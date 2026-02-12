@@ -317,6 +317,8 @@ PODS:
     - ExpoModulesCore
   - ExpoSQLite (55.0.5):
     - ExpoModulesCore
+  - ExpoStoreReview (9.0.9):
+    - ExpoModulesCore
   - ExpoSymbols (55.0.3):
     - ExpoModulesCore
   - ExpoSystemUI (55.0.5):
@@ -381,11 +383,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - PurchasesHybridCommon (17.31.0):
-    - RevenueCat (= 5.57.0)
-  - PurchasesHybridCommonUI (17.31.0):
-    - PurchasesHybridCommon (= 17.31.0)
-    - RevenueCatUI (= 5.57.0)
+  - PurchasesHybridCommon (17.23.0):
+    - RevenueCat (= 5.50.0)
+  - PurchasesHybridCommonUI (17.23.0):
+    - PurchasesHybridCommon (= 17.23.0)
+    - RevenueCatUI (= 5.50.0)
   - RCTDeprecation (0.83.1)
   - RCTRequired (0.83.1)
   - RCTSwiftUI (0.83.1)
@@ -1873,6 +1875,53 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-maps (1.26.20):
+    - react-native-maps/Maps (= 1.26.20)
+  - react-native-maps/Generated (1.26.20):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - react-native-maps/Maps (1.26.20):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - react-native-maps/Generated
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-menu (1.2.2):
     - hermes-engine
     - RCTRequired
@@ -2013,7 +2062,7 @@ PODS:
     - Yoga
   - react-native-segmented-control (2.5.7):
     - React-Core
-  - react-native-skia (2.4.14):
+  - react-native-skia (1.11.7):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2532,9 +2581,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RevenueCat (5.57.0)
-  - RevenueCatUI (5.57.0):
-    - RevenueCat (= 5.57.0)
+  - RevenueCat (5.50.0)
+  - RevenueCatUI (5.50.0):
+    - RevenueCat (= 5.50.0)
   - RNCAsyncStorage (2.2.0):
     - hermes-engine
     - RCTRequired
@@ -2667,11 +2716,11 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNPaywalls (9.7.6):
-    - PurchasesHybridCommonUI (= 17.31.0)
+  - RNPaywalls (9.6.10):
+    - PurchasesHybridCommonUI (= 17.23.0)
     - React-Core
-  - RNPurchases (9.7.6):
-    - PurchasesHybridCommon (= 17.31.0)
+  - RNPurchases (9.6.10):
+    - PurchasesHybridCommon (= 17.23.0)
     - React-Core
   - RNReanimated (4.2.1):
     - hermes-engine
@@ -2976,6 +3025,7 @@ DEPENDENCIES:
   - ExpoSMS (from `../node_modules/expo-sms/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
   - ExpoSQLite (from `../node_modules/expo-sqlite/ios`)
+  - ExpoStoreReview (from `../node_modules/expo-store-review/ios`)
   - ExpoSymbols (from `../node_modules/expo-symbols/ios`)
   - ExpoSystemUI (from `../node_modules/expo-system-ui/ios`)
   - ExpoVideo (from `../node_modules/expo-video/ios`)
@@ -3028,6 +3078,7 @@ DEPENDENCIES:
   - react-native-bottom-tabs (from `../node_modules/react-native-bottom-tabs`)
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-keyboard-controller (from `../node_modules/react-native-keyboard-controller`)
+  - react-native-maps (from `../node_modules/react-native-maps`)
   - "react-native-menu (from `../node_modules/@react-native-menu/menu`)"
   - react-native-mmkv (from `../node_modules/react-native-mmkv`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
@@ -3204,6 +3255,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-splash-screen/ios"
   ExpoSQLite:
     :path: "../node_modules/expo-sqlite/ios"
+  ExpoStoreReview:
+    :path: "../node_modules/expo-store-review/ios"
   ExpoSymbols:
     :path: "../node_modules/expo-symbols/ios"
   ExpoSystemUI:
@@ -3307,6 +3360,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-get-random-values"
   react-native-keyboard-controller:
     :path: "../node_modules/react-native-keyboard-controller"
+  react-native-maps:
+    :path: "../node_modules/react-native-maps"
   react-native-menu:
     :path: "../node_modules/@react-native-menu/menu"
   react-native-mmkv:
@@ -3474,6 +3529,7 @@ SPEC CHECKSUMS:
   ExpoSMS: d46e331d78f0a052974b2739b2fe9e68eff3234e
   ExpoSplashScreen: 71acba74a5d7401fdf63bae8fe869e6d5a724652
   ExpoSQLite: 1c458536331e7bf55c99a2f5b97bc114d865e1e4
+  ExpoStoreReview: 32bb43b6fae9c8db3e33cad69996dff3785eef5f
   ExpoSymbols: 2f7bc13638130613935601bdbb31c5b9fc2927fb
   ExpoSystemUI: 4d7512f15eb2025e4e538ba9583e99eac6bcf2e7
   ExpoVideo: ee3ed4889addeb7d03dd9f5096964f005a47687f
@@ -3490,8 +3546,8 @@ SPEC CHECKSUMS:
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   lottie-ios: a881093fab623c467d3bce374367755c272bdd59
   lottie-react-native: 8e5dd0e51847600666057d2c9b95815ac9fdb165
-  PurchasesHybridCommon: 21a11c5d66c8a52cf9aede45cecc2efe1551b98b
-  PurchasesHybridCommonUI: 60fbb660ebbf224df733c90849c4f3b8f6819f4b
+  PurchasesHybridCommon: e95a0b9bb01f6e9101d44f411343fb91030e26ae
+  PurchasesHybridCommonUI: 476200612e1f5be556ef20327d5da8886d657a3d
   RCTDeprecation: a93fe21ed2fd99e13bf3b011390d1e9769c83d23
   RCTRequired: 176145d35686c966863f268c0f938f58ae23dc78
   RCTSwiftUI: a6c7271c39098bf00dbdad8f8ed997a59bbfbe44
@@ -3531,13 +3587,14 @@ SPEC CHECKSUMS:
   react-native-bottom-tabs: e37c9d1565b1ee48c4c0e4b4fa4b804775f82dfa
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-keyboard-controller: 310010f4988f57e3fb116c56f379b94e8e943f70
+  react-native-maps: a1a4eb15eee016a2d0a009b24155ec92cc6f4ef6
   react-native-menu: 9644e03cbd35d8cc536eeb800469e32f41c6b7ed
   react-native-mmkv: 3d69c8bbdbceb1c0d3754863ecffa6ec24e4be12
   react-native-netinfo: cec9c4e86083cb5b6aba0e0711f563e2fbbff187
   react-native-pager-view: adc7d78123fb395e03a70d19e8d75805b49838b5
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
   react-native-segmented-control: bf6e0032726727498e18dd437ae88afcdbc18e99
-  react-native-skia: 268f183f849742e9da216743ee234bd7ad81c69b
+  react-native-skia: f8be6b8890f4499209be90cda3b466f6e1e4fa08
   react-native-slider: f954578344106f0a732a4358ce3a3e11015eb6e1
   react-native-view-shot: fb3c0774edb448f42705491802a455beac1502a2
   react-native-webview: 3e303e80cadb5f17118c8c1502aa398e9287e415
@@ -3576,18 +3633,18 @@ SPEC CHECKSUMS:
   ReactCommon: c24a308601d0bce5c9edf2f36afb0dbf7afaf6ef
   ReactNativeDependencies: c5a16b06fbcb7d246dbd7797ae8bbc3dc8f94c6c
   ReactNativeEnriched: 335700c48d72b91ddb307a5b64c30c62e83821f0
-  RevenueCat: 2d8aa56c68fa8e92c0d669e5e797c4a93e284f20
-  RevenueCatUI: 25c86cf10c6cb9e3e9f308c48df55b31bf7fdba5
+  RevenueCat: a5fcd0a12b5ec9bbddc0cf0dd20c14b7e6213df6
+  RevenueCatUI: d470454494ecc734ca9b416fea0704613c4cd7a2
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
   RNCClipboard: 88d7eeb555d1183915f0885bdbc5c97eb6f7f3ba
   RNCMaskedView: d2578d41c59b936db122b2798ba37e4722d21035
   RNCPicker: c8a3584b74133464ee926224463fcc54dfdaebca
   RNDateTimePicker: 9c0a849bbe1c256f0854fea255734b715f5ea876
   RNGestureHandler: 5494787ce29288a8941fa825663f2b1fa0a5aaf1
-  RNPaywalls: d8ebe418a058fdc7c7b6dd1b3ecb07058d4f1d89
-  RNPurchases: 462fb7edb0304dba1db46e3d38368a271ebe4cc2
+  RNPaywalls: 638800e62194330656c53c34257f3b7fabb17e2e
+  RNPurchases: 393312c7ac9cfb3852e3f14a91520d305fa05be6
   RNReanimated: 86e5991396f1aa514db90d6c79d4c3e37a37bb10
-  RNScreens: 4b093829e5233191d2510d72a1291c33931c2003
+  RNScreens: 03a87569e6febf47b08a8c061ee953ea47b9f653
   RNSVG: bb9dc09f078cafaf09683a67dd5fde641e3e33cb
   RNWorklets: 0e736f568c3c61cb3326cdcda767c4daee56a8a9
   SDWebImage: 1bb6a1b84b6fe87b972a102bdc77dd589df33477
@@ -3599,6 +3656,6 @@ SPEC CHECKSUMS:
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   Yoga: 35d573dff66536d48493acb65a519482f8219fe8
 
-PODFILE CHECKSUM: 56bb7b3d638b35d1b50cb6028e0bc1a82ac77478
+PODFILE CHECKSUM: e6210ea1af33631b3f5a4adbf7cccb62cc0931c3
 
 COCOAPODS: 1.16.2

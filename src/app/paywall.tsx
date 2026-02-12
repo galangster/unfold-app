@@ -124,7 +124,7 @@ export default function PaywallScreen() {
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{
           position: 'absolute',
-          top: insets.top + 8,
+          top: insets.top + 16,
           right: 16,
           zIndex: 10,
           padding: 8,
@@ -135,7 +135,7 @@ export default function PaywallScreen() {
       </Pressable>
 
       {/* Top section — hero + features (takes available space) */}
-      <View style={{ flex: 1, paddingTop: insets.top + 24, paddingHorizontal: 28, justifyContent: 'flex-start' }}>
+      <View style={{ flex: 1, paddingTop: insets.top + 12, paddingHorizontal: 28, justifyContent: 'flex-start' }}>
         {/* Hero */}
         <Animated.View entering={FadeIn.duration(600)}>
           <View
@@ -175,7 +175,7 @@ export default function PaywallScreen() {
         {/* Feature list */}
         <Animated.View
           entering={FadeInDown.duration(500).delay(100)}
-          style={{ marginTop: 28 }}
+          style={{ marginTop: 20 }}
         >
           {FEATURES.map((feature) => (
             <View
@@ -203,11 +203,11 @@ export default function PaywallScreen() {
       </View>
 
       {/* Bottom section — plans + subscribe + legal (fixed at bottom) */}
-      <View style={{ paddingHorizontal: 28, paddingBottom: Math.max(insets.bottom, 16) + 8 }}>
+      <View style={{ paddingHorizontal: 28, paddingBottom: Math.max(insets.bottom, 12) }}>
         {/* Plan selection */}
         <Animated.View
           entering={FadeInDown.duration(500).delay(200)}
-          style={{ gap: 8, marginBottom: 14 }}
+          style={{ gap: 8, marginBottom: 12 }}
         >
           {/* Yearly */}
           <Pressable

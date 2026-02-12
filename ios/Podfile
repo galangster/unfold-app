@@ -1,3 +1,5 @@
+# Set by expo-router. This enables Fabric-only features from react-native-screens
+ENV['RNS_GAMMA_ENABLED'] ||= '1'
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
@@ -59,13 +61,29 @@ target 'Unfold' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
-    
-    # Fix deployment target warnings for pods
+
+    # Fix React Native Skia linking with New Architecture (Bridgeless/Fabric)
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 12.0
-          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+        # Link all Skia static libraries
+        skia_libs = [
+          'libskia.a',
+          'libskshaper.a',
+          'libskparagraph.a',
+          'libskunicode_core.a',
+          'libskunicode_icu.a',
+          'libsksg.a',
+          'libskottie.a'
+        ]
+        
+        skia_libs.each do |lib|
+          config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']
+          config.build_settings['OTHER_LDFLAGS'] << "-l#{lib.sub('.a', '')}"
         end
+        
+        # Ensure symbols are exported
+        config.build_settings['STRIP_STYLE'] = 'debugging'
+        config.build_settings['DEAD_CODE_STRIPPING'] = 'NO'
       end
     end
   end
