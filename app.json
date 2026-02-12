@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Unfold",
+    "slug": "unfold",
+    "scheme": "vibecode",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vibecode.unfold.9fj08t",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Unfold accesses your photo library so you can move media between the app and your library.",
+        "NSPhotoLibraryAddUsageDescription": "Unfold saves media you export from the app into your photo library.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "package": "com.vibecode.unfold.x9fj08t",
+      "enableProguardInReleaseBuilds": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-asset",
+      "expo-video",
+      "expo-web-browser",
+      "react-native-edge-to-edge",
+      "@react-native-community/datetimepicker",
+      "expo-build-properties",
+      "expo-font",
+      "expo-mail-composer",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-image",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "icon": "./icon.png"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "cli": {
+    "version": "16.17.4"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EAS_USE_CACHE": "1"
+      },
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EAS_USE_CACHE": "1"
+      }
+    },
+    "production": {
+      "env": {
+        "BACKEND_URL": "https://oversight-cloning.vibecode.run",
+        "EXPO_PUBLIC_BACKEND_URL": "https://oversight-cloning.vibecode.run",
+        "EXPO_PUBLIC_VIBECODE_BACKEND_URL": "https://oversight-cloning.vibecode.run",
+        "EAS_USE_CACHE": "1"
+      },
+      "ios": {
+        "distribution": "store"
+      },
+      "android": {
+        "distribution": "store"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
+    }
+  }
+}
