@@ -16,7 +16,7 @@ import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { THEME_CATEGORIES } from '@/constants/devotional-types';
 import { useUnfoldStore } from '@/lib/store';
-import { Plus, BookOpen, PenLine, Settings, Flame, Bookmark } from 'lucide-react-native';
+import { Plus, BookOpen, PenLine, Settings, Flame, Bookmark, Highlighter } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
@@ -869,11 +869,11 @@ export default function HomeScreen() {
                 <Pressable
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push('/(main)/my-responses');
+                    router.push('/(main)/highlights');
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="My Responses"
-                  accessibilityHint="View your journal entries and reflections"
+                  accessibilityLabel="My Highlights"
+                  accessibilityHint="View your highlighted quotes and verses"
                   style={({ pressed }) => ({
                     opacity: pressed ? 0.7 : 1,
                     transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -888,7 +888,7 @@ export default function HomeScreen() {
                       padding: 18,
                     }}
                   >
-                    <PenLine size={20} color={colors.accent} strokeWidth={1.5} style={{ marginBottom: 12 }} />
+                    <Highlighter size={20} color={colors.accent} strokeWidth={1.5} style={{ marginBottom: 12 }} />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
@@ -897,7 +897,7 @@ export default function HomeScreen() {
                         marginBottom: 3,
                       }}
                     >
-                      My Responses
+                      My Highlights
                     </Text>
                     <Text
                       style={{
@@ -906,7 +906,7 @@ export default function HomeScreen() {
                         color: colors.textSubtle,
                       }}
                     >
-                      Journal entries
+                      Saved quotes
                     </Text>
                   </View>
                 </Pressable>
