@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Linking, Platform } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Linking, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -104,7 +104,7 @@ export default function PaywallScreen() {
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
 
-  // Updated pricing: $3.99/month, $29.99/year (37% savings)
+  // Updated pricing: $3.99/month, $29.99/year (25% savings)
   const monthlyPrice = monthlyPackage?.product?.priceString ?? '$3.99';
   const yearlyPrice = yearlyPackage?.product?.priceString ?? '$29.99';
   const yearlyRaw = yearlyPackage?.product?.price ?? 29.99;
@@ -154,7 +154,7 @@ export default function PaywallScreen() {
             }}
           >
             {/* TODO: Replace with actual icon image */}
-            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
+            <Image source={require('@/assets/icon-paywall.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
           </View>
           
           <View
@@ -231,7 +231,7 @@ export default function PaywallScreen() {
       </View>
 
       {/* Plans + subscribe + legal */}
-      <View style={{ paddingHorizontal: 28, paddingBottom: Math.max(insets.bottom, 8), paddingTop: 8 }}>
+      <View style={{ flex: 1, paddingHorizontal: 28, paddingBottom: 8, paddingTop: 8 }}>
         {/* Plan selection */}
         <Animated.View
           entering={FadeInDown.duration(500).delay(200)}
@@ -296,7 +296,7 @@ export default function PaywallScreen() {
                         letterSpacing: 0.5,
                       }}
                     >
-                      Save 37%
+                      Save 25%
                     </Text>
                   </View>
                 </View>
@@ -376,22 +376,26 @@ export default function PaywallScreen() {
             onPress={handleSubscribe}
             disabled={isPurchasing}
             style={({ pressed }) => ({
-              backgroundColor: btnBg,
+              backgroundColor: colors.accent,
               paddingVertical: 18,
               borderRadius: 14,
-              borderWidth: 1,
-              borderColor: btnBorder,
-              opacity: pressed ? 0.85 : 1,
+              shadowColor: colors.accent,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 5,
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.98 : 1 }],
             })}
           >
             {isPurchasing ? (
-              <ActivityIndicator color={btnText} />
+              <ActivityIndicator color={isDark ? '#000' : '#fff'} />
             ) : (
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 17,
-                  color: btnText,
+                  color: isDark ? '#000' : '#fff',
                   textAlign: 'center',
                   letterSpacing: 0.2,
                 }}
@@ -402,8 +406,8 @@ export default function PaywallScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Restore + fine print */}
-        <View style={{ alignItems: 'center', marginTop: 10 }}>
+        {/* Restore + Cancel text */}
+        <View style={{ alignItems: 'center', marginTop: 12 }}>
           <Pressable
             onPress={handleRestore}
             disabled={isPurchasing}
@@ -427,7 +431,7 @@ export default function PaywallScreen() {
           <Text
             style={{
               fontFamily: FontFamily.ui,
-              fontSize: 13,
+              fontSize: 12,
               color: colors.textHint,
               textAlign: 'center',
               lineHeight: 18,
@@ -437,40 +441,43 @@ export default function PaywallScreen() {
           >
             Cancel anytime. Auto-renews unless canceled 24h before period ends.
           </Text>
+        </View>
 
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'center',
-              marginTop: 4,
-              gap: 16,
-            }}
-          >
-            <Pressable onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 10,
-                  color: colors.textSubtle,
-                  textDecorationLine: 'underline',
-                }}
-              >
-                Terms of Use
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 10,
-                  color: colors.textSubtle,
-                  textDecorationLine: 'underline',
-                }}
-              >
-                Privacy Policy
-              </Text>
-            </Pressable>
-          </View>
+        {/* Legal links at bottom */}
+        <View style={{ flex: 1 }} />
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'center',
+            marginTop: 20,
+            paddingBottom: Math.max(insets.bottom, 8),
+            gap: 16,
+          }}
+        >
+          <Pressable onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 11,
+                color: colors.textHint,
+                textDecorationLine: 'underline',
+              }}
+            >
+              Terms of Use
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 11,
+                color: colors.textHint,
+                textDecorationLine: 'underline',
+              }}
+            >
+              Privacy Policy
+            </Text>
+          </Pressable>
         </View>
       </View>
 
