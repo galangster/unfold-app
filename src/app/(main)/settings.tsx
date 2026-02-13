@@ -392,7 +392,7 @@ export default function SettingsScreen() {
                 onPress={handleUpgrade} 
                 accessibilityRole="button"
                 accessibilityLabel="Upgrade to Premium"
-                accessibilityHint="Unlock unlimited devotionals, audio, and more features"
+                accessibilityHint="Unlock unlimited devotionals and more premium features"
                 style={{ marginBottom: 24 }}
               >
                 <View
@@ -436,7 +436,7 @@ export default function SettingsScreen() {
                         color: colors.textMuted,
                       }}
                     >
-                      Unlimited devotionals, audio & more
+                      Unlimited devotionals & more
                     </Text>
                   </View>
                 </View>

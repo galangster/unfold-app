@@ -534,6 +534,10 @@ export function DevotionalWebView({
         onMessage={handleMessage}
         originWhitelist={['*']}
         injectedJavaScript={injectedJavaScript}
+        // Performance optimizations
+        androidLayerType="hardware"
+        cacheEnabled={true}
+        androidCacheMode="LOAD_CACHE_ELSE_NETWORK"
       />
     </View>
   );
