@@ -153,8 +153,8 @@ export default function PaywallScreen() {
               borderColor: colors.border,
             }}
           >
-            {/* Icon placeholder - replace with actual image file */}
-            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
+            {/* Icon */}
+            <Image source={require('@/assets/icon-paywall.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
           </View>
           
           <View
@@ -389,13 +389,13 @@ export default function PaywallScreen() {
             })}
           >
             {isPurchasing ? (
-              <ActivityIndicator color={isDark ? '#000' : '#fff'} />
+              <ActivityIndicator color="#fff" />
             ) : (
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 17,
-                  color: isDark ? '#000' : '#fff',
+                  color: '#fff',
                   textAlign: 'center',
                   letterSpacing: 0.2,
                 }}
@@ -406,8 +406,9 @@ export default function PaywallScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Restore only */}
-        <View style={{ alignItems: 'center', marginTop: 24 }}>
+        {/* Restore + Legal at bottom */}
+        <View style={{ flex: 1 }} />
+        <View style={{ alignItems: 'center', marginBottom: 8 }}>
           <Pressable
             onPress={handleRestore}
             disabled={isPurchasing}
@@ -430,12 +431,11 @@ export default function PaywallScreen() {
         </View>
 
         {/* Legal links at bottom */}
-        <View style={{ flex: 1 }} />
         <View
           style={{
             flexDirection: 'row',
             justifyContent: 'center',
-            marginTop: 20,
+            marginTop: 8,
             paddingBottom: Math.max(insets.bottom, 8),
             gap: 16,
           }}
