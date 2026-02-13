@@ -98,6 +98,12 @@ export interface UserProfile {
   themeMode: ThemeMode;
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
+  // Streak system
+  streakCount: number;
+  longestStreak: number;
+  lastReadDate: string | null;
+  streakFreezes: number;
+  weekendAmnesty: boolean;
   // New: Theme and type preferences for next devotional
   selectedTheme?: ThemeCategory;
   selectedType?: DevotionalType;
@@ -287,8 +293,11 @@ interface UnfoldState {
   streakLongest: number;
   streakGraceDaysUsedThisWeek: number;
   streakWeekStart: string | null; // ISO date of current week start (Sunday)
+  streakWeekendAmnesty: boolean;
+  streakFreezes: number;
   recordStreakRead: () => void;
   resetStreakGraceDays: () => void;
+  toggleWeekendAmnesty: () => void;
 
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
@@ -319,6 +328,8 @@ const initialState = {
   streakLongest: 0,
   streakGraceDaysUsedThisWeek: 0,
   streakWeekStart: null as string | null,
+  streakWeekendAmnesty: true,
+  streakFreezes: 0,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -377,7 +388,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             return {
               ...d,
               days: mergedDays,
-              // Only increase totalDays, never shrink it — partial batches shouldn't lower the target
+              // Only increase totalDays, never shrink it - partial batches shouldn't lower the target
               totalDays: Math.max(d.totalDays, mergedDays.length),
               ...(title ? { title } : {}),
             };
@@ -588,9 +599,10 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Streak actions
       recordStreakRead: () =>
         set((state) => {
-          const today = new Date().toDateString();
+          const now = new Date();
+          const today = now.toDateString();
           const lastRead = state.streakLastReadDate ? new Date(state.streakLastReadDate).toDateString() : null;
-          
+
           // Already read today, no change
           if (lastRead === today) {
             return state;
@@ -607,33 +619,65 @@ export const useUnfoldStore = create<UnfoldState>()(
 
           let newStreak = state.streakCurrent;
           let newGraceDays = isNewWeek ? 0 : state.streakGraceDaysUsedThisWeek;
+          let newFreezes = state.streakFreezes;
+          let missedWeekendDays = 0;
 
           if (wasYesterday || !lastRead) {
             // Continue streak
             newStreak = state.streakCurrent + 1;
           } else {
-            // Check if we can use a grace day (Sabbath rest concept - 1 per week)
+            // Calculate days missed
             const daysMissed = Math.floor(
-              (new Date(today).getTime() - new Date(lastRead).getTime()) / (1000 * 60 * 60 * 24)
+              (new Date(today).getTime() - new Date(lastRead!).getTime()) / (1000 * 60 * 60 * 24)
             );
-            
-            if (daysMissed === 2 && newGraceDays < 1) {
-              // Use grace day, keep streak alive
-              newGraceDays += 1;
+
+            // Count weekend days missed (if amnesty enabled)
+            if (state.streakWeekendAmnesty) {
+              for (let i = 1; i < daysMissed; i++) {
+                const missedDate = new Date();
+                missedDate.setDate(missedDate.getDate() - i);
+                if (missedDate.getDay() === 0 || missedDate.getDay() === 6) {
+                  missedWeekendDays++;
+                }
+              }
+            }
+
+            const effectiveMissed = daysMissed - missedWeekendDays;
+
+            // Use freeze if available for first missed day
+            if (effectiveMissed >= 1 && state.streakFreezes > 0) {
+              newFreezes--;
+              newStreak = state.streakCurrent + 1;
+            } else if (effectiveMissed === 1) {
+              // Just missed yesterday but no freeze - continue
+              newStreak = state.streakCurrent + 1;
+            } else if (effectiveMissed > 1 && newGraceDays < 1) {
+              // Use grace day for extra missed day
+              newGraceDays++;
               newStreak = state.streakCurrent + 1;
             } else {
-              // Streak broken, start over
+              // Streak broken
               newStreak = 1;
               newGraceDays = 0;
             }
           }
 
+          // Check if earned a freeze (perfect week = 7 days, streak divisible by 7)
+          if (newStreak > 0 && newStreak % 7 === 0) {
+            // Check if we already earned for this week
+            const lastEarnedStreak = Math.floor((state.streakLongest || 0) / 7) * 7;
+            if (newStreak > lastEarnedStreak) {
+              newFreezes = Math.min(newFreezes + 1, 1); // Max 1 freeze
+            }
+          }
+
           return {
-            streakLastReadDate: new Date().toISOString(),
+            streakLastReadDate: now.toISOString(),
             streakCurrent: newStreak,
             streakLongest: Math.max(state.streakLongest, newStreak),
             streakGraceDaysUsedThisWeek: newGraceDays,
             streakWeekStart: currentWeekStart.toISOString(),
+            streakFreezes: newFreezes,
           };
         }),
       resetStreakGraceDays: () =>
@@ -641,6 +685,10 @@ export const useUnfoldStore = create<UnfoldState>()(
           streakGraceDaysUsedThisWeek: 0,
           streakWeekStart: getWeekStart(new Date()).toISOString(),
         }),
+      toggleWeekendAmnesty: () =>
+        set((state) => ({
+          streakWeekendAmnesty: !state.streakWeekendAmnesty,
+        })),
 
       // Helpers
       getCurrentDevotional: () => {
@@ -653,11 +701,11 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3, // Increment when state structure changes
+      version: 4, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
-        
+
         // Migration from version 1 to 2: Add review prompt fields
         if (version < 2) {
           return {
@@ -673,7 +721,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakWeekStart: null,
           } as UnfoldState;
         }
-        
+
         // Migration from version 2 to 3: Add streak tracking fields
         if (version < 3) {
           return {
@@ -685,7 +733,16 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakWeekStart: null,
           } as UnfoldState;
         }
-        
+
+        // Migration from version 3 to 4: Add streak freeze and weekend amnesty
+        if (version < 4) {
+          return {
+            ...state,
+            streakWeekendAmnesty: true,
+            streakFreezes: 0,
+          } as UnfoldState;
+        }
+
         return state as UnfoldState;
       },
       // Validate state on rehydration
@@ -694,21 +751,21 @@ export const useUnfoldStore = create<UnfoldState>()(
           if (error) {
             console.error('[store] Rehydration error:', error);
             // Log to bug tracking
-            void logBugError('store-rehydration', error, { 
+            void logBugError('store-rehydration', error, {
               timestamp: new Date().toISOString(),
             });
           }
-          
+
           if (state) {
             // Validate required fields exist
-            const isValid = 
+            const isValid =
               Array.isArray(state.devotionals) &&
               Array.isArray(state.journalEntries) &&
               Array.isArray(state.bookmarks) &&
               Array.isArray(state.usedScriptures) &&
               state.generationSession != null &&
               typeof state.generationSession === 'object';
-            
+
             if (!isValid) {
               console.warn('[store] Invalid state detected, resetting to initial state');
               void logBugError('store-validation', new Error('Invalid persisted state'), {
