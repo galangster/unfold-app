@@ -11,17 +11,9 @@ import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
 import { ThemeProvider, useTheme } from '@/lib/theme';
+import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-
-// Lazy import auth to avoid crash if Firebase isn't installed
-let useAuth: (() => void) | undefined;
-try {
-  const authModule = require('@/hooks/useAuth');
-  useAuth = authModule.useAuth;
-} catch {
-  useAuth = undefined;
-}
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -35,10 +27,8 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
 
-  // Initialize Firebase Auth and listen to auth state changes (if available)
-  if (useAuth) {
-    useAuth();
-  }
+  // Initialize Firebase Auth and listen to auth state changes
+  useAuth();
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();

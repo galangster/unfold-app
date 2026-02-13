@@ -10,6 +10,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.vibecode.unfold.9fj08t",
       "buildNumber": "1",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Unfold accesses your photo library so you can move media between the app and your library.",
         "NSPhotoLibraryAddUsageDescription": "Unfold saves media you export from the app into your photo library.",

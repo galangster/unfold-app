@@ -380,12 +380,12 @@ export default function PaywallScreen() {
             onPress={handleSubscribe}
             disabled={isPurchasing}
             style={({ pressed }) => ({
-              backgroundColor: colors.text,
+              backgroundColor: isDark ? '#F5F0EB' : '#1C1710',
               paddingVertical: 18,
               borderRadius: 14,
               borderWidth: 2,
-              borderColor: colors.text,
-              shadowColor: colors.text,
+              borderColor: isDark ? '#F5F0EB' : '#1C1710',
+              shadowColor: isDark ? '#F5F0EB' : '#1C1710',
               shadowOffset: { width: 0, height: 6 },
               shadowOpacity: 0.3,
               shadowRadius: 12,
@@ -395,13 +395,13 @@ export default function PaywallScreen() {
             })}
           >
             {isPurchasing ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={isDark ? '#1C1710' : '#fff'} />
             ) : (
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 17,
-                  color: '#fff',
+                  color: isDark ? '#1C1710' : '#fff',
                   textAlign: 'center',
                   letterSpacing: 0.2,
                 }}

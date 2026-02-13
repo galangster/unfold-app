@@ -98,6 +98,13 @@ export interface UserProfile {
   themeMode: ThemeMode;
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
+  // Auth fields
+  authUserId: string | null;
+  authProvider: 'apple' | 'anonymous' | null;
+  authEmail: string | null;
+  authDisplayName: string | null;
+  hasSeenSignInPrompt: boolean;
+  signInPromptCount: number;
   // Streak system
   streakCount: number;
   longestStreak: number;
@@ -701,7 +708,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4, // Increment when state structure changes
+      version: 5, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -740,6 +747,24 @@ export const useUnfoldStore = create<UnfoldState>()(
             ...state,
             streakWeekendAmnesty: true,
             streakFreezes: 0,
+          } as UnfoldState;
+        }
+
+        // Migration from version 4 to 5: Add auth fields to user profile
+        if (version < 5) {
+          return {
+            ...state,
+            user: state.user
+              ? {
+                  ...state.user,
+                  authUserId: null,
+                  authProvider: null,
+                  authEmail: null,
+                  authDisplayName: null,
+                  hasSeenSignInPrompt: false,
+                  signInPromptCount: 0,
+                }
+              : null,
           } as UnfoldState;
         }
 

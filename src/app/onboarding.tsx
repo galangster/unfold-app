@@ -300,6 +300,19 @@ export default function OnboardingScreen() {
         themeMode: 'system',
         accentTheme: 'gold',
         readingFont: 'source-serif',
+        // Auth fields - initialize as null, will be set when user signs in
+        authUserId: null,
+        authProvider: null,
+        authEmail: null,
+        authDisplayName: null,
+        hasSeenSignInPrompt: false,
+        signInPromptCount: 0,
+        // Streak fields
+        streakCount: 0,
+        longestStreak: 0,
+        lastReadDate: null,
+        streakFreezes: 0,
+        weekendAmnesty: true,
       };
 
       if (existingUser) {
