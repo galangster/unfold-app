@@ -14,6 +14,15 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
+// Lazy import auth to avoid crash if Firebase isn't installed
+let useAuth: (() => void) | undefined;
+try {
+  const authModule = require('@/hooks/useAuth');
+  useAuth = authModule.useAuth;
+} catch {
+  useAuth = undefined;
+}
+
 export const unstable_settings = {
   initialRouteName: 'index',
 };
@@ -25,6 +34,11 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
+
+  // Initialize Firebase Auth and listen to auth state changes (if available)
+  if (useAuth) {
+    useAuth();
+  }
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
@@ -42,6 +56,7 @@ function RootLayoutNav() {
         <Stack.Screen name="style-onboarding" />
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="generating" />
+        <Stack.Screen name="(onboarding)/sign-in" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="(main)" options={{ headerShown: false }} />
         <Stack.Screen
           name="paywall"
