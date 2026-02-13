@@ -478,7 +478,28 @@ export default function GeneratingScreen() {
 
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.replace('/(main)/home');
+
+    // Check if user should see sign-in prompt
+    // Skip sign-in prompt if Firebase Auth isn't available
+    let shouldShowSignIn = false;
+    try {
+      require('@react-native-firebase/auth');
+      // Show sign-in if:
+      // 1. User hasn't seen sign-in prompt before
+      // 2. User is not already authenticated with Apple
+      shouldShowSignIn =
+        !user?.hasSeenSignInPrompt &&
+        user?.authProvider !== 'apple';
+    } catch {
+      // Firebase Auth not available, skip sign-in
+      shouldShowSignIn = false;
+    }
+
+    if (shouldShowSignIn) {
+      router.replace('/(onboarding)/sign-in');
+    } else {
+      router.replace('/(main)/home');
+    }
   };
 
   const handleStartReadingEarly = () => {
