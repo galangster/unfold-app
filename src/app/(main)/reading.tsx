@@ -1020,80 +1020,100 @@ export default function ReadingScreen() {
                 existingHighlights={currentDayHighlights}
               />
 
+              {/* Chevron at top of content area - invites scroll */}
+              {showScrollHint && (
+                <Animated.View
+                  entering={FadeIn.duration(300)}
+                  exiting={FadeOut.duration(300)}
+                  style={{
+                    alignItems: 'center',
+                    marginTop: 20,
+                    marginBottom: 10,
+                  }}
+                >
+                  <Animated.View style={scrollHintStyle}>
+                    <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
+                  </Animated.View>
+                </Animated.View>
+              )}
+
               {/* Complete button - show if viewing day not yet completed */}
               {!isCompleted && (
                 <Animated.View
                   exiting={FadeOut.duration(200)}
-                  style={{ marginTop: 48, alignItems: 'center', gap: 20 }}
+                  style={{ marginTop: 48, alignItems: 'center', gap: 16 }}
                 >
-                  {/* Animated Chevron - inviting scroll to buttons */}
-                  <Animated.View style={[{ marginBottom: 8 }, scrollHintStyle]}>
-                    <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
-                  </Animated.View>
-
-                  {/* Complete Day Button - Premium pill design */}
-                  <Pressable
-                    onPress={handleComplete}
-                    accessibilityRole="button"
-                    accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
-                    accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
-                    style={({ pressed }) => ({
+                  {/* Complete Day Button - Filled container with border */}
+                  <View
+                    style={{
                       backgroundColor: colors.accent,
-                      paddingVertical: 20,
-                      paddingHorizontal: 56,
-                      borderRadius: 32,
-                      shadowColor: colors.accent,
-                      shadowOffset: { width: 0, height: 6 },
-                      shadowOpacity: pressed ? 0.4 : 0.25,
-                      shadowRadius: 20,
-                      elevation: 12,
-                      transform: [{ scale: pressed ? 0.97 : 1 }],
-                    })}
+                      paddingVertical: 4,
+                      paddingHorizontal: 4,
+                      borderRadius: 36,
+                      borderWidth: 2,
+                      borderColor: colors.accent,
+                    }}
                   >
-                    {({ pressed }) => (
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 18,
-                          color: isDark ? '#0a0a0a' : '#1a1a1a',
-                          textAlign: 'center',
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        {isLastDay ? 'Complete Journey' : 'Complete Day'}
-                      </Text>
-                    )}
-                  </Pressable>
+                    <Pressable
+                      onPress={handleComplete}
+                      accessibilityRole="button"
+                      accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
+                      accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
+                      style={({ pressed }) => ({
+                        backgroundColor: colors.accent,
+                        paddingVertical: 18,
+                        paddingHorizontal: 48,
+                        borderRadius: 32,
+                        shadowColor: colors.accent,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: pressed ? 0.4 : 0.2,
+                        shadowRadius: 12,
+                        elevation: 8,
+                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                      })}
+                    >
+                      {({ pressed }) => (
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.display,
+                            fontSize: 18,
+                            color: isDark ? '#0a0a0a' : '#1a1a1a',
+                            textAlign: 'center',
+                            letterSpacing: 0.5,
+                          }}
+                        >
+                          {isLastDay ? 'Complete Journey' : 'Complete Day'}
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
 
-                  {/* Share Button - Elegant centered design */}
+                  {/* Share Button - Centered, icon above text */}
                   <Pressable
                     onPress={handleShare}
                     accessibilityRole="button"
                     accessibilityLabel="Share devotional"
                     accessibilityHint="Share this day's reading with others"
                     style={({ pressed }) => ({
-                      flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 10,
-                      paddingVertical: 14,
-                      paddingHorizontal: 28,
-                      borderRadius: 24,
-                      borderWidth: 1,
-                      borderColor: colors.border,
+                      gap: 6,
+                      paddingVertical: 16,
+                      paddingHorizontal: 32,
+                      borderRadius: 16,
                       backgroundColor: pressed ? colors.inputBackground : 'transparent',
                       opacity: pressed ? 0.8 : 1,
                     })}
                   >
                     <SymbolView
                       name="square.and.arrow.up"
-                      size={20}
+                      size={24}
                       tintColor={colors.textMuted}
                       weight="medium"
                     />
                     <Text
                       style={{
                         fontFamily: FontFamily.display,
-                        fontSize: 15,
+                        fontSize: 14,
                         color: colors.textMuted,
                         letterSpacing: 0.3,
                       }}
@@ -1243,139 +1263,6 @@ export default function ReadingScreen() {
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>
-
-      {/* Scroll hint - appears above the native toolbar */}
-      {showScrollHint && (
-        <Animated.View
-          entering={FadeIn.duration(300)}
-          exiting={FadeOut.duration(300)}
-          style={{
-            position: 'absolute',
-            bottom: 80,
-            left: 0,
-            right: 0,
-            alignItems: 'center',
-          }}
-        >
-          <Animated.View style={scrollHintStyle}>
-            <ChevronDown size={24} color={colors.textSubtle} />
-          </Animated.View>
-        </Animated.View>
-      )}
-
-      {/* Bottom Navigation Toolbar - True iOS 18 Liquid Glass */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          left: 0,
-          right: 0,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 48,
-        }}
-        pointerEvents="box-none"
-      >
-        {/* Previous Day Button - Liquid Glass */}
-        <Pressable onPress={handlePrevious} disabled={!canGoBack}>
-          {({ pressed }) => (
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 26,
-                overflow: 'hidden',
-                opacity: pressed ? 0.75 : canGoBack ? 1 : 0.35,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: isDark ? 0.5 : 0.2,
-                shadowRadius: 16,
-                elevation: canGoBack ? 10 : 0,
-              }}
-            >
-              <BlurView
-                intensity={isDark ? 40 : 60}
-                tint={isDark ? 'dark' : 'light'}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <SymbolView
-                  name="chevron.left"
-                  size={22}
-                  tintColor={canGoBack ? colors.text : colors.textMuted}
-                  weight="semibold"
-                />
-              </BlurView>
-            </View>
-          )}
-        </Pressable>
-
-        {/* Share Button - Liquid Glass */}
-        <Pressable onPress={handleShare}>
-          {({ pressed }) => (
-            <View
-              style={{
-                width: 64,
-                height: 64,
-                borderRadius: 32,
-                overflow: 'hidden',
-                opacity: pressed ? 0.8 : 1,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: isDark ? 0.6 : 0.25,
-                shadowRadius: 20,
-                elevation: 12,
-              }}
-            >
-              <BlurView
-                intensity={isDark ? 50 : 70}
-                tint={isDark ? 'dark' : 'light'}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <SymbolView
-                  name="square.and.arrow.up"
-                  size={26}
-                  tintColor={colors.text}
-                  weight="medium"
-                />
-              </BlurView>
-            </View>
-          )}
-        </Pressable>
-
-        {/* Next Day Button - Liquid Glass */}
-        <Pressable onPress={handleNext} disabled={!canGoForward}>
-          {({ pressed }) => (
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 26,
-                overflow: 'hidden',
-                opacity: pressed ? 0.75 : canGoForward ? 1 : 0.35,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: isDark ? 0.5 : 0.2,
-                shadowRadius: 16,
-                elevation: canGoForward ? 10 : 0,
-              }}
-            >
-              <BlurView
-                intensity={isDark ? 40 : 60}
-                tint={isDark ? 'dark' : 'light'}
-                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <SymbolView
-                  name="chevron.right"
-                  size={22}
-                  tintColor={canGoForward ? colors.text : colors.textMuted}
-                  weight="semibold"
-                />
-              </BlurView>
-            </View>
-          )}
-        </Pressable>
-      </View>
 
       {/* Completion Celebration */}
       <CompletionCelebration
