@@ -212,23 +212,34 @@ export default function SettingsScreen() {
     userNote?: string;
     report: Record<string, unknown>;
   }) => {
-    const response = await fetch(`${BACKEND_URL}/api/bug-report/email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-    if (!response.ok) {
-      let detail = '';
-      try {
-        const data = await response.json();
-        detail = typeof data?.error === 'string' ? data.error : JSON.stringify(data);
-      } catch {
-        detail = `HTTP ${response.status}`;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/bug-report/email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const data = await response.json();
+          detail = typeof data?.error === 'string' ? data.error : JSON.stringify(data);
+        } catch {
+          detail = `HTTP ${response.status}`;
+        }
+        throw new Error(detail || `HTTP ${response.status}`);
       }
-      throw new Error(detail || `HTTP ${response.status}`);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
     }
   };
 

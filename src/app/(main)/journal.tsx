@@ -171,6 +171,9 @@ export default function JournalScreen() {
     setDeeperError(false);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+      
       const response = await fetch(`${BACKEND_URL}/api/generate/journal-prompts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -180,7 +183,10 @@ export default function JournalScreen() {
           scriptureReference: currentDay?.scriptureReference ?? '',
           dayTitle: currentDay?.title ?? `Day ${dayNumber}`,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) throw new Error('Failed to generate');
 

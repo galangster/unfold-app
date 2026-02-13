@@ -89,7 +89,7 @@ export function DevotionalContent({
             minHeight: day.scriptureText ? 'auto' : 60,
           }}
         >
-          {day.scriptureText ? `"${preventOrphan(day.scriptureText)}"` : ''}
+          {day.scriptureText ? `"${preventOrphan(day.scriptureText)}"` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
         </Text>
         
         {/* Bookmark button - centered at bottom */}
