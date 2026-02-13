@@ -1347,32 +1347,6 @@ export default function ReadingScreen() {
           )}
         </Pressable>
       </View>
-          })}
-        >
-          <BlurView
-            intensity={isDark ? 40 : 60}
-            tint={isDark ? 'dark' : 'light'}
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: canGoForward
-                ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
-                : 'transparent',
-            }}
-          >
-            <SymbolView
-              name="chevron.right"
-              size={22}
-              tintColor={canGoForward ? colors.text : colors.textMuted}
-              weight="semibold"
-            />
-          </BlurView>
-        </Pressable>
-      </View>
 
       {/* Completion Celebration */}
       <CompletionCelebration
