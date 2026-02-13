@@ -913,25 +913,8 @@ export default function ReadingScreen() {
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-            {/* Header with blur gradient */}
-            <View style={{ position: 'relative' }}>
-              <LinearGradient
-                colors={[
-                  colors.background,
-                  `${colors.background}F0`,
-                  `${colors.background}80`,
-                  'transparent',
-                ]}
-                locations={[0, 0.4, 0.75, 1]}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 60,
-                  zIndex: 1,
-                }}
-              />
+            {/* Header */}
+            <View style={{ backgroundColor: colors.background }}>
               <View
                 style={{
                   flexDirection: 'row',
@@ -939,8 +922,6 @@ export default function ReadingScreen() {
                   justifyContent: 'space-between',
                   paddingHorizontal: 16,
                   paddingVertical: 12,
-                  position: 'relative',
-                  zIndex: 2,
                 }}
               >
               <Pressable
@@ -1012,7 +993,6 @@ export default function ReadingScreen() {
                   strokeWidth={1.5}
                 />
               </Pressable>
-            </View>
             </View>
 
             {/* Content - Scrollable */}
