@@ -18,6 +18,7 @@ import {
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
+import { deleteAccount, signOut } from '@/lib/appleAuth';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
 
@@ -149,6 +150,52 @@ export default function SettingsScreen() {
             try {
               reset();
               router.replace('/');
+            } finally {
+              setIsDeletingAccount(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = async () => {
+    // Prevent double-tap
+    if (isDeletingAccount) return;
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      'Delete your account?',
+      'This will permanently delete your account, all devotionals, journal entries, and settings. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingAccount(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            try {
+              // Delete Firebase Auth user
+              const result = await deleteAccount();
+
+              if (result.success) {
+                // Sign out from RevenueCat
+                const { logoutUser } = await import('@/lib/revenuecatClient');
+                await logoutUser();
+
+                // Clear local data
+                reset();
+
+                logger.log('[Settings] Account deleted successfully');
+                router.replace('/');
+              } else {
+                // Show error
+                Alert.alert('Unable to delete account', result.error || 'Please try again later.');
+              }
+            } catch (error) {
+              logger.error('[Settings] Error deleting account', { error });
+              Alert.alert('Error', 'Unable to delete account. Please try again later.');
             } finally {
               setIsDeletingAccount(false);
             }
@@ -1943,6 +1990,41 @@ export default function SettingsScreen() {
                   }}
                 >
                   {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
+                </Text>
+              </View>
+            </Pressable>
+
+            {/* Delete Account - Required by Apple for Sign In with Apple */}
+            <Pressable
+              onPress={handleDeleteAccount}
+              disabled={isDeletingAccount}
+              accessibilityState={{ disabled: isDeletingAccount }}
+              style={{ marginTop: 8 }}
+            >
+              <View
+                style={{
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  opacity: isDeletingAccount ? 0.6 : 1,
+                }}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Trash2 size={20} color={colors.error} />
+                )}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.error,
+                    marginLeft: 12,
+                  }}
+                >
+                  {isDeletingAccount ? 'Deleting...' : 'Delete account'}
                 </Text>
               </View>
             </Pressable>

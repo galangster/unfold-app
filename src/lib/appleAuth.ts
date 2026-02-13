@@ -197,6 +197,44 @@ export async function isAppleSignInAvailable(): Promise<boolean> {
 }
 
 /**
+ * Delete the current user's account
+ * This deletes the Firebase Auth user and should be called before clearing local data
+ * Required by App Store for apps with Sign In with Apple
+ */
+export async function deleteAccount(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const currentUser = auth().currentUser;
+
+    if (!currentUser) {
+      logger.log('[AppleAuth] No user to delete');
+      return { success: true }; // Already deleted / never existed
+    }
+
+    // Delete the user
+    await currentUser.delete();
+
+    logger.log('[AppleAuth] User account deleted successfully');
+    return { success: true };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('[AppleAuth] Account deletion error', { error: errorMessage });
+
+    // Handle specific error cases
+    if (errorMessage.includes('requires-recent-login')) {
+      return {
+        success: false,
+        error: 'For security, please sign out and sign back in before deleting your account.',
+      };
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
+}
+
+/**
  * Initialize authentication on app startup
  * Attempts to restore existing session or create anonymous user
  */
