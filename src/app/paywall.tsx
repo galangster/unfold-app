@@ -104,9 +104,10 @@ export default function PaywallScreen() {
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
 
-  const yearlyPrice = yearlyPackage?.product?.priceString ?? '$38.99';
-  const yearlyRaw = yearlyPackage?.product?.price ?? 38.99;
+  // Updated pricing: $3.99/month, $29.99/year (37% savings)
   const monthlyPrice = monthlyPackage?.product?.priceString ?? '$3.99';
+  const yearlyPrice = yearlyPackage?.product?.priceString ?? '$29.99';
+  const yearlyRaw = yearlyPackage?.product?.price ?? 29.99;
   const perMonthFromYearly = `$${(yearlyRaw / 12).toFixed(2)}`;
 
   // Hard-coded high-contrast CTA colors (theme-independent for guaranteed readability)
@@ -116,7 +117,7 @@ export default function PaywallScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Close button — absolute positioned, always on top */}
+      {/* Close button — higher position */}
       <Pressable
         onPress={handleClose}
         disabled={isPurchasing}
@@ -124,7 +125,7 @@ export default function PaywallScreen() {
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{
           position: 'absolute',
-          top: insets.top + 8,
+          top: insets.top + 4,
           right: 16,
           zIndex: 10,
           padding: 8,
@@ -135,15 +136,33 @@ export default function PaywallScreen() {
       </Pressable>
 
       {/* Top section — hero + features */}
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 28 }}>
+      <View style={{ paddingTop: insets.top + 2, paddingHorizontal: 28 }}>
         {/* Hero */}
         <Animated.View entering={FadeIn.duration(600)}>
+          {/* App Icon */}
+          <View
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 16,
+              backgroundColor: isDark ? '#1C1710' : '#F5F5F3',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            {/* TODO: Replace with actual icon image */}
+            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
+          </View>
+          
           <View
             style={{
               width: 36,
               height: 1,
               backgroundColor: colors.accent,
-              marginBottom: 20,
+              marginBottom: 16,
               borderRadius: 1,
               opacity: 0.6,
             }}
@@ -183,10 +202,10 @@ export default function PaywallScreen() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingVertical: 5,
+                paddingVertical: 4,
               }}
             >
-              <Check size={15} color={colors.accent} strokeWidth={2.5} />
+              <Check size={18} color={colors.accent} strokeWidth={2.5} />
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -200,6 +219,15 @@ export default function PaywallScreen() {
             </View>
           ))}
         </Animated.View>
+        
+        {/* Separator */}
+        <View
+          style={{
+            height: 1,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+            marginVertical: 20,
+          }}
+        />
       </View>
 
       {/* Plans + subscribe + legal */}
@@ -223,10 +251,10 @@ export default function PaywallScreen() {
                 paddingHorizontal: 16,
                 paddingVertical: 14,
                 borderRadius: 14,
-                borderWidth: selectedPlan === 'yearly' ? 1.5 : 1,
+                borderWidth: selectedPlan === 'yearly' ? 2 : 1,
                 borderColor: selectedPlan === 'yearly' ? colors.accent : colors.border,
                 backgroundColor: selectedPlan === 'yearly'
-                  ? (isDark ? 'rgba(200, 165, 92, 0.06)' : 'rgba(154, 123, 60, 0.04)')
+                  ? (isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(200, 165, 92, 0.08)')
                   : 'transparent',
               }}
             >
@@ -268,7 +296,7 @@ export default function PaywallScreen() {
                         letterSpacing: 0.5,
                       }}
                     >
-                      Save 20%
+                      Save 37%
                     </Text>
                   </View>
                 </View>
@@ -399,10 +427,10 @@ export default function PaywallScreen() {
           <Text
             style={{
               fontFamily: FontFamily.ui,
-              fontSize: 10,
+              fontSize: 13,
               color: colors.textHint,
               textAlign: 'center',
-              lineHeight: 15,
+              lineHeight: 18,
               marginTop: 4,
               paddingHorizontal: 8,
             }}
