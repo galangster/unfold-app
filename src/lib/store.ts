@@ -189,6 +189,7 @@ export interface Highlight {
   dayNumber: number;
   dayTitle: string;
   highlightedText: string;
+  serializedRange?: string; // Rangy serialization for precise restoration
   contextBefore?: string;
   contextAfter?: string;
   createdAt: string;

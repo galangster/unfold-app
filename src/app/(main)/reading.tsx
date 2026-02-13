@@ -287,7 +287,7 @@ export default function ReadingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, bookmarks, addBookmark, removeBookmark]);
 
-  const handleQuoteSelected = useCallback((quote: { text: string; context: string }) => {
+  const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string }) => {
     if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
 
     addHighlight({
@@ -296,6 +296,7 @@ export default function ReadingScreen() {
       dayNumber: viewingDay,
       dayTitle: currentDayData.title,
       highlightedText: quote.text,
+      serializedRange: quote.serializedRange,
       contextBefore: quote.context.substring(0, 100),
     });
 

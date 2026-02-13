@@ -8,6 +8,7 @@ import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight } from '@/lib/stor
 interface Quote {
   text: string;
   context: string;
+  serializedRange?: string;
 }
 
 interface DevotionalWebViewProps {
@@ -36,14 +37,52 @@ export function DevotionalWebView({
     return existingHighlights.map((_, i) => `highlight-${day.dayNumber}-${i}`);
   }, [existingHighlights, day.dayNumber]);
 
-  // Inject JS to report content height and apply highlights
+  // Inject JS to report content height and apply highlights using rangy
   const injectedJavaScript = useMemo(() => {
-    const highlightData = existingHighlights.map((h, i) => ({
-      id: highlightIds[i],
-      text: h.highlightedText,
-    }));
+    const serializedHighlights = existingHighlights
+      .map(h => h.serializedRange)
+      .filter(Boolean)
+      .join('|');
 
     return `
+      // Wait for rangy to load
+      function initRangy() {
+        if (typeof rangy === 'undefined') {
+          setTimeout(initRangy, 100);
+          return;
+        }
+        
+        rangy.init();
+        
+        // Create highlighter instance
+        const highlighter = rangy.createHighlighter(document, 'textContent');
+        
+        // Add class applier for highlight styling
+        const highlightApplier = rangy.createClassApplier('rangy-highlight', {
+          elementTagName: 'mark',
+          elementProperties: {
+            style: 'background: ${isDark ? 'rgba(200, 165, 92, 0.35)' : 'rgba(255, 220, 100, 0.6)'}; color: inherit; padding: 2px 0; border-radius: 2px;'
+          }
+        });
+        highlighter.addClassApplier(highlightApplier);
+        
+        // Store highlighter globally for access from save button
+        window.rangyHighlighter = highlighter;
+        
+        // Deserialize existing highlights
+        const savedHighlights = "${serializedHighlights}";
+        if (savedHighlights) {
+          try {
+            highlighter.deserialize(savedHighlights);
+          } catch (e) {
+            console.log('Failed to deserialize some highlights:', e);
+          }
+        }
+        
+        // Report height after highlights applied
+        reportHeight();
+      }
+      
       function reportHeight() {
         const height = document.body.scrollHeight;
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -52,99 +91,21 @@ export function DevotionalWebView({
         }));
       }
       
-      // Apply saved highlights
-      function applyHighlights() {
-        const highlights = ${JSON.stringify(highlightData)};
-        highlights.forEach(hl => {
-          highlightText(hl.text, hl.id);
-        });
+      // Initialize on load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initRangy);
+      } else {
+        initRangy();
       }
       
-      // Highlight text by wrapping in mark tags
-      function highlightText(searchText, highlightId) {
-        if (!searchText || searchText.length < 3) return;
-        
-        // Track if we've successfully highlighted this text
-        let highlighted = false;
-        
-        const walker = document.createTreeWalker(
-          document.body,
-          NodeFilter.SHOW_TEXT,
-          null,
-          false
-        );
-        
-        const textNodes = [];
-        let node;
-        while (node = walker.nextNode()) {
-          if (node.parentElement.tagName !== 'SCRIPT' && 
-              node.parentElement.tagName !== 'STYLE' &&
-              node.parentElement.tagName !== 'MARK') {
-            textNodes.push(node);
-          }
-        }
-        
-        for (let i = 0; i < textNodes.length; i++) {
-          const textNode = textNodes[i];
-          const text = textNode.textContent;
-          const index = text.indexOf(searchText);
-          
-          if (index !== -1) {
-            // Check if this exact text is already highlighted (by ID)
-            const existingMark = document.getElementById(highlightId);
-            if (existingMark) {
-              return; // Already highlighted
-            }
-            
-            // Check if any part is already in a mark (overlap detection)
-            const parent = textNode.parentElement;
-            if (parent && parent.tagName === 'MARK') {
-              continue; // Skip already highlighted text
-            }
-            
-            const before = text.substring(0, index);
-            const match = text.substring(index, index + searchText.length);
-            const after = text.substring(index + searchText.length);
-            
-            const fragment = document.createDocumentFragment();
-            
-            if (before) {
-              fragment.appendChild(document.createTextNode(before));
-            }
-            
-            const mark = document.createElement('mark');
-            mark.id = highlightId;
-            mark.textContent = match;
-            fragment.appendChild(mark);
-            
-            if (after) {
-              fragment.appendChild(document.createTextNode(after));
-            }
-            
-            textNode.parentNode.replaceChild(fragment, textNode);
-            highlighted = true;
-            
-            // Only highlight first UNHIGHLIGHTED occurrence
-            // (skip if same text appears multiple times - prevent duplicates)
-            break;
-          }
-        }
-        
-        return highlighted;
-      }
-      
-      // Report height after fonts load and apply highlights
-      window.addEventListener('load', () => {
-        reportHeight();
-        setTimeout(applyHighlights, 100);
-      });
+      // Backup height reports
       setTimeout(reportHeight, 100);
       setTimeout(reportHeight, 500);
       setTimeout(reportHeight, 1000);
       
       true;
     `;
-  }, [existingHighlights, highlightIds]);
+  }, [existingHighlights, isDark]);
 
   // Generate HTML with exact typography matching
   const htmlContent = useMemo(() => {
@@ -235,6 +196,12 @@ export function DevotionalWebView({
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Rangy for robust text highlighting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rangy/1.3.0/rangy-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rangy/1.3.0/rangy-classapplier.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/rangy/1.3.0/rangy-highlighter.min.js"></script>
+  
   <style>
     * {
       margin: 0;
@@ -471,7 +438,7 @@ export function DevotionalWebView({
       e.preventDefault();
       e.stopPropagation();
       
-      if (selectedText) {
+      if (selectedText && window.rangyHighlighter) {
         // Get context (parent paragraph text)
         let context = '';
         if (selectionRange) {
@@ -480,40 +447,41 @@ export function DevotionalWebView({
           context = element?.textContent?.substring(0, 150) || '';
         }
         
-        // Apply highlight immediately
-        const mark = document.createElement('mark');
-        mark.textContent = selectedText;
+        // Apply highlight using rangy
         let highlightApplied = false;
+        let serializedHighlight = '';
         
         try {
-          selectionRange.surroundContents(mark);
+          // Restore the selection temporarily
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(selectionRange);
+          
+          // Highlight using rangy
+          window.rangyHighlighter.highlightSelection('rangy-highlight', { exclusive: true });
           highlightApplied = true;
+          
+          // Serialize all highlights
+          serializedHighlight = window.rangyHighlighter.serialize();
+          
         } catch (e) {
-          // Complex selection spanning multiple elements - try extract/insert approach
-          try {
-            const contents = selectionRange.extractContents();
-            mark.appendChild(contents);
-            selectionRange.insertNode(mark);
-            highlightApplied = true;
-          } catch (e2) {
-            // Final fallback: use highlightText function
-            const tempId = 'temp-' + Date.now();
-            highlightApplied = highlightText(selectedText, tempId);
-          }
+          console.log('Rangy highlight failed:', e);
         }
         
-        // Send to React Native (even if highlight failed visually)
+        // Send to React Native with serialized range
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'QUOTE_SELECTED',
           text: selectedText,
           context: context,
-          highlightApplied: highlightApplied
+          highlightApplied: highlightApplied,
+          serializedRange: serializedHighlight
         }));
         
         // Clear selection and hide button
         window.getSelection().removeAllRanges();
         saveBtn.classList.remove('visible');
         selectedText = '';
+      }
       }
     });
     
@@ -545,6 +513,7 @@ export function DevotionalWebView({
         onQuoteSelected({
           text: data.text,
           context: data.context,
+          serializedRange: data.serializedRange,
         });
       } else if (data.type === 'HEIGHT_CHANGE') {
         setWebViewHeight(Math.max(data.height, 200));
