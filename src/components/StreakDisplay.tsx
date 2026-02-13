@@ -24,6 +24,8 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
     ? { flame: 32, number: 28, freeze: 20, padding: 14 }
     : { flame: 24, number: 18, freeze: 16, padding: 10 };
 
+  const config = sizeConfig;
+
   if (streak === 0) {
     return (
       <Animated.View
