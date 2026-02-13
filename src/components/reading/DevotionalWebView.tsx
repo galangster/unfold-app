@@ -342,6 +342,7 @@ export function DevotionalWebView({
       padding: 0;
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
     }
     
     body {
@@ -352,11 +353,19 @@ export function DevotionalWebView({
       background: transparent;
       padding: 0 ${CONTENT_PADDING}px 60px;
       max-width: 100%;
+      -webkit-user-select: text;
+      user-select: text;
     }
     
-    /* Selection styling */
+    /* Selection styling - hide native menu */
     ::selection {
       background: ${accentColor}40;
+    }
+    
+    /* Prevent native context menu on long press */
+    p, span, div {
+      -webkit-user-select: text;
+      user-select: text;
     }
     
     /* Highlight colors */

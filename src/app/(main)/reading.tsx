@@ -1233,7 +1233,7 @@ export default function ReadingScreen() {
         </Animated.View>
       )}
 
-      {/* Bottom Navigation Toolbar */}
+      {/* Bottom Navigation Toolbar - Liquid Glass iOS 18 Style */}
       <View
         style={{
           position: 'absolute',
@@ -1242,9 +1242,8 @@ export default function ReadingScreen() {
           right: 0,
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
-          gap: 20,
-          paddingHorizontal: 24,
+          justifyContent: 'space-between',
+          paddingHorizontal: 48,
         }}
         pointerEvents="box-none"
       >
@@ -1253,57 +1252,57 @@ export default function ReadingScreen() {
           onPress={handlePrevious}
           disabled={!canGoBack}
           style={({ pressed }) => ({
-            width: 48,
-            height: 48,
-            borderRadius: 24,
+            width: 52,
+            height: 52,
+            borderRadius: 26,
             backgroundColor: canGoBack
-              ? (isDark ? 'rgba(120, 120, 128, 0.24)' : 'rgba(255, 255, 255, 0.7)')
+              ? (isDark ? 'rgba(120, 120, 128, 0.32)' : 'rgba(255, 255, 255, 0.85)')
               : 'transparent',
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: pressed ? 0.8 : (canGoBack ? 1 : 0.4),
+            opacity: pressed ? 0.75 : (canGoBack ? 1 : 0.35),
             shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDark ? 0.4 : 0.15,
-            shadowRadius: 12,
-            elevation: canGoBack ? 6 : 0,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: isDark ? 0.5 : 0.2,
+            shadowRadius: 16,
+            elevation: canGoBack ? 10 : 0,
             borderWidth: 1,
             borderColor: canGoBack
-              ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.6)')
+              ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
               : 'transparent',
           })}
         >
           <SymbolView
             name="chevron.left"
-            size={20}
-            tintColor={colors.text}
+            size={22}
+            tintColor={canGoBack ? colors.text : colors.textMuted}
             weight="semibold"
           />
         </Pressable>
 
-        {/* Share Button - Liquid Glass */}
+        {/* Share Button - Liquid Glass (center, larger) */}
         <Pressable
           onPress={handleShare}
           style={({ pressed }) => ({
-            width: 60,
-            height: 60,
-            borderRadius: 30,
-            backgroundColor: isDark ? 'rgba(120, 120, 128, 0.32)' : 'rgba(255, 255, 255, 0.82)',
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: isDark ? 'rgba(120, 120, 128, 0.4)' : 'rgba(255, 255, 255, 0.92)',
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: pressed ? 0.85 : 1,
+            opacity: pressed ? 0.8 : 1,
             shadowColor: '#000',
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: isDark ? 0.5 : 0.18,
-            shadowRadius: 16,
-            elevation: 8,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.7)',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: isDark ? 0.6 : 0.25,
+            shadowRadius: 20,
+            elevation: 12,
+            borderWidth: 1.5,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.9)',
           })}
         >
           <SymbolView
             name="square.and.arrow.up"
-            size={24}
+            size={26}
             tintColor={colors.text}
             weight="medium"
           />
@@ -1314,30 +1313,30 @@ export default function ReadingScreen() {
           onPress={handleNext}
           disabled={!canGoForward}
           style={({ pressed }) => ({
-            width: 48,
-            height: 48,
-            borderRadius: 24,
+            width: 52,
+            height: 52,
+            borderRadius: 26,
             backgroundColor: canGoForward
-              ? (isDark ? 'rgba(120, 120, 128, 0.24)' : 'rgba(255, 255, 255, 0.7)')
+              ? (isDark ? 'rgba(120, 120, 128, 0.32)' : 'rgba(255, 255, 255, 0.85)')
               : 'transparent',
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: pressed ? 0.8 : (canGoForward ? 1 : 0.4),
+            opacity: pressed ? 0.75 : (canGoForward ? 1 : 0.35),
             shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: isDark ? 0.4 : 0.15,
-            shadowRadius: 12,
-            elevation: canGoForward ? 6 : 0,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: isDark ? 0.5 : 0.2,
+            shadowRadius: 16,
+            elevation: canGoForward ? 10 : 0,
             borderWidth: 1,
             borderColor: canGoForward
-              ? (isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.6)')
+              ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
               : 'transparent',
           })}
         >
           <SymbolView
             name="chevron.right"
-            size={20}
-            tintColor={colors.text}
+            size={22}
+            tintColor={canGoForward ? colors.text : colors.textMuted}
             weight="semibold"
           />
         </Pressable>
