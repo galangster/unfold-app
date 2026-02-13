@@ -733,7 +733,7 @@ export default function ReadingScreen() {
 
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
           {/* Back header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
             <Pressable
@@ -912,7 +912,7 @@ export default function ReadingScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <GestureDetector gesture={panGesture}>
         <Animated.View style={[{ flex: 1 }, contentStyle]}>
-          <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
             {/* Header with blur gradient */}
             <View style={{ position: 'relative' }}>
               <LinearGradient
