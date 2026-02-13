@@ -201,8 +201,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'highlights' && (
-          <Animated.View entering={FadeInRight.duration(300)}
-003e
+          <Animated.View entering={FadeInRight.duration(300)}>
             {highlights.length === 0 ? (
               <EmptyState
                 icon={Highlighter}
