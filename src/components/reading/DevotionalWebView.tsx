@@ -64,6 +64,9 @@ export function DevotionalWebView({
       function highlightText(searchText, highlightId) {
         if (!searchText || searchText.length < 3) return;
         
+        // Track if we've successfully highlighted this text
+        let highlighted = false;
+        
         const walker = document.createTreeWalker(
           document.body,
           NodeFilter.SHOW_TEXT,
@@ -87,6 +90,18 @@ export function DevotionalWebView({
           const index = text.indexOf(searchText);
           
           if (index !== -1) {
+            // Check if this exact text is already highlighted (by ID)
+            const existingMark = document.getElementById(highlightId);
+            if (existingMark) {
+              return; // Already highlighted
+            }
+            
+            // Check if any part is already in a mark (overlap detection)
+            const parent = textNode.parentElement;
+            if (parent && parent.tagName === 'MARK') {
+              continue; // Skip already highlighted text
+            }
+            
             const before = text.substring(0, index);
             const match = text.substring(index, index + searchText.length);
             const after = text.substring(index + searchText.length);
@@ -107,9 +122,15 @@ export function DevotionalWebView({
             }
             
             textNode.parentNode.replaceChild(fragment, textNode);
-            break; // Only highlight first occurrence
+            highlighted = true;
+            
+            // Only highlight first UNHIGHLIGHTED occurrence
+            // (skip if same text appears multiple times - prevent duplicates)
+            break;
           }
         }
+        
+        return highlighted;
       }
       
       // Report height after fonts load and apply highlights
@@ -399,9 +420,22 @@ export function DevotionalWebView({
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Position button above selection
-      const top = rect.top - 50;
-      const left = rect.left + (rect.width / 2);
+      // Position button above selection with boundary checking
+      let top = rect.top - 50;
+      let left = rect.left + (rect.width / 2);
+      
+      // Keep button on screen (min 10px from top)
+      if (top < 10) {
+        top = rect.bottom + 20; // Position below if too close to top
+      }
+      
+      // Keep button horizontally within viewport
+      const btnWidth = 120; // Approximate button width
+      if (left < btnWidth / 2) {
+        left = btnWidth / 2 + 10;
+      } else if (left > window.innerWidth - btnWidth / 2) {
+        left = window.innerWidth - btnWidth / 2 - 10;
+      }
       
       saveBtn.style.top = top + 'px';
       saveBtn.style.left = left + 'px';
@@ -449,18 +483,31 @@ export function DevotionalWebView({
         // Apply highlight immediately
         const mark = document.createElement('mark');
         mark.textContent = selectedText;
+        let highlightApplied = false;
+        
         try {
           selectionRange.surroundContents(mark);
+          highlightApplied = true;
         } catch (e) {
-          // Complex selection, fallback to simple approach
-          console.log('Complex selection, skipping visual highlight');
+          // Complex selection spanning multiple elements - try extract/insert approach
+          try {
+            const contents = selectionRange.extractContents();
+            mark.appendChild(contents);
+            selectionRange.insertNode(mark);
+            highlightApplied = true;
+          } catch (e2) {
+            // Final fallback: use highlightText function
+            const tempId = 'temp-' + Date.now();
+            highlightApplied = highlightText(selectedText, tempId);
+          }
         }
         
-        // Send to React Native
+        // Send to React Native (even if highlight failed visually)
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'QUOTE_SELECTED',
           text: selectedText,
-          context: context
+          context: context,
+          highlightApplied: highlightApplied
         }));
         
         // Clear selection and hide button
