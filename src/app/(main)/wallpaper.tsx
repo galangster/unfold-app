@@ -1,13 +1,21 @@
 import { useState, useRef, useCallback } from 'react';
-import { View, Text, Pressable, Dimensions, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  Dimensions,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
-import { X, Lock } from 'lucide-react-native';
+import { X, Lock, Crown } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -305,51 +313,157 @@ export default function WallpaperScreen() {
           </Animated.View>
         </View>
 
-        {/* Style Selector */}
-        <Animated.View entering={FadeIn.duration(400).delay(100)}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 16, gap: 10 }}
+        {/* Style Carousel */}
+        <View style={{ paddingBottom: isPremium ? 16 : 140 }}>
+          <Animated.View entering={FadeIn.duration(400).delay(100)}>
+            <FlatList
+              data={wallpaperStyles}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              pagingEnabled
+              snapToAlignment="center"
+              decelerationRate="fast"
+              contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
+              renderItem={({ item: style }) => {
+                const isLocked = style.premium && !isPremium;
+                const isActive = selectedStyle === style.id;
+                return (
+                  <Pressable
+                    onPress={() => handleSelectStyle(style)}
+                    style={{ alignItems: 'center', marginRight: 12 }}
+                  >
+                    <View
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 28,
+                        backgroundColor: style.bg,
+                        borderWidth: isActive ? 3 : 2,
+                        borderColor: isActive ? colors.accent : colors.border,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        shadowColor: isActive ? colors.accent : 'transparent',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: isActive ? 0.3 : 0,
+                        shadowRadius: 4,
+                      }}
+                    >
+                      {isLocked && (
+                        <View
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0,0,0,0.4)',
+                            borderRadius: 28,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Lock size={18} color="rgba(255,255,255,0.9)" />
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 11,
+                        color: isActive ? colors.text : colors.textMuted,
+                        marginTop: 6,
+                      }}
+                    >
+                      {style.name}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+              keyExtractor={(item) => item.id}
+            />
+          </Animated.View>
+
+          {/* Page Indicator */}
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 6,
+              marginTop: 12,
+            }}
           >
-            {wallpaperStyles.map((style) => {
-              const isSelected = selectedStyle === style.id;
-              const isLocked = style.premium && !isPremium;
-              return (
-                <Pressable
-                  key={style.id}
-                  onPress={() => handleSelectStyle(style)}
-                  style={{ alignItems: 'center' }}
-                >
-                  <View
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: style.bg,
-                      borderWidth: isSelected ? 2.5 : 1,
-                      borderColor: isSelected ? colors.text : colors.border,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    {isLocked && <Lock size={14} color={style.textColor} />}
-                  </View>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 11,
-                      color: isSelected ? colors.text : colors.textMuted,
-                      marginTop: 6,
-                    }}
-                  >
-                    {style.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </Animated.View>
+            {wallpaperStyles.map((style) => (
+              <View
+                key={style.id}
+                style={{
+                  width: selectedStyle === style.id ? 16 : 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor:
+                    selectedStyle === style.id ? colors.accent : colors.border,
+                }}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* Upgrade CTA for Free Users */}
+        {!isPremium && (
+          <Animated.View
+            entering={FadeInUp.duration(300).delay(200)}
+            style={{
+              position: 'absolute',
+              bottom: 90,
+              left: 0,
+              right: 0,
+              paddingHorizontal: 24,
+              paddingVertical: 16,
+              backgroundColor: colors.background,
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 13,
+                color: colors.textMuted,
+                textAlign: 'center',
+                marginBottom: 12,
+              }}
+            >
+              Unlock all {wallpaperStyles.filter((s) => s.premium).length} premium styles
+            </Text>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/paywall');
+              }}
+              style={({ pressed }) => ({
+                backgroundColor: colors.accent,
+                paddingVertical: 14,
+                borderRadius: 12,
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 8,
+                opacity: pressed ? 0.9 : 1,
+                transform: [{ scale: pressed ? 0.98 : 1 }],
+              })}
+            >
+              <Crown size={16} color={isDark ? '#000' : '#fff'} />
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 15,
+                  color: isDark ? '#000' : '#fff',
+                }}
+              >
+                Upgrade to Premium
+              </Text>
+            </Pressable>
+          </Animated.View>
+        )}
 
         {/* Actions */}
         <Animated.View
