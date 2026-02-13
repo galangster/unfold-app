@@ -994,6 +994,7 @@ export default function ReadingScreen() {
                 />
               </Pressable>
             </View>
+            </View>
 
             {/* Content - Scrollable */}
             <ScrollView
@@ -1023,34 +1024,94 @@ export default function ReadingScreen() {
               {!isCompleted && (
                 <Animated.View
                   exiting={FadeOut.duration(200)}
-                  style={{ marginTop: 48, alignItems: 'center' }}
+                  style={{ marginTop: 48, alignItems: 'center', gap: 20 }}
                 >
+                  {/* Animated Chevron - inviting scroll to buttons */}
+                  <Animated.View style={{ marginBottom: 8 }}>
+                    <Animated.View
+                      style={{
+                        transform: [{
+                          translateY: withRepeat(
+                            withTiming(6, { duration: 1200 }),
+                            -1,
+                            true
+                          )
+                        }]
+                      }}
+                    >
+                      <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
+                    </Animated.View>
+                  </Animated.View>
+
+                  {/* Complete Day Button - Premium pill design */}
                   <Pressable
                     onPress={handleComplete}
                     accessibilityRole="button"
                     accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                     accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
                     style={({ pressed }) => ({
-                      backgroundColor: pressed ? colors.text : colors.buttonBackground,
-                      paddingVertical: 18,
-                      paddingHorizontal: 48,
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: pressed ? colors.text : colors.border,
+                      backgroundColor: colors.accent,
+                      paddingVertical: 20,
+                      paddingHorizontal: 56,
+                      borderRadius: 32,
+                      shadowColor: colors.accent,
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: pressed ? 0.4 : 0.25,
+                      shadowRadius: 20,
+                      elevation: 12,
+                      transform: [{ scale: pressed ? 0.97 : 1 }],
                     })}
                   >
                     {({ pressed }) => (
                       <Text
                         style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 16,
-                          color: pressed ? colors.background : colors.text,
+                          fontFamily: FontFamily.display,
+                          fontSize: 18,
+                          color: isDark ? '#0a0a0a' : '#1a1a1a',
                           textAlign: 'center',
+                          letterSpacing: 0.5,
                         }}
                       >
                         {isLastDay ? 'Complete Journey' : 'Complete Day'}
                       </Text>
                     )}
+                  </Pressable>
+
+                  {/* Share Button - Elegant centered design */}
+                  <Pressable
+                    onPress={handleShare}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share devotional"
+                    accessibilityHint="Share this day's reading with others"
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                      paddingVertical: 14,
+                      paddingHorizontal: 28,
+                      borderRadius: 24,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: pressed ? colors.inputBackground : 'transparent',
+                      opacity: pressed ? 0.8 : 1,
+                    })}
+                  >
+                    <SymbolView
+                      name="square.and.arrow.up"
+                      size={20}
+                      tintColor={colors.textMuted}
+                      weight="medium"
+                    />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.display,
+                        fontSize: 15,
+                        color: colors.textMuted,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      Share today's reading
+                    </Text>
                   </Pressable>
                 </Animated.View>
               )}
