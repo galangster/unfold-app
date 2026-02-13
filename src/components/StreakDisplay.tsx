@@ -7,21 +7,22 @@ import { useUnfoldStore } from '@/lib/store';
 
 interface StreakDisplayProps {
   size?: 'small' | 'medium' | 'large';
+  compact?: boolean;
   showFreeze?: boolean;
 }
 
-export function StreakDisplay({ size = 'medium', showFreeze = true }: StreakDisplayProps) {
+export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: StreakDisplayProps) {
   const { colors, isDark } = useTheme();
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
 
-  const sizeConfig = {
-    small: { flame: 16, number: 14, freeze: 12, padding: 6 },
-    medium: { flame: 24, number: 18, freeze: 16, padding: 10 },
-    large: { flame: 32, number: 28, freeze: 20, padding: 14 },
-  };
-
-  const config = sizeConfig[size];
+  const sizeConfig = compact
+    ? { flame: 16, number: 14, freeze: 12, padding: 6 }
+    : size === 'small'
+    ? { flame: 16, number: 14, freeze: 12, padding: 6 }
+    : size === 'large'
+    ? { flame: 32, number: 28, freeze: 20, padding: 14 }
+    : { flame: 24, number: 18, freeze: 16, padding: 10 };
 
   if (streak === 0) {
     return (
