@@ -181,6 +181,9 @@ export interface Bookmark {
   savedAt: string;
 }
 
+// Highlight colors for categorization
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'purple' | 'red';
+
 // Highlights for saved quotes from devotional text
 export interface Highlight {
   id: string;
@@ -190,6 +193,7 @@ export interface Highlight {
   dayTitle: string;
   highlightedText: string;
   serializedRange?: string; // Rangy serialization for precise restoration
+  color?: HighlightColor; // Color coding for categorization
   contextBefore?: string;
   contextAfter?: string;
   createdAt: string;

@@ -1,14 +1,15 @@
-import React, { useRef, useMemo, useState, useEffect } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight } from '@/lib/store';
+import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor } from '@/lib/store';
 
 interface Quote {
   text: string;
   context: string;
   serializedRange?: string;
+  color?: HighlightColor;
 }
 
 interface DevotionalWebViewProps {
@@ -21,6 +22,15 @@ interface DevotionalWebViewProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
 
+// Color definitions for highlights
+const HIGHLIGHT_COLORS = {
+  yellow: { light: 'rgba(255, 220, 100, 0.6)', dark: 'rgba(200, 165, 92, 0.35)' },
+  green: { light: 'rgba(100, 200, 100, 0.4)', dark: 'rgba(100, 200, 100, 0.25)' },
+  blue: { light: 'rgba(100, 150, 255, 0.4)', dark: 'rgba(100, 150, 255, 0.25)' },
+  purple: { light: 'rgba(180, 100, 200, 0.4)', dark: 'rgba(180, 100, 200, 0.25)' },
+  red: { light: 'rgba(255, 100, 100, 0.4)', dark: 'rgba(255, 100, 100, 0.25)' },
+};
+
 export function DevotionalWebView({ 
   day, 
   fontSize, 
@@ -32,17 +42,23 @@ export function DevotionalWebView({
   const webViewRef = useRef<WebView>(null);
   const [webViewHeight, setWebViewHeight] = useState(200);
 
-  // Generate unique IDs for highlights
-  const highlightIds = useMemo(() => {
-    return existingHighlights.map((_, i) => `highlight-${day.dayNumber}-${i}`);
-  }, [existingHighlights, day.dayNumber]);
-
   // Inject JS to report content height and apply highlights using rangy
   const injectedJavaScript = useMemo(() => {
-    const serializedHighlights = existingHighlights
-      .map(h => h.serializedRange)
-      .filter(Boolean)
-      .join('|');
+    // Group highlights by color for rangy deserialization
+    const highlightsByColor: Record<string, string[]> = {
+      yellow: [],
+      green: [],
+      blue: [],
+      purple: [],
+      red: [],
+    };
+    
+    existingHighlights.forEach(h => {
+      const color = h.color || 'yellow';
+      if (h.serializedRange && highlightsByColor[color]) {
+        highlightsByColor[color].push(h.serializedRange);
+      }
+    });
 
     return `
       // Wait for rangy to load
@@ -57,30 +73,44 @@ export function DevotionalWebView({
         // Create highlighter instance
         const highlighter = rangy.createHighlighter(document, 'textContent');
         
-        // Add class applier for highlight styling
-        const highlightApplier = rangy.createClassApplier('rangy-highlight', {
-          elementTagName: 'mark',
-          elementProperties: {
-            style: 'background: ${isDark ? 'rgba(200, 165, 92, 0.35)' : 'rgba(255, 220, 100, 0.6)'}; color: inherit; padding: 2px 0; border-radius: 2px;'
-          }
-        });
-        highlighter.addClassApplier(highlightApplier);
+        // Add class appliers for each highlight color
+        const colorConfigs = ${JSON.stringify(HIGHLIGHT_COLORS)};
+        const isDark = ${isDark};
         
-        // Store highlighter globally for access from save button
+        Object.keys(colorConfigs).forEach(color => {
+          const bgColor = isDark ? colorConfigs[color].dark : colorConfigs[color].light;
+          const applier = rangy.createClassApplier('rangy-highlight-' + color, {
+            elementTagName: 'mark',
+            elementProperties: {
+              style: 'background: ' + bgColor + '; color: inherit; padding: 2px 0; border-radius: 2px;',
+              className: 'highlight-' + color
+            }
+          });
+          highlighter.addClassApplier(applier);
+        });
+        
+        // Store highlighter globally
         window.rangyHighlighter = highlighter;
         
-        // Deserialize existing highlights
-        const savedHighlights = "${serializedHighlights}";
-        if (savedHighlights) {
-          try {
-            highlighter.deserialize(savedHighlights);
-          } catch (e) {
-            console.log('Failed to deserialize some highlights:', e);
+        // Deserialize existing highlights by color
+        const highlightsByColor = ${JSON.stringify(highlightsByColor)};
+        Object.keys(highlightsByColor).forEach(color => {
+          const ranges = highlightsByColor[color];
+          if (ranges && ranges.length > 0) {
+            ranges.forEach(range => {
+              if (range) {
+                try {
+                  highlighter.deserialize(range);
+                } catch (e) {
+                  console.log('Failed to deserialize highlight:', e);
+                }
+              }
+            });
           }
-        }
+        });
         
         // Report height after highlights applied
-        reportHeight();
+        setTimeout(reportHeight, 100);
       }
       
       function reportHeight() {
@@ -99,9 +129,120 @@ export function DevotionalWebView({
       }
       
       // Backup height reports
-      setTimeout(reportHeight, 100);
       setTimeout(reportHeight, 500);
       setTimeout(reportHeight, 1000);
+      
+      // Selection handling
+      let selectedText = '';
+      let selectionRange = null;
+      const toolbar = document.getElementById('highlight-toolbar');
+      
+      function positionToolbar() {
+        const selection = window.getSelection();
+        if (!selection.rangeCount) return;
+        
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // Position toolbar below selection
+        let top = rect.bottom + 10;
+        let left = rect.left + (rect.width / 2) - 100; // Center 200px toolbar
+        
+        // Keep toolbar on screen
+        if (top < 50) top = rect.bottom + 10;
+        if (top > window.innerHeight - 60) top = rect.top - 60;
+        if (left < 10) left = 10;
+        if (left > window.innerWidth - 210) left = window.innerWidth - 210;
+        
+        toolbar.style.top = top + 'px';
+        toolbar.style.left = left + 'px';
+      }
+      
+      function checkSelection() {
+        const selection = window.getSelection();
+        const newText = selection.toString().trim();
+        
+        if (newText.length > 5 && newText !== selectedText) {
+          selectedText = newText;
+          selectionRange = selection.getRangeAt(0);
+          positionToolbar();
+          toolbar.classList.add('visible');
+        } else if (newText.length <= 5) {
+          selectedText = '';
+          toolbar.classList.remove('visible');
+        }
+      }
+      
+      // Poll for selection changes
+      document.addEventListener('selectionchange', () => {
+        setTimeout(checkSelection, 100);
+      });
+      
+      document.addEventListener('touchend', () => {
+        setTimeout(checkSelection, 200);
+      });
+      
+      // Handle color button clicks
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const color = btn.dataset.color;
+          if (!selectedText || !window.rangyHighlighter) return;
+          
+          let context = '';
+          if (selectionRange) {
+            const container = selectionRange.commonAncestorContainer;
+            const element = container.nodeType === 3 ? container.parentElement : container;
+            context = element?.textContent?.substring(0, 150) || '';
+          }
+          
+          let highlightApplied = false;
+          let serializedHighlight = '';
+          
+          try {
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(selectionRange);
+            
+            window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
+            highlightApplied = true;
+            serializedHighlight = window.rangyHighlighter.serialize();
+          } catch (e) {
+            console.log('Highlight failed:', e);
+          }
+          
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'QUOTE_SELECTED',
+            text: selectedText,
+            context: context,
+            highlightApplied: highlightApplied,
+            serializedRange: serializedHighlight,
+            color: color
+          }));
+          
+          window.getSelection().removeAllRanges();
+          toolbar.classList.remove('visible');
+          selectedText = '';
+        });
+      });
+      
+      // Hide toolbar when tapping elsewhere
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#highlight-toolbar')) {
+          const selection = window.getSelection();
+          if (!selection.toString().trim()) {
+            toolbar.classList.remove('visible');
+            selectedText = '';
+          }
+        }
+      });
+      
+      // Hide on scroll
+      window.addEventListener('scroll', () => {
+        toolbar.classList.remove('visible');
+      });
       
       true;
     `;
@@ -113,7 +254,6 @@ export function DevotionalWebView({
     const bodyFontSize = fontSizes.body;
     const lineHeight = bodyFontSize * 1.75;
 
-    // Get web font name from native font mapping
     const getWebFontName = (nativeFont: string) => {
       const fontMap: Record<string, string> = {
         'SourceSerifPro_400Regular': 'Source Serif 4',
@@ -131,14 +271,11 @@ export function DevotionalWebView({
     const mutedColor = isDark ? '#9A958D' : '#6B6560';
     const accentColor = colors.accent;
     const inputBg = isDark ? '#1F1F1F' : '#F5F5F3';
-    const highlightBg = isDark ? 'rgba(200, 165, 92, 0.35)' : 'rgba(255, 220, 100, 0.6)';
 
-    // Build body HTML with proper paragraph splitting
     const firstLetter = day.bodyText?.charAt(0) || '';
     const remainingText = day.bodyText?.slice(1) || '';
     const hasDropCap = firstLetter.match(/[A-Za-z]/);
     
-    // Split body text into paragraphs and wrap each in <p> tags
     const paragraphs = remainingText
       .split(/\n\n+/)
       .map(p => p.trim())
@@ -151,7 +288,6 @@ export function DevotionalWebView({
       `
       : paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
 
-    // Build quotes section
     const quotesHtml = day.quotes?.length
       ? day.quotes.map(q => `
         <blockquote>
@@ -164,7 +300,6 @@ export function DevotionalWebView({
       `).join('')
       : '';
 
-    // Build context note
     const contextHtml = day.contextNote
       ? `
         <div class="context-box">
@@ -174,7 +309,6 @@ export function DevotionalWebView({
       `
       : '';
 
-    // Build word study
     const wordStudyHtml = day.wordStudy
       ? `
         <div class="word-study-box">
@@ -225,13 +359,18 @@ export function DevotionalWebView({
       background: ${accentColor}40;
     }
     
-    /* Highlight styling */
+    /* Highlight colors */
     mark {
-      background: ${highlightBg};
       color: inherit;
       padding: 2px 0;
       border-radius: 2px;
     }
+    
+    mark.highlight-yellow { background: ${HIGHLIGHT_COLORS.yellow[isDark ? 'dark' : 'light']}; }
+    mark.highlight-green { background: ${HIGHLIGHT_COLORS.green[isDark ? 'dark' : 'light']}; }
+    mark.highlight-blue { background: ${HIGHLIGHT_COLORS.blue[isDark ? 'dark' : 'light']}; }
+    mark.highlight-purple { background: ${HIGHLIGHT_COLORS.purple[isDark ? 'dark' : 'light']}; }
+    mark.highlight-red { background: ${HIGHLIGHT_COLORS.red[isDark ? 'dark' : 'light']}; }
     
     /* Body text with drop cap */
     p {
@@ -308,7 +447,6 @@ export function DevotionalWebView({
       margin: 0;
     }
     
-    /* Word study */
     .word-term {
       margin-bottom: 10px;
     }
@@ -328,43 +466,50 @@ export function DevotionalWebView({
       opacity: 0.7;
     }
     
-    /* Save quote button (tooltip style above selection) */
-    #save-quote-tooltip {
+    /* Highlight toolbar */
+    #highlight-toolbar {
       position: absolute;
-      background: ${accentColor};
-      color: ${isDark ? '#000' : '#fff'};
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px;
-      font-weight: 500;
-      border: none;
-      cursor: pointer;
+      background: ${isDark ? '#2a2a2a' : '#ffffff'};
+      border-radius: 24px;
+      padding: 8px 12px;
+      display: flex;
+      gap: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      z-index: 1000;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s, transform 0.2s;
-      box-shadow: 0 4px 20px ${accentColor}60;
-      z-index: 1000;
-      white-space: nowrap;
       transform: translateY(10px);
     }
     
-    #save-quote-tooltip.visible {
+    #highlight-toolbar.visible {
       opacity: 1;
       pointer-events: auto;
       transform: translateY(0);
     }
     
-    #save-quote-tooltip::after {
-      content: '';
-      position: absolute;
-      bottom: -8px;
-      left: 50%;
-      transform: translateX(-50%);
-      border-left: 8px solid transparent;
-      border-right: 8px solid transparent;
-      border-top: 8px solid ${accentColor};
+    .color-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 16px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.1s, border-color 0.2s;
     }
+    
+    .color-btn:hover {
+      transform: scale(1.1);
+    }
+    
+    .color-btn:active {
+      transform: scale(0.95);
+    }
+    
+    .color-btn.yellow { background: linear-gradient(135deg, #FFE066, #FFD43B); }
+    .color-btn.green { background: linear-gradient(135deg, #69DB7C, #51CF66); }
+    .color-btn.blue { background: linear-gradient(135deg, #74C0FC, #4DABF7); }
+    .color-btn.purple { background: linear-gradient(135deg, #E599F7, #DA77F2); }
+    .color-btn.red { background: linear-gradient(135deg, #FF8787, #FF6B6B); }
   </style>
 </head>
 <body>
@@ -373,138 +518,18 @@ export function DevotionalWebView({
   ${contextHtml}
   ${wordStudyHtml}
   
-  <button id="save-quote-tooltip">Save Quote</button>
-  
-  <script>
-    let selectedText = '';
-    let selectionRange = null;
-    const saveBtn = document.getElementById('save-quote-tooltip');
-    
-    function positionButton() {
-      const selection = window.getSelection();
-      if (!selection.rangeCount) return;
-      
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      
-      // Position button above selection with boundary checking
-      let top = rect.top - 50;
-      let left = rect.left + (rect.width / 2);
-      
-      // Keep button on screen (min 10px from top)
-      if (top < 10) {
-        top = rect.bottom + 20; // Position below if too close to top
-      }
-      
-      // Keep button horizontally within viewport
-      const btnWidth = 120; // Approximate button width
-      if (left < btnWidth / 2) {
-        left = btnWidth / 2 + 10;
-      } else if (left > window.innerWidth - btnWidth / 2) {
-        left = window.innerWidth - btnWidth / 2 - 10;
-      }
-      
-      saveBtn.style.top = top + 'px';
-      saveBtn.style.left = left + 'px';
-    }
-    
-    function checkSelection() {
-      const selection = window.getSelection();
-      const newText = selection.toString().trim();
-      
-      if (newText.length > 10 && newText !== selectedText) {
-        selectedText = newText;
-        selectionRange = selection.getRangeAt(0);
-        positionButton();
-        saveBtn.classList.add('visible');
-      } else if (newText.length <= 10) {
-        selectedText = '';
-        saveBtn.classList.remove('visible');
-      }
-    }
-    
-    // Poll for selection changes (more reliable than event on iOS)
-    document.addEventListener('selectionchange', () => {
-      setTimeout(checkSelection, 100);
-    });
-    
-    // Also check on touchend
-    document.addEventListener('touchend', () => {
-      setTimeout(checkSelection, 300);
-    });
-    
-    // Handle save button click
-    saveBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      if (selectedText && window.rangyHighlighter) {
-        // Get context (parent paragraph text)
-        let context = '';
-        if (selectionRange) {
-          const container = selectionRange.commonAncestorContainer;
-          const element = container.nodeType === 3 ? container.parentElement : container;
-          context = element?.textContent?.substring(0, 150) || '';
-        }
-        
-        // Apply highlight using rangy
-        let highlightApplied = false;
-        let serializedHighlight = '';
-        
-        try {
-          // Restore the selection temporarily
-          const selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(selectionRange);
-          
-          // Highlight using rangy
-          window.rangyHighlighter.highlightSelection('rangy-highlight', { exclusive: true });
-          highlightApplied = true;
-          
-          // Serialize all highlights
-          serializedHighlight = window.rangyHighlighter.serialize();
-          
-        } catch (e) {
-          console.log('Rangy highlight failed:', e);
-        }
-        
-        // Send to React Native with serialized range
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'QUOTE_SELECTED',
-          text: selectedText,
-          context: context,
-          highlightApplied: highlightApplied,
-          serializedRange: serializedHighlight
-        }));
-        
-        // Clear selection and hide button
-        window.getSelection().removeAllRanges();
-        saveBtn.classList.remove('visible');
-        selectedText = '';
-      }
-      }
-    });
-    
-    // Hide button when tapping elsewhere
-    document.addEventListener('click', (e) => {
-      if (e.target !== saveBtn) {
-        const selection = window.getSelection();
-        if (!selection.toString().trim()) {
-          saveBtn.classList.remove('visible');
-          selectedText = '';
-        }
-      }
-    });
-    
-    // Hide on scroll
-    window.addEventListener('scroll', () => {
-      saveBtn.classList.remove('visible');
-    });
-  </script>
+  <!-- Highlight color toolbar -->
+  <div id="highlight-toolbar">
+    <button class="color-btn yellow" data-color="yellow" aria-label="Highlight yellow"></button>
+    <button class="color-btn green" data-color="green" aria-label="Highlight green"></button>
+    <button class="color-btn blue" data-color="blue" aria-label="Highlight blue"></button>
+    <button class="color-btn purple" data-color="purple" aria-label="Highlight purple"></button>
+    <button class="color-btn red" data-color="red" aria-label="Highlight red"></button>
+  </div>
 </body>
 </html>
     `;
-  }, [day, fontSize, colors, isDark, readingFont, existingHighlights]);
+  }, [day, fontSize, colors, isDark, readingFont]);
 
   const handleMessage = (event: any) => {
     try {
@@ -514,6 +539,7 @@ export function DevotionalWebView({
           text: data.text,
           context: data.context,
           serializedRange: data.serializedRange,
+          color: data.color,
         });
       } else if (data.type === 'HEIGHT_CHANGE') {
         setWebViewHeight(Math.max(data.height, 200));
@@ -534,7 +560,6 @@ export function DevotionalWebView({
         onMessage={handleMessage}
         originWhitelist={['*']}
         injectedJavaScript={injectedJavaScript}
-        // Performance optimizations
         androidLayerType="hardware"
         cacheEnabled={true}
         androidCacheMode="LOAD_CACHE_ELSE_NETWORK"
@@ -543,14 +568,13 @@ export function DevotionalWebView({
   );
 }
 
-// Helper to escape HTML
 function escapeHtml(text: string): string {
   return text
-    .replace(/\u0026/g, '\u0026amp;')
-    .replace(/</g, '\u0026lt;')
-    .replace(/>/g, '\u0026gt;')
-    .replace(/"/g, '\u0026quot;')
-    .replace(/'/g, '\u0026#039;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 const styles = StyleSheet.create({
