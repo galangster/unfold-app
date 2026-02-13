@@ -174,6 +174,7 @@ export default function SignInScreen() {
     if (isLoading) return;
 
     setIsLoading(true);
+    setErrorMessage(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
@@ -194,14 +195,17 @@ export default function SignInScreen() {
           userId: result.user.uid,
           promptCount: currentCount + 1,
         });
-      }
 
-      // Navigate to home
-      router.replace('/(main)/home');
+        // Navigate to home
+        router.replace('/(main)/home');
+      } else {
+        // Show error for anonymous sign-in failure
+        logger.error('[SignIn] Anonymous sign in failed', { error: result.error });
+        setErrorMessage('Unable to continue. Please try again.');
+      }
     } catch (error) {
       logger.error('[SignIn] Error continuing anonymously', { error });
-      // Navigate anyway - the auth hook will handle initialization
-      router.replace('/(main)/home');
+      setErrorMessage('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
