@@ -371,7 +371,7 @@ export default function PaywallScreen() {
         </Animated.View>
 
         {/* SUBSCRIBE BUTTON — large, impossible to miss */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={{ marginTop: 8 }}>
           <Pressable
             onPress={handleSubscribe}
             disabled={isPurchasing}
