@@ -380,12 +380,12 @@ export default function PaywallScreen() {
             onPress={handleSubscribe}
             disabled={isPurchasing}
             style={({ pressed }) => ({
-              backgroundColor: '#B8942E',
+              backgroundColor: '#9A7B2C',
               paddingVertical: 18,
               borderRadius: 14,
               borderWidth: 2,
-              borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
-              shadowColor: '#8B6914',
+              borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)',
+              shadowColor: '#5C4A1A',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.5,
               shadowRadius: 12,
