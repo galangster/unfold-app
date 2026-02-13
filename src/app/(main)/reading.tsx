@@ -1248,100 +1248,105 @@ export default function ReadingScreen() {
         }}
         pointerEvents="box-none"
       >
-        {/* Previous Day Button - Liquid Glass with Blur */}
-        <Pressable
-          onPress={handlePrevious}
-          disabled={!canGoBack}
-          style={({ pressed }) => ({
-            width: 52,
-            height: 52,
-            borderRadius: 26,
-            overflow: 'hidden',
-            opacity: pressed ? 0.75 : (canGoBack ? 1 : 0.35),
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: isDark ? 0.5 : 0.2,
-            shadowRadius: 16,
-            elevation: canGoBack ? 10 : 0,
-          })}
-        >
-          <BlurView
-            intensity={isDark ? 40 : 60}
-            tint={isDark ? 'dark' : 'light'}
-            style={{
-              width: 52,
-              height: 52,
-              borderRadius: 26,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1,
-              borderColor: canGoBack
-                ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
-                : 'transparent',
-            }}
-          >
-            <SymbolView
-              name="chevron.left"
-              size={22}
-              tintColor={canGoBack ? colors.text : colors.textMuted}
-              weight="semibold"
-            />
-          </BlurView>
+        {/* Previous Day Button - Liquid Glass */}
+        <Pressable onPress={handlePrevious} disabled={!canGoBack}>
+          {({ pressed }) => (
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                overflow: 'hidden',
+                opacity: pressed ? 0.75 : canGoBack ? 1 : 0.35,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.5 : 0.2,
+                shadowRadius: 16,
+                elevation: canGoBack ? 10 : 0,
+              }}
+            >
+              <BlurView
+                intensity={isDark ? 40 : 60}
+                tint={isDark ? 'dark' : 'light'}
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <SymbolView
+                  name="chevron.left"
+                  size={22}
+                  tintColor={canGoBack ? colors.text : colors.textMuted}
+                  weight="semibold"
+                />
+              </BlurView>
+            </View>
+          )}
         </Pressable>
 
-        {/* Share Button - Liquid Glass with Blur (center, larger) */}
-        <Pressable
-          onPress={handleShare}
-          style={({ pressed }) => ({
-            width: 64,
-            height: 64,
-            borderRadius: 32,
-            overflow: 'hidden',
-            opacity: pressed ? 0.8 : 1,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: isDark ? 0.6 : 0.25,
-            shadowRadius: 20,
-            elevation: 12,
-          })}
-        >
-          <BlurView
-            intensity={isDark ? 50 : 70}
-            tint={isDark ? 'dark' : 'light'}
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 1.5,
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.9)',
-            }}
-          >
-            <SymbolView
-              name="square.and.arrow.up"
-              size={26}
-              tintColor={colors.text}
-              weight="medium"
-            />
-          </BlurView>
+        {/* Share Button - Liquid Glass */}
+        <Pressable onPress={handleShare}>
+          {({ pressed }) => (
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                overflow: 'hidden',
+                opacity: pressed ? 0.8 : 1,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: isDark ? 0.6 : 0.25,
+                shadowRadius: 20,
+                elevation: 12,
+              }}
+            >
+              <BlurView
+                intensity={isDark ? 50 : 70}
+                tint={isDark ? 'dark' : 'light'}
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <SymbolView
+                  name="square.and.arrow.up"
+                  size={26}
+                  tintColor={colors.text}
+                  weight="medium"
+                />
+              </BlurView>
+            </View>
+          )}
         </Pressable>
 
-        {/* Next Day Button - Liquid Glass with Blur */}
-        <Pressable
-          onPress={handleNext}
-          disabled={!canGoForward}
-          style={({ pressed }) => ({
-            width: 52,
-            height: 52,
-            borderRadius: 26,
-            overflow: 'hidden',
-            opacity: pressed ? 0.75 : (canGoForward ? 1 : 0.35),
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: isDark ? 0.5 : 0.2,
-            shadowRadius: 16,
-            elevation: canGoForward ? 10 : 0,
+        {/* Next Day Button - Liquid Glass */}
+        <Pressable onPress={handleNext} disabled={!canGoForward}>
+          {({ pressed }) => (
+            <View
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 26,
+                overflow: 'hidden',
+                opacity: pressed ? 0.75 : canGoForward ? 1 : 0.35,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: isDark ? 0.5 : 0.2,
+                shadowRadius: 16,
+                elevation: canGoForward ? 10 : 0,
+              }}
+            >
+              <BlurView
+                intensity={isDark ? 40 : 60}
+                tint={isDark ? 'dark' : 'light'}
+                style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <SymbolView
+                  name="chevron.right"
+                  size={22}
+                  tintColor={canGoForward ? colors.text : colors.textMuted}
+                  weight="semibold"
+                />
+              </BlurView>
+            </View>
+          )}
+        </Pressable>
+      </View>
           })}
         >
           <BlurView
