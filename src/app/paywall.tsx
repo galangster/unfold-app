@@ -104,11 +104,11 @@ export default function PaywallScreen() {
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
 
-  // Updated pricing: $3.99/month, $29.99/year (25% savings)
-  const monthlyPrice = monthlyPackage?.product?.priceString ?? '$3.99';
-  const yearlyPrice = yearlyPackage?.product?.priceString ?? '$29.99';
-  const yearlyRaw = yearlyPackage?.product?.price ?? 29.99;
-  const perMonthFromYearly = `$${(yearlyRaw / 12).toFixed(2)}`;
+  // Hardcoded new pricing (update in RevenueCat dashboard later)
+  const monthlyPrice = '$3.99';
+  const yearlyPrice = '$29.99';
+  const yearlyRaw = 29.99;
+  const perMonthFromYearly = '$2.50';
 
   // Hard-coded high-contrast CTA colors (theme-independent for guaranteed readability)
   const btnBg = '#1C1710';
@@ -376,14 +376,14 @@ export default function PaywallScreen() {
             onPress={handleSubscribe}
             disabled={isPurchasing}
             style={({ pressed }) => ({
-              backgroundColor: colors.accent,
+              backgroundColor: '#C8A55C',
               paddingVertical: 18,
               borderRadius: 14,
-              shadowColor: colors.accent,
+              shadowColor: '#C8A55C',
               shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 5,
+              shadowOpacity: 0.4,
+              shadowRadius: 10,
+              elevation: 8,
               opacity: pressed ? 0.9 : 1,
               transform: [{ scale: pressed ? 0.98 : 1 }],
             })}
@@ -406,8 +406,8 @@ export default function PaywallScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* Restore + Cancel text */}
-        <View style={{ alignItems: 'center', marginTop: 12 }}>
+        {/* Restore only */}
+        <View style={{ alignItems: 'center', marginTop: 24 }}>
           <Pressable
             onPress={handleRestore}
             disabled={isPurchasing}
@@ -427,20 +427,6 @@ export default function PaywallScreen() {
               Restore purchases
             </Text>
           </Pressable>
-
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 12,
-              color: colors.textHint,
-              textAlign: 'center',
-              lineHeight: 18,
-              marginTop: 4,
-              paddingHorizontal: 8,
-            }}
-          >
-            Cancel anytime. Auto-renews unless canceled 24h before period ends.
-          </Text>
         </View>
 
         {/* Legal links at bottom */}
