@@ -1027,7 +1027,7 @@ export default function ReadingScreen() {
                   style={{ marginTop: 48, alignItems: 'center', gap: 20 }}
                 >
                   {/* Animated Chevron - inviting scroll to buttons */}
-                  <Animated.View style={[{ marginBottom: 8 }, chevronAnimatedStyle]}>
+                  <Animated.View style={[{ marginBottom: 8 }, scrollHintStyle]}>
                     <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
                   </Animated.View>
 
