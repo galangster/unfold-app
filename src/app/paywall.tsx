@@ -154,7 +154,7 @@ export default function PaywallScreen() {
             }}
           >
             {/* Icon */}
-            <Image source={require('@/assets/icon-paywall.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
+            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
           </View>
           
           <View
