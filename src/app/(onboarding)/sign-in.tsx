@@ -10,6 +10,7 @@ import Animated, {
   withDelay,
   Easing,
   interpolate,
+  FadeIn,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
@@ -68,6 +69,7 @@ export default function SignInScreen() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isAppleAvailable, setIsAppleAvailable] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Animation values
   const headerOpacity = useSharedValue(0);
@@ -119,6 +121,7 @@ export default function SignInScreen() {
     if (isLoading) return;
 
     setIsLoading(true);
+    setErrorMessage(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
@@ -147,10 +150,21 @@ export default function SignInScreen() {
         // Stay on screen, user can try again or skip
       } else {
         logger.error('[SignIn] Apple Sign In failed', { error: result.error });
-        // Stay on screen, show error handled by the button
+        
+        // Show user-friendly error message
+        let friendlyError = 'Unable to sign in. Please try again.';
+        if (result.error?.includes('network')) {
+          friendlyError = 'Network error. Check your connection and try again.';
+        } else if (result.error?.includes('credential') || result.error?.includes('already')) {
+          friendlyError = 'This Apple account is already linked to another user.';
+        } else if (result.error?.includes('unavailable')) {
+          friendlyError = 'Apple Sign In is currently unavailable. Please try again later.';
+        }
+        setErrorMessage(friendlyError);
       }
     } catch (error) {
       logger.error('[SignIn] Unexpected error during Apple Sign In', { error });
+      setErrorMessage('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -248,6 +262,31 @@ export default function SignInScreen() {
             />
           ))}
         </View>
+
+        {/* Error Message */}
+        {errorMessage && (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={{
+              backgroundColor: colors.error + '15',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 16,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.error,
+                fontFamily: FontFamily.ui,
+                fontSize: 14,
+                textAlign: 'center',
+                lineHeight: 20,
+              }}
+            >
+              {errorMessage}
+            </Text>
+          </Animated.View>
+        )}
 
         {/* Button Section */}
         <View style={styles.buttonSection}>
