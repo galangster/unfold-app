@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo } from 'react-native';
+import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -1233,7 +1234,7 @@ export default function ReadingScreen() {
         </Animated.View>
       )}
 
-      {/* Bottom Navigation Toolbar - Liquid Glass iOS 18 Style */}
+      {/* Bottom Navigation Toolbar - True iOS 18 Liquid Glass */}
       <View
         style={{
           position: 'absolute',
@@ -1247,7 +1248,7 @@ export default function ReadingScreen() {
         }}
         pointerEvents="box-none"
       >
-        {/* Previous Day Button - Liquid Glass */}
+        {/* Previous Day Button - Liquid Glass with Blur */}
         <Pressable
           onPress={handlePrevious}
           disabled={!canGoBack}
@@ -1255,60 +1256,78 @@ export default function ReadingScreen() {
             width: 52,
             height: 52,
             borderRadius: 26,
-            backgroundColor: canGoBack
-              ? (isDark ? 'rgba(120, 120, 128, 0.32)' : 'rgba(255, 255, 255, 0.85)')
-              : 'transparent',
-            alignItems: 'center',
-            justifyContent: 'center',
+            overflow: 'hidden',
             opacity: pressed ? 0.75 : (canGoBack ? 1 : 0.35),
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: isDark ? 0.5 : 0.2,
             shadowRadius: 16,
             elevation: canGoBack ? 10 : 0,
-            borderWidth: 1,
-            borderColor: canGoBack
-              ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
-              : 'transparent',
           })}
         >
-          <SymbolView
-            name="chevron.left"
-            size={22}
-            tintColor={canGoBack ? colors.text : colors.textMuted}
-            weight="semibold"
-          />
+          <BlurView
+            intensity={isDark ? 40 : 60}
+            tint={isDark ? 'dark' : 'light'}
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: canGoBack
+                ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
+                : 'transparent',
+            }}
+          >
+            <SymbolView
+              name="chevron.left"
+              size={22}
+              tintColor={canGoBack ? colors.text : colors.textMuted}
+              weight="semibold"
+            />
+          </BlurView>
         </Pressable>
 
-        {/* Share Button - Liquid Glass (center, larger) */}
+        {/* Share Button - Liquid Glass with Blur (center, larger) */}
         <Pressable
           onPress={handleShare}
           style={({ pressed }) => ({
             width: 64,
             height: 64,
             borderRadius: 32,
-            backgroundColor: isDark ? 'rgba(120, 120, 128, 0.4)' : 'rgba(255, 255, 255, 0.92)',
-            alignItems: 'center',
-            justifyContent: 'center',
+            overflow: 'hidden',
             opacity: pressed ? 0.8 : 1,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 10 },
             shadowOpacity: isDark ? 0.6 : 0.25,
             shadowRadius: 20,
             elevation: 12,
-            borderWidth: 1.5,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.9)',
           })}
         >
-          <SymbolView
-            name="square.and.arrow.up"
-            size={26}
-            tintColor={colors.text}
-            weight="medium"
-          />
+          <BlurView
+            intensity={isDark ? 50 : 70}
+            tint={isDark ? 'dark' : 'light'}
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1.5,
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.9)',
+            }}
+          >
+            <SymbolView
+              name="square.and.arrow.up"
+              size={26}
+              tintColor={colors.text}
+              weight="medium"
+            />
+          </BlurView>
         </Pressable>
 
-        {/* Next Day Button - Liquid Glass */}
+        {/* Next Day Button - Liquid Glass with Blur */}
         <Pressable
           onPress={handleNext}
           disabled={!canGoForward}
@@ -1316,29 +1335,37 @@ export default function ReadingScreen() {
             width: 52,
             height: 52,
             borderRadius: 26,
-            backgroundColor: canGoForward
-              ? (isDark ? 'rgba(120, 120, 128, 0.32)' : 'rgba(255, 255, 255, 0.85)')
-              : 'transparent',
-            alignItems: 'center',
-            justifyContent: 'center',
+            overflow: 'hidden',
             opacity: pressed ? 0.75 : (canGoForward ? 1 : 0.35),
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 8 },
             shadowOpacity: isDark ? 0.5 : 0.2,
             shadowRadius: 16,
             elevation: canGoForward ? 10 : 0,
-            borderWidth: 1,
-            borderColor: canGoForward
-              ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
-              : 'transparent',
           })}
         >
-          <SymbolView
-            name="chevron.right"
-            size={22}
-            tintColor={canGoForward ? colors.text : colors.textMuted}
-            weight="semibold"
-          />
+          <BlurView
+            intensity={isDark ? 40 : 60}
+            tint={isDark ? 'dark' : 'light'}
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 26,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: canGoForward
+                ? (isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.8)')
+                : 'transparent',
+            }}
+          >
+            <SymbolView
+              name="chevron.right"
+              size={22}
+              tintColor={canGoForward ? colors.text : colors.textMuted}
+              weight="semibold"
+            />
+          </BlurView>
         </Pressable>
       </View>
 
