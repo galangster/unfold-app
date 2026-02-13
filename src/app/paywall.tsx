@@ -153,8 +153,12 @@ export default function PaywallScreen() {
               borderColor: colors.border,
             }}
           >
-            {/* Icon */}
-            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
+            {/* Icon - switches based on theme */}
+            <Image 
+              source={isDark ? require('@/assets/icon-paywall.png') : require('@/assets/icon-paywall-light.png')} 
+              style={{ width: 40, height: 40 }} 
+              resizeMode="contain" 
+            />
           </View>
           
           <View
@@ -371,7 +375,7 @@ export default function PaywallScreen() {
         </Animated.View>
 
         {/* SUBSCRIBE BUTTON — large, impossible to miss */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={{ marginTop: 8 }}>
+        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={{ marginTop: 24 }}>
           <Pressable
             onPress={handleSubscribe}
             disabled={isPurchasing}
