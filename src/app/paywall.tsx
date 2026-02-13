@@ -124,7 +124,7 @@ export default function PaywallScreen() {
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         style={{
           position: 'absolute',
-          top: insets.top + 16,
+          top: insets.top + 8,
           right: 16,
           zIndex: 10,
           padding: 8,
@@ -134,8 +134,8 @@ export default function PaywallScreen() {
         <X size={22} color={colors.textSubtle} />
       </Pressable>
 
-      {/* Top section — hero + features (takes available space) */}
-      <View style={{ flex: 1, paddingTop: insets.top + 12, paddingHorizontal: 28, justifyContent: 'flex-start' }}>
+      {/* Top section — hero + features */}
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 28 }}>
         {/* Hero */}
         <Animated.View entering={FadeIn.duration(600)}>
           <View
@@ -175,7 +175,7 @@ export default function PaywallScreen() {
         {/* Feature list */}
         <Animated.View
           entering={FadeInDown.duration(500).delay(100)}
-          style={{ marginTop: 20 }}
+          style={{ marginTop: 16 }}
         >
           {FEATURES.map((feature) => (
             <View
@@ -183,7 +183,7 @@ export default function PaywallScreen() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingVertical: 7,
+                paddingVertical: 5,
               }}
             >
               <Check size={15} color={colors.accent} strokeWidth={2.5} />
@@ -202,8 +202,8 @@ export default function PaywallScreen() {
         </Animated.View>
       </View>
 
-      {/* Bottom section — plans + subscribe + legal (fixed at bottom) */}
-      <View style={{ paddingHorizontal: 28, paddingBottom: Math.max(insets.bottom, 12) }}>
+      {/* Plans + subscribe + legal */}
+      <View style={{ paddingHorizontal: 28, paddingBottom: Math.max(insets.bottom, 8), paddingTop: 8 }}>
         {/* Plan selection */}
         <Animated.View
           entering={FadeInDown.duration(500).delay(200)}
