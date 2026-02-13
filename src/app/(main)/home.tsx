@@ -869,11 +869,11 @@ export default function HomeScreen() {
                 <Pressable
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push('/(main)/highlights');
+                    router.push('/(main)/my-content');
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="My Highlights"
-                  accessibilityHint="View your highlighted quotes and verses"
+                  accessibilityLabel="My Content"
+                  accessibilityHint="View your journal, highlights, and bookmarks"
                   style={({ pressed }) => ({
                     opacity: pressed ? 0.7 : 1,
                     transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -888,7 +888,7 @@ export default function HomeScreen() {
                       padding: 18,
                     }}
                   >
-                    <Highlighter size={20} color={colors.accent} strokeWidth={1.5} style={{ marginBottom: 12 }} />
+                    <PenLine size={20} color={colors.accent} strokeWidth={1.5} style={{ marginBottom: 12 }} />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
@@ -897,7 +897,7 @@ export default function HomeScreen() {
                         marginBottom: 3,
                       }}
                     >
-                      My Highlights
+                      My Content
                     </Text>
                     <Text
                       style={{
@@ -906,7 +906,7 @@ export default function HomeScreen() {
                         color: colors.textSubtle,
                       }}
                     >
-                      Saved quotes
+                      Journal & saves
                     </Text>
                   </View>
                 </Pressable>

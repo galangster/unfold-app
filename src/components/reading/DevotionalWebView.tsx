@@ -357,6 +357,39 @@ export function DevotionalWebView({
       user-select: text;
     }
     
+    /* Staggered fade-in animation for paragraphs */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    p, blockquote, .context-box, .word-study-box {
+      opacity: 0;
+      animation: fadeInUp 0.5s ease-out forwards;
+    }
+    
+    p:nth-child(1) { animation-delay: 0.05s; }
+    p:nth-child(2) { animation-delay: 0.1s; }
+    p:nth-child(3) { animation-delay: 0.15s; }
+    p:nth-child(4) { animation-delay: 0.2s; }
+    p:nth-child(5) { animation-delay: 0.25s; }
+    p:nth-child(6) { animation-delay: 0.3s; }
+    p:nth-child(7) { animation-delay: 0.35s; }
+    p:nth-child(8) { animation-delay: 0.4s; }
+    p:nth-child(9) { animation-delay: 0.45s; }
+    p:nth-child(10) { animation-delay: 0.5s; }
+    p:nth-child(n+11) { animation-delay: 0.55s; }
+    
+    blockquote { animation-delay: 0.3s; }
+    .context-box { animation-delay: 0.35s; }
+    .word-study-box { animation-delay: 0.35s; }
+    
     /* Selection styling - hide native menu */
     ::selection {
       background: ${accentColor}40;
