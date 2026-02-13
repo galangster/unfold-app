@@ -1027,20 +1027,8 @@ export default function ReadingScreen() {
                   style={{ marginTop: 48, alignItems: 'center', gap: 20 }}
                 >
                   {/* Animated Chevron - inviting scroll to buttons */}
-                  <Animated.View style={{ marginBottom: 8 }}>
-                    <Animated.View
-                      style={{
-                        transform: [{
-                          translateY: withRepeat(
-                            withTiming(6, { duration: 1200 }),
-                            -1,
-                            true
-                          )
-                        }]
-                      }}
-                    >
-                      <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
-                    </Animated.View>
+                  <Animated.View style={[{ marginBottom: 8 }, chevronAnimatedStyle]}>
+                    <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
                   </Animated.View>
 
                   {/* Complete Day Button - Premium pill design */}
