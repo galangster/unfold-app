@@ -186,6 +186,26 @@ export async function signOut(): Promise<void> {
 }
 
 /**
+ * Update the current user's display name
+ * Used when user sets their name manually (e.g., after Apple Sign In with hidden email)
+ */
+export async function updateUserProfile(displayName: string): Promise<void> {
+  try {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      throw new Error('No current user');
+    }
+
+    await currentUser.updateProfile({ displayName });
+    logger.log('[AppleAuth] User profile updated', { displayName });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('[AppleAuth] Update profile error', { error: errorMessage });
+    throw error;
+  }
+}
+
+/**
  * Check if Apple Sign In is available on this device
  */
 export async function isAppleSignInAvailable(): Promise<boolean> {

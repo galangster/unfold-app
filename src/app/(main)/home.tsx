@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback } from 'react';
+import { useMemo, useEffect, useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, AccessibilityInfo } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import { Plus, BookOpen, PenLine, Settings, Flame, Bookmark, Highlighter } from 
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
+import { NamePromptModal } from '@/components/NamePromptModal';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -131,6 +132,26 @@ export default function HomeScreen() {
       updateUser({ isPremium: premiumResult.data });
     }
   }, [premiumResult, user?.isPremium, updateUser]);
+
+  // Show name prompt if user is authenticated but doesn't have a display name
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
+
+  useEffect(() => {
+    // Check if we should show the name prompt
+    // Show if: user is signed in with Apple but has no display name
+    const shouldPrompt =
+      user?.authProvider === 'apple' &&
+      !user?.authDisplayName &&
+      !user?.name;
+
+    if (shouldPrompt) {
+      // Small delay to let the screen settle
+      const timer = setTimeout(() => {
+        setShowNamePrompt(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [user?.authProvider, user?.authDisplayName, user?.name]);
 
   // Get a quote based on the day
   const dailyQuote = useMemo(() => {
@@ -1049,6 +1070,12 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {/* Name Prompt Modal - shown if user signed in with Apple but has no name */}
+      <NamePromptModal
+        visible={showNamePrompt}
+        onComplete={() => setShowNamePrompt(false)}
+      />
     </View>
   );
 }
