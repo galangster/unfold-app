@@ -153,8 +153,12 @@ export default function PaywallScreen() {
               borderColor: colors.border,
             }}
           >
-            {/* Icon placeholder - add images to assets folder and use require */}
-            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
+            {/* Icon - switches based on theme */}
+            <Image 
+              source={isDark ? require('./icon-paywall.png') : require('./icon-paywall-light.png')} 
+              style={{ width: 40, height: 40 }} 
+              resizeMode="contain" 
+            />
           </View>
           
           <View
