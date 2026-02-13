@@ -153,8 +153,8 @@ export default function PaywallScreen() {
               borderColor: colors.border,
             }}
           >
-            {/* TODO: Replace with actual icon image */}
-            <Image source={require('@/assets/icon-paywall.png')} style={{ width: 40, height: 40 }} resizeMode="contain" />
+            {/* Icon placeholder - replace with actual image file */}
+            <View style={{ width: 40, height: 40, backgroundColor: colors.accent, borderRadius: 8 }} />
           </View>
           
           <View
