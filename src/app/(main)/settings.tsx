@@ -69,6 +69,7 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'translation' | null>(null);
+  const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>('colors');
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -871,135 +872,201 @@ export default function SettingsScreen() {
                 opacity: user?.isPremium ? 1 : 0.7,
               }}
             >
-              {/* Accent Color subsection */}
-              <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                <Text
+              {/* Accent Color subsection - Collapsible */}
+              <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setExpandedPremium(expandedPremium === 'colors' ? null : 'colors');
+                  }}
                   style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 14,
-                    color: colors.text,
-                    marginBottom: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 16,
                   }}
                 >
-                  Accent Color
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-                  {ACCENT_THEMES.map((theme) => {
-                    const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
-                    const swatchColor = isDark ? theme.dark : theme.light;
-                    return (
-                      <Pressable
-                        key={theme.id}
-                        onPress={() => {
-                          if (!user?.isPremium) {
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                            router.push('/paywall');
-                            return;
-                          }
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          updateUser({ accentTheme: theme.id });
-                        }}
-                        style={{
-                          alignItems: 'center',
-                          width: 56,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 20,
-                            backgroundColor: swatchColor,
-                            borderWidth: isSelected ? 3 : 1,
-                            borderColor: isSelected ? colors.text : colors.border,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          {isSelected && (
-                            <Check size={16} color={isDark ? '#000' : '#fff'} strokeWidth={3} />
-                          )}
-                        </View>
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.ui,
-                            fontSize: 11,
-                            color: isSelected ? colors.text : colors.textMuted,
-                            marginTop: 6,
-                          }}
-                        >
-                          {theme.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Reading Font subsection */}
-              <View>
-                <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
-                      color: colors.text,
-                    }}
-                  >
-                    Reading Font
-                  </Text>
-                </View>
-                {READING_FONTS.map((font, index) => {
-                  const isSelected = (user?.readingFont ?? 'source-serif') === font.id;
-                  return (
-                    <Pressable
-                      key={font.id}
-                      onPress={() => {
-                        if (!user?.isPremium) {
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                          router.push('/paywall');
-                          return;
-                        }
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        updateUser({ readingFont: font.id });
-                      }}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Palette size={18} color={colors.text} />
+                    <Text
                       style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        paddingVertical: 13,
-                        paddingHorizontal: 16,
-                        borderBottomWidth: index < READING_FONTS.length - 1 ? 1 : 0,
-                        borderBottomColor: colors.border,
-                        backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.text,
                       }}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text
+                      Accent Colors
+                    </Text>
+                  </View>
+                  <ChevronDown
+                    size={18}
+                    color={colors.textMuted}
+                    style={{
+                      transform: [{ rotate: expandedPremium === 'colors' ? '180deg' : '0deg' }],
+                    }}
+                  />
+                </Pressable>
+
+                {expandedPremium === 'colors' && (
+                  <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                      {ACCENT_THEMES.map((theme) => {
+                        const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
+                        const swatchColor = isDark ? theme.dark : theme.light;
+                        return (
+                          <Pressable
+                            key={theme.id}
+                            onPress={() => {
+                              if (!user?.isPremium) {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                                router.push('/paywall');
+                                return;
+                              }
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              updateUser({ accentTheme: theme.id });
+                            }}
+                            style={{
+                              alignItems: 'center',
+                              width: 56,
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 22,
+                                backgroundColor: swatchColor,
+                                borderWidth: isSelected ? 3 : 1,
+                                borderColor: isSelected ? colors.text : colors.border,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                            >
+                              {isSelected && (
+                                <Check size={16} color={isDark ? '#000' : '#fff'} strokeWidth={3} />
+                              )}
+                            </View>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.ui,
+                                fontSize: 11,
+                                color: isSelected ? colors.text : colors.textMuted,
+                                marginTop: 6,
+                              }}
+                            >
+                              {theme.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+                )}
+              </View>
+
+              {/* Reading Font subsection - Collapsible */}
+              <View>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setExpandedPremium(expandedPremium === 'fonts' ? null : 'fonts');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 16,
+                    borderBottomWidth: expandedPremium === 'fonts' ? 1 : 0,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Type size={18} color={colors.text} />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Reading Font
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 13,
+                        color: colors.textMuted,
+                      }}
+                    >
+                      {READING_FONTS.find(f => f.id === (user?.readingFont ?? 'source-serif'))?.name}
+                    </Text>
+                    <ChevronDown
+                      size={18}
+                      color={colors.textMuted}
+                      style={{
+                        transform: [{ rotate: expandedPremium === 'fonts' ? '180deg' : '0deg' }],
+                      }}
+                    />
+                  </View>
+                </Pressable>
+
+                {expandedPremium === 'fonts' && (
+                  <Animated.View entering={FadeIn.duration(200)}>
+                    {READING_FONTS.map((font, index) => {
+                      const isSelected = (user?.readingFont ?? 'source-serif') === font.id;
+                      return (
+                        <Pressable
+                          key={font.id}
+                          onPress={() => {
+                            if (!user?.isPremium) {
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                              router.push('/paywall');
+                              return;
+                            }
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            updateUser({ readingFont: font.id });
+                          }}
                           style={{
-                            fontFamily: font.regular,
-                            fontSize: 17,
-                            color: colors.text,
-                            marginBottom: 2,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 13,
+                            paddingHorizontal: 16,
+                            borderBottomWidth: index < READING_FONTS.length - 1 ? 1 : 0,
+                            borderBottomColor: colors.border,
+                            backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
                           }}
                         >
-                          {font.name}
-                        </Text>
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.ui,
-                            fontSize: 12,
-                            color: colors.textMuted,
-                          }}
-                        >
-                          {font.preview}
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Check size={18} color={colors.accent} strokeWidth={2.5} />
-                      )}
-                    </Pressable>
-                  );
-                })}
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                fontFamily: font.regular,
+                                fontSize: 17,
+                                color: colors.text,
+                                marginBottom: 2,
+                              }}
+                            >
+                              {font.name}
+                            </Text>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.ui,
+                                fontSize: 12,
+                                color: colors.textMuted,
+                              }}
+                            >
+                              {font.preview}
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <Check size={18} color={colors.accent} strokeWidth={2.5} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </Animated.View>
+                )}
               </View>
 
               {/* Notifications subsection */}
