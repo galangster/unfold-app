@@ -3,7 +3,7 @@ import { Quote, BookOpen, Bookmark } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { DevotionalDay, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
+import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
 import { DevotionalWebView } from './DevotionalWebView';
 
@@ -14,6 +14,7 @@ interface DevotionalContentProps {
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
   onQuoteSelected?: (quote: { text: string; context: string }) => void;
+  existingHighlights?: Highlight[];
 }
 
 export function DevotionalContent({ 
@@ -22,7 +23,8 @@ export function DevotionalContent({
   titleSharedTransitionTag, 
   isBookmarked, 
   onToggleBookmark,
-  onQuoteSelected 
+  onQuoteSelected,
+  existingHighlights
 }: DevotionalContentProps) {
   const { colors } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
@@ -117,6 +119,7 @@ export function DevotionalContent({
         day={day} 
         fontSize={fontSize}
         onQuoteSelected={onQuoteSelected}
+        existingHighlights={existingHighlights}
       />
 
       {/* Cross References Section - NATIVE (structured) */}

@@ -84,6 +84,7 @@ export default function ReadingScreen() {
   const removeBookmark = useUnfoldStore((s) => s.removeBookmark);
   const addHighlight = useUnfoldStore((s) => s.addHighlight);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
+  const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
   // Review prompt state
@@ -136,6 +137,12 @@ export default function ReadingScreen() {
     if (!currentDevotionalId) return false;
     return bookmarks.some((b) => b.devotionalId === currentDevotionalId && b.dayNumber === viewingDay);
   }, [bookmarks, currentDevotionalId, viewingDay]);
+
+  // Get highlights for current day
+  const currentDayHighlights = useMemo(() => {
+    if (!currentDevotionalId) return [];
+    return highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
+  }, [highlights, currentDevotionalId, viewingDay]);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   const showIncompleteJourneyRetry = availableDays < expectedDays;
   const retryCtaButtonBg = '#1C1710';
@@ -1026,6 +1033,7 @@ export default function ReadingScreen() {
                 isBookmarked={isCurrentDayBookmarked}
                 onToggleBookmark={handleToggleBookmark}
                 onQuoteSelected={handleQuoteSelected}
+                existingHighlights={currentDayHighlights}
               />
 
               {/* Complete button - show if viewing day not yet completed */}

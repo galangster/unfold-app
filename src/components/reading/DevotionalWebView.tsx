@@ -1,56 +1,129 @@
-import React, { useRef, useMemo, useState } from 'react';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { FONT_SIZE_VALUES, FontSize, DevotionalDay } from '@/lib/store';
+import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight } from '@/lib/store';
 
 interface Quote {
   text: string;
   context: string;
 }
 
-interface HighlightRange {
-  id: string;
-  text: string;
-  startOffset?: number;
-  endOffset?: number;
-}
-
 interface DevotionalWebViewProps {
   day: DevotionalDay;
   fontSize: FontSize;
   onQuoteSelected?: (quote: Quote) => void;
-  existingHighlights?: HighlightRange[];
+  existingHighlights?: Highlight[];
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
 
-export function DevotionalWebView({ day, fontSize, onQuoteSelected }: DevotionalWebViewProps) {
+export function DevotionalWebView({ 
+  day, 
+  fontSize, 
+  onQuoteSelected,
+  existingHighlights = [] 
+}: DevotionalWebViewProps) {
   const { colors, isDark } = useTheme();
   const readingFont = useReadingFont();
   const webViewRef = useRef<WebView>(null);
   const [webViewHeight, setWebViewHeight] = useState(200);
 
-  // Inject JS to report content height
-  const injectedJavaScript = `
-    function reportHeight() {
-      const height = document.body.scrollHeight;
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'HEIGHT_CHANGE',
-        height: height
-      }));
-    }
-    
-    // Report height after fonts load and on any content change
-    window.addEventListener('load', reportHeight);
-    setTimeout(reportHeight, 100);
-    setTimeout(reportHeight, 500);
-    setTimeout(reportHeight, 1000);
-    
-    true;
-  `;
+  // Generate unique IDs for highlights
+  const highlightIds = useMemo(() => {
+    return existingHighlights.map((_, i) => `highlight-${day.dayNumber}-${i}`);
+  }, [existingHighlights, day.dayNumber]);
+
+  // Inject JS to report content height and apply highlights
+  const injectedJavaScript = useMemo(() => {
+    const highlightData = existingHighlights.map((h, i) => ({
+      id: highlightIds[i],
+      text: h.highlightedText,
+    }));
+
+    return `
+      function reportHeight() {
+        const height = document.body.scrollHeight;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'HEIGHT_CHANGE',
+          height: height
+        }));
+      }
+      
+      // Apply saved highlights
+      function applyHighlights() {
+        const highlights = ${JSON.stringify(highlightData)};
+        highlights.forEach(hl => {
+          highlightText(hl.text, hl.id);
+        });
+      }
+      
+      // Highlight text by wrapping in mark tags
+      function highlightText(searchText, highlightId) {
+        if (!searchText || searchText.length < 3) return;
+        
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+        
+        const textNodes = [];
+        let node;
+        while (node = walker.nextNode()) {
+          if (node.parentElement.tagName !== 'SCRIPT' && 
+              node.parentElement.tagName !== 'STYLE' &&
+              node.parentElement.tagName !== 'MARK') {
+            textNodes.push(node);
+          }
+        }
+        
+        for (let i = 0; i < textNodes.length; i++) {
+          const textNode = textNodes[i];
+          const text = textNode.textContent;
+          const index = text.indexOf(searchText);
+          
+          if (index !== -1) {
+            const before = text.substring(0, index);
+            const match = text.substring(index, index + searchText.length);
+            const after = text.substring(index + searchText.length);
+            
+            const fragment = document.createDocumentFragment();
+            
+            if (before) {
+              fragment.appendChild(document.createTextNode(before));
+            }
+            
+            const mark = document.createElement('mark');
+            mark.id = highlightId;
+            mark.textContent = match;
+            fragment.appendChild(mark);
+            
+            if (after) {
+              fragment.appendChild(document.createTextNode(after));
+            }
+            
+            textNode.parentNode.replaceChild(fragment, textNode);
+            break; // Only highlight first occurrence
+          }
+        }
+      }
+      
+      // Report height after fonts load and apply highlights
+      window.addEventListener('load', () => {
+        reportHeight();
+        setTimeout(applyHighlights, 100);
+      });
+      setTimeout(reportHeight, 100);
+      setTimeout(reportHeight, 500);
+      setTimeout(reportHeight, 1000);
+      
+      true;
+    `;
+  }, [existingHighlights, highlightIds]);
 
   // Generate HTML with exact typography matching
   const htmlContent = useMemo(() => {
@@ -76,6 +149,7 @@ export function DevotionalWebView({ day, fontSize, onQuoteSelected }: Devotional
     const mutedColor = isDark ? '#9A958D' : '#6B6560';
     const accentColor = colors.accent;
     const inputBg = isDark ? '#1F1F1F' : '#F5F5F3';
+    const highlightBg = isDark ? 'rgba(200, 165, 92, 0.35)' : 'rgba(255, 220, 100, 0.6)';
 
     // Build body HTML with proper paragraph splitting
     const firstLetter = day.bodyText?.charAt(0) || '';
@@ -161,6 +235,14 @@ export function DevotionalWebView({ day, fontSize, onQuoteSelected }: Devotional
     /* Selection styling */
     ::selection {
       background: ${accentColor}40;
+    }
+    
+    /* Highlight styling */
+    mark {
+      background: ${highlightBg};
+      color: inherit;
+      padding: 2px 0;
+      border-radius: 2px;
     }
     
     /* Body text with drop cap */
@@ -309,7 +391,6 @@ export function DevotionalWebView({ day, fontSize, onQuoteSelected }: Devotional
     let selectedText = '';
     let selectionRange = null;
     const saveBtn = document.getElementById('save-quote-tooltip');
-    let checkSelectionInterval = null;
     
     function positionButton() {
       const selection = window.getSelection();
@@ -365,6 +446,16 @@ export function DevotionalWebView({ day, fontSize, onQuoteSelected }: Devotional
           context = element?.textContent?.substring(0, 150) || '';
         }
         
+        // Apply highlight immediately
+        const mark = document.createElement('mark');
+        mark.textContent = selectedText;
+        try {
+          selectionRange.surroundContents(mark);
+        } catch (e) {
+          // Complex selection, fallback to simple approach
+          console.log('Complex selection, skipping visual highlight');
+        }
+        
         // Send to React Native
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'QUOTE_SELECTED',
@@ -395,46 +486,10 @@ export function DevotionalWebView({ day, fontSize, onQuoteSelected }: Devotional
       saveBtn.classList.remove('visible');
     });
   </script>
-        saveBtn.classList.remove('visible');
-      }
-    });
-    
-    // Handle save button click
-    saveBtn.addEventListener('click', () => {
-      if (selectedText) {
-        // Get context (text before and after selection)
-        const selection = window.getSelection();
-        const range = selection.getRangeAt(0);
-        const container = range.commonAncestorContainer;
-        const fullText = container.textContent || '';
-        
-        // Send to React Native
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'QUOTE_SELECTED',
-          text: selectedText,
-          context: fullText.substring(0, 100) + '...'
-        }));
-        
-        // Clear selection
-        selection.removeAllRanges();
-        saveBtn.classList.remove('visible');
-      }
-    });
-    
-    // Hide button when tapping elsewhere
-    document.addEventListener('click', (e) => {
-      if (e.target !== saveBtn) {
-        const selection = window.getSelection();
-        if (!selection.toString().trim()) {
-          saveBtn.classList.remove('visible');
-        }
-      }
-    });
-  </script>
 </body>
 </html>
     `;
-  }, [day, fontSize, colors, isDark, readingFont]);
+  }, [day, fontSize, colors, isDark, readingFont, existingHighlights]);
 
   const handleMessage = (event: any) => {
     try {
@@ -471,11 +526,11 @@ export function DevotionalWebView({ day, fontSize, onQuoteSelected }: Devotional
 // Helper to escape HTML
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/\u0026/g, '\u0026amp;')
+    .replace(/</g, '\u0026lt;')
+    .replace(/>/g, '\u0026gt;')
+    .replace(/"/g, '\u0026quot;')
+    .replace(/'/g, '\u0026#039;');
 }
 
 const styles = StyleSheet.create({
