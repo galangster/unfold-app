@@ -79,6 +79,7 @@ export default function SignInScreen() {
   const skipOpacity = useSharedValue(0);
   const sparkleOpacity = useSharedValue(0);
   const sparkleScale = useSharedValue(0.5);
+  const loadingRotation = useSharedValue(0);
 
   useEffect(() => {
     // Check if Apple Sign In is available
@@ -88,15 +89,28 @@ export default function SignInScreen() {
     headerOpacity.value = withDelay(200, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }));
     headerTranslateY.value = withDelay(200, withTiming(0, { duration: 700, easing: Easing.out(Easing.cubic) }));
 
-    buttonOpacity.value = withDelay(600, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-    buttonScale.value = withDelay(600, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+    buttonOpacity.value = withDelay(400, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+    buttonScale.value = withDelay(400, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
 
-    skipOpacity.value = withDelay(800, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
+    skipOpacity.value = withDelay(600, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
 
     // Sparkle animation (subtle pulse)
     sparkleOpacity.value = withDelay(400, withTiming(1, { duration: 500 }));
     sparkleScale.value = withDelay(400, withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.5)) }));
   }, []);
+
+  // Loading spinner animation
+  useEffect(() => {
+    if (isLoading) {
+      loadingRotation.value = withRepeat(
+        withTiming(360, { duration: 1000, easing: Easing.linear }),
+        -1,
+        false
+      );
+    } else {
+      loadingRotation.value = 0;
+    }
+  }, [isLoading]);
 
   const headerStyle = useAnimatedStyle(() => ({
     opacity: headerOpacity.value,
@@ -115,6 +129,10 @@ export default function SignInScreen() {
   const sparkleStyle = useAnimatedStyle(() => ({
     opacity: interpolate(sparkleOpacity.value, [0, 1], [0.6, 1]),
     transform: [{ scale: sparkleScale.value }],
+  }));
+
+  const spinnerStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${loadingRotation.value}deg` }],
   }));
 
   const handleAppleSignIn = useCallback(async () => {
@@ -345,6 +363,48 @@ export default function SignInScreen() {
           </Text>
         </Animated.View>
       </View>
+
+      {/* Loading Overlay */}
+      {isLoading && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: colors.background + 'E6',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <View style={{ alignItems: 'center' }}>
+            <Animated.View
+              style={[
+                {
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  borderWidth: 3,
+                  borderColor: colors.accent + '30',
+                  borderTopColor: colors.accent,
+                },
+                spinnerStyle,
+              ]}
+            />
+            <Text
+              style={{
+                marginTop: 16,
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 15,
+                color: colors.textSubtle,
+              }}
+            >
+              Signing in...
+            </Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
