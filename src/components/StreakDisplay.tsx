@@ -1,6 +1,15 @@
 import { View, Text } from 'react-native';
 import { Flame, Snowflake } from 'lucide-react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { 
+  FadeIn, 
+  FadeInUp, 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring,
+  useDerivedValue,
+  runOnJS,
+} from 'react-native-reanimated';
+import { useEffect, useState } from 'react';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -16,6 +25,27 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
 
+  // Animated streak value for spring animation
+  const animatedStreak = useSharedValue(streak);
+  const [displayStreak, setDisplayStreak] = useState(streak);
+
+  // Spring animation when streak changes
+  useEffect(() => {
+    if (streak !== animatedStreak.value) {
+      animatedStreak.value = withSpring(streak, {
+        damping: 15,
+        stiffness: 100,
+        mass: 1,
+      });
+    }
+  }, [streak]);
+
+  // Update display value during animation
+  const animatedValue = useDerivedValue(() => {
+    runOnJS(setDisplayStreak)(Math.round(animatedStreak.value));
+    return animatedStreak.value;
+  });
+
   const sizeConfig = compact
     ? { flame: 16, number: 14, freeze: 12, padding: 6 }
     : size === 'small'
@@ -25,6 +55,13 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
     : { flame: 24, number: 18, freeze: 16, padding: 10 };
 
   const config = sizeConfig;
+
+  // Animated style for the number
+  const numberStyle = useAnimatedStyle(() => ({
+    transform: [{ 
+      scale: 1 + (animatedStreak.value - Math.round(animatedStreak.value)) * 0.1 
+    }],
+  }));
 
   if (streak === 0) {
     return (
@@ -79,15 +116,18 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
           color="#C8A55C"
           fill={streak >= 7 ? '#C8A55C' : 'transparent'}
         />
-        <Text
-          style={{
-            fontFamily: FontFamily.uiSemiBold,
-            fontSize: config.number,
-            color: colors.text,
-          }}
+        <Animated.Text
+          style={[
+            {
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: config.number,
+              color: colors.text,
+            },
+            numberStyle,
+          ]}
         >
-          {streak}
-        </Text>
+          {displayStreak}
+        </Animated.Text>
         <Text
           style={{
             fontFamily: FontFamily.ui,
