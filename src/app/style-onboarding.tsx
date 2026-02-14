@@ -156,6 +156,11 @@ export default function StyleOnboardingScreen() {
       faithBackground: 'growing' as FaithBackground,
     };
 
+    // Get default theme based on time of day
+    const hour = new Date().getHours();
+    const defaultTheme = hour >= 5 && hour < 12 ? 'purpose' :
+                         hour >= 18 || hour < 5 ? 'peace' : 'growth';
+
     if (user) {
       updateUser({
         hasCompletedStyleOnboarding: true,
@@ -163,10 +168,6 @@ export default function StyleOnboardingScreen() {
       });
     } else {
       // Create user with smart defaults for quick start
-      const hour = new Date().getHours();
-      const defaultTheme = hour >= 5 && hour < 12 ? 'purpose' :
-                           hour >= 18 || hour < 5 ? 'peace' : 'growth';
-
       setUser({
         name: 'Friend',
         aboutMe: '',

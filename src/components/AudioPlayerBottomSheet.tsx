@@ -8,9 +8,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Audio } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Play, Pause, SkipBack, SkipForward, X, ChevronDown } from 'lucide-react-native';
+import { Play, Pause, SkipBack, SkipForward, ChevronDown } from 'lucide-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -56,7 +55,6 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const soundRef = useRef<Audio.Sound | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Snap points for the bottom sheet
   const snapPoints = useMemo(() => ['25%', '50%', '90%'], []);
@@ -78,12 +76,6 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
-    }
-
-    // Abort any pending requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
     }
 
     // Stop and unload sound
@@ -119,68 +111,55 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       // Cleanup any existing audio
       await cleanup();
 
-      // Create abort controller for this request
-      abortControllerRef.current = new AbortController();
-
-      // Track audio generation start
-      Analytics.logEvent(AnalyticsEvents.AUDIO_GENERATION_STARTED, {
+      // Track audio play start
+      Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_STARTED, {
         devotional_title: title,
         voice_id: voiceId,
       });
 
       // Stream audio from Cartesia
-      const result = await streamDevotionalAudio({
-        text: fullText,
+      const result = await streamDevotionalAudio(
+        fullText,
         voiceId,
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!result.success || !result.audioBlob) {
-        throw new Error(result.error || 'Failed to generate audio');
-      }
+        (word, timestamp) => {
+          // Find word index for karaoke effect
+          const index = wordTimestamps.findIndex(wt => wt.word === word && Math.abs(wt.start - timestamp) < 0.1);
+          if (index !== -1) {
+            setActiveWordIndex(index);
+          }
+        }
+      );
 
       // Store word timestamps for karaoke effect
-      if (result.wordTimestamps) {
-        setWordTimestamps(result.wordTimestamps);
-      }
+      setWordTimestamps(result.wordTimestamps);
 
       // Create audio URL and load
-      const audioUrl = URL.createObjectURL(result.audioBlob);
-      audioUrlRef.current = audioUrl;
+      audioUrlRef.current = result.audioUrl;
 
       const { sound } = await Audio.Sound.createAsync(
-        { uri: audioUrl },
+        { uri: result.audioUrl },
         { shouldPlay: true }
       );
 
       soundRef.current = sound;
       setIsPlaying(true);
-
-      // Track successful audio generation
-      Analytics.logEvent(AnalyticsEvents.AUDIO_GENERATION_COMPLETED, {
-        devotional_title: title,
-        voice_id: voiceId,
-        duration_ms: result.durationMs,
-      });
-
-      // Get duration
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded) {
-        setDuration(status.durationMillis || 0);
-      }
+      setDuration(result.duration * 1000); // Convert to milliseconds
 
       // Set up playback status listener
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate((status: any) => {
         if (status.isLoaded) {
           setCurrentTime(status.positionMillis);
           setIsPlaying(status.isPlaying);
 
           // Update active word based on timestamp
-          if (wordTimestamps.length > 0 && status.positionMillis) {
-            const currentWord = wordTimestamps.findIndex(
-              (wt) => status.positionMillis >= wt.start && status.positionMillis <= wt.end
+          if (result.wordTimestamps.length > 0 && status.positionMillis) {
+            const currentSeconds = status.positionMillis / 1000;
+            const currentWord = result.wordTimestamps.findIndex(
+              (wt) => currentSeconds >= wt.start && currentSeconds <= wt.end
             );
-            setActiveWordIndex(currentWord);
+            if (currentWord !== -1) {
+              setActiveWordIndex(currentWord);
+            }
           }
 
           // Handle completion
@@ -188,6 +167,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
             setIsPlaying(false);
             setCurrentTime(0);
             setActiveWordIndex(-1);
+            Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_COMPLETED, {
+              devotional_title: title,
+              voice_id: voiceId,
+            });
           }
         }
       });
@@ -206,12 +189,6 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       logger.error('Error loading audio:', error);
       setHasError(true);
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load audio');
-      
-      Analytics.logEvent(AnalyticsEvents.AUDIO_GENERATION_FAILED, {
-        devotional_title: title,
-        voice_id: voiceId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
     } finally {
       setIsLoading(false);
     }
@@ -229,6 +206,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
         if (status.isPlaying) {
           await soundRef.current.pauseAsync();
           setIsPlaying(false);
+          Analytics.logEvent(AnalyticsEvents.AUDIO_PAUSED, {
+            devotional_title: title,
+            position_ms: status.positionMillis,
+          });
         } else {
           await soundRef.current.playAsync();
           setIsPlaying(true);
@@ -237,7 +218,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     } catch (error) {
       logger.error('Error toggling playback:', error);
     }
-  }, [loadAndPlayAudio]);
+  }, [loadAndPlayAudio, title]);
 
   const skipBackward = useCallback(async () => {
     if (!soundRef.current) return;

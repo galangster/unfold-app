@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  withSpring,
   runOnJS,
   FadeIn,
   FadeOut,

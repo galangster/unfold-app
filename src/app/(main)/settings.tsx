@@ -534,7 +534,7 @@ export default function SettingsScreen() {
                   <View style={{ marginLeft: 14, flex: 1 }}>
                     <Text
                       style={{
-                        fontFamily: FontFamily.semibold,
+                        fontFamily: FontFamily.uiSemiBold,
                         fontSize: 15,
                         color: colors.accent,
                       }}

@@ -138,7 +138,7 @@ export default function WelcomeScreen() {
                     colors={['#C8A55C', '#B8944F']}
                     style={styles.quickStartGradient}
                   >
-                    <Text style={[styles.quickStartTitle, { fontFamily: FontFamily.semibold }]}>
+                    <Text style={[styles.quickStartTitle, { fontFamily: FontFamily.uiSemiBold }]}>
                       Quick Start
                     </Text>
                     <Text style={[styles.quickStartSubtitle, { fontFamily: FontFamily.body }]}>
@@ -166,7 +166,7 @@ export default function WelcomeScreen() {
                   onPress={handlePersonalize}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.personalizeTitle, { color: colors.text, fontFamily: FontFamily.semibold }]}>
+                  <Text style={[styles.personalizeTitle, { color: colors.text, fontFamily: FontFamily.uiSemiBold }]}>
                     Personalize
                   </Text>
                   <Text style={[styles.personalizeSubtitle, { color: colors.textSubtle, fontFamily: FontFamily.body }]}>
@@ -182,7 +182,7 @@ export default function WelcomeScreen() {
                 Already have an account?
               </Text>
               <TouchableOpacity onPress={handleSignIn}>
-                <Text style={[styles.signInText, { color: colors.accent, fontFamily: FontFamily.semibold }]}>
+                <Text style={[styles.signInText, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
                   Sign In
                 </Text>
               </TouchableOpacity>
