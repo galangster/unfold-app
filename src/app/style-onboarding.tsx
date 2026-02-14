@@ -4,8 +4,9 @@ import {
   Text,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -115,13 +116,17 @@ const STYLE_QUESTIONS: StyleQuestion[] = [
 
 export default function StyleOnboardingScreen() {
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: 'quick' | 'full' }>();
   const { colors } = useTheme();
   const user = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
+  const isQuickMode = mode === 'quick';
+
   const [currentStep, setCurrentStep] = useState(0);
   const [showOptions, setShowOptions] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [selections, setSelections] = useState<{
     tone: WritingTone;
     depth: ContentDepth;
@@ -131,6 +136,79 @@ export default function StyleOnboardingScreen() {
     depth: 'balanced',
     faithBackground: 'growing',
   });
+
+  // Quick mode: Auto-complete with smart defaults
+  useEffect(() => {
+    if (isQuickMode) {
+      setIsProcessing(true);
+      // Small delay for UX so user sees we're doing something
+      const timer = setTimeout(() => {
+        handleQuickStartComplete();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [isQuickMode]);
+
+  const handleQuickStartComplete = () => {
+    const quickSelections = {
+      tone: 'warm' as WritingTone,
+      depth: 'balanced' as ContentDepth,
+      faithBackground: 'growing' as FaithBackground,
+    };
+
+    if (user) {
+      updateUser({
+        hasCompletedStyleOnboarding: true,
+        writingStyle: quickSelections,
+      });
+    } else {
+      // Create user with smart defaults for quick start
+      const hour = new Date().getHours();
+      const defaultTheme = hour >= 5 && hour < 12 ? 'purpose' :
+                           hour >= 18 || hour < 5 ? 'peace' : 'growth';
+
+      setUser({
+        name: 'Friend',
+        aboutMe: '',
+        currentSituation: '',
+        emotionalState: '',
+        spiritualSeeking: '',
+        readingDuration: 15,
+        devotionalLength: 7,
+        reminderTime: '8:00 AM',
+        hasCompletedOnboarding: false,
+        hasCompletedStyleOnboarding: true,
+        isPremium: false,
+        fontSize: 'medium',
+        writingStyle: quickSelections,
+        bibleTranslation: 'NIV',
+        themeMode: 'dark',
+        accentTheme: 'gold',
+        readingFont: 'source-serif',
+        // Auth fields
+        authUserId: null,
+        authProvider: null,
+        authEmail: null,
+        authDisplayName: null,
+        hasSeenSignInPrompt: false,
+        signInPromptCount: 0,
+        // Streak fields
+        streakCount: 0,
+        longestStreak: 0,
+        lastReadDate: null,
+        streakFreezes: 0,
+        weekendAmnesty: true,
+        // Audio preference
+        audioVoiceId: '694f9389-aac1-45b6-b726-9d9369183238',
+      });
+    }
+
+    // Navigate to main onboarding with quick mode flag
+    router.replace({
+      pathname: '/onboarding',
+      params: { mode: 'quick', theme: defaultTheme },
+    });
+  };
 
   const currentQuestion = STYLE_QUESTIONS[currentStep];
   const isLastStep = currentStep === STYLE_QUESTIONS.length - 1;
@@ -221,6 +299,31 @@ export default function StyleOnboardingScreen() {
   };
 
   const currentValue = selections[currentQuestion.id as keyof typeof selections];
+
+  // Quick mode loading UI
+  if (isQuickMode && isProcessing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={{
+          fontFamily: FontFamily.display,
+          fontSize: 24,
+          color: colors.text,
+          marginTop: 24,
+        }}>
+          Preparing your journey...
+        </Text>
+        <Text style={{
+          fontFamily: FontFamily.body,
+          fontSize: 14,
+          color: colors.textMuted,
+          marginTop: 8,
+        }}>
+          Quick start • 30 seconds
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
