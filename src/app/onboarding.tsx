@@ -10,8 +10,9 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   AccessibilityInfo,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -86,10 +87,13 @@ interface AdaptedStep {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { mode, theme: quickTheme } = useLocalSearchParams<{ mode?: 'quick' | 'full'; theme?: string }>();
   const { colors, isDark } = useTheme();
   const existingUser = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+
+  const isQuickMode = mode === 'quick';
 
   // Types that require subject selection (book, character, etc.)
   const TYPES_WITH_SUBJECT_SELECTION: DevotionalType[] = ['book_study', 'character_study'];
@@ -100,12 +104,48 @@ export default function OnboardingScreen() {
   const [adaptedSteps, setAdaptedSteps] = useState<Record<string, AdaptedStep>>({});
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   const [showListScrollHint, setShowListScrollHint] = useState(true);
+  const [isQuickProcessing, setIsQuickProcessing] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const inputOpacity = useSharedValue(0);
   const inputTranslateY = useSharedValue(10);
   const listScrollY = useSharedValue(0);
+
+  // Quick mode: Auto-complete and navigate to home
+  useEffect(() => {
+    if (isQuickMode && !isQuickProcessing) {
+      setIsQuickProcessing(true);
+      // Small delay for UX
+      const timer = setTimeout(() => {
+        completeQuickOnboarding();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isQuickMode]);
+
+  const completeQuickOnboarding = async () => {
+    const hour = new Date().getHours();
+    const defaultTheme = quickTheme || (hour >= 5 && hour < 12 ? 'purpose' : hour >= 18 || hour < 5 ? 'peace' : 'growth');
+
+    // Update user with quick settings
+    if (existingUser) {
+      updateUser({
+        hasCompletedOnboarding: true,
+        name: existingUser.name || 'Friend',
+        readingDuration: 15,
+        devotionalLength: 7,
+        bibleTranslation: 'NIV',
+        reminderTime: '8:00 AM',
+        selectedThemes: [defaultTheme as ThemeCategory],
+      });
+    }
+
+    Analytics.logEvent(AnalyticsEvents.ONBOARDING_COMPLETED, { mode: 'quick' });
+
+    // Navigate to home
+    router.replace('/(main)/home');
+  };
 
   // Theme selection scroll animation
   const listFadeAnimatedStyle = useAnimatedStyle(() => ({
@@ -149,7 +189,7 @@ export default function OnboardingScreen() {
           return false;
         }
       }
-      
+
       if (step.skipIfHasValue) {
         const stepId = step.id as StepId;
         if (stepId === 'name' && existingUser?.name) return false;
@@ -1141,6 +1181,33 @@ export default function OnboardingScreen() {
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
             </View>
           </Animated.View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // Quick mode loading UI
+  if (isQuickMode && isQuickProcessing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={{
+            fontFamily: FontFamily.display,
+            fontSize: 24,
+            color: colors.text,
+            marginTop: 24,
+          }}>
+            Creating your devotional...
+          </Text>
+          <Text style={{
+            fontFamily: FontFamily.body,
+            fontSize: 14,
+            color: colors.textMuted,
+            marginTop: 8,
+          }}>
+            Quick start • Almost there
+          </Text>
         </SafeAreaView>
       </View>
     );
