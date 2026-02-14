@@ -242,7 +242,7 @@ export default function OnboardingScreen() {
         }
       }
     }
-    if (data.selectedThemes.length > 0) {
+    if ((data.selectedThemes?.length ?? 0) > 0) {
       const themeNames = data.selectedThemes.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean).join(', ');
       answers.push({ question: 'What themes are you drawn to?', answer: themeNames });
     }
@@ -369,7 +369,7 @@ export default function OnboardingScreen() {
 
       // Navigate to generating screen with user context
       const params: Record<string, string> = {};
-      if (data.selectedThemes.length > 0) {
+      if ((data.selectedThemes?.length ?? 0) > 0) {
         params.themes = data.selectedThemes.join(',');
       }
       if (data.selectedType) {
@@ -383,7 +383,7 @@ export default function OnboardingScreen() {
       Analytics.logEvent(AnalyticsEvents.ONBOARDING_COMPLETED, {
         devotional_length: data.devotionalLength,
         reading_duration: data.readingDuration,
-        has_selected_theme: data.selectedThemes.length > 0,
+        has_selected_theme: (data.selectedThemes?.length ?? 0) > 0,
         has_selected_type: !!data.selectedType,
       });
 
@@ -464,7 +464,7 @@ export default function OnboardingScreen() {
       if (themeSelectionMode === 'none') {
         return !!data.selectedMainOption;
       }
-      if (themeSelectionMode === 'theme') return data.selectedThemes.length > 0 && data.selectedThemes.length <= 3;
+      if (themeSelectionMode === 'theme') return (data.selectedThemes?.length ?? 0) > 0 && (data.selectedThemes?.length ?? 0) <= 3;
       if (themeSelectionMode === 'type') return !!data.selectedType;
       return false;
     }
@@ -824,12 +824,12 @@ export default function OnboardingScreen() {
                 style={{
                   fontFamily: FontFamily.ui,
                   fontSize: 13,
-                  color: data.selectedThemes.length >= 3 ? colors.accent : colors.textMuted,
+                  color: (data.selectedThemes?.length ?? 0) >= 3 ? colors.accent : colors.textMuted,
                 }}
               >
-                {data.selectedThemes.length >= 3 
+                {(data.selectedThemes?.length ?? 0) >= 3 
                   ? 'Maximum 3 themes selected'
-                  : `Select up to 3 themes (${data.selectedThemes.length}/3)`}
+                  : `Select up to 3 themes (${data.selectedThemes?.length ?? 0}/3)`}
               </Text>
             </View>
             
@@ -857,11 +857,11 @@ export default function OnboardingScreen() {
                       {themeIds.map((themeId) => {
                         const theme = THEME_CATEGORIES.find((t) => t.id === themeId);
                         if (!theme) return null;
-                        const isSelected = data.selectedThemes.includes(themeId);
+                        const isSelected = data.selectedThemes?.includes(themeId) ?? false;
                         const selectionOrder = isSelected 
-                          ? data.selectedThemes.indexOf(themeId) + 1 
+                          ? (data.selectedThemes?.indexOf(themeId) ?? -1) + 1 
                           : undefined;
-                        const isMaxedOut = data.selectedThemes.length >= 3 && !isSelected;
+                        const isMaxedOut = (data.selectedThemes?.length ?? 0) >= 3 && !isSelected;
 
                         return (
                           <ThemePill
@@ -879,11 +879,12 @@ export default function OnboardingScreen() {
                               if (isMaxedOut) return;
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               setData((prev) => {
-                                if (prev.selectedThemes.includes(themeId)) {
-                                  return { ...prev, selectedThemes: prev.selectedThemes.filter((t) => t !== themeId) };
+                                const currentThemes = prev.selectedThemes ?? [];
+                                if (currentThemes.includes(themeId)) {
+                                  return { ...prev, selectedThemes: currentThemes.filter((t) => t !== themeId) };
                                 }
-                                if (prev.selectedThemes.length >= 3) return prev;
-                                return { ...prev, selectedThemes: [...prev.selectedThemes, themeId] };
+                                if (currentThemes.length >= 3) return prev;
+                                return { ...prev, selectedThemes: [...currentThemes, themeId] };
                               });
                             }}
                             selectionOrder={selectionOrder}
