@@ -499,6 +499,64 @@ export default function SettingsScreen() {
 
           {/* Profile section */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)}>
+            {/* Quick Start - Complete Profile Banner */}
+            {user?.name === 'Friend' && (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push({
+                    pathname: '/style-onboarding',
+                    params: { mode: 'full' },
+                  });
+                }}
+                style={{
+                  backgroundColor: colors.accent + '15', // 15 = ~8% opacity
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.accent + '30',
+                  padding: 16,
+                  marginBottom: 16,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: colors.accent + '25',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 20 }}>✨</Text>
+                  </View>
+                  <View style={{ marginLeft: 14, flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.semibold,
+                        fontSize: 15,
+                        color: colors.accent,
+                      }}
+                    >
+                      Complete Your Profile
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.body,
+                        fontSize: 13,
+                        color: colors.textMuted,
+                        marginTop: 2,
+                      }}
+                    >
+                      Quick start is great, but personalization makes it yours
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 20, color: colors.accent }}>›</Text>
+                </View>
+              </Pressable>
+            )}
+
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <Text
                 style={{
