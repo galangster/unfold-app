@@ -173,7 +173,10 @@
   },
   "private": true,
   "overrides": {
-    "react-native-css-interop": "0.1.22"
+    "react-native-css-interop": "0.1.22",
+    "@teovilla/react-native-web-maps": {
+      "expo-location": "55.0.6"
+    }
   },
   "patchedDependencies": {}
 }
