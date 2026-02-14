@@ -20,9 +20,7 @@
       }
     },
     "android": {
-      "edgeToEdgeEnabled": true,
-      "package": "com.vibecode.unfold.x9fj08t",
-      "enableProguardInReleaseBuilds": true
+      "package": "com.vibecode.unfold.x9fj08t"
     },
     "plugins": [
       "expo-router",
