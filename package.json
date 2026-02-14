@@ -12,7 +12,11 @@
     "web": "DARK_MODE=class expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "storybook-generate": "sb-rn-get-stories"
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "maestro": "maestro test .maestro/",
+    "maestro:record": "maestro record .maestro/onboarding.yml"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
@@ -158,6 +162,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@playwright/test": "^1.58.2",
     "@tanstack/eslint-plugin-query": "^5.62.10",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "29.5.14",

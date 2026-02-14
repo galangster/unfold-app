@@ -1,0 +1,11 @@
+# Maestro E2E Testing for Unfold
+# Run: maestro test .maestro/
+
+appId: com.vibecode.unfold.x9fj08t
+---
+# Onboarding Flow Test
+- launchApp
+- tapOn: "Quick Start"
+- assertVisible: ".* devotional.*"
+- tapOn: "Complete Day"
+- assertVisible: "🔥.*day streak"
