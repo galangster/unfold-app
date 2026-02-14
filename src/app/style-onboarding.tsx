@@ -13,9 +13,12 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
+  withSpring,
   Easing,
   FadeIn,
   FadeOut,
+  SlideInRight,
+  SlideOutLeft,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -301,6 +304,21 @@ export default function StyleOnboardingScreen() {
 
   const currentValue = selections[currentQuestion.id as keyof typeof selections];
 
+  // Track animation direction for slide effect
+  const [animationDirection, setAnimationDirection] = useState<'forward' | 'backward'>('forward');
+
+  const handleNextWithAnimation = () => {
+    setAnimationDirection('forward');
+    handleNext();
+  };
+
+  const handleBackWithAnimation = () => {
+    if (currentStep > 0) {
+      setAnimationDirection('backward');
+    }
+    handleBack();
+  };
+
   // Quick mode loading UI
   if (isQuickMode && isProcessing) {
     return (
@@ -332,7 +350,7 @@ export default function StyleOnboardingScreen() {
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3">
           <Pressable
-            onPress={handleBack}
+            onPress={handleBackWithAnimation}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
@@ -363,8 +381,12 @@ export default function StyleOnboardingScreen() {
           contentContainerStyle={{ paddingTop: 40, paddingBottom: 160 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Question with typewriter */}
-          <View key={currentStep}>
+          {/* Question with typewriter - animated slide transition */}
+          <Animated.View 
+            key={currentStep}
+            entering={animationDirection === 'forward' ? SlideInRight.duration(400) : SlideInRight.duration(400)}
+            exiting={SlideOutLeft.duration(200)}
+          >
             <TypewriterText
               text={currentQuestion.question}
               onComplete={handleTypewriterComplete}
@@ -373,7 +395,7 @@ export default function StyleOnboardingScreen() {
                 lineHeight: 38,
               }}
             />
-          </View>
+          </Animated.View>
 
           {/* Subtext */}
           {showOptions && (
@@ -508,7 +530,7 @@ export default function StyleOnboardingScreen() {
             }}
           >
             <Pressable
-              onPress={handleNext}
+              onPress={handleNextWithAnimation}
               style={({ pressed }) => ({
                 backgroundColor: pressed
                   ? colors.buttonBackgroundPressed

@@ -13,6 +13,7 @@ import Animated, {
   runOnJS,
   FadeIn,
   FadeOut,
+  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
@@ -173,12 +174,12 @@ export default function ReadingScreen() {
   const isLastDay = viewingDay === totalDays;
   const isDayCompleted = currentDayData?.isRead ?? false;
 
-  // Start the chevron bounce animation
+  // Start the chevron bounce animation - more organic
   useEffect(() => {
     chevronBounce.value = withRepeat(
       withSequence(
-        withTiming(-6, { duration: 600 }),
-        withTiming(0, { duration: 600 })
+        withTiming(-8, { duration: 700, easing: Easing.out(Easing.sin) }),
+        withTiming(0, { duration: 700, easing: Easing.inOut(Easing.sin) })
       ),
       -1, // Infinite repeat
       true
