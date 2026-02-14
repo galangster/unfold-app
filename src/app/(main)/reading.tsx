@@ -130,6 +130,13 @@ export default function ReadingScreen() {
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
   const completeButtonScale = useSharedValue(1);
+  const shareButtonScale = useSharedValue(1);
+  const headerButtonScales = {
+    home: useSharedValue(1),
+    listen: useSharedValue(1),
+    journal: useSharedValue(1),
+    daySelector: useSharedValue(1),
+  };
 
   const fontSize = user?.fontSize ?? 'medium';
 
@@ -331,6 +338,26 @@ export default function ReadingScreen() {
 
   const completeButtonStyle = useAnimatedStyle(() => ({
     transform: [{ scale: completeButtonScale.value }],
+  }));
+
+  const shareButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: shareButtonScale.value }],
+  }));
+
+  const homeButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: headerButtonScales.home.value }],
+  }));
+
+  const listenButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: headerButtonScales.listen.value }],
+  }));
+
+  const journalButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: headerButtonScales.journal.value }],
+  }));
+
+  const daySelectorButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: headerButtonScales.daySelector.value }],
   }));
 
   const panGesture = useMemo(() =>
@@ -961,13 +988,21 @@ export default function ReadingScreen() {
               >
               <Pressable
                 onPress={handleGoHome}
+                onPressIn={() => {
+                  headerButtonScales.home.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                }}
+                onPressOut={() => {
+                  headerButtonScales.home.value = withSpring(1, { damping: 15, stiffness: 400 });
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go home"
                 accessibilityHint="Returns to the home screen"
                 style={{ padding: 8 }}
               >
-                <Home size={22} color={colors.textMuted} />
+                <Animated.View style={homeButtonStyle}>
+                  <Home size={22} color={colors.textMuted} />
+                </Animated.View>
               </Pressable>
 
               <Pressable
@@ -981,22 +1016,30 @@ export default function ReadingScreen() {
                     },
                   });
                 }}
+                onPressIn={() => {
+                  headerButtonScales.daySelector.value = withSpring(0.9, { damping: 15, stiffness: 400 });
+                }}
+                onPressOut={() => {
+                  headerButtonScales.daySelector.value = withSpring(1, { damping: 15, stiffness: 400 });
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
                 accessibilityHint="Opens day selector menu"
                 accessibilityValue={{ min: 1, max: currentDevotional.totalDays, now: viewingDay, text: `Day ${viewingDay} of ${currentDevotional.totalDays}` }}
                 style={{ padding: 8 }}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.mono,
-                    fontSize: 12,
-                    color: colors.textSubtle,
-                    letterSpacing: 1,
-                  }}
-                >
-                  DAY {viewingDay} OF {currentDevotional.totalDays}
-                </Text>
+                <Animated.View style={daySelectorButtonStyle}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.mono,
+                      fontSize: 12,
+                      color: colors.textSubtle,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    DAY {viewingDay} OF {currentDevotional.totalDays}
+                  </Text>
+                </Animated.View>
               </Pressable>
 
               {/* Listen Button - Audio Player */}
@@ -1005,17 +1048,25 @@ export default function ReadingScreen() {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowAudioPlayer(true);
                 }}
+                onPressIn={() => {
+                  headerButtonScales.listen.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                }}
+                onPressOut={() => {
+                  headerButtonScales.listen.value = withSpring(1, { damping: 15, stiffness: 400 });
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Listen to devotional"
                 accessibilityHint="Opens audio player with text-to-speech"
                 style={{ padding: 8 }}
               >
-                <Headphones
-                  size={22}
-                  color={colors.accent}
-                  strokeWidth={1.5}
-                />
+                <Animated.View style={listenButtonStyle}>
+                  <Headphones
+                    size={22}
+                    color={colors.accent}
+                    strokeWidth={1.5}
+                  />
+                </Animated.View>
               </Pressable>
 
               <Pressable
@@ -1034,6 +1085,12 @@ export default function ReadingScreen() {
                     },
                   });
                 }}
+                onPressIn={() => {
+                  headerButtonScales.journal.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                }}
+                onPressOut={() => {
+                  headerButtonScales.journal.value = withSpring(1, { damping: 15, stiffness: 400 });
+                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Open journal"
@@ -1041,11 +1098,13 @@ export default function ReadingScreen() {
                 accessibilityState={{ disabled: !isPremium }}
                 style={{ padding: 8 }}
               >
-                <BookOpen
-                  size={22}
-                  color={!isPremium ? colors.textMuted : colors.text}
-                  strokeWidth={1.5}
-                />
+                <Animated.View style={journalButtonStyle}>
+                  <BookOpen
+                    size={22}
+                    color={!isPremium ? colors.textMuted : colors.text}
+                    strokeWidth={1.5}
+                  />
+                </Animated.View>
               </Pressable>
             </View>
             </View>
@@ -1159,6 +1218,12 @@ export default function ReadingScreen() {
                   {/* Share Button - Centered, icon above text */}
                   <Pressable
                     onPress={handleShare}
+                    onPressIn={() => {
+                      shareButtonScale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
+                    }}
+                    onPressOut={() => {
+                      shareButtonScale.value = withSpring(1, { damping: 15, stiffness: 300 });
+                    }}
                     accessibilityRole="button"
                     accessibilityLabel="Share devotional"
                     accessibilityHint="Share this day's reading with others"
@@ -1169,25 +1234,26 @@ export default function ReadingScreen() {
                       paddingHorizontal: 32,
                       borderRadius: 16,
                       backgroundColor: pressed ? colors.inputBackground : 'transparent',
-                      opacity: pressed ? 0.8 : 1,
                     })}
                   >
-                    <SymbolView
-                      name="square.and.arrow.up"
-                      size={24}
-                      tintColor={colors.textMuted}
-                      weight="medium"
-                    />
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 14,
-                        color: colors.textMuted,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      Share today's reading
-                    </Text>
+                    <Animated.View style={[shareButtonStyle, { alignItems: 'center', gap: 6 }]}>
+                      <SymbolView
+                        name="square.and.arrow.up"
+                        size={24}
+                        tintColor={colors.textMuted}
+                        weight="medium"
+                      />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 14,
+                          color: colors.textMuted,
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        Share today's reading
+                      </Text>
+                    </Animated.View>
                   </Pressable>
                 </Animated.View>
               )}
