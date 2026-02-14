@@ -14,6 +14,8 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Analytics } from '@/lib/analytics';
+import { useAnalyticsScreenTracking } from '@/hooks/useAnalytics';
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -32,6 +34,14 @@ function RootLayoutNav() {
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
+
+  // Initialize analytics
+  useEffect(() => {
+    Analytics.initialize();
+  }, []);
+
+  // Track screen views automatically
+  useAnalyticsScreenTracking();
 
   return (
     <NavigationThemeProvider value={navigationTheme}>
