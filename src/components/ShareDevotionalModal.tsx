@@ -202,11 +202,11 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
             {({ pressed }) => (
               <View
                 style={{
-                  backgroundColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.15)',
+                  backgroundColor: pressed ? colors.backgroundPure : colors.glassBackground,
                   paddingVertical: 16,
                   borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.3)',
+                  borderColor: pressed ? colors.backgroundPure : colors.glassBorder,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -215,15 +215,15 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                 }}
               >
                 {isSharing ? (
-                  <ActivityIndicator size="small" color={pressed ? '#000000' : '#ffffff'} />
+                  <ActivityIndicator size="small" color={pressed ? colors.text : colors.backgroundPure} />
                 ) : (
                   <>
-                    <Share2 size={18} color={pressed ? '#000000' : '#ffffff'} />
+                    <Share2 size={18} color={pressed ? colors.text : colors.backgroundPure} />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
                         fontSize: 16,
-                        color: pressed ? '#000000' : '#ffffff',
+                        color: pressed ? colors.text : colors.backgroundPure,
                       }}
                     >
                       Share
