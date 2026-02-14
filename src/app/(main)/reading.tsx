@@ -15,7 +15,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, Headphones } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -28,6 +28,7 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
+import { AudioPlayer } from '@/components/AudioPlayer';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
@@ -112,6 +113,7 @@ export default function ReadingScreen() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   const [showScrollHint, setShowScrollHint] = useState(true);
+  const [showAudioPlayer, setShowAudioPlayer] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
@@ -992,6 +994,25 @@ export default function ReadingScreen() {
                 </Text>
               </Pressable>
 
+              {/* Listen Button - Audio Player */}
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowAudioPlayer(true);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Listen to devotional"
+                accessibilityHint="Opens audio player with text-to-speech"
+                style={{ padding: 8 }}
+              >
+                <Headphones
+                  size={22}
+                  color={colors.accent}
+                  strokeWidth={1.5}
+                />
+              </Pressable>
+
               <Pressable
                 onPress={() => {
                   if (!isPremium) {
@@ -1308,6 +1329,19 @@ export default function ReadingScreen() {
         onClose={() => setShareModalOpen(false)}
         day={currentDayData}
         seriesTitle={currentDevotional.title}
+      />
+
+      {/* Audio Player */}
+      <AudioPlayer
+        visible={showAudioPlayer}
+        onClose={() => setShowAudioPlayer(false)}
+        title={currentDayData?.title || 'Devotional'}
+        subtitle={`Day ${viewingDay} of ${currentDevotional?.title}`}
+        content={currentDayData?.bodyText || ''}
+        scriptureReference={currentDayData?.scriptureReference || ''}
+        scriptureText={currentDayData?.scriptureText || ''}
+        voiceId={user?.audioVoiceId || '694f9389-aac1-45b6-b726-9d9369183238'}
+        isPremium={user?.isPremium || false}
       />
     </View>
   );
