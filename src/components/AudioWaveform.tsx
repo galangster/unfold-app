@@ -67,16 +67,27 @@ export function AudioWaveform({
   // Animate bars based on playback state
   useEffect(() => {
     if (isPlaying) {
-      // Animate each bar with spring physics
-      bars.forEach((bar) => {
-        const { delay, duration, minHeight, maxHeight } = bar;
+      // Animate each bar with spring physics - more organic
+      bars.forEach((bar, i) => {
+        const { delay, maxHeight, minHeight } = bar;
+        
+        // Stagger the start for wave effect
+        const staggerDelay = i * 30;
 
         bar.value = withDelay(
-          delay,
+          staggerDelay,
           withRepeat(
             withSequence(
-              withSpring(maxHeight, { damping: 15, stiffness: 150 }),
-              withSpring(minHeight, { damping: 20, stiffness: 100 })
+              withSpring(maxHeight, { 
+                damping: 12 + Math.random() * 6, 
+                stiffness: 120 + Math.random() * 60,
+                mass: 0.8 + Math.random() * 0.4,
+              }),
+              withSpring(minHeight, { 
+                damping: 14 + Math.random() * 6, 
+                stiffness: 100 + Math.random() * 40,
+                mass: 0.8 + Math.random() * 0.4,
+              })
             ),
             -1, // Infinite repeat
             true // Reverse
@@ -84,14 +95,14 @@ export function AudioWaveform({
         ) as any;
       });
     } else {
-      // Gentle breathing idle state when paused
+      // Gentle breathing idle state when paused - more natural
       bars.forEach((bar, i) => {
         bar.value = withDelay(
-          i * 100,
+          i * 80,
           withRepeat(
             withSequence(
-              withTiming(0.35, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-              withTiming(0.25, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+              withTiming(0.32, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
+              withTiming(0.22, { duration: 1200, easing: Easing.inOut(Easing.sin) })
             ),
             -1,
             true
@@ -134,23 +145,26 @@ function WaveformBar({ bar, isActive, activeColor, inactiveColor, index }: Wavef
   const animatedStyle = useAnimatedStyle(() => ({
     height: `${bar.value.value * 100}%`,
     backgroundColor: isActive ? activeColor : inactiveColor,
-    opacity: isActive ? 1 : 0.6,
+    opacity: isActive ? 1 : 0.5,
     shadowColor: isActive ? activeColor : 'transparent',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: isActive ? 0.5 : 0,
-    shadowRadius: isActive ? 8 : 0,
-    elevation: isActive ? 4 : 0,
+    shadowOpacity: isActive ? 0.6 : 0,
+    shadowRadius: isActive ? 10 : 0,
+    elevation: isActive ? 6 : 0,
   }));
 
-  // Vary width slightly based on index for rhythm
-  const width = 3 + (index % 3);
+  // Vary width slightly based on index for rhythm - more variation
+  const width = 2.5 + (index % 4) * 0.8;
+  
+  // Vary border radius for organic feel
+  const borderRadius = 1 + (index % 3);
 
   return (
     <Animated.View
       style={[
         styles.bar,
         animatedStyle,
-        { width },
+        { width, borderRadius },
       ]}
     />
   );

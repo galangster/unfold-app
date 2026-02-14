@@ -75,16 +75,17 @@ export function StreakDisplay({
       // Check for milestone
       const wasMilestone = MILESTONES.includes(streak) && streak > previousStreak;
       
-      animatedStreak.value = withSpring(streak, {
-        damping: 12,
-        stiffness: 150,
-        mass: 1,
-        overshootClamping: false,
-      });
+      // More dramatic spring for milestones
+      const springConfig = wasMilestone 
+        ? { damping: 10, stiffness: 200, mass: 0.8 }
+        : { damping: 12, stiffness: 150, mass: 1 };
+      
+      animatedStreak.value = withSpring(streak, springConfig);
 
       if (wasMilestone) {
         setShowCelebration(true);
-        setTimeout(() => setShowCelebration(false), 1000);
+        // Longer celebration for milestones
+        setTimeout(() => setShowCelebration(false), 1500);
       }
 
       setPreviousStreak(streak);
@@ -127,10 +128,28 @@ export function StreakDisplay({
   const containerGlowStyle = useAnimatedStyle(() => ({
     shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: isMilestone ? 0.5 : 0,
-    shadowRadius: isMilestone ? 12 : 0,
-    elevation: isMilestone ? 8 : 0,
+    shadowOpacity: isMilestone ? withSpring(0.6, { damping: 10 }) : 0,
+    shadowRadius: isMilestone ? 20 : 0,
+    elevation: isMilestone ? 12 : 0,
   }));
+
+  const milestonePulseStyle = useAnimatedStyle(() => {
+    if (!isMilestone) return {};
+    return {
+      transform: [
+        { 
+          scale: withRepeat(
+            withSequence(
+              withTiming(1, { duration: 1000 }),
+              withTiming(1.05, { duration: 1000 })
+            ),
+            -1,
+            true
+          ) 
+        }
+      ],
+    };
+  });
 
   // Accessibility label
   const accessibilityLabel = streak === 0 
@@ -141,10 +160,26 @@ export function StreakDisplay({
     ? "Double tap to view streak details" 
     : undefined;
 
+  const pressScale = useSharedValue(1);
+
+  const handlePressIn = () => {
+    pressScale.value = withSpring(0.95, { damping: 15, stiffness: 400 });
+  };
+
+  const handlePressOut = () => {
+    pressScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+  };
+
+  const pressAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
+
   if (streak === 0) {
     return (
       <TouchableOpacity 
         onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         activeOpacity={0.8}
         accessible={true}
         accessibilityLabel={accessibilityLabel}
@@ -153,15 +188,18 @@ export function StreakDisplay({
       >
         <Animated.View
           entering={FadeIn}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: colors.inputBackground,
-            paddingHorizontal: config.padding,
-            paddingVertical: config.padding * 0.6,
-            borderRadius: 20,
-            gap: 6,
-          }}
+          style={[
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: colors.inputBackground,
+              paddingHorizontal: config.padding,
+              paddingVertical: config.padding * 0.6,
+              borderRadius: 20,
+              gap: 6,
+            },
+            pressAnimatedStyle,
+          ]}
         >
           <Animated.View style={flameStyle}>
             <Flame size={config.flame} color={colors.textMuted} />
@@ -183,6 +221,8 @@ export function StreakDisplay({
   return (
     <TouchableOpacity
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       activeOpacity={0.9}
       accessible={true}
       accessibilityLabel={accessibilityLabel}
@@ -191,24 +231,30 @@ export function StreakDisplay({
     >
       <Animated.View
         entering={FadeInUp}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-        }}
+        style={[
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          },
+          pressAnimatedStyle,
+        ]}
       >
         <Animated.View
           style={[
             {
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(200, 165, 92, 0.1)',
+              backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(200, 165, 92, 0.08)',
               paddingHorizontal: config.padding,
               paddingVertical: config.padding * 0.6,
               borderRadius: 20,
               gap: 6,
+              borderWidth: isMilestone ? 1.5 : 0,
+              borderColor: isMilestone ? colors.accent : 'transparent',
             },
             containerGlowStyle,
+            milestonePulseStyle,
           ]}
         >
           {showCelebration && (

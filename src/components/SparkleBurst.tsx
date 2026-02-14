@@ -21,6 +21,7 @@ interface Particle {
   distance: number;
   delay: number;
   rotation: number;
+  rotationSpeed: number;
   scale: any;
   opacity: any;
   translateX: any;
@@ -31,17 +32,22 @@ interface Particle {
 export function SparkleBurst({ 
   trigger, 
   color = '#C8A55C',
-  particleCount = 12 
+  particleCount = 16 
 }: SparkleBurstProps) {
   // Create particles with pre-calculated values (no hooks in loop)
   const particles = useMemo(() => {
     return Array.from({ length: particleCount }, (_, i) => {
-      const angle = (i * (360 / particleCount)) * (Math.PI / 180);
+      // Create organic clustering - not perfectly even
+      const baseAngle = (i * (360 / particleCount)) * (Math.PI / 180);
+      const angleVariation = (Math.random() - 0.5) * 0.3; // ±15% variation
+      const angle = baseAngle + angleVariation;
+      
       return {
         angle,
-        distance: 80 + Math.random() * 40,
-        delay: i * 20 + Math.random() * 40, // Organic clustering
+        distance: 60 + Math.random() * 50, // Varied distances
+        delay: i * 15 + Math.random() * 60, // Organic clustering
         rotation: Math.random() * 360,
+        rotationSpeed: 180 + Math.random() * 360, // Varied rotation speeds
         scale: useSharedValue(0),
         opacity: useSharedValue(0),
         translateX: useSharedValue(0),
@@ -74,42 +80,49 @@ export function SparkleBurst({
         particle.translateY.value = 0;
         particle.rotationValue.value = 0;
 
-        const { delay, distance, angle, rotation } = particle;
+        const { delay, distance, angle, rotation, rotationSpeed } = particle;
         
-        // Scale up with slight overshoot, then fade (end at 0.2 not 0)
+        // Scale up with slight overshoot, then settle
         particle.scale.value = withDelay(delay, 
           withSequence(
-            withTiming(1.2, { duration: 200, easing: Easing.out(Easing.ease) }),
-            withTiming(0.8, { duration: 200 }),
-            withTiming(0.2, { duration: 300 })
+            withTiming(1.3, { duration: 180, easing: Easing.out(Easing.ease) }),
+            withTiming(0.9, { duration: 200 }),
+            withTiming(0.3, { duration: 400 })
           )
         );
 
-        // Fade in then out
+        // Fade in quickly then fade out slowly
         particle.opacity.value = withDelay(delay,
           withSequence(
-            withTiming(1, { duration: 100 }),
-            withTiming(0, { duration: 500, easing: Easing.out(Easing.ease) })
+            withTiming(1, { duration: 80 }),
+            withTiming(0.85, { duration: 400 }),
+            withTiming(0, { duration: 600, easing: Easing.out(Easing.ease) })
           )
         );
 
-        // Move outward with natural deceleration
+        // Move outward with natural deceleration and slight gravity
         particle.translateX.value = withDelay(delay,
           withTiming(Math.cos(angle) * distance, { 
-            duration: 600, 
+            duration: 900, 
             easing: Easing.bezier(0.25, 0.1, 0.25, 1) 
           })
         );
         particle.translateY.value = withDelay(delay,
-          withTiming(Math.sin(angle) * distance, { 
-            duration: 600, 
-            easing: Easing.bezier(0.25, 0.1, 0.25, 1) 
-          })
+          withSequence(
+            withTiming(Math.sin(angle) * distance * 0.3, { 
+              duration: 300, 
+              easing: Easing.out(Easing.quad) 
+            }),
+            withTiming(Math.sin(angle) * distance + 20, { 
+              duration: 600, 
+              easing: Easing.bezier(0.25, 0.1, 0.25, 1) 
+            })
+          )
         );
 
-        // Rotation
+        // Rotation with varied speed
         particle.rotationValue.value = withDelay(delay,
-          withTiming(rotation, { duration: 600 })
+          withTiming(rotation + rotationSpeed, { duration: 900, easing: Easing.out(Easing.quad) })
         );
       });
     }

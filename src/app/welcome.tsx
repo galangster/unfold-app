@@ -24,38 +24,48 @@ export default function WelcomeScreen() {
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideUpAnim = useRef(new Animated.Value(30)).current;
+  const slideUpAnim = useRef(new Animated.Value(40)).current;
   const buttonScale1 = useRef(new Animated.Value(0.9)).current;
   const buttonScale2 = useRef(new Animated.Value(0.9)).current;
+  const brandIconScale = useRef(new Animated.Value(0)).current;
+  const brandIconRotate = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Entrance animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideUpAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Button animations with delay
+    // Entrance animations - staggered for drama
     Animated.sequence([
-      Animated.delay(400),
+      // First the icon pops in with rotation
+      Animated.spring(brandIconScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(brandIconRotate, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      // Then content fades in
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideUpAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 60,
+          useNativeDriver: true,
+        }),
+      ]),
+      // Then buttons spring in
       Animated.spring(buttonScale1, {
         toValue: 1,
         friction: 6,
         tension: 40,
         useNativeDriver: true,
       }),
-    ]).start();
-
-    Animated.sequence([
-      Animated.delay(550),
       Animated.spring(buttonScale2, {
         toValue: 1,
         friction: 6,
@@ -67,6 +77,12 @@ export default function WelcomeScreen() {
     // Track screen view
     Analytics.logEvent(AnalyticsEvents.ONBOARDING_STARTED, { screen: 'welcome' });
   }, []);
+
+  // Icon rotation interpolation
+  const iconRotation = brandIconRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-180deg', '0deg'],
+  });
 
   const handleQuickStart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -96,7 +112,7 @@ export default function WelcomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <LinearGradient
-        colors={isDark ? [colors.background, '#1a1a1e', colors.background] : [colors.background, '#f8f6f3', colors.background]}
+        colors={isDark ? [colors.background, '#161412', colors.background] : [colors.background, '#f5f3f0', colors.background]}
         style={styles.gradient}
       >
         <SafeAreaView style={styles.safeArea}>
@@ -111,7 +127,20 @@ export default function WelcomeScreen() {
           >
             {/* Logo/Brand */}
             <View style={styles.brandContainer}>
-              <Text style={[styles.brandIcon, { color: colors.accent }]}>✦</Text>
+              <Animated.Text 
+                style={[
+                  styles.brandIcon, 
+                  { 
+                    color: colors.accent,
+                    transform: [
+                      { scale: brandIconScale },
+                      { rotate: iconRotation },
+                    ],
+                  }
+                ]}
+              >
+                ✦
+              </Animated.Text>
               <Text style={[styles.brandName, { color: colors.text, fontFamily: FontFamily.display }]}>
                 Unfold
               </Text>
@@ -132,7 +161,23 @@ export default function WelcomeScreen() {
                 <TouchableOpacity
                   style={styles.quickStartButton}
                   onPress={handleQuickStart}
-                  activeOpacity={0.9}
+                  activeOpacity={0.85}
+                  onPressIn={() => {
+                    Animated.spring(buttonScale1, {
+                      toValue: 0.96,
+                      friction: 8,
+                      tension: 400,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                  onPressOut={() => {
+                    Animated.spring(buttonScale1, {
+                      toValue: 1,
+                      friction: 8,
+                      tension: 400,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
                 >
                   <LinearGradient
                     colors={['#C8A55C', '#B8944F']}
@@ -159,12 +204,28 @@ export default function WelcomeScreen() {
                   style={[
                     styles.personalizeButton,
                     {
-                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.03)',
-                      borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)',
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.02)',
+                      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
                     },
                   ]}
                   onPress={handlePersonalize}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
+                  onPressIn={() => {
+                    Animated.spring(buttonScale2, {
+                      toValue: 0.96,
+                      friction: 8,
+                      tension: 400,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
+                  onPressOut={() => {
+                    Animated.spring(buttonScale2, {
+                      toValue: 1,
+                      friction: 8,
+                      tension: 400,
+                      useNativeDriver: true,
+                    }).start();
+                  }}
                 >
                   <Text style={[styles.personalizeTitle, { color: colors.text, fontFamily: FontFamily.uiSemiBold }]}>
                     Personalize
@@ -206,71 +267,78 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 32,
+    paddingHorizontal: 28,
     justifyContent: 'space-between',
     paddingVertical: 60,
   },
   brandContainer: {
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 60,
   },
   brandIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+    fontSize: 56,
+    marginBottom: 20,
+    textShadowColor: 'rgba(200, 165, 92, 0.3)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
   },
   brandName: {
-    fontSize: 42,
-    letterSpacing: 1,
+    fontSize: 48,
+    letterSpacing: 0.5,
   },
   tagline: {
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 24,
+    marginTop: 16,
+    lineHeight: 26,
     maxWidth: 280,
+    opacity: 0.85,
   },
   optionsContainer: {
-    gap: 16,
+    gap: 14,
   },
   buttonWrapper: {
     width: '100%',
   },
   quickStartButton: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     shadowColor: '#C8A55C',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 10,
   },
   quickStartGradient: {
-    paddingVertical: 20,
+    paddingVertical: 22,
     paddingHorizontal: 32,
     alignItems: 'center',
   },
   quickStartTitle: {
     fontSize: 18,
     color: '#1a1a2e',
-    marginBottom: 4,
+    marginBottom: 5,
+    letterSpacing: 0.3,
   },
   quickStartSubtitle: {
     fontSize: 13,
-    color: 'rgba(26, 26, 46, 0.7)',
+    color: 'rgba(26, 26, 46, 0.65)',
   },
   personalizeButton: {
-    borderRadius: 16,
-    paddingVertical: 20,
+    borderRadius: 18,
+    paddingVertical: 22,
     paddingHorizontal: 32,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   personalizeTitle: {
     fontSize: 18,
-    marginBottom: 4,
+    marginBottom: 5,
+    letterSpacing: 0.3,
   },
   personalizeSubtitle: {
     fontSize: 13,
+    opacity: 0.8,
   },
   footer: {
     flexDirection: 'row',
@@ -280,6 +348,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
+    opacity: 0.7,
   },
   signInText: {
     fontSize: 14,
