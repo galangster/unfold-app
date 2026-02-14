@@ -29,6 +29,7 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
 import { createReviewPromptManager } from '@/lib/review-prompt';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -167,6 +168,18 @@ export default function ReadingScreen() {
       true
     );
   }, []);
+
+  // Track devotional opened
+  useEffect(() => {
+    if (currentDevotionalId && currentDevotional) {
+      Analytics.logEvent(AnalyticsEvents.DEVOTIONAL_OPENED, {
+        day_number: viewingDay,
+        devotional_id: currentDevotionalId,
+        total_days: totalDays,
+        is_completed: currentDayData?.isRead ?? false,
+      });
+    }
+  }, [currentDevotionalId, currentDevotional?.id]);
 
   // Network state for offline-aware retry behavior.
   useEffect(() => {
@@ -383,6 +396,13 @@ export default function ReadingScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
 
+    // Track devotional completion
+    Analytics.logEvent(AnalyticsEvents.DEVOTIONAL_COMPLETED, {
+      day_number: viewingDay,
+      devotional_id: currentDevotionalId,
+      is_last_day: viewingDay >= totalDays,
+    });
+
     if (currentDevotionalId) {
       markDayAsRead(currentDevotionalId, viewingDay);
 
@@ -403,6 +423,14 @@ export default function ReadingScreen() {
 
       if (viewingDay < expectedTotal) {
         advanceDay(currentDevotionalId);
+        
+        // Track day advancement
+        Analytics.logEvent(AnalyticsEvents.DAY_ADVANCED, {
+          from_day: viewingDay,
+          to_day: viewingDay + 1,
+          devotional_id: currentDevotionalId,
+        });
+        
         refreshDailyReminder();
       }
 
