@@ -30,7 +30,7 @@
     "@expo/metro-runtime": "~55.0.5",
     "@expo/react-native-action-sheet": "^4.1.1",
     "@expo/vector-icons": "^15.0.3",
-    "@gorhom/bottom-sheet": "^5",
+    "@gorhom/bottom-sheet": "^5.2.8",
     "@kolking/react-native-avatar": "^2.1.6",
     "@nandorojo/galeria": "2.0.0-rc.4",
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BottomSheet from '@gorhom/bottom-sheet';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,7 +29,7 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
-import { AudioPlayer } from '@/components/AudioPlayer';
+import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 import { SparkleBurst } from '@/components/SparkleBurst';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
@@ -125,6 +126,7 @@ export default function ReadingScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
   const [showSparkleBurst, setShowSparkleBurst] = useState(false);
+  const audioPlayerRef = useRef<BottomSheet>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -1074,7 +1076,7 @@ export default function ReadingScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowAudioPlayer(true);
+                  audioPlayerRef.current?.expand();
                 }}
                 onPressIn={() => {
                   headerButtonScales.listen.value = withSpring(0.85, { damping: 15, stiffness: 400 });
@@ -1453,8 +1455,8 @@ export default function ReadingScreen() {
 
       {/* Audio Player */}
       <AudioPlayer
-        visible={showAudioPlayer}
-        onClose={() => setShowAudioPlayer(false)}
+        ref={audioPlayerRef}
+        onClose={() => audioPlayerRef.current?.close()}
         title={currentDayData?.title || 'Devotional'}
         subtitle={`Day ${viewingDay} of ${currentDevotional?.title}`}
         content={currentDayData?.bodyText || ''}

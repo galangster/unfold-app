@@ -16,6 +16,7 @@ import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Analytics } from '@/lib/analytics';
 import { useAnalyticsScreenTracking } from '@/hooks/useAnalytics';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -121,11 +122,13 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
-          <KeyboardProvider>
-            <ThemeProvider>
-              <RootLayoutNav />
-            </ThemeProvider>
-          </KeyboardProvider>
+          <BottomSheetModalProvider>
+            <KeyboardProvider>
+              <ThemeProvider>
+                <RootLayoutNav />
+              </ThemeProvider>
+            </KeyboardProvider>
+          </BottomSheetModalProvider>
         </GestureHandlerRootView>
       </QueryClientProvider>
     </ErrorBoundary>
