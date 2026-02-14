@@ -21,6 +21,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { analyzeNetworkError, isOnline } from '@/lib/network-error-handler';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
 
@@ -78,6 +79,13 @@ export default function JournalScreen() {
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 300);
+
+    // Track journal opened
+    Analytics.logEvent(AnalyticsEvents.JOURNAL_OPENED, {
+      devotional_id: devotionalId,
+      day_number: dayNumber,
+      has_existing_entry: !!existingEntry,
+    });
   }, []);
 
   const saveEntry = useCallback((text: string) => {
@@ -85,6 +93,13 @@ export default function JournalScreen() {
 
     if (savedEntryIdRef.current) {
       updateJournalEntry(savedEntryIdRef.current, text);
+
+      // Track journal entry edited
+      Analytics.logEvent(AnalyticsEvents.JOURNAL_ENTRY_EDITED, {
+        devotional_id: devotionalId,
+        day_number: dayNumber,
+        entry_id: savedEntryIdRef.current,
+      });
     } else {
       addJournalEntry({
         devotionalId,
@@ -94,6 +109,14 @@ export default function JournalScreen() {
       const newEntry = getJournalEntry(devotionalId, dayNumber);
       if (newEntry) {
         savedEntryIdRef.current = newEntry.id;
+
+        // Track journal entry created
+        Analytics.logEvent(AnalyticsEvents.JOURNAL_ENTRY_CREATED, {
+          devotional_id: devotionalId,
+          day_number: dayNumber,
+          entry_id: newEntry.id,
+          has_content: text.trim().length > 50,
+        });
       }
     }
   }, [devotionalId, dayNumber, addJournalEntry, updateJournalEntry, getJournalEntry]);
@@ -173,7 +196,14 @@ export default function JournalScreen() {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-      
+
+      // Track Go Deeper AI prompt used
+      Analytics.logEvent(AnalyticsEvents.JOURNAL_AI_PROMPT_USED, {
+        devotional_id: devotionalId,
+        day_number: dayNumber,
+        content_length: content.trim().length,
+      });
+
       const response = await fetch(`${BACKEND_URL}/api/generate/journal-prompts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,14 +233,14 @@ export default function JournalScreen() {
       }
     } catch (error) {
       console.error('Go Deeper error:', error);
-      
+
       // Show user-friendly error
       Alert.alert(
         'Unable to Generate Prompts',
         'This feature is temporarily unavailable. Please try again later.',
         [{ text: 'OK' }]
       );
-      
+
       setDeeperError(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
