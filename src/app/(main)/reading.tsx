@@ -131,6 +131,7 @@ export default function ReadingScreen() {
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
+  const scrollY = useSharedValue(0);
   const completeButtonScale = useSharedValue(1);
   const shareButtonScale = useSharedValue(1);
   const headerButtonScales = {
@@ -362,6 +363,10 @@ export default function ReadingScreen() {
     transform: [{ scale: headerButtonScales.daySelector.value }],
   }));
 
+  const headerBackgroundStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(1, Math.max(0, scrollY.value / 100)),
+  }));
+
   const panGesture = useMemo(() =>
     Gesture.Pan()
       .activeOffsetX([-20, 20])
@@ -420,6 +425,7 @@ export default function ReadingScreen() {
   // Uses functional setState to avoid dependency on showScrollHint
   const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     const offsetY = e.nativeEvent.contentOffset.y;
+    scrollY.value = offsetY;
     // Hide scroll hint after scrolling 100px
     setShowScrollHint((current) => {
       if (offsetY > 100 && current) return false;
@@ -985,6 +991,20 @@ export default function ReadingScreen() {
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
             {/* Header */}
             <View style={{ backgroundColor: colors.background }}>
+              {/* Scroll-linked background overlay */}
+              <Animated.View
+                style={[
+                  {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: colors.background,
+                  },
+                  headerBackgroundStyle,
+                ]}
+              />
               <View
                 style={{
                   flexDirection: 'row',
