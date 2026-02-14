@@ -98,6 +98,8 @@ export interface UserProfile {
   themeMode: ThemeMode;
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
+  // Audio preferences
+  audioVoiceId?: string;
   // Auth fields
   authUserId: string | null;
   authProvider: 'apple' | 'anonymous' | null;
