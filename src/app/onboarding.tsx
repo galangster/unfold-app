@@ -243,7 +243,7 @@ export default function OnboardingScreen() {
       }
     }
     if ((data.selectedThemes?.length ?? 0) > 0) {
-      const themeNames = data.selectedThemes?.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean).join(', ');
+      const themeNames = data.selectedThemes?.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean).join(', ') ?? '';
       answers.push({ question: 'What themes are you drawn to?', answer: themeNames });
     }
 
@@ -370,7 +370,7 @@ export default function OnboardingScreen() {
       // Navigate to generating screen with user context
       const params: Record<string, string> = {};
       if ((data.selectedThemes?.length ?? 0) > 0) {
-        params.themes = data.selectedThemes?.join(',');
+        params.themes = data.selectedThemes?.join(',') ?? '';
       }
       if (data.selectedType) {
         params.devotionalType = data.selectedType;
