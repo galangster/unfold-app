@@ -8,6 +8,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -62,41 +63,66 @@ const UNFOLD_TAGLINES = [
   'Unfold the sacred\nin the ordinary.',
 ];
 
-// Animated progress bar component
+// Animated progress bar component with spring physics
 function AnimatedProgressBar({ progress, colors }: { progress: number; colors: ColorTheme }) {
   const animatedProgress = useSharedValue(0);
+  const glowOpacity = useSharedValue(0);
 
   useFocusEffect(
     useCallback(() => {
       const timer = setTimeout(() => {
-        animatedProgress.value = withTiming(progress, {
-          duration: 900,
-          easing: Easing.out(Easing.cubic),
+        // Spring animation for progress
+        animatedProgress.value = withSpring(progress, {
+          damping: 15,
+          stiffness: 100,
+          mass: 0.8,
         });
+        // Fade in glow effect
+        glowOpacity.value = withTiming(0.5, { duration: 600 });
       }, 400);
 
       return () => clearTimeout(timer);
-    }, [progress, animatedProgress])
+    }, [progress, animatedProgress, glowOpacity])
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
     width: `${animatedProgress.value}%`,
   }));
 
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
   return (
     <View
       style={{
-        height: 3,
+        height: 4,
         backgroundColor: colors.border,
-        borderRadius: 1.5,
+        borderRadius: 2,
+        overflow: 'hidden',
       }}
     >
+      {/* Glow effect behind progress */}
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            left: 0,
+            top: -4,
+            bottom: -4,
+            backgroundColor: colors.accent,
+            opacity: 0.3,
+            borderRadius: 4,
+          },
+          glowStyle,
+        ]}
+      />
       <Animated.View
         style={[
           {
             height: '100%',
             backgroundColor: colors.accent,
-            borderRadius: 1.5,
+            borderRadius: 2,
           },
           animatedStyle,
         ]}
