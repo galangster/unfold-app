@@ -35,9 +35,25 @@ export interface ColorTheme {
   // Accent (minimal use)
   accent: string;
 
+  // Gold spectrum for gradients and depth
+  accentLight: string;
+  accentDark: string;
+  accentGlow: string;
+
+  // Accent states
+  accentHover: string;
+  accentPressed: string;
+  accentDisabled: string;
+
   // Status
   success: string;
+  successLight: string;
   error: string;
+  errorLight: string;
+
+  // Status states
+  successHover: string;
+  errorHover: string;
 }
 
 // Dark theme (default)
@@ -51,7 +67,7 @@ export const DarkColors: ColorTheme = {
   text: '#F5F0EB',
   textMuted: 'rgba(245, 240, 235, 0.6)',
   textSubtle: 'rgba(245, 240, 235, 0.4)',
-  textHint: 'rgba(245, 240, 235, 0.25)',
+  textHint: 'rgba(245, 240, 235, 0.38)', // Was 0.25, now 0.38 for WCAG AA (~4.5:1)
 
   // Interactive elements
   inputBackground: 'rgba(245, 240, 235, 0.05)',
@@ -65,15 +81,27 @@ export const DarkColors: ColorTheme = {
   borderStrong: 'rgba(245, 240, 235, 0.28)',
 
   // Glass effect (for liquid glass menu)
-  glassBackground: 'rgba(245, 240, 235, 0.12)',
-  glassBorder: 'rgba(245, 240, 235, 0.18)',
+  glassBackground: 'rgba(245, 240, 235, 0.08)',
+  glassBorder: 'rgba(245, 240, 235, 0.22)',
 
-  // Accent - warm gold (the signature)
+  // Accent - warm gold spectrum
   accent: '#C8A55C',
+  accentLight: '#E8D7A8', // Shimmer highlight
+  accentDark: '#8B6F3A',  // Deep shadow
+  accentGlow: 'rgba(200, 165, 92, 0.3)',
 
-  // Status
-  success: 'rgba(74, 222, 128, 0.9)',
-  error: 'rgba(248, 113, 113, 0.9)',
+  // Accent states
+  accentHover: '#D4B76A',
+  accentPressed: '#BC933E',
+  accentDisabled: 'rgba(200, 165, 92, 0.4)',
+
+  // Status - warm olive and terracotta
+  success: '#7CB342',        // Warm olive green
+  successLight: 'rgba(124, 179, 66, 0.15)',
+  successHover: '#8BC34A',
+  error: '#D8785F',          // Warm terracotta
+  errorLight: 'rgba(216, 120, 95, 0.15)',
+  errorHover: '#E08A73',
 };
 
 // Light theme - warm, paper-like aesthetic
@@ -86,8 +114,8 @@ export const LightColors: ColorTheme = {
   // Text hierarchy - warm dark tones
   text: '#1C1710',
   textMuted: 'rgba(28, 23, 16, 0.62)',
-  textSubtle: 'rgba(28, 23, 16, 0.42)',
-  textHint: 'rgba(28, 23, 16, 0.3)',
+  textSubtle: 'rgba(28, 23, 16, 0.55)', // Was 0.42, now 0.55 for WCAG AA
+  textHint: 'rgba(28, 23, 16, 0.35)',
 
   // Interactive elements
   inputBackground: 'rgba(28, 23, 16, 0.04)',
@@ -104,12 +132,24 @@ export const LightColors: ColorTheme = {
   glassBackground: 'rgba(255, 255, 255, 0.9)',
   glassBorder: 'rgba(28, 23, 16, 0.08)',
 
-  // Accent - deeper warm gold for light mode
-  accent: '#9A7B3C',
+  // Accent - refined gold for light mode (was muddy #9A7B3C)
+  accent: '#B8944F',
+  accentLight: '#D4B87A',
+  accentDark: '#8B6F3A',
+  accentGlow: 'rgba(184, 148, 79, 0.25)',
 
-  // Status
-  success: 'rgba(34, 197, 94, 0.9)',
-  error: 'rgba(239, 68, 68, 0.9)',
+  // Accent states
+  accentHover: '#C4A05C',
+  accentPressed: '#A68845',
+  accentDisabled: 'rgba(184, 148, 79, 0.4)',
+
+  // Status - warm olive and terracotta
+  success: '#6B9B3A',
+  successLight: 'rgba(107, 155, 58, 0.12)',
+  successHover: '#7AAF42',
+  error: '#C76A52',
+  errorLight: 'rgba(199, 106, 82, 0.12)',
+  errorHover: '#D67D65',
 };
 
 // Default export for backwards compatibility - will be overridden by theme context
