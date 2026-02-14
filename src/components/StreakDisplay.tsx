@@ -77,8 +77,8 @@ export function StreakDisplay({
       
       // More dramatic spring for milestones
       const springConfig = wasMilestone 
-        ? { damping: 10, stiffness: 200, mass: 0.8 }
-        : { damping: 12, stiffness: 150, mass: 1 };
+        ? { damping: 8, stiffness: 150, mass: 0.8 }
+        : { damping: 10, stiffness: 120, mass: 1 };
       
       animatedStreak.value = withSpring(streak, springConfig);
 

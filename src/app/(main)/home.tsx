@@ -446,6 +446,9 @@ export default function HomeScreen() {
         <ScrollView
           contentContainerStyle={{ paddingBottom: 48 }}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          removeClippedSubviews={true}
+          bounces={true}
         >
           {/* Header */}
           <Animated.View

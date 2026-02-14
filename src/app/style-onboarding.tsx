@@ -19,6 +19,7 @@ import Animated, {
   FadeOut,
   SlideInRight,
   SlideOutLeft,
+  LinearTransition,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -357,19 +358,25 @@ export default function StyleOnboardingScreen() {
             <ChevronLeft size={24} color={colors.textMuted} />
           </Pressable>
 
-          {/* Progress dots */}
+          {/* Progress dots with spring animation */}
           <View className="flex-row space-x-2">
-            {STYLE_QUESTIONS.map((_, index) => (
-              <View
-                key={index}
-                style={{
-                  width: index === currentStep ? 24 : 6,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: index <= currentStep ? colors.accent : colors.border,
-                }}
-              />
-            ))}
+            {STYLE_QUESTIONS.map((_, index) => {
+              const isActive = index === currentStep;
+              const isCompleted = index < currentStep;
+              
+              return (
+                <Animated.View
+                  key={index}
+                  layout={LinearTransition.springify().damping(15).stiffness(200)}
+                  style={{
+                    width: isActive ? 24 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: isCompleted || isActive ? colors.accent : colors.border,
+                  }}
+                />
+              );
+            })}
           </View>
 
           <View style={{ width: 40 }} />

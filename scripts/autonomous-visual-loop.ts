@@ -12,7 +12,10 @@
  * 5. Repeats until satisfied
  * 
  * The number of screens and videos scales automatically based on the SCREENS config.
- * No hardcoded numbers - just 
+ * No hardcoded numbers - just add/remove screens from the SCREENS array.
+ * 
+ * Usage: npx tsx scripts/autonomous-visual-loop.ts
+ */
 
 import { chromium } from '@playwright/test';
 import * as fs from 'fs';
