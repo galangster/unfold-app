@@ -9,6 +9,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { isRevenueCatEnabled, setUserId, logoutUser } from '@/lib/revenuecatClient';
 import { logger } from '@/lib/logger';
 import { initializeAuth } from '@/lib/appleAuth';
+import { Analytics } from '@/lib/analytics';
 
 interface AuthState {
   user: FirebaseAuthTypes.User | null;
@@ -39,6 +40,7 @@ export function useAuth() {
         authEmail: null,
         authDisplayName: null,
       });
+      Analytics.setUserId(null);
       return;
     }
 
@@ -55,6 +57,10 @@ export function useAuth() {
       authEmail: user.email,
       authDisplayName: user.displayName,
     });
+
+    // Set analytics user ID and properties
+    Analytics.setUserId(user.uid);
+    Analytics.setUserProperty('auth_provider', authProvider || 'none');
 
     logger.log('[useAuth] Synced auth to store', {
       userId: user.uid,
