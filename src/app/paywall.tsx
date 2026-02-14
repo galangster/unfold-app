@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Linking, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const FEATURES = [
   'Unlimited devotional journeys',
@@ -49,6 +50,13 @@ export default function PaywallScreen() {
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
     onSuccess: async (result) => {
       if (result.ok) {
+        // Track subscription purchased
+        Analytics.logEvent(AnalyticsEvents.SUBSCRIPTION_PURCHASED, {
+          plan: selectedPlan,
+          product_id: selectedPlan === 'yearly' ? '$rc_annual' : '$rc_monthly',
+        });
+        Analytics.setUserProperty('is_premium', 'true');
+
         // Immediately update the Zustand store
         const subscriptionResult = await hasActiveSubscription();
         if (subscriptionResult.ok) {
@@ -66,6 +74,10 @@ export default function PaywallScreen() {
     mutationFn: restorePurchases,
     onSuccess: async (result) => {
       if (result.ok) {
+        // Track subscription restored
+        Analytics.logEvent(AnalyticsEvents.SUBSCRIPTION_RESTORED);
+        Analytics.setUserProperty('is_premium', 'true');
+
         // Immediately update the Zustand store
         const subscriptionResult = await hasActiveSubscription();
         if (subscriptionResult.ok) {
@@ -82,7 +94,12 @@ export default function PaywallScreen() {
   const handleClose = () => {
     // Prevent double-tap
     if (isPurchasing) return;
-    
+
+    // Track paywall closed
+    Analytics.logEvent(AnalyticsEvents.PAYWALL_CLOSED, {
+      selected_plan: selectedPlan,
+    });
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
   };
@@ -93,6 +110,13 @@ export default function PaywallScreen() {
 
     const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
     if (!pkg) return;
+
+    // Track purchase tapped
+    Analytics.logEvent(AnalyticsEvents.PAYWALL_PURCHASE_TAPPED, {
+      plan: selectedPlan,
+      product_id: pkg.identifier,
+    });
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     purchaseMutation.mutate(pkg);
   };
@@ -103,6 +127,13 @@ export default function PaywallScreen() {
   };
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
+
+  // Track paywall shown
+  useEffect(() => {
+    Analytics.logEvent(AnalyticsEvents.PAYWALL_SHOWN, {
+      trigger: 'manual', // Could be passed via route params
+    });
+  }, []);
 
   // Hardcoded new pricing (update in RevenueCat dashboard later)
   const monthlyPrice = '$3.99';
