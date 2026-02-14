@@ -110,7 +110,7 @@ class AnalyticsService {
    */
   async logEvent(
     name: string,
-    params?: FirebaseAnalyticsTypes.CustomEventParams
+    params?: Record<string, any>
   ): Promise<void> {
     if (!this.isEnabled) return;
 
@@ -259,7 +259,7 @@ class AnalyticsService {
 export const Analytics = new AnalyticsService();
 
 // Export individual functions for convenience
-export const logEvent = (name: string, params?: FirebaseAnalyticsTypes.CustomEventParams) => 
+export const logEvent = (name: string, params?: Record<string, any>) => 
   Analytics.logEvent(name, params);
 
 export const logScreenView = (screenName: string, screenClass?: string) => 

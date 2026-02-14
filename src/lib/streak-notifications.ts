@@ -31,9 +31,9 @@ export async function scheduleMorningReminder(hour: number = 8, minute: number =
       sound: true,
     },
     trigger: {
+      type: 'daily',
       hour,
       minute,
-      repeats: true,
     } as Notifications.DailyTriggerInput,
   });
 }
@@ -212,5 +212,7 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
