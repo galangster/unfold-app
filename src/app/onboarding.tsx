@@ -38,6 +38,7 @@ import {
   getRandomDurationSubtext,
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
@@ -219,6 +220,11 @@ export default function OnboardingScreen() {
   };
 
   useEffect(() => {
+    // Track onboarding start
+    Analytics.logEvent(AnalyticsEvents.ONBOARDING_STARTED);
+  }, []);
+
+  useEffect(() => {
     const loadAdaptiveQuestion = async () => {
       if (!step) return;
       if (!step.adaptive || adaptedSteps[step.id]) return;
@@ -332,6 +338,14 @@ export default function OnboardingScreen() {
       if (data.selectedStudySubject) {
         params.studySubject = data.selectedStudySubject;
       }
+
+      // Track onboarding completion
+      Analytics.logEvent(AnalyticsEvents.ONBOARDING_COMPLETED, {
+        devotional_length: data.devotionalLength,
+        reading_duration: data.readingDuration,
+        has_selected_theme: data.selectedThemes.length > 0,
+        has_selected_type: !!data.selectedType,
+      });
 
       router.push({
         pathname: '/generating',
