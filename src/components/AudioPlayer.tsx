@@ -56,7 +56,7 @@ export function AudioPlayer({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  const audioRef = useRef<Audio.Sound | null>(null);
+  const audioRef = useRef<typeof Audio.Sound | null>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<any>(null);
   const wordRefs = useRef<Map<number, any>>(new Map());
@@ -109,7 +109,7 @@ export function AudioPlayer({
       audioRef.current = sound;
       
       // Set up playback status listener
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate((status: any) => {
         if (status.isLoaded) {
           setIsBuffering(status.isBuffering);
           
@@ -465,7 +465,6 @@ const styles = StyleSheet.create({
     marginRight: 4,
     lineHeight: 28,
     paddingVertical: 2,
-    transition: 'all 0.1s ease',
   },
   loadingContainer: {
     flex: 1,

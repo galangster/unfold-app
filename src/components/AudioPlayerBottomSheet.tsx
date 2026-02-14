@@ -52,7 +52,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<typeof Audio.Sound | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
