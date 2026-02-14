@@ -17,6 +17,7 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
+import { logger } from '@/lib/logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { deleteAccount, signOut } from '@/lib/appleAuth';
 import { CARTESIA_VOICES } from '@/lib/cartesia';
