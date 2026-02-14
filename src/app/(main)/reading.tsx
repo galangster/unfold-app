@@ -29,6 +29,7 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
 import { AudioPlayer } from '@/components/AudioPlayer';
+import { SparkleBurst } from '@/components/SparkleBurst';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
@@ -123,6 +124,7 @@ export default function ReadingScreen() {
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
+  const [showSparkleBurst, setShowSparkleBurst] = useState(false);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -429,6 +431,12 @@ export default function ReadingScreen() {
   const handleComplete = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
+    setShowSparkleBurst(true);
+
+    // Reset sparkle burst after animation completes
+    setTimeout(() => {
+      setShowSparkleBurst(false);
+    }, 600);
 
     // Track devotional completion
     Analytics.logEvent(AnalyticsEvents.DEVOTIONAL_COMPLETED, {
@@ -1170,6 +1178,13 @@ export default function ReadingScreen() {
                       completeButtonStyle,
                     ]}
                   >
+                    {/* Sparkle burst animation on completion */}
+                    <SparkleBurst 
+                      trigger={showSparkleBurst} 
+                      color={colors.accent}
+                      particleCount={12}
+                    />
+
                     <Pressable
                       onPress={handleComplete}
                       onPressIn={() => {
