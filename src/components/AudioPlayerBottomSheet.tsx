@@ -17,6 +17,7 @@ import { useTheme } from '@/lib/theme';
 import { streamDevotionalAudio, WordTimestamp, CARTESIA_VOICES } from '@/lib/cartesia';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
+import { AudioWaveform } from './AudioWaveform';
 
 const { width, height } = Dimensions.get('window');
 
@@ -345,6 +346,15 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
             </Text>
           )}
         </View>
+
+        {/* Audio Waveform Visualization */}
+        <AudioWaveform
+          isPlaying={isPlaying}
+          activeWordIndex={activeWordIndex}
+          totalWords={wordTimestamps.length}
+          color={colors.accent}
+          barCount={24}
+        />
 
         {/* Progress bar */}
         <View style={styles.progressContainer}>
