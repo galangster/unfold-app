@@ -368,7 +368,7 @@ export default function ReadingScreen() {
   }));
 
   const headerBackgroundStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, Math.max(0, scrollY.value / 100)),
+    opacity: Math.min(1, Math.max(0, (scrollY.value - 80) / 20)),
   }));
 
   const panGesture = useMemo(() =>
@@ -1213,14 +1213,14 @@ export default function ReadingScreen() {
                       onPress={handleComplete}
                       onPressIn={() => {
                         completeButtonScale.value = withSpring(0.95, {
-                          damping: 15,
-                          stiffness: 300,
+                          damping: 12,
+                          stiffness: 200,
                         });
                       }}
                       onPressOut={() => {
                         completeButtonScale.value = withSpring(1, {
-                          damping: 15,
-                          stiffness: 300,
+                          damping: 12,
+                          stiffness: 200,
                         });
                       }}
                       accessibilityRole="button"
