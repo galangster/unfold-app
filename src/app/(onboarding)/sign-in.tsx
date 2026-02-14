@@ -8,6 +8,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
+  withRepeat,
   Easing,
   interpolate,
   FadeIn,

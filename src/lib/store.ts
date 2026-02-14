@@ -114,7 +114,7 @@ export interface UserProfile {
   streakFreezes: number;
   weekendAmnesty: boolean;
   // New: Theme and type preferences for next devotional
-  selectedTheme?: ThemeCategory;
+  selectedThemes?: ThemeCategory[];
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
 }

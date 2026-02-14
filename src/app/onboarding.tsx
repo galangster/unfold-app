@@ -74,7 +74,7 @@ interface OnboardingData {
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
-  selectedThemes: ThemeCategory[];
+  selectedThemes?: ThemeCategory[];
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
   selectedMainOption?: 'theme' | 'type' | 'guided';

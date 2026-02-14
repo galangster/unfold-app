@@ -361,7 +361,7 @@ export default function GeneratingScreen() {
                 currentSituation: user.currentSituation,
                 emotionalState: user.emotionalState,
               },
-              themeCategory: user.selectedTheme,
+              themeCategory: user.selectedThemes[0],
               devotionalType: user.selectedType || 'personal',
               studySubject: user.selectedStudySubject,
             };
@@ -386,7 +386,7 @@ export default function GeneratingScreen() {
             devotionalLength: user.devotionalLength,
             bibleTranslation: user.bibleTranslation ?? 'NIV',
             previouslyUsedScriptures: previouslyUsedReferences,
-            themeCategory: user.selectedTheme,
+            themeCategory: user.selectedThemes[0],
             devotionalType: user.selectedType,
             studySubject: user.selectedStudySubject,
           },
@@ -409,7 +409,7 @@ export default function GeneratingScreen() {
             devotionalLength: user.devotionalLength,
             bibleTranslation: user.bibleTranslation ?? 'NIV',
             previouslyUsedScriptures: previouslyUsedReferences,
-            themeCategory: user.selectedTheme,
+            themeCategory: user.selectedThemes[0],
             devotionalType: user.selectedType,
             studySubject: user.selectedStudySubject,
           });
