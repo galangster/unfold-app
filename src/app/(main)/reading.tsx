@@ -129,6 +129,7 @@ export default function ReadingScreen() {
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
+  const completeButtonScale = useSharedValue(1);
 
   const fontSize = user?.fontSize ?? 'medium';
 
@@ -326,6 +327,10 @@ export default function ReadingScreen() {
 
   const scrollHintStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: chevronBounce.value }],
+  }));
+
+  const completeButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: completeButtonScale.value }],
   }));
 
   const panGesture = useMemo(() =>
@@ -1093,18 +1098,33 @@ export default function ReadingScreen() {
                   style={{ marginTop: 48, alignItems: 'center', gap: 16 }}
                 >
                   {/* Complete Day Button - Filled container with border */}
-                  <View
-                    style={{
-                      backgroundColor: colors.accent,
-                      paddingVertical: 4,
-                      paddingHorizontal: 4,
-                      borderRadius: 36,
-                      borderWidth: 2,
-                      borderColor: colors.accent,
-                    }}
+                  <Animated.View
+                    style={[
+                      {
+                        backgroundColor: colors.accent,
+                        paddingVertical: 4,
+                        paddingHorizontal: 4,
+                        borderRadius: 36,
+                        borderWidth: 2,
+                        borderColor: colors.accent,
+                      },
+                      completeButtonStyle,
+                    ]}
                   >
                     <Pressable
                       onPress={handleComplete}
+                      onPressIn={() => {
+                        completeButtonScale.value = withSpring(0.95, {
+                          damping: 15,
+                          stiffness: 300,
+                        });
+                      }}
+                      onPressOut={() => {
+                        completeButtonScale.value = withSpring(1, {
+                          damping: 15,
+                          stiffness: 300,
+                        });
+                      }}
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
@@ -1118,7 +1138,6 @@ export default function ReadingScreen() {
                         shadowOpacity: pressed ? 0.4 : 0.2,
                         shadowRadius: 12,
                         elevation: 8,
-                        transform: [{ scale: pressed ? 0.98 : 1 }],
                       })}
                     >
                       {({ pressed }) => (
@@ -1135,7 +1154,7 @@ export default function ReadingScreen() {
                         </Text>
                       )}
                     </Pressable>
-                  </View>
+                  </Animated.View>
 
                   {/* Share Button - Centered, icon above text */}
                   <Pressable
