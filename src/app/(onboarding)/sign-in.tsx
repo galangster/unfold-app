@@ -18,6 +18,7 @@ import { FontFamily } from '@/constants/fonts';
 import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -85,6 +86,9 @@ export default function SignInScreen() {
     // Check if Apple Sign In is available
     AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
 
+    // Track sign-in prompt shown
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_PROMPT_SHOWN);
+
     // Staggered entrance animations
     headerOpacity.value = withDelay(200, withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }));
     headerTranslateY.value = withDelay(200, withTiming(0, { duration: 700, easing: Easing.out(Easing.cubic) }));
@@ -142,10 +146,20 @@ export default function SignInScreen() {
     setErrorMessage(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
+    // Track Apple Sign In tapped
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
+
     try {
       const result = await signInWithApple();
 
       if (result.success && result.user) {
+        // Track successful sign in
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, {
+          auth_provider: 'apple',
+        });
+        Analytics.setUserId(result.user.uid);
+        Analytics.setUserProperty('auth_provider', 'apple');
+
         // Update store with auth info
         updateUser({
           authUserId: result.user.uid,
@@ -167,6 +181,12 @@ export default function SignInScreen() {
         logger.log('[SignIn] User cancelled Apple Sign In');
         // Stay on screen, user can try again or skip
       } else {
+        // Track error
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
+          auth_provider: 'apple',
+          error_type: result.error || 'unknown',
+        });
+
         logger.error('[SignIn] Apple Sign In failed', { error: result.error });
         
         // Show user-friendly error message
@@ -195,11 +215,21 @@ export default function SignInScreen() {
     setErrorMessage(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    // Track skip tapped
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
+
     try {
       // Create anonymous user if needed
       const result = await signInAnonymously();
 
       if (result.success && result.user) {
+        // Track anonymous sign in
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, {
+          auth_provider: 'anonymous',
+        });
+        Analytics.setUserId(result.user.uid);
+        Analytics.setUserProperty('auth_provider', 'anonymous');
+
         const currentCount = userProfile?.signInPromptCount ?? 0;
 
         updateUser({
@@ -217,11 +247,22 @@ export default function SignInScreen() {
         // Navigate to home
         router.replace('/(main)/home');
       } else {
+        // Track error
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
+          auth_provider: 'anonymous',
+          error_type: result.error || 'unknown',
+        });
+
         // Show error for anonymous sign-in failure
         logger.error('[SignIn] Anonymous sign in failed', { error: result.error });
         setErrorMessage('Unable to continue. Please try again.');
       }
     } catch (error) {
+      Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
+        auth_provider: 'anonymous',
+        error_type: 'exception',
+      });
+
       logger.error('[SignIn] Error continuing anonymously', { error });
       setErrorMessage('Something went wrong. Please try again.');
     } finally {
