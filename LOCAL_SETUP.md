@@ -5,7 +5,7 @@
 ## 📍 Location
 
 ```
-~/clawd/work/vibecodeapp-fix/app/mobile/
+~/clawd/work/unfold/app/mobile/
 ```
 
 **This is the ONLY copy.** Everything else has been deleted.
