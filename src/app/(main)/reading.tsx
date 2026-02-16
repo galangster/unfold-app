@@ -950,8 +950,20 @@ export default function ReadingScreen() {
                 accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
                 accessibilityHint="Opens day selector menu"
                 accessibilityValue={{ min: 1, max: currentDevotional.totalDays, now: viewingDay, text: `Day ${viewingDay} of ${currentDevotional.totalDays}` }}
-                style={{ padding: 8 }}
+                style={{ 
+                  padding: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
               >
+                {/* Left Chevron - show if not on day 1 */}
+                {viewingDay > 1 ? (
+                  <ChevronLeft size={16} color={colors.textMuted} strokeWidth={1.5} />
+                ) : (
+                  <View style={{ width: 16 }} />
+                )}
+                
                 <Text
                   style={{
                     fontFamily: FontFamily.mono,
@@ -962,6 +974,13 @@ export default function ReadingScreen() {
                 >
                   DAY {viewingDay} OF {currentDevotional.totalDays}
                 </Text>
+                
+                {/* Right Chevron - show if more days available */}
+                {viewingDay < availableDays ? (
+                  <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
+                ) : (
+                  <View style={{ width: 16 }} />
+                )}
               </Pressable>
 
               <Pressable
@@ -996,56 +1015,20 @@ export default function ReadingScreen() {
             </View>
             </View>
 
-            {/* Content area with swipe chevrons */}
-            <View style={{ flex: 1, position: 'relative' }}>
-              {/* Left Chevron - show if not on day 1 */}
-              {viewingDay > 1 && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    left: 8,
-                    top: '50%',
-                    transform: [{ translateY: -12 }],
-                    zIndex: 10,
-                    opacity: 0.4,
-                  }}
-                  pointerEvents="none"
-                >
-                  <ChevronLeft size={24} color={colors.textMuted} strokeWidth={1.5} />
-                </View>
-              )}
-
-              {/* Right Chevron - show if more days available */}
-              {viewingDay < availableDays && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    right: 8,
-                    top: '50%',
-                    transform: [{ translateY: -12 }],
-                    zIndex: 10,
-                    opacity: 0.4,
-                  }}
-                  pointerEvents="none"
-                >
-                  <ChevronRight size={24} color={colors.textMuted} strokeWidth={1.5} />
-                </View>
-              )}
-
-              {/* Content - Scrollable */}
-              <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={{
-                  paddingHorizontal: 24,
-                  paddingTop: 20,
-                  paddingBottom: 300,
-                }}
-                showsVerticalScrollIndicator={false}
-                bounces={true}
-                onScroll={handleScroll}
-                scrollEventThrottle={150}
-                removeClippedSubviews={true}
-              >
+            {/* Content - Scrollable */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{
+                paddingHorizontal: 24,
+                paddingTop: 20,
+                paddingBottom: 300,
+              }}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              onScroll={handleScroll}
+              scrollEventThrottle={150}
+              removeClippedSubviews={true}
+            >
               <DevotionalContent
                 day={currentDayData}
                 fontSize={fontSize}
@@ -1162,17 +1145,40 @@ export default function ReadingScreen() {
               {isCompleted && (
                 <Animated.View
                   entering={FadeIn.duration(400)}
-                  style={{ marginTop: 48, alignItems: 'center' }}
+                  style={{ marginTop: 48, marginHorizontal: 24 }}
                 >
-                  <Text
+                  {/* Day completed card */}
+                  <View
                     style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 16,
-                      color: colors.textMuted,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+                      borderRadius: 20,
+                      paddingVertical: 20,
+                      paddingHorizontal: 24,
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
                     }}
                   >
-                    Day completed
-                  </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.display,
+                        fontSize: 18,
+                        color: colors.text,
+                        marginBottom: 4,
+                      }}
+                    >
+                      ✓ Day completed
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.body,
+                        fontSize: 14,
+                        color: colors.textMuted,
+                      }}
+                    >
+                      Great job today
+                    </Text>
+                  </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
                   {showIncompleteJourneyRetry && (
@@ -1294,7 +1300,6 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
             </ScrollView>
-          </View>
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>
