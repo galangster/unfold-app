@@ -262,6 +262,7 @@ export default function PastDevotionalsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
+          estimatedItemSize={150}
         />
       </SafeAreaView>
     </View>

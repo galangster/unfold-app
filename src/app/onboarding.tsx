@@ -10,9 +10,8 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   AccessibilityInfo,
-  ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -39,7 +38,6 @@ import {
   getRandomDurationSubtext,
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
-import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
@@ -74,7 +72,7 @@ interface OnboardingData {
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
-  selectedThemes?: ThemeCategory[];
+  selectedThemes: ThemeCategory[];
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
   selectedMainOption?: 'theme' | 'type' | 'guided';
@@ -87,13 +85,10 @@ interface AdaptedStep {
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { mode, theme: quickTheme } = useLocalSearchParams<{ mode?: 'quick' | 'full'; theme?: string }>();
   const { colors, isDark } = useTheme();
   const existingUser = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
-
-  const isQuickMode = mode === 'quick';
 
   // Types that require subject selection (book, character, etc.)
   const TYPES_WITH_SUBJECT_SELECTION: DevotionalType[] = ['book_study', 'character_study'];
@@ -104,48 +99,12 @@ export default function OnboardingScreen() {
   const [adaptedSteps, setAdaptedSteps] = useState<Record<string, AdaptedStep>>({});
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   const [showListScrollHint, setShowListScrollHint] = useState(true);
-  const [isQuickProcessing, setIsQuickProcessing] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const inputOpacity = useSharedValue(0);
   const inputTranslateY = useSharedValue(10);
   const listScrollY = useSharedValue(0);
-
-  // Quick mode: Auto-complete and navigate to home
-  useEffect(() => {
-    if (isQuickMode && !isQuickProcessing) {
-      setIsQuickProcessing(true);
-      // Small delay for UX
-      const timer = setTimeout(() => {
-        completeQuickOnboarding();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [isQuickMode]);
-
-  const completeQuickOnboarding = async () => {
-    const hour = new Date().getHours();
-    const defaultTheme = quickTheme || (hour >= 5 && hour < 12 ? 'purpose' : hour >= 18 || hour < 5 ? 'peace' : 'growth');
-
-    // Update user with quick settings
-    if (existingUser) {
-      updateUser({
-        hasCompletedOnboarding: true,
-        name: existingUser.name || 'Friend',
-        readingDuration: 15,
-        devotionalLength: 7,
-        bibleTranslation: 'NIV',
-        reminderTime: '8:00 AM',
-        selectedThemes: [defaultTheme as ThemeCategory],
-      });
-    }
-
-    Analytics.logEvent(AnalyticsEvents.ONBOARDING_COMPLETED, { mode: 'quick' });
-
-    // Navigate to home
-    router.replace('/(main)/home');
-  };
 
   // Theme selection scroll animation
   const listFadeAnimatedStyle = useAnimatedStyle(() => ({
@@ -189,7 +148,7 @@ export default function OnboardingScreen() {
           return false;
         }
       }
-
+      
       if (step.skipIfHasValue) {
         const stepId = step.id as StepId;
         if (stepId === 'name' && existingUser?.name) return false;
@@ -242,8 +201,8 @@ export default function OnboardingScreen() {
         }
       }
     }
-    if ((data.selectedThemes?.length ?? 0) > 0) {
-      const themeNames = data.selectedThemes?.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean).join(', ') ?? '';
+    if (data.selectedThemes.length > 0) {
+      const themeNames = data.selectedThemes.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean).join(', ');
       answers.push({ question: 'What themes are you drawn to?', answer: themeNames });
     }
 
@@ -258,11 +217,6 @@ export default function OnboardingScreen() {
     }
     return answers;
   };
-
-  useEffect(() => {
-    // Track onboarding start
-    Analytics.logEvent(AnalyticsEvents.ONBOARDING_STARTED);
-  }, []);
 
   useEffect(() => {
     const loadAdaptiveQuestion = async () => {
@@ -346,19 +300,6 @@ export default function OnboardingScreen() {
         themeMode: 'system',
         accentTheme: 'gold',
         readingFont: 'source-serif',
-        // Auth fields - initialize as null, will be set when user signs in
-        authUserId: null,
-        authProvider: null,
-        authEmail: null,
-        authDisplayName: null,
-        hasSeenSignInPrompt: false,
-        signInPromptCount: 0,
-        // Streak fields
-        streakCount: 0,
-        longestStreak: 0,
-        lastReadDate: null,
-        streakFreezes: 0,
-        weekendAmnesty: true,
       };
 
       if (existingUser) {
@@ -369,8 +310,8 @@ export default function OnboardingScreen() {
 
       // Navigate to generating screen with user context
       const params: Record<string, string> = {};
-      if ((data.selectedThemes?.length ?? 0) > 0) {
-        params.themes = data.selectedThemes?.join(',') ?? '';
+      if (data.selectedThemes.length > 0) {
+        params.themes = data.selectedThemes.join(',');
       }
       if (data.selectedType) {
         params.devotionalType = data.selectedType;
@@ -378,14 +319,6 @@ export default function OnboardingScreen() {
       if (data.selectedStudySubject) {
         params.studySubject = data.selectedStudySubject;
       }
-
-      // Track onboarding completion
-      Analytics.logEvent(AnalyticsEvents.ONBOARDING_COMPLETED, {
-        devotional_length: data.devotionalLength,
-        reading_duration: data.readingDuration,
-        has_selected_theme: (data.selectedThemes?.length ?? 0) > 0,
-        has_selected_type: !!data.selectedType,
-      });
 
       router.push({
         pathname: '/generating',
@@ -445,9 +378,8 @@ export default function OnboardingScreen() {
     if (currentIdx > 0) {
       const prevStepId = STEPS[currentIdx - 1].id as StepId;
       setCurrentStepId(prevStepId);
-    } else {
-      router.back();
     }
+    // On first step, do nothing (back button is hidden)
   };
 
   const updateData = (key: StepId, value: string | number) => {
@@ -464,7 +396,7 @@ export default function OnboardingScreen() {
       if (themeSelectionMode === 'none') {
         return !!data.selectedMainOption;
       }
-      if (themeSelectionMode === 'theme') return (data.selectedThemes?.length ?? 0) > 0 && (data.selectedThemes?.length ?? 0) <= 3;
+      if (themeSelectionMode === 'theme') return data.selectedThemes.length > 0 && data.selectedThemes.length <= 3;
       if (themeSelectionMode === 'type') return !!data.selectedType;
       return false;
     }
@@ -824,12 +756,12 @@ export default function OnboardingScreen() {
                 style={{
                   fontFamily: FontFamily.ui,
                   fontSize: 13,
-                  color: (data.selectedThemes?.length ?? 0) >= 3 ? colors.accent : colors.textMuted,
+                  color: data.selectedThemes.length >= 3 ? colors.accent : colors.textMuted,
                 }}
               >
-                {(data.selectedThemes?.length ?? 0) >= 3 
+                {data.selectedThemes.length >= 3 
                   ? 'Maximum 3 themes selected'
-                  : `Select up to 3 themes (${data.selectedThemes?.length ?? 0}/3)`}
+                  : `Select up to 3 themes (${data.selectedThemes.length}/3)`}
               </Text>
             </View>
             
@@ -857,11 +789,11 @@ export default function OnboardingScreen() {
                       {themeIds.map((themeId) => {
                         const theme = THEME_CATEGORIES.find((t) => t.id === themeId);
                         if (!theme) return null;
-                        const isSelected = data.selectedThemes?.includes(themeId) ?? false;
+                        const isSelected = data.selectedThemes.includes(themeId);
                         const selectionOrder = isSelected 
-                          ? (data.selectedThemes?.indexOf(themeId) ?? -1) + 1 
+                          ? data.selectedThemes.indexOf(themeId) + 1 
                           : undefined;
-                        const isMaxedOut = (data.selectedThemes?.length ?? 0) >= 3 && !isSelected;
+                        const isMaxedOut = data.selectedThemes.length >= 3 && !isSelected;
 
                         return (
                           <ThemePill
@@ -879,12 +811,11 @@ export default function OnboardingScreen() {
                               if (isMaxedOut) return;
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               setData((prev) => {
-                                const currentThemes = prev.selectedThemes ?? [];
-                                if (currentThemes.includes(themeId)) {
-                                  return { ...prev, selectedThemes: currentThemes.filter((t) => t !== themeId) };
+                                if (prev.selectedThemes.includes(themeId)) {
+                                  return { ...prev, selectedThemes: prev.selectedThemes.filter((t) => t !== themeId) };
                                 }
-                                if (currentThemes.length >= 3) return prev;
-                                return { ...prev, selectedThemes: [...currentThemes, themeId] };
+                                if (prev.selectedThemes.length >= 3) return prev;
+                                return { ...prev, selectedThemes: [...prev.selectedThemes, themeId] };
                               });
                             }}
                             selectionOrder={selectionOrder}
@@ -1187,33 +1118,6 @@ export default function OnboardingScreen() {
     );
   }
 
-  // Quick mode loading UI
-  if (isQuickMode && isQuickProcessing) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={{
-            fontFamily: FontFamily.display,
-            fontSize: 24,
-            color: colors.text,
-            marginTop: 24,
-          }}>
-            Creating your devotional...
-          </Text>
-          <Text style={{
-            fontFamily: FontFamily.body,
-            fontSize: 14,
-            color: colors.textMuted,
-            marginTop: 8,
-          }}>
-            Quick start • Almost there
-          </Text>
-        </SafeAreaView>
-      </View>
-    );
-  }
-
   if (!step) return null;
 
   return (
@@ -1221,9 +1125,13 @@ export default function OnboardingScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View className="flex-row items-center justify-between px-4 py-3">
-            <Pressable onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 8 }}>
-              <ChevronLeft size={24} color={colors.textMuted} />
-            </Pressable>
+            {currentStepIndex > 0 ? (
+              <Pressable onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 8 }}>
+                <ChevronLeft size={24} color={colors.textMuted} />
+              </Pressable>
+            ) : (
+              <View style={{ padding: 8, width: 40 }} />
+            )}
             
             <Pressable
               onPress={handleNext}

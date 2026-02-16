@@ -17,11 +17,7 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
-import { logger } from '@/lib/logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
-import { deleteAccount, signOut } from '@/lib/appleAuth';
-import { CARTESIA_VOICES } from '@/lib/cartesia';
-import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
 
@@ -73,10 +69,7 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'translation' | null>(null);
-  const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | 'voice' | null>('colors');
-  
-  // Voice selection state
-  const [selectedVoice, setSelectedVoice] = useState(user?.audioVoiceId || '694f9389-aac1-45b6-b726-9d9369183238');
+  const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>('colors');
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -156,52 +149,6 @@ export default function SettingsScreen() {
             try {
               reset();
               router.replace('/');
-            } finally {
-              setIsDeletingAccount(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDeleteAccount = async () => {
-    // Prevent double-tap
-    if (isDeletingAccount) return;
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
-      'Delete your account?',
-      'This will permanently delete your account, all devotionals, journal entries, and settings. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeletingAccount(true);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              // Delete Firebase Auth user
-              const result = await deleteAccount();
-
-              if (result.success) {
-                // Sign out from RevenueCat
-                const { logoutUser } = await import('@/lib/revenuecatClient');
-                await logoutUser();
-
-                // Clear local data
-                reset();
-
-                logger.log('[Settings] Account deleted successfully');
-                router.replace('/');
-              } else {
-                // Show error
-                Alert.alert('Unable to delete account', result.error || 'Please try again later.');
-              }
-            } catch (error) {
-              logger.error('[Settings] Error deleting account', { error });
-              Alert.alert('Error', 'Unable to delete account. Please try again later.');
             } finally {
               setIsDeletingAccount(false);
             }
@@ -500,64 +447,6 @@ export default function SettingsScreen() {
 
           {/* Profile section */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)}>
-            {/* Quick Start - Complete Profile Banner */}
-            {user?.name === 'Friend' && (
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  router.push({
-                    pathname: '/style-onboarding',
-                    params: { mode: 'full' },
-                  });
-                }}
-                style={{
-                  backgroundColor: colors.accent + '15', // 15 = ~8% opacity
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.accent + '30',
-                  padding: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 20,
-                      backgroundColor: colors.accent + '25',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <Text style={{ fontSize: 20 }}>✨</Text>
-                  </View>
-                  <View style={{ marginLeft: 14, flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiSemiBold,
-                        fontSize: 15,
-                        color: colors.accent,
-                      }}
-                    >
-                      Complete Your Profile
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: 13,
-                        color: colors.textMuted,
-                        marginTop: 2,
-                      }}
-                    >
-                      Quick start is great, but personalization makes it yours
-                    </Text>
-                  </View>
-                  <Text style={{ fontSize: 20, color: colors.accent }}>›</Text>
-                </View>
-              </Pressable>
-            )}
-
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <Text
                 style={{
@@ -1172,139 +1061,6 @@ export default function SettingsScreen() {
                           </View>
                           {isSelected && (
                             <Check size={18} color={colors.accent} strokeWidth={2.5} />
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </Animated.View>
-                )}
-              </View>
-
-              {/* Voice Selection subsection */}
-              <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-                <Pressable
-                  onPress={() => {
-                    if (!user?.isPremium) {
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                      router.push('/paywall');
-                      return;
-                    }
-                    setExpandedPremium(expandedPremium === 'voice' ? null : 'voice');
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Audio voice"
-                  accessibilityHint={user?.isPremium ? "Choose voice for audio devotionals" : "Premium feature. Opens upgrade options"}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 13,
-                    paddingHorizontal: 16,
-                    borderBottomWidth: expandedPremium === 'voice' ? 1 : 0,
-                    borderBottomColor: colors.border,
-                    opacity: user?.isPremium ? 1 : 0.7,
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Type size={18} color={colors.textMuted} strokeWidth={1.5} />
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: 15,
-                        color: colors.text,
-                      }}
-                    >
-                      Audio Voice
-                    </Text>
-                    {!user?.isPremium && (
-                      <Lock size={14} color={colors.textMuted} strokeWidth={1.5} />
-                    )}
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: 14,
-                        color: colors.textMuted,
-                      }}
-                    >
-                      {CARTESIA_VOICES.find(v => v.id === selectedVoice)?.name || 'Katie'}
-                    </Text>
-                    <ChevronDown
-                      size={18}
-                      color={colors.textMuted}
-                      strokeWidth={1.5}
-                      style={{
-                        transform: [{ rotate: expandedPremium === 'voice' ? '180deg' : '0deg' }],
-                      }}
-                    />
-                  </View>
-                </Pressable>
-
-                {expandedPremium === 'voice' && user?.isPremium && (
-                  <Animated.View entering={FadeIn.duration(200)} style={{ paddingVertical: 8 }}>
-                    {CARTESIA_VOICES.map((voice) => {
-                      const isSelected = selectedVoice === voice.id;
-                      const isLocked = voice.premium && !user?.isPremium;
-                      
-                      return (
-                        <Pressable
-                          key={voice.id}
-                          onPress={() => {
-                            if (isLocked) {
-                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                              router.push('/paywall');
-                              return;
-                            }
-                            setSelectedVoice(voice.id);
-                            updateUser({ audioVoiceId: voice.id });
-                            
-                            // Track voice change
-                            Analytics.logEvent(AnalyticsEvents.VOICE_CHANGED, {
-                              voice_id: voice.id,
-                              voice_name: voice.name,
-                            });
-                            
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          }}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            paddingVertical: 12,
-                            paddingHorizontal: 16,
-                            opacity: isLocked ? 0.5 : 1,
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={{
-                                fontFamily: FontFamily.uiMedium,
-                                fontSize: 15,
-                                color: colors.text,
-                                marginBottom: 2,
-                              }}
-                            >
-                              {voice.name}
-                              {voice.premium && (
-                                <Text style={{ color: colors.accent }}> ✦</Text>
-                              )}
-                            </Text>
-                            <Text
-                              style={{
-                                fontFamily: FontFamily.ui,
-                                fontSize: 12,
-                                color: colors.textMuted,
-                              }}
-                            >
-                              {voice.description}
-                            </Text>
-                          </View>
-                          {isSelected && (
-                            <Check size={18} color={colors.accent} strokeWidth={2.5} />
-                          )}
-                          {isLocked && (
-                            <Lock size={16} color={colors.textMuted} strokeWidth={1.5} />
                           )}
                         </Pressable>
                       );
@@ -2187,41 +1943,6 @@ export default function SettingsScreen() {
                   }}
                 >
                   {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
-                </Text>
-              </View>
-            </Pressable>
-
-            {/* Delete Account - Required by Apple for Sign In with Apple */}
-            <Pressable
-              onPress={handleDeleteAccount}
-              disabled={isDeletingAccount}
-              accessibilityState={{ disabled: isDeletingAccount }}
-              style={{ marginTop: 8 }}
-            >
-              <View
-                style={{
-                  borderRadius: 12,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  opacity: isDeletingAccount ? 0.6 : 1,
-                }}
-              >
-                {isDeletingAccount ? (
-                  <ActivityIndicator size="small" color={colors.error} />
-                ) : (
-                  <Trash2 size={20} color={colors.error} />
-                )}
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 15,
-                    color: colors.error,
-                    marginLeft: 12,
-                  }}
-                >
-                  {isDeletingAccount ? 'Deleting...' : 'Delete account'}
                 </Text>
               </View>
             </Pressable>

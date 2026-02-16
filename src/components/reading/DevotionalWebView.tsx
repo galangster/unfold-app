@@ -604,6 +604,7 @@ export function DevotionalWebView({
         injectedJavaScript={injectedJavaScript}
         androidLayerType="hardware"
         cacheEnabled={true}
+        androidCacheMode="LOAD_CACHE_ELSE_NETWORK"
       />
     </View>
   );

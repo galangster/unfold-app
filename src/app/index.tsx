@@ -14,7 +14,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
 
-export default function SplashScreen() {
+export default function WelcomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const user = useUnfoldStore((s) => s.user);
@@ -41,9 +41,10 @@ export default function SplashScreen() {
   const navigate = useCallback(() => {
     if (user?.hasCompletedOnboarding) {
       router.replace('/(main)/home');
+    } else if (user?.hasCompletedStyleOnboarding) {
+      router.replace('/onboarding');
     } else {
-      // Go to welcome screen for new users to choose Quick Start or Personalize
-      router.replace('/welcome');
+      router.replace('/style-onboarding');
     }
   }, [user, router]);
 

@@ -185,8 +185,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoAppleAuthentication (8.0.8):
-    - ExpoModulesCore
   - ExpoAsset (55.0.4):
     - ExpoModulesCore
   - ExpoBattery (55.0.5):
@@ -319,7 +317,7 @@ PODS:
     - ExpoModulesCore
   - ExpoSQLite (55.0.5):
     - ExpoModulesCore
-  - ExpoStoreReview (9.0.9):
+  - ExpoStoreReview (55.0.5):
     - ExpoModulesCore
   - ExpoSymbols (55.0.3):
     - ExpoModulesCore
@@ -336,55 +334,9 @@ PODS:
   - EXUpdatesInterface (55.1.1):
     - ExpoModulesCore
   - FBLazyVector (0.83.1)
-  - Firebase/Auth (12.8.0):
-    - Firebase/CoreOnly
-    - FirebaseAuth (~> 12.8.0)
-  - Firebase/CoreOnly (12.8.0):
-    - FirebaseCore (~> 12.8.0)
-  - FirebaseAppCheckInterop (12.8.0)
-  - FirebaseAuth (12.8.0):
-    - FirebaseAppCheckInterop (~> 12.8.0)
-    - FirebaseAuthInterop (~> 12.8.0)
-    - FirebaseCore (~> 12.8.0)
-    - FirebaseCoreExtension (~> 12.8.0)
-    - GoogleUtilities/AppDelegateSwizzler (~> 8.1)
-    - GoogleUtilities/Environment (~> 8.1)
-    - GTMSessionFetcher/Core (< 6.0, >= 3.4)
-    - RecaptchaInterop (~> 101.0)
-  - FirebaseAuthInterop (12.8.0)
-  - FirebaseCore (12.8.0):
-    - FirebaseCoreInternal (~> 12.8.0)
-    - GoogleUtilities/Environment (~> 8.1)
-    - GoogleUtilities/Logger (~> 8.1)
-  - FirebaseCoreExtension (12.8.0):
-    - FirebaseCore (~> 12.8.0)
-  - FirebaseCoreInternal (12.8.0):
-    - "GoogleUtilities/NSData+zlib (~> 8.1)"
   - Galeria (2.0.0-rc.4):
     - ExpoModulesCore
     - SDWebImage
-  - GoogleUtilities/AppDelegateSwizzler (8.1.0):
-    - GoogleUtilities/Environment
-    - GoogleUtilities/Logger
-    - GoogleUtilities/Network
-    - GoogleUtilities/Privacy
-  - GoogleUtilities/Environment (8.1.0):
-    - GoogleUtilities/Privacy
-  - GoogleUtilities/Logger (8.1.0):
-    - GoogleUtilities/Environment
-    - GoogleUtilities/Privacy
-  - GoogleUtilities/Network (8.1.0):
-    - GoogleUtilities/Logger
-    - "GoogleUtilities/NSData+zlib"
-    - GoogleUtilities/Privacy
-    - GoogleUtilities/Reachability
-  - "GoogleUtilities/NSData+zlib (8.1.0)":
-    - GoogleUtilities/Privacy
-  - GoogleUtilities/Privacy (8.1.0)
-  - GoogleUtilities/Reachability (8.1.0):
-    - GoogleUtilities/Logger
-    - GoogleUtilities/Privacy
-  - GTMSessionFetcher/Core (5.1.0)
   - hermes-engine (0.14.0):
     - hermes-engine/Pre-built (= 0.14.0)
   - hermes-engine/Pre-built (0.14.0)
@@ -2063,7 +2015,7 @@ PODS:
     - Yoga
   - react-native-segmented-control (2.5.7):
     - React-Core
-  - react-native-skia (1.11.7):
+  - react-native-skia (2.4.14):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2582,7 +2534,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RecaptchaInterop (101.0.0)
   - RevenueCat (5.50.0)
   - RevenueCatUI (5.50.0):
     - RevenueCat (= 5.50.0)
@@ -2695,53 +2646,6 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - Yoga
-  - RNFBApp (23.8.6):
-    - Firebase/CoreOnly (= 12.8.0)
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
-  - RNFBAuth (23.8.6):
-    - Firebase/Auth (= 12.8.0)
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - RNFBApp
     - Yoga
   - RNGestureHandler (2.30.0):
     - hermes-engine
@@ -3036,7 +2940,6 @@ DEPENDENCIES:
   - expo-dev-launcher (from `../node_modules/expo-dev-launcher`)
   - expo-dev-menu (from `../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../node_modules/expo-dev-menu-interface/ios`)
-  - ExpoAppleAuthentication (from `../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoBattery (from `../node_modules/expo-battery/ios`)
   - ExpoBlur (from `../node_modules/expo-blur/ios`)
@@ -3178,8 +3081,6 @@ DEPENDENCIES:
   - "RNCMaskedView (from `../node_modules/@react-native-masked-view/masked-view`)"
   - "RNCPicker (from `../node_modules/@react-native-picker/picker`)"
   - "RNDateTimePicker (from `../node_modules/@react-native-community/datetimepicker`)"
-  - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
-  - "RNFBAuth (from `../node_modules/@react-native-firebase/auth`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - RNPaywalls (from `../node_modules/react-native-purchases-ui`)
   - RNPurchases (from `../node_modules/react-native-purchases`)
@@ -3191,22 +3092,12 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
-    - Firebase
-    - FirebaseAppCheckInterop
-    - FirebaseAuth
-    - FirebaseAuthInterop
-    - FirebaseCore
-    - FirebaseCoreExtension
-    - FirebaseCoreInternal
-    - GoogleUtilities
-    - GTMSessionFetcher
     - libavif
     - libdav1d
     - libwebp
     - lottie-ios
     - PurchasesHybridCommon
     - PurchasesHybridCommonUI
-    - RecaptchaInterop
     - RevenueCat
     - RevenueCatUI
     - SDWebImage
@@ -3240,8 +3131,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-dev-menu"
   expo-dev-menu-interface:
     :path: "../node_modules/expo-dev-menu-interface/ios"
-  ExpoAppleAuthentication:
-    :path: "../node_modules/expo-apple-authentication/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
   ExpoBattery:
@@ -3523,10 +3412,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-picker/picker"
   RNDateTimePicker:
     :path: "../node_modules/@react-native-community/datetimepicker"
-  RNFBApp:
-    :path: "../node_modules/@react-native-firebase/app"
-  RNFBAuth:
-    :path: "../node_modules/@react-native-firebase/auth"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
   RNPaywalls:
@@ -3556,7 +3441,6 @@ SPEC CHECKSUMS:
   expo-dev-launcher: 0c36281d7ff5c381189b0b7ef1182b57d1ea3f19
   expo-dev-menu: db59f0b369cdf1cde3acdc4ed5b8c51f2e4f2942
   expo-dev-menu-interface: bf6f816d29b45bec038080790963c635e8d588c2
-  ExpoAppleAuthentication: 9413ae9a5e631a424cc04c1b13b0694dbab7d594
   ExpoAsset: 0de8c1198cfcb54878332a53c63e0f6ef575c603
   ExpoBattery: 8056820cf5995701095031fb29582c558985f594
   ExpoBlur: 636a4e6b119873f76d19b6855cdaae0afd960a14
@@ -3595,7 +3479,7 @@ SPEC CHECKSUMS:
   ExpoSMS: d46e331d78f0a052974b2739b2fe9e68eff3234e
   ExpoSplashScreen: 71acba74a5d7401fdf63bae8fe869e6d5a724652
   ExpoSQLite: 1c458536331e7bf55c99a2f5b97bc114d865e1e4
-  ExpoStoreReview: 32bb43b6fae9c8db3e33cad69996dff3785eef5f
+  ExpoStoreReview: 97b3ba5e07dba9745a6528d3814406fad03479ad
   ExpoSymbols: 2f7bc13638130613935601bdbb31c5b9fc2927fb
   ExpoSystemUI: 4d7512f15eb2025e4e538ba9583e99eac6bcf2e7
   ExpoVideo: ee3ed4889addeb7d03dd9f5096964f005a47687f
@@ -3604,16 +3488,7 @@ SPEC CHECKSUMS:
   ExpoWidgets: 366fe61c681044e13b7cc344bdbd319ff5d54b28
   EXUpdatesInterface: fea7c1edceb8e8f9d2d3fc16df444a040e9ee74c
   FBLazyVector: 3a7ea85f6009224ad89f7daeda516f189e6b5759
-  Firebase: 9a58fdbc9d8655ed7b79a19cf9690bb007d3d46d
-  FirebaseAppCheckInterop: ba3dc604a89815379e61ec2365101608d365cf7d
-  FirebaseAuth: 4c289b1a43f5955283244a55cf6bd616de344be5
-  FirebaseAuthInterop: 95363fe96493cb4f106656666a0768b420cba090
-  FirebaseCore: 0dbad74bda10b8fb9ca34ad8f375fb9dd3ebef7c
-  FirebaseCoreExtension: 6605938d51f765d8b18bfcafd2085276a252bee2
-  FirebaseCoreInternal: fe5fa466aeb314787093a7dce9f0beeaad5a2a21
   Galeria: 8c40b795c085be6ba9ff40277830fa6ac15ddf10
-  GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
-  GTMSessionFetcher: b8ab00db932816e14b0a0664a08cb73dda6d164b
   hermes-engine: 5942c8a81d70858c0f6b730d2d208356fcb22e39
   ImageColors: e12eb73e29bc1feaa3c228db8c174a1b25acb59d
   libavif: 5f8e715bea24debec477006f21ef9e95432e254d
@@ -3668,7 +3543,7 @@ SPEC CHECKSUMS:
   react-native-pager-view: adc7d78123fb395e03a70d19e8d75805b49838b5
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
   react-native-segmented-control: bf6e0032726727498e18dd437ae88afcdbc18e99
-  react-native-skia: f8be6b8890f4499209be90cda3b466f6e1e4fa08
+  react-native-skia: 268f183f849742e9da216743ee234bd7ad81c69b
   react-native-slider: f954578344106f0a732a4358ce3a3e11015eb6e1
   react-native-view-shot: fb3c0774edb448f42705491802a455beac1502a2
   react-native-webview: 3e303e80cadb5f17118c8c1502aa398e9287e415
@@ -3707,7 +3582,6 @@ SPEC CHECKSUMS:
   ReactCommon: c24a308601d0bce5c9edf2f36afb0dbf7afaf6ef
   ReactNativeDependencies: c5a16b06fbcb7d246dbd7797ae8bbc3dc8f94c6c
   ReactNativeEnriched: 335700c48d72b91ddb307a5b64c30c62e83821f0
-  RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   RevenueCat: a5fcd0a12b5ec9bbddc0cf0dd20c14b7e6213df6
   RevenueCatUI: d470454494ecc734ca9b416fea0704613c4cd7a2
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
@@ -3715,8 +3589,6 @@ SPEC CHECKSUMS:
   RNCMaskedView: d2578d41c59b936db122b2798ba37e4722d21035
   RNCPicker: c8a3584b74133464ee926224463fcc54dfdaebca
   RNDateTimePicker: 9c0a849bbe1c256f0854fea255734b715f5ea876
-  RNFBApp: 0301a2330161b0a66bcec40bfd15152d85030e48
-  RNFBAuth: 983e676a77c99e653283419c13bce209192ffe0a
   RNGestureHandler: 5494787ce29288a8941fa825663f2b1fa0a5aaf1
   RNPaywalls: 638800e62194330656c53c34257f3b7fabb17e2e
   RNPurchases: 393312c7ac9cfb3852e3f14a91520d305fa05be6
@@ -3733,6 +3605,6 @@ SPEC CHECKSUMS:
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   Yoga: 35d573dff66536d48493acb65a519482f8219fe8
 
-PODFILE CHECKSUM: 34c0ed07b80aa07c770b1fa8fcd03f3311f071cc
+PODFILE CHECKSUM: e6210ea1af33631b3f5a4adbf7cccb62cc0931c3
 
 COCOAPODS: 1.16.2

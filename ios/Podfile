@@ -19,7 +19,6 @@ ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSou
 ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true'
 ENV['RCT_HERMES_V1_ENABLED'] ||= '1' if podfile_properties['expo.useHermesV1'] == 'true'
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
-use_modular_headers!
 
 prepare_react_native_project!
 
@@ -44,9 +43,8 @@ target 'Unfold' do
 
   config = use_native_modules!(config_command)
 
-  # Disable use_frameworks! to fix Firebase Auth header issues
-  # use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
-  # use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
+  use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
+  use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
   use_react_native!(
     :path => config[:reactNativePath],
@@ -63,5 +61,30 @@ target 'Unfold' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    # Fix React Native Skia linking with New Architecture (Bridgeless/Fabric)
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        # Link all Skia static libraries
+        skia_libs = [
+          'libskia.a',
+          'libskshaper.a',
+          'libskparagraph.a',
+          'libskunicode_core.a',
+          'libskunicode_icu.a',
+          'libsksg.a',
+          'libskottie.a'
+        ]
+        
+        skia_libs.each do |lib|
+          config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']
+          config.build_settings['OTHER_LDFLAGS'] << "-l#{lib.sub('.a', '')}"
+        end
+        
+        # Ensure symbols are exported
+        config.build_settings['STRIP_STYLE'] = 'debugging'
+        config.build_settings['DEAD_CODE_STRIPPING'] = 'NO'
+      end
+    end
   end
 end

@@ -4,22 +4,17 @@ import {
   Text,
   Pressable,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withSpring,
   Easing,
   FadeIn,
   FadeOut,
-  SlideInRight,
-  SlideOutLeft,
-  LinearTransition,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
@@ -120,17 +115,13 @@ const STYLE_QUESTIONS: StyleQuestion[] = [
 
 export default function StyleOnboardingScreen() {
   const router = useRouter();
-  const { mode } = useLocalSearchParams<{ mode?: 'quick' | 'full' }>();
   const { colors } = useTheme();
   const user = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
-  const isQuickMode = mode === 'quick';
-
   const [currentStep, setCurrentStep] = useState(0);
   const [showOptions, setShowOptions] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [selections, setSelections] = useState<{
     tone: WritingTone;
     depth: ContentDepth;
@@ -140,80 +131,6 @@ export default function StyleOnboardingScreen() {
     depth: 'balanced',
     faithBackground: 'growing',
   });
-
-  // Quick mode: Auto-complete with smart defaults
-  useEffect(() => {
-    if (isQuickMode) {
-      setIsProcessing(true);
-      // Small delay for UX so user sees we're doing something
-      const timer = setTimeout(() => {
-        handleQuickStartComplete();
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [isQuickMode]);
-
-  const handleQuickStartComplete = () => {
-    const quickSelections = {
-      tone: 'warm' as WritingTone,
-      depth: 'balanced' as ContentDepth,
-      faithBackground: 'growing' as FaithBackground,
-    };
-
-    // Get default theme based on time of day
-    const hour = new Date().getHours();
-    const defaultTheme = hour >= 5 && hour < 12 ? 'purpose' :
-                         hour >= 18 || hour < 5 ? 'peace' : 'growth';
-
-    if (user) {
-      updateUser({
-        hasCompletedStyleOnboarding: true,
-        writingStyle: quickSelections,
-      });
-    } else {
-      // Create user with smart defaults for quick start
-      setUser({
-        name: 'Friend',
-        aboutMe: '',
-        currentSituation: '',
-        emotionalState: '',
-        spiritualSeeking: '',
-        readingDuration: 15,
-        devotionalLength: 7,
-        reminderTime: '8:00 AM',
-        hasCompletedOnboarding: false,
-        hasCompletedStyleOnboarding: true,
-        isPremium: false,
-        fontSize: 'medium',
-        writingStyle: quickSelections,
-        bibleTranslation: 'NIV',
-        themeMode: 'dark',
-        accentTheme: 'gold',
-        readingFont: 'source-serif',
-        // Auth fields
-        authUserId: null,
-        authProvider: null,
-        authEmail: null,
-        authDisplayName: null,
-        hasSeenSignInPrompt: false,
-        signInPromptCount: 0,
-        // Streak fields
-        streakCount: 0,
-        longestStreak: 0,
-        lastReadDate: null,
-        streakFreezes: 0,
-        weekendAmnesty: true,
-        // Audio preference
-        audioVoiceId: '694f9389-aac1-45b6-b726-9d9369183238',
-      });
-    }
-
-    // Navigate to main onboarding with quick mode flag
-    router.replace({
-      pathname: '/onboarding',
-      params: { mode: 'quick', theme: defaultTheme },
-    });
-  };
 
   const currentQuestion = STYLE_QUESTIONS[currentStep];
   const isLastStep = currentStep === STYLE_QUESTIONS.length - 1;
@@ -273,19 +190,6 @@ export default function StyleOnboardingScreen() {
           themeMode: 'dark',
           accentTheme: 'gold',
           readingFont: 'source-serif',
-          // Auth fields - initialize as null, will be set when user signs in
-          authUserId: null,
-          authProvider: null,
-          authEmail: null,
-          authDisplayName: null,
-          hasSeenSignInPrompt: false,
-          signInPromptCount: 0,
-          // Streak fields
-          streakCount: 0,
-          longestStreak: 0,
-          lastReadDate: null,
-          streakFreezes: 0,
-          weekendAmnesty: true,
         });
       }
       router.replace('/onboarding');
@@ -305,78 +209,32 @@ export default function StyleOnboardingScreen() {
 
   const currentValue = selections[currentQuestion.id as keyof typeof selections];
 
-  // Track animation direction for slide effect
-  const [animationDirection, setAnimationDirection] = useState<'forward' | 'backward'>('forward');
-
-  const handleNextWithAnimation = () => {
-    setAnimationDirection('forward');
-    handleNext();
-  };
-
-  const handleBackWithAnimation = () => {
-    if (currentStep > 0) {
-      setAnimationDirection('backward');
-    }
-    handleBack();
-  };
-
-  // Quick mode loading UI
-  if (isQuickMode && isProcessing) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={{
-          fontFamily: FontFamily.display,
-          fontSize: 24,
-          color: colors.text,
-          marginTop: 24,
-        }}>
-          Preparing your journey...
-        </Text>
-        <Text style={{
-          fontFamily: FontFamily.body,
-          fontSize: 14,
-          color: colors.textMuted,
-          marginTop: 8,
-        }}>
-          Quick start • 30 seconds
-        </Text>
-      </View>
-    );
-  }
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3">
           <Pressable
-            onPress={handleBackWithAnimation}
+            onPress={handleBack}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
             <ChevronLeft size={24} color={colors.textMuted} />
           </Pressable>
 
-          {/* Progress dots with spring animation */}
+          {/* Progress dots */}
           <View className="flex-row space-x-2">
-            {STYLE_QUESTIONS.map((_, index) => {
-              const isActive = index === currentStep;
-              const isCompleted = index < currentStep;
-              
-              return (
-                <Animated.View
-                  key={index}
-                  layout={LinearTransition.springify().damping(15).stiffness(200)}
-                  style={{
-                    width: isActive ? 24 : 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: isCompleted || isActive ? colors.accent : colors.border,
-                  }}
-                />
-              );
-            })}
+            {STYLE_QUESTIONS.map((_, index) => (
+              <View
+                key={index}
+                style={{
+                  width: index === currentStep ? 24 : 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: index <= currentStep ? colors.accent : colors.border,
+                }}
+              />
+            ))}
           </View>
 
           <View style={{ width: 40 }} />
@@ -388,12 +246,8 @@ export default function StyleOnboardingScreen() {
           contentContainerStyle={{ paddingTop: 40, paddingBottom: 160 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Question with typewriter - animated slide transition */}
-          <Animated.View 
-            key={currentStep}
-            entering={animationDirection === 'forward' ? SlideInRight.duration(400) : SlideInRight.duration(400)}
-            exiting={SlideOutLeft.duration(200)}
-          >
+          {/* Question with typewriter */}
+          <View key={currentStep}>
             <TypewriterText
               text={currentQuestion.question}
               onComplete={handleTypewriterComplete}
@@ -402,7 +256,7 @@ export default function StyleOnboardingScreen() {
                 lineHeight: 38,
               }}
             />
-          </Animated.View>
+          </View>
 
           {/* Subtext */}
           {showOptions && (
@@ -537,7 +391,7 @@ export default function StyleOnboardingScreen() {
             }}
           >
             <Pressable
-              onPress={handleNextWithAnimation}
+              onPress={handleNext}
               style={({ pressed }) => ({
                 backgroundColor: pressed
                   ? colors.buttonBackgroundPressed

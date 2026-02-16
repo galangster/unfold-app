@@ -2,23 +2,20 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import BottomSheet from '@gorhom/bottom-sheet';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withRepeat,
   withSequence,
-  withSpring,
   runOnJS,
   FadeIn,
   FadeOut,
-  Easing,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, Headphones } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -31,10 +28,7 @@ import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
-import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
-import { SparkleBurst } from '@/components/SparkleBurst';
 import { createReviewPromptManager } from '@/lib/review-prompt';
-import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -117,7 +111,6 @@ export default function ReadingScreen() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   const [showScrollHint, setShowScrollHint] = useState(true);
-  const [showAudioPlayer, setShowAudioPlayer] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
@@ -127,23 +120,12 @@ export default function ReadingScreen() {
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
-  const [showSparkleBurst, setShowSparkleBurst] = useState(false);
-  const audioPlayerRef = useRef<BottomSheet>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
-  const scrollY = useSharedValue(0);
-  const completeButtonScale = useSharedValue(1);
-  const shareButtonScale = useSharedValue(1);
-  const headerButtonScales = {
-    home: useSharedValue(1),
-    listen: useSharedValue(1),
-    journal: useSharedValue(1),
-    daySelector: useSharedValue(1),
-  };
 
   const fontSize = user?.fontSize ?? 'medium';
 
@@ -174,29 +156,17 @@ export default function ReadingScreen() {
   const isLastDay = viewingDay === totalDays;
   const isDayCompleted = currentDayData?.isRead ?? false;
 
-  // Start the chevron bounce animation - more organic
+  // Start the chevron bounce animation
   useEffect(() => {
     chevronBounce.value = withRepeat(
       withSequence(
-        withTiming(-8, { duration: 700, easing: Easing.out(Easing.sin) }),
-        withTiming(0, { duration: 700, easing: Easing.inOut(Easing.sin) })
+        withTiming(-6, { duration: 600 }),
+        withTiming(0, { duration: 600 })
       ),
       -1, // Infinite repeat
       true
     );
   }, []);
-
-  // Track devotional opened
-  useEffect(() => {
-    if (currentDevotionalId && currentDevotional) {
-      Analytics.logEvent(AnalyticsEvents.DEVOTIONAL_OPENED, {
-        day_number: viewingDay,
-        devotional_id: currentDevotionalId,
-        total_days: totalDays,
-        is_completed: currentDayData?.isRead ?? false,
-      });
-    }
-  }, [currentDevotionalId, currentDevotional?.id]);
 
   // Network state for offline-aware retry behavior.
   useEffect(() => {
@@ -343,34 +313,6 @@ export default function ReadingScreen() {
     transform: [{ translateY: chevronBounce.value }],
   }));
 
-  const completeButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: completeButtonScale.value }],
-  }));
-
-  const shareButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: shareButtonScale.value }],
-  }));
-
-  const homeButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: headerButtonScales.home.value }],
-  }));
-
-  const listenButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: headerButtonScales.listen.value }],
-  }));
-
-  const journalButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: headerButtonScales.journal.value }],
-  }));
-
-  const daySelectorButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: headerButtonScales.daySelector.value }],
-  }));
-
-  const headerBackgroundStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, Math.max(0, (scrollY.value - 80) / 20)),
-  }));
-
   const panGesture = useMemo(() =>
     Gesture.Pan()
       .activeOffsetX([-20, 20])
@@ -429,7 +371,6 @@ export default function ReadingScreen() {
   // Uses functional setState to avoid dependency on showScrollHint
   const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     const offsetY = e.nativeEvent.contentOffset.y;
-    scrollY.value = offsetY;
     // Hide scroll hint after scrolling 100px
     setShowScrollHint((current) => {
       if (offsetY > 100 && current) return false;
@@ -441,19 +382,6 @@ export default function ReadingScreen() {
   const handleComplete = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsCompleted(true);
-    setShowSparkleBurst(true);
-
-    // Reset sparkle burst after animation completes
-    setTimeout(() => {
-      setShowSparkleBurst(false);
-    }, 600);
-
-    // Track devotional completion
-    Analytics.logEvent(AnalyticsEvents.DEVOTIONAL_COMPLETED, {
-      day_number: viewingDay,
-      devotional_id: currentDevotionalId,
-      is_last_day: viewingDay >= totalDays,
-    });
 
     if (currentDevotionalId) {
       markDayAsRead(currentDevotionalId, viewingDay);
@@ -475,14 +403,6 @@ export default function ReadingScreen() {
 
       if (viewingDay < expectedTotal) {
         advanceDay(currentDevotionalId);
-        
-        // Track day advancement
-        Analytics.logEvent(AnalyticsEvents.DAY_ADVANCED, {
-          from_day: viewingDay,
-          to_day: viewingDay + 1,
-          devotional_id: currentDevotionalId,
-        });
-        
         refreshDailyReminder();
       }
 
@@ -995,20 +915,6 @@ export default function ReadingScreen() {
           <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
             {/* Header */}
             <View style={{ backgroundColor: colors.background }}>
-              {/* Scroll-linked background overlay */}
-              <Animated.View
-                style={[
-                  {
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: colors.background,
-                  },
-                  headerBackgroundStyle,
-                ]}
-              />
               <View
                 style={{
                   flexDirection: 'row',
@@ -1020,21 +926,13 @@ export default function ReadingScreen() {
               >
               <Pressable
                 onPress={handleGoHome}
-                onPressIn={() => {
-                  headerButtonScales.home.value = withSpring(0.85, { damping: 15, stiffness: 400 });
-                }}
-                onPressOut={() => {
-                  headerButtonScales.home.value = withSpring(1, { damping: 15, stiffness: 400 });
-                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go home"
                 accessibilityHint="Returns to the home screen"
                 style={{ padding: 8 }}
               >
-                <Animated.View style={homeButtonStyle}>
-                  <Home size={22} color={colors.textMuted} />
-                </Animated.View>
+                <Home size={22} color={colors.textMuted} />
               </Pressable>
 
               <Pressable
@@ -1048,57 +946,22 @@ export default function ReadingScreen() {
                     },
                   });
                 }}
-                onPressIn={() => {
-                  headerButtonScales.daySelector.value = withSpring(0.9, { damping: 15, stiffness: 400 });
-                }}
-                onPressOut={() => {
-                  headerButtonScales.daySelector.value = withSpring(1, { damping: 15, stiffness: 400 });
-                }}
                 accessibilityRole="button"
                 accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
                 accessibilityHint="Opens day selector menu"
                 accessibilityValue={{ min: 1, max: currentDevotional.totalDays, now: viewingDay, text: `Day ${viewingDay} of ${currentDevotional.totalDays}` }}
                 style={{ padding: 8 }}
               >
-                <Animated.View style={daySelectorButtonStyle}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.mono,
-                      fontSize: 12,
-                      color: colors.textSubtle,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    DAY {viewingDay} OF {currentDevotional.totalDays}
-                  </Text>
-                </Animated.View>
-              </Pressable>
-
-              {/* Listen Button - Audio Player */}
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  audioPlayerRef.current?.expand();
-                }}
-                onPressIn={() => {
-                  headerButtonScales.listen.value = withSpring(0.85, { damping: 15, stiffness: 400 });
-                }}
-                onPressOut={() => {
-                  headerButtonScales.listen.value = withSpring(1, { damping: 15, stiffness: 400 });
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Listen to devotional"
-                accessibilityHint="Opens audio player with text-to-speech"
-                style={{ padding: 8 }}
-              >
-                <Animated.View style={listenButtonStyle}>
-                  <Headphones
-                    size={22}
-                    color={colors.accent}
-                    strokeWidth={1.5}
-                  />
-                </Animated.View>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.mono,
+                    fontSize: 12,
+                    color: colors.textSubtle,
+                    letterSpacing: 1,
+                  }}
+                >
+                  DAY {viewingDay} OF {currentDevotional.totalDays}
+                </Text>
               </Pressable>
 
               <Pressable
@@ -1117,12 +980,6 @@ export default function ReadingScreen() {
                     },
                   });
                 }}
-                onPressIn={() => {
-                  headerButtonScales.journal.value = withSpring(0.85, { damping: 15, stiffness: 400 });
-                }}
-                onPressOut={() => {
-                  headerButtonScales.journal.value = withSpring(1, { damping: 15, stiffness: 400 });
-                }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Open journal"
@@ -1130,13 +987,11 @@ export default function ReadingScreen() {
                 accessibilityState={{ disabled: !isPremium }}
                 style={{ padding: 8 }}
               >
-                <Animated.View style={journalButtonStyle}>
-                  <BookOpen
-                    size={22}
-                    color={!isPremium ? colors.textMuted : colors.text}
-                    strokeWidth={1.5}
-                  />
-                </Animated.View>
+                <BookOpen
+                  size={22}
+                  color={!isPremium ? colors.textMuted : colors.text}
+                  strokeWidth={1.5}
+                />
               </Pressable>
             </View>
             </View>
@@ -1189,40 +1044,18 @@ export default function ReadingScreen() {
                   style={{ marginTop: 48, alignItems: 'center', gap: 16 }}
                 >
                   {/* Complete Day Button - Filled container with border */}
-                  <Animated.View
-                    style={[
-                      {
-                        backgroundColor: colors.accent,
-                        paddingVertical: 4,
-                        paddingHorizontal: 4,
-                        borderRadius: 36,
-                        borderWidth: 2,
-                        borderColor: colors.accent,
-                      },
-                      completeButtonStyle,
-                    ]}
+                  <View
+                    style={{
+                      backgroundColor: colors.accent,
+                      paddingVertical: 4,
+                      paddingHorizontal: 4,
+                      borderRadius: 36,
+                      borderWidth: 2,
+                      borderColor: colors.accent,
+                    }}
                   >
-                    {/* Sparkle burst animation on completion */}
-                    <SparkleBurst 
-                      trigger={showSparkleBurst} 
-                      color={colors.accent}
-                      particleCount={12}
-                    />
-
                     <Pressable
                       onPress={handleComplete}
-                      onPressIn={() => {
-                        completeButtonScale.value = withSpring(0.95, {
-                          damping: 12,
-                          stiffness: 200,
-                        });
-                      }}
-                      onPressOut={() => {
-                        completeButtonScale.value = withSpring(1, {
-                          damping: 12,
-                          stiffness: 200,
-                        });
-                      }}
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
@@ -1236,6 +1069,7 @@ export default function ReadingScreen() {
                         shadowOpacity: pressed ? 0.4 : 0.2,
                         shadowRadius: 12,
                         elevation: 8,
+                        transform: [{ scale: pressed ? 0.98 : 1 }],
                       })}
                     >
                       {({ pressed }) => (
@@ -1252,17 +1086,11 @@ export default function ReadingScreen() {
                         </Text>
                       )}
                     </Pressable>
-                  </Animated.View>
+                  </View>
 
                   {/* Share Button - Centered, icon above text */}
                   <Pressable
                     onPress={handleShare}
-                    onPressIn={() => {
-                      shareButtonScale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
-                    }}
-                    onPressOut={() => {
-                      shareButtonScale.value = withSpring(1, { damping: 15, stiffness: 300 });
-                    }}
                     accessibilityRole="button"
                     accessibilityLabel="Share devotional"
                     accessibilityHint="Share this day's reading with others"
@@ -1273,26 +1101,25 @@ export default function ReadingScreen() {
                       paddingHorizontal: 32,
                       borderRadius: 16,
                       backgroundColor: pressed ? colors.inputBackground : 'transparent',
+                      opacity: pressed ? 0.8 : 1,
                     })}
                   >
-                    <Animated.View style={[shareButtonStyle, { alignItems: 'center', gap: 6 }]}>
-                      <SymbolView
-                        name="square.and.arrow.up"
-                        size={24}
-                        tintColor={colors.textMuted}
-                        weight="medium"
-                      />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 14,
-                          color: colors.textMuted,
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        Share today's reading
-                      </Text>
-                    </Animated.View>
+                    <SymbolView
+                      name="square.and.arrow.up"
+                      size={24}
+                      tintColor={colors.textMuted}
+                      weight="medium"
+                    />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.display,
+                        fontSize: 14,
+                        color: colors.textMuted,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      Share today's reading
+                    </Text>
                   </Pressable>
                 </Animated.View>
               )}
@@ -1453,19 +1280,6 @@ export default function ReadingScreen() {
         onClose={() => setShareModalOpen(false)}
         day={currentDayData}
         seriesTitle={currentDevotional.title}
-      />
-
-      {/* Audio Player */}
-      <AudioPlayer
-        ref={audioPlayerRef}
-        onClose={() => audioPlayerRef.current?.close()}
-        title={currentDayData?.title || 'Devotional'}
-        subtitle={`Day ${viewingDay} of ${currentDevotional?.title}`}
-        content={currentDayData?.bodyText || ''}
-        scriptureReference={currentDayData?.scriptureReference || ''}
-        scriptureText={currentDayData?.scriptureText || ''}
-        voiceId={user?.audioVoiceId || '694f9389-aac1-45b6-b726-9d9369183238'}
-        isPremium={user?.isPremium || false}
       />
     </View>
   );

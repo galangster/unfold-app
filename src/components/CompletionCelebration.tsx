@@ -385,7 +385,7 @@ export function CompletionCelebration({
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: type === 'series' ? 52 : 48,
-                  color: colors.text,
+                  color: '#F5F0EB',
                   textAlign: 'center',
                   lineHeight: type === 'series' ? 56 : 52,
                   letterSpacing: -1,
@@ -401,7 +401,7 @@ export function CompletionCelebration({
                 style={{
                   fontFamily: FontFamily.bodyItalic,
                   fontSize: 17,
-                  color: colors.textMuted,
+                  color: 'rgba(245, 240, 235, 0.55)',
                   textAlign: 'center',
                   lineHeight: 26,
                 }}

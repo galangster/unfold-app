@@ -361,7 +361,7 @@ export default function GeneratingScreen() {
                 currentSituation: user.currentSituation,
                 emotionalState: user.emotionalState,
               },
-              themeCategory: user.selectedThemes?.[0],
+              themeCategory: user.selectedTheme,
               devotionalType: user.selectedType || 'personal',
               studySubject: user.selectedStudySubject,
             };
@@ -386,7 +386,7 @@ export default function GeneratingScreen() {
             devotionalLength: user.devotionalLength,
             bibleTranslation: user.bibleTranslation ?? 'NIV',
             previouslyUsedScriptures: previouslyUsedReferences,
-            themeCategory: user.selectedThemes?.[0],
+            themeCategory: user.selectedTheme,
             devotionalType: user.selectedType,
             studySubject: user.selectedStudySubject,
           },
@@ -409,7 +409,7 @@ export default function GeneratingScreen() {
             devotionalLength: user.devotionalLength,
             bibleTranslation: user.bibleTranslation ?? 'NIV',
             previouslyUsedScriptures: previouslyUsedReferences,
-            themeCategory: user.selectedThemes?.[0],
+            themeCategory: user.selectedTheme,
             devotionalType: user.selectedType,
             studySubject: user.selectedStudySubject,
           });
@@ -480,12 +480,20 @@ export default function GeneratingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     // Check if user should see sign-in prompt
-    // Show sign-in if:
-    // 1. User hasn't seen sign-in prompt before
-    // 2. User is not already authenticated with Apple
-    const shouldShowSignIn =
-      !user?.hasSeenSignInPrompt &&
-      user?.authProvider !== 'apple';
+    // Skip sign-in prompt if Firebase Auth isn't available
+    let shouldShowSignIn = false;
+    try {
+      require('@react-native-firebase/auth');
+      // Show sign-in if:
+      // 1. User hasn't seen sign-in prompt before
+      // 2. User is not already authenticated with Apple
+      shouldShowSignIn =
+        !user?.hasSeenSignInPrompt &&
+        user?.authProvider !== 'apple';
+    } catch {
+      // Firebase Auth not available, skip sign-in
+      shouldShowSignIn = false;
+    }
 
     if (shouldShowSignIn) {
       router.replace('/(onboarding)/sign-in');

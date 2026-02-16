@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback, useState } from 'react';
+import { useMemo, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, AccessibilityInfo } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +8,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -21,7 +20,6 @@ import { Plus, BookOpen, PenLine, Settings, Flame, Bookmark, Highlighter } from 
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
-import { NamePromptModal } from '@/components/NamePromptModal';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -63,66 +61,41 @@ const UNFOLD_TAGLINES = [
   'Unfold the sacred\nin the ordinary.',
 ];
 
-// Animated progress bar component with spring physics
+// Animated progress bar component
 function AnimatedProgressBar({ progress, colors }: { progress: number; colors: ColorTheme }) {
   const animatedProgress = useSharedValue(0);
-  const glowOpacity = useSharedValue(0);
 
   useFocusEffect(
     useCallback(() => {
       const timer = setTimeout(() => {
-        // Spring animation for progress
-        animatedProgress.value = withSpring(progress, {
-          damping: 15,
-          stiffness: 100,
-          mass: 0.8,
+        animatedProgress.value = withTiming(progress, {
+          duration: 900,
+          easing: Easing.out(Easing.cubic),
         });
-        // Fade in glow effect
-        glowOpacity.value = withTiming(0.5, { duration: 600 });
       }, 400);
 
       return () => clearTimeout(timer);
-    }, [progress, animatedProgress, glowOpacity])
+    }, [progress, animatedProgress])
   );
 
   const animatedStyle = useAnimatedStyle(() => ({
     width: `${animatedProgress.value}%`,
   }));
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glowOpacity.value,
-  }));
-
   return (
     <View
       style={{
-        height: 4,
+        height: 3,
         backgroundColor: colors.border,
-        borderRadius: 2,
-        overflow: 'hidden',
+        borderRadius: 1.5,
       }}
     >
-      {/* Glow effect behind progress */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            left: 0,
-            top: -4,
-            bottom: -4,
-            backgroundColor: colors.accent,
-            opacity: 0.3,
-            borderRadius: 4,
-          },
-          glowStyle,
-        ]}
-      />
       <Animated.View
         style={[
           {
             height: '100%',
             backgroundColor: colors.accent,
-            borderRadius: 2,
+            borderRadius: 1.5,
           },
           animatedStyle,
         ]}
@@ -158,26 +131,6 @@ export default function HomeScreen() {
       updateUser({ isPremium: premiumResult.data });
     }
   }, [premiumResult, user?.isPremium, updateUser]);
-
-  // Show name prompt if user is authenticated but doesn't have a display name
-  const [showNamePrompt, setShowNamePrompt] = useState(false);
-
-  useEffect(() => {
-    // Check if we should show the name prompt
-    // Show if: user is signed in with Apple but has no display name
-    const shouldPrompt =
-      user?.authProvider === 'apple' &&
-      !user?.authDisplayName &&
-      !user?.name;
-
-    if (shouldPrompt) {
-      // Small delay to let the screen settle
-      const timer = setTimeout(() => {
-        setShowNamePrompt(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [user?.authProvider, user?.authDisplayName, user?.name]);
 
   // Get a quote based on the day
   const dailyQuote = useMemo(() => {
@@ -446,9 +399,6 @@ export default function HomeScreen() {
         <ScrollView
           contentContainerStyle={{ paddingBottom: 48 }}
           showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          removeClippedSubviews={true}
-          bounces={true}
         >
           {/* Header */}
           <Animated.View
@@ -1099,12 +1049,6 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
-
-      {/* Name Prompt Modal - shown if user signed in with Apple but has no name */}
-      <NamePromptModal
-        visible={showNamePrompt}
-        onComplete={() => setShowNamePrompt(false)}
-      />
     </View>
   );
 }
