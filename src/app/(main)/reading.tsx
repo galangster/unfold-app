@@ -15,7 +15,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -996,20 +996,56 @@ export default function ReadingScreen() {
             </View>
             </View>
 
-            {/* Content - Scrollable */}
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{
-                paddingHorizontal: 24,
-                paddingTop: 20,
-                paddingBottom: 300,
-              }}
-              showsVerticalScrollIndicator={false}
-              bounces={true}
-              onScroll={handleScroll}
-              scrollEventThrottle={150}
-              removeClippedSubviews={true}
-            >
+            {/* Content area with swipe chevrons */}
+            <View style={{ flex: 1, position: 'relative' }}>
+              {/* Left Chevron - show if not on day 1 */}
+              {viewingDay > 1 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 8,
+                    top: '50%',
+                    transform: [{ translateY: -12 }],
+                    zIndex: 10,
+                    opacity: 0.4,
+                  }}
+                  pointerEvents="none"
+                >
+                  <ChevronLeft size={24} color={colors.textMuted} strokeWidth={1.5} />
+                </View>
+              )}
+
+              {/* Right Chevron - show if more days available */}
+              {viewingDay < availableDays && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: [{ translateY: -12 }],
+                    zIndex: 10,
+                    opacity: 0.4,
+                  }}
+                  pointerEvents="none"
+                >
+                  <ChevronRight size={24} color={colors.textMuted} strokeWidth={1.5} />
+                </View>
+              )}
+
+              {/* Content - Scrollable */}
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{
+                  paddingHorizontal: 24,
+                  paddingTop: 20,
+                  paddingBottom: 300,
+                }}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+                onScroll={handleScroll}
+                scrollEventThrottle={150}
+                removeClippedSubviews={true}
+              >
               <DevotionalContent
                 day={currentDayData}
                 fontSize={fontSize}
@@ -1041,28 +1077,27 @@ export default function ReadingScreen() {
               {!isCompleted && (
                 <Animated.View
                   exiting={FadeOut.duration(200)}
-                  style={{ marginTop: 48, alignItems: 'center', gap: 16 }}
+                  style={{ marginTop: 48, paddingHorizontal: 24 }}
                 >
-                  {/* Complete Day Button - Filled container with border */}
+                  {/* Horizontal button row - Complete Day (70%) + Share (30%) */}
                   <View
                     style={{
-                      backgroundColor: colors.accent,
-                      paddingVertical: 4,
-                      paddingHorizontal: 4,
-                      borderRadius: 36,
-                      borderWidth: 2,
-                      borderColor: colors.accent,
+                      flexDirection: 'row',
+                      gap: 16,
+                      alignItems: 'center',
                     }}
                   >
+                    {/* Complete Day Button - 70% width, white text on gold */}
                     <Pressable
                       onPress={handleComplete}
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
                       style={({ pressed }) => ({
+                        flex: 0.7,
                         backgroundColor: colors.accent,
                         paddingVertical: 18,
-                        paddingHorizontal: 48,
+                        paddingHorizontal: 24,
                         borderRadius: 32,
                         shadowColor: colors.accent,
                         shadowOffset: { width: 0, height: 4 },
@@ -1070,14 +1105,16 @@ export default function ReadingScreen() {
                         shadowRadius: 12,
                         elevation: 8,
                         transform: [{ scale: pressed ? 0.98 : 1 }],
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       })}
                     >
                       {({ pressed }) => (
                         <Text
                           style={{
                             fontFamily: FontFamily.display,
-                            fontSize: 18,
-                            color: isDark ? '#0a0a0a' : '#1a1a1a',
+                            fontSize: 17,
+                            color: '#ffffff',
                             textAlign: 'center',
                             letterSpacing: 0.5,
                           }}
@@ -1086,41 +1123,38 @@ export default function ReadingScreen() {
                         </Text>
                       )}
                     </Pressable>
-                  </View>
 
-                  {/* Share Button - Centered, icon above text */}
-                  <Pressable
-                    onPress={handleShare}
-                    accessibilityRole="button"
-                    accessibilityLabel="Share devotional"
-                    accessibilityHint="Share this day's reading with others"
-                    style={({ pressed }) => ({
-                      alignItems: 'center',
-                      gap: 6,
-                      paddingVertical: 16,
-                      paddingHorizontal: 32,
-                      borderRadius: 16,
-                      backgroundColor: pressed ? colors.inputBackground : 'transparent',
-                      opacity: pressed ? 0.8 : 1,
-                    })}
-                  >
-                    <SymbolView
-                      name="square.and.arrow.up"
-                      size={24}
-                      tintColor={colors.textMuted}
-                      weight="medium"
-                    />
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 14,
-                        color: colors.textMuted,
-                        letterSpacing: 0.3,
-                      }}
+                    {/* Share Button - 30% width, ghost/outline style */}
+                    <Pressable
+                      onPress={handleShare}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share devotional"
+                      accessibilityHint="Share this day's reading with others"
+                      style={({ pressed }) => ({
+                        flex: 0.3,
+                        paddingVertical: 16,
+                        paddingHorizontal: 16,
+                        borderRadius: 32,
+                        borderWidth: 1.5,
+                        borderColor: colors.textMuted,
+                        backgroundColor: 'transparent',
+                        opacity: pressed ? 0.7 : 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      })}
                     >
-                      Share today's reading
-                    </Text>
-                  </Pressable>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 15,
+                          color: colors.textMuted,
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        Share
+                      </Text>
+                    </Pressable>
+                  </View>
                 </Animated.View>
               )}
 
@@ -1260,6 +1294,7 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
             </ScrollView>
+          </View>
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>
