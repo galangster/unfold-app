@@ -35,10 +35,11 @@ export function AudioWaveform({
   color = '#C8A55C',
   barCount = 20,
 }: AudioWaveformProps) {
-  // Create shared values at top level (not inside useMemo)
+  // Create shared values at top level — MUST be consistent array size
   const barValues = useMemo(() => {
-    return Array.from({ length: barCount }, () => useSharedValue(0.3));
-  }, [barCount]);
+    // Fixed size array of 20 (max barCount)
+    return Array.from({ length: 20 }, () => useSharedValue(0.3));
+  }, []);
 
   // Create bar configs (static values, no hooks)
   const bars = useMemo(() => {
