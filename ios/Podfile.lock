@@ -7,9 +7,6 @@ PODS:
     - ExpoModulesCore
   - EXApplication (55.0.5):
     - ExpoModulesCore
-  - EXAV (16.0.8-canary-20251120-e46b3cc):
-    - ExpoModulesCore
-    - ReactCommon/turbomodule/core
   - EXConstants (55.0.4):
     - ExpoModulesCore
   - EXJSONUtils (55.0.0)
@@ -189,6 +186,8 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - ExpoAsset (55.0.4):
+    - ExpoModulesCore
+  - ExpoAudio (55.0.6):
     - ExpoModulesCore
   - ExpoBattery (55.0.5):
     - ExpoModulesCore
@@ -2982,7 +2981,6 @@ DEPENDENCIES:
   - Burnt (from `../node_modules/burnt/ios`)
   - EASClient (from `../node_modules/expo-eas-client/ios`)
   - EXApplication (from `../node_modules/expo-application/ios`)
-  - EXAV (from `../node_modules/expo-av/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - EXJSONUtils (from `../node_modules/expo-json-utils/ios`)
   - EXManifests (from `../node_modules/expo-manifests/ios`)
@@ -2992,6 +2990,7 @@ DEPENDENCIES:
   - expo-dev-menu (from `../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../node_modules/expo-dev-menu-interface/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
+  - ExpoAudio (from `../node_modules/expo-audio/ios`)
   - ExpoBattery (from `../node_modules/expo-battery/ios`)
   - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoBrightness (from `../node_modules/expo-brightness/ios`)
@@ -3167,8 +3166,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-eas-client/ios"
   EXApplication:
     :path: "../node_modules/expo-application/ios"
-  EXAV:
-    :path: "../node_modules/expo-av/ios"
   EXConstants:
     :path: "../node_modules/expo-constants/ios"
   EXJSONUtils:
@@ -3187,6 +3184,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-dev-menu-interface/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
+  ExpoAudio:
+    :path: "../node_modules/expo-audio/ios"
   ExpoBattery:
     :path: "../node_modules/expo-battery/ios"
   ExpoBlur:
@@ -3489,7 +3488,6 @@ SPEC CHECKSUMS:
   Burnt: 0616363a206ed96ba9af3e2eb0e184dc97be1458
   EASClient: 7eead1417d9970757ad2654d1eddee4de796d1ee
   EXApplication: f9ed028c77431d25141379577fed2eb4657f13d7
-  EXAV: ebeea54cd81118075715ab4de3a3b1f9905d63d3
   EXConstants: 4b0b9532ad265f0870ea03cdd1100ec16075719c
   EXJSONUtils: 0080c14b673cfa9a6be5e3fe429768ffe3d42dfb
   EXManifests: a835dde678d0cce2afa3f4cb8aa32b4e5fa0a464
@@ -3499,6 +3497,7 @@ SPEC CHECKSUMS:
   expo-dev-menu: db59f0b369cdf1cde3acdc4ed5b8c51f2e4f2942
   expo-dev-menu-interface: bf6f816d29b45bec038080790963c635e8d588c2
   ExpoAsset: 0de8c1198cfcb54878332a53c63e0f6ef575c603
+  ExpoAudio: 2f8961d9faff0834303c1f4da7a2ca86298c5c1d
   ExpoBattery: 8056820cf5995701095031fb29582c558985f594
   ExpoBlur: 636a4e6b119873f76d19b6855cdaae0afd960a14
   ExpoBrightness: 3328df0173d79dc1895f3373a1cb0db22b884478

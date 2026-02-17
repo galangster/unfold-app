@@ -4,10 +4,9 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { Play, Pause, SkipBack, SkipForward, ChevronDown } from 'lucide-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -17,8 +16,6 @@ import { streamDevotionalAudio, WordTimestamp, CARTESIA_VOICES } from '@/lib/car
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { AudioWaveform } from './AudioWaveform';
-
-const { width, height } = Dimensions.get('window');
 
 interface AudioPlayerProps {
   title: string;
@@ -41,60 +38,84 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   isPremium,
   onClose,
 }, ref) => {
-  const { colors, isDark } = useTheme();
-  
+  const { colors } = useTheme();
+
   const [isLoading, setIsLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [activeWordIndex, setActiveWordIndex] = useState(-1);
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  
-  const soundRef = useRef<typeof Audio.Sound | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  // Snap points for the bottom sheet
+  const shouldAutoplayRef = useRef(false);
+  const audioUrlRef = useRef<string | null>(null);
+
+  const player = useAudioPlayer(audioUrl ? { uri: audioUrl } : null, { updateInterval: 100 });
+  const status = useAudioPlayerStatus(player);
+
+  const isPlaying = status.playing;
+  const currentTime = status.currentTime * 1000;
+  const duration = status.duration * 1000;
+
   const snapPoints = useMemo(() => ['25%', '50%', '90%'], []);
 
-  // Combine devotional content with scripture for full audio
   const fullText = useMemo(() => {
     return `${content}\n\n${scriptureReference}: ${scriptureText}`;
   }, [content, scriptureReference, scriptureText]);
 
-  // Cleanup on unmount
+  useEffect(() => {
+    void setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      allowsRecording: false,
+      interruptionMode: 'duckOthers',
+      shouldRouteThroughEarpiece: false,
+    });
+  }, []);
+
+  useEffect(() => {
+    audioUrlRef.current = audioUrl;
+  }, [audioUrl]);
+
+  useEffect(() => {
+    if (!status.isLoaded || !audioUrl || !shouldAutoplayRef.current) return;
+    player.play();
+    shouldAutoplayRef.current = false;
+  }, [status.isLoaded, audioUrl, player]);
+
+  useEffect(() => {
+    if (!wordTimestamps.length) {
+      setActiveWordIndex(-1);
+      return;
+    }
+    const currentSeconds = currentTime / 1000;
+    const currentWord = wordTimestamps.findIndex(
+      (wt) => currentSeconds >= wt.start && currentSeconds <= wt.end
+    );
+    setActiveWordIndex(currentWord);
+  }, [currentTime, wordTimestamps]);
+
+  useEffect(() => {
+    if (status.didJustFinish) {
+      setActiveWordIndex(-1);
+      Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_COMPLETED, {
+        devotional_title: title,
+        voice_id: voiceId,
+      });
+    }
+  }, [status.didJustFinish, title, voiceId]);
+
   useEffect(() => {
     return () => {
-      cleanup();
-    };
-  }, []);
-
-  const cleanup = useCallback(async () => {
-    // Stop progress tracking
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-
-    // Stop and unload sound
-    if (soundRef.current) {
       try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch (error) {
-        logger.warn('Error cleaning up audio:', error);
+        player.pause();
+      } catch {}
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
       }
-      soundRef.current = null;
-    }
-
-    // Revoke audio URL
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
-    }
-  }, []);
+    };
+  }, [player]);
 
   const loadAndPlayAudio = useCallback(async () => {
     if (!isPremium) {
@@ -108,83 +129,24 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       setHasError(false);
       setErrorMessage('');
 
-      // Cleanup any existing audio
-      await cleanup();
+      if (audioUrlRef.current) {
+        try {
+          player.pause();
+        } catch {}
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
 
-      // Track audio play start
       Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_STARTED, {
         devotional_title: title,
         voice_id: voiceId,
       });
 
-      // Stream audio from Cartesia
-      const result = await streamDevotionalAudio(
-        fullText,
-        voiceId,
-        (word, timestamp) => {
-          // Find word index for karaoke effect
-          const index = wordTimestamps.findIndex(wt => wt.word === word && Math.abs(wt.start - timestamp) < 0.1);
-          if (index !== -1) {
-            setActiveWordIndex(index);
-          }
-        }
-      );
-
-      // Store word timestamps for karaoke effect
+      const result = await streamDevotionalAudio(fullText, voiceId);
       setWordTimestamps(result.wordTimestamps);
 
-      // Create audio URL and load
-      audioUrlRef.current = result.audioUrl;
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: result.audioUrl },
-        { shouldPlay: true }
-      );
-
-      soundRef.current = sound;
-      setIsPlaying(true);
-      setDuration(result.duration * 1000); // Convert to milliseconds
-
-      // Set up playback status listener
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded) {
-          setCurrentTime(status.positionMillis);
-          setIsPlaying(status.isPlaying);
-
-          // Update active word based on timestamp
-          if (result.wordTimestamps.length > 0 && status.positionMillis) {
-            const currentSeconds = status.positionMillis / 1000;
-            const currentWord = result.wordTimestamps.findIndex(
-              (wt) => currentSeconds >= wt.start && currentSeconds <= wt.end
-            );
-            if (currentWord !== -1) {
-              setActiveWordIndex(currentWord);
-            }
-          }
-
-          // Handle completion
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            setCurrentTime(0);
-            setActiveWordIndex(-1);
-            Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_COMPLETED, {
-              devotional_title: title,
-              voice_id: voiceId,
-            });
-          }
-        }
-      });
-
-      // Start progress tracking
-      progressIntervalRef.current = setInterval(async () => {
-        if (soundRef.current) {
-          const status = await soundRef.current.getStatusAsync();
-          if (status.isLoaded) {
-            setCurrentTime(status.positionMillis);
-          }
-        }
-      }, 100);
-
+      shouldAutoplayRef.current = true;
+      setAudioUrl(result.audioUrl);
     } catch (error) {
       logger.error('Error loading audio:', error);
       setHasError(true);
@@ -192,64 +154,59 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     } finally {
       setIsLoading(false);
     }
-  }, [isPremium, fullText, voiceId, title, wordTimestamps, cleanup]);
+  }, [isPremium, fullText, voiceId, title, player]);
 
   const togglePlayback = useCallback(async () => {
-    if (!soundRef.current) {
+    if (!audioUrl || !status.isLoaded) {
       await loadAndPlayAudio();
       return;
     }
 
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        if (status.isPlaying) {
-          await soundRef.current.pauseAsync();
-          setIsPlaying(false);
-          Analytics.logEvent(AnalyticsEvents.AUDIO_PAUSED, {
-            devotional_title: title,
-            position_ms: status.positionMillis,
-          });
-        } else {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
+      if (status.playing) {
+        player.pause();
+        Analytics.logEvent(AnalyticsEvents.AUDIO_PAUSED, {
+          devotional_title: title,
+          position_ms: currentTime,
+        });
+      } else {
+        // Replay behavior when at end
+        if (status.duration > 0 && Math.abs(status.currentTime - status.duration) < 0.05) {
+          await player.seekTo(0);
         }
+        player.play();
       }
     } catch (error) {
       logger.error('Error toggling playback:', error);
     }
-  }, [loadAndPlayAudio, title]);
+  }, [audioUrl, status, loadAndPlayAudio, player, title, currentTime]);
 
   const skipBackward = useCallback(async () => {
-    if (!soundRef.current) return;
-    
+    if (!audioUrl || !status.isLoaded) return;
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        const newPosition = Math.max(0, status.positionMillis - 10000);
-        await soundRef.current.setPositionAsync(newPosition);
-      }
+      const newPositionSec = Math.max(0, status.currentTime - 10);
+      await player.seekTo(newPositionSec);
     } catch (error) {
       logger.error('Error skipping backward:', error);
     }
-  }, []);
+  }, [audioUrl, status, player]);
 
   const skipForward = useCallback(async () => {
-    if (!soundRef.current) return;
-    
+    if (!audioUrl || !status.isLoaded) return;
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        const newPosition = Math.min(
-          status.durationMillis || 0,
-          status.positionMillis + 10000
-        );
-        await soundRef.current.setPositionAsync(newPosition);
-      }
+      const newPositionSec = Math.min(status.duration || 0, status.currentTime + 10);
+      await player.seekTo(newPositionSec);
     } catch (error) {
       logger.error('Error skipping forward:', error);
     }
-  }, []);
+  }, [audioUrl, status, player]);
+
+  const handleClose = useCallback(() => {
+    try {
+      player.pause();
+    } catch {}
+    onClose();
+  }, [player, onClose]);
 
   const formatTime = useCallback((ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -258,7 +215,6 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
-  // Get voice name
   const voiceName = useMemo(() => {
     const voice = CARTESIA_VOICES.find((v) => v.id === voiceId);
     return voice?.name || 'Default Voice';
@@ -270,7 +226,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       index={0}
       snapPoints={snapPoints}
       enablePanDownToClose={true}
-      onClose={onClose}
+      onClose={handleClose}
       backgroundStyle={{
         backgroundColor: colors.background,
       }}
@@ -287,29 +243,26 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       }}
     >
       <BottomSheetView style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Close button */}
         <Pressable
-          onPress={onClose}
+          onPress={handleClose}
           style={styles.closeButton}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <ChevronDown size={24} color={colors.textMuted} />
         </Pressable>
 
-        {/* Title */}
         <View style={styles.titleContainer}>
           <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
             {title}
           </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted, fontFamily: FontFamily.body }]}>
+          <Text style={[styles.subtitle, { color: colors.textMuted, fontFamily: FontFamily.body }]}> 
             {subtitle}
           </Text>
         </View>
 
-        {/* Karaoke-style text display */}
         <View style={styles.textContainer}>
           {wordTimestamps.length > 0 ? (
-            <Text style={[styles.karaokeText, { fontFamily: FontFamily.body }]}>
+            <Text style={[styles.karaokeText, { fontFamily: FontFamily.body }]}> 
               {wordTimestamps.map((wt, index) => (
                 <Text
                   key={index}
@@ -322,13 +275,12 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
               ))}
             </Text>
           ) : (
-            <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
+            <Text style={[styles.placeholderText, { color: colors.textMuted }]}> 
               {isLoading ? 'Loading audio...' : 'Press play to start listening'}
             </Text>
           )}
         </View>
 
-        {/* Audio Waveform Visualization */}
         <AudioWaveform
           isPlaying={isPlaying}
           activeWordIndex={activeWordIndex}
@@ -337,9 +289,8 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
           barCount={24}
         />
 
-        {/* Progress bar */}
         <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+          <View style={[styles.progressBar, { backgroundColor: colors.border }]}> 
             <View
               style={[
                 styles.progressFill,
@@ -351,32 +302,17 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
             />
           </View>
           <View style={styles.timeContainer}>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(currentTime)}
-            </Text>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(duration)}
-            </Text>
+            <Text style={[styles.timeText, { color: colors.textMuted }]}>{formatTime(currentTime)}</Text>
+            <Text style={[styles.timeText, { color: colors.textMuted }]}>{formatTime(duration)}</Text>
           </View>
         </View>
 
-        {/* Controls */}
         <View style={styles.controlsContainer}>
-          <Pressable
-            onPress={skipBackward}
-            style={styles.controlButton}
-            disabled={!soundRef.current}
-          >
-            <SkipBack size={24} color={soundRef.current ? colors.text : colors.textMuted} />
+          <Pressable onPress={skipBackward} style={styles.controlButton} disabled={!audioUrl || !status.isLoaded}>
+            <SkipBack size={24} color={audioUrl && status.isLoaded ? colors.text : colors.textMuted} />
           </Pressable>
 
-          <Pressable
-            onPress={togglePlayback}
-            style={[
-              styles.playButton,
-              { backgroundColor: colors.accent },
-            ]}
-          >
+          <Pressable onPress={togglePlayback} style={[styles.playButton, { backgroundColor: colors.accent }]}> 
             {isLoading ? (
               <ActivityIndicator color="#000" size="small" />
             ) : isPlaying ? (
@@ -386,28 +322,18 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
             )}
           </Pressable>
 
-          <Pressable
-            onPress={skipForward}
-            style={styles.controlButton}
-            disabled={!soundRef.current}
-          >
-            <SkipForward size={24} color={soundRef.current ? colors.text : colors.textMuted} />
+          <Pressable onPress={skipForward} style={styles.controlButton} disabled={!audioUrl || !status.isLoaded}>
+            <SkipForward size={24} color={audioUrl && status.isLoaded ? colors.text : colors.textMuted} />
           </Pressable>
         </View>
 
-        {/* Voice info */}
         <View style={styles.voiceContainer}>
-          <Text style={[styles.voiceText, { color: colors.textMuted }]}>
-            Voice: {voiceName}
-          </Text>
+          <Text style={[styles.voiceText, { color: colors.textMuted }]}>Voice: {voiceName}</Text>
         </View>
 
-        {/* Error message */}
         {hasError && (
-          <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
-            <Text style={[styles.errorText, { color: colors.error }]}>
-              {errorMessage}
-            </Text>
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}> 
+            <Text style={[styles.errorText, { color: colors.error }]}>{errorMessage}</Text>
           </View>
         )}
       </BottomSheetView>
