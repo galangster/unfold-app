@@ -53,23 +53,25 @@ export default function MyContentScreen() {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 16,
+          paddingHorizontal: 20,
           paddingVertical: 12,
         }}
       >
         <Pressable onPress={handleBack} style={{ padding: 8 }}>
           <ChevronLeft size={24} color={colors.text} />
         </Pressable>
-        <Text
-          style={{
-            fontFamily: FontFamily.uiSemiBold,
-            fontSize: 17,
-            color: colors.text,
-            marginLeft: 12,
-          }}
-        >
-          My Content
-        </Text>
+        <View style={{ marginLeft: 12 }}>
+          <Text
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 28,
+              color: colors.text,
+              letterSpacing: -0.5,
+            }}
+          >
+            My Content
+          </Text>
+        </View>
       </View>
 
       {/* Elegant Tab Bar */}
