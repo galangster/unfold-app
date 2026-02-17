@@ -25,7 +25,6 @@ interface BarConfig {
   minHeight: number;
   maxHeight: number;
   frequency: number;
-  value: any;
 }
 
 export function AudioWaveform({
@@ -35,10 +34,14 @@ export function AudioWaveform({
   color = '#C8A55C',
   barCount = 20,
 }: AudioWaveformProps) {
-  // Create bar configs with pre-calculated harmonic values (no hooks in loops)
+  // Create shared values at top level (not inside useMemo)
+  const barValues = useMemo(() => {
+    return Array.from({ length: barCount }, () => useSharedValue(0.3));
+  }, [barCount]);
+
+  // Create bar configs (static values, no hooks)
   const bars = useMemo(() => {
     return Array.from({ length: barCount }, (_, i) => {
-      // Use sine-based frequency for harmonic relationship (not pure random)
       const frequency = 0.5 + Math.sin((i / barCount) * Math.PI) * 0.5;
       return {
         delay: i * 40,
@@ -46,7 +49,6 @@ export function AudioWaveform({
         minHeight: 0.2 + frequency * 0.2,
         maxHeight: 0.6 + frequency * 0.3,
         frequency,
-        value: useSharedValue(0.3),
       };
     });
   }, [barCount]);
@@ -55,9 +57,8 @@ export function AudioWaveform({
   const progress = totalWords > 0 ? activeWordIndex / totalWords : 0;
   const activeBarIndex = Math.floor(progress * barCount);
 
-  // Calculate inactive color with proper rgba (not hex hack)
+  // Calculate inactive color with proper rgba
   const inactiveColor = useMemo(() => {
-    // Fallback to default gold if color is undefined
     const safeColor = color || '#C8A55C';
     const hex = safeColor.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
@@ -69,14 +70,11 @@ export function AudioWaveform({
   // Animate bars based on playback state
   useEffect(() => {
     if (isPlaying) {
-      // Animate each bar with spring physics - more organic
       bars.forEach((bar, i) => {
-        const { delay, maxHeight, minHeight } = bar;
-        
-        // Stagger the start for wave effect
+        const { maxHeight, minHeight } = bar;
         const staggerDelay = i * 30;
 
-        bar.value = withDelay(
+        barValues[i].value = withDelay(
           staggerDelay,
           withRepeat(
             withSequence(
@@ -91,15 +89,14 @@ export function AudioWaveform({
                 mass: 0.8 + Math.random() * 0.4,
               })
             ),
-            -1, // Infinite repeat
-            true // Reverse
+            -1,
+            true
           )
         ) as any;
       });
     } else {
-      // Gentle breathing idle state when paused - more natural
       bars.forEach((bar, i) => {
-        bar.value = withDelay(
+        barValues[i].value = withDelay(
           i * 80,
           withRepeat(
             withSequence(
@@ -112,7 +109,7 @@ export function AudioWaveform({
         ) as any;
       });
     }
-  }, [isPlaying, bars]);
+  }, [isPlaying, bars, barValues]);
 
   return (
     <View style={styles.container}>
@@ -122,6 +119,7 @@ export function AudioWaveform({
         return (
           <WaveformBar
             key={i}
+            barValue={barValues[i]}
             bar={bar}
             isActive={isActive}
             activeColor={color}
@@ -136,6 +134,7 @@ export function AudioWaveform({
 
 // Separate component to properly use animated style hook
 interface WaveformBarProps {
+  barValue: Animated.SharedValue<number>;
   bar: BarConfig;
   isActive: boolean;
   activeColor: string;
@@ -143,9 +142,9 @@ interface WaveformBarProps {
   index: number;
 }
 
-function WaveformBar({ bar, isActive, activeColor, inactiveColor, index }: WaveformBarProps) {
+function WaveformBar({ barValue, bar, isActive, activeColor, inactiveColor, index }: WaveformBarProps) {
   const animatedStyle = useAnimatedStyle(() => ({
-    height: `${bar.value.value * 100}%`,
+    height: `${barValue.value * 100}%`,
     backgroundColor: isActive ? activeColor : inactiveColor,
     opacity: isActive ? 1 : 0.5,
     shadowColor: isActive ? activeColor : 'transparent',
@@ -155,10 +154,7 @@ function WaveformBar({ bar, isActive, activeColor, inactiveColor, index }: Wavef
     elevation: isActive ? 6 : 0,
   }));
 
-  // Vary width slightly based on index for rhythm - more variation
   const width = 2.5 + (index % 4) * 0.8;
-  
-  // Vary border radius for organic feel
   const borderRadius = 1 + (index % 3);
 
   return (
