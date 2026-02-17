@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Linking, Platform, Image } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, ActivityIndicator, Linking, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -376,32 +376,28 @@ export default function PaywallScreen() {
         </Animated.View>
 
         {/* SUBSCRIBE BUTTON — gold pill-shaped, impossible to miss */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={{ marginTop: 24 }}>
-          <Pressable
+        <View style={{ marginTop: 24, marginBottom: 12 }}>
+          <TouchableOpacity
             onPress={handleSubscribe}
             disabled={isPurchasing}
-            style={({ pressed }) => ({
+            activeOpacity={0.85}
+            style={{
               backgroundColor: '#C8A55C',
-              paddingVertical: 16,
+              paddingVertical: 18,
               paddingHorizontal: 32,
-              borderRadius: 9999,
-              shadowColor: '#C8A55C',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 8,
-              opacity: pressed ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
-            })}
+              borderRadius: 28,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             {isPurchasing ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 16,
-                  color: '#fff',
+                  fontSize: 17,
+                  color: '#FFFFFF',
                   textAlign: 'center',
                   letterSpacing: 0.3,
                 }}
@@ -409,8 +405,8 @@ export default function PaywallScreen() {
                 {selectedPlan === 'yearly' ? `Subscribe — ${yearlyPrice}/year` : `Subscribe — ${monthlyPrice}/month`}
               </Text>
             )}
-          </Pressable>
-        </Animated.View>
+          </TouchableOpacity>
+        </View>
 
         {/* Restore + Legal at bottom */}
         <View style={{ flex: 1 }} />
