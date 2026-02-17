@@ -30,7 +30,7 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
 import { createReviewPromptManager } from '@/lib/review-prompt';
-import { AudioPlayerBottomSheet } from '@/components/AudioPlayerBottomSheet';
+import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1347,7 +1347,7 @@ export default function ReadingScreen() {
 
       {/* Audio Player Bottom Sheet */}
       {currentDayData && (
-        <AudioPlayerBottomSheet
+        <AudioPlayer
           ref={audioPlayerRef}
           title={currentDayData.title}
           subtitle={`Day ${viewingDay} of ${currentDevotional.totalDays}`}

@@ -14,6 +14,7 @@ import { useUnfoldStore } from '@/lib/store';
 
 const FEATURES = [
   'Unlimited devotional journeys',
+  'Expressive AI narration with follow-along',
   'Custom themes & accent colors',
   'Premium reading fonts',
   'Wallpaper share styles',
@@ -110,10 +111,10 @@ export default function PaywallScreen() {
   const yearlyRaw = 29.99;
   const perMonthFromYearly = '$2.50';
 
-  // Hard-coded high-contrast CTA colors (theme-independent for guaranteed readability)
-  const btnBg = '#1C1710';
-  const btnText = '#FFFFFF';
-  const btnBorder = isDark ? 'rgba(245, 240, 235, 0.28)' : 'rgba(28, 23, 16, 0.22)';
+  // Gold CTA button color for better visibility
+  const btnBg = colors.accent;
+  const btnText = '#1C1710';
+  const btnBorder = colors.accent;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

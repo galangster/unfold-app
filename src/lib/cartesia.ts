@@ -6,13 +6,13 @@
 const CARTESIA_API_KEY = process.env.EXPO_PUBLIC_CARTESIA_KEY || '';
 const CARTESIA_BASE_URL = 'https://api.cartesia.ai';
 
-// Voice options for Unfold
+// Voice options for Unfold - ALL PREMIUM
 export const CARTESIA_VOICES = [
   {
     id: '694f9389-aac1-45b6-b726-9d9369183238',
     name: 'Katie',
     description: 'Warm, contemplative — perfect for devotionals',
-    premium: false,
+    premium: true,
   },
   {
     id: '03496517-369a-4db1-8236-3d3ae459ddf7',
