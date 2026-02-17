@@ -57,7 +57,9 @@ export function AudioWaveform({
 
   // Calculate inactive color with proper rgba (not hex hack)
   const inactiveColor = useMemo(() => {
-    const hex = color.replace('#', '');
+    // Fallback to default gold if color is undefined
+    const safeColor = color || '#C8A55C';
+    const hex = safeColor.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);
