@@ -69,7 +69,7 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'translation' | null>(null);
-  const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>('colors');
+  const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | 'voice' | null>('colors');
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -1809,7 +1809,7 @@ export default function SettingsScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setExpandedPreference(expandedPreference === 'voice' ? null : 'voice');
+                  setExpandedPremium(expandedPremium === 'voice' ? null : 'voice');
                 }}
                 style={{
                   flexDirection: 'row',
@@ -1854,13 +1854,13 @@ export default function SettingsScreen() {
                   size={20}
                   color={colors.textMuted}
                   style={{
-                    transform: [{ rotate: expandedPreference === 'voice' ? '180deg' : '0deg' }],
+                    transform: [{ rotate: expandedPremium === 'voice' ? '180deg' : '0deg' }],
                   }}
                 />
               </Pressable>
 
               {/* Voice options */}
-              {expandedPreference === 'voice' && (
+              {expandedPremium === 'voice' && (
                 <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
                   {CARTESIA_VOICES.map((option) => {
                     const isSelected = (user?.preferredVoice ?? '694f9389-aac1-45b6-b726-9d9369183238') === option.id;
