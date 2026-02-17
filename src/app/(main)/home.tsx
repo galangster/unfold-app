@@ -14,9 +14,8 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
-import { THEME_CATEGORIES } from '@/constants/devotional-types';
 import { useUnfoldStore } from '@/lib/store';
-import { Plus, BookOpen, PenLine, Settings, Flame, Bookmark, Highlighter } from 'lucide-react-native';
+import { Plus, BookOpen, PenLine, Settings, Bookmark } from 'lucide-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
@@ -110,7 +109,6 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
@@ -151,67 +149,6 @@ export default function HomeScreen() {
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
-  const weeklyRecap = useMemo(() => {
-    const now = new Date();
-    const windowStart = new Date(now);
-    windowStart.setDate(now.getDate() - 6);
-    windowStart.setHours(0, 0, 0, 0);
-    const windowStartMs = windowStart.getTime();
-
-    let daysReadThisWeek = 0;
-    let journeysTouched = 0;
-    const weeklyThemeCounts = new Map<string, number>();
-
-    devotionals.forEach((devotional) => {
-      const weeklyReadDays = devotional.days.filter(
-        (day) => day.readAt && new Date(day.readAt).getTime() >= windowStartMs
-      );
-
-      daysReadThisWeek += weeklyReadDays.length;
-      if (weeklyReadDays.length > 0) {
-        journeysTouched += 1;
-
-        if (devotional.themeCategory) {
-          weeklyThemeCounts.set(
-            devotional.themeCategory,
-            (weeklyThemeCounts.get(devotional.themeCategory) ?? 0) + weeklyReadDays.length
-          );
-        }
-      }
-    });
-
-    const reflectionsThisWeek = journalEntries.filter((entry) => {
-      const touchedAt = entry.updatedAt || entry.createdAt;
-      return new Date(touchedAt).getTime() >= windowStartMs;
-    }).length;
-
-    const estimatedMinutes = daysReadThisWeek * (user?.readingDuration ?? 15);
-
-    let headline = 'Keep your rhythm this week';
-    if (daysReadThisWeek > 0 && reflectionsThisWeek > 0) {
-      headline = `You showed up ${daysReadThisWeek} day${daysReadThisWeek === 1 ? '' : 's'} this week`;
-    } else if (daysReadThisWeek > 0) {
-      headline = `You spent about ${estimatedMinutes} min with God this week`;
-    } else if (reflectionsThisWeek > 0) {
-      headline = `You captured ${reflectionsThisWeek} reflection${reflectionsThisWeek === 1 ? '' : 's'} this week`;
-    }
-
-    const topTheme = [...weeklyThemeCounts.entries()].sort((a, b) => b[1] - a[1])[0];
-    const topThemeId = topTheme?.[0] ?? null;
-    const topThemeName = topThemeId
-      ? (THEME_CATEGORIES.find((theme) => theme.id === topThemeId)?.name ?? topThemeId)
-      : null;
-
-    return {
-      headline,
-      daysReadThisWeek,
-      reflectionsThisWeek,
-      journeysTouched,
-      topThemeId,
-      topThemeName,
-      hasActivity: daysReadThisWeek > 0 || reflectionsThisWeek > 0,
-    };
-  }, [devotionals, journalEntries, user?.readingDuration]);
 
   const getReadingDayLabel = () => {
     if (!currentDevotional) return 'Today';
@@ -260,19 +197,6 @@ export default function HomeScreen() {
     });
   };
 
-  const handleOpenStats = (themeId?: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    if (themeId) {
-      router.push({
-        pathname: '/(main)/stats',
-        params: { theme: themeId },
-      });
-      return;
-    }
-
-    router.push('/(main)/stats');
-  };
 
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -971,83 +895,6 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {/* Weekly recap - simplified */}
-          {weeklyRecap.hasActivity && (
-            <Animated.View
-              entering={FadeInDown.duration(600).delay(388)}
-              style={{ paddingHorizontal: 24, marginTop: 12 }}
-            >
-              <Pressable
-                onPress={() => handleOpenStats(weeklyRecap.topThemeId ?? undefined)}
-                accessibilityRole="button"
-                accessibilityLabel="Weekly activity recap"
-                accessibilityHint={`This week: ${weeklyRecap.headline}. Tap to view detailed stats`}
-                accessibilityValue={{ text: `${weeklyRecap.daysReadThisWeek} days read, ${weeklyRecap.reflectionsThisWeek} reflections` }}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.7 : 1,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
-                })}
-              >
-                <View
-                  style={{
-                    backgroundColor: colors.inputBackground,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    padding: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Flame size={22} color={colors.accent} strokeWidth={1.5} />
-                  <View style={{ marginLeft: 14, flex: 1 }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.text,
-                        lineHeight: 22,
-                      }}
-                    >
-                      {weeklyRecap.headline}
-                    </Text>
-                    {weeklyRecap.topThemeName && (
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 13,
-                          color: colors.textSubtle,
-                          marginTop: 2,
-                        }}
-                      >
-                        Focus: {weeklyRecap.topThemeName}
-                      </Text>
-                    )}
-                  </View>
-                  <View
-                    style={{
-                      backgroundColor: colors.accent + '20',
-                      borderRadius: 12,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      marginLeft: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.mono,
-                        fontSize: 12,
-                        color: colors.accent,
-                        letterSpacing: 0.5,
-                      }}
-                    >
-                      {weeklyRecap.daysReadThisWeek} days
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-            </Animated.View>
-          )}
           {/* Streak Box */}
           <Animated.View
             entering={FadeInDown.duration(600).delay(400)}
