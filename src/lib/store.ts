@@ -98,6 +98,7 @@ export interface UserProfile {
   themeMode: ThemeMode;
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
+  preferredVoice: string;
   // Streak system
   streakCount: number;
   longestStreak: number;

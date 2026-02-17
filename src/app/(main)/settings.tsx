@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Crown, Trash2, Lock, Star, ChevronDown, MessageSquare, Layers, Compass, Book, Sun, Moon, Monitor, UserCircle, Pencil, Check, Palette, Type } from 'lucide-react-native';
+import { ChevronLeft, Crown, Trash2, Lock, Play, Star, ChevronDown, MessageSquare, Layers, Compass, Book, Sun, Moon, Monitor, UserCircle, Pencil, Check, Palette, Type } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
@@ -17,7 +17,7 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
-import { analyzeNetworkError } from '@/lib/network-error-handler';
+import { CARTESIA_VOICES } from '@/lib/cartesia';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
 
@@ -1377,7 +1377,170 @@ export default function SettingsScreen() {
                 marginBottom: 24,
               }}
             >
-              {/* Tone preference */}
+              {/* Voice section */}
+          <Animated.View entering={FadeInDown.duration(400).delay(170)}>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 12,
+                color: colors.textHint,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                marginBottom: 12,
+              }}
+            >
+              Voice
+            </Text>
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: 24,
+              }}
+            >
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'voice' ? null : 'voice');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Play size={18} color={colors.text} fill={colors.text} />
+                </View>
+                <View style={{ marginLeft: 14, flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Reading Voice
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 12,
+                      color: colors.textMuted,
+                      marginTop: 2,
+                    }}
+                  >
+                    {CARTESIA_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Katie'}
+                  </Text>
+                </View>
+                <ChevronDown
+                  size={20}
+                  color={colors.textMuted}
+                  style={{
+                    transform: [{ rotate: expandedPreference === 'voice' ? '180deg' : '0deg' }],
+                  }}
+                />
+              </Pressable>
+
+              {/* Voice options */}
+              {expandedPreference === 'voice' && (
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                  {CARTESIA_VOICES.map((option) => {
+                    const isSelected = (user?.preferredVoice ?? '694f9389-aac1-45b6-b726-9d9369183238') === option.id;
+                    const isLocked = option.premium && !user?.isPremium;
+                    return (
+                      <Pressable
+                        key={option.id}
+                        onPress={() => {
+                          if (isLocked) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                            router.push('/paywall');
+                            return;
+                          }
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({ preferredVoice: option.id });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: 12,
+                          paddingHorizontal: 12,
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: 4,
+                          opacity: isLocked ? 0.6 : 1,
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.uiMedium,
+                                fontSize: 15,
+                                color: colors.text,
+                              }}
+                            >
+                              {option.name}
+                            </Text>
+                            {option.premium && !user?.isPremium && (
+                              <Lock size={14} color={colors.textMuted} />
+                            )}
+                          </View>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.ui,
+                              fontSize: 12,
+                              color: colors.textMuted,
+                              marginTop: 2,
+                            }}
+                          >
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 4,
+                                backgroundColor: colors.background,
+                              }}
+                            />
+                          )}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </Animated.View>
+              )}
+            </View>
+          </Animated.View>
+
+          {/* Tone preference */}
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

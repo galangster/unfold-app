@@ -190,6 +190,7 @@ export default function StyleOnboardingScreen() {
           themeMode: 'dark',
           accentTheme: 'gold',
           readingFont: 'source-serif',
+          preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238', // Katie - free voice
         });
       }
       router.replace('/onboarding');
