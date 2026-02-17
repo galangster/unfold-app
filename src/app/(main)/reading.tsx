@@ -1,5 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import BottomSheet from '@gorhom/bottom-sheet';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +15,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -30,7 +29,6 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading';
 import { createReviewPromptManager } from '@/lib/review-prompt';
-import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -109,7 +107,6 @@ export default function ReadingScreen() {
 
   const [viewingDay, setViewingDay] = useState(() => requestedDayNumber ?? currentDevotional?.currentDay ?? 1);
   const [shareModalOpen, setShareModalOpen] = useState(false);
-  const audioPlayerRef = useRef<BottomSheet>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
@@ -1015,26 +1012,6 @@ export default function ReadingScreen() {
                   strokeWidth={1.5}
                 />
               </Pressable>
-
-              {/* Audio Player Button */}
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  audioPlayerRef.current?.expand();
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Listen to devotional"
-                accessibilityHint="Play audio version of today's reading"
-                style={{ padding: 8 }}
-              >
-                <Play
-                  size={22}
-                  color={colors.text}
-                  strokeWidth={1.5}
-                  fill={colors.text}
-                />
-              </Pressable>
             </View>
             </View>
 
@@ -1344,21 +1321,6 @@ export default function ReadingScreen() {
         day={currentDayData}
         seriesTitle={currentDevotional.title}
       />
-
-      {/* Audio Player Bottom Sheet */}
-      {currentDayData && (
-        <AudioPlayer
-          ref={audioPlayerRef}
-          title={currentDayData.title}
-          subtitle={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
-          content={currentDayData.bodyText}
-          scriptureReference={currentDayData.scriptureReference}
-          scriptureText={currentDayData.scriptureText}
-          voiceId={user?.preferredVoice || 'default'}
-          isPremium={isPremium}
-          onClose={() => audioPlayerRef.current?.close()}
-        />
-      )}
     </View>
   );
 }

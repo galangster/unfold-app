@@ -7,6 +7,9 @@ PODS:
     - ExpoModulesCore
   - EXApplication (55.0.5):
     - ExpoModulesCore
+  - EXAV (16.0.8-canary-20251120-e46b3cc):
+    - ExpoModulesCore
+    - ReactCommon/turbomodule/core
   - EXConstants (55.0.4):
     - ExpoModulesCore
   - EXJSONUtils (55.0.0)
@@ -317,7 +320,7 @@ PODS:
     - ExpoModulesCore
   - ExpoSQLite (55.0.5):
     - ExpoModulesCore
-  - ExpoStoreReview (55.0.5):
+  - ExpoStoreReview (9.0.9):
     - ExpoModulesCore
   - ExpoSymbols (55.0.3):
     - ExpoModulesCore
@@ -1875,6 +1878,53 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - react-native-maps (1.26.20):
+    - react-native-maps/Maps (= 1.26.20)
+  - react-native-maps/Generated (1.26.20):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - react-native-maps/Maps (1.26.20):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - react-native-maps/Generated
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-menu (1.2.2):
     - hermes-engine
     - RCTRequired
@@ -2015,7 +2065,7 @@ PODS:
     - Yoga
   - react-native-segmented-control (2.5.7):
     - React-Core
-  - react-native-skia (2.4.14):
+  - react-native-skia (1.11.7):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2932,6 +2982,7 @@ DEPENDENCIES:
   - Burnt (from `../node_modules/burnt/ios`)
   - EASClient (from `../node_modules/expo-eas-client/ios`)
   - EXApplication (from `../node_modules/expo-application/ios`)
+  - EXAV (from `../node_modules/expo-av/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - EXJSONUtils (from `../node_modules/expo-json-utils/ios`)
   - EXManifests (from `../node_modules/expo-manifests/ios`)
@@ -3031,6 +3082,7 @@ DEPENDENCIES:
   - react-native-bottom-tabs (from `../node_modules/react-native-bottom-tabs`)
   - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-keyboard-controller (from `../node_modules/react-native-keyboard-controller`)
+  - react-native-maps (from `../node_modules/react-native-maps`)
   - "react-native-menu (from `../node_modules/@react-native-menu/menu`)"
   - react-native-mmkv (from `../node_modules/react-native-mmkv`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
@@ -3115,6 +3167,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-eas-client/ios"
   EXApplication:
     :path: "../node_modules/expo-application/ios"
+  EXAV:
+    :path: "../node_modules/expo-av/ios"
   EXConstants:
     :path: "../node_modules/expo-constants/ios"
   EXJSONUtils:
@@ -3312,6 +3366,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-get-random-values"
   react-native-keyboard-controller:
     :path: "../node_modules/react-native-keyboard-controller"
+  react-native-maps:
+    :path: "../node_modules/react-native-maps"
   react-native-menu:
     :path: "../node_modules/@react-native-menu/menu"
   react-native-mmkv:
@@ -3433,6 +3489,7 @@ SPEC CHECKSUMS:
   Burnt: 0616363a206ed96ba9af3e2eb0e184dc97be1458
   EASClient: 7eead1417d9970757ad2654d1eddee4de796d1ee
   EXApplication: f9ed028c77431d25141379577fed2eb4657f13d7
+  EXAV: ebeea54cd81118075715ab4de3a3b1f9905d63d3
   EXConstants: 4b0b9532ad265f0870ea03cdd1100ec16075719c
   EXJSONUtils: 0080c14b673cfa9a6be5e3fe429768ffe3d42dfb
   EXManifests: a835dde678d0cce2afa3f4cb8aa32b4e5fa0a464
@@ -3479,7 +3536,7 @@ SPEC CHECKSUMS:
   ExpoSMS: d46e331d78f0a052974b2739b2fe9e68eff3234e
   ExpoSplashScreen: 71acba74a5d7401fdf63bae8fe869e6d5a724652
   ExpoSQLite: 1c458536331e7bf55c99a2f5b97bc114d865e1e4
-  ExpoStoreReview: 97b3ba5e07dba9745a6528d3814406fad03479ad
+  ExpoStoreReview: 32bb43b6fae9c8db3e33cad69996dff3785eef5f
   ExpoSymbols: 2f7bc13638130613935601bdbb31c5b9fc2927fb
   ExpoSystemUI: 4d7512f15eb2025e4e538ba9583e99eac6bcf2e7
   ExpoVideo: ee3ed4889addeb7d03dd9f5096964f005a47687f
@@ -3537,13 +3594,14 @@ SPEC CHECKSUMS:
   react-native-bottom-tabs: e37c9d1565b1ee48c4c0e4b4fa4b804775f82dfa
   react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-keyboard-controller: 310010f4988f57e3fb116c56f379b94e8e943f70
+  react-native-maps: a1a4eb15eee016a2d0a009b24155ec92cc6f4ef6
   react-native-menu: 9644e03cbd35d8cc536eeb800469e32f41c6b7ed
   react-native-mmkv: 3d69c8bbdbceb1c0d3754863ecffa6ec24e4be12
   react-native-netinfo: cec9c4e86083cb5b6aba0e0711f563e2fbbff187
   react-native-pager-view: adc7d78123fb395e03a70d19e8d75805b49838b5
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
   react-native-segmented-control: bf6e0032726727498e18dd437ae88afcdbc18e99
-  react-native-skia: 268f183f849742e9da216743ee234bd7ad81c69b
+  react-native-skia: f8be6b8890f4499209be90cda3b466f6e1e4fa08
   react-native-slider: f954578344106f0a732a4358ce3a3e11015eb6e1
   react-native-view-shot: fb3c0774edb448f42705491802a455beac1502a2
   react-native-webview: 3e303e80cadb5f17118c8c1502aa398e9287e415
