@@ -9,6 +9,7 @@ import Animated, {
   withSpring,
   withDelay,
   Easing,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 interface AudioWaveformProps {
@@ -134,7 +135,7 @@ export function AudioWaveform({
 
 // Separate component to properly use animated style hook
 interface WaveformBarProps {
-  barValue: Animated.SharedValue<number>;
+  barValue: SharedValue<number>;
   bar: BarConfig;
   isActive: boolean;
   activeColor: string;

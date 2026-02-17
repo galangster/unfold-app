@@ -1351,7 +1351,7 @@ export default function ReadingScreen() {
           ref={audioPlayerRef}
           title={currentDayData.title}
           subtitle={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
-          content={currentDayData.content}
+          content={currentDayData.bodyText}
           scriptureReference={currentDayData.scriptureReference}
           scriptureText={currentDayData.scriptureText}
           voiceId={user?.preferredVoice || 'default'}
