@@ -35,16 +35,18 @@ export function AudioWaveform({
   color = '#C8A55C',
   barCount = 20,
 }: AudioWaveformProps) {
-  // Create shared values at top level — MUST be consistent array size
+  const SAFE_BAR_SLOTS = 32;
+  const effectiveBarCount = Math.min(Math.max(1, Math.floor(barCount ?? 20)), SAFE_BAR_SLOTS);
+
+  // Shared values must exist for the full possible range to avoid undefined access.
   const barValues = useMemo(() => {
-    // Fixed size array of 20 (max barCount)
-    return Array.from({ length: 20 }, () => useSharedValue(0.3));
+    return Array.from({ length: SAFE_BAR_SLOTS }, () => useSharedValue(0.3));
   }, []);
 
   // Create bar configs (static values, no hooks)
   const bars = useMemo(() => {
-    return Array.from({ length: barCount }, (_, i) => {
-      const frequency = 0.5 + Math.sin((i / barCount) * Math.PI) * 0.5;
+    return Array.from({ length: effectiveBarCount }, (_, i) => {
+      const frequency = 0.5 + Math.sin((i / effectiveBarCount) * Math.PI) * 0.5;
       return {
         delay: i * 40,
         duration: 400 + frequency * 200,
@@ -53,11 +55,11 @@ export function AudioWaveform({
         frequency,
       };
     });
-  }, [barCount]);
+  }, [effectiveBarCount]);
 
   // Calculate progress through text
   const progress = totalWords > 0 ? activeWordIndex / totalWords : 0;
-  const activeBarIndex = Math.floor(progress * barCount);
+  const activeBarIndex = Math.floor(progress * effectiveBarCount);
 
   // Calculate inactive color with proper rgba
   const inactiveColor = useMemo(() => {
@@ -73,10 +75,12 @@ export function AudioWaveform({
   useEffect(() => {
     if (isPlaying) {
       bars.forEach((bar, i) => {
+        const barValue = barValues[i];
+        if (!barValue) return;
         const { maxHeight, minHeight } = bar;
         const staggerDelay = i * 30;
 
-        barValues[i].value = withDelay(
+        barValue.value = withDelay(
           staggerDelay,
           withRepeat(
             withSequence(
@@ -98,7 +102,9 @@ export function AudioWaveform({
       });
     } else {
       bars.forEach((bar, i) => {
-        barValues[i].value = withDelay(
+        const barValue = barValues[i];
+        if (!barValue) return;
+        barValue.value = withDelay(
           i * 80,
           withRepeat(
             withSequence(
@@ -121,7 +127,7 @@ export function AudioWaveform({
         return (
           <WaveformBar
             key={i}
-            barValue={barValues[i]}
+            barValue={barValues[i] ?? barValues[0]}
             bar={bar}
             isActive={isActive}
             activeColor={color}
