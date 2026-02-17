@@ -20,6 +20,7 @@ import { Plus, BookOpen, PenLine, Settings, Flame, Bookmark, Highlighter } from 
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
+import { StreakBox } from '@/components/StreakBox';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -1047,6 +1048,17 @@ export default function HomeScreen() {
               </Pressable>
             </Animated.View>
           )}
+          {/* Streak Box */}
+          <Animated.View
+            entering={FadeInDown.duration(600).delay(400)}
+            style={{ paddingHorizontal: 24, marginTop: 24 }}
+          >
+            <StreakBox
+              streakCount={useUnfoldStore.getState().streakCurrent}
+              onPress={() => router.push('/(main)/streak-settings')}
+            />
+          </Animated.View>
+
         </ScrollView>
       </SafeAreaView>
     </View>

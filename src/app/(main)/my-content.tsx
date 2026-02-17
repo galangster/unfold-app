@@ -40,10 +40,10 @@ export default function MyContentScreen() {
     setActiveTab(tab);
   };
 
-  const tabs: { id: Tab; label: string; icon: typeof PenLine; count: number }[] = [
-    { id: 'journal', label: 'Journal', icon: PenLine, count: journalEntries.length },
-    { id: 'highlights', label: 'Highlights', icon: Highlighter, count: highlights.length },
-    { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark, count: bookmarks.length },
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'journal', label: 'Journal', count: journalEntries.length },
+    { id: 'highlights', label: 'Highlights', count: highlights.length },
+    { id: 'bookmarks', label: 'Bookmarks', count: bookmarks.length },
   ];
 
   return (
@@ -63,10 +63,9 @@ export default function MyContentScreen() {
         <View style={{ marginLeft: 12 }}>
           <Text
             style={{
-              fontFamily: FontFamily.display,
-              fontSize: 28,
+              fontFamily: FontFamily.uiMedium,
+              fontSize: 16,
               color: colors.text,
-              letterSpacing: -0.5,
             }}
           >
             My Content
@@ -86,7 +85,6 @@ export default function MyContentScreen() {
       >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
-          const Icon = tab.icon;
           return (
             <Pressable
               key={tab.id}
@@ -102,17 +100,16 @@ export default function MyContentScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  paddingHorizontal: 12,
+                  paddingHorizontal: 10,
                   paddingVertical: 8,
                   borderRadius: 20,
                   backgroundColor: isActive ? colors.inputBackground : 'transparent',
                 }}
               >
-                <Icon size={16} color={isActive ? colors.text : colors.textMuted} />
                 <Text
                   style={{
                     fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
-                    fontSize: 14,
+                    fontSize: 13,
                     color: isActive ? colors.text : colors.textMuted,
                   }}
                 >

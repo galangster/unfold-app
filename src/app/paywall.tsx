@@ -375,22 +375,21 @@ export default function PaywallScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* SUBSCRIBE BUTTON — large, impossible to miss */}
+        {/* SUBSCRIBE BUTTON — gold pill-shaped, impossible to miss */}
         <Animated.View entering={FadeInDown.duration(400).delay(300)} style={{ marginTop: 24 }}>
           <Pressable
             onPress={handleSubscribe}
             disabled={isPurchasing}
             style={({ pressed }) => ({
-              backgroundColor: colors.text,
-              paddingVertical: 18,
-              borderRadius: 14,
-              borderWidth: 2,
-              borderColor: colors.text,
-              shadowColor: colors.text,
-              shadowOffset: { width: 0, height: 6 },
+              backgroundColor: '#C8A55C',
+              paddingVertical: 16,
+              paddingHorizontal: 32,
+              borderRadius: 9999,
+              shadowColor: '#C8A55C',
+              shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.3,
-              shadowRadius: 12,
-              elevation: 10,
+              shadowRadius: 8,
+              elevation: 8,
               opacity: pressed ? 0.9 : 1,
               transform: [{ scale: pressed ? 0.98 : 1 }],
             })}
@@ -401,10 +400,10 @@ export default function PaywallScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 17,
+                  fontSize: 16,
                   color: '#fff',
                   textAlign: 'center',
-                  letterSpacing: 0.2,
+                  letterSpacing: 0.3,
                 }}
               >
                 {selectedPlan === 'yearly' ? `Subscribe — ${yearlyPrice}/year` : `Subscribe — ${monthlyPrice}/month`}

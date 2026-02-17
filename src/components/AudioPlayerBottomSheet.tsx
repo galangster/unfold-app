@@ -60,7 +60,8 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const currentTime = status.currentTime * 1000;
   const duration = status.duration * 1000;
 
-  const snapPoints = useMemo(() => ['12%', '25%'], []);
+  // Thinner snap point for horizontal layout (~8-10% height)
+  const snapPoints = useMemo(() => ['10%', '25%'], []);
 
   const fullText = useMemo(() => {
     return `${content}\n\n${scriptureReference}: ${scriptureText}`;
@@ -228,10 +229,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
           style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)' }]}
         />
 
-        {/* Content over blur */}
+        {/* Content over blur - Horizontal Layout */}
         <View style={styles.content}>
-          {/* Progress bar - full width, scrubbable */}
-          <View style={styles.progressSection}>
+          {/* Left side: Progress bar with time labels */}
+          <View style={styles.leftSection}>
+            {/* Progress bar - scrubbable */}
             <Pressable
               ref={progressBarRef}
               onLayout={handleProgressBarLayout}
@@ -260,7 +262,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
               />
             </Pressable>
             
-            {/* Time labels */}
+            {/* Time labels below progress bar */}
             <View style={styles.timeContainer}>
               <Text style={[styles.timeText, { color: colors.textMuted }]}>
                 {formatTime(currentTime)}
@@ -271,29 +273,29 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
             </View>
           </View>
 
-          {/* Single play/pause button */}
-          <View style={styles.controlsContainer}>
-            <Pressable
-              onPress={togglePlayback}
-              style={[styles.playButton, { backgroundColor: colors.accent }]}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : isPlaying ? (
-                <Pause size={28} color="#fff" fill="#fff" />
-              ) : (
-                <Play size={28} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
-              )}
-            </Pressable>
-          </View>
+          {/* Right side: Play/pause button */}
+          <Pressable
+            onPress={togglePlayback}
+            style={[styles.playButton, { backgroundColor: colors.accent }]}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : isPlaying ? (
+              <Pause size={24} color="#fff" fill="#fff" />
+            ) : (
+              <Play size={24} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
+            )}
+          </Pressable>
 
-          {/* Error message - fixed contrast */}
+          {/* Error message overlay */}
           {hasError && (
-            <View style={[styles.errorContainer, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
-              <Text style={[styles.errorText, { color: isDark ? '#ef4444' : '#dc2626' }]}>
-                {errorMessage}
-              </Text>
+            <View style={[StyleSheet.absoluteFill, styles.errorOverlay]}>
+              <View style={[styles.errorContainer, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
+                <Text style={[styles.errorText, { color: isDark ? '#ef4444' : '#dc2626' }]}>
+                  {errorMessage}
+                </Text>
+              </View>
             </View>
           )}
         </View>
@@ -313,12 +315,16 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 40,
+    paddingBottom: 20,
+    gap: 16,
   },
-  progressSection: {
-    marginTop: 8,
+  leftSection: {
+    flex: 1,
+    justifyContent: 'center',
   },
   progressBarContainer: {
     height: 4,
@@ -345,33 +351,36 @@ const styles = StyleSheet.create({
   timeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 6,
   },
   timeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontVariant: ['tabular-nums'],
   },
-  controlsContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
   playButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowRadius: 4,
+    elevation: 4,
+    flexShrink: 0,
+  },
+  errorOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   errorContainer: {
-    marginTop: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
+    maxWidth: '100%',
   },
   errorText: {
     fontSize: 14,
