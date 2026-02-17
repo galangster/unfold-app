@@ -109,6 +109,7 @@ export default function ReadingScreen() {
 
   const [viewingDay, setViewingDay] = useState(() => requestedDayNumber ?? currentDevotional?.currentDay ?? 1);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const audioPlayerRef = useRef<BottomSheet>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -1020,7 +1021,15 @@ export default function ReadingScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  audioPlayerRef.current?.expand();
+                  if (!isAudioPlayerVisible) {
+                    setIsAudioPlayerVisible(true);
+                    // Small delay to let component mount before expanding
+                    setTimeout(() => {
+                      audioPlayerRef.current?.expand();
+                    }, 50);
+                  } else {
+                    audioPlayerRef.current?.expand();
+                  }
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
@@ -1346,7 +1355,7 @@ export default function ReadingScreen() {
       />
 
       {/* Audio Player Bottom Sheet */}
-      {currentDayData && (
+      {isAudioPlayerVisible && currentDayData && (
         <AudioPlayer
           ref={audioPlayerRef}
           title={currentDayData.title}
@@ -1356,7 +1365,9 @@ export default function ReadingScreen() {
           scriptureText={currentDayData.scriptureText}
           voiceId={user?.preferredVoice || 'default'}
           isPremium={isPremium}
-          onClose={() => audioPlayerRef.current?.close()}
+          onClose={() => {
+            setIsAudioPlayerVisible(false);
+          }}
         />
       )}
     </View>
