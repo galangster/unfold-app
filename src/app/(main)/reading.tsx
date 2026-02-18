@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -110,6 +110,7 @@ export default function ReadingScreen() {
   const [viewingDay, setViewingDay] = useState(() => requestedDayNumber ?? currentDevotional?.currentDay ?? 1);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
+  const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
   const audioPlayerRef = useRef<BottomSheet>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -1021,6 +1022,13 @@ export default function ReadingScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (!isPremium) {
+                    // Show toast for non-premium users
+                    setAudioToast({ visible: true, message: 'Audio playback is a premium feature. Upgrade to listen.' });
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => setAudioToast(null), 3000);
+                    return;
+                  }
                   if (!isAudioPlayerVisible) {
                     setIsAudioPlayerVisible(true);
                     // Small delay to let component mount before expanding
@@ -1034,7 +1042,7 @@ export default function ReadingScreen() {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Listen to devotional"
-                accessibilityHint="Play audio version of today's reading"
+                accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
                 style={{ padding: 8 }}
               >
                 <Play
@@ -1370,6 +1378,45 @@ export default function ReadingScreen() {
           }}
         />
       )}
+
+      {/* Premium Toast Notification */}
+      {audioToast?.visible && (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(200)}
+          style={[
+            styles.toastContainer,
+            { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.9)' : 'rgba(220, 38, 38, 0.9)' }
+          ]}
+        >
+          <Text style={styles.toastText}>{audioToast.message}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  toastContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+});
