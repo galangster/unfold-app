@@ -20,6 +20,7 @@ export default function MainLayout() {
       <Stack.Screen name="journal" />
       <Stack.Screen name="journal-detail" />
       <Stack.Screen name="past-devotionals" />
+      <Stack.Screen name="your-journey" />
       <Stack.Screen name="my-responses" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="stats" />

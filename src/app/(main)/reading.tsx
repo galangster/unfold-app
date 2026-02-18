@@ -1009,7 +1009,14 @@ export default function ReadingScreen() {
                 accessibilityLabel="Open journal"
                 accessibilityHint={!isPremium ? "Premium feature. Opens upgrade options." : "Write a reflection about today's reading"}
                 accessibilityState={{ disabled: !isPremium }}
-                style={{ padding: 8 }}
+                style={({ pressed }) => ({
+                  padding: 8,
+                  borderRadius: 10,
+                  backgroundColor: !isPremium 
+                    ? (pressed ? colors.inputBackgroundFocused : colors.inputBackground)
+                    : 'transparent',
+                  opacity: !isPremium ? 0.6 : 1,
+                })}
               >
                 <BookOpen
                   size={22}
