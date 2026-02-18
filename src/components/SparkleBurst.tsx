@@ -26,27 +26,19 @@ interface Particle {
 
 interface SparkleParticleProps {
   particle: Particle;
-  trigger: boolean;
   color: string;
-  index: number;
+  trigger: boolean;
 }
 
-function SparkleParticle({ particle, trigger, color, index }: SparkleParticleProps) {
+// Maximum number of particles supported
+const MAX_PARTICLES = 32;
+
+function SparkleParticle({ particle, color, trigger }: SparkleParticleProps) {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const rotationValue = useSharedValue(0);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-      { rotate: `${rotationValue.value}deg` },
-    ],
-    opacity: opacity.value,
-  }));
 
   useEffect(() => {
     return () => {
@@ -56,11 +48,12 @@ function SparkleParticle({ particle, trigger, color, index }: SparkleParticlePro
       cancelAnimation(translateY);
       cancelAnimation(rotationValue);
     };
-  }, [scale, opacity, translateX, translateY, rotationValue]);
+  }, [opacity, rotationValue, scale, translateX, translateY]);
 
   useEffect(() => {
     if (!trigger) return;
 
+    // Reset values
     scale.value = 0;
     opacity.value = 0;
     translateX.value = 0;
@@ -116,11 +109,20 @@ function SparkleParticle({ particle, trigger, color, index }: SparkleParticlePro
         easing: Easing.out(Easing.quad),
       })
     );
-  }, [trigger, particle, scale, opacity, translateX, translateY, rotationValue]);
+  }, [opacity, particle, rotationValue, scale, translateX, translateY, trigger]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+      { rotate: `${rotationValue.value}deg` },
+    ],
+    opacity: opacity.value,
+  }));
 
   return (
     <Animated.View
-      key={index}
       style={[
         {
           position: 'absolute',
@@ -166,10 +168,16 @@ function SparkleParticle({ particle, trigger, color, index }: SparkleParticlePro
   );
 }
 
-export function SparkleBurst({ trigger, color = '#C8A55C', particleCount = 16 }: SparkleBurstProps) {
+export function SparkleBurst({
+  trigger,
+  color = '#C8A55C',
+  particleCount = 16,
+}: SparkleBurstProps) {
+  const count = Math.min(particleCount, MAX_PARTICLES);
+
   const particles = useMemo(() => {
-    return Array.from({ length: particleCount }, (_, i) => {
-      const baseAngle = (i * (360 / particleCount)) * (Math.PI / 180);
+    return Array.from({ length: count }, (_, i) => {
+      const baseAngle = (i * (360 / count)) * (Math.PI / 180);
       const angleVariation = (Math.random() - 0.5) * 0.3;
       return {
         angle: baseAngle + angleVariation,
@@ -179,7 +187,7 @@ export function SparkleBurst({ trigger, color = '#C8A55C', particleCount = 16 }:
         rotationSpeed: 180 + Math.random() * 360,
       };
     });
-  }, [particleCount]);
+  }, [count]);
 
   return (
     <View
@@ -193,13 +201,12 @@ export function SparkleBurst({ trigger, color = '#C8A55C', particleCount = 16 }:
         pointerEvents: 'none',
       }}
     >
-      {particles.map((particle, index) => (
+      {particles.map((particle, i) => (
         <SparkleParticle
-          key={index}
-          index={index}
+          key={i}
           particle={particle}
-          trigger={trigger}
           color={color}
+          trigger={trigger}
         />
       ))}
     </View>
