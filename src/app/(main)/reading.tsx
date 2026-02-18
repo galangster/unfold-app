@@ -1387,7 +1387,7 @@ export default function ReadingScreen() {
           exiting={FadeOut.duration(200)}
           style={[
             styles.toastContainer,
-            { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.9)' : 'rgba(220, 38, 38, 0.9)' }
+            { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
           ]}
         >
           <Text style={styles.toastText}>{audioToast.message}</Text>
@@ -1400,24 +1400,25 @@ export default function ReadingScreen() {
 const styles = StyleSheet.create({
   toastContainer: {
     position: 'absolute',
-    bottom: 100,
-    left: 20,
-    right: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    bottom: 120,
+    left: '10%',
+    right: '10%',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   toastText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
     textAlign: 'center',
   },
 });
