@@ -16,7 +16,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Lock, Check } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -1016,6 +1016,7 @@ export default function ReadingScreen() {
                     ? (pressed ? colors.inputBackgroundFocused : colors.inputBackground)
                     : 'transparent',
                   opacity: !isPremium ? 0.6 : 1,
+                  position: 'relative',
                 })}
               >
                 <BookOpen
@@ -1023,6 +1024,11 @@ export default function ReadingScreen() {
                   color={!isPremium ? colors.textMuted : colors.text}
                   strokeWidth={1.5}
                 />
+                {!isPremium && (
+                  <View style={{ position: 'absolute', bottom: 4, right: 4 }}>
+                    <Lock size={10} color={colors.textMuted} strokeWidth={2} />
+                  </View>
+                )}
               </Pressable>
 
               {/* Audio Player Button */}
@@ -1104,8 +1110,8 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
 
-              {/* Complete button - show if viewing day not yet completed */}
-              {!isCompleted && (
+              {/* Complete button + Share button row - always show Share, toggle Complete button state */}
+              {!isCompleted ? (
                 <Animated.View
                   exiting={FadeOut.duration(200)}
                   style={{ marginTop: 48, paddingHorizontal: 24 }}
@@ -1187,45 +1193,86 @@ export default function ReadingScreen() {
                     </Pressable>
                   </View>
                 </Animated.View>
-              )}
-
-              {/* Completed indicator */}
-              {isCompleted && (
+              ) : (
                 <Animated.View
                   entering={FadeIn.duration(400)}
-                  style={{ marginTop: 48, marginHorizontal: 24 }}
+                  style={{ marginTop: 48, paddingHorizontal: 24 }}
                 >
-                  {/* Day completed card */}
+                  {/* Horizontal button row - Day Completed (70%) + Share (30%) */}
                   <View
                     style={{
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-                      borderRadius: 20,
-                      paddingVertical: 20,
-                      paddingHorizontal: 24,
+                      flexDirection: 'row',
+                      gap: 16,
                       alignItems: 'center',
-                      borderWidth: 1,
-                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
                     }}
                   >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 18,
-                        color: colors.text,
-                        marginBottom: 4,
+                    {/* Day Completed Button - 70% width, gold text with gold border */}
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Day completed"
+                      accessibilityHint="This day has already been marked as complete"
+                      style={({ pressed }) => ({
+                        flex: 0.7,
+                        backgroundColor: 'transparent',
+                        paddingVertical: 18,
+                        paddingHorizontal: 24,
+                        borderRadius: 32,
+                        borderWidth: 2,
+                        borderColor: colors.accent,
+                        opacity: pressed ? 0.7 : 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 8,
+                      })}
                     >
-                      ✓ Day completed
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: 14,
-                        color: colors.textMuted,
-                      }}
+                      <Check size={18} color={colors.accent} strokeWidth={2.5} />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 17,
+                          color: colors.accent,
+                          textAlign: 'center',
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        Day Completed
+                      </Text>
+                    </Pressable>
+
+                    {/* Share Button - 30% width, ghost/outline style */}
+                    <Pressable
+                      onPress={handleShare}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share devotional"
+                      accessibilityHint="Share this day's reading with others"
+                      style={({ pressed }) => ({
+                        flex: 0.3,
+                        paddingVertical: 16,
+                        paddingHorizontal: 16,
+                        borderRadius: 32,
+                        borderWidth: 1.5,
+                        borderColor: colors.textMuted,
+                        backgroundColor: 'transparent',
+                        opacity: pressed ? 0.7 : 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      })}
                     >
-                      Great job today
-                    </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 15,
+                          color: colors.textMuted,
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        Share
+                      </Text>
+                    </Pressable>
                   </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
@@ -1346,7 +1393,7 @@ export default function ReadingScreen() {
                       </View>
                   )}
                 </Animated.View>
-              )}
+              )} 
             </ScrollView>
           </SafeAreaView>
         </Animated.View>
