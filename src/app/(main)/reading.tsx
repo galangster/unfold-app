@@ -1023,7 +1023,8 @@ export default function ReadingScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   if (!isPremium) {
-                    // Show toast for non-premium users
+                    // Never open player for non-premium users; show toast instead
+                    setIsAudioPlayerVisible(false);
                     setAudioToast({ visible: true, message: 'Audio playback is a premium feature. Upgrade to listen.' });
                     // Auto-hide after 3 seconds
                     setTimeout(() => setAudioToast(null), 3000);
@@ -1363,7 +1364,7 @@ export default function ReadingScreen() {
       />
 
       {/* Audio Player Bottom Sheet */}
-      {isAudioPlayerVisible && currentDayData && (
+      {isPremium && isAudioPlayerVisible && currentDayData && (
         <AudioPlayer
           ref={audioPlayerRef}
           title={currentDayData.title}
