@@ -1,0 +1,11 @@
+Rule: react-doctor/no-nested-component-definition
+Severity: error
+Category: Correctness
+Count: 1
+
+Component "ThemePill" defined inside "OnboardingScreen" — creates new instance every render, destroying state
+
+Suggestion: Move to a separate file or to module scope above the parent component
+
+Files:
+  src/app/onboarding.tsx: 411

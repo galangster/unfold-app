@@ -1,0 +1,10 @@
+Rule: react-hooks/rules-of-hooks
+Severity: error
+Category: Correctness
+Count: 7
+
+React Hook "useAuth" is called conditionally. React Hooks must be called in the exact same order in every component render.
+
+Files:
+  src/app/_layout.tsx: 40
+  src/components/SparkleBurst.tsx: 51, 52, 53, 54, 55, 154

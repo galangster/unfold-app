@@ -1,0 +1,11 @@
+Rule: jsx-a11y/no-autofocus
+Severity: warning
+Category: Accessibility
+Count: 1
+
+The `autoFocus` attribute is found here, which can cause usability issues for sighted and non-sighted users.
+
+Suggestion: Remove the `autoFocus` attribute.
+
+Files:
+  src/components/NamePromptModal.tsx: 93

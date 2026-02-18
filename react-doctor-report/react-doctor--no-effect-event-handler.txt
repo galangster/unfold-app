@@ -1,0 +1,17 @@
+Rule: react-doctor/no-effect-event-handler
+Severity: warning
+Category: State & Effects
+Count: 7
+
+useEffect simulating an event handler — move logic to an actual event handler instead
+
+Suggestion: Move the conditional logic into onClick, onChange, or onSubmit handlers directly
+
+Files:
+  src/components/AudioWaveform.tsx: 114
+  src/app/(onboarding)/sign-in.tsx: 108
+  src/components/CompletionCelebration.tsx: 275
+  src/app/onboarding.tsx: 1091
+  src/components/SparkleBurst.tsx: 73
+  src/components/GlassMenu.tsx: 39
+  src/components/AudioPlayer.tsx: 80

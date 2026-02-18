@@ -1,0 +1,16 @@
+Rule: react-doctor/prefer-useReducer
+Severity: warning
+Category: State & Effects
+Count: 6
+
+Component "SettingsScreen" has 9 useState calls — consider useReducer for related state
+
+Suggestion: Group related state: `const [state, dispatch] = useReducer(reducer, { field1, field2, ... })`
+
+Files:
+  src/app/(main)/settings.tsx: 62
+  src/app/(main)/reading.tsx: 73
+  src/app/(main)/journal.tsx: 27
+  src/app/generating.tsx: 84
+  src/app/onboarding.tsx: 86
+  src/components/AudioPlayer.tsx: 46
