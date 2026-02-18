@@ -39,6 +39,90 @@ import {
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
 
+// ThemePill component - defined at module scope to avoid nested component definition
+interface ThemePillProps {
+  theme: {
+    id: ThemeCategory;
+    name: string;
+    description: string;
+    scriptureFocus: string[];
+    toneGuidance: string;
+    icon: React.ReactNode;
+  };
+  isSelected: boolean;
+  onPress: () => void;
+  selectionOrder?: number;
+  colors: {
+    buttonBackgroundPressed: string;
+    inputBackground: string;
+    borderFocused: string;
+    border: string;
+    text: string;
+    textMuted: string;
+    accent: string;
+    background: string;
+  };
+}
+
+function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: ThemePillProps) {
+  const [isPressed, setIsPressed] = useState(false);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 10,
+          paddingHorizontal: 16,
+          borderRadius: 20,
+          backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+          borderWidth: 1.5,
+          borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
+          gap: 8,
+        }}
+      >
+        {theme.icon}
+        <Text
+          style={{
+            fontFamily: FontFamily.uiMedium,
+            fontSize: 14,
+            color: isSelected ? colors.text : colors.textMuted,
+          }}
+        >
+          {theme.name}
+        </Text>
+        {selectionOrder && (
+          <View
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              backgroundColor: colors.accent,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.mono,
+                fontSize: 10,
+                color: colors.background,
+              }}
+            >
+              {selectionOrder}
+            </Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'bibleTranslation', question: 'Which Bible translation do you prefer?', subtext: "We'll use this translation for all scripture in your devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
@@ -407,65 +491,8 @@ export default function OnboardingScreen() {
     return true;
   };
 
-  // Theme pill component with improved press handling
-  const ThemePill = ({ theme, isSelected, onPress, selectionOrder }: { theme: { id: ThemeCategory; name: string; description: string; scriptureFocus: string[]; toneGuidance: string; icon: React.ReactNode }; isSelected: boolean; onPress: () => void; selectionOrder?: number }) => {
-    const [isPressed, setIsPressed] = useState(false);
-    
-    return (
-      <Pressable
-        onPress={onPress}
-        onPressIn={() => setIsPressed(true)}
-        onPressOut={() => setIsPressed(false)}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            borderRadius: 20,
-            backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-            borderWidth: 1.5,
-            borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
-            gap: 8,
-          }}
-        >
-          {theme.icon}
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: 14,
-              color: isSelected ? colors.text : colors.textMuted,
-            }}
-          >
-            {theme.name}
-          </Text>
-          {selectionOrder && (
-            <View
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: colors.accent,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.mono,
-                  fontSize: 10,
-                  color: colors.background,
-                }}
-              >
-                {selectionOrder}
-              </Text>
-            </View>
-          )}
-        </View>
-      </Pressable>
-    );
-  };
+    // Helper to advance to the next step
+  const advanceToNextStep = useCallback(() => {
 
   const renderInput = () => {
     if (!baseStep) return null;
@@ -820,6 +847,7 @@ export default function OnboardingScreen() {
                               });
                             }}
                             selectionOrder={selectionOrder}
+                            colors={colors}
                           />
                         );
                       })}
