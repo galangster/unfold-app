@@ -37,7 +37,11 @@
       "expo-web-browser",
       "react-native-edge-to-edge",
       "@react-native-community/datetimepicker",
-      "expo-build-properties",
+      ["expo-build-properties", {
+        "ios": {
+          "useModularHeaders": true
+        }
+      }],
       "expo-font",
       "expo-mail-composer",
       "expo-secure-store",
