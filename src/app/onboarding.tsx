@@ -491,9 +491,6 @@ export default function OnboardingScreen() {
     return true;
   };
 
-    // Helper to advance to the next step
-  const advanceToNextStep = useCallback(() => {
-
   const renderInput = () => {
     if (!baseStep) return null;
     const stepId = baseStep.id as StepId;

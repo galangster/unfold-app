@@ -737,6 +737,17 @@ export default function HomeScreen() {
             )}
           </Animated.View>
 
+          {/* Streak Box - Moved above Quick links */}
+          <Animated.View
+            entering={FadeInDown.duration(600).delay(300)}
+            style={{ paddingHorizontal: 24, marginTop: 24 }}
+          >
+            <StreakBox
+              streakCount={useUnfoldStore.getState().streakCurrent}
+              onPress={() => router.push('/(main)/streak-settings')}
+            />
+          </Animated.View>
+
           {/* Quick links - side by side, full width */}
           <Animated.View
             entering={FadeInDown.duration(600).delay(350)}
@@ -894,17 +905,6 @@ export default function HomeScreen() {
               </Pressable>
             </Animated.View>
           )}
-
-          {/* Streak Box */}
-          <Animated.View
-            entering={FadeInDown.duration(600).delay(400)}
-            style={{ paddingHorizontal: 24, marginTop: 24 }}
-          >
-            <StreakBox
-              streakCount={useUnfoldStore.getState().streakCurrent}
-              onPress={() => router.push('/(main)/streak-settings')}
-            />
-          </Animated.View>
 
         </ScrollView>
       </SafeAreaView>

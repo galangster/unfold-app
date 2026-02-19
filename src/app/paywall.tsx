@@ -376,7 +376,7 @@ export default function PaywallScreen() {
         </Animated.View>
 
         {/* SUBSCRIBE BUTTON — gold pill-shaped, impossible to miss */}
-        <View style={{ marginTop: 24, marginBottom: 12 }}>
+        <View style={{ marginTop: 8, marginBottom: 12 }}>
           <TouchableOpacity
             onPress={handleSubscribe}
             disabled={isPurchasing}

@@ -61,30 +61,5 @@ target 'Unfold' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
-
-    # Fix React Native Skia linking with New Architecture (Bridgeless/Fabric)
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        # Link all Skia static libraries
-        skia_libs = [
-          'libskia.a',
-          'libskshaper.a',
-          'libskparagraph.a',
-          'libskunicode_core.a',
-          'libskunicode_icu.a',
-          'libsksg.a',
-          'libskottie.a'
-        ]
-        
-        skia_libs.each do |lib|
-          config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']
-          config.build_settings['OTHER_LDFLAGS'] << "-l#{lib.sub('.a', '')}"
-        end
-        
-        # Ensure symbols are exported
-        config.build_settings['STRIP_STYLE'] = 'debugging'
-        config.build_settings['DEAD_CODE_STRIPPING'] = 'NO'
-      end
-    end
   end
 end

@@ -17,6 +17,14 @@ interface DevotionalContentProps {
   existingHighlights?: Highlight[];
 }
 
+// Truncate text to maxWords, adding ellipsis if truncated
+function truncateText(text: string, maxWords: number = 10): string {
+  if (!text) return '';
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(' ') + '...';
+}
+
 export function DevotionalContent({ 
   day, 
   fontSize, 
@@ -58,23 +66,41 @@ export function DevotionalContent({
         }}
       />
 
-      {/* Scripture reference */}
-      <Text
-        style={{
-          fontFamily: FontFamily.mono,
-          fontSize: 11,
-          color: colors.accent,
-          textAlign: 'center',
-          letterSpacing: 1.5,
-          textTransform: 'uppercase',
-          marginBottom: 16,
-          opacity: 0.8,
-        }}
-      >
-        {day.scriptureReference}
-      </Text>
+      {/* Scripture reference with bookmark */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, gap: 8 }}>
+        <Text
+          style={{
+            fontFamily: FontFamily.mono,
+            fontSize: 11,
+            color: colors.accent,
+            textAlign: 'center',
+            letterSpacing: 1.5,
+            textTransform: 'uppercase',
+            opacity: 0.8,
+          }}
+        >
+          {day.scriptureReference}
+        </Text>
+        
+        {/* Bookmark button - inline with reference */}
+        {onToggleBookmark && (
+          <Pressable
+            onPress={onToggleBookmark}
+            style={{
+              padding: 4,
+            }}
+          >
+            <Bookmark
+              size={14}
+              color={isBookmarked ? colors.accent : colors.textMuted}
+              fill={isBookmarked ? colors.accent : 'transparent'}
+              strokeWidth={1.5}
+            />
+          </Pressable>
+        )}
+      </View>
 
-      {/* Scripture text with bookmark - NATIVE (not selectable for quotes) */}
+      {/* Scripture text - NATIVE (not selectable for quotes) */}
       <View
         style={{
           paddingHorizontal: 16,
@@ -91,27 +117,8 @@ export function DevotionalContent({
             minHeight: day.scriptureText ? 'auto' : 60,
           }}
         >
-          {day.scriptureText ? `"${preventOrphan(day.scriptureText)}"` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
+          {day.scriptureText ? `"${preventOrphan(truncateText(day.scriptureText, 10))}"` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
         </Text>
-        
-        {/* Bookmark button - centered at bottom */}
-        {onToggleBookmark && (
-          <Pressable
-            onPress={onToggleBookmark}
-            style={{
-              alignSelf: 'center',
-              marginTop: 16,
-              padding: 8,
-            }}
-          >
-            <Bookmark
-              size={20}
-              color={isBookmarked ? colors.accent : colors.textMuted}
-              fill={isBookmarked ? colors.accent : 'transparent'}
-              strokeWidth={1.5}
-            />
-          </Pressable>
-        )}
       </View>
 
       {/* Body text, quotes, and related content - WEBVIEW (selectable for quotes) */}

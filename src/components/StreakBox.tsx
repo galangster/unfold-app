@@ -119,17 +119,14 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             padding: 20,
           }}
         >
-          {/* Header with flame and streak count */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-            <View style={{ marginRight: 12 }}>
+          {/* Header row - Current Streak label on left, streak count on right */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Flame
                 size={32}
                 color="#C8A55C"
                 fill={streakCount >= 7 ? '#C8A55C' : 'transparent'}
               />
-            </View>
-
-            <View style={{ flex: 1 }}>
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
@@ -139,28 +136,30 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
               >
                 Current Streak
               </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: 28,
-                    color: colors.text,
-                    letterSpacing: -0.5,
-                  }}
-                >
-                  {streakCount}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 14,
-                    color: colors.textMuted,
-                    marginLeft: 6,
-                  }}
-                >
-                  {streakLabel}
-                </Text>
-              </View>
+            </View>
+
+            {/* Streak count - number and label horizontally aligned with consistent font */}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 28,
+                  color: colors.text,
+                  letterSpacing: -0.5,
+                }}
+              >
+                {streakCount}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 14,
+                  color: colors.textMuted,
+                  marginLeft: 4,
+                }}
+              >
+                {streakLabel}
+              </Text>
             </View>
           </View>
 

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, TouchableOpacity, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -16,7 +16,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Lock, Check } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Check } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -990,11 +990,6 @@ export default function ReadingScreen() {
 
               <Pressable
                 onPress={() => {
-                  if (!isPremium) {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    router.push('/paywall');
-                    return;
-                  }
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
                     pathname: '/(main)/journal',
@@ -1007,28 +1002,17 @@ export default function ReadingScreen() {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Open journal"
-                accessibilityHint={!isPremium ? "Premium feature. Opens upgrade options." : "Write a reflection about today's reading"}
-                accessibilityState={{ disabled: !isPremium }}
+                accessibilityHint="Write a reflection about today's reading"
                 style={({ pressed }) => ({
                   padding: 8,
-                  borderRadius: 10,
-                  backgroundColor: !isPremium 
-                    ? (pressed ? colors.inputBackgroundFocused : colors.inputBackground)
-                    : 'transparent',
-                  opacity: !isPremium ? 0.6 : 1,
-                  position: 'relative',
+                  opacity: pressed ? 0.6 : 1,
                 })}
               >
                 <BookOpen
                   size={22}
-                  color={!isPremium ? colors.textMuted : colors.text}
+                  color={colors.text}
                   strokeWidth={1.5}
                 />
-                {!isPremium && (
-                  <View style={{ position: 'absolute', bottom: 4, right: 4 }}>
-                    <Lock size={10} color={colors.textMuted} strokeWidth={2} />
-                  </View>
-                )}
               </Pressable>
 
               {/* Audio Player Button */}
@@ -1124,73 +1108,64 @@ export default function ReadingScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    {/* Complete Day Button - 70% width, white text on gold */}
-                    <Pressable
+                    {/* Complete Day Button - 80% width, white text on gold */}
+                    <TouchableOpacity
                       onPress={handleComplete}
+                      activeOpacity={0.85}
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
-                      style={({ pressed }) => ({
-                        flex: 0.7,
+                      style={{
+                        flex: 4,
                         backgroundColor: colors.accent,
                         paddingVertical: 18,
-                        paddingHorizontal: 24,
-                        borderRadius: 32,
-                        shadowColor: colors.accent,
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: pressed ? 0.4 : 0.2,
-                        shadowRadius: 12,
-                        elevation: 8,
-                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                        paddingHorizontal: 32,
+                        borderRadius: 28,
                         alignItems: 'center',
                         justifyContent: 'center',
-                      })}
-                    >
-                      {({ pressed }) => (
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.display,
-                            fontSize: 17,
-                            color: '#ffffff',
-                            textAlign: 'center',
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          {isLastDay ? 'Complete Journey' : 'Complete Day'}
-                        </Text>
-                      )}
-                    </Pressable>
-
-                    {/* Share Button - 30% width, ghost/outline style */}
-                    <Pressable
-                      onPress={handleShare}
-                      accessibilityRole="button"
-                      accessibilityLabel="Share devotional"
-                      accessibilityHint="Share this day's reading with others"
-                      style={({ pressed }) => ({
-                        flex: 0.3,
-                        paddingVertical: 16,
-                        paddingHorizontal: 16,
-                        borderRadius: 32,
-                        borderWidth: 1.5,
-                        borderColor: colors.textMuted,
-                        backgroundColor: 'transparent',
-                        opacity: pressed ? 0.7 : 1,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      })}
+                      }}
                     >
                       <Text
                         style={{
-                          fontFamily: FontFamily.display,
+                          fontFamily: FontFamily.uiSemiBold,
+                          fontSize: 17,
+                          color: '#ffffff',
+                          textAlign: 'center',
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {isLastDay ? 'Complete Journey' : 'Complete Day'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Share Button - 20% width, gray background */}
+                    <TouchableOpacity
+                      onPress={handleShare}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share devotional"
+                      accessibilityHint="Share this day's reading with others"
+                      style={{
+                        flex: 1,
+                        backgroundColor: isDark ? '#3A3A3A' : '#E5E5E5',
+                        paddingVertical: 18,
+                        paddingHorizontal: 16,
+                        borderRadius: 28,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiSemiBold,
                           fontSize: 15,
-                          color: colors.textMuted,
+                          color: isDark ? '#AAAAAA' : '#666666',
                           letterSpacing: 0.3,
                         }}
                       >
                         Share
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
                 </Animated.View>
               ) : (
@@ -1198,7 +1173,7 @@ export default function ReadingScreen() {
                   entering={FadeIn.duration(400)}
                   style={{ marginTop: 48, paddingHorizontal: 24 }}
                 >
-                  {/* Horizontal button row - Day Completed (70%) + Share (30%) */}
+                  {/* Horizontal button row - Day Completed (80%) + Share (20%) */}
                   <View
                     style={{
                       flexDirection: 'row',
@@ -1206,33 +1181,33 @@ export default function ReadingScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    {/* Day Completed Button - 70% width, gold text with gold border */}
-                    <Pressable
+                    {/* Day Completed Button - 80% width, light gray background with gold border and text */}
+                    <TouchableOpacity
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       }}
+                      activeOpacity={0.85}
                       accessibilityRole="button"
                       accessibilityLabel="Day completed"
                       accessibilityHint="This day has already been marked as complete"
-                      style={({ pressed }) => ({
-                        flex: 0.7,
-                        backgroundColor: 'transparent',
+                      style={{
+                        flex: 4,
+                        backgroundColor: isDark ? '#2A2A2A' : '#F0F0F0',
                         paddingVertical: 18,
-                        paddingHorizontal: 24,
-                        borderRadius: 32,
+                        paddingHorizontal: 32,
+                        borderRadius: 28,
                         borderWidth: 2,
                         borderColor: colors.accent,
-                        opacity: pressed ? 0.7 : 1,
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexDirection: 'row',
                         gap: 8,
-                      })}
+                      }}
                     >
                       <Check size={18} color={colors.accent} strokeWidth={2.5} />
                       <Text
                         style={{
-                          fontFamily: FontFamily.display,
+                          fontFamily: FontFamily.uiSemiBold,
                           fontSize: 17,
                           color: colors.accent,
                           textAlign: 'center',
@@ -1241,38 +1216,36 @@ export default function ReadingScreen() {
                       >
                         Day Completed
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
 
-                    {/* Share Button - 30% width, ghost/outline style */}
-                    <Pressable
+                    {/* Share Button - 20% width, gray background */}
+                    <TouchableOpacity
                       onPress={handleShare}
+                      activeOpacity={0.85}
                       accessibilityRole="button"
                       accessibilityLabel="Share devotional"
                       accessibilityHint="Share this day's reading with others"
-                      style={({ pressed }) => ({
-                        flex: 0.3,
-                        paddingVertical: 16,
+                      style={{
+                        flex: 1,
+                        backgroundColor: isDark ? '#3A3A3A' : '#E5E5E5',
+                        paddingVertical: 18,
                         paddingHorizontal: 16,
-                        borderRadius: 32,
-                        borderWidth: 1.5,
-                        borderColor: colors.textMuted,
-                        backgroundColor: 'transparent',
-                        opacity: pressed ? 0.7 : 1,
+                        borderRadius: 28,
                         alignItems: 'center',
                         justifyContent: 'center',
-                      })}
+                      }}
                     >
                       <Text
                         style={{
-                          fontFamily: FontFamily.display,
+                          fontFamily: FontFamily.uiSemiBold,
                           fontSize: 15,
-                          color: colors.textMuted,
+                          color: isDark ? '#AAAAAA' : '#666666',
                           letterSpacing: 0.3,
                         }}
                       >
                         Share
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
