@@ -33,6 +33,7 @@ import { TypewriterText } from '@/components/TypewriterText';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
+import { DevotionalPersona } from '@/constants/devotional-personas';
 import {
   pickRandomVariation,
   getRandomDurationSubtext,
@@ -127,6 +128,14 @@ const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'bibleTranslation', question: 'Which Bible translation do you prefer?', subtext: "We'll use this translation for all scripture in your devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
   { id: 'aboutMe', question: 'Tell me about yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive — it all shapes what we create for you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  // PERSONA: Writing style selection for devotional voice
+  { id: 'persona', question: 'How would you like your devotionals to feel?', subtext: 'Choose a voice that resonates with where you are right now.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+    { value: 'gentle_guide', label: 'Like a warm conversation', description: 'Gentle, intimate, permission-giving — like coffee with a trusted friend' },
+    { value: 'prophetic_challenger', label: 'Direct and convicting', description: 'Urgent, challenging, calls to action — doesn\'t waste words' },
+    { value: 'poetic_mystic', label: 'Contemplative and poetic', description: 'Lyrical, wonder-filled, lingers in mystery — awakens awe' },
+    { value: 'scholarly_pastor', label: 'Thoughtful and rich', description: 'Theologically deep yet accessible — bridges head and heart' },
+    { value: 'storyteller', label: 'Story-driven and relatable', description: 'Narrative-rich, character-driven, humor-infused — story is the sermon' },
+  ]},
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want to explore?', subtext: 'Pick one that resonates, or skip to let us guide you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -142,12 +151,13 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we remind you?', subtext: "A gentle nudge to pause and reflect. You can change this anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'name' | 'bibleTranslation' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'name' | 'bibleTranslation' | 'aboutMe' | 'persona' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 interface OnboardingData {
   name: string;
   bibleTranslation: BibleTranslation;
   aboutMe: string;
+  persona: string;
   themeType: boolean;
   studySubject: boolean;
   currentSituation: string;
@@ -207,6 +217,7 @@ export default function OnboardingScreen() {
     name: existingUser?.name ?? '',
     bibleTranslation: existingUser?.bibleTranslation ?? 'NIV',
     aboutMe: existingUser?.aboutMe ?? '',
+    persona: existingUser?.persona ?? 'gentle_guide',
     themeType: false,
     studySubject: false,
     currentSituation: '',
@@ -370,6 +381,7 @@ export default function OnboardingScreen() {
         name: data.name,
         bibleTranslation: data.bibleTranslation,
         aboutMe: data.aboutMe,
+        persona: data.persona as DevotionalPersona,
         currentSituation: data.currentSituation,
         emotionalState: data.emotionalState,
         spiritualSeeking: data.spiritualSeeking,
@@ -1174,6 +1186,37 @@ export default function OnboardingScreen() {
               </Text>
             </Pressable>
           </View>
+
+          {/* Progress indicator */}
+          {showInput && (
+            <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
+              <Text style={{ 
+                fontFamily: FontFamily.ui, 
+                fontSize: 13, 
+                color: colors.textMuted,
+                letterSpacing: 0.5 
+              }}>
+                Question {currentStepIndex + 1} of {STEPS.length}
+              </Text>
+              <View style={{ 
+                flexDirection: 'row', 
+                marginTop: 8, 
+                gap: 4 
+              }}>
+                {STEPS.map((_, idx) => (
+                  <View 
+                    key={idx}
+                    style={{
+                      width: idx === currentStepIndex ? 24 : 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: idx <= currentStepIndex ? colors.accent : colors.border,
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
 
           {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
             <View className="flex-1 px-6" style={{ paddingTop: 40 }}>
