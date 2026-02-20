@@ -215,13 +215,17 @@ export default function StyleOnboardingScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3">
-          <Pressable
-            onPress={handleBack}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
-          >
-            <ChevronLeft size={24} color={colors.textMuted} />
-          </Pressable>
+          {currentStep > 0 ? (
+            <Pressable
+              onPress={handleBack}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ padding: 8 }}
+            >
+              <ChevronLeft size={24} color={colors.textMuted} />
+            </Pressable>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
 
           {/* Progress dots */}
           <View className="flex-row space-x-2">
