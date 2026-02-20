@@ -6,6 +6,8 @@ module.exports = function (api) {
       "nativewind/babel",
     ],
     plugins: [
+      // React Compiler - auto-memoizes components
+      ["babel-plugin-react-compiler", { target: "19" }],
       [
         "module-resolver",
         {
