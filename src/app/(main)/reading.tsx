@@ -28,7 +28,7 @@ import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
-import { DevotionalContent } from '@/components/reading';
+import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 
