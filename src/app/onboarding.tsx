@@ -30,6 +30,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
+import { GoldEmberField } from '@/components/GoldEmberField';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
@@ -369,8 +370,32 @@ export default function OnboardingScreen() {
     transform: [{ translateY: inputTranslateY.value }],
   }));
 
+  // Check if we should show sample devotional preview
+  const shouldShowSamplePreview = useCallback(() => {
+    // Show preview after aboutMe if user hasn't completed onboarding
+    if (currentStepId === 'aboutMe' && data.aboutMe.trim().length > 10) {
+      return true;
+    }
+    return false;
+  }, [currentStepId, data.aboutMe]);
+
   // Helper to advance to the next step
   const advanceToNextStep = useCallback(() => {
+    // Show sample devotional preview after aboutMe
+    if (shouldShowSamplePreview()) {
+      // Save current progress first
+      const userData: Partial<UserProfile> = {
+        name: data.name,
+        bibleTranslation: data.bibleTranslation,
+        aboutMe: data.aboutMe,
+      };
+      updateUser(userData);
+      
+      // Navigate to sample devotional preview
+      router.push('/sample-devotional');
+      return;
+    }
+
     const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
     if (currentIdx < STEPS.length - 1) {
       const nextStepId = STEPS[currentIdx + 1].id as StepId;
@@ -422,7 +447,7 @@ export default function OnboardingScreen() {
         params,
       });
     }
-  }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser]);
+  }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser, shouldShowSamplePreview]);
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1160,6 +1185,8 @@ export default function OnboardingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <GoldEmberField density="low" active={true} style={{ opacity: 0.5 }} />
+      
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View className="flex-row items-center justify-between px-4 py-3">

@@ -1,23 +1,29 @@
-import { View, Text } from 'react-native';
+import { View, Text, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
+  withRepeat,
+  withSequence,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
+import { GoldEmberField } from '@/components/GoldEmberField';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const user = useUnfoldStore((s) => s.user);
+  const [emberPhase, setEmberPhase] = useState<'intense' | 'gentle' | 'minimal'>('intense');
 
   // Letter-by-letter staggered fade for "Unfold"
   const letter1 = useSharedValue(0);
@@ -33,24 +39,27 @@ export default function WelcomeScreen() {
 
   // Subtitle fade
   const subtitleOpacity = useSharedValue(0);
-  const subtitleTranslateY = useSharedValue(8);
+  const subtitleTranslateY = useSharedValue(12);
 
   // Whole screen fade-out before navigation
   const screenOpacity = useSharedValue(1);
 
+  // Glow pulse behind title
+  const glowOpacity = useSharedValue(0);
+  const glowScale = useSharedValue(0.8);
+
   const navigate = useCallback(() => {
     if (user?.hasCompletedOnboarding) {
       router.replace('/(main)/home');
-    } else if (user?.hasCompletedStyleOnboarding) {
-      router.replace('/onboarding');
     } else {
-      router.replace('/style-onboarding');
+      // New users go through how-it-works first
+      router.replace('/how-it-works');
     }
   }, [user, router]);
 
   const startFadeOut = useCallback(() => {
     screenOpacity.value = withTiming(0, {
-      duration: 400,
+      duration: 600,
       easing: Easing.in(Easing.ease),
     }, () => {
       runOnJS(navigate)();
@@ -64,34 +73,52 @@ export default function WelcomeScreen() {
       return;
     }
 
-    const letterDelay = 80;
-    const baseDelay = 400;
+    const letterDelay = 100;
+    const baseDelay = 600;
+
+    // Glow pulse begins immediately
+    glowOpacity.value = withTiming(0.6, { duration: 800, easing: Easing.out(Easing.ease) });
+    glowScale.value = withRepeat(
+      withSequence(
+        withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.95, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
 
     // Staggered letter reveals: each letter fades + slides up slightly
-    letter1.value = withDelay(baseDelay, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-    letter2.value = withDelay(baseDelay + letterDelay, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-    letter3.value = withDelay(baseDelay + letterDelay * 2, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-    letter4.value = withDelay(baseDelay + letterDelay * 3, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-    letter5.value = withDelay(baseDelay + letterDelay * 4, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-    letter6.value = withDelay(baseDelay + letterDelay * 5, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+    letter1.value = withDelay(baseDelay, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    letter2.value = withDelay(baseDelay + letterDelay, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    letter3.value = withDelay(baseDelay + letterDelay * 2, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    letter4.value = withDelay(baseDelay + letterDelay * 3, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    letter5.value = withDelay(baseDelay + letterDelay * 4, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    letter6.value = withDelay(baseDelay + letterDelay * 5, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
 
-    // Subtle haptic when the word completes
-    setTimeout(() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, baseDelay + letterDelay * 5 + 200);
+    // Haptic cascade during letter reveal
+    [0, 1, 2].forEach((i) => {
+      setTimeout(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }, baseDelay + letterDelay * (i * 2 + 1) + 300);
+    });
 
     // Gold line draws in after letters finish
-    const lineStart = baseDelay + letterDelay * 6 + 100;
+    const lineStart = baseDelay + letterDelay * 6 + 200;
     lineOpacity.value = withDelay(lineStart, withTiming(1, { duration: 300 }));
-    lineWidth.value = withDelay(lineStart, withTiming(40, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    lineWidth.value = withDelay(lineStart, withTiming(60, { duration: 700, easing: Easing.out(Easing.cubic) }));
 
     // Subtitle fades in
-    const subtitleStart = lineStart + 300;
-    subtitleOpacity.value = withDelay(subtitleStart, withTiming(1, { duration: 700, easing: Easing.out(Easing.ease) }));
-    subtitleTranslateY.value = withDelay(subtitleStart, withTiming(0, { duration: 700, easing: Easing.out(Easing.cubic) }));
+    const subtitleStart = lineStart + 400;
+    subtitleOpacity.value = withDelay(subtitleStart, withTiming(1, { duration: 800, easing: Easing.out(Easing.ease) }));
+    subtitleTranslateY.value = withDelay(subtitleStart, withTiming(0, { duration: 800, easing: Easing.out(Easing.cubic) }));
 
-    // Auto-navigate after animation completes (~2.5s total)
-    const autoNavDelay = subtitleStart + 1200;
+    // Transition ember phase to gentle after splash completes
+    setTimeout(() => {
+      setEmberPhase('gentle');
+    }, subtitleStart + 500);
+
+    // Auto-navigate after animation completes (~3.5s total)
+    const autoNavDelay = subtitleStart + 2000;
     setTimeout(() => {
       startFadeOut();
     }, autoNavDelay);
@@ -137,12 +164,39 @@ export default function WelcomeScreen() {
     opacity: screenOpacity.value,
   }));
 
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    transform: [{ scale: glowScale.value }],
+  }));
+
   const letters = ['U', 'n', 'f', 'o', 'l', 'd'];
   const letterStyles = [l1Style, l2Style, l3Style, l4Style, l5Style, l6Style];
 
   return (
     <Animated.View style={[{ flex: 1, backgroundColor: colors.background }, screenStyle]}>
+      {/* Gold embers floating upward */}
+      <GoldEmberField 
+        density={emberPhase === 'intense' ? 'high' : 'medium'} 
+        active={true} 
+      />
+
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        {/* Warm glow behind title */}
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              width: 200,
+              height: 200,
+              borderRadius: 100,
+              backgroundColor: isDark 
+                ? 'rgba(200, 165, 92, 0.15)' 
+                : 'rgba(154, 123, 60, 0.1)',
+            },
+            glowStyle,
+          ]}
+        />
+
         {/* Title: "Unfold" - each letter animated independently */}
         <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
           {letters.map((char, i) => (
@@ -151,9 +205,9 @@ export default function WelcomeScreen() {
               style={[
                 {
                   fontFamily: FontFamily.display,
-                  fontSize: 68,
+                  fontSize: 72,
                   color: colors.text,
-                  letterSpacing: -1.5,
+                  letterSpacing: -2,
                 },
                 letterStyles[i],
               ]}
@@ -167,7 +221,7 @@ export default function WelcomeScreen() {
         <Animated.View
           style={[
             {
-              height: 1.5,
+              height: 2,
               backgroundColor: colors.accent,
               borderRadius: 1,
               marginTop: 20,
@@ -177,17 +231,17 @@ export default function WelcomeScreen() {
         />
 
         {/* Subtitle */}
-        <Animated.View style={[{ marginTop: 18 }, subtitleStyle]}>
+        <Animated.View style={[{ marginTop: 24 }, subtitleStyle]}>
           <Text
             style={{
               fontFamily: FontFamily.bodyItalic,
-              fontSize: 15,
-              color: colors.textSubtle,
+              fontSize: 16,
+              color: colors.textMuted,
               textAlign: 'center',
-              lineHeight: 22,
+              lineHeight: 24,
             }}
           >
-            Devotionals written for{'\n'}where you are
+            The world's most personalized{'\n'}Bible devotionals
           </Text>
         </Animated.View>
       </View>
