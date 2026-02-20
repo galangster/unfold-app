@@ -238,7 +238,26 @@ export default function StyleOnboardingScreen() {
             ))}
           </View>
 
-          <View style={{ width: 40 }} />
+          {/* Continue / Next button — top right */}
+          {showOptions ? (
+            <Pressable
+              onPress={handleNext}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ padding: 8 }}
+            >
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiMedium,
+                  fontSize: 16,
+                  color: colors.accent,
+                }}
+              >
+                {isLastStep ? 'Continue' : 'Continue'}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
         </View>
 
         {/* Content */}
