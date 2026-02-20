@@ -395,50 +395,6 @@ export default function StyleOnboardingScreen() {
             </Animated.View>
           )}
         </ScrollView>
-
-        {/* Continue button */}
-        {showOptions && (
-          <Animated.View
-            entering={FadeIn.duration(300).delay(400)}
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              padding: 24,
-              paddingBottom: 40,
-              backgroundColor: colors.background,
-            }}
-          >
-            <Pressable
-              onPress={handleNext}
-              style={({ pressed }) => ({
-                backgroundColor: pressed
-                  ? colors.buttonBackgroundPressed
-                  : colors.buttonBackground,
-                paddingVertical: 18,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-              })}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 16,
-                  color: colors.text,
-                  textAlign: 'center',
-                }}
-              >
-                {isLastStep ? 'Continue' : 'Next'}
-              </Text>
-              <ChevronRight size={20} color={colors.text} style={{ marginLeft: 4 }} />
-            </Pressable>
-          </Animated.View>
-        )}
       </SafeAreaView>
     </View>
   );
