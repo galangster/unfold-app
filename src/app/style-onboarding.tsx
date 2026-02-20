@@ -249,7 +249,7 @@ export default function StyleOnboardingScreen() {
                 style={{
                   fontFamily: FontFamily.uiMedium,
                   fontSize: 16,
-                  color: colors.accent,
+                  color: colors.text,
                 }}
               >
                 {isLastStep ? 'Continue' : 'Continue'}
