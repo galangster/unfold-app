@@ -25,7 +25,7 @@ import Animated, {
   FadeOut,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronDown, ArrowRight, Hand, Fingerprint, Moon, Compass, Heart, Sparkles, Wind, Mountain, Sun, Eye, Flame, Sparkle, CloudRain, Scale, Target, Stars, BookOpen, Users, Music, Crown, Leaf, MessageCircle, Calendar, Wheat, User, Wand2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronDown, ArrowRight, Hand, Fingerprint, Moon, Compass, Heart, Sparkles, Wind, Mountain, Sun, Eye, Flame, Sparkle, CloudRain, Scale, Target, Stars, BookOpen, Users, Music, Crown, Leaf, MessageCircle, Calendar, Wheat, User, Wand2, Smile, Gift, Telescope } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
@@ -599,8 +599,8 @@ export default function OnboardingScreen() {
         rest: <Moon size={16} color={colors.textMuted} />,
         presence: <Eye size={16} color={colors.textMuted} />,
         healing: <Heart size={16} color={colors.textMuted} />,
-        joy: <Sparkle size={16} color={colors.textMuted} />,
-        gratitude: <Sparkles size={16} color={colors.textMuted} />,
+        joy: <Smile size={16} color={colors.textMuted} />,
+        gratitude: <Gift size={16} color={colors.textMuted} />,
         lament: <CloudRain size={16} color={colors.textMuted} />,
         hope: <Sun size={16} color={colors.textMuted} />,
         purpose: <Compass size={16} color={colors.textMuted} />,
@@ -609,7 +609,7 @@ export default function OnboardingScreen() {
         surrender: <Wind size={16} color={colors.textMuted} />,
         discipline: <Target size={16} color={colors.textMuted} />,
         justice: <Scale size={16} color={colors.textMuted} />,
-        wonder: <Stars size={16} color={colors.textMuted} />,
+        wonder: <Telescope size={16} color={colors.textMuted} />,
         // Study type icons (larger, accent color)
         personal: <User size={20} color={colors.accent} />,
         book_study: <BookOpen size={20} color={colors.accent} />,
