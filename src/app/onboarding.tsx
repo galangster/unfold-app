@@ -383,7 +383,6 @@ export default function OnboardingScreen() {
   const advanceToNextStep = useCallback(() => {
     // Show sample devotional preview after aboutMe
     if (shouldShowSamplePreview()) {
-      // Save current progress first
       const userData: Partial<UserProfile> = {
         name: data.name,
         bibleTranslation: data.bibleTranslation,
@@ -391,7 +390,6 @@ export default function OnboardingScreen() {
       };
       updateUser(userData);
       
-      // Navigate to sample devotional preview
       router.push('/sample-devotional');
       return;
     }
@@ -401,6 +399,39 @@ export default function OnboardingScreen() {
       const nextStepId = STEPS[currentIdx + 1].id as StepId;
       setCurrentStepId(nextStepId);
     } else {
+      // Final step - show celebration before generating
+      const userData: UserProfile = {
+        name: data.name,
+        bibleTranslation: data.bibleTranslation,
+        aboutMe: data.aboutMe,
+        personaTraits: data.personaTraits,
+        currentSituation: data.currentSituation,
+        emotionalState: data.emotionalState,
+        spiritualSeeking: data.spiritualSeeking,
+        readingDuration: data.readingDuration,
+        devotionalLength: data.devotionalLength,
+        reminderTime: data.reminderTime,
+        isPremium: false,
+        hasCompletedOnboarding: true,
+        hasCompletedStyleOnboarding: false,
+        fontSize: 'medium',
+        writingStyle: { tone: 'warm', depth: 'balanced', faithBackground: 'growing' },
+        themeMode: 'system',
+        accentTheme: 'gold',
+        readingFont: 'source-serif',
+        preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238',
+      };
+
+      if (existingUser) {
+        updateUser(userData);
+      } else {
+        setUser(userData);
+      }
+
+      // Navigate to celebration screen instead of directly to generating
+      router.push('/welcome-celebration');
+    }
+  }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser, shouldShowSamplePreview]);
       // Final step - create user and devotional
       const userData: UserProfile = {
         name: data.name,
