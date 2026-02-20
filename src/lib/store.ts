@@ -83,7 +83,7 @@ export interface WritingStylePreferences {
 export interface UserProfile {
   name: string;
   aboutMe: string;
-  persona: string;
+  personaTraits: string[];
   currentSituation: string;
   emotionalState: string;
   spiritualSeeking: string;

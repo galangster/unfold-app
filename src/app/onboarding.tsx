@@ -128,14 +128,14 @@ const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'bibleTranslation', question: 'Which Bible translation do you prefer?', subtext: "We'll use this translation for all scripture in your devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
   { id: 'aboutMe', question: 'Tell me about yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive — it all shapes what we create for you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
-  // PERSONA: Writing style selection for devotional voice
-  { id: 'persona', question: 'How would you like your devotionals to feel?', subtext: 'Choose a voice that resonates with where you are right now.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
-    { value: 'gentle_guide', label: 'Like a warm conversation', description: 'Gentle, intimate, permission-giving — like coffee with a trusted friend' },
-    { value: 'prophetic_challenger', label: 'Direct and convicting', description: 'Urgent, challenging, calls to action — doesn\'t waste words' },
-    { value: 'poetic_mystic', label: 'Contemplative and poetic', description: 'Lyrical, wonder-filled, lingers in mystery — awakens awe' },
-    { value: 'scholarly_pastor', label: 'Thoughtful and rich', description: 'Theologically deep yet accessible — bridges head and heart' },
-    { value: 'storyteller', label: 'Story-driven and relatable', description: 'Narrative-rich, character-driven, humor-infused — story is the sermon' },
-  ]},
+  // PERSONA: Writing style selection - pick 1-2 traits
+  { id: 'personaTraits', question: 'How would you like your devotionals to feel?', subtext: 'Choose up to two that resonate. We\'ll mix them for variety across your journey.', type: 'multiSelect' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+    { value: 'gentle', label: 'Warm & Conversational', description: 'Like coffee with a trusted friend — vulnerable, permission-giving' },
+    { value: 'challenging', label: 'Direct & Convicting', description: 'Urgent truth that calls you to action — doesn\'t waste words' },
+    { value: 'poetic', label: 'Contemplative & Poetic', description: 'Lyrical, wonder-filled, lingers in mystery — awakens awe' },
+    { value: 'scholarly', label: 'Thoughtful & Rich', description: 'Theologically deep yet accessible — bridges head and heart' },
+    { value: 'narrative', label: 'Story-Driven', description: 'Character-rich, narrative-first — story is the sermon' },
+  ], maxSelections: 2 },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want to explore?', subtext: 'Pick one that resonates, or skip to let us guide you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -151,13 +151,13 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we remind you?', subtext: "A gentle nudge to pause and reflect. You can change this anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'name' | 'bibleTranslation' | 'aboutMe' | 'persona' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'name' | 'bibleTranslation' | 'aboutMe' | 'personaTraits' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 interface OnboardingData {
   name: string;
   bibleTranslation: BibleTranslation;
   aboutMe: string;
-  persona: string;
+  personaTraits: string[];
   themeType: boolean;
   studySubject: boolean;
   currentSituation: string;
@@ -217,7 +217,7 @@ export default function OnboardingScreen() {
     name: existingUser?.name ?? '',
     bibleTranslation: existingUser?.bibleTranslation ?? 'NIV',
     aboutMe: existingUser?.aboutMe ?? '',
-    persona: existingUser?.persona ?? 'gentle_guide',
+    personaTraits: existingUser?.personaTraits ?? ['gentle'],
     themeType: false,
     studySubject: false,
     currentSituation: '',
@@ -381,7 +381,7 @@ export default function OnboardingScreen() {
         name: data.name,
         bibleTranslation: data.bibleTranslation,
         aboutMe: data.aboutMe,
-        persona: data.persona as DevotionalPersona,
+        personaTraits: data.personaTraits,
         currentSituation: data.currentSituation,
         emotionalState: data.emotionalState,
         spiritualSeeking: data.spiritualSeeking,
