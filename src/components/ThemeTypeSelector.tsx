@@ -30,6 +30,12 @@ import {
   Calendar,
   Wheat,
   ChevronRight,
+  CloudRain,
+  Scale,
+  Target,
+  Gift,
+  Smile,
+  Telescope,
 } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -57,6 +63,13 @@ const THEME_ICONS: Record<string, React.FC<{ size: number; color: string }>> = {
   Mountain,
   Sun,
   Eye,
+  CloudRain,
+  Scale,
+  Target,
+  Gift,
+  Smile,
+  Telescope,
+  Flame,
 };
 
 const TYPE_ICONS: Record<string, React.FC<{ size: number; color: string }>> = {
