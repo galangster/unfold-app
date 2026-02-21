@@ -11,10 +11,9 @@ import Animated, {
   withRepeat,
   Easing,
   interpolate,
-  useAnimatedGestureHandler,
   runOnJS,
 } from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -308,14 +307,15 @@ export default function HowItWorksScreen() {
     }
   }, [currentSlide, translateX]);
 
-  const onGestureEvent = useAnimatedGestureHandler({
-    onStart: (_, ctx: any) => {
+  // New Gesture API for Reanimated 3
+  const panGesture = Gesture.Pan()
+    .onStart((ctx) => {
       ctx.startX = translateX.value;
-    },
-    onActive: (event, ctx) => {
+    })
+    .onUpdate((event, ctx: any) => {
       translateX.value = ctx.startX + event.translationX;
-    },
-    onEnd: (event) => {
+    })
+    .onEnd((event) => {
       const threshold = SCREEN_WIDTH * 0.2;
       
       if (event.velocityX > 500 || event.translationX > threshold) {
@@ -349,8 +349,7 @@ export default function HowItWorksScreen() {
         // Snap back
         translateX.value = withTiming(-currentSlide * SCREEN_WIDTH, { duration: 200 });
       }
-    },
-  });
+    });
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -380,7 +379,7 @@ export default function HowItWorksScreen() {
         </View>
 
         {/* Carousel */}
-        <PanGestureHandler onGestureEvent={onGestureEvent}>
+        <GestureDetector gesture={panGesture}>
           <Animated.View style={[styles.carousel, containerStyle]}>
             {slides.map((slide) => (
               <View key={slide.id} style={styles.slide}>
@@ -399,7 +398,7 @@ export default function HowItWorksScreen() {
               </View>
             ))}
           </Animated.View>
-        </PanGestureHandler>
+        </GestureDetector>
 
         {/* Bottom controls */}
         <View style={styles.bottom}>
