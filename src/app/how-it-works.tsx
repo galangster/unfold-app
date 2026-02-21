@@ -24,18 +24,18 @@ interface Slide {
 const slides: Slide[] = [
   {
     id: 0,
-    title: 'Share where you are',
-    subtitle: 'Your story, your struggles, your season. The more you share, the more personal it becomes.',
+    title: 'A spiritual experience crafted just for you',
+    subtitle: "The world's most personalized devotional. Every word reflects your story, your struggles, your season.",
   },
   {
     id: 1,
-    title: 'We listen deeply',
-    subtitle: 'Ancient wisdom meets modern AI. Every devotional is crafted uniquely for you.',
+    title: 'Theology meets artistry',
+    subtitle: 'Trained on profound theology and beautiful writing. Every devotional is uniquely composed with care, precision, and spiritual depth.',
   },
   {
     id: 2,
-    title: 'Receive daily bread',
-    subtitle: 'A fresh devotional every day, written for exactly where you are.',
+    title: 'A daily ritual that transforms',
+    subtitle: 'Fresh bread every morning, perfectly tuned to where you are. Build a habit of encountering God that lasts a lifetime.',
   },
 ];
 

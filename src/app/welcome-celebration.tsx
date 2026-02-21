@@ -51,7 +51,7 @@ export default function WelcomeCelebrationScreen() {
             </Text>
             
             <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, textAlign: 'center' }}>
-              Your journey begins today.
+              Your personalized devotional journey begins now.
             </Text>
           </Animated.View>
 
@@ -71,10 +71,10 @@ export default function WelcomeCelebrationScreen() {
               WHAT HAPPENS NEXT
             </Text>
 
-            {[
-              "We're crafting your first devotional",
-              'It will be ready in just a moment',
-              'Written just for you, based on what you shared',
+            {[ 
+              'Your first devotional is being uniquely crafted', 
+              'Every morning, fresh words for exactly where you are', 
+              'Build a transformative habit, one day at a time', 
             ].map((text, index) => (
               <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                 <View

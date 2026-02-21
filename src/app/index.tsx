@@ -107,7 +107,7 @@ export default function WelcomeScreen() {
             subtitleStyle,
           ]}
         >
-          The world's most personalized{'\n'}Bible devotionals
+          The world's most personalized{'\n'}spiritual experience
         </Animated.Text>
       </View>
     </Animated.View>
