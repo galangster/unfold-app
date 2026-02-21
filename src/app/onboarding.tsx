@@ -465,6 +465,7 @@ export default function OnboardingScreen() {
         personaTraits: data.personaTraits,
         currentSituation: data.currentSituation,
         emotionalState: data.emotionalState,
+        personaTraits: autoSelectPersona(data.aboutMe),
         spiritualSeeking: data.spiritualSeeking,
         readingDuration: data.readingDuration,
         devotionalLength: data.devotionalLength,
