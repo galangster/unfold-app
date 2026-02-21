@@ -64,7 +64,8 @@ export default function SampleDevotionalScreen() {
   }, []);
 
   const handleContinue = () => {
-    router.push('/onboarding');
+    // Go back to existing onboarding (don't push new one)
+    router.back();
   };
 
   const handleBack = () => {
