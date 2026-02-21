@@ -30,7 +30,6 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
-import { GoldEmberField } from '@/components/GoldEmberField';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
@@ -1169,8 +1168,6 @@ export default function OnboardingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <GoldEmberField density="low" active={true} style={{ opacity: 0.5 }} />
-      
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View className="flex-row items-center justify-between px-4 py-3">

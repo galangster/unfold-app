@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,17 +7,11 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withSequence,
-  withRepeat,
-  Easing,
-  interpolate,
-  runOnJS,
+  FadeIn,
+  FadeInUp,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
-import { GoldEmberField } from '@/components/GoldEmberField';
-import { User, Sparkles, BookOpen } from 'lucide-react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -25,309 +19,57 @@ interface Slide {
   id: number;
   title: string;
   subtitle: string;
-  icon: React.ReactNode;
-  illustration: React.ReactNode;
 }
 
-// Animated illustration components
-function ShareIllustration({ colors, isDark }: { colors: any; isDark: boolean }) {
-  const pulse = useSharedValue(0);
-  
-  React.useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
-    );
-  }, []);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.3, 0.7]),
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.1]) }],
-  }));
-
-  return (
-    <View style={styles.illustrationContainer}>
-      {/* Central circle with pulse */}
-      <Animated.View
-        style={[
-          styles.illustrationGlow,
-          {
-            backgroundColor: isDark 
-              ? 'rgba(200, 165, 92, 0.2)' 
-              : 'rgba(154, 123, 60, 0.15)',
-          },
-          glowStyle,
-        ]}
-      />
-      <View style={[styles.illustrationCenter, { backgroundColor: colors.inputBackground }]}>
-        <User size={40} color={colors.accent} strokeWidth={1.5} />
-      </View>
-      
-      {/* Orbiting dots */}
-      {[0, 1, 2].map((i) => (
-        <OrbitingDot key={i} index={i} colors={colors} />
-      ))}
-    </View>
-  );
-}
-
-function OrbitingDot({ index, colors }: { index: number; colors: any }) {
-  const rotation = useSharedValue(0);
-  
-  React.useEffect(() => {
-    rotation.value = withDelay(
-      index * 1000,
-      withRepeat(
-        withTiming(360, { duration: 6000, easing: Easing.linear }),
-        -1,
-        false
-      )
-    );
-  }, [index]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${rotation.value}deg` },
-    ],
-  }));
-
-  const dotStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${-rotation.value}deg` },
-    ],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        styles.orbitRing,
-        {
-          width: 100 + index * 30,
-          height: 100 + index * 30,
-        },
-        animatedStyle,
-      ]}
-    >
-      <Animated.View
-        style={[
-          styles.orbitDot,
-          {
-            backgroundColor: index === 1 ? colors.accent : colors.textMuted,
-            top: -4,
-            left: '50%',
-            marginLeft: -4,
-          },
-          dotStyle,
-        ]}
-      />
-    </Animated.View>
-  );
-}
-
-function ListenIllustration({ colors, isDark }: { colors: any; isDark: boolean }) {
-  const wave1 = useSharedValue(0);
-  const wave2 = useSharedValue(0);
-  const wave3 = useSharedValue(0);
-
-  React.useEffect(() => {
-    wave1.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-    wave2.value = withDelay(200, withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    ));
-    wave3.value = withDelay(400, withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    ));
-  }, []);
-
-  const wave1Style = useAnimatedStyle(() => ({
-    opacity: interpolate(wave1.value, [0, 1], [0.2, 0.6]),
-    transform: [{ scale: interpolate(wave1.value, [0, 1], [1, 1.3]) }],
-  }));
-
-  const wave2Style = useAnimatedStyle(() => ({
-    opacity: interpolate(wave2.value, [0, 1], [0.2, 0.5]),
-    transform: [{ scale: interpolate(wave2.value, [0, 1], [1, 1.2]) }],
-  }));
-
-  const wave3Style = useAnimatedStyle(() => ({
-    opacity: interpolate(wave3.value, [0, 1], [0.2, 0.4]),
-    transform: [{ scale: interpolate(wave3.value, [0, 1], [1, 1.1]) }],
-  }));
-
-  return (
-    <View style={styles.illustrationContainer}>
-      <Animated.View
-        style={[
-          styles.waveRing,
-          { borderColor: colors.accent },
-          wave3Style,
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.waveRing,
-          { borderColor: colors.accent },
-          wave2Style,
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.waveRing,
-          { borderColor: colors.accent },
-          wave1Style,
-        ]}
-      />
-      <View style={[styles.illustrationCenter, { backgroundColor: colors.inputBackground }]}>
-        <Sparkles size={40} color={colors.accent} strokeWidth={1.5} />
-      </View>
-    </View>
-  );
-}
-
-function ReceiveIllustration({ colors }: { colors: any }) {
-  const progress = useSharedValue(0);
-
-  React.useEffect(() => {
-    progress.value = withDelay(
-      500,
-      withRepeat(
-        withTiming(1, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      )
-    );
-  }, []);
-
-  const pageStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotateY: `${interpolate(progress.value, [0, 1], [0, -15])}deg` },
-      { perspective: 1000 },
-    ],
-  }));
-
-  return (
-    <View style={styles.illustrationContainer}>
-      {/* Book/pages */}
-      <Animated.View style={[styles.bookContainer, pageStyle]}>
-        <View style={[styles.bookPage, { backgroundColor: colors.inputBackground }]}>
-          {/* Lines representing text */}
-          {[0, 1, 2, 3, 4].map((i) => (
-            <View
-              key={i}
-              style={[
-                styles.bookLine,
-                {
-                  backgroundColor: colors.textMuted,
-                  width: 60 + Math.random() * 20,
-                  marginTop: i === 0 ? 0 : 8,
-                },
-              ]}
-            />
-          ))}
-        </View>
-        <View style={[styles.bookSpine, { backgroundColor: colors.accent }]} />
-      </Animated.View>
-      
-      {/* Floating accent */}
-      <View style={[styles.illustrationCenter, { backgroundColor: colors.inputBackground, position: 'absolute' }]}>
-        <BookOpen size={40} color={colors.accent} strokeWidth={1.5} />
-      </View>
-    </View>
-  );
-}
+const slides: Slide[] = [
+  {
+    id: 0,
+    title: 'Share where you are',
+    subtitle: 'Your story, your struggles, your season. The more you share, the more personal it becomes.',
+  },
+  {
+    id: 1,
+    title: 'We listen deeply',
+    subtitle: 'Ancient wisdom meets modern AI. Every devotional is crafted uniquely for you.',
+  },
+  {
+    id: 2,
+    title: 'Receive daily bread',
+    subtitle: 'A fresh devotional every day, written for exactly where you are.',
+  },
+];
 
 export default function HowItWorksScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const translateX = useSharedValue(0);
 
-  const slides: Slide[] = [
-    {
-      id: 0,
-      title: 'Share where you are',
-      subtitle: 'Your story, your struggles, your season.\nThe more you share, the more personal it becomes.',
-      icon: <User size={24} color={colors.accent} />,
-      illustration: <ShareIllustration colors={colors} isDark={isDark} />,
-    },
-    {
-      id: 1,
-      title: 'We listen deeply',
-      subtitle: 'Ancient wisdom meets modern AI.\nEvery devotional is crafted uniquely for you.',
-      icon: <Sparkles size={24} color={colors.accent} />,
-      illustration: <ListenIllustration colors={colors} isDark={isDark} />,
-    },
-    {
-      id: 2,
-      title: 'Receive daily bread',
-      subtitle: 'A fresh devotional every day,\nwritten for exactly where you are.',
-      icon: <BookOpen size={24} color={colors.accent} />,
-      illustration: <ReceiveIllustration colors={colors} />,
-    },
-  ];
-
-  const goToNext = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
+  const goToNext = () => {
     if (currentSlide < slides.length - 1) {
-      goToSlide(currentSlide + 1);
+      setCurrentSlide(currentSlide + 1);
     } else {
-      // Navigate to onboarding
       router.replace('/onboarding');
     }
-  }, [currentSlide, slides.length, router, goToSlide]);
+  };
 
-  const goToPrevious = useCallback(() => {
+  const goToPrevious = () => {
     if (currentSlide > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      goToSlide(currentSlide - 1);
+      setCurrentSlide(currentSlide - 1);
     }
-  }, [currentSlide, goToSlide]);
+  };
 
-  // Navigate to specific slide
-  const goToSlide = useCallback((index: number) => {
-    if (index >= 0 && index < slides.length) {
-      translateX.value = withTiming(-index * SCREEN_WIDTH, {
-        duration: 400,
-        easing: Easing.out(Easing.cubic),
-      }, () => {
-        runOnJS(setCurrentSlide)(index);
-      });
-    }
-  }, [slides.length, translateX]);
-
-  const containerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const canGoBack = currentSlide > 0;
+  const slide = slides[currentSlide];
   const isLastSlide = currentSlide === slides.length - 1;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]} >
-      <GoldEmberField density="low" active={true} />
-
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable
-            onPress={goToPrevious}
-            disabled={!canGoBack}
-            style={[styles.backButton, { opacity: canGoBack ? 1 : 0 }]}
-          >
-            <Text style={[styles.backText, { color: colors.textMuted }]}>Back</Text>
+          <Pressable onPress={goToPrevious} disabled={currentSlide === 0}>
+            <Text style={[styles.backText, { color: currentSlide === 0 ? colors.border : colors.textMuted }]}>
+              Back
+            </Text>
           </Pressable>
 
           <Pressable onPress={() => router.replace('/onboarding')}>
@@ -335,33 +77,29 @@ export default function HowItWorksScreen() {
           </Pressable>
         </View>
 
-        {/* Carousel */}
-        <Animated.View style={[styles.carousel, containerStyle]}>
-          {slides.map((slide) => (
-            <View key={slide.id} style={styles.slide}>
-              <View style={styles.illustrationWrapper}>
-                {slide.illustration}
-              </View>
+        {/* Content */}
+        <View style={styles.content}>
+          <Animated.View
+            key={currentSlide}
+            entering={FadeInUp.duration(400)}
+            style={styles.slideContent}
+          >
+            <Text style={[styles.title, { color: colors.text }]}>
+              {slide.title}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              {slide.subtitle}
+            </Text>
+          </Animated.View>
+        </View>
 
-              <View style={styles.textContainer}>
-                <Text style={[styles.title, { color: colors.text }]}>
-                  {slide.title}
-                </Text>
-                <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                  {slide.subtitle}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </Animated.View>
-
-        {/* Bottom controls */}
+        {/* Bottom */}
         <View style={styles.bottom}>
           {/* Progress dots */}
           <View style={styles.dots}>
-            {slides.map((slide, index) => (
+            {slides.map((_, index) => (
               <View
-                key={slide.id}
+                key={index}
                 style={[
                   styles.dot,
                   {
@@ -413,9 +151,6 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     height: 60,
   },
-  backButton: {
-    paddingVertical: 8,
-  },
   backText: {
     fontFamily: FontFamily.ui,
     fontSize: 15,
@@ -424,97 +159,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.uiMedium,
     fontSize: 15,
   },
-  carousel: {
+  content: {
     flex: 1,
-    flexDirection: 'row',
-  },
-  slide: {
-    width: SCREEN_WIDTH,
-    flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: 40,
-    justifyContent: 'center',
   },
-  illustrationWrapper: {
-    height: 220,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  illustrationContainer: {
-    width: 160,
-    height: 160,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  illustrationCenter: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  illustrationGlow: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-  },
-  orbitRing: {
-    position: 'absolute',
-    borderWidth: 1,
-    borderColor: 'rgba(200, 165, 92, 0.2)',
-    borderRadius: 999,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  orbitDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  waveRing: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 1.5,
-  },
-  bookContainer: {
-    position: 'absolute',
-    width: 100,
-    height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bookPage: {
-    width: 80,
-    height: 100,
-    borderRadius: 4,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  bookSpine: {
-    position: 'absolute',
-    left: '50%',
-    width: 3,
-    height: 100,
-    marginLeft: -1.5,
-    borderRadius: 1.5,
-  },
-  bookLine: {
-    height: 3,
-    borderRadius: 1.5,
-  },
-  textContainer: {
+  slideContent: {
     alignItems: 'center',
   },
   title: {
