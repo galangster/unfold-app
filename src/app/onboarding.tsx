@@ -343,27 +343,36 @@ export default function OnboardingScreen() {
   const currentStepIndex = useMemo(() => STEPS.findIndex((s) => s.id === currentStepId), [STEPS, currentStepId]);
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
+  // Track which steps have been completed based on data state
+  const completedStepIds = useMemo(() => {
+    const completed: StepId[] = [];
+    if (data.name?.trim()) completed.push('name');
+    if (data.bibleTranslation) completed.push('bibleTranslation');
+    if (data.aboutMe?.trim()) completed.push('aboutMe');
+    return completed;
+  }, [data.name, data.bibleTranslation, data.aboutMe]);
+
   // Skip to first uncompleted step on mount (for returning from sample devotional)
   useEffect(() => {
-    // Wait for existingUser data to be available
-    if (!existingUser) return;
-    
     // Find first step that hasn't been completed
     const firstUncompletedStep = STEPS.find((s) => {
       if (s.skipIfHasValue) {
         const stepId = s.id as StepId;
-        if (stepId === 'name' && existingUser?.name) return false;
-        if (stepId === 'bibleTranslation' && existingUser?.bibleTranslation) return false;
-        if (stepId === 'aboutMe' && existingUser?.aboutMe) return false;
-        if (stepId === 'reminderTime' && existingUser?.reminderTime) return false;
+        // Check both existingUser (from store) and local data state
+        if (stepId === 'name' && (existingUser?.name || data.name)) return false;
+        if (stepId === 'bibleTranslation' && (existingUser?.bibleTranslation || data.bibleTranslation)) return false;
+        if (stepId === 'aboutMe' && (existingUser?.aboutMe || data.aboutMe)) return false;
+        if (stepId === 'reminderTime' && (existingUser?.reminderTime || data.reminderTime)) return false;
       }
       return true;
     });
     
     if (firstUncompletedStep && firstUncompletedStep.id !== currentStepId) {
       setCurrentStepId(firstUncompletedStep.id as StepId);
+      // Reset showInput so the typewriter plays for the new step
+      setShowInput(false);
     }
-  }, [existingUser?.name, existingUser?.bibleTranslation, existingUser?.aboutMe]); // Re-run when user data changes
+  }, []); // Only run on mount
 
   const getStepIds = () => STEPS.map((s) => s.id);
 
