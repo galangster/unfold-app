@@ -177,6 +177,86 @@ interface AdaptedStep {
   subtext: string;
 }
 
+// Progress indicator component with smooth animation
+function ProgressIndicator({ 
+  currentStepIndex, 
+  totalSteps, 
+  colors 
+}: { 
+  currentStepIndex: number; 
+  totalSteps: number; 
+  colors: any;
+}) {
+  const activeIndex = useSharedValue(currentStepIndex);
+  
+  useEffect(() => {
+    activeIndex.value = withTiming(currentStepIndex, { 
+      duration: 300, 
+      easing: Easing.out(Easing.ease) 
+    });
+  }, [currentStepIndex]);
+
+  return (
+    <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
+      <Text style={{ 
+        fontFamily: FontFamily.ui, 
+        fontSize: 13, 
+        color: colors.textMuted,
+        letterSpacing: 0.5 
+      }}>
+        Question {currentStepIndex + 1} of {totalSteps}
+      </Text>
+      <View style={{ 
+        flexDirection: 'row', 
+        marginTop: 8, 
+        gap: 4 
+      }}>
+        {Array.from({ length: totalSteps }).map((_, idx) => (
+          <ProgressDot 
+            key={idx}
+            index={idx}
+            activeIndex={activeIndex}
+            colors={colors}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Individual animated dot
+function ProgressDot({ 
+  index, 
+  activeIndex, 
+  colors 
+}: { 
+  index: number; 
+  activeIndex: Animated.SharedValue<number>; 
+  colors: any;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const isActive = index === Math.round(activeIndex.value);
+    const isCompleted = index < activeIndex.value;
+    
+    return {
+      width: withTiming(isActive ? 24 : 6, { duration: 300 }),
+      backgroundColor: isCompleted || isActive ? colors.accent : colors.border,
+    };
+  });
+
+  return (
+    <Animated.View 
+      style={[
+        {
+          height: 6,
+          borderRadius: 3,
+        },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
 export default function OnboardingScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -1214,36 +1294,12 @@ export default function OnboardingScreen() {
             </Pressable>
           </View>
 
-          {/* Progress indicator */}
-          {showInput && (
-            <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
-              <Text style={{ 
-                fontFamily: FontFamily.ui, 
-                fontSize: 13, 
-                color: colors.textMuted,
-                letterSpacing: 0.5 
-              }}>
-                Question {currentStepIndex + 1} of {STEPS.length}
-              </Text>
-              <View style={{ 
-                flexDirection: 'row', 
-                marginTop: 8, 
-                gap: 4 
-              }}>
-                {STEPS.map((_, idx) => (
-                  <View 
-                    key={idx}
-                    style={{
-                      width: idx === currentStepIndex ? 24 : 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: idx <= currentStepIndex ? colors.accent : colors.border,
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
+          {/* Progress indicator - always visible */}
+          <ProgressIndicator 
+            currentStepIndex={currentStepIndex} 
+            totalSteps={STEPS.length} 
+            colors={colors} 
+          />
 
           {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
             <View className="flex-1 px-6" style={{ paddingTop: 40 }}>
