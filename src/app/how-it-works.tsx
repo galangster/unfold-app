@@ -1,21 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withSequence,
-  Easing,
-  interpolate,
-  runOnJS,
-} from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Slide {
   id: number;
@@ -46,7 +34,7 @@ function MagicalText({
   text, 
   style, 
   delay = 0,
-  speed = 25,
+  speed = 20,
   onComplete 
 }: { 
   text: string; 
@@ -56,7 +44,6 @@ function MagicalText({
   onComplete?: () => void;
 }) {
   const [visibleChars, setVisibleChars] = useState(0);
-  const textColor = style?.color || '#000';
   
   useEffect(() => {
     const startTimeout = setTimeout(() => {
@@ -79,13 +66,14 @@ function MagicalText({
     return () => clearTimeout(startTimeout);
   }, [text, delay, speed, onComplete]);
   
-  // Reset when text changes
   useEffect(() => {
     setVisibleChars(0);
   }, [text]);
   
+  const textColor = style?.color || '#000';
+  
   return (
-    <Text style={[style, { color: textColor }]}>
+    <Text style={style}>
       {text.split('').map((char, index) => (
         <Text
           key={index}
@@ -105,12 +93,12 @@ function MagicalText({
   );
 }
 
-// Staggered word reveal for subtitle
+// Word-by-word shimmer reveal
 function WordReveal({ 
   text, 
   style, 
   delay = 0,
-  staggerDelay = 50 
+  staggerDelay = 40 
 }: { 
   text: string; 
   style?: any; 
@@ -119,7 +107,6 @@ function WordReveal({
 }) {
   const [visibleWords, setVisibleWords] = useState(0);
   const words = text.split(' ');
-  const textColor = style?.color || '#000';
   
   useEffect(() => {
     const startTimeout = setTimeout(() => {
@@ -140,18 +127,19 @@ function WordReveal({
     return () => clearTimeout(startTimeout);
   }, [text, delay, staggerDelay]);
   
-  // Reset when text changes
   useEffect(() => {
     setVisibleWords(0);
   }, [text]);
   
+  const textColor = style?.color || '#000';
+  
   return (
-    <Text style={[style, { color: textColor }]}>
+    <Text style={style}>
       {words.map((word, index) => (
         <Text
           key={index}
           style={{
-            opacity: index < visibleWords ? 1 : 0.15,
+            opacity: index < visibleWords ? 1 : 0.2,
             color: textColor,
             fontFamily: style?.fontFamily,
             fontSize: style?.fontSize,
@@ -159,17 +147,6 @@ function WordReveal({
           }}
         >
           {word}{index < words.length - 1 ? '\u00A0' : ''}
-        </Text>
-      ))}
-    </Text>
-  );
-}
-            fontFamily: style?.fontFamily,
-            fontSize: style?.fontSize,
-            lineHeight: style?.lineHeight,
-          }}
-        >
-          {word}{index < words.length - 1 ? ' ' : ''}
         </Text>
       ))}
     </Text>
@@ -219,24 +196,22 @@ export default function HowItWorksScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          {/* Title with magical reveal */}
           <MagicalText
             key={`title-${currentSlide}`}
             text={slide.title}
             style={[styles.title, { color: colors.text }]}
             delay={100}
-            speed={20}
+            speed={18}
             onComplete={() => setTitleComplete(true)}
           />
           
-          {/* Subtitle with word reveal - starts after title completes */}
           {titleComplete && (
             <WordReveal
               key={`subtitle-${currentSlide}`}
               text={slide.subtitle}
               style={[styles.subtitle, { color: colors.textMuted }]}
-              delay={200}
-              staggerDelay={40}
+              delay={150}
+              staggerDelay={35}
             />
           )}
         </View>
