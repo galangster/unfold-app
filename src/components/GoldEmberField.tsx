@@ -50,7 +50,7 @@ function EmberParticleComponent({ particle, onComplete, colors }: EmberParticleP
       spawnDelay,
       withTiming(1, {
         duration: particle.duration,
-        easing: Easing.out(Easing.quad),
+        easing: Easing.out(Easing.ease),
       }, (finished) => {
         if (finished) {
           runOnJS(onComplete)();
@@ -73,8 +73,8 @@ function EmberParticleComponent({ particle, onComplete, colors }: EmberParticleP
       spawnDelay,
       withRepeat(
         withSequence(
-          withTiming(15, { duration: 2000, easing: Easing.inOut(Easing.sine) }),
-          withTiming(-15, { duration: 2000, easing: Easing.inOut(Easing.sine) })
+          withTiming(15, { duration: 2000, easing: Easing.linear }),
+          withTiming(-15, { duration: 2000, easing: Easing.linear })
         ),
         -1,
         true

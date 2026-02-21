@@ -186,6 +186,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - ExpoAppleAuthentication (55.0.7):
+    - ExpoModulesCore
   - ExpoAsset (55.0.4):
     - ExpoModulesCore
   - ExpoAudio (55.0.6):
@@ -3085,6 +3087,7 @@ DEPENDENCIES:
   - expo-dev-launcher (from `../node_modules/expo-dev-launcher`)
   - expo-dev-menu (from `../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../node_modules/expo-dev-menu-interface/ios`)
+  - ExpoAppleAuthentication (from `../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoAudio (from `../node_modules/expo-audio/ios`)
   - ExpoBattery (from `../node_modules/expo-battery/ios`)
@@ -3290,6 +3293,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-dev-menu"
   expo-dev-menu-interface:
     :path: "../node_modules/expo-dev-menu-interface/ios"
+  ExpoAppleAuthentication:
+    :path: "../node_modules/expo-apple-authentication/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
   ExpoAudio:
@@ -3608,6 +3613,7 @@ SPEC CHECKSUMS:
   expo-dev-launcher: a5fa2a3dcff09e7624555e9a00d1cc55a8f57588
   expo-dev-menu: 6eadf2f4074006dc7b9881300a2db83a6ae425ca
   expo-dev-menu-interface: bf6f816d29b45bec038080790963c635e8d588c2
+  ExpoAppleAuthentication: 1c191502f7e1961d1117f3a0c70c7847145cbc54
   ExpoAsset: 0de8c1198cfcb54878332a53c63e0f6ef575c603
   ExpoAudio: 2f8961d9faff0834303c1f4da7a2ca86298c5c1d
   ExpoBattery: 8056820cf5995701095031fb29582c558985f594

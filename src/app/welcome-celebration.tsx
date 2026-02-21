@@ -61,7 +61,7 @@ function ConfettiParticle({ particle }: { particle: Particle }) {
       particle.delay,
       withTiming(1, {
         duration: particle.fallDuration,
-        easing: Easing.out(Easing.quad),
+        easing: Easing.out(Easing.ease),
       })
     );
 

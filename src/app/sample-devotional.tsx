@@ -68,7 +68,7 @@ function generateSampleDevotional(name: string, aboutMe: string) {
       prayer: `Lord, ${name} is carrying more than they were meant to hold alone. Teach them to trade their anxious thoughts for Your peace—not as a feeling, but as a Person who never leaves.`,
     },
     rest: {
-      title: 'The Invitation You Didn't Know You Needed',
+      title: "The Invitation You Didn't Know You Needed",
       scripture: 'Matthew 11:28-30',
       passage: 'Come to me, all you who are weary and burdened, and I will give you rest. Take my yoke upon you and learn from me, for I am gentle and humble in heart, and you will find rest for your souls.',
       reflection: `${name}, exhaustion isn't a badge of honor—it's a signal that something is out of rhythm. Jesus doesn't offer rest as a reward for productivity; He offers it as a starting point.\n\nThe rest He promises isn't just physical sleep. It's soul-rest—the deep assurance that you don't have to earn your place, prove your worth, or hold everything together.`,
