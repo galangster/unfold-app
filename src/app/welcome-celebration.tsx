@@ -41,7 +41,7 @@ export default function WelcomeCelebrationScreen() {
                 marginBottom: 32,
               }}
             >
-              <Text style={{ fontSize: 40 }}✓</Text>
+              <Text style={{ fontSize: 40 }}>✓</Text>
             </View>
           </Animated.View>
 
