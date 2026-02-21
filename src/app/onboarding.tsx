@@ -345,6 +345,9 @@ export default function OnboardingScreen() {
 
   // Skip to first uncompleted step on mount (for returning from sample devotional)
   useEffect(() => {
+    // Wait for existingUser data to be available
+    if (!existingUser) return;
+    
     // Find first step that hasn't been completed
     const firstUncompletedStep = STEPS.find((s) => {
       if (s.skipIfHasValue) {
@@ -360,7 +363,7 @@ export default function OnboardingScreen() {
     if (firstUncompletedStep && firstUncompletedStep.id !== currentStepId) {
       setCurrentStepId(firstUncompletedStep.id as StepId);
     }
-  }, []); // Only run on mount
+  }, [existingUser?.name, existingUser?.bibleTranslation, existingUser?.aboutMe]); // Re-run when user data changes
 
   const getStepIds = () => STEPS.map((s) => s.id);
 
