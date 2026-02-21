@@ -34,7 +34,7 @@ const slides: Slide[] = [
   },
   {
     id: 2,
-    title: 'A daily ritual that transforms',
+    title: 'A rhythm of life that transforms',
     subtitle: 'Fresh bread every morning, perfectly tuned to where you are. Build a habit of encountering God that lasts a lifetime.',
   },
 ];
