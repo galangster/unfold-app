@@ -449,43 +449,9 @@ export default function OnboardingScreen() {
     transform: [{ translateY: inputTranslateY.value }],
   }));
 
-  // Check if we should show sample devotional preview
-  const shouldShowSamplePreview = useCallback(() => {
-    // Show preview after aboutMe if user hasn't completed onboarding
-    if (currentStepId === 'aboutMe' && data.aboutMe.trim().length > 10) {
-      return true;
-    }
-    return false;
-  }, [currentStepId, data.aboutMe]);
-
-  // Auto-advance after returning from sample devotional
-  useEffect(() => {
-    // If we're on aboutMe step but aboutMe has value (returned from preview), advance
-    if (currentStepId === 'aboutMe' && data.aboutMe && !shouldShowSamplePreview()) {
-      const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
-      if (currentIdx < STEPS.length - 1) {
-        const nextStepId = STEPS[currentIdx + 1].id as StepId;
-        setCurrentStepId(nextStepId);
-        setShowInput(false);
-      }
-    }
-  }, [currentStepId, data.aboutMe]);
 
   // Helper to advance to the next step
   const advanceToNextStep = useCallback(() => {
-    // Show sample devotional preview after aboutMe
-    if (shouldShowSamplePreview()) {
-      const userData: Partial<UserProfile> = {
-        name: data.name,
-        bibleTranslation: data.bibleTranslation,
-        aboutMe: data.aboutMe,
-      };
-      updateUser(userData);
-      
-      router.push('/sample-devotional');
-      return;
-    }
-
     const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
     if (currentIdx < STEPS.length - 1) {
       const nextStepId = STEPS[currentIdx + 1].id as StepId;
@@ -523,7 +489,7 @@ export default function OnboardingScreen() {
       // Navigate to celebration screen instead of directly to generating
       router.push('/welcome-celebration');
     }
-  }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser, shouldShowSamplePreview]);
+  }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser]);
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
