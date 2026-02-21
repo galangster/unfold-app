@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 
@@ -29,135 +30,13 @@ const slides: Slide[] = [
   },
 ];
 
-// Magical text reveal - characters fade in with stagger
-function MagicalText({ 
-  text, 
-  textStyle, 
-  delay = 0,
-  speed = 20,
-  onComplete 
-}: { 
-  text: string; 
-  textStyle?: any; 
-  delay?: number;
-  speed?: number;
-  onComplete?: () => void;
-}) {
-  const [visibleChars, setVisibleChars] = useState(0);
-  
-  useEffect(() => {
-    const startTimeout = setTimeout(() => {
-      let current = 0;
-      const total = text.length;
-      
-      const interval = setInterval(() => {
-        if (current < total) {
-          setVisibleChars(current + 1);
-          current++;
-        } else {
-          clearInterval(interval);
-          onComplete?.();
-        }
-      }, speed);
-      
-      return () => clearInterval(interval);
-    }, delay);
-    
-    return () => clearTimeout(startTimeout);
-  }, [text, delay, speed, onComplete]);
-  
-  useEffect(() => {
-    setVisibleChars(0);
-  }, [text]);
-  
-  return (
-    <View style={textStyle}>
-      {text.split('').map((char, index) => (
-        <Text
-          key={index}
-          style={{
-            opacity: index < visibleChars ? 1 : 0,
-            color: textStyle?.color || '#000',
-            fontFamily: textStyle?.fontFamily,
-            fontSize: textStyle?.fontSize,
-            lineHeight: textStyle?.lineHeight,
-            letterSpacing: textStyle?.letterSpacing,
-          }}
-        >
-          {char === ' ' ? '\u00A0' : char}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-// Word-by-word shimmer reveal
-function WordReveal({ 
-  text, 
-  textStyle, 
-  delay = 0,
-  staggerDelay = 40 
-}: { 
-  text: string; 
-  textStyle?: any; 
-  delay?: number;
-  staggerDelay?: number;
-}) {
-  const [visibleWords, setVisibleWords] = useState(0);
-  const words = text.split(' ');
-  
-  useEffect(() => {
-    const startTimeout = setTimeout(() => {
-      let current = 0;
-      
-      const interval = setInterval(() => {
-        if (current < words.length) {
-          setVisibleWords(current + 1);
-          current++;
-        } else {
-          clearInterval(interval);
-        }
-      }, staggerDelay);
-      
-      return () => clearInterval(interval);
-    }, delay);
-    
-    return () => clearTimeout(startTimeout);
-  }, [text, delay, staggerDelay]);
-  
-  useEffect(() => {
-    setVisibleWords(0);
-  }, [text]);
-  
-  return (
-    <View style={textStyle}>
-      {words.map((word, index) => (
-        <Text
-          key={index}
-          style={{
-            opacity: index < visibleWords ? 1 : 0.2,
-            color: textStyle?.color || '#000',
-            fontFamily: textStyle?.fontFamily,
-            fontSize: textStyle?.fontSize,
-            lineHeight: textStyle?.lineHeight,
-          }}
-        >
-          {word}{index < words.length - 1 ? '\u00A0' : ''}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
 export default function HowItWorksScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [titleComplete, setTitleComplete] = useState(false);
 
   const goToNext = () => {
     if (currentSlide < slides.length - 1) {
-      setTitleComplete(false);
       setCurrentSlide(currentSlide + 1);
     } else {
       router.replace('/onboarding');
@@ -166,7 +45,6 @@ export default function HowItWorksScreen() {
 
   const goToPrevious = () => {
     if (currentSlide > 0) {
-      setTitleComplete(false);
       setCurrentSlide(currentSlide - 1);
     }
   };
@@ -192,24 +70,18 @@ export default function HowItWorksScreen() {
 
         {/* Content */}
         <View style={styles.content}>
-          <MagicalText
-            key={`title-${currentSlide}`}
-            text={slide.title}
-            textStyle={[styles.title, { color: colors.text }]}
-            delay={100}
-            speed={18}
-            onComplete={() => setTitleComplete(true)}
-          />
-          
-          {titleComplete && (
-            <WordReveal
-              key={`subtitle-${currentSlide}`}
-              text={slide.subtitle}
-              textStyle={[styles.subtitle, { color: colors.textMuted }]}
-              delay={150}
-              staggerDelay={35}
-            />
-          )}
+          <Animated.View
+            key={currentSlide}
+            entering={FadeInUp.duration(400)}
+            style={styles.slideContent}
+          >
+            <Text style={[styles.title, { color: colors.text }]}>
+              {slide.title}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              {slide.subtitle}
+            </Text>
+          </Animated.View>
         </View>
 
         {/* Bottom */}
@@ -283,16 +155,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
+  slideContent: {
+    alignItems: 'center',
+  },
   title: {
     fontFamily: FontFamily.display,
     fontSize: 32,
     letterSpacing: -0.5,
-    marginBottom: 24,
+    textAlign: 'center',
+    marginBottom: 16,
   },
   subtitle: {
     fontFamily: FontFamily.body,
     fontSize: 16,
-    lineHeight: 26,
+    lineHeight: 24,
+    textAlign: 'center',
   },
   bottom: {
     paddingHorizontal: 24,
