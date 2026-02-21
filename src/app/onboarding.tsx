@@ -432,53 +432,6 @@ export default function OnboardingScreen() {
       router.push('/welcome-celebration');
     }
   }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser, shouldShowSamplePreview]);
-      // Final step - create user and devotional
-      const userData: UserProfile = {
-        name: data.name,
-        bibleTranslation: data.bibleTranslation,
-        aboutMe: data.aboutMe,
-        personaTraits: data.personaTraits,
-        currentSituation: data.currentSituation,
-        emotionalState: data.emotionalState,
-        spiritualSeeking: data.spiritualSeeking,
-        readingDuration: data.readingDuration,
-        devotionalLength: data.devotionalLength,
-        reminderTime: data.reminderTime,
-        isPremium: false,
-        hasCompletedOnboarding: true,
-        hasCompletedStyleOnboarding: false,
-        fontSize: 'medium',
-        writingStyle: { tone: 'warm', depth: 'balanced', faithBackground: 'growing' },
-        themeMode: 'system',
-        accentTheme: 'gold',
-        readingFont: 'source-serif',
-        preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238', // Katie - free voice
-      };
-
-      if (existingUser) {
-        updateUser(userData);
-      } else {
-        setUser(userData);
-      }
-
-      // Navigate to generating screen with user context
-      const params: Record<string, string> = {};
-      if (data.selectedThemes.length > 0) {
-        params.themes = data.selectedThemes.join(',');
-      }
-      if (data.selectedType) {
-        params.devotionalType = data.selectedType;
-      }
-      if (data.selectedStudySubject) {
-        params.studySubject = data.selectedStudySubject;
-      }
-
-      router.push({
-        pathname: '/generating',
-        params,
-      });
-    }
-  }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser, shouldShowSamplePreview]);
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
