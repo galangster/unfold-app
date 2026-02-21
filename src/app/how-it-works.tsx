@@ -56,6 +56,7 @@ function MagicalText({
   onComplete?: () => void;
 }) {
   const [visibleChars, setVisibleChars] = useState(0);
+  const textColor = style?.color || '#000';
   
   useEffect(() => {
     const startTimeout = setTimeout(() => {
@@ -84,20 +85,20 @@ function MagicalText({
   }, [text]);
   
   return (
-    <Text style={style}>
+    <Text style={[style, { color: textColor }]}>
       {text.split('').map((char, index) => (
         <Text
           key={index}
           style={{
             opacity: index < visibleChars ? 1 : 0,
-            color: style?.color || '#000',
+            color: textColor,
             fontFamily: style?.fontFamily,
             fontSize: style?.fontSize,
             lineHeight: style?.lineHeight,
             letterSpacing: style?.letterSpacing,
           }}
         >
-          {char}
+          {char === ' ' ? '\u00A0' : char}
         </Text>
       ))}
     </Text>
@@ -118,6 +119,7 @@ function WordReveal({
 }) {
   const [visibleWords, setVisibleWords] = useState(0);
   const words = text.split(' ');
+  const textColor = style?.color || '#000';
   
   useEffect(() => {
     const startTimeout = setTimeout(() => {
@@ -144,13 +146,24 @@ function WordReveal({
   }, [text]);
   
   return (
-    <Text style={style}>
+    <Text style={[style, { color: textColor }]}>
       {words.map((word, index) => (
         <Text
           key={index}
           style={{
             opacity: index < visibleWords ? 1 : 0.15,
-            color: style?.color || '#000',
+            color: textColor,
+            fontFamily: style?.fontFamily,
+            fontSize: style?.fontSize,
+            lineHeight: style?.lineHeight,
+          }}
+        >
+          {word}{index < words.length - 1 ? '\u00A0' : ''}
+        </Text>
+      ))}
+    </Text>
+  );
+}
             fontFamily: style?.fontFamily,
             fontSize: style?.fontSize,
             lineHeight: style?.lineHeight,
