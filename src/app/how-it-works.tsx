@@ -13,7 +13,6 @@ import Animated, {
   interpolate,
   runOnJS,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -283,73 +282,31 @@ export default function HowItWorksScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     if (currentSlide < slides.length - 1) {
-      translateX.value = withTiming(-(currentSlide + 1) * SCREEN_WIDTH, {
-        duration: 400,
-        easing: Easing.out(Easing.cubic),
-      }, () => {
-        runOnJS(setCurrentSlide)(currentSlide + 1);
-      });
+      goToSlide(currentSlide + 1);
     } else {
       // Navigate to onboarding
       router.replace('/onboarding');
     }
-  }, [currentSlide, slides.length, router, translateX]);
+  }, [currentSlide, slides.length, router, goToSlide]);
 
   const goToPrevious = useCallback(() => {
     if (currentSlide > 0) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      translateX.value = withTiming(-(currentSlide - 1) * SCREEN_WIDTH, {
+      goToSlide(currentSlide - 1);
+    }
+  }, [currentSlide, goToSlide]);
+
+  // Navigate to specific slide
+  const goToSlide = useCallback((index: number) => {
+    if (index >= 0 && index < slides.length) {
+      translateX.value = withTiming(-index * SCREEN_WIDTH, {
         duration: 400,
         easing: Easing.out(Easing.cubic),
       }, () => {
-        runOnJS(setCurrentSlide)(currentSlide - 1);
+        runOnJS(setCurrentSlide)(index);
       });
     }
-  }, [currentSlide, translateX]);
-
-  // New Gesture API for Reanimated 3
-  const panGesture = Gesture.Pan()
-    .onStart((ctx) => {
-      ctx.startX = translateX.value;
-    })
-    .onUpdate((event, ctx: any) => {
-      translateX.value = ctx.startX + event.translationX;
-    })
-    .onEnd((event) => {
-      const threshold = SCREEN_WIDTH * 0.2;
-      
-      if (event.velocityX > 500 || event.translationX > threshold) {
-        // Swipe right - go back
-        if (currentSlide > 0) {
-          translateX.value = withTiming(-(currentSlide - 1) * SCREEN_WIDTH, {
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
-          }, () => {
-            runOnJS(setCurrentSlide)(currentSlide - 1);
-          });
-        } else {
-          translateX.value = withTiming(0, { duration: 200 });
-        }
-      } else if (event.velocityX < -500 || event.translationX < -threshold) {
-        // Swipe left - go forward
-        if (currentSlide < slides.length - 1) {
-          translateX.value = withTiming(-(currentSlide + 1) * SCREEN_WIDTH, {
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
-          }, () => {
-            runOnJS(setCurrentSlide)(currentSlide + 1);
-          });
-        } else {
-          // Last slide, navigate to onboarding
-          translateX.value = withTiming(-currentSlide * SCREEN_WIDTH, { duration: 200 }, () => {
-            runOnJS(router.replace)('/onboarding');
-          });
-        }
-      } else {
-        // Snap back
-        translateX.value = withTiming(-currentSlide * SCREEN_WIDTH, { duration: 200 });
-      }
-    });
+  }, [slides.length, translateX]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -379,26 +336,24 @@ export default function HowItWorksScreen() {
         </View>
 
         {/* Carousel */}
-        <GestureDetector gesture={panGesture}>
-          <Animated.View style={[styles.carousel, containerStyle]}>
-            {slides.map((slide) => (
-              <View key={slide.id} style={styles.slide}>
-                <View style={styles.illustrationWrapper}>
-                  {slide.illustration}
-                </View>
-
-                <View style={styles.textContainer}>
-                  <Text style={[styles.title, { color: colors.text }]}>
-                    {slide.title}
-                  </Text>
-                  <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-                    {slide.subtitle}
-                  </Text>
-                </View>
+        <Animated.View style={[styles.carousel, containerStyle]}>
+          {slides.map((slide) => (
+            <View key={slide.id} style={styles.slide}>
+              <View style={styles.illustrationWrapper}>
+                {slide.illustration}
               </View>
-            ))}
-          </Animated.View>
-        </GestureDetector>
+
+              <View style={styles.textContainer}>
+                <Text style={[styles.title, { color: colors.text }]}>
+                  {slide.title}
+                </Text>
+                <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                  {slide.subtitle}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
 
         {/* Bottom controls */}
         <View style={styles.bottom}>
