@@ -263,6 +263,25 @@ export default function OnboardingScreen() {
   const currentStepIndex = useMemo(() => STEPS.findIndex((s) => s.id === currentStepId), [STEPS, currentStepId]);
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
+  // Skip to first uncompleted step on mount (for returning from sample devotional)
+  useEffect(() => {
+    // Find first step that hasn't been completed
+    const firstUncompletedStep = STEPS.find((s) => {
+      if (s.skipIfHasValue) {
+        const stepId = s.id as StepId;
+        if (stepId === 'name' && existingUser?.name) return false;
+        if (stepId === 'bibleTranslation' && existingUser?.bibleTranslation) return false;
+        if (stepId === 'aboutMe' && existingUser?.aboutMe) return false;
+        if (stepId === 'reminderTime' && existingUser?.reminderTime) return false;
+      }
+      return true;
+    });
+    
+    if (firstUncompletedStep && firstUncompletedStep.id !== currentStepId) {
+      setCurrentStepId(firstUncompletedStep.id as StepId);
+    }
+  }, []); // Only run on mount
+
   const getStepIds = () => STEPS.map((s) => s.id);
 
   // Get previous answers for adaptive question generation
