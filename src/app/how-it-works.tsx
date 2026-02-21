@@ -32,13 +32,13 @@ const slides: Slide[] = [
 // Magical text reveal - characters fade in with stagger
 function MagicalText({ 
   text, 
-  style, 
+  textStyle, 
   delay = 0,
   speed = 20,
   onComplete 
 }: { 
   text: string; 
-  style?: any; 
+  textStyle?: any; 
   delay?: number;
   speed?: number;
   onComplete?: () => void;
@@ -70,38 +70,36 @@ function MagicalText({
     setVisibleChars(0);
   }, [text]);
   
-  const textColor = style?.color || '#000';
-  
   return (
-    <Text style={style}>
+    <View style={textStyle}>
       {text.split('').map((char, index) => (
         <Text
           key={index}
           style={{
             opacity: index < visibleChars ? 1 : 0,
-            color: textColor,
-            fontFamily: style?.fontFamily,
-            fontSize: style?.fontSize,
-            lineHeight: style?.lineHeight,
-            letterSpacing: style?.letterSpacing,
+            color: textStyle?.color || '#000',
+            fontFamily: textStyle?.fontFamily,
+            fontSize: textStyle?.fontSize,
+            lineHeight: textStyle?.lineHeight,
+            letterSpacing: textStyle?.letterSpacing,
           }}
         >
           {char === ' ' ? '\u00A0' : char}
         </Text>
       ))}
-    </Text>
+    </View>
   );
 }
 
 // Word-by-word shimmer reveal
 function WordReveal({ 
   text, 
-  style, 
+  textStyle, 
   delay = 0,
   staggerDelay = 40 
 }: { 
   text: string; 
-  style?: any; 
+  textStyle?: any; 
   delay?: number;
   staggerDelay?: number;
 }) {
@@ -131,25 +129,23 @@ function WordReveal({
     setVisibleWords(0);
   }, [text]);
   
-  const textColor = style?.color || '#000';
-  
   return (
-    <Text style={style}>
+    <View style={textStyle}>
       {words.map((word, index) => (
         <Text
           key={index}
           style={{
             opacity: index < visibleWords ? 1 : 0.2,
-            color: textColor,
-            fontFamily: style?.fontFamily,
-            fontSize: style?.fontSize,
-            lineHeight: style?.lineHeight,
+            color: textStyle?.color || '#000',
+            fontFamily: textStyle?.fontFamily,
+            fontSize: textStyle?.fontSize,
+            lineHeight: textStyle?.lineHeight,
           }}
         >
           {word}{index < words.length - 1 ? '\u00A0' : ''}
         </Text>
       ))}
-    </Text>
+    </View>
   );
 }
 
@@ -199,7 +195,7 @@ export default function HowItWorksScreen() {
           <MagicalText
             key={`title-${currentSlide}`}
             text={slide.title}
-            style={[styles.title, { color: colors.text }]}
+            textStyle={[styles.title, { color: colors.text }]}
             delay={100}
             speed={18}
             onComplete={() => setTitleComplete(true)}
@@ -209,7 +205,7 @@ export default function HowItWorksScreen() {
             <WordReveal
               key={`subtitle-${currentSlide}`}
               text={slide.subtitle}
-              style={[styles.subtitle, { color: colors.textMuted }]}
+              textStyle={[styles.subtitle, { color: colors.textMuted }]}
               delay={150}
               staggerDelay={35}
             />
