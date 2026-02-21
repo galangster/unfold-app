@@ -458,6 +458,19 @@ export default function OnboardingScreen() {
     return false;
   }, [currentStepId, data.aboutMe]);
 
+  // Auto-advance after returning from sample devotional
+  useEffect(() => {
+    // If we're on aboutMe step but aboutMe has value (returned from preview), advance
+    if (currentStepId === 'aboutMe' && data.aboutMe && !shouldShowSamplePreview()) {
+      const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
+      if (currentIdx < STEPS.length - 1) {
+        const nextStepId = STEPS[currentIdx + 1].id as StepId;
+        setCurrentStepId(nextStepId);
+        setShowInput(false);
+      }
+    }
+  }, [currentStepId, data.aboutMe]);
+
   // Helper to advance to the next step
   const advanceToNextStep = useCallback(() => {
     // Show sample devotional preview after aboutMe
@@ -1284,7 +1297,7 @@ export default function OnboardingScreen() {
 
           {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
             <View className="flex-1 px-6" style={{ paddingTop: 40 }}>
-              <View key={`${currentStepId}-${step.question}`}>
+              <View>
                 <TypewriterText 
                   text={
                     baseStep?.type === 'themeType' && themeSelectionMode === 'theme' 
@@ -1312,7 +1325,7 @@ export default function OnboardingScreen() {
             </View>
           ) : (
             <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 40, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <View key={`${currentStepId}-${step.question}`}>
+              <View>
                 <TypewriterText text={step.question} onComplete={handleTypewriterComplete} style={{ fontSize: 28, lineHeight: 38 }} />
               </View>
               {showInput && (
