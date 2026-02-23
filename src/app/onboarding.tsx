@@ -44,6 +44,27 @@ import {
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
 
+// Quippy biblical loading phrases for the adaptive question generation
+const LOADING_QUIPS = [
+  'Contemplating...',
+  'Pondering...',
+  'Seeking wisdom...',
+  'Listening...',
+  'In quietness...',
+  'Stillness...',
+  'Reflecting...',
+  'Waiting...',
+  'Be still...',
+  'Resting...',
+  'Considering...',
+  'Meditating...',
+  'Attending...',
+  'Pausing...',
+  'Dwelling...',
+];
+
+const getRandomLoadingQuip = () => LOADING_QUIPS[Math.floor(Math.random() * LOADING_QUIPS.length)];
+
 // ThemePill component - defined at module scope to avoid nested component definition
 interface ThemePillProps {
   theme: {
@@ -1632,19 +1653,23 @@ export default function OnboardingScreen() {
   // }
 
   if (isPreparingDiscovery) {
+    const preparingQuip = useMemo(() => getRandomLoadingQuip(), []);
+    
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }} edges={['top']}>
-          <Animated.View style={breathingStyle}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
-            </View>
-          </Animated.View>
-          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text, textAlign: 'center' }}>{preparationMessage}</Text>
-          <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted, textAlign: 'center', marginTop: 8 }}>
-            Personalizing your discovery questions…
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+          </View>
+          <Text style={{ 
+            fontFamily: FontFamily.ui, 
+            fontSize: 15, 
+            color: colors.textMuted,
+            letterSpacing: 0.5 
+          }}>
+            {preparingQuip}
           </Text>
         </SafeAreaView>
       </View>
@@ -1740,10 +1765,24 @@ export default function OnboardingScreen() {
                 <View className="flex-1 px-6" style={{ paddingTop: 40, paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <ActivityIndicator size="small" color={colors.accent} />
-                        <Text style={{ fontFamily: FontFamily.ui, fontSize: 16, color: colors.textMuted }}>
-                          Crafting your question...
+                      <View style={{ 
+                        flex: 1, 
+                        justifyContent: 'center', 
+                        alignItems: 'center',
+                        minHeight: 200 
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+                        </View>
+                        <Text style={{ 
+                          fontFamily: FontFamily.ui, 
+                          fontSize: 15, 
+                          color: colors.textMuted,
+                          letterSpacing: 0.5
+                        }}>
+                          {getRandomLoadingQuip()}
                         </Text>
                       </View>
                     ) : (
