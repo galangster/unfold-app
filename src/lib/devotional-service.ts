@@ -1400,6 +1400,8 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const { response } = backendResult;
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Adaptive] Backend API error:', response.status, errorText.substring(0, 200));
       return nextQuestionBase;
     }
 
@@ -1407,15 +1409,25 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const content = data.content?.[0]?.text;
 
     if (!content) {
+      console.error('[Adaptive] Backend returned no content:', data);
       return nextQuestionBase;
     }
 
+    console.log('[Adaptive] Backend raw content:', content?.substring(0, 200));
+
     const parsedResult = JSON.parse(content) as { question: string; subtext: string };
+    
+    console.log('[Adaptive] Backend parsed result:', {
+      question: parsedResult.question?.substring(0, 60),
+      subtext: parsedResult.subtext?.substring(0, 40)
+    });
+    
     return {
       question: parsedResult.question || nextQuestionBase.question,
       subtext: parsedResult.subtext || nextQuestionBase.subtext,
     };
-  } catch {
+  } catch (err) {
+    console.error('[Adaptive] Backend parse error:', err);
     return nextQuestionBase;
   }
 }
