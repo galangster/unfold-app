@@ -36,7 +36,6 @@ import { TypewriterText } from '@/components/TypewriterText';
 import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
-import { generateAdaptiveQuestionWithGemini, isGeminiAvailable } from '@/lib/gemini-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
 import {
   pickRandomVariation,
@@ -563,27 +562,7 @@ export default function OnboardingScreen() {
       const base = { question: step.question, subtext: step.subtext };
 
       try {
-        // STEP 1: Try Gemini Flash 2.5 first (direct API call, no caching)
-        if (isGeminiAvailable()) {
-          console.log('[Adaptive] Trying Gemini Flash 2.5...');
-          const geminiResult = await generateAdaptiveQuestionWithGemini(
-            previousAnswers,
-            base,
-            stepPosition
-          );
-
-          if (geminiResult) {
-            console.log('[Adaptive] ✓ Using Gemini-generated question:', geminiResult);
-            setAdaptedSteps((prev) => ({ ...prev, [step.id]: geminiResult }));
-            setIsLoadingAdaptive(false);
-            return; // Success - exit early
-          }
-          console.log('[Adaptive] Gemini returned null, falling back to backend...');
-        } else {
-          console.log('[Adaptive] Gemini not available (no API key), using backend...');
-        }
-
-        // STEP 2: Fall back to backend API (Claude/Haiku)
+        // Use backend API (Haiku/Claude)
         console.log('[Adaptive] Calling backend API...');
         const adapted = await generateAdaptiveQuestion(
           previousAnswers,
@@ -603,7 +582,7 @@ export default function OnboardingScreen() {
           setAdaptedSteps((prev) => ({ ...prev, [step.id]: localFallback }));
         }
       } catch (err) {
-        console.log('[Adaptive] All APIs failed, using local fallback:', err);
+        console.log('[Adaptive] API failed, using local fallback:', err);
         const localFallback = buildFallbackAdaptive(step.id, base, previousAnswers);
         setAdaptedSteps((prev) => ({ ...prev, [step.id]: localFallback }));
       } finally {
@@ -833,23 +812,7 @@ export default function OnboardingScreen() {
             if (!baseStep) return { stepId, adapted: null };
             
             try {
-              // STEP 1: Try Gemini Flash 2.5 first
-              if (isGeminiAvailable()) {
-                console.log(`[DiscoveryPrep] Trying Gemini for ${stepId}...`);
-                const geminiResult = await generateAdaptiveQuestionWithGemini(
-                  answers,
-                  { question: baseStep.question, subtext: baseStep.subtext },
-                  stepPositions[stepId]
-                );
-                
-                if (geminiResult) {
-                  console.log(`[DiscoveryPrep] ✓ Gemini success for ${stepId}`);
-                  return { stepId, adapted: geminiResult };
-                }
-                console.log(`[DiscoveryPrep] Gemini failed for ${stepId}, trying backend...`);
-              }
-              
-              // STEP 2: Fall back to backend
+              // Use backend API (Haiku/Claude)
               const adapted = await generateAdaptiveQuestion(
                 answers,
                 { question: baseStep.question, subtext: baseStep.subtext },
