@@ -12,7 +12,7 @@
 import { logBugError } from './bug-logger';
 
 // Gemini Configuration
-const GEMINI_MODEL = 'gemini-1.5-flash-latest';
+const GEMINI_MODEL = 'gemini-2.5-flash-preview-01-06';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 // Get API key from environment
