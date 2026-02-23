@@ -572,6 +572,13 @@ export default function OnboardingScreen() {
 
         // Only use adapted if it's actually different from base
         const isDifferent = adapted.question?.trim().toLowerCase() !== base.question.trim().toLowerCase();
+        
+        console.log('[Adaptive] Backend response:', {
+          question: adapted.question?.substring(0, 50),
+          subtext: adapted.subtext?.substring(0, 30),
+          isDifferent,
+          length: adapted.question?.length
+        });
 
         if (isDifferent && adapted.question?.length > 10) {
           console.log('[Adaptive] ✓ Using backend AI-generated question:', adapted);
