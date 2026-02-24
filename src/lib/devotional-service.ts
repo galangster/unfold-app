@@ -1419,7 +1419,15 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     console.log('[Adaptive] Backend raw content:', content?.substring(0, 200));
 
-    const parsedResult = JSON.parse(content) as { question: string; subtext: string };
+    // Handle markdown-wrapped JSON (```json ... ```)
+    let jsonText = content;
+    const markdownMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+    if (markdownMatch) {
+      jsonText = markdownMatch[1].trim();
+      console.log('[Adaptive] Extracted JSON from markdown');
+    }
+
+    const parsedResult = JSON.parse(jsonText) as { question: string; subtext: string };
     
     console.log('[Adaptive] Backend parsed result:', {
       question: parsedResult.question?.substring(0, 60),
