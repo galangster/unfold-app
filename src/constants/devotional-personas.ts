@@ -254,7 +254,7 @@ export const DEVOTIONAL_PERSONAS: Record<DevotionalPersona, PersonaConfig> = {
 // Day-specific engagement hooks for series-based devotionals
 export const DAY_HOOKS: Record<number, { hook: string; goal: string }> = {
   1: { hook: "This week, we're exploring...", goal: 'Promise clear outcome' },
-  2: { hook: 'Yesterday we talked about... today, let's get personal', goal: 'Build on previous day' },
+  2: { hook: "Yesterday we talked about... today, let's get personal", goal: 'Build on previous day' },
   3: { hook: "Here's the hard truth...", goal: 'Mid-series pivot to application' },
   4: { hook: 'Let me tell you about...', goal: 'Narrative anchor' },
   5: { hook: "We've covered a lot...", goal: 'Pull threads together' },
