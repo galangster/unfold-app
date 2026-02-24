@@ -1274,9 +1274,9 @@ export async function generateAdaptiveQuestion(
   previousAnswers: { question: string; answer: string }[],
   nextQuestionBase: { question: string; subtext: string },
   stepPosition?: 'opening' | 'depth' | 'longing'
-): Promise<{ question: string; subtext: string }> {
+): Promise<{ question: string; subtext: string; source: 'backend' | 'fallback'; backendUrl?: string }> {
   if (previousAnswers.length === 0) {
-    return nextQuestionBase;
+    return { ...nextQuestionBase, source: 'fallback' };
   }
 
   // Check rate limit before making API call
@@ -1284,7 +1284,7 @@ export async function generateAdaptiveQuestion(
   if (!rateLimit.allowed) {
     console.warn('[Adaptive] Rate limit exceeded:', rateLimit);
     // Fall back to base question if rate limited
-    return nextQuestionBase;
+    return { ...nextQuestionBase, source: 'fallback' };
   }
 
   try {
@@ -1430,7 +1430,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     if (!response.ok) {
       const errorText = await response.text();
       console.warn('[Adaptive] Backend API error (recoverable, using fallback question):', response.status, errorText.substring(0, 200));
-      return nextQuestionBase;
+      return { ...nextQuestionBase, source: 'fallback' };
     }
 
     const data = await response.json();
@@ -1443,6 +1443,8 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
         subtext: typeof data?.subtext === 'string' && data.subtext.trim()
           ? data.subtext
           : nextQuestionBase.subtext,
+        source: 'backend',
+        backendUrl: backendResult.backendUrl,
       };
     }
 
@@ -1450,7 +1452,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     if (!content || typeof content !== 'string') {
       console.warn('[Adaptive] Backend returned no parseable content (recoverable, using fallback question):', data);
-      return nextQuestionBase;
+      return { ...nextQuestionBase, source: 'fallback' };
     }
 
     console.log('[Adaptive] Backend raw content:', content.substring(0, 200));
@@ -1483,10 +1485,12 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     return {
       question: parsedResult.question || nextQuestionBase.question,
       subtext: parsedResult.subtext || nextQuestionBase.subtext,
+      source: 'backend',
+      backendUrl: backendResult.backendUrl,
     };
   } catch (err) {
     console.warn('[Adaptive] Backend parse error (recoverable, using fallback question):', err);
-    return nextQuestionBase;
+    return { ...nextQuestionBase, source: 'fallback' };
   }
 }
 
