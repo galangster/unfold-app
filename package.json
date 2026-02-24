@@ -15,6 +15,7 @@
     "health:adaptive": "node scripts/adaptive-healthcheck.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",
     "verify:smoke": "node scripts/verify-smoke.mjs",
+    "verify:device": "node scripts/verify-device-flow.mjs",
     "verify:release": "node scripts/verify-release.mjs",
     "verify:report": "node scripts/verify-report.mjs"
   },
