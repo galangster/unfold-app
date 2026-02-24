@@ -1,5 +1,6 @@
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
+import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import {
   getThemeById,
   getDevotionalTypeById,
@@ -1003,6 +1004,13 @@ export async function generateDevotional(
   onProgress?: (status: string) => void,
   onDayGenerated?: OnDayGeneratedCallback
 ): Promise<GeneratedDevotional> {
+  // Check rate limit before starting generation
+  const rateLimit = await checkRateLimit('devotional');
+  if (!rateLimit.allowed) {
+    console.warn('[Devotional] Rate limit exceeded:', rateLimit);
+    throw new Error(`Daily devotional generation limit reached. Please try again in ${getTimeUntilReset(rateLimit.resetTime)}.`);
+  }
+
   const requestKey = buildFullGenerationRequestKey(context);
   const existingRequest = inFlightFullGenerationRequests.get(requestKey);
 
@@ -1073,6 +1081,9 @@ export async function generateDevotional(
       void logBugEvent('devotional-service', 'full-generation-finished', {
         days: allDays.length,
       });
+
+      // Increment rate limit counter on success
+      await incrementRateLimit('devotional');
 
       return {
         title: seriesTitle || 'Your Devotional Journey',
@@ -1264,6 +1275,14 @@ export async function generateAdaptiveQuestion(
     return nextQuestionBase;
   }
 
+  // Check rate limit before making API call
+  const rateLimit = await checkRateLimit('adaptive-question');
+  if (!rateLimit.allowed) {
+    console.warn('[Adaptive] Rate limit exceeded:', rateLimit);
+    // Fall back to base question if rate limited
+    return nextQuestionBase;
+  }
+
   try {
     const contextStr = previousAnswers
       .map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`)
@@ -1434,6 +1453,9 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       subtext: parsedResult.subtext?.substring(0, 40)
     });
     
+    // Increment rate limit counter on success
+    await incrementRateLimit('adaptive-question');
+    
     return {
       question: parsedResult.question || nextQuestionBase.question,
       subtext: parsedResult.subtext || nextQuestionBase.subtext,
@@ -1450,6 +1472,13 @@ export async function extractShareableQuotes(
   dayTitle: string,
   count: number = 2
 ): Promise<{ text: string; score: number }[]> {
+  // Check rate limit before making API call
+  const rateLimit = await checkRateLimit('extract-quotes');
+  if (!rateLimit.allowed) {
+    console.warn('[ExtractQuotes] Rate limit exceeded');
+    return []; // Return empty if rate limited
+  }
+
   try {
     const extractionSystemPrompt = `You are a quote curator. Extract the most shareable, quotable sentences from this devotional content.
 
@@ -1508,6 +1537,10 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     }
 
     const parsedResult = JSON.parse(content) as { quotes: { text: string; score: number }[] };
+    
+    // Increment rate limit counter on success
+    await incrementRateLimit('extract-quotes');
+    
     return parsedResult.quotes?.slice(0, count) || [];
   } catch (err) {
     console.log('[Quote Extraction] Error:', err);
