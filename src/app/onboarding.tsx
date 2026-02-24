@@ -190,6 +190,8 @@ interface OnboardingData {
 interface AdaptedStep {
   question: string;
   subtext: string;
+  source?: 'backend' | 'fallback';
+  backendUrl?: string;
 }
 
 // Progress indicator component with smooth animation
@@ -398,6 +400,11 @@ export default function OnboardingScreen() {
     return adapted?.subtext ?? step.subtext;
   };
 
+  const getAdaptiveSource = () => {
+    if (!step?.adaptive) return null;
+    return adaptedSteps[step.id]?.source ?? null;
+  };
+
   const buildFallbackAdaptive = (stepId: string, base: { question: string; subtext: string }, previousAnswers: { question: string; answer: string }[]) => {
     const typeInfo = data.selectedType ? DEVOTIONAL_TYPES.find(t => t.id === data.selectedType) : null;
     const themeNames = data.selectedThemes.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean) as string[];
@@ -576,6 +583,8 @@ export default function OnboardingScreen() {
         console.log('[Adaptive] Backend response:', {
           question: adapted.question?.substring(0, 50),
           subtext: adapted.subtext?.substring(0, 30),
+          source: adapted.source,
+          backendUrl: adapted.backendUrl,
           isDifferent,
           length: adapted.question?.length
         });
@@ -586,12 +595,12 @@ export default function OnboardingScreen() {
         } else {
           console.log('[Adaptive] Backend returned base or too short, using local fallback');
           const localFallback = buildFallbackAdaptive(step.id, base, previousAnswers);
-          setAdaptedSteps((prev) => ({ ...prev, [step.id]: localFallback }));
+          setAdaptedSteps((prev) => ({ ...prev, [step.id]: { ...localFallback, source: 'fallback' } }));
         }
       } catch (err) {
         console.log('[Adaptive] API failed, using local fallback:', err);
         const localFallback = buildFallbackAdaptive(step.id, base, previousAnswers);
-        setAdaptedSteps((prev) => ({ ...prev, [step.id]: localFallback }));
+        setAdaptedSteps((prev) => ({ ...prev, [step.id]: { ...localFallback, source: 'fallback' } }));
       } finally {
         setIsLoadingAdaptive(false);
       }
@@ -1768,6 +1777,11 @@ export default function OnboardingScreen() {
                   {showInput && (
                     <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 32 }}>
                       <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
+                      {__DEV__ && step?.adaptive && getAdaptiveSource() && (
+                        <Text style={{ marginTop: 8, fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                          AI source: {getAdaptiveSource()}
+                        </Text>
+                      )}
                     </Animated.View>
                   )}
                   {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
