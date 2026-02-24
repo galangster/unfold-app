@@ -15,30 +15,28 @@ import { DEVOTIONAL_PERSONAS, DevotionalPersona } from '../constants/devotional-
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Backend URL for proxied API calls (keeps API keys server-side)
-const DEFAULT_LOCAL_BACKEND_URL = 'http://localhost:3000';
+// Use remote by default so device builds don't silently point to localhost.
 const DEFAULT_REMOTE_BACKEND_FALLBACK_URL = 'https://oversight-cloning.vibecode.run';
 
 const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || DEFAULT_LOCAL_BACKEND_URL;
+  process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || DEFAULT_REMOTE_BACKEND_FALLBACK_URL;
 const EXPLICIT_FALLBACK_BACKEND_URL =
   process.env.EXPO_PUBLIC_VIBECODE_BACKEND_FALLBACK_URL?.trim() || '';
-
-function isLocalBackendUrl(url: string): boolean {
-  return /localhost|127\.0\.0\.1/.test(url);
-}
 
 function getBackendCandidates(): string[] {
   const candidates = [PRIMARY_BACKEND_URL];
 
-  // Always keep one sane remote fallback unless the primary already is that fallback.
-  // This protects against stale/misconfigured remote URLs returning HTML 404 pages.
-  const fallback = EXPLICIT_FALLBACK_BACKEND_URL ||
-    (PRIMARY_BACKEND_URL !== DEFAULT_REMOTE_BACKEND_FALLBACK_URL
-      ? DEFAULT_REMOTE_BACKEND_FALLBACK_URL
-      : '');
+  // Respect explicit fallback first, but always keep the known remote fallback
+  // as a final safety net unless already included.
+  if (EXPLICIT_FALLBACK_BACKEND_URL && !candidates.includes(EXPLICIT_FALLBACK_BACKEND_URL)) {
+    candidates.push(EXPLICIT_FALLBACK_BACKEND_URL);
+  }
 
-  if (fallback && !candidates.includes(fallback)) {
-    candidates.push(fallback);
+  if (
+    DEFAULT_REMOTE_BACKEND_FALLBACK_URL &&
+    !candidates.includes(DEFAULT_REMOTE_BACKEND_FALLBACK_URL)
+  ) {
+    candidates.push(DEFAULT_REMOTE_BACKEND_FALLBACK_URL);
   }
 
   return candidates;
@@ -1422,6 +1420,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       { timeoutMs: 15000 }  // 15 seconds instead of 20
     );
 
+    console.log('[Adaptive] Backend candidates:', getBackendCandidates());
     console.log('[Adaptive] Backend URL used:', backendResult.backendUrl);
     console.log('[Adaptive] Backend attempts:', backendResult.attempts);
     console.log('[Adaptive] Backend used fallback:', backendResult.usedFallback);
@@ -1430,19 +1429,31 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Adaptive] Backend API error:', response.status, errorText.substring(0, 200));
+      console.warn('[Adaptive] Backend API error (recoverable, using fallback question):', response.status, errorText.substring(0, 200));
       return nextQuestionBase;
     }
 
     const data = await response.json();
-    const content = data.content?.[0]?.text;
 
-    if (!content) {
-      console.error('[Adaptive] Backend returned no content:', data);
+    // Accept already-structured JSON directly from backend.
+    if (typeof data?.question === 'string' && data.question.trim()) {
+      await incrementRateLimit('adaptive-question');
+      return {
+        question: data.question,
+        subtext: typeof data?.subtext === 'string' && data.subtext.trim()
+          ? data.subtext
+          : nextQuestionBase.subtext,
+      };
+    }
+
+    const content = data?.content?.[0]?.text;
+
+    if (!content || typeof content !== 'string') {
+      console.warn('[Adaptive] Backend returned no parseable content (recoverable, using fallback question):', data);
       return nextQuestionBase;
     }
 
-    console.log('[Adaptive] Backend raw content:', content?.substring(0, 200));
+    console.log('[Adaptive] Backend raw content:', content.substring(0, 200));
 
     // Handle markdown-wrapped JSON (```json ... ```)
     let jsonText = content;
@@ -1450,9 +1461,16 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     if (markdownMatch) {
       jsonText = markdownMatch[1].trim();
       console.log('[Adaptive] Extracted JSON from markdown');
+    } else {
+      // Try extracting first JSON object from mixed prose responses.
+      const objectMatch = content.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
+        jsonText = objectMatch[0];
+        console.log('[Adaptive] Extracted JSON object from mixed response');
+      }
     }
 
-    const parsedResult = JSON.parse(jsonText) as { question: string; subtext: string };
+    const parsedResult = JSON.parse(jsonText) as { question?: string; subtext?: string };
     
     console.log('[Adaptive] Backend parsed result:', {
       question: parsedResult.question?.substring(0, 60),
@@ -1467,7 +1485,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       subtext: parsedResult.subtext || nextQuestionBase.subtext,
     };
   } catch (err) {
-    console.error('[Adaptive] Backend parse error:', err);
+    console.warn('[Adaptive] Backend parse error (recoverable, using fallback question):', err);
     return nextQuestionBase;
   }
 }
