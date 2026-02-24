@@ -11,7 +11,11 @@
     "ios": "expo run:ios",
     "web": "DARK_MODE=class expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "health:adaptive": "node scripts/adaptive-healthcheck.mjs",
+    "verify:changed": "node scripts/verify-changed.mjs",
+    "verify:smoke": "node scripts/verify-smoke.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
