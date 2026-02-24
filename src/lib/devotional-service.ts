@@ -30,8 +30,12 @@ function isLocalBackendUrl(url: string): boolean {
 function getBackendCandidates(): string[] {
   const candidates = [PRIMARY_BACKEND_URL];
 
+  // Always keep one sane remote fallback unless the primary already is that fallback.
+  // This protects against stale/misconfigured remote URLs returning HTML 404 pages.
   const fallback = EXPLICIT_FALLBACK_BACKEND_URL ||
-    (isLocalBackendUrl(PRIMARY_BACKEND_URL) ? DEFAULT_REMOTE_BACKEND_FALLBACK_URL : '');
+    (PRIMARY_BACKEND_URL !== DEFAULT_REMOTE_BACKEND_FALLBACK_URL
+      ? DEFAULT_REMOTE_BACKEND_FALLBACK_URL
+      : '');
 
   if (fallback && !candidates.includes(fallback)) {
     candidates.push(fallback);
@@ -78,8 +82,10 @@ async function postJsonWithBackendFallback(
         signal: controller.signal,
       });
 
-      // If this backend is unhealthy and we have a fallback endpoint, try it.
-      if (response.status >= 500 && hasAnotherCandidate) {
+      // If this backend fails and we have a fallback endpoint, try it.
+      // This specifically guards against stale/misconfigured deployments returning
+      // HTML 404 pages for API routes.
+      if (!response.ok && hasAnotherCandidate) {
         console.warn(
           `[Devotional] Backend ${backendUrl} returned ${response.status}; trying fallback ${backendCandidates[i + 1]}`
         );

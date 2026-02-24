@@ -1604,6 +1604,7 @@ export default function OnboardingScreen() {
   }, [isLoadingAdaptive, isPreparingDiscovery]);
 
   const breathingStyle = useAnimatedStyle(() => ({ opacity: breathingOpacity.value }));
+  const preparingQuip = useMemo(() => getRandomLoadingQuip(), [isPreparingDiscovery]);
 
   // Full-screen loading removed - using inline loading instead
   // if (isLoadingAdaptive) {
@@ -1623,8 +1624,6 @@ export default function OnboardingScreen() {
   // }
 
   if (isPreparingDiscovery) {
-    const preparingQuip = useMemo(() => getRandomLoadingQuip(), []);
-    
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
