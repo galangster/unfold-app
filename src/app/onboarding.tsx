@@ -1626,20 +1626,23 @@ export default function OnboardingScreen() {
   if (isPreparingDiscovery) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+            </View>
+            <Text style={{ 
+              fontFamily: FontFamily.ui, 
+              fontSize: 15, 
+              color: colors.textMuted,
+              letterSpacing: 0.5,
+              textAlign: 'center',
+            }}>
+              {preparingQuip}
+            </Text>
           </View>
-          <Text style={{ 
-            fontFamily: FontFamily.ui, 
-            fontSize: 15, 
-            color: colors.textMuted,
-            letterSpacing: 0.5 
-          }}>
-            {preparingQuip}
-          </Text>
         </SafeAreaView>
       </View>
     );
