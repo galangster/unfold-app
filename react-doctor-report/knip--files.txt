@@ -1,0 +1,30 @@
+Rule: knip/files
+Severity: warning
+Category: Dead Code
+Count: 20
+
+Unused file
+
+Suggestion: This file is not imported by any other file in the project.
+
+Files:
+  playwright.config.ts
+  scripts/audit-unfold.ts
+  scripts/audit-visual.ts
+  scripts/autonomous-visual-loop.ts
+  src/components/AudioPlayer.tsx
+  src/components/GlassMenu.tsx
+  src/components/NamePromptModal.tsx
+  src/components/StreakCelebration.tsx
+  src/components/StreakIntegrationExample.tsx
+  src/components/ThemeTypeSelector.tsx
+  src/components/Themed.tsx
+  src/hooks/useAnalytics.ts
+  src/hooks/useAuth.ts
+  src/lib/streak-notifications.ts
+  src/lib/streak.ts
+  src/lib/useClientOnlyValue.ts
+  src/lib/useColorScheme.ts
+  src/lib/voice-samples.ts
+  src/lib/state/example-state.ts
+  src/widgets/ios/UnfoldTodayWidget.tsx

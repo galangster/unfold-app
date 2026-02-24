@@ -4,21 +4,20 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Dimensions,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { Play, Pause, SkipBack, SkipForward, ChevronDown } from 'lucide-react-native';
+import { Play, Pause } from 'lucide-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { FontFamily } from '@/constants/fonts';
+import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
-import { streamDevotionalAudio, WordTimestamp, CARTESIA_VOICES } from '@/lib/cartesia';
+import { streamDevotionalAudio, WordTimestamp } from '@/lib/cartesia';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
-import { AudioWaveform } from './AudioWaveform';
 
-const { width, height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AudioPlayerProps {
   title: string;
@@ -32,8 +31,6 @@ interface AudioPlayerProps {
 }
 
 export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
-  title,
-  subtitle,
   content,
   scriptureReference,
   scriptureText,
@@ -42,149 +39,107 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   onClose,
 }, ref) => {
   const { colors, isDark } = useTheme();
-  
+
   const [isLoading, setIsLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [activeWordIndex, setActiveWordIndex] = useState(-1);
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  
-  const soundRef = useRef<typeof Audio.Sound | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragPosition, setDragPosition] = useState(0);
+
+  const shouldAutoplayRef = useRef(false);
   const audioUrlRef = useRef<string | null>(null);
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressBarRef = useRef<View>(null);
+  const progressBarWidthRef = useRef(0);
 
-  // Snap points for the bottom sheet
-  const snapPoints = useMemo(() => ['25%', '50%', '90%'], []);
+  const player = useAudioPlayer(audioUrl ? { uri: audioUrl } : null, { updateInterval: 100 });
+  const status = useAudioPlayerStatus(player);
 
-  // Combine devotional content with scripture for full audio
+  const isPlaying = status.playing;
+  const currentTime = status.currentTime * 1000;
+  const duration = status.duration * 1000;
+
+  // Thinner snap point for horizontal layout (~8-10% height)
+  const snapPoints = useMemo(() => ['10%', '25%'], []);
+
   const fullText = useMemo(() => {
     return `${content}\n\n${scriptureReference}: ${scriptureText}`;
   }, [content, scriptureReference, scriptureText]);
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      cleanup();
-    };
+    void setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      allowsRecording: false,
+      interruptionMode: 'duckOthers',
+      shouldRouteThroughEarpiece: false,
+    });
   }, []);
 
-  const cleanup = useCallback(async () => {
-    // Stop progress tracking
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
+  useEffect(() => {
+    audioUrlRef.current = audioUrl;
+  }, [audioUrl]);
 
-    // Stop and unload sound
-    if (soundRef.current) {
+  useEffect(() => {
+    if (!status.isLoaded || !audioUrl || !shouldAutoplayRef.current) return;
+    player.play();
+    shouldAutoplayRef.current = false;
+  }, [status.isLoaded, audioUrl, player]);
+
+  useEffect(() => {
+    if (status.didJustFinish) {
+      Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_COMPLETED, {
+        voice_id: voiceId,
+      });
+    }
+  }, [status.didJustFinish, voiceId]);
+
+  useEffect(() => {
+    return () => {
       try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch (error) {
-        logger.warn('Error cleaning up audio:', error);
+        player.pause();
+      } catch {}
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
       }
-      soundRef.current = null;
-    }
+    };
+  }, [player]);
 
-    // Revoke audio URL
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
+  // Auto-load and play if premium
+  useEffect(() => {
+    if (isPremium && !audioUrl && !hasError) {
+      loadAndPlayAudio();
+    } else if (!isPremium) {
+      setHasError(true);
+      setErrorMessage('Audio playback is a premium feature. Upgrade to listen.');
     }
   }, []);
 
   const loadAndPlayAudio = useCallback(async () => {
-    if (!isPremium) {
-      setHasError(true);
-      setErrorMessage('Audio playback is a premium feature. Upgrade to listen.');
-      return;
-    }
-
     try {
       setIsLoading(true);
       setHasError(false);
       setErrorMessage('');
 
-      // Cleanup any existing audio
-      await cleanup();
+      if (audioUrlRef.current) {
+        try {
+          player.pause();
+        } catch {}
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
 
-      // Track audio play start
       Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_STARTED, {
-        devotional_title: title,
         voice_id: voiceId,
       });
 
-      // Stream audio from Cartesia
-      const result = await streamDevotionalAudio(
-        fullText,
-        voiceId,
-        (word, timestamp) => {
-          // Find word index for karaoke effect
-          const index = wordTimestamps.findIndex(wt => wt.word === word && Math.abs(wt.start - timestamp) < 0.1);
-          if (index !== -1) {
-            setActiveWordIndex(index);
-          }
-        }
-      );
-
-      // Store word timestamps for karaoke effect
+      const result = await streamDevotionalAudio(fullText, voiceId);
       setWordTimestamps(result.wordTimestamps);
 
-      // Create audio URL and load
-      audioUrlRef.current = result.audioUrl;
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: result.audioUrl },
-        { shouldPlay: true }
-      );
-
-      soundRef.current = sound;
-      setIsPlaying(true);
-      setDuration(result.duration * 1000); // Convert to milliseconds
-
-      // Set up playback status listener
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded) {
-          setCurrentTime(status.positionMillis);
-          setIsPlaying(status.isPlaying);
-
-          // Update active word based on timestamp
-          if (result.wordTimestamps.length > 0 && status.positionMillis) {
-            const currentSeconds = status.positionMillis / 1000;
-            const currentWord = result.wordTimestamps.findIndex(
-              (wt) => currentSeconds >= wt.start && currentSeconds <= wt.end
-            );
-            if (currentWord !== -1) {
-              setActiveWordIndex(currentWord);
-            }
-          }
-
-          // Handle completion
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            setCurrentTime(0);
-            setActiveWordIndex(-1);
-            Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_COMPLETED, {
-              devotional_title: title,
-              voice_id: voiceId,
-            });
-          }
-        }
-      });
-
-      // Start progress tracking
-      progressIntervalRef.current = setInterval(async () => {
-        if (soundRef.current) {
-          const status = await soundRef.current.getStatusAsync();
-          if (status.isLoaded) {
-            setCurrentTime(status.positionMillis);
-          }
-        }
-      }, 100);
-
+      shouldAutoplayRef.current = true;
+      setAudioUrl(result.audioUrl);
     } catch (error) {
       logger.error('Error loading audio:', error);
       setHasError(true);
@@ -192,64 +147,50 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     } finally {
       setIsLoading(false);
     }
-  }, [isPremium, fullText, voiceId, title, wordTimestamps, cleanup]);
+  }, [isPremium, fullText, voiceId, player]);
 
   const togglePlayback = useCallback(async () => {
-    if (!soundRef.current) {
+    if (!audioUrl || !status.isLoaded) {
       await loadAndPlayAudio();
       return;
     }
 
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        if (status.isPlaying) {
-          await soundRef.current.pauseAsync();
-          setIsPlaying(false);
-          Analytics.logEvent(AnalyticsEvents.AUDIO_PAUSED, {
-            devotional_title: title,
-            position_ms: status.positionMillis,
-          });
-        } else {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
+      if (status.playing) {
+        player.pause();
+        Analytics.logEvent(AnalyticsEvents.AUDIO_PAUSED, {
+          position_ms: currentTime,
+        });
+      } else {
+        // Replay behavior when at end
+        if (status.duration > 0 && Math.abs(status.currentTime - status.duration) < 0.05) {
+          await player.seekTo(0);
         }
+        player.play();
       }
     } catch (error) {
       logger.error('Error toggling playback:', error);
     }
-  }, [loadAndPlayAudio, title]);
+  }, [audioUrl, status, loadAndPlayAudio, player, currentTime]);
 
-  const skipBackward = useCallback(async () => {
-    if (!soundRef.current) return;
-    
-    try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        const newPosition = Math.max(0, status.positionMillis - 10000);
-        await soundRef.current.setPositionAsync(newPosition);
-      }
-    } catch (error) {
-      logger.error('Error skipping backward:', error);
-    }
+  const handleProgressBarLayout = useCallback((event: any) => {
+    progressBarWidthRef.current = event.nativeEvent.layout.width;
   }, []);
 
-  const skipForward = useCallback(async () => {
-    if (!soundRef.current) return;
+  const handleProgressPress = useCallback(async (event: any) => {
+    if (!audioUrl || !status.isLoaded || duration <= 0) return;
+    
+    const { locationX } = event.nativeEvent;
+    const progress = Math.max(0, Math.min(1, locationX / progressBarWidthRef.current));
+    const newPositionSec = (progress * duration) / 1000;
     
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        const newPosition = Math.min(
-          status.durationMillis || 0,
-          status.positionMillis + 10000
-        );
-        await soundRef.current.setPositionAsync(newPosition);
-      }
+      await player.seekTo(newPositionSec);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
-      logger.error('Error skipping forward:', error);
+      logger.error('Error seeking:', error);
     }
-  }, []);
+  }, [audioUrl, status.isLoaded, duration, player]);
 
   const formatTime = useCallback((ms: number) => {
     const seconds = Math.floor(ms / 1000);
@@ -258,11 +199,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
-  // Get voice name
-  const voiceName = useMemo(() => {
-    const voice = CARTESIA_VOICES.find((v) => v.id === voiceId);
-    return voice?.name || 'Default Voice';
-  }, [voiceId]);
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <BottomSheet
@@ -272,12 +209,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       enablePanDownToClose={true}
       onClose={onClose}
       backgroundStyle={{
-        backgroundColor: colors.background,
+        backgroundColor: 'transparent',
       }}
       handleStyle={{
-        backgroundColor: colors.background,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: 'transparent',
       }}
       handleIndicatorStyle={{
         backgroundColor: colors.textMuted,
@@ -286,130 +221,84 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
         borderRadius: 2,
       }}
     >
-      <BottomSheetView style={[styles.container, { backgroundColor: colors.background }]}>
-        {/* Close button */}
-        <Pressable
-          onPress={onClose}
-          style={styles.closeButton}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ChevronDown size={24} color={colors.textMuted} />
-        </Pressable>
-
-        {/* Title */}
-        <View style={styles.titleContainer}>
-          <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
-            {title}
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textMuted, fontFamily: FontFamily.body }]}>
-            {subtitle}
-          </Text>
-        </View>
-
-        {/* Karaoke-style text display */}
-        <View style={styles.textContainer}>
-          {wordTimestamps.length > 0 ? (
-            <Text style={[styles.karaokeText, { fontFamily: FontFamily.body }]}>
-              {wordTimestamps.map((wt, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    color: index === activeWordIndex ? colors.accent : colors.textMuted,
-                  }}
-                >
-                  {wt.word + ' '}
-                </Text>
-              ))}
-            </Text>
-          ) : (
-            <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
-              {isLoading ? 'Loading audio...' : 'Press play to start listening'}
-            </Text>
-          )}
-        </View>
-
-        {/* Audio Waveform Visualization */}
-        <AudioWaveform
-          isPlaying={isPlaying}
-          activeWordIndex={activeWordIndex}
-          totalWords={wordTimestamps.length}
-          color={colors.accent}
-          barCount={24}
+      <BottomSheetView style={styles.container}>
+        {/* Blur background */}
+        <BlurView
+          intensity={80}
+          tint={isDark ? 'dark' : 'light'}
+          style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)' }]}
         />
 
-        {/* Progress bar */}
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  backgroundColor: colors.accent,
-                  width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%',
-                },
-              ]}
-            />
+        {/* Content over blur - Horizontal Layout */}
+        <View style={styles.content}>
+          {/* Left side: Progress bar with time labels */}
+          <View style={styles.leftSection}>
+            {/* Progress bar - scrubbable */}
+            <Pressable
+              ref={progressBarRef}
+              onLayout={handleProgressBarLayout}
+              onPress={handleProgressPress}
+              style={[styles.progressBarContainer, { backgroundColor: colors.border }]}
+            >
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: colors.accent,
+                    width: `${progressPercent}%`,
+                  },
+                ]}
+              />
+              {/* Progress thumb */}
+              <View
+                style={[
+                  styles.progressThumb,
+                  {
+                    backgroundColor: colors.accent,
+                    left: `${progressPercent}%`,
+                    transform: [{ translateX: -8 }],
+                  },
+                ]}
+              />
+            </Pressable>
+            
+            {/* Time labels below progress bar */}
+            <View style={styles.timeContainer}>
+              <Text style={[styles.timeText, { color: colors.textMuted }]}>
+                {formatTime(currentTime)}
+              </Text>
+              <Text style={[styles.timeText, { color: colors.textMuted }]}>
+                {formatTime(duration)}
+              </Text>
+            </View>
           </View>
-          <View style={styles.timeContainer}>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(currentTime)}
-            </Text>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(duration)}
-            </Text>
-          </View>
-        </View>
 
-        {/* Controls */}
-        <View style={styles.controlsContainer}>
-          <Pressable
-            onPress={skipBackward}
-            style={styles.controlButton}
-            disabled={!soundRef.current}
-          >
-            <SkipBack size={24} color={soundRef.current ? colors.text : colors.textMuted} />
-          </Pressable>
-
+          {/* Right side: Play/pause button */}
           <Pressable
             onPress={togglePlayback}
-            style={[
-              styles.playButton,
-              { backgroundColor: colors.accent },
-            ]}
+            style={[styles.playButton, { backgroundColor: colors.accent }]}
+            disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color="#000" size="small" />
+              <ActivityIndicator color="#fff" size="small" />
             ) : isPlaying ? (
-              <Pause size={24} color="#000" />
+              <Pause size={24} color="#fff" fill="#fff" />
             ) : (
-              <Play size={24} color="#000" fill="#000" />
+              <Play size={24} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
             )}
           </Pressable>
 
-          <Pressable
-            onPress={skipForward}
-            style={styles.controlButton}
-            disabled={!soundRef.current}
-          >
-            <SkipForward size={24} color={soundRef.current ? colors.text : colors.textMuted} />
-          </Pressable>
+          {/* Error message overlay */}
+          {hasError && (
+            <View style={[StyleSheet.absoluteFill, styles.errorOverlay]}>
+              <View style={[styles.errorContainer, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
+                <Text style={[styles.errorText, { color: isDark ? '#ef4444' : '#dc2626' }]}>
+                  {errorMessage}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
-
-        {/* Voice info */}
-        <View style={styles.voiceContainer}>
-          <Text style={[styles.voiceText, { color: colors.textMuted }]}>
-            Voice: {voiceName}
-          </Text>
-        </View>
-
-        {/* Error message */}
-        {hasError && (
-          <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
-            <Text style={[styles.errorText, { color: colors.error }]}>
-              {errorMessage}
-            </Text>
-          </View>
-        )}
       </BottomSheetView>
     </BottomSheet>
   );
@@ -420,90 +309,84 @@ AudioPlayer.displayName = 'AudioPlayer';
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
-  closeButton: {
-    alignSelf: 'center',
-    padding: 8,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  titleContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 20,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  textContainer: {
+  content: {
     flex: 1,
-    marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+    gap: 16,
   },
-  karaokeText: {
-    fontSize: 16,
-    lineHeight: 24,
+  leftSection: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  placeholderText: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  progressContainer: {
-    marginBottom: 24,
-  },
-  progressBar: {
+  progressBarContainer: {
     height: 4,
     borderRadius: 2,
-    overflow: 'hidden',
+    overflow: 'visible',
+    position: 'relative',
   },
   progressFill: {
     height: '100%',
     borderRadius: 2,
   },
+  progressThumb: {
+    position: 'absolute',
+    top: -6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   timeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 6,
   },
   timeText: {
-    fontSize: 12,
-  },
-  controlsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 32,
-    marginBottom: 24,
-  },
-  controlButton: {
-    padding: 12,
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
   },
   playButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    flexShrink: 0,
   },
-  voiceContainer: {
+  errorOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  voiceText: {
-    fontSize: 12,
+    paddingHorizontal: 20,
   },
   errorContainer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
-    marginTop: 16,
+    maxWidth: '100%',
   },
   errorText: {
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
   },
 });
+
+export default AudioPlayer;

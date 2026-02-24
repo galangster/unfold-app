@@ -1,0 +1,25 @@
+Rule: react-doctor/no-giant-component
+Severity: warning
+Category: Architecture
+Count: 15
+
+Component "DevotionalWebView" is 577 lines — consider breaking it into smaller focused components
+
+Suggestion: Extract logical sections into focused components: `<UserHeader />`, `<UserActions />`, etc.
+
+Files:
+  src/components/reading/DevotionalWebView.tsx: 34
+  src/app/(main)/wallpaper.tsx: 121
+  src/app/(main)/stats.tsx: 91
+  src/app/(main)/settings.tsx: 62
+  src/app/(main)/reading.tsx: 73
+  src/app/style-onboarding.tsx: 116
+  src/app/(main)/my-content.tsx: 22
+  src/app/(main)/journal.tsx: 27
+  src/app/generating.tsx: 84
+  src/app/(onboarding)/sign-in.tsx: 66
+  src/app/onboarding.tsx: 86
+  src/app/paywall.tsx: 27
+  src/app/(main)/home.tsx: 107
+  src/components/AudioPlayer.tsx: 36
+  src/components/ThemeTypeSelector.tsx: 85

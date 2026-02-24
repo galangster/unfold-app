@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, TouchableOpacity, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -16,7 +16,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Check } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -28,7 +28,7 @@ import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
-import { DevotionalContent } from '@/components/reading';
+import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 
@@ -109,6 +109,8 @@ export default function ReadingScreen() {
 
   const [viewingDay, setViewingDay] = useState(() => requestedDayNumber ?? currentDevotional?.currentDay ?? 1);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
+  const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
   const audioPlayerRef = useRef<BottomSheet>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -988,11 +990,6 @@ export default function ReadingScreen() {
 
               <Pressable
                 onPress={() => {
-                  if (!isPremium) {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    router.push('/paywall');
-                    return;
-                  }
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
                     pathname: '/(main)/journal',
@@ -1005,13 +1002,15 @@ export default function ReadingScreen() {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Open journal"
-                accessibilityHint={!isPremium ? "Premium feature. Opens upgrade options." : "Write a reflection about today's reading"}
-                accessibilityState={{ disabled: !isPremium }}
-                style={{ padding: 8 }}
+                accessibilityHint="Write a reflection about today's reading"
+                style={({ pressed }) => ({
+                  padding: 8,
+                  opacity: pressed ? 0.6 : 1,
+                })}
               >
                 <BookOpen
                   size={22}
-                  color={!isPremium ? colors.textMuted : colors.text}
+                  color={colors.text}
                   strokeWidth={1.5}
                 />
               </Pressable>
@@ -1020,12 +1019,28 @@ export default function ReadingScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  audioPlayerRef.current?.expand();
+                  if (!isPremium) {
+                    // Never open player for non-premium users; show toast instead
+                    setIsAudioPlayerVisible(false);
+                    setAudioToast({ visible: true, message: 'Audio playback is a premium feature. Upgrade to listen.' });
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => setAudioToast(null), 3000);
+                    return;
+                  }
+                  if (!isAudioPlayerVisible) {
+                    setIsAudioPlayerVisible(true);
+                    // Small delay to let component mount before expanding
+                    setTimeout(() => {
+                      audioPlayerRef.current?.expand();
+                    }, 50);
+                  } else {
+                    audioPlayerRef.current?.expand();
+                  }
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Listen to devotional"
-                accessibilityHint="Play audio version of today's reading"
+                accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
                 style={{ padding: 8 }}
               >
                 <Play
@@ -1079,8 +1094,8 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
 
-              {/* Complete button - show if viewing day not yet completed */}
-              {!isCompleted && (
+              {/* Complete button + Share button row - always show Share, toggle Complete button state */}
+              {!isCompleted ? (
                 <Animated.View
                   exiting={FadeOut.duration(200)}
                   style={{ marginTop: 48, paddingHorizontal: 24 }}
@@ -1093,114 +1108,144 @@ export default function ReadingScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    {/* Complete Day Button - 70% width, white text on gold */}
-                    <Pressable
+                    {/* Complete Day Button - 80% width, white text on gold */}
+                    <TouchableOpacity
                       onPress={handleComplete}
+                      activeOpacity={0.85}
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
-                      style={({ pressed }) => ({
-                        flex: 0.7,
+                      style={{
+                        flex: 4,
                         backgroundColor: colors.accent,
                         paddingVertical: 18,
-                        paddingHorizontal: 24,
-                        borderRadius: 32,
-                        shadowColor: colors.accent,
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: pressed ? 0.4 : 0.2,
-                        shadowRadius: 12,
-                        elevation: 8,
-                        transform: [{ scale: pressed ? 0.98 : 1 }],
+                        paddingHorizontal: 32,
+                        borderRadius: 28,
                         alignItems: 'center',
                         justifyContent: 'center',
-                      })}
-                    >
-                      {({ pressed }) => (
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.display,
-                            fontSize: 17,
-                            color: '#ffffff',
-                            textAlign: 'center',
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          {isLastDay ? 'Complete Journey' : 'Complete Day'}
-                        </Text>
-                      )}
-                    </Pressable>
-
-                    {/* Share Button - 30% width, ghost/outline style */}
-                    <Pressable
-                      onPress={handleShare}
-                      accessibilityRole="button"
-                      accessibilityLabel="Share devotional"
-                      accessibilityHint="Share this day's reading with others"
-                      style={({ pressed }) => ({
-                        flex: 0.3,
-                        paddingVertical: 16,
-                        paddingHorizontal: 16,
-                        borderRadius: 32,
-                        borderWidth: 1.5,
-                        borderColor: colors.textMuted,
-                        backgroundColor: 'transparent',
-                        opacity: pressed ? 0.7 : 1,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      })}
+                      }}
                     >
                       <Text
                         style={{
-                          fontFamily: FontFamily.display,
+                          fontFamily: FontFamily.uiSemiBold,
+                          fontSize: 17,
+                          color: '#ffffff',
+                          textAlign: 'center',
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        {isLastDay ? 'Complete Journey' : 'Complete Day'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Share Button - 20% width, gray background */}
+                    <TouchableOpacity
+                      onPress={handleShare}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share devotional"
+                      accessibilityHint="Share this day's reading with others"
+                      style={{
+                        flex: 1,
+                        backgroundColor: isDark ? '#3A3A3A' : '#E5E5E5',
+                        paddingVertical: 18,
+                        paddingHorizontal: 16,
+                        borderRadius: 28,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiSemiBold,
                           fontSize: 15,
-                          color: colors.textMuted,
+                          color: isDark ? '#AAAAAA' : '#666666',
                           letterSpacing: 0.3,
                         }}
                       >
                         Share
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
                 </Animated.View>
-              )}
-
-              {/* Completed indicator */}
-              {isCompleted && (
+              ) : (
                 <Animated.View
                   entering={FadeIn.duration(400)}
-                  style={{ marginTop: 48, marginHorizontal: 24 }}
+                  style={{ marginTop: 48, paddingHorizontal: 24 }}
                 >
-                  {/* Day completed card */}
+                  {/* Horizontal button row - Day Completed (80%) + Share (20%) */}
                   <View
                     style={{
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
-                      borderRadius: 20,
-                      paddingVertical: 20,
-                      paddingHorizontal: 24,
+                      flexDirection: 'row',
+                      gap: 16,
                       alignItems: 'center',
-                      borderWidth: 1,
-                      borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
                     }}
                   >
-                    <Text
+                    {/* Day Completed Button - 80% width, light gray background with gold border and text */}
+                    <TouchableOpacity
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      }}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Day completed"
+                      accessibilityHint="This day has already been marked as complete"
                       style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 18,
-                        color: colors.text,
-                        marginBottom: 4,
+                        flex: 4,
+                        backgroundColor: isDark ? '#2A2A2A' : '#F0F0F0',
+                        paddingVertical: 18,
+                        paddingHorizontal: 32,
+                        borderRadius: 28,
+                        borderWidth: 2,
+                        borderColor: colors.accent,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 8,
                       }}
                     >
-                      ✓ Day completed
-                    </Text>
-                    <Text
+                      <Check size={18} color={colors.accent} strokeWidth={2.5} />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiSemiBold,
+                          fontSize: 17,
+                          color: colors.accent,
+                          textAlign: 'center',
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        Day Completed
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Share Button - 20% width, gray background */}
+                    <TouchableOpacity
+                      onPress={handleShare}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share devotional"
+                      accessibilityHint="Share this day's reading with others"
                       style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: 14,
-                        color: colors.textMuted,
+                        flex: 1,
+                        backgroundColor: isDark ? '#3A3A3A' : '#E5E5E5',
+                        paddingVertical: 18,
+                        paddingHorizontal: 16,
+                        borderRadius: 28,
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
-                      Great job today
-                    </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiSemiBold,
+                          fontSize: 15,
+                          color: isDark ? '#AAAAAA' : '#666666',
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        Share
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
@@ -1321,7 +1366,7 @@ export default function ReadingScreen() {
                       </View>
                   )}
                 </Animated.View>
-              )}
+              )} 
             </ScrollView>
           </SafeAreaView>
         </Animated.View>
@@ -1346,19 +1391,61 @@ export default function ReadingScreen() {
       />
 
       {/* Audio Player Bottom Sheet */}
-      {currentDayData && (
+      {isPremium && isAudioPlayerVisible && currentDayData && (
         <AudioPlayer
           ref={audioPlayerRef}
           title={currentDayData.title}
           subtitle={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
-          content={currentDayData.content}
+          content={currentDayData.bodyText}
           scriptureReference={currentDayData.scriptureReference}
           scriptureText={currentDayData.scriptureText}
           voiceId={user?.preferredVoice || 'default'}
           isPremium={isPremium}
-          onClose={() => audioPlayerRef.current?.close()}
+          onClose={() => {
+            setIsAudioPlayerVisible(false);
+          }}
         />
+      )}
+
+      {/* Premium Toast Notification */}
+      {audioToast?.visible && (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(200)}
+          style={[
+            styles.toastContainer,
+            { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
+          ]}
+        >
+          <Text style={styles.toastText}>{audioToast.message}</Text>
+        </Animated.View>
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  toastContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: '10%',
+    right: '10%',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+});

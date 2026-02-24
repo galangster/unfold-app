@@ -9,7 +9,9 @@ import {
   Platform,
   NativeSyntheticEvent,
   NativeScrollEvent,
-  AccessibilityInfo,
+  LayoutAnimation,
+  Keyboard,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,13 +25,15 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
+  type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronDown, ArrowRight, Hand, Fingerprint, Moon, Compass, Heart, Sparkles, Wind, Mountain, Sun, Eye, Flame, Sparkle, CloudRain, Scale, Target, Stars, BookOpen, Users, Music, Crown, Leaf, MessageCircle, Calendar, Wheat, User, Wand2 } from 'lucide-react-native';
+import { ChevronLeft, ChevronDown, ArrowRight, Hand, Fingerprint, Moon, Compass, Heart, Sparkles, Wind, Mountain, Sun, Eye, Flame, Sparkle, CloudRain, Scale, Target, Stars, BookOpen, Users, Music, Crown, Leaf, MessageCircle, Calendar, Wheat, User, Wand2, Smile, Gift, Telescope } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
+import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
@@ -39,10 +43,115 @@ import {
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
 
+// Quippy biblical loading phrases for the adaptive question generation
+const LOADING_QUIPS = [
+  'Contemplating...',
+  'Pondering...',
+  'Seeking wisdom...',
+  'Listening...',
+  'In quietness...',
+  'Stillness...',
+  'Reflecting...',
+  'Waiting...',
+  'Be still...',
+  'Resting...',
+  'Considering...',
+  'Meditating...',
+  'Attending...',
+  'Pausing...',
+  'Dwelling...',
+];
+
+const getRandomLoadingQuip = () => LOADING_QUIPS[Math.floor(Math.random() * LOADING_QUIPS.length)];
+
+// ThemePill component - defined at module scope to avoid nested component definition
+interface ThemePillProps {
+  theme: {
+    id: ThemeCategory;
+    name: string;
+    description: string;
+    scriptureFocus: string[];
+    toneGuidance: string;
+    icon: React.ReactNode;
+  };
+  isSelected: boolean;
+  onPress: () => void;
+  selectionOrder?: number;
+  colors: {
+    buttonBackgroundPressed: string;
+    inputBackground: string;
+    borderFocused: string;
+    border: string;
+    text: string;
+    textMuted: string;
+    accent: string;
+    background: string;
+  };
+}
+
+function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: ThemePillProps) {
+  const [isPressed, setIsPressed] = useState(false);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 10,
+          paddingHorizontal: 16,
+          borderRadius: 20,
+          backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+          borderWidth: 1.5,
+          borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
+          gap: 8,
+        }}
+      >
+        {theme.icon}
+        <Text
+          style={{
+            fontFamily: FontFamily.uiMedium,
+            fontSize: 14,
+            color: isSelected ? colors.text : colors.textMuted,
+          }}
+        >
+          {theme.name}
+        </Text>
+        {selectionOrder && (
+          <View
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              backgroundColor: colors.accent,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.mono,
+                fontSize: 10,
+                color: colors.background,
+              }}
+            >
+              {selectionOrder}
+            </Text>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'bibleTranslation', question: 'Which Bible translation do you prefer?', subtext: "We'll use this translation for all scripture in your devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
-  { id: 'aboutMe', question: 'Tell me a little about yourself.', subtext: "Who you are, what you do, what matters to you. There's no wrong answer here.", type: 'multiline' as const, placeholder: "I'm a...", adaptive: true, skipIfHasValue: true, hasVariations: false },
+  { id: 'aboutMe', question: 'Tell me about yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive — it all shapes what we create for you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want to explore?', subtext: 'Pick one that resonates, or skip to let us guide you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -83,6 +192,86 @@ interface AdaptedStep {
   subtext: string;
 }
 
+// Progress indicator component with smooth animation
+function ProgressIndicator({ 
+  currentStepIndex, 
+  totalSteps, 
+  colors 
+}: { 
+  currentStepIndex: number; 
+  totalSteps: number; 
+  colors: any;
+}) {
+  const activeIndex = useSharedValue(currentStepIndex);
+  
+  useEffect(() => {
+    activeIndex.value = withTiming(currentStepIndex, { 
+      duration: 300, 
+      easing: Easing.out(Easing.ease) 
+    });
+  }, [currentStepIndex]);
+
+  return (
+    <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
+      <Text style={{ 
+        fontFamily: FontFamily.ui, 
+        fontSize: 13, 
+        color: colors.textMuted,
+        letterSpacing: 0.5 
+      }}>
+        Question {currentStepIndex + 1} of {totalSteps}
+      </Text>
+      <View style={{ 
+        flexDirection: 'row', 
+        marginTop: 8, 
+        gap: 4 
+      }}>
+        {Array.from({ length: totalSteps }).map((_, idx) => (
+          <ProgressDot 
+            key={idx}
+            index={idx}
+            activeIndex={activeIndex}
+            colors={colors}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Individual animated dot
+function ProgressDot({ 
+  index, 
+  activeIndex, 
+  colors 
+}: { 
+  index: number; 
+  activeIndex: SharedValue<number>; 
+  colors: any;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const isActive = index === Math.round(activeIndex.value);
+    const isCompleted = index < activeIndex.value;
+    
+    return {
+      width: withTiming(isActive ? 24 : 6, { duration: 300 }),
+      backgroundColor: isCompleted || isActive ? colors.accent : colors.border,
+    };
+  });
+
+  return (
+    <Animated.View 
+      style={[
+        {
+          height: 6,
+          borderRadius: 3,
+        },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
 export default function OnboardingScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -94,11 +283,16 @@ export default function OnboardingScreen() {
   const TYPES_WITH_SUBJECT_SELECTION: DevotionalType[] = ['book_study', 'character_study'];
 
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [showInput, setShowInput] = useState(false);
-  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
+  const [isLoadingAdaptive, setIsLoadingAdaptive] = useState(false);
   const [adaptedSteps, setAdaptedSteps] = useState<Record<string, AdaptedStep>>({});
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   const [showListScrollHint, setShowListScrollHint] = useState(true);
+  
+  // NEW: Loading state for discovery preparation
+  const [isPreparingDiscovery, setIsPreparingDiscovery] = useState(false);
+  const [preparationMessage, setPreparationMessage] = useState('Getting everything ready for you...');
 
   const inputRef = useRef<TextInput>(null);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -137,6 +331,11 @@ export default function OnboardingScreen() {
   // Filter steps based on what we already know
   const STEPS = useMemo(() => {
     return ALL_STEPS.filter((step) => {
+      // Skip reminderTime for non-premium users (push notifications are premium)
+      if (step.id === 'reminderTime' && !existingUser?.isPremium) {
+        return false;
+      }
+      
       // Skip study subject if user selected themes or guided mode (not a study type)
       if (step.id === 'studySubject') {
         // If they selected themes or guided, skip subject selection
@@ -168,9 +367,133 @@ export default function OnboardingScreen() {
   const currentStepIndex = useMemo(() => STEPS.findIndex((s) => s.id === currentStepId), [STEPS, currentStepId]);
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
+  useEffect(() => {
+    if (step || STEPS.length === 0) return;
+
+    const allOrder = ALL_STEPS.map((s) => s.id);
+    const currentOrder = allOrder.indexOf(currentStepId);
+    const fallback =
+      STEPS.find((s) => allOrder.indexOf(s.id) > currentOrder) ||
+      STEPS[STEPS.length - 1] ||
+      STEPS[0];
+
+    if (fallback?.id && fallback.id !== currentStepId) {
+      setCurrentStepId(fallback.id as StepId);
+    }
+  }, [step, STEPS, currentStepId]);
+
   const getStepIds = () => STEPS.map((s) => s.id);
 
   // Get previous answers for adaptive question generation
+  // Get display text for current step (adaptive or default)
+  const getStepQuestion = () => {
+    if (!step) return '';
+    const adapted = adaptedSteps[step.id];
+    return adapted?.question ?? step.question;
+  };
+
+  const getStepSubtext = () => {
+    if (!step) return '';
+    const adapted = adaptedSteps[step.id];
+    return adapted?.subtext ?? step.subtext;
+  };
+
+  const buildFallbackAdaptive = (stepId: string, base: { question: string; subtext: string }, previousAnswers: { question: string; answer: string }[]) => {
+    const typeInfo = data.selectedType ? DEVOTIONAL_TYPES.find(t => t.id === data.selectedType) : null;
+    const themeNames = data.selectedThemes.map(id => THEME_CATEGORIES.find(t => t.id === id)?.name).filter(Boolean) as string[];
+    const lastAnswer = previousAnswers[previousAnswers.length - 1]?.answer || '';
+    const firstAnswer = previousAnswers[0]?.answer || '';
+    const secondAnswer = previousAnswers[1]?.answer || '';
+
+    if (stepId === 'currentSituation') {
+      // Opening question based on what they selected
+      if (typeInfo) {
+        const openers = [
+          `So you're drawn to ${typeInfo.name.toLowerCase()} right now. What's making this feel important for you?`,
+          `What led you to choose ${typeInfo.name.toLowerCase()}? What's happening in your life that made this stand out?`,
+          `When you think about ${typeInfo.name.toLowerCase()}, what are you hoping to find or understand better?`,
+        ];
+        return {
+          question: openers[Math.floor(Math.random() * openers.length)],
+          subtext: "There's no right answer. Just share what's true for you right now.",
+        };
+      }
+      if (themeNames.length > 0) {
+        const openers = [
+          `${themeNames[0]} resonates with you. What's stirring in you around that?`,
+          `When you think about ${themeNames[0]}, what comes up? What are you sitting with?`,
+          `What does ${themeNames[0]} mean for you in this season? What's the real story?`,
+        ];
+        return {
+          question: openers[Math.floor(Math.random() * openers.length)],
+          subtext: "Go with what feels most honest, even if it's messy or unclear.",
+        };
+      }
+    }
+
+    if (stepId === 'emotionalState') {
+      // Build on the first answer about their current situation
+      if (lastAnswer) {
+        // Detect if their answer mentions specific emotional keywords
+        const hasEmotion = /(struggle|hard|difficult|pain|hurt|lost|confused|anxious|worried|scared|angry|sad|lonely|overwhelmed|tired|exhausted)/i.test(lastAnswer);
+        const hasHope = /(hope|want|desire|long|yearn|wish|dream|looking for|seeking|trying)/i.test(lastAnswer);
+        const hasSpiritual = /(God|Jesus|Spirit|faith|pray|church|belief|doubt|question|wonder)/i.test(lastAnswer);
+        
+        if (hasEmotion) {
+          return {
+            question: "That sounds like a lot to carry. What do you wish someone understood about what you're going through?",
+            subtext: "Sometimes naming it helps, even if nothing changes yet.",
+          };
+        }
+        if (hasHope) {
+          return {
+            question: "I hear you wanting something to shift. If you could glimpse one small change, what would it be?",
+            subtext: "Small is okay. Often the small things are the real things.",
+          };
+        }
+        if (hasSpiritual) {
+          return {
+            question: "There's something real in what you shared. What's the conversation you wish you could have right now?",
+            subtext: "With God, with yourself, with someone you trust — what would you say?",
+          };
+        }
+        
+        // Default emotional follow-ups that don't quote their text
+        const followUps = [
+          "What's underneath what you just shared? The part you might not usually say out loud?",
+          "If you could name one thing you're really sitting with, what would it be?",
+          "What feels most alive or most heavy for you right now?",
+          "What's the thing you're carrying that you wish you didn't have to carry alone?",
+        ];
+        return {
+          question: followUps[Math.floor(Math.random() * followUps.length)],
+          subtext: "This is a safe place. You don't have to have it all figured out.",
+        };
+      }
+      return {
+        question: "Before we go further — what's really going on for you right now?",
+        subtext: "The honest version, not the polished one.",
+      };
+    }
+
+    if (stepId === 'spiritualSeeking') {
+      // Final question about what they need
+      if (previousAnswers.length >= 2) {
+        return {
+          question: "Given everything you've shared — what would actually help you right now?",
+          subtext: "Not what you think you should want. What you actually need.",
+        };
+      }
+      
+      return {
+        question: "If these devotionals could meet you in one real way, what would you want them to do?",
+        subtext: "Comfort? Challenge? Clarify? Something else?",
+      };
+    }
+
+    return base;
+  };
+
   const getPreviousAnswers = () => {
     const stepIds = getStepIds();
     const answers: { question: string; answer: string }[] = [];
@@ -224,24 +547,53 @@ export default function OnboardingScreen() {
       if (!step.adaptive || adaptedSteps[step.id]) return;
       const previousAnswers = getPreviousAnswers();
       if (previousAnswers.length === 0) return;
-      setIsLoadingQuestion(true);
+
+      // Show loading immediately
+      setIsLoadingAdaptive(true);
+
+      console.log('[Adaptive] Loading adaptive question for:', step.id);
+      console.log('[Adaptive] Previous answers:', previousAnswers);
 
       const stepPosition = step.id === 'currentSituation' ? 'opening' as const
         : step.id === 'emotionalState' ? 'depth' as const
         : step.id === 'spiritualSeeking' ? 'longing' as const
         : undefined;
 
+      const base = { question: step.question, subtext: step.subtext };
+
       try {
+        // Use backend API (Haiku/Claude)
+        console.log('[Adaptive] Calling backend API...');
         const adapted = await generateAdaptiveQuestion(
           previousAnswers,
-          { question: step.question, subtext: step.subtext },
+          base,
           stepPosition
         );
-        setAdaptedSteps((prev) => ({ ...prev, [step.id]: adapted }));
-      } catch {
-        console.log('Failed to adapt question, using default');
+
+        // Only use adapted if it's actually different from base
+        const isDifferent = adapted.question?.trim().toLowerCase() !== base.question.trim().toLowerCase();
+        
+        console.log('[Adaptive] Backend response:', {
+          question: adapted.question?.substring(0, 50),
+          subtext: adapted.subtext?.substring(0, 30),
+          isDifferent,
+          length: adapted.question?.length
+        });
+
+        if (isDifferent && adapted.question?.length > 10) {
+          console.log('[Adaptive] ✓ Using backend AI-generated question:', adapted);
+          setAdaptedSteps((prev) => ({ ...prev, [step.id]: adapted }));
+        } else {
+          console.log('[Adaptive] Backend returned base or too short, using local fallback');
+          const localFallback = buildFallbackAdaptive(step.id, base, previousAnswers);
+          setAdaptedSteps((prev) => ({ ...prev, [step.id]: localFallback }));
+        }
+      } catch (err) {
+        console.log('[Adaptive] API failed, using local fallback:', err);
+        const localFallback = buildFallbackAdaptive(step.id, base, previousAnswers);
+        setAdaptedSteps((prev) => ({ ...prev, [step.id]: localFallback }));
       } finally {
-        setIsLoadingQuestion(false);
+        setIsLoadingAdaptive(false);
       }
     };
     loadAdaptiveQuestion();
@@ -251,12 +603,26 @@ export default function OnboardingScreen() {
     setAdaptedSteps({});
   }, [data.selectedType, data.selectedStudySubject, data.selectedThemes]);
 
+  // Clear adapted steps when previous answers change (so next question regenerates)
   useEffect(() => {
-    setShowInput(false);
-    setShowListScrollHint(true);
-    inputOpacity.value = withTiming(0, { duration: 0 });
-    inputTranslateY.value = withTiming(10, { duration: 0 });
-  }, [currentStepId]);
+    // When currentSituation changes, clear emotionalState adaptation
+    if (data.currentSituation) {
+      setAdaptedSteps(prev => {
+        const { emotionalState, spiritualSeeking, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, [data.currentSituation]);
+
+  useEffect(() => {
+    // When emotionalState changes, clear spiritualSeeking adaptation
+    if (data.emotionalState) {
+      setAdaptedSteps(prev => {
+        const { spiritualSeeking, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, [data.emotionalState]);
 
   const handleTypewriterComplete = () => {
     setTimeout(() => {
@@ -274,6 +640,7 @@ export default function OnboardingScreen() {
     transform: [{ translateY: inputTranslateY.value }],
   }));
 
+
   // Helper to advance to the next step
   const advanceToNextStep = useCallback(() => {
     const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
@@ -281,7 +648,7 @@ export default function OnboardingScreen() {
       const nextStepId = STEPS[currentIdx + 1].id as StepId;
       setCurrentStepId(nextStepId);
     } else {
-      // Final step - create user and devotional
+      // Final step - show celebration before generating
       const userData: UserProfile = {
         name: data.name,
         bibleTranslation: data.bibleTranslation,
@@ -300,7 +667,13 @@ export default function OnboardingScreen() {
         themeMode: 'system',
         accentTheme: 'gold',
         readingFont: 'source-serif',
-        preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238', // Katie - free voice
+        preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238',
+        // Streak defaults
+        streakCount: 0,
+        longestStreak: 0,
+        lastReadDate: null,
+        streakFreezes: 0,
+        weekendAmnesty: true,
       };
 
       if (existingUser) {
@@ -309,26 +682,15 @@ export default function OnboardingScreen() {
         setUser(userData);
       }
 
-      // Navigate to generating screen with user context
-      const params: Record<string, string> = {};
-      if (data.selectedThemes.length > 0) {
-        params.themes = data.selectedThemes.join(',');
-      }
-      if (data.selectedType) {
-        params.devotionalType = data.selectedType;
-      }
-      if (data.selectedStudySubject) {
-        params.studySubject = data.selectedStudySubject;
-      }
-
-      router.push({
-        pathname: '/generating',
-        params,
-      });
+      // Navigate to celebration screen instead of directly to generating
+      router.push('/welcome-celebration');
     }
   }, [STEPS, currentStepId, data, existingUser, router, setUser, updateUser]);
 
   const handleNext = () => {
+    // Prevent double-clicks during transitions
+    if (isTransitioning) return;
+    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Handle theme type selection sub-modes
@@ -336,27 +698,168 @@ export default function OnboardingScreen() {
       if (themeSelectionMode === 'none' && data.selectedMainOption) {
         // User selected main option, now enter sub-mode or advance for guided
         if (data.selectedMainOption === 'theme') {
+          LayoutAnimation.configureNext({
+            duration: 200,
+            create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+            update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+          });
           setThemeSelectionMode('theme');
           return;
         } else if (data.selectedMainOption === 'type') {
+          LayoutAnimation.configureNext({
+            duration: 200,
+            create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+            update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+          });
           setThemeSelectionMode('type');
           return;
         } else if (data.selectedMainOption === 'guided') {
-          // Guided mode - clear selections and advance immediately
-          setData((prev) => ({ ...prev, selectedThemes: [], selectedType: undefined, selectedStudySubject: undefined }));
-          advanceToNextStep();
+          // Guided mode - show preparation screen then advance to discovery
+          startDiscoveryPreparation('guided');
           return;
         }
       } else if (themeSelectionMode !== 'none') {
-        // In sub-mode, selection was made - advance to next step
-        // Note: we keep themeSelectionSubMode so back button returns to this sub-mode
-        advanceToNextStep();
-        return;
+        // In sub-mode with selection made
+        if (themeSelectionMode === 'theme' && data.selectedThemes.length > 0) {
+          startDiscoveryPreparation('theme');
+          return;
+        } else if (themeSelectionMode === 'type' && data.selectedType) {
+          // Check if we need subject selection
+          const needsSubject = TYPES_WITH_SUBJECT_SELECTION.includes(data.selectedType);
+          if (needsSubject && !data.selectedStudySubject) {
+            // Need to select subject first
+            advanceToNextStep();
+            return;
+          }
+          startDiscoveryPreparation('type');
+          return;
+        }
       }
     }
 
+    // If on subject-selection step, prepare discovery before moving on
+    if (baseStep?.type === 'studySubject' && data.selectedStudySubject) {
+      startDiscoveryPreparation('type');
+      return;
+    }
+
     // Default: advance to next step
-    advanceToNextStep();
+    // Dismiss keyboard first to prevent layout shift during animation
+    Keyboard.dismiss();
+    
+    // Small delay to let keyboard fully dismiss before animating
+    setTimeout(() => {
+      // Configure layout animation before state change
+      LayoutAnimation.configureNext({
+        duration: 200,
+        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+        update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      }, () => {
+        // Animation complete callback
+        setIsTransitioning(false);
+      });
+      
+      advanceToNextStep();
+    }, 50);
+    
+    setIsTransitioning(true);
+    setShowInput(false);
+    setShowListScrollHint(true);
+    inputOpacity.value = 0;
+    inputTranslateY.value = 10;
+    
+    return;
+  };
+
+  // NEW: Start discovery preparation with loading screen
+  const startDiscoveryPreparation = async (selectionMode: 'guided' | 'theme' | 'type') => {
+    setIsPreparingDiscovery(true);
+    
+    // Set appropriate message based on selection
+    const messages = {
+      guided: "Getting everything ready for you...",
+      theme: "Crafting questions around what you chose...",
+      type: "Preparing your study journey...",
+    };
+    setPreparationMessage(messages[selectionMode]);
+    
+    // Clear any previous adaptations
+    setAdaptedSteps({});
+    
+    // Prepare answers for AI generation
+    const answers = getPreviousAnswers();
+
+    // Seed immediately with contextual local adaptations so user never sees generic defaults
+    const discoverySteps = ['currentSituation', 'emotionalState', 'spiritualSeeking'] as const;
+    const seededAdapted: Record<string, AdaptedStep> = {};
+    discoverySteps.forEach((stepId) => {
+      const base = ALL_STEPS.find((s) => s.id === stepId);
+      if (base) seededAdapted[stepId] = buildFallbackAdaptive(stepId, { question: base.question, subtext: base.subtext }, answers);
+    });
+    setAdaptedSteps(seededAdapted);
+    
+    // Generate all three discovery questions in parallel
+    const stepPositions: Record<string, 'opening' | 'depth' | 'longing'> = {
+      currentSituation: 'opening',
+      emotionalState: 'depth',
+      spiritualSeeking: 'longing',
+    };
+    
+    try {
+      // Race AI generation against timeout (8 seconds max)
+      const timeoutPromise = new Promise<
+        { stepId: string; adapted: AdaptedStep | null }[]
+      >((resolve) => setTimeout(() => resolve(discoverySteps.map((stepId) => ({ stepId, adapted: null }))), 8000));
+
+      const adaptations = await Promise.race([
+        Promise.all(
+          discoverySteps.map(async (stepId) => {
+            const baseStep = ALL_STEPS.find((s) => s.id === stepId);
+            if (!baseStep) return { stepId, adapted: null };
+            
+            try {
+              // Use backend API (Haiku/Claude)
+              const adapted = await generateAdaptiveQuestion(
+                answers,
+                { question: baseStep.question, subtext: baseStep.subtext },
+                stepPositions[stepId]
+              );
+              return { stepId, adapted };
+            } catch (err) {
+              console.log(`[DiscoveryPrep] Failed for ${stepId}:`, err);
+              return { stepId, adapted: null };
+            }
+          })
+        ),
+        timeoutPromise,
+      ]);
+
+      // Merge AI results with seeded fallbacks
+      adaptations.forEach(({ stepId, adapted }) => {
+        if (adapted) {
+          seededAdapted[stepId] = adapted;
+        }
+      });
+      setAdaptedSteps({ ...seededAdapted });
+
+      // Brief pause to show we did something
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } finally {
+      setIsPreparingDiscovery(false);
+
+      // Advance to discovery
+      LayoutAnimation.configureNext({
+        duration: 300,
+        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+        update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      });
+
+      // Reset theme selection mode before advancing
+      setThemeSelectionMode('none');
+      setCurrentStepId('currentSituation');
+    }
   };
 
   const handleBack = () => {
@@ -378,7 +881,22 @@ export default function OnboardingScreen() {
     const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
     if (currentIdx > 0) {
       const prevStepId = STEPS[currentIdx - 1].id as StepId;
-      setCurrentStepId(prevStepId);
+      
+      // Dismiss keyboard first to prevent layout shift
+      Keyboard.dismiss();
+      
+      // Small delay to let keyboard settle before animating
+      setTimeout(() => {
+        // Configure layout animation before state change
+        LayoutAnimation.configureNext({
+          duration: 200,
+          create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+          update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+          delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+        });
+        
+        setCurrentStepId(prevStepId);
+      }, 50);
     }
     // On first step, do nothing (back button is hidden)
   };
@@ -387,12 +905,21 @@ export default function OnboardingScreen() {
     setData((prev) => ({ ...prev, [key]: value }));
   };
 
+  const isAutoAdvanceStep = (step: { type?: string } | null | undefined) => {
+    if (!step) return false;
+    return step.type === 'choice' || step.type === 'timeChoice' || step.type === 'themeType';
+  };
+
   const canProceed = () => {
     if (!baseStep) return false;
     const stepId = baseStep.id as StepId;
     const value = data[stepId];
     if (baseStep.type === 'text') return typeof value === 'string' && value.trim().length > 0;
-    if (baseStep.type === 'multiline') return typeof value === 'string' && value.trim().length > 10;
+    if (baseStep.type === 'multiline') return typeof value === 'string' && value.trim().length >= 3;
+    if (baseStep.type === 'choice' || baseStep.type === 'timeChoice') {
+      // For choice steps, ensure a value is selected (not undefined or empty string)
+      return value !== undefined && value !== null && value !== '';
+    }
     if (baseStep.type === 'themeType') {
       if (themeSelectionMode === 'none') {
         return !!data.selectedMainOption;
@@ -405,66 +932,6 @@ export default function OnboardingScreen() {
       return !!data.selectedStudySubject;
     }
     return true;
-  };
-
-  // Theme pill component with improved press handling
-  const ThemePill = ({ theme, isSelected, onPress, selectionOrder }: { theme: { id: ThemeCategory; name: string; description: string; scriptureFocus: string[]; toneGuidance: string; icon: React.ReactNode }; isSelected: boolean; onPress: () => void; selectionOrder?: number }) => {
-    const [isPressed, setIsPressed] = useState(false);
-    
-    return (
-      <Pressable
-        onPress={onPress}
-        onPressIn={() => setIsPressed(true)}
-        onPressOut={() => setIsPressed(false)}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            borderRadius: 20,
-            backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-            borderWidth: 1.5,
-            borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
-            gap: 8,
-          }}
-        >
-          {theme.icon}
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: 14,
-              color: isSelected ? colors.text : colors.textMuted,
-            }}
-          >
-            {theme.name}
-          </Text>
-          {selectionOrder && (
-            <View
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: colors.accent,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.mono,
-                  fontSize: 10,
-                  color: colors.background,
-                }}
-              >
-                {selectionOrder}
-              </Text>
-            </View>
-          )}
-        </View>
-      </Pressable>
-    );
   };
 
   const renderInput = () => {
@@ -501,6 +968,7 @@ export default function OnboardingScreen() {
     if (baseStep.type === 'multiline') {
       const inputLength = (data[stepId] as string)?.length ?? 0;
       const isDiscoveryStep = ['currentSituation', 'emotionalState', 'spiritualSeeking'].includes(stepId);
+      const isAboutMeStep = stepId === 'aboutMe';
       const showNudge = isDiscoveryStep && inputLength > 0 && inputLength < 80;
 
       return (
@@ -563,6 +1031,18 @@ export default function OnboardingScreen() {
               </Text>
             </View>
           </View>
+          
+          {/* Speech-to-text for About Me step */}
+          {isAboutMeStep && (
+            <SpeechToTextButton
+              onTranscription={(text) => {
+                const currentText = (data[stepId] as string) || '';
+                const newText = currentText + (currentText ? ' ' : '') + text;
+                updateData(stepId, newText.slice(0, INPUT_LIMITS.LONG_TEXT.max));
+              }}
+              isActive={inputLength < INPUT_LIMITS.LONG_TEXT.max - 100}
+            />
+          )}
         </View>
       );
     }
@@ -575,8 +1055,8 @@ export default function OnboardingScreen() {
         rest: <Moon size={16} color={colors.textMuted} />,
         presence: <Eye size={16} color={colors.textMuted} />,
         healing: <Heart size={16} color={colors.textMuted} />,
-        joy: <Sparkle size={16} color={colors.textMuted} />,
-        gratitude: <Sparkles size={16} color={colors.textMuted} />,
+        joy: <Smile size={16} color={colors.textMuted} />,
+        gratitude: <Gift size={16} color={colors.textMuted} />,
         lament: <CloudRain size={16} color={colors.textMuted} />,
         hope: <Sun size={16} color={colors.textMuted} />,
         purpose: <Compass size={16} color={colors.textMuted} />,
@@ -585,7 +1065,7 @@ export default function OnboardingScreen() {
         surrender: <Wind size={16} color={colors.textMuted} />,
         discipline: <Target size={16} color={colors.textMuted} />,
         justice: <Scale size={16} color={colors.textMuted} />,
-        wonder: <Stars size={16} color={colors.textMuted} />,
+        wonder: <Telescope size={16} color={colors.textMuted} />,
         // Study type icons (larger, accent color)
         personal: <User size={20} color={colors.accent} />,
         book_study: <BookOpen size={20} color={colors.accent} />,
@@ -615,6 +1095,10 @@ export default function OnboardingScreen() {
                   selectedType: undefined,
                   selectedStudySubject: undefined,
                 }));
+                // Auto-advance after selection
+                setTimeout(() => {
+                  handleNext();
+                }, 200);
               }}
             >
               {({ pressed }) => {
@@ -629,7 +1113,7 @@ export default function OnboardingScreen() {
                     borderWidth: 2,
                     borderColor: isSelected ? colors.borderFocused : colors.border,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                       <View style={{
                         width: 48, height: 48, borderRadius: 14,
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)',
@@ -660,6 +1144,10 @@ export default function OnboardingScreen() {
                   selectedType: undefined,
                   selectedStudySubject: undefined,
                 }));
+                // Auto-advance after selection
+                setTimeout(() => {
+                  handleNext();
+                }, 200);
               }}
             >
               {({ pressed }) => {
@@ -674,7 +1162,7 @@ export default function OnboardingScreen() {
                     borderWidth: 2,
                     borderColor: isSelected ? colors.borderFocused : colors.border,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                       <View style={{
                         width: 48, height: 48, borderRadius: 14,
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)',
@@ -705,6 +1193,10 @@ export default function OnboardingScreen() {
                   selectedType: undefined,
                   selectedStudySubject: undefined,
                 }));
+                // Auto-advance after selection
+                setTimeout(() => {
+                  handleNext();
+                }, 200);
               }}
             >
               {({ pressed }) => {
@@ -719,7 +1211,7 @@ export default function OnboardingScreen() {
                     borderWidth: 2,
                     borderColor: isSelected ? colors.borderFocused : colors.border,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                       <View style={{
                         width: 48, height: 48, borderRadius: 14,
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)',
@@ -820,6 +1312,7 @@ export default function OnboardingScreen() {
                               });
                             }}
                             selectionOrder={selectionOrder}
+                            colors={colors}
                           />
                         );
                       })}
@@ -892,19 +1385,7 @@ export default function OnboardingScreen() {
                           selectedType: newType,
                           selectedStudySubject: undefined,
                         }));
-                        
-                        // Auto-advance if type doesn't need subject selection
-                        if (newType && !needsSubject) {
-                          // Note: we keep themeSelectionSubMode so back button returns to type selection
-                          // Small delay to let state update before advancing
-                          setTimeout(() => {
-                            const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
-                            if (currentIdx < STEPS.length - 1) {
-                              const nextStepId = STEPS[currentIdx + 1].id as StepId;
-                              setCurrentStepId(nextStepId);
-                            }
-                          }, 150);
-                        }
+                        // REMOVED: No auto-advance - all selections wait for Continue button
                       }}
                     >
                       {({ pressed }) => {
@@ -1045,7 +1526,21 @@ export default function OnboardingScreen() {
     }
 
     if (baseStep.type === 'choice' || baseStep.type === 'timeChoice') {
+      // Generate dynamic subtexts for steps that have hasDynamicOptions
       const dynamicDescs = {} as Record<string | number, string>;
+      
+      if (baseStep.hasDynamicOptions) {
+        if (stepId === 'readingDuration') {
+          dynamicDescs[5] = getRandomReadingSubtext(5);
+          dynamicDescs[15] = getRandomReadingSubtext(15);
+          dynamicDescs[30] = getRandomReadingSubtext(30);
+        } else if (stepId === 'devotionalLength') {
+          dynamicDescs[3] = getRandomDurationSubtext(3);
+          dynamicDescs[7] = getRandomDurationSubtext(7);
+          dynamicDescs[14] = getRandomDurationSubtext(14);
+          dynamicDescs[30] = getRandomDurationSubtext(30);
+        }
+      }
       return (
         <View className="space-y-3">
           {baseStep.options?.map((option: { value: string | number; label: string; description?: string; time?: string }) => {
@@ -1054,7 +1549,14 @@ export default function OnboardingScreen() {
             return (
               <Pressable
                 key={String(option.value)}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); updateData(stepId, option.value); }}
+                onPress={() => { 
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+                  updateData(stepId, option.value);
+                  // Auto-advance for single-choice questions after a short delay
+                  setTimeout(() => {
+                    handleNext();
+                  }, 200);
+                }}
               >
                 {({ pressed }) => {
                   const showPressed = isSelected || pressed;
@@ -1089,7 +1591,7 @@ export default function OnboardingScreen() {
   const breathingOpacity = useSharedValue(0.3);
 
   useEffect(() => {
-    if (isLoadingQuestion) {
+    if (isLoadingAdaptive || isPreparingDiscovery) {
       breathingOpacity.value = withRepeat(
         withSequence(
           withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
@@ -1099,98 +1601,178 @@ export default function OnboardingScreen() {
         false
       );
     }
-  }, [isLoadingQuestion]);
+  }, [isLoadingAdaptive, isPreparingDiscovery]);
 
   const breathingStyle = useAnimatedStyle(() => ({ opacity: breathingOpacity.value }));
 
-  if (isLoadingQuestion) {
+  // Full-screen loading removed - using inline loading instead
+  // if (isLoadingAdaptive) {
+  //   return (
+  //     <View style={{ flex: 1, backgroundColor: colors.background }}>
+  //       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
+  //         <Animated.View style={breathingStyle}>
+  //           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+  //             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
+  //             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
+  //             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
+  //           </View>
+  //         </Animated.View>
+  //       </SafeAreaView>
+  //     </View>
+  //   );
+  // }
+
+  if (isPreparingDiscovery) {
+    const preparingQuip = useMemo(() => getRandomLoadingQuip(), []);
+    
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
-          <Animated.View style={breathingStyle}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, marginHorizontal: 4 }} />
-            </View>
-          </Animated.View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+          </View>
+          <Text style={{ 
+            fontFamily: FontFamily.ui, 
+            fontSize: 15, 
+            color: colors.textMuted,
+            letterSpacing: 0.5 
+          }}>
+            {preparingQuip}
+          </Text>
         </SafeAreaView>
       </View>
     );
   }
 
-  if (!step) return null;
+  if (!step) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted }}>Loading next question…</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View className="flex-row items-center justify-between px-4 py-3">
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'height' : 'height'}>
+          <View className="flex-row items-center justify-between px-4 py-3" style={{ minHeight: 52 }}>
             {currentStepIndex > 0 ? (
-              <Pressable onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: 8 }}>
+              <Pressable
+                onPress={handleBack}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+              >
                 <ChevronLeft size={24} color={colors.textMuted} />
               </Pressable>
             ) : (
-              <View style={{ padding: 8, width: 40 }} />
+              <View style={{ width: 40, height: 40 }} />
             )}
             
-            <Pressable
-              onPress={handleNext}
-              disabled={!canProceed()}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ padding: 8 }}
-            >
-              <Text style={{ 
-                fontFamily: FontFamily.uiMedium, 
-                fontSize: 14, 
-                color: canProceed() ? colors.text : colors.textMuted 
-              }}>
-                {isLastStep ? 'Create' : 'Continue'}
-              </Text>
-            </Pressable>
+            {/* Hide Continue button for auto-advance questions, but always show for last step */}
+            {(!isAutoAdvanceStep(baseStep) || isLastStep) ? (
+              <Pressable
+                onPress={handleNext}
+                disabled={!canProceed()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ height: 40, justifyContent: 'center', paddingHorizontal: 8 }}
+              >
+                <Text style={{ 
+                  fontFamily: FontFamily.uiMedium, 
+                  fontSize: 14, 
+                  color: canProceed() ? colors.text : colors.textMuted 
+                }}>
+                  {isLastStep ? 'Create' : 'Continue'}
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={{ width: 40, height: 40 }} />
+            )}
           </View>
 
-          {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
-            <View className="flex-1 px-6" style={{ paddingTop: 40 }}>
-              <View key={`${currentStepId}-${step.question}`}>
-                <TypewriterText 
-                  text={
-                    baseStep?.type === 'themeType' && themeSelectionMode === 'theme' 
-                      ? "What themes are on your heart?"
-                      : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
-                      ? "What would you like to study?"
-                      : step.question
-                  } 
-                  onComplete={handleTypewriterComplete} 
-                  style={{ fontSize: 28, lineHeight: 38 }} 
-                />
-              </View>
-              {showInput && (
-                <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 24 }}>
-                  <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>
-                    {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
-                      ? "Select up to 3 themes that resonate with where you are."
-                      : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
-                      ? "Choose a study style for your journey."
-                      : step.subtext}
-                  </Text>
-                </Animated.View>
-              )}
-              {showInput && <Animated.View style={[inputAnimatedStyle, { flex: 1 }]}>{renderInput()}</Animated.View>}
-            </View>
-          ) : (
-            <ScrollView className="flex-1 px-6" contentContainerStyle={{ paddingTop: 40, paddingBottom: 120 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-              <View key={`${currentStepId}-${step.question}`}>
-                <TypewriterText text={step.question} onComplete={handleTypewriterComplete} style={{ fontSize: 28, lineHeight: 38 }} />
-              </View>
-              {showInput && (
-                <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 32 }}>
-                  <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>{step.subtext}</Text>
-                </Animated.View>
-              )}
-              {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
-            </ScrollView>
-          )}
+          {/* Progress indicator - always visible */}
+          <ProgressIndicator 
+            currentStepIndex={currentStepIndex} 
+            totalSteps={STEPS.length} 
+            colors={colors} 
+          />
+
+          <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
+            {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
+              <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View className="flex-1 px-6" style={{ paddingTop: 40 }}>
+                  <View>
+                    <TypewriterText 
+                      text={
+                        baseStep?.type === 'themeType' && themeSelectionMode === 'theme' 
+                          ? "What themes are on your heart?"
+                          : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
+                          ? "What would you like to study?"
+                          : getStepQuestion()
+                      } 
+                      onComplete={handleTypewriterComplete} 
+                      style={{ fontSize: 32, lineHeight: 40 }} 
+                    />
+                  </View>
+                  {showInput && (
+                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 24 }}>
+                      <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>
+                        {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
+                          ? "Select up to 3 themes that resonate with where you are."
+                          : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
+                          ? "Choose a study style for your journey."
+                          : getStepSubtext()}
+                      </Text>
+                    </Animated.View>
+                  )}
+                  {showInput && <Animated.View style={[inputAnimatedStyle, { flex: 1 }]}>{renderInput()}</Animated.View>}
+                </View>
+              </ScrollView>
+            ) : (
+              <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View className="flex-1 px-6" style={{ paddingTop: 40, paddingBottom: 120 }}>
+                  <View>
+                    {isLoadingAdaptive && step?.adaptive ? (
+                      <View style={{ 
+                        flex: 1, 
+                        justifyContent: 'center', 
+                        alignItems: 'center',
+                        minHeight: 200 
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+                        </View>
+                        <Text style={{ 
+                          fontFamily: FontFamily.ui, 
+                          fontSize: 15, 
+                          color: colors.textMuted,
+                          letterSpacing: 0.5
+                        }}>
+                          {getRandomLoadingQuip()}
+                        </Text>
+                      </View>
+                    ) : (
+                      <TypewriterText 
+                        text={getStepQuestion()} 
+                        onComplete={handleTypewriterComplete} 
+                        style={{ fontSize: 32, lineHeight: 40 }} 
+                      />
+                    )}
+                  </View>
+                  {showInput && (
+                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 32 }}>
+                      <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
+                    </Animated.View>
+                  )}
+                  {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
+                </View>
+              </ScrollView>
+            )}
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>

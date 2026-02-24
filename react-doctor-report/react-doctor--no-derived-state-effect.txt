@@ -1,0 +1,11 @@
+Rule: react-doctor/no-derived-state-effect
+Severity: error
+Category: State & Effects
+Count: 1
+
+Derived state in useEffect — compute during render instead
+
+Suggestion: Compute during render: `const derived = computeFrom(dep1, dep2)` — no useEffect needed
+
+Files:
+  src/app/(main)/reading.tsx: 224

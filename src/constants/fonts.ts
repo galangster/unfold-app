@@ -4,21 +4,21 @@
  */
 
 export const FontFamily = {
-  // Display/Headers - elegant serif
+  // Primary serif (Instrument Serif) kept as the main display/headings font
   display: 'InstrumentSerif_400Regular',
   displayItalic: 'InstrumentSerif_400Regular_Italic',
 
-  // Body text - warm, readable serif
-  body: 'SourceSerifPro_400Regular',
-  bodyItalic: 'SourceSerifPro_400Regular_Italic',
-  bodyMedium: 'SourceSerifPro_600SemiBold',
-  bodyBold: 'SourceSerifPro_700Bold',
+  // Secondary sans (Inter) for body + UI. Variety comes from weights/italics, not more families.
+  body: 'Inter_400Regular',
+  bodyItalic: 'Inter_400Italic',
+  bodyMedium: 'Inter_500Medium',
+  bodyBold: 'Inter_700Bold',
 
-  // User input - monospace
+  // User input - monospace (kept for code-like readability)
   mono: 'JetBrainsMono_400Regular',
   monoMedium: 'JetBrainsMono_500Medium',
 
-  // UI labels - minimal use
+  // UI labels - Inter
   ui: 'Inter_400Regular',
   uiMedium: 'Inter_500Medium',
   uiSemiBold: 'Inter_600SemiBold',

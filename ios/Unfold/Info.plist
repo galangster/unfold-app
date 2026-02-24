@@ -28,7 +28,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>vibecode</string>
-				<string>com.vibecode.unfold.9fj08t</string>
+				<string>com.vibecode.unfold.x9fj08t</string>
 			</array>
 		</dict>
 		<dict>
@@ -90,6 +90,8 @@
 	<string>Allow $(PRODUCT_NAME) to access your location</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Allow $(PRODUCT_NAME) to access your location</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow $(PRODUCT_NAME) to access your microphone</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Unfold saves media you export from the app into your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -103,6 +105,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
+		<string>audio</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>SplashScreen</string>

@@ -9,6 +9,7 @@ import Animated, {
   withSpring,
   withDelay,
   Easing,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 interface AudioWaveformProps {
@@ -27,6 +28,9 @@ interface BarConfig {
   frequency: number;
 }
 
+// Maximum number of bars we'll support
+const MAX_BARS = 32;
+
 export function AudioWaveform({
   isPlaying,
   activeWordIndex,
@@ -34,15 +38,54 @@ export function AudioWaveform({
   color = '#C8A55C',
   barCount = 20,
 }: AudioWaveformProps) {
-  // Create shared values at top level (not inside useMemo)
-  const barValues = useMemo(() => {
-    return Array.from({ length: barCount }, () => useSharedValue(0.3));
-  }, [barCount]);
+  const effectiveBarCount = Math.min(Math.max(1, Math.floor(barCount ?? 20)), MAX_BARS);
+
+  // Create all shared values at top level - hooks must be called in same order every render
+  const sv0 = useSharedValue(0.3);
+  const sv1 = useSharedValue(0.3);
+  const sv2 = useSharedValue(0.3);
+  const sv3 = useSharedValue(0.3);
+  const sv4 = useSharedValue(0.3);
+  const sv5 = useSharedValue(0.3);
+  const sv6 = useSharedValue(0.3);
+  const sv7 = useSharedValue(0.3);
+  const sv8 = useSharedValue(0.3);
+  const sv9 = useSharedValue(0.3);
+  const sv10 = useSharedValue(0.3);
+  const sv11 = useSharedValue(0.3);
+  const sv12 = useSharedValue(0.3);
+  const sv13 = useSharedValue(0.3);
+  const sv14 = useSharedValue(0.3);
+  const sv15 = useSharedValue(0.3);
+  const sv16 = useSharedValue(0.3);
+  const sv17 = useSharedValue(0.3);
+  const sv18 = useSharedValue(0.3);
+  const sv19 = useSharedValue(0.3);
+  const sv20 = useSharedValue(0.3);
+  const sv21 = useSharedValue(0.3);
+  const sv22 = useSharedValue(0.3);
+  const sv23 = useSharedValue(0.3);
+  const sv24 = useSharedValue(0.3);
+  const sv25 = useSharedValue(0.3);
+  const sv26 = useSharedValue(0.3);
+  const sv27 = useSharedValue(0.3);
+  const sv28 = useSharedValue(0.3);
+  const sv29 = useSharedValue(0.3);
+  const sv30 = useSharedValue(0.3);
+  const sv31 = useSharedValue(0.3);
+
+  // Array of all shared values for easy access
+  const barValues: SharedValue<number>[] = useMemo(() => [
+    sv0, sv1, sv2, sv3, sv4, sv5, sv6, sv7,
+    sv8, sv9, sv10, sv11, sv12, sv13, sv14, sv15,
+    sv16, sv17, sv18, sv19, sv20, sv21, sv22, sv23,
+    sv24, sv25, sv26, sv27, sv28, sv29, sv30, sv31,
+  ], [sv0, sv1, sv2, sv3, sv4, sv5, sv6, sv7, sv8, sv9, sv10, sv11, sv12, sv13, sv14, sv15, sv16, sv17, sv18, sv19, sv20, sv21, sv22, sv23, sv24, sv25, sv26, sv27, sv28, sv29, sv30, sv31]);
 
   // Create bar configs (static values, no hooks)
   const bars = useMemo(() => {
-    return Array.from({ length: barCount }, (_, i) => {
-      const frequency = 0.5 + Math.sin((i / barCount) * Math.PI) * 0.5;
+    return Array.from({ length: effectiveBarCount }, (_, i) => {
+      const frequency = 0.5 + Math.sin((i / effectiveBarCount) * Math.PI) * 0.5;
       return {
         delay: i * 40,
         duration: 400 + frequency * 200,
@@ -51,11 +94,11 @@ export function AudioWaveform({
         frequency,
       };
     });
-  }, [barCount]);
+  }, [effectiveBarCount]);
 
   // Calculate progress through text
   const progress = totalWords > 0 ? activeWordIndex / totalWords : 0;
-  const activeBarIndex = Math.floor(progress * barCount);
+  const activeBarIndex = Math.floor(progress * effectiveBarCount);
 
   // Calculate inactive color with proper rgba
   const inactiveColor = useMemo(() => {
@@ -71,10 +114,12 @@ export function AudioWaveform({
   useEffect(() => {
     if (isPlaying) {
       bars.forEach((bar, i) => {
+        const barValue = barValues[i];
+        if (!barValue) return;
         const { maxHeight, minHeight } = bar;
         const staggerDelay = i * 30;
 
-        barValues[i].value = withDelay(
+        barValue.value = withDelay(
           staggerDelay,
           withRepeat(
             withSequence(
@@ -96,7 +141,9 @@ export function AudioWaveform({
       });
     } else {
       bars.forEach((bar, i) => {
-        barValues[i].value = withDelay(
+        const barValue = barValues[i];
+        if (!barValue) return;
+        barValue.value = withDelay(
           i * 80,
           withRepeat(
             withSequence(
@@ -115,11 +162,13 @@ export function AudioWaveform({
     <View style={styles.container}>
       {bars.map((bar, i) => {
         const isActive = i <= activeBarIndex;
+        const barValue = barValues[i];
+        if (!barValue) return null;
         
         return (
           <WaveformBar
             key={i}
-            barValue={barValues[i]}
+            barValue={barValue}
             bar={bar}
             isActive={isActive}
             activeColor={color}
@@ -134,7 +183,7 @@ export function AudioWaveform({
 
 // Separate component to properly use animated style hook
 interface WaveformBarProps {
-  barValue: Animated.SharedValue<number>;
+  barValue: SharedValue<number>;
   bar: BarConfig;
   isActive: boolean;
   activeColor: string;

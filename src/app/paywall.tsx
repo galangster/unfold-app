@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Linking, Platform, Image } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, ActivityIndicator, Linking, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -375,43 +375,38 @@ export default function PaywallScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* SUBSCRIBE BUTTON — large, impossible to miss */}
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={{ marginTop: 24 }}>
-          <Pressable
+        {/* SUBSCRIBE BUTTON — gold pill-shaped, impossible to miss */}
+        <View style={{ marginTop: 8, marginBottom: 12 }}>
+          <TouchableOpacity
             onPress={handleSubscribe}
             disabled={isPurchasing}
-            style={({ pressed }) => ({
-              backgroundColor: colors.text,
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: '#C8A55C',
               paddingVertical: 18,
-              borderRadius: 14,
-              borderWidth: 2,
-              borderColor: colors.text,
-              shadowColor: colors.text,
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.3,
-              shadowRadius: 12,
-              elevation: 10,
-              opacity: pressed ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
-            })}
+              paddingHorizontal: 32,
+              borderRadius: 28,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             {isPurchasing ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 17,
-                  color: '#fff',
+                  color: '#FFFFFF',
                   textAlign: 'center',
-                  letterSpacing: 0.2,
+                  letterSpacing: 0.3,
                 }}
               >
                 {selectedPlan === 'yearly' ? `Subscribe — ${yearlyPrice}/year` : `Subscribe — ${monthlyPrice}/month`}
               </Text>
             )}
-          </Pressable>
-        </Animated.View>
+          </TouchableOpacity>
+        </View>
 
         {/* Restore + Legal at bottom */}
         <View style={{ flex: 1 }} />

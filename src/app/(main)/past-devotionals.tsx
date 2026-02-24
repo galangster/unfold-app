@@ -203,7 +203,7 @@ export default function PastDevotionalsScreen() {
                 marginLeft: 8,
               }}
             >
-              Past Devotionals
+              Past Journeys
             </Text>
           </View>
 
@@ -252,7 +252,7 @@ export default function PastDevotionalsScreen() {
               marginLeft: 8,
             }}
           >
-            Past Devotionals
+            Past Journeys
           </Text>
         </View>
 

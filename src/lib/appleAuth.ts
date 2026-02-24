@@ -4,7 +4,7 @@
  */
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { getRandomBytesAsync } from 'expo-crypto';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import auth, { FirebaseAuthTypes } from '@/lib/mockFirebaseAuth';
 import { logger } from './logger';
 
 /**

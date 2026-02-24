@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, BookOpen, Highlighter, Bookmark, PenLine } from 'lucide-react-native';
+import { ChevronLeft, BookOpen, Highlighter, Bookmark, PenLine, Lock } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
@@ -29,6 +29,7 @@ export default function MyContentScreen() {
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -40,10 +41,10 @@ export default function MyContentScreen() {
     setActiveTab(tab);
   };
 
-  const tabs: { id: Tab; label: string; icon: typeof PenLine; count: number }[] = [
-    { id: 'journal', label: 'Journal', icon: PenLine, count: journalEntries.length },
-    { id: 'highlights', label: 'Highlights', icon: Highlighter, count: highlights.length },
-    { id: 'bookmarks', label: 'Bookmarks', icon: Bookmark, count: bookmarks.length },
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: 'journal', label: 'Journal', count: journalEntries.length },
+    { id: 'highlights', label: 'Highlights', count: highlights.length },
+    { id: 'bookmarks', label: 'Bookmarks', count: bookmarks.length },
   ];
 
   return (
@@ -63,10 +64,9 @@ export default function MyContentScreen() {
         <View style={{ marginLeft: 12 }}>
           <Text
             style={{
-              fontFamily: FontFamily.display,
-              fontSize: 28,
+              fontFamily: FontFamily.uiMedium,
+              fontSize: 16,
               color: colors.text,
-              letterSpacing: -0.5,
             }}
           >
             My Content
@@ -86,7 +86,6 @@ export default function MyContentScreen() {
       >
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
-          const Icon = tab.icon;
           return (
             <Pressable
               key={tab.id}
@@ -102,17 +101,16 @@ export default function MyContentScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
-                  paddingHorizontal: 12,
+                  paddingHorizontal: 10,
                   paddingVertical: 8,
                   borderRadius: 20,
                   backgroundColor: isActive ? colors.inputBackground : 'transparent',
                 }}
               >
-                <Icon size={16} color={isActive ? colors.text : colors.textMuted} />
                 <Text
                   style={{
                     fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
-                    fontSize: 14,
+                    fontSize: 13,
                     color: isActive ? colors.text : colors.textMuted,
                   }}
                 >
@@ -150,11 +148,84 @@ export default function MyContentScreen() {
         {activeTab === 'journal' && (
           <Animated.View entering={FadeInRight.duration(300)}>
             {journalEntries.length === 0 ? (
-              <EmptyState
-                icon={PenLine}
-                title="No journal entries"
-                subtitle="Reflect on your readings to capture your thoughts."
-              />
+              <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 32,
+                    backgroundColor: colors.inputBackground,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 20,
+                  }}
+                >
+                  <PenLine size={28} color={colors.textMuted} />
+                </View>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.display,
+                    fontSize: 22,
+                    color: colors.text,
+                    marginBottom: 8,
+                    textAlign: 'center',
+                  }}
+                >
+                  No journal entries yet
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.textMuted,
+                    textAlign: 'center',
+                    lineHeight: 22,
+                    marginBottom: 24,
+                  }}
+                >
+                  Reflect on your readings to capture your thoughts.
+                </Text>
+                
+                {/* Start Your First Entry CTA */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    // Navigate to the current reading day to open journal
+                    const currentDevotional = devotionals.find(d => d.id === currentDevotionalId);
+                    if (currentDevotional) {
+                      router.push({
+                        pathname: '/(main)/journal',
+                        params: {
+                          devotionalId: currentDevotionalId,
+                          dayNumber: currentDevotional.currentDay.toString(),
+                        },
+                      });
+                    }
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    paddingHorizontal: 24,
+                    borderRadius: 12,
+                    borderWidth: 1.5,
+                    borderColor: colors.accent,
+                    backgroundColor: 'transparent',
+                    opacity: pressed ? 0.7 : 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                  })}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiSemiBold,
+                      fontSize: 15,
+                      color: colors.accent,
+                    }}
+                  >
+                    Start your first entry
+                  </Text>
+                </Pressable>
+              </View>
             ) : (
               journalEntries.map((entry, index) => {
                 const devotional = devotionals.find(d => d.id === entry.devotionalId);

@@ -1,5 +1,6 @@
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
+import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import {
   getThemeById,
   getDevotionalTypeById,
@@ -8,6 +9,10 @@ import {
   BiblicalCharacter,
   BibleBookStudy,
 } from '../constants/devotional-types';
+import { DEVOTIONAL_PERSONAS, DevotionalPersona } from '../constants/devotional-personas';
+
+// Re-export for use in components
+export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Backend URL for proxied API calls (keeps API keys server-side)
 const DEFAULT_LOCAL_BACKEND_URL = 'http://localhost:3000';
@@ -186,6 +191,8 @@ interface GenerationContext {
   themeCategory?: ThemeCategory;
   devotionalType?: DevotionalType;
   studySubject?: string; // For book/character studies
+  // New: Writing persona preference
+  personaTraits?: string; // gentle_guide, prophetic_challenger, poetic_mystic, scholarly_pastor, storyteller
 }
 
 interface GeneratedDevotional {
@@ -294,6 +301,68 @@ function getSystemPrompt(retryLevel: number): string {
   if (retryLevel === 1) return SYSTEM_PROMPT_SOFT;
   return SYSTEM_PROMPT_MINIMAL;
 }
+
+// Get persona-specific system prompt addition
+function getPersonaSystemPrompt(personaTraits?: string): string {
+  if (!personaTraits) return '';
+  
+  const persona = DEVOTIONAL_PERSONAS[personaTraits as DevotionalPersona];
+  if (!persona) return '';
+  
+  return `
+
+YOUR WRITING PERSONA: ${persona.name}
+${persona.description}
+
+TONE: ${persona.tone}
+
+SENTENCE STYLE: ${persona.sentenceStyle}
+
+KEY PHRASES TO WEAVE IN NATURALLY: ${persona.keyPhrases.join(', ')}
+
+OPENING HOOKS (vary these): ${persona.openingHooks.join(' | ')}
+
+TRANSITIONAL PHRASES: ${persona.transitionalPhrases.join(' | ')}
+
+CLOSING TECHNIQUES: ${persona.closingTechniques.join(' | ')}
+
+SCRIPTURE INTEGRATION: ${persona.scriptureIntegration}
+
+${persona.systemPrompt}`;
+}
+
+// Add Peter Enns-inspired conversational depth to all voices
+const PETER_ENNS_ADDITION = `
+
+CONVERSATIONAL DEPTH (Peter Enns-inspired):
+- Write like you're talking to a friend who can handle complexity
+- Short, punchy sentences that land hard
+- One-sentence paragraphs for emphasis — these are your "sticky sentences"
+- Theological depth without academic jargon
+- The reader should nod and think "I've never heard it put that way before"
+- Example sticky sentences: "God isn't looking for believers. He's looking for partners." / "The Bible isn't a book of answers. It's a record of people asking better questions."`;
+
+// Sticky sentence instruction for shareable moments - use when the devotional calls for it
+const STICKY_SENTENCE_INSTRUCTION = `
+
+STICKY SENTENCES (Use When Natural):
+When a devotional naturally calls for a hard-hitting, memorable truth, include ONE standalone sentence as its own paragraph. This should feel earned, not forced.
+
+A sticky sentence works when:
+- The moment calls for emphasis or surprise
+- A truth lands better alone than surrounded by explanation
+- It crystallizes the day's core insight
+
+Characteristics:
+- Standalone as its own paragraph
+- Under 15 words if possible
+- Contains a surprise or reversal
+- Quot-worthy — something readers would screenshot
+- Packs theological depth into plain language
+
+Examples: "Faith isn't certainty. It's courage in the face of uncertainty." / "God doesn't need your strength. He needs your honesty."
+
+Important: Don't force a sticky sentence every day. Let it emerge naturally from the writing. Some days flow better without one.`;
 
 const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
   switch (duration) {
@@ -667,7 +736,9 @@ async function generateBatch(
   previousDayTitles: string[],
   retryLevel: number = 0
 ): Promise<{ title: string; days: DevotionalDay[] }> {
-  const systemPrompt = getSystemPrompt(retryLevel);
+  const baseSystemPrompt = getSystemPrompt(retryLevel);
+  const personaPrompt = getPersonaSystemPrompt(context.personaTraits);
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + personaPrompt + STICKY_SENTENCE_INSTRUCTION;
   const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel);
 
   // Using Haiku for all days - cost-effective and quality is sufficient for devotionals
@@ -933,6 +1004,13 @@ export async function generateDevotional(
   onProgress?: (status: string) => void,
   onDayGenerated?: OnDayGeneratedCallback
 ): Promise<GeneratedDevotional> {
+  // Check rate limit before starting generation
+  const rateLimit = await checkRateLimit('devotional');
+  if (!rateLimit.allowed) {
+    console.warn('[Devotional] Rate limit exceeded:', rateLimit);
+    throw new Error(`Daily devotional generation limit reached. Please try again in ${getTimeUntilReset(rateLimit.resetTime)}.`);
+  }
+
   const requestKey = buildFullGenerationRequestKey(context);
   const existingRequest = inFlightFullGenerationRequests.get(requestKey);
 
@@ -1003,6 +1081,9 @@ export async function generateDevotional(
       void logBugEvent('devotional-service', 'full-generation-finished', {
         days: allDays.length,
       });
+
+      // Increment rate limit counter on success
+      await incrementRateLimit('devotional');
 
       return {
         title: seriesTitle || 'Your Devotional Journey',
@@ -1194,6 +1275,14 @@ export async function generateAdaptiveQuestion(
     return nextQuestionBase;
   }
 
+  // Check rate limit before making API call
+  const rateLimit = await checkRateLimit('adaptive-question');
+  if (!rateLimit.allowed) {
+    console.warn('[Adaptive] Rate limit exceeded:', rateLimit);
+    // Fall back to base question if rate limited
+    return nextQuestionBase;
+  }
+
   try {
     const contextStr = previousAnswers
       .map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`)
@@ -1313,8 +1402,9 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
+        model: 'claude-haiku-4-5-20251001',  // Fast, cost-effective model
+        max_tokens: 400,  // Slightly more room for unique phrasing
+        temperature: 0.9,  // Higher temperature for more variation
         system: adaptiveSystemPrompt,
         messages: [
           {
@@ -1323,12 +1413,18 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
           },
         ],
       },
-      { timeoutMs: 20000 }
+      { timeoutMs: 15000 }  // 15 seconds instead of 20
     );
+
+    console.log('[Adaptive] Backend URL used:', backendResult.backendUrl);
+    console.log('[Adaptive] Backend attempts:', backendResult.attempts);
+    console.log('[Adaptive] Backend used fallback:', backendResult.usedFallback);
 
     const { response } = backendResult;
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Adaptive] Backend API error:', response.status, errorText.substring(0, 200));
       return nextQuestionBase;
     }
 
@@ -1336,15 +1432,118 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const content = data.content?.[0]?.text;
 
     if (!content) {
+      console.error('[Adaptive] Backend returned no content:', data);
       return nextQuestionBase;
     }
 
-    const parsedResult = JSON.parse(content) as { question: string; subtext: string };
+    console.log('[Adaptive] Backend raw content:', content?.substring(0, 200));
+
+    // Handle markdown-wrapped JSON (```json ... ```)
+    let jsonText = content;
+    const markdownMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+    if (markdownMatch) {
+      jsonText = markdownMatch[1].trim();
+      console.log('[Adaptive] Extracted JSON from markdown');
+    }
+
+    const parsedResult = JSON.parse(jsonText) as { question: string; subtext: string };
+    
+    console.log('[Adaptive] Backend parsed result:', {
+      question: parsedResult.question?.substring(0, 60),
+      subtext: parsedResult.subtext?.substring(0, 40)
+    });
+    
+    // Increment rate limit counter on success
+    await incrementRateLimit('adaptive-question');
+    
     return {
       question: parsedResult.question || nextQuestionBase.question,
       subtext: parsedResult.subtext || nextQuestionBase.subtext,
     };
-  } catch {
+  } catch (err) {
+    console.error('[Adaptive] Backend parse error:', err);
     return nextQuestionBase;
+  }
+}
+
+// Extract the most shareable quotes from a devotional day using AI
+export async function extractShareableQuotes(
+  dayContent: string,
+  dayTitle: string,
+  count: number = 2
+): Promise<{ text: string; score: number }[]> {
+  // Check rate limit before making API call
+  const rateLimit = await checkRateLimit('extract-quotes');
+  if (!rateLimit.allowed) {
+    console.warn('[ExtractQuotes] Rate limit exceeded');
+    return []; // Return empty if rate limited
+  }
+
+  try {
+    const extractionSystemPrompt = `You are a quote curator. Extract the most shareable, quotable sentences from this devotional content.
+
+A shareable quote is:
+- Under 20 words ideally (max 30)
+- Stands alone without context
+- Contains surprise, reversal, or profound simplicity
+- Uses "you" or speaks directly to the reader
+- Theological depth in plain language
+- Memorable enough to screenshot or share
+
+Score each quote 1-10 based on:
+- Stickiness (surprise, reversal): +3 points
+- Brevity (under 15 words): +2 points
+- Direct address ("you"): +1 point
+- Concrete imagery: +1 point
+- Ends with impact: +1 point
+
+Respond with valid JSON only: {"quotes": [{"text": "...", "score": 8}, ...]}`;
+
+    const extractionUserPrompt = `Day Title: "${dayTitle}"
+
+Content:
+${dayContent.substring(0, 3000)}
+
+Extract the top ${count} most shareable quotes from this devotional day. Return ONLY valid JSON.`;
+
+    const backendResult = await postJsonWithBackendFallback(
+      '/api/generate/extract-quotes',
+      {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        system: extractionSystemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: extractionUserPrompt,
+          },
+        ],
+      },
+      { timeoutMs: 15000 }
+    );
+
+    const { response } = backendResult;
+
+    if (!response.ok) {
+      console.log('[Quote Extraction] Backend request failed, using fallback');
+      return [];
+    }
+
+    const data = await response.json();
+    const content = data.content?.[0]?.text;
+
+    if (!content) {
+      return [];
+    }
+
+    const parsedResult = JSON.parse(content) as { quotes: { text: string; score: number }[] };
+    
+    // Increment rate limit counter on success
+    await incrementRateLimit('extract-quotes');
+    
+    return parsedResult.quotes?.slice(0, count) || [];
+  } catch (err) {
+    console.log('[Quote Extraction] Error:', err);
+    return [];
   }
 }

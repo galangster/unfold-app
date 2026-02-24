@@ -1,0 +1,12 @@
+Rule: react-doctor/no-render-in-render
+Severity: warning
+Category: Architecture
+Count: 6
+
+Inline render function "renderInput()" — extract to a separate component for proper reconciliation
+
+Suggestion: Extract to a named component: `const ListItem = ({ item }) => <div>{item.name}</div>`
+
+Files:
+  src/app/onboarding.tsx: 1179, 1191
+  src/app/showcase.tsx: 61, 72, 90, 116

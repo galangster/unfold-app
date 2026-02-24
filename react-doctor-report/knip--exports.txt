@@ -1,0 +1,28 @@
+Rule: knip/exports
+Severity: warning
+Category: Dead Code
+Count: 59
+
+Unused export: NavigationTheme
+
+Files:
+  src/constants/colors.ts
+  src/lib/theme.tsx
+  src/components/ErrorBoundary.tsx
+  src/constants/fonts.ts
+  src/lib/devotional-service.ts
+  src/lib/notifications.ts
+  src/lib/bug-logger.ts
+  src/lib/validation.ts
+  src/constants/devotional-types.ts
+  src/constants/onboarding-questions.ts
+  src/lib/revenuecatClient.ts
+  src/lib/analytics.ts
+  src/lib/network-error-handler.ts
+  src/components/reading/index.ts
+  src/lib/review-prompt.ts
+  src/components/AudioPlayerBottomSheet.tsx
+  src/lib/cartesia.ts
+  src/lib/appleAuth.ts
+  src/lib/cn.ts
+  src/components/reading/ReadingBottomNav.tsx
