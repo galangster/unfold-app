@@ -15,7 +15,8 @@
     "health:adaptive": "node scripts/adaptive-healthcheck.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",
     "verify:smoke": "node scripts/verify-smoke.mjs",
-    "verify:release": "node scripts/verify-release.mjs"
+    "verify:release": "node scripts/verify-release.mjs",
+    "verify:report": "node scripts/verify-report.mjs"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
