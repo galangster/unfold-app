@@ -19,10 +19,19 @@ For every code patch:
   Diff-aware check. If adaptive flow files are touched, runs adaptive healthcheck.
 
 - `bun run verify:smoke`  
-  Fast smoke validation for critical path.
+  Critical-path smoke validation (adaptive backend + live device flow audit).
+
+- `bun run verify:device`  
+  Local live device flow audit via agent-device (launch + snapshot + appstate).
 
 - `bun run verify:release`  
   Runs changed + smoke checks.
+
+## Notes
+
+- `verify:device` runs by default in local smoke checks.
+- In CI, device audit auto-skips (no simulator/device attached).
+- Override app bundle id with `CVL_IOS_APP_BUNDLE=<bundleId>` when needed.
 
 ## Why this exists
 
