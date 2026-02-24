@@ -30,15 +30,17 @@ function isLocalBackendUrl(url: string): boolean {
 function getBackendCandidates(): string[] {
   const candidates = [PRIMARY_BACKEND_URL];
 
-  // Always keep one sane remote fallback unless the primary already is that fallback.
-  // This protects against stale/misconfigured remote URLs returning HTML 404 pages.
-  const fallback = EXPLICIT_FALLBACK_BACKEND_URL ||
-    (PRIMARY_BACKEND_URL !== DEFAULT_REMOTE_BACKEND_FALLBACK_URL
-      ? DEFAULT_REMOTE_BACKEND_FALLBACK_URL
-      : '');
+  // Respect explicit fallback first, but always keep the known remote fallback
+  // as a final safety net unless already included.
+  if (EXPLICIT_FALLBACK_BACKEND_URL && !candidates.includes(EXPLICIT_FALLBACK_BACKEND_URL)) {
+    candidates.push(EXPLICIT_FALLBACK_BACKEND_URL);
+  }
 
-  if (fallback && !candidates.includes(fallback)) {
-    candidates.push(fallback);
+  if (
+    DEFAULT_REMOTE_BACKEND_FALLBACK_URL &&
+    !candidates.includes(DEFAULT_REMOTE_BACKEND_FALLBACK_URL)
+  ) {
+    candidates.push(DEFAULT_REMOTE_BACKEND_FALLBACK_URL);
   }
 
   return candidates;
@@ -1422,6 +1424,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       { timeoutMs: 15000 }  // 15 seconds instead of 20
     );
 
+    console.log('[Adaptive] Backend candidates:', getBackendCandidates());
     console.log('[Adaptive] Backend URL used:', backendResult.backendUrl);
     console.log('[Adaptive] Backend attempts:', backendResult.attempts);
     console.log('[Adaptive] Backend used fallback:', backendResult.usedFallback);
@@ -1430,7 +1433,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Adaptive] Backend API error:', response.status, errorText.substring(0, 200));
+      console.warn('[Adaptive] Backend API error (recoverable, using fallback question):', response.status, errorText.substring(0, 200));
       return nextQuestionBase;
     }
 
@@ -1438,7 +1441,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const content = data.content?.[0]?.text;
 
     if (!content) {
-      console.error('[Adaptive] Backend returned no content:', data);
+      console.warn('[Adaptive] Backend returned no content (recoverable, using fallback question):', data);
       return nextQuestionBase;
     }
 
@@ -1467,7 +1470,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       subtext: parsedResult.subtext || nextQuestionBase.subtext,
     };
   } catch (err) {
-    console.error('[Adaptive] Backend parse error:', err);
+    console.warn('[Adaptive] Backend parse error (recoverable, using fallback question):', err);
     return nextQuestionBase;
   }
 }
