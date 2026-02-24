@@ -1397,6 +1397,10 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       { timeoutMs: 15000 }  // 15 seconds instead of 20
     );
 
+    console.log('[Adaptive] Backend URL used:', backendResult.backendUrl);
+    console.log('[Adaptive] Backend attempts:', backendResult.attempts);
+    console.log('[Adaptive] Backend used fallback:', backendResult.usedFallback);
+
     const { response } = backendResult;
 
     if (!response.ok) {
