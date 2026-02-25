@@ -372,6 +372,11 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (step || STEPS.length === 0) return;
 
+    // Don't auto-advance if we're in a theme/type sub-mode selection (wait for user to complete selection)
+    if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
+      return;
+    }
+
     const allOrder = ALL_STEPS.map((s) => s.id);
     const currentOrder = allOrder.indexOf(currentStepId);
     const fallback =
@@ -382,7 +387,7 @@ export default function OnboardingScreen() {
     if (fallback?.id && fallback.id !== currentStepId) {
       setCurrentStepId(fallback.id as StepId);
     }
-  }, [step, STEPS, currentStepId]);
+  }, [step, STEPS, currentStepId, themeSelectionMode, baseStep?.type]);
 
   const getStepIds = () => STEPS.map((s) => s.id);
 
