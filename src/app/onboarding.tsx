@@ -376,7 +376,11 @@ export default function OnboardingScreen() {
   const baseStep = ALL_STEPS.find((s) => s.id === currentStepId);
   
   // Helper to get the index of current step in STEPS array
-  const currentStepIndex = useMemo(() => STEPS.findIndex((s) => s.id === currentStepId), [STEPS, currentStepId]);
+  const currentStepIndex = useMemo(() => {
+    const idx = STEPS.findIndex((s) => s.id === currentStepId);
+    console.log('[Onboarding] currentStepIndex computed:', idx, '| currentStepId:', currentStepId, '| STEPS:', STEPS.map(s => s.id));
+    return idx;
+  }, [STEPS, currentStepId]);
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
   useEffect(() => {
