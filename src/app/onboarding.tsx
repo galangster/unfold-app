@@ -782,6 +782,12 @@ export default function OnboardingScreen() {
     }
 
     // Default: advance to next step
+    // BUT: Never advance if we're in a themeType sub-mode (safety guard)
+    if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
+      console.log('[Onboarding] Blocking default advance: in themeType sub-mode');
+      return;
+    }
+    
     // Dismiss keyboard first to prevent layout shift during animation
     Keyboard.dismiss();
     
