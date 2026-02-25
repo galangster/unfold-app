@@ -344,6 +344,10 @@ export default function OnboardingScreen() {
         if (data.selectedMainOption === 'theme' || data.selectedMainOption === 'guided') {
           return false;
         }
+        // If they selected "type" mode but haven't picked a specific type yet, skip
+        if (data.selectedMainOption === 'type' && !data.selectedType) {
+          return false;
+        }
         // If they selected a type that doesn't need subject selection, skip
         if (data.selectedType && !TYPES_WITH_SUBJECT_SELECTION.includes(data.selectedType)) {
           return false;
