@@ -13,6 +13,15 @@ function run(cmd) {
   execSync(cmd, { stdio: 'inherit' });
 }
 
+function runSoft(cmd) {
+  try {
+    execSync(cmd, { stdio: 'inherit' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function sh(cmd) {
   return execSync(cmd, { encoding: 'utf8' }).trim();
 }
@@ -62,8 +71,23 @@ for (const appId of candidates) {
   try {
     console.log('[cvl][device] trying', appId);
     run(`agent-device open ${appId} --platform ios --relaunch`);
+
+    // Dismiss common Expo dev overlays when present.
+    runSoft('agent-device find "Continue" click --platform ios');
+    runSoft('agent-device find "Close" click --platform ios');
+
+    // Snapshot + foreground app assertion
     run('agent-device snapshot -i --platform ios');
     run('agent-device appstate --platform ios');
+
+    // Best-effort signal for adaptive UI in dev builds (won't fail if onboarding not reached yet)
+    const sawAdaptiveLabel = runSoft('agent-device find "AI source:" exists --platform ios');
+    if (sawAdaptiveLabel) {
+      console.log('[cvl][device] detected adaptive source label on-screen');
+    } else {
+      console.log('[cvl][device] adaptive source label not visible in current screen (non-fatal)');
+    }
+
     console.log('[cvl][device] PASS using', appId);
     process.exit(0);
   } catch (err) {
