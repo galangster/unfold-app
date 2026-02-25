@@ -1127,8 +1127,8 @@ export default function OnboardingScreen() {
         const selectedMode = data.selectedMainOption;
         
         return (
-          <View style={{ gap: 16 }}>
-            {/* Theme/Topic option */}
+          <View style={{ gap: 0 }}>
+            {/* Theme/Topic option - EDITORIAL LAYOUT */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1144,29 +1144,47 @@ export default function OnboardingScreen() {
             >
               {({ pressed }) => {
                 const isSelected = selectedMode === 'theme';
-                const showPressed = isSelected || (!selectedMode && pressed);
+                const showPressed = isSelected || pressed;
                 return (
                   <View style={{
-                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-                    paddingHorizontal: 24,
-                    paddingVertical: 24,
-                    borderRadius: 20,
-                    borderWidth: 2,
-                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                    paddingVertical: 28,
+                    paddingHorizontal: 4,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                      <View style={{
-                        width: 48, height: 48, borderRadius: 14,
-                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)',
-                        justifyContent: 'center', alignItems: 'center',
-                      }}>
-                        <Heart size={22} color={colors.accent} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: colors.text, letterSpacing: -0.2 }}>A theme or topic</Text>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 }}>
+                    {/* Icon floating right - asymmetric layout */}
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1, paddingRight: 16 }}>
+                        <Text style={{ 
+                          fontFamily: FontFamily.uiMedium, 
+                          fontSize: 20, 
+                          color: showPressed ? colors.text : colors.text,
+                          letterSpacing: -0.3,
+                          marginBottom: 8,
+                        }}>
+                          A theme or topic
+                        </Text>
+                        <Text style={{ 
+                          fontFamily: FontFamily.body, 
+                          fontSize: 15, 
+                          color: colors.textMuted, 
+                          lineHeight: 22,
+                          maxWidth: '85%',
+                        }}>
                           Trust, courage, joy, lament, discipline...
                         </Text>
+                      </View>
+                      <View style={{
+                        width: 56, 
+                        height: 56, 
+                        borderRadius: 16,
+                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.10)',
+                        justifyContent: 'center', 
+                        alignItems: 'center',
+                        marginTop: -4,
+                      }}>
+                        <Heart size={26} color={colors.accent} />
                       </View>
                     </View>
                   </View>
@@ -1174,7 +1192,7 @@ export default function OnboardingScreen() {
               }}
             </Pressable>
 
-            {/* Study Type option */}
+            {/* Study Type option - EDITORIAL LAYOUT */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1192,27 +1210,43 @@ export default function OnboardingScreen() {
             >
               {({ pressed }) => {
                 const isSelected = selectedMode === 'type';
-                const showPressed = isSelected || (!selectedMode && pressed);
+                const showPressed = isSelected || pressed;
                 return (
                   <View style={{
-                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-                    paddingHorizontal: 24,
-                    paddingVertical: 24,
-                    borderRadius: 20,
-                    borderWidth: 2,
-                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                    paddingVertical: 28,
+                    paddingHorizontal: 4,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                    {/* Icon on left - different from theme option */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
                       <View style={{
-                        width: 48, height: 48, borderRadius: 14,
+                        width: 52, 
+                        height: 52, 
+                        borderRadius: 14,
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)',
-                        justifyContent: 'center', alignItems: 'center',
+                        justifyContent: 'center', 
+                        alignItems: 'center',
                       }}>
-                        <BookOpen size={22} color={colors.accent} />
+                        <BookOpen size={24} color={colors.accent} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: colors.text, letterSpacing: -0.2 }}>A style of study</Text>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 }}>
+                        <Text style={{ 
+                          fontFamily: FontFamily.uiMedium, 
+                          fontSize: 19, 
+                          color: colors.text,
+                          letterSpacing: -0.3,
+                          marginBottom: 6,
+                        }}>
+                          A style of study
+                        </Text>
+                        <Text style={{ 
+                          fontFamily: FontFamily.body, 
+                          fontSize: 15, 
+                          color: colors.textMuted, 
+                          lineHeight: 22,
+                        }}>
                           Book study, character study, psalms, parables...
                         </Text>
                       </View>
@@ -1222,7 +1256,7 @@ export default function OnboardingScreen() {
               }}
             </Pressable>
 
-            {/* Just guide me option */}
+            {/* Just guide me option - QUIETER, MORE SUBTLE */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1239,27 +1273,33 @@ export default function OnboardingScreen() {
             >
               {({ pressed }) => {
                 const isSelected = selectedMode === 'guided';
-                const showPressed = isSelected || (!selectedMode && pressed);
+                const showPressed = isSelected || pressed;
                 return (
                   <View style={{
-                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-                    paddingHorizontal: 24,
                     paddingVertical: 24,
-                    borderRadius: 20,
-                    borderWidth: 2,
-                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                    paddingHorizontal: 4,
+                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
+                    opacity: 0.85, // More subtle
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                      <View style={{
-                        width: 48, height: 48, borderRadius: 14,
-                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)',
-                        justifyContent: 'center', alignItems: 'center',
-                      }}>
-                        <Wand2 size={22} color={colors.accent} />
-                      </View>
+                    {/* Minimal layout - text only with small icon */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Wand2 size={18} color={colors.textMuted} style={{ opacity: 0.6 }} />
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: colors.text, letterSpacing: -0.2 }}>Just guide me</Text>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20 }}>
+                        <Text style={{ 
+                          fontFamily: FontFamily.ui, 
+                          fontSize: 16, 
+                          color: colors.textMuted,
+                          letterSpacing: -0.2,
+                        }}>
+                          Just guide me
+                        </Text>
+                        <Text style={{ 
+                          fontFamily: FontFamily.body, 
+                          fontSize: 13, 
+                          color: colors.textSubtle, 
+                          lineHeight: 18,
+                          marginTop: 2,
+                        }}>
                           We'll craft something based on what you share
                         </Text>
                       </View>
@@ -1403,56 +1443,124 @@ export default function OnboardingScreen() {
       }
 
       if (themeSelectionMode === 'type') {
+        // Split into featured and standard for editorial layout
+        const featuredTypes = ['personal', 'book_study', 'character_study'];
+        const standardTypes = DEVOTIONAL_TYPES.filter(t => !featuredTypes.includes(t.id));
+        
         return (
           <View style={{ flex: 1 }}>
             <ScrollView showsVerticalScrollIndicator={false} onScroll={handleListScroll} scrollEventThrottle={16}>
-              <View style={{ gap: 10, paddingBottom: 200 }}>
-                {DEVOTIONAL_TYPES.map((type) => {
-                  const isSelected = data.selectedType === type.id;
-                  const Icon = iconMap[type.id] || <BookOpen size={20} color={colors.textMuted} />;
-                  const needsSubject = TYPES_WITH_SUBJECT_SELECTION.includes(type.id);
-                  
-                  return (
-                    <Pressable
-                      key={type.id}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        const newType = isSelected ? undefined : type.id;
-                        setData((prev) => ({
-                          ...prev,
-                          selectedType: newType,
-                          selectedStudySubject: undefined,
-                        }));
-                        // REMOVED: No auto-advance - all selections wait for Continue button
-                      }}
-                    >
-                      {({ pressed }) => {
-                        const showPressed = isSelected || pressed;
-                        return (
-                          <View style={{
-                            backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-                            paddingHorizontal: 18,
-                            paddingVertical: 16,
-                            borderRadius: 12,
-                            borderWidth: 1,
-                            borderColor: isSelected ? colors.borderFocused : colors.border,
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 12,
-                          }}>
-                            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)', justifyContent: 'center', alignItems: 'center' }}>
-                              {Icon}
+              <View style={{ gap: 12, paddingBottom: 200 }}>
+                {/* Featured items - larger, more prominent */}
+                <View style={{ gap: 12 }}>
+                  {featuredTypes.map((typeId) => {
+                    const type = DEVOTIONAL_TYPES.find(t => t.id === typeId);
+                    if (!type) return null;
+                    const isSelected = data.selectedType === type.id;
+                    const Icon = iconMap[type.id] || <BookOpen size={24} color={colors.textMuted} />;
+                    
+                    return (
+                      <Pressable
+                        key={type.id}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          const newType = isSelected ? undefined : type.id;
+                          setData((prev) => ({
+                            ...prev,
+                            selectedType: newType,
+                            selectedStudySubject: undefined,
+                          }));
+                        }}
+                      >
+                        {({ pressed }) => {
+                          const showPressed = isSelected || pressed;
+                          return (
+                            <View style={{
+                              backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+                              paddingHorizontal: 20,
+                              paddingVertical: 20,
+                              borderRadius: 16,
+                              borderWidth: isSelected ? 2 : 0,
+                              borderColor: colors.borderFocused,
+                            }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                                <View style={{ 
+                                  width: 52, 
+                                  height: 52, 
+                                  borderRadius: 14, 
+                                  backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.10)', 
+                                  justifyContent: 'center', 
+                                  alignItems: 'center' 
+                                }}>
+                                  {Icon}
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: colors.text }}>{type.name}</Text>
+                                  <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted, marginTop: 3, lineHeight: 20 }}>{type.description}</Text>
+                                </View>
+                              </View>
                             </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>{type.name}</Text>
-                              <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 }}>{type.description}</Text>
+                          );
+                        }}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Divider */}
+                <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 8 }} />
+
+                {/* Standard items - more compact, grid-like */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {standardTypes.map((type) => {
+                    const isSelected = data.selectedType === type.id;
+                    const Icon = iconMap[type.id] || <BookOpen size={18} color={colors.textMuted} />;
+                    
+                    return (
+                      <Pressable
+                        key={type.id}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          const newType = isSelected ? undefined : type.id;
+                          setData((prev) => ({
+                            ...prev,
+                            selectedType: newType,
+                            selectedStudySubject: undefined,
+                          }));
+                        }}
+                        style={{ width: '48%' }}
+                      >
+                        {({ pressed }) => {
+                          const showPressed = isSelected || pressed;
+                          return (
+                            <View style={{
+                              backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+                              paddingHorizontal: 14,
+                              paddingVertical: 14,
+                              borderRadius: 12,
+                              borderWidth: isSelected ? 2 : 1,
+                              borderColor: isSelected ? colors.borderFocused : colors.border,
+                              height: 100,
+                              justifyContent: 'space-between',
+                            }}>
+                              <View style={{ 
+                                width: 32, 
+                                height: 32, 
+                                borderRadius: 8, 
+                                backgroundColor: isDark ? 'rgba(200, 165, 92, 0.10)' : 'rgba(154, 123, 60, 0.06)', 
+                                justifyContent: 'center', 
+                                alignItems: 'center' 
+                              }}>
+                                {Icon}
+                              </View>
+                              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text, lineHeight: 17 }}>{type.name}</Text>
                             </View>
-                          </View>
-                        );
-                      }}
-                    </Pressable>
-                  );
-                })}
+                          );
+                        }}
+                      </Pressable>
+                    );
+                  })}
+                </View>
 
                 <View
                   style={{
