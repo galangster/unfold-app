@@ -34,6 +34,7 @@ import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { SpeechToTextButton } from '@/components/SpeechToTextButton';
+import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
@@ -43,7 +44,7 @@ import {
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
 
-// TYPES_WITH_SUBJECT_SELECTION defined inline since not exported
+// Types with subject selection
 const TYPES_WITH_SUBJECT_SELECTION = ['book_study', 'character_study'];
 
 // Quippy biblical loading phrases for the adaptive question generation
