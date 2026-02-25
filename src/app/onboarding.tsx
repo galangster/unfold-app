@@ -1095,19 +1095,16 @@ export default function OnboardingScreen() {
           <View style={{ gap: 16 }}>
             {/* Theme/Topic option */}
             <Pressable
-              onPress={() => { 
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
-                setData((prev) => ({ 
-                  ...prev, 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setData((prev) => ({
+                  ...prev,
                   selectedMainOption: 'theme',
                   selectedThemes: [],
                   selectedType: undefined,
                   selectedStudySubject: undefined,
                 }));
-                // Auto-advance after selection
-                setTimeout(() => {
-                  handleNext();
-                }, 200);
+                setThemeSelectionMode('theme');
               }}
             >
               {({ pressed }) => {
@@ -1144,19 +1141,16 @@ export default function OnboardingScreen() {
 
             {/* Study Type option */}
             <Pressable
-              onPress={() => { 
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
-                setData((prev) => ({ 
-                  ...prev, 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setData((prev) => ({
+                  ...prev,
                   selectedMainOption: 'type',
                   selectedThemes: [],
                   selectedType: undefined,
                   selectedStudySubject: undefined,
                 }));
-                // Auto-advance after selection
-                setTimeout(() => {
-                  handleNext();
-                }, 200);
+                setThemeSelectionMode('type');
               }}
             >
               {({ pressed }) => {
@@ -1193,19 +1187,17 @@ export default function OnboardingScreen() {
 
             {/* Just guide me option */}
             <Pressable
-              onPress={() => { 
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 
-                setData((prev) => ({ 
-                  ...prev, 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setData((prev) => ({
+                  ...prev,
                   selectedMainOption: 'guided',
                   selectedThemes: [],
                   selectedType: undefined,
                   selectedStudySubject: undefined,
                 }));
-                // Auto-advance after selection
-                setTimeout(() => {
-                  handleNext();
-                }, 200);
+                setThemeSelectionMode('none');
+                startDiscoveryPreparation('guided');
               }}
             >
               {({ pressed }) => {
