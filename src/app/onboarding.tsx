@@ -332,7 +332,7 @@ export default function OnboardingScreen() {
 
   // Filter steps based on what we already know
   const STEPS = useMemo(() => {
-    return ALL_STEPS.filter((step) => {
+    const filtered = ALL_STEPS.filter((step) => {
       // Skip reminderTime for non-premium users (push notifications are premium)
       if (step.id === 'reminderTime' && !existingUser?.isPremium) {
         return false;
@@ -363,6 +363,12 @@ export default function OnboardingScreen() {
       }
       return true;
     });
+    
+    console.log('[Onboarding] STEPS recomputed:', filtered.map(s => s.id), 
+      '| selectedMainOption:', data.selectedMainOption, 
+      '| selectedType:', data.selectedType);
+    
+    return filtered;
   }, [existingUser, data.selectedMainOption, data.selectedType]);
 
   // Find current step from filtered STEPS array
@@ -378,6 +384,7 @@ export default function OnboardingScreen() {
 
     // Don't auto-advance if we're in a theme/type sub-mode selection (wait for user to complete selection)
     if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
+      console.log('[Onboarding] Blocking auto-advance: in themeType sub-mode');
       return;
     }
 
@@ -389,6 +396,7 @@ export default function OnboardingScreen() {
       STEPS[0];
 
     if (fallback?.id && fallback.id !== currentStepId) {
+      console.log('[Onboarding] Auto-advancing from', currentStepId, 'to', fallback.id);
       setCurrentStepId(fallback.id as StepId);
     }
   }, [step, STEPS, currentStepId, themeSelectionMode, baseStep?.type]);
@@ -708,6 +716,14 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     // Prevent double-clicks during transitions
     if (isTransitioning) return;
+    
+    console.log('[Onboarding] handleNext called', {
+      currentStepId,
+      baseStepType: baseStep?.type,
+      themeSelectionMode,
+      selectedMainOption: data.selectedMainOption,
+      selectedType: data.selectedType,
+    });
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -1152,6 +1168,7 @@ export default function OnboardingScreen() {
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                console.log('[Onboarding] Selected "A style of study", currentStepId:', currentStepId);
                 setData((prev) => ({
                   ...prev,
                   selectedMainOption: 'type',
@@ -1160,6 +1177,7 @@ export default function OnboardingScreen() {
                   selectedStudySubject: undefined,
                 }));
                 setThemeSelectionMode('type');
+                console.log('[Onboarding] Set themeSelectionMode to type');
               }}
             >
               {({ pressed }) => {
