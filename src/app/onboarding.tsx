@@ -1162,15 +1162,14 @@ export default function OnboardingScreen() {
                 }}
               >
                 {({ pressed }) => {
-                  const showPressed = isSelected || pressed;
                   return (
                     <View style={{
-                      backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.inputBackground,
                       paddingHorizontal: 20,
                       paddingVertical: 18,
                       borderRadius: 16,
                       borderWidth: 1,
-                      borderColor: isSelected ? colors.borderFocused : colors.border,
+                      borderColor: colors.border,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -1181,18 +1180,6 @@ export default function OnboardingScreen() {
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{option.description}</Text>
                         )}
                       </View>
-                      {isSelected && (
-                        <View style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 12,
-                          backgroundColor: colors.accent,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}>
-                          <Text style={{ color: colors.background, fontSize: 14 }}>✓</Text>
-                        </View>
-                      )}
                     </View>
                   );
                 }}
