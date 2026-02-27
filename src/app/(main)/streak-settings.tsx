@@ -105,7 +105,7 @@ export default function StreakSettingsScreen() {
               alignItems: 'center',
             }}
           >
-            <Flame size={24} color="#C8A55C" />
+            <Flame size={24} color={colors.accent} />
             <Text
               style={{
                 fontFamily: FontFamily.uiBold,

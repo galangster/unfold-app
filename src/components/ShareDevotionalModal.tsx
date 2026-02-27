@@ -1,12 +1,12 @@
 import { useRef, useState, useEffect } from 'react';
-import { View, Text, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { X, Share2 } from 'lucide-react-native';
+import { X, Upload } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { DevotionalDay } from '@/lib/store';
@@ -31,10 +31,10 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
   const [isSharing, setIsSharing] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
 
-  // Colors for the share image based on theme
+  // Colors for the share image based on theme - pure black/white, no blue gradient
   const shareImageColors = isDark
-    ? { gradient: ['#0c1220', '#1a2332', '#2d3a4d'] as const, text: '#ffffff', subtle: 'rgba(255,255,255,0.4)', appName: 'rgba(255,255,255,0.3)' }
-    : { gradient: ['#FAF8F5', '#F5F2ED', '#EDE8E0'] as const, text: '#1A1612', subtle: 'rgba(26,22,18,0.45)', appName: 'rgba(26,22,18,0.3)' };
+    ? { gradient: ['#000000', '#1a1a1a', '#2d2d2d'] as const, text: '#ffffff', subtle: 'rgba(255,255,255,0.4)', appName: 'rgba(255,255,255,0.3)' }
+    : { gradient: ['#FFFFFF', '#F5F5F5', '#E8E8E8'] as const, text: '#000000', subtle: 'rgba(0,0,0,0.45)', appName: 'rgba(0,0,0,0.3)' };
 
   // Auto-capture when modal opens
   useEffect(() => {
@@ -82,7 +82,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       const uri = capturedUri || await captureCard();
 
       if (!uri) {
-        alert('Could not capture the image. Please try again.');
+        Alert.alert('Error', 'Could not capture the image. Please try again.');
         setIsSharing(false);
         return;
       }
@@ -90,7 +90,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       // Check if sharing is available
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        alert('Sharing is not available on this device');
+        Alert.alert('Error', 'Sharing is not available on this device');
         setIsSharing(false);
         return;
       }
@@ -218,7 +218,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                   <ActivityIndicator size="small" color={pressed ? '#000000' : '#ffffff'} />
                 ) : (
                   <>
-                    <Share2 size={18} color={pressed ? '#000000' : '#ffffff'} />
+                    <Upload size={18} color={pressed ? '#000000' : '#ffffff'} />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,

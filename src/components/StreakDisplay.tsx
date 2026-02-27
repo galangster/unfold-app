@@ -9,9 +9,10 @@ interface StreakDisplayProps {
   size?: 'small' | 'medium' | 'large';
   compact?: boolean;
   showFreeze?: boolean;
+  hideDayLabel?: boolean;
 }
 
-export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: StreakDisplayProps) {
+export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hideDayLabel }: StreakDisplayProps) {
   const { colors, isDark } = useTheme();
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
@@ -67,7 +68,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(200, 165, 92, 0.1)',
+          backgroundColor: isDark ? `${colors.accent}26` : `${colors.accent}1A`,
           paddingHorizontal: config.padding,
           paddingVertical: config.padding * 0.6,
           borderRadius: 20,
@@ -76,8 +77,8 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
       >
         <Flame
           size={config.flame}
-          color="#C8A55C"
-          fill={streak >= 7 ? '#C8A55C' : 'transparent'}
+          color={colors.accent}
+          fill={streak >= 7 ? colors.accent : 'transparent'}
         />
         <Text
           style={{
@@ -88,15 +89,17 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true }: S
         >
           {streak}
         </Text>
-        <Text
-          style={{
-            fontFamily: FontFamily.ui,
-            fontSize: config.number * 0.7,
-            color: colors.textMuted,
-          }}
-        >
-          day{streak !== 1 ? 's' : ''}
-        </Text>
+        {!hideDayLabel && (
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: config.number * 0.7,
+              color: colors.textMuted,
+            }}
+          >
+            day{streak !== 1 ? 's' : ''}
+          </Text>
+        )}
       </View>
 
       {showFreeze && freezes > 0 && (

@@ -145,6 +145,9 @@ export default function HomeScreen() {
 
   const shouldShowResumeCard = useMemo(() => {
     if (!resumeContext || !resumeDevotional) return false;
+    // Hide resume card if the journey is already complete
+    const isResumeDevotionalComplete = resumeDevotional.days.filter(d => d.isRead).length === resumeDevotional.totalDays;
+    if (isResumeDevotionalComplete) return false;
     if (resumeContext.route === 'journal') return true;
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
@@ -359,7 +362,7 @@ export default function HomeScreen() {
                 >
                   {user?.name}
                 </Text>
-                <StreakDisplay compact />
+                <StreakDisplay compact hideDayLabel />
               </View>
             </View>
 

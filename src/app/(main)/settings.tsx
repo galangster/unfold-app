@@ -454,7 +454,6 @@ export default function SettingsScreen() {
                   fontSize: 12,
                   color: colors.textHint,
                   letterSpacing: 1,
-                  textTransform: 'uppercase',
                 }}
               >
                 Profile
@@ -645,7 +644,6 @@ export default function SettingsScreen() {
                 fontSize: 12,
                 color: colors.textHint,
                 letterSpacing: 1,
-                textTransform: 'uppercase',
                 marginBottom: 12,
               }}
             >
@@ -732,7 +730,6 @@ export default function SettingsScreen() {
                 fontSize: 12,
                 color: colors.textHint,
                 letterSpacing: 1,
-                textTransform: 'uppercase',
                 marginBottom: 12,
               }}
             >
@@ -830,7 +827,6 @@ export default function SettingsScreen() {
                   fontSize: 12,
                   color: colors.textHint,
                   letterSpacing: 1,
-                  textTransform: 'uppercase',
                 }}
               >
                 Premium
@@ -1109,7 +1105,7 @@ export default function SettingsScreen() {
                   </Text>
                   <Text
                     style={{
-                      fontFamily: FontFamily.mono,
+                      fontFamily: FontFamily.uiMedium,
                       fontSize: 14,
                       color: (user?.isPremium ? notificationsEnabled : false) ? colors.text : colors.textMuted,
                     }}
@@ -1143,7 +1139,7 @@ export default function SettingsScreen() {
                     </Text>
                     <Text
                       style={{
-                        fontFamily: FontFamily.mono,
+                        fontFamily: FontFamily.ui,
                         fontSize: 14,
                         color: colors.textMuted,
                       }}
@@ -1353,7 +1349,7 @@ export default function SettingsScreen() {
                       </Text>
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.ui,
                           fontSize: 13,
                           color: colors.textMuted,
                         }}
@@ -1375,7 +1371,6 @@ export default function SettingsScreen() {
                 fontSize: 12,
                 color: colors.textHint,
                 letterSpacing: 1,
-                textTransform: 'uppercase',
                 marginBottom: 12,
               }}
             >
@@ -1526,7 +1521,6 @@ export default function SettingsScreen() {
                 fontSize: 12,
                 color: colors.textHint,
                 letterSpacing: 1,
-                textTransform: 'uppercase',
                 marginBottom: 12,
               }}
             >
@@ -1953,7 +1947,6 @@ export default function SettingsScreen() {
                 fontSize: 12,
                 color: colors.textHint,
                 letterSpacing: 1,
-                textTransform: 'uppercase',
                 marginBottom: 12,
               }}
             >
@@ -2074,7 +2067,6 @@ export default function SettingsScreen() {
                 fontSize: 12,
                 color: colors.textHint,
                 letterSpacing: 1,
-                textTransform: 'uppercase',
                 marginBottom: 12,
               }}
             >

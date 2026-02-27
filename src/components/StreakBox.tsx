@@ -66,9 +66,9 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             borderRadius: 12,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: isCompleted ? '#C8A55C' : 'transparent',
+            backgroundColor: isCompleted ? colors.accent : 'transparent',
             borderWidth: isCompleted ? 0 : 1.5,
-            borderColor: isToday ? '#C8A55C' : colors.border,
+            borderColor: isToday ? colors.accent : colors.border,
           }}
         >
           {isCompleted && (
@@ -88,7 +88,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
                 width: 8,
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: '#C8A55C',
+                backgroundColor: colors.accent,
               }}
             />
           )}
@@ -124,8 +124,8 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Flame
                 size={32}
-                color="#C8A55C"
-                fill={streakCount >= 7 ? '#C8A55C' : 'transparent'}
+                color={colors.accent}
+                fill={streakCount >= 7 ? colors.accent : 'transparent'}
               />
               <Text
                 style={{

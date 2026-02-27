@@ -16,7 +16,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Check } from 'lucide-react-native';
+import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Check, Upload } from 'lucide-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -1138,7 +1138,7 @@ export default function ReadingScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Share Button - 20% width, gray background */}
+                    {/* Share Button - icon-only Upload to match top nav style */}
                     <TouchableOpacity
                       onPress={handleShare}
                       activeOpacity={0.85}
@@ -1155,16 +1155,7 @@ export default function ReadingScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiSemiBold,
-                          fontSize: 15,
-                          color: isDark ? '#AAAAAA' : '#666666',
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        Share
-                      </Text>
+                      <Upload size={20} color={isDark ? '#AAAAAA' : '#666666'} strokeWidth={1.5} />
                     </TouchableOpacity>
                   </View>
                 </Animated.View>
@@ -1218,7 +1209,7 @@ export default function ReadingScreen() {
                       </Text>
                     </TouchableOpacity>
 
-                    {/* Share Button - 20% width, gray background */}
+                    {/* Share Button - icon-only Upload to match top nav style */}
                     <TouchableOpacity
                       onPress={handleShare}
                       activeOpacity={0.85}
@@ -1235,16 +1226,7 @@ export default function ReadingScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiSemiBold,
-                          fontSize: 15,
-                          color: isDark ? '#AAAAAA' : '#666666',
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        Share
-                      </Text>
+                      <Upload size={20} color={isDark ? '#AAAAAA' : '#666666'} strokeWidth={1.5} />
                     </TouchableOpacity>
                   </View>
 
