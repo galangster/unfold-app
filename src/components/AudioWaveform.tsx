@@ -11,6 +11,7 @@ import Animated, {
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
+import { useTheme } from '@/lib/theme';
 
 interface AudioWaveformProps {
   isPlaying: boolean;
@@ -35,9 +36,11 @@ export function AudioWaveform({
   isPlaying,
   activeWordIndex,
   totalWords,
-  color = '#C8A55C',
+  color: propColor,
   barCount = 20,
 }: AudioWaveformProps) {
+  const { colors } = useTheme();
+  const color = propColor ?? colors.accent;
   const effectiveBarCount = Math.min(Math.max(1, Math.floor(barCount ?? 20)), MAX_BARS);
 
   // Create all shared values at top level - hooks must be called in same order every render
@@ -102,8 +105,7 @@ export function AudioWaveform({
 
   // Calculate inactive color with proper rgba
   const inactiveColor = useMemo(() => {
-    const safeColor = color || '#C8A55C';
-    const hex = safeColor.replace('#', '');
+    const hex = color.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);

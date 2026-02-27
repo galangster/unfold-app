@@ -479,11 +479,11 @@ export default function HomeScreen() {
               </Text>
               <Text
                 style={{
-                  fontFamily: FontFamily.mono,
+                  fontFamily: FontFamily.uiMedium,
                   fontSize: 11,
                   color: colors.accent,
                   letterSpacing: 0.8,
-                  opacity: 0.8,
+                  opacity: 0.9,
                 }}
               >
                 {dailyQuote.reference.toUpperCase()}
@@ -627,10 +627,10 @@ export default function HomeScreen() {
                     >
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.uiMedium,
                           fontSize: 11,
                           color: colors.textMuted,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.3,
                         }}
                       >
                         {getReadingDayLabel()} · Day {currentDevotional.currentDay}/{currentDevotional.totalDays}
@@ -670,10 +670,10 @@ export default function HomeScreen() {
                       </Text>
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.uiSemiBold,
                           fontSize: 12,
                           color: colors.accent,
-                          opacity: 0.7,
+                          opacity: 0.9,
                         }}
                       >
                         {Math.round(progressPercent)}%

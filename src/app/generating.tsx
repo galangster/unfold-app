@@ -93,8 +93,8 @@ export default function GeneratingScreen() {
     text: '#F5F5F7',
     textMuted: '#A0A6B1',
     textSubtle: '#7D8592',
-    buttonBackground: '#A68A43',
-    buttonBackgroundPressed: '#8F773A',
+    buttonBackground: themeColors.accent,
+    buttonBackgroundPressed: themeColors.accent,
   };
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);

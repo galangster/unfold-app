@@ -9,6 +9,7 @@ import Animated, {
   runOnJS 
 } from 'react-native-reanimated';
 import { Flame, Sparkles } from 'lucide-react-native';
+import { useTheme } from '@/lib/theme';
 
 interface StreakCelebrationProps {
   streak: number;
@@ -16,6 +17,7 @@ interface StreakCelebrationProps {
 }
 
 export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps) {
+  const { colors } = useTheme();
   const scaleAnim = useRef(new RNAnimated.Value(0)).current;
   const opacityAnim = useRef(new RNAnimated.Value(0)).current;
 
@@ -70,9 +72,9 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
         {isMilestone ? (
           <View style={{ alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Sparkles size={40} color="#C8A55C" />
-              <Flame size={60} color="#C8A55C" fill="#C8A55C" />
-              <Sparkles size={40} color="#C8A55C" />
+              <Sparkles size={40} color={colors.accent} />
+              <Flame size={60} color={colors.accent} fill={colors.accent} />
+              <Sparkles size={40} color={colors.accent} />
             </View>
             <Animated.Text
               entering={FadeIn.delay(200)}
@@ -80,7 +82,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
                 fontFamily: 'System',
                 fontSize: 28,
                 fontWeight: 'bold',
-                color: '#C8A55C',
+                color: colors.accent,
                 marginTop: 16,
               }}
             >
@@ -89,13 +91,13 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
           </View>
         ) : (
           <View style={{ alignItems: 'center' }}>
-            <Flame size={50} color="#C8A55C" fill="#C8A55C" />
+            <Flame size={50} color={colors.accent} fill={colors.accent} />
             <RNAnimated.Text
               style={{
                 fontFamily: 'System',
                 fontSize: 24,
                 fontWeight: '600',
-                color: '#C8A55C',
+                color: colors.accent,
                 marginTop: 12,
               }}
             >

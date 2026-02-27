@@ -76,7 +76,7 @@ export default function SignInScreen() {
     textMuted: '#A0A6B1',
     textSubtle: '#8C93A0',
     textHint: '#6F7785',
-    accent: '#A68A43',
+    accent: themeColors.accent,
     error: '#EF4444',
   };
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -313,15 +313,15 @@ export default function SignInScreen() {
           <View style={[styles.topLine, { backgroundColor: colors.accent }]} />
 
           <Text style={[styles.eyebrow, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
-Save your journey
+            Keep your journey safe
           </Text>
 
           <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
-            Keep your progress in sync
+            Sync across all your devices
           </Text>
 
           <Text style={[styles.subtitle, { color: colors.textMuted, fontFamily: FontFamily.body }]}>
-            Sign in to save devotionals, notes, and streaks across your devices.
+            Sign in to save your devotionals, journal, and reading streak.
           </Text>
         </Animated.View>
 

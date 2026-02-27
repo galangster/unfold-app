@@ -259,7 +259,7 @@ export default function PaywallScreen() {
                 borderWidth: selectedPlan === 'yearly' ? 2 : 1,
                 borderColor: selectedPlan === 'yearly' ? colors.accent : colors.border,
                 backgroundColor: selectedPlan === 'yearly'
-                  ? (isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(200, 165, 92, 0.08)')
+                  ? `${colors.accent}1F`
                   : 'transparent',
               }}
             >
@@ -286,7 +286,7 @@ export default function PaywallScreen() {
                   </Text>
                   <View
                     style={{
-                      backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                      backgroundColor: `${colors.accent}26`,
                       paddingHorizontal: 7,
                       paddingVertical: 2,
                       borderRadius: 5,
@@ -336,7 +336,7 @@ export default function PaywallScreen() {
                 borderWidth: selectedPlan === 'monthly' ? 1.5 : 1,
                 borderColor: selectedPlan === 'monthly' ? colors.accent : colors.border,
                 backgroundColor: selectedPlan === 'monthly'
-                  ? (isDark ? 'rgba(200, 165, 92, 0.06)' : 'rgba(154, 123, 60, 0.04)')
+                  ? `${colors.accent}0F`
                   : 'transparent',
               }}
             >
@@ -382,7 +382,7 @@ export default function PaywallScreen() {
             disabled={isPurchasing}
             activeOpacity={0.85}
             style={{
-              backgroundColor: '#C8A55C',
+              backgroundColor: colors.accent,
               paddingVertical: 18,
               paddingHorizontal: 32,
               borderRadius: 28,

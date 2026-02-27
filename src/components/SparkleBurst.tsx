@@ -9,6 +9,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { useEffect, useMemo } from 'react';
+import { useTheme } from '@/lib/theme';
 
 interface SparkleBurstProps {
   trigger: boolean;
@@ -170,9 +171,11 @@ function SparkleParticle({ particle, color, trigger }: SparkleParticleProps) {
 
 export function SparkleBurst({
   trigger,
-  color = '#C8A55C',
+  color: propColor,
   particleCount = 16,
 }: SparkleBurstProps) {
+  const { colors } = useTheme();
+  const color = propColor ?? colors.accent;
   const count = Math.min(particleCount, MAX_PARTICLES);
 
   const particles = useMemo(() => {
