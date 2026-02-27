@@ -180,7 +180,8 @@
   },
   "private": true,
   "overrides": {
-    "react-native-css-interop": "0.1.22"
+    "react-native-css-interop": "0.1.22",
+    "expo-location": "~55.1.2"
   },
   "patchedDependencies": {}
 }
