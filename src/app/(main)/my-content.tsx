@@ -392,7 +392,7 @@ export default function MyContentScreen() {
                       }}
                       numberOfLines={3}
                     >
-                      "{day?.scriptureText?.slice(0, 200)}..."
+                      "{day?.scriptureText}"
                     </Text>
                   </Pressable>
                 );

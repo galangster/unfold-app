@@ -53,7 +53,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const progressBarRef = useRef<View>(null);
   const progressBarWidthRef = useRef(0);
 
-  const player = useAudioPlayer(audioUrl ? { uri: audioUrl } : null, { updateInterval: 100 });
+  const player = useAudioPlayer(
+    audioUrl ? { uri: audioUrl } : undefined,
+    { updateInterval: 100 }
+  );
   const status = useAudioPlayerStatus(player);
 
   const isPlaying = status.playing;
@@ -291,8 +294,8 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
           {/* Error message overlay */}
           {hasError && (
             <View style={[StyleSheet.absoluteFill, styles.errorOverlay]}>
-              <View style={[styles.errorContainer, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
-                <Text style={[styles.errorText, { color: isDark ? '#ef4444' : '#dc2626' }]}>
+              <View style={[styles.errorContainer, { backgroundColor: isDark ? 'rgba(239,68,68,0.85)' : 'rgba(220,38,38,0.9)' }]}>
+                <Text style={[styles.errorText, { color: '#ffffff' }]}>
                   {errorMessage}
                 </Text>
               </View>

@@ -65,7 +65,20 @@ function BenefitItem({ icon, title, description, delay, colors }: BenefitItemPro
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const isDark = true;
+  const colors = {
+    ...themeColors,
+    background: '#0A0A0A',
+    inputBackground: '#111214',
+    border: '#24262B',
+    text: '#F5F5F7',
+    textMuted: '#A0A6B1',
+    textSubtle: '#8C93A0',
+    textHint: '#6F7785',
+    accent: '#A68A43',
+    error: '#EF4444',
+  };
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const userProfile = useUnfoldStore((s) => s.user);
 
@@ -291,10 +304,7 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Background sparkle effect */}
-      <Animated.View style={[styles.sparkleContainer, sparkleStyle]}>
-        <View style={[styles.sparkle, { backgroundColor: colors.accent, opacity: 0.15 }]} />
-      </Animated.View>
+      {/* Removed decorative background blob for cleaner, calmer composition */}
 
       <View style={styles.content}>
         {/* Header Section */}
@@ -303,15 +313,15 @@ export default function SignInScreen() {
           <View style={[styles.topLine, { backgroundColor: colors.accent }]} />
 
           <Text style={[styles.eyebrow, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
-            Your devotional is ready
+Save your journey
           </Text>
 
           <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
-            Want to keep it{'\n'}forever?
+            Keep your progress in sync
           </Text>
 
           <Text style={[styles.subtitle, { color: colors.textMuted, fontFamily: FontFamily.body }]}>
-            Sign in to preserve your spiritual journey and access it from anywhere.
+            Sign in to save devotionals, notes, and streaks across your devices.
           </Text>
         </Animated.View>
 
@@ -332,7 +342,7 @@ export default function SignInScreen() {
           <Animated.View
             entering={FadeIn.duration(300)}
             style={{
-              backgroundColor: colors.error + '15',
+              backgroundColor: colors.error,
               borderRadius: 12,
               padding: 16,
               marginBottom: 16,
@@ -340,7 +350,7 @@ export default function SignInScreen() {
           >
             <Text
               style={{
-                color: colors.error,
+                color: '#FFFFFF',
                 fontFamily: FontFamily.ui,
                 fontSize: 14,
                 textAlign: 'center',
@@ -554,7 +564,10 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
     paddingVertical: 12,
+    marginTop: 28,
   },
   skipText: {
     fontSize: 15,

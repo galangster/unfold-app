@@ -83,7 +83,19 @@ const RIPPLE_DURATION = 2400;
 
 export default function GeneratingScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const colors = {
+    ...themeColors,
+    background: '#0A0A0A',
+    cardBackground: '#111214',
+    inputBackground: '#111214',
+    border: '#24262B',
+    text: '#F5F5F7',
+    textMuted: '#A0A6B1',
+    textSubtle: '#7D8592',
+    buttonBackground: '#A68A43',
+    buttonBackgroundPressed: '#8F773A',
+  };
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
@@ -683,9 +695,7 @@ export default function GeneratingScreen() {
               style={({ pressed }) => ({
                 backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
                 paddingVertical: 20,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
+                borderRadius: 999,
                 opacity: isNavigating ? 0.6 : 1,
               })}
             >
@@ -1019,9 +1029,7 @@ export default function GeneratingScreen() {
               style={({ pressed }) => ({
                 backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
                 paddingVertical: 20,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: colors.border,
+                borderRadius: 999,
                 opacity: !canStartReading ? 0.6 : 1,
               })}
             >
