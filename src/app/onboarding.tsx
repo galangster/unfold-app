@@ -22,6 +22,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  withDelay,
   Easing,
   FadeIn,
   FadeOut,
@@ -215,24 +216,11 @@ interface OnboardingData {
 
 // Progress indicator component
 function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentStepIndex: number; totalSteps: number; colors: any }) {
-  if (totalSteps <= 1) return null;
-  
-  const progress = Math.min(1, Math.max(0, (currentStepIndex + 1) / totalSteps));
-  
-  return (
-    <View style={{ paddingHorizontal: 24, paddingVertical: 12 }}>
-      <View style={{ height: 3, backgroundColor: colors.border, borderRadius: 1.5, overflow: 'hidden' }}>
-        <View 
-          style={{ 
-            height: '100%', 
-            width: `${progress * 100}%`, 
-            backgroundColor: colors.accent,
-            borderRadius: 1.5,
-          }} 
-        />
-      </View>
-    </View>
-  );
+  // Intentionally hidden for a calmer, less "step-counted" onboarding feel.
+  void currentStepIndex;
+  void totalSteps;
+  void colors;
+  return null;
 }
 
 export default function OnboardingScreen() {
@@ -253,6 +241,9 @@ export default function OnboardingScreen() {
   // Adaptive question states
   const [adaptedSteps, setAdaptedSteps] = useState<Record<string, { question: string; subtext: string }>>({});
   const [isLoadingAdaptive, setIsLoadingAdaptive] = useState(false);
+  const ripple1 = useSharedValue(0);
+  const ripple2 = useSharedValue(0);
+  const ripple3 = useSharedValue(0);
   
   // Transition state for animations
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -281,6 +272,44 @@ export default function OnboardingScreen() {
   const inputAnimatedStyle = useAnimatedStyle(() => ({
     opacity: inputOpacity.value,
   }));
+
+  const ripple1Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 0.35 - ripple1.value * 0.35),
+    transform: [{ scale: 0.35 + ripple1.value * 1.5 }],
+  }));
+
+  const ripple2Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 0.3 - ripple2.value * 0.3),
+    transform: [{ scale: 0.35 + ripple2.value * 1.5 }],
+  }));
+
+  const ripple3Style = useAnimatedStyle(() => ({
+    opacity: Math.max(0, 0.25 - ripple3.value * 0.25),
+    transform: [{ scale: 0.35 + ripple3.value * 1.5 }],
+  }));
+
+  useEffect(() => {
+    if (!isLoadingAdaptive) {
+      ripple1.value = 0;
+      ripple2.value = 0;
+      ripple3.value = 0;
+      return;
+    }
+
+    ripple1.value = withRepeat(
+      withTiming(1, { duration: 1700, easing: Easing.out(Easing.ease) }),
+      -1,
+      false
+    );
+    ripple2.value = withDelay(
+      550,
+      withRepeat(withTiming(1, { duration: 1700, easing: Easing.out(Easing.ease) }), -1, false)
+    );
+    ripple3.value = withDelay(
+      1100,
+      withRepeat(withTiming(1, { duration: 1700, easing: Easing.out(Easing.ease) }), -1, false)
+    );
+  }, [isLoadingAdaptive, ripple1, ripple2, ripple3]);
   
   // Keyboard height tracking for scroll adjustment
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -619,8 +648,7 @@ export default function OnboardingScreen() {
         spiritualSeeking: selectionType === 'guided' ? 'longing' : 'breakthrough',
       };
       
-      // Brief pause to show we did something
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // No artificial delay here — move straight into discovery for faster feel.
     } finally {
       clearInterval(quipInterval);
       setIsPreparingDiscovery(false);
@@ -1283,7 +1311,7 @@ export default function OnboardingScreen() {
                           : getStepQuestion()
                       } 
                       onComplete={handleTypewriterComplete} 
-                      style={{ fontSize: 32, lineHeight: 40 }} 
+                      style={{ fontSize: 28, lineHeight: 36 }} 
                     />
                   </View>
                   {showInput && (
@@ -1305,31 +1333,68 @@ export default function OnboardingScreen() {
                 <View className="flex-1 px-6" style={{ paddingTop: 40, paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
-                      <View style={{ 
-                        flex: 1, 
-                        justifyContent: 'center', 
+                      <View style={{
+                        flex: 1,
+                        minHeight: 420,
+                        justifyContent: 'center',
                         alignItems: 'center',
-                        minHeight: 200 
                       }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
+                        <View style={{ width: 88, height: 88, justifyContent: 'center', alignItems: 'center' }}>
+                          <Animated.View
+                            style={[
+                              {
+                                position: 'absolute',
+                                width: 88,
+                                height: 88,
+                                borderRadius: 44,
+                                borderWidth: 1,
+                                borderColor: colors.accent,
+                              },
+                              ripple1Style,
+                            ]}
+                          />
+                          <Animated.View
+                            style={[
+                              {
+                                position: 'absolute',
+                                width: 88,
+                                height: 88,
+                                borderRadius: 44,
+                                borderWidth: 1,
+                                borderColor: colors.accent,
+                              },
+                              ripple2Style,
+                            ]}
+                          />
+                          <Animated.View
+                            style={[
+                              {
+                                position: 'absolute',
+                                width: 88,
+                                height: 88,
+                                borderRadius: 44,
+                                borderWidth: 1,
+                                borderColor: colors.accent,
+                              },
+                              ripple3Style,
+                            ]}
+                          />
+                          <View
+                            style={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: 7,
+                              backgroundColor: colors.accent,
+                              opacity: 0.9,
+                            }}
+                          />
                         </View>
-                        <Text style={{ 
-                          fontFamily: FontFamily.ui, 
-                          fontSize: 15, 
-                          color: colors.textMuted,
-                          letterSpacing: 0.5
-                        }}>
-                          {getRandomLoadingQuip()}
-                        </Text>
                       </View>
                     ) : (
-                      <TypewriterText 
-                        text={getStepQuestion()} 
-                        onComplete={handleTypewriterComplete} 
-                        style={{ fontSize: 32, lineHeight: 40 }} 
+                      <TypewriterText
+                        text={getStepQuestion()}
+                        onComplete={handleTypewriterComplete}
+                        style={{ fontSize: 28, lineHeight: 36 }}
                       />
                     )}
                   </View>

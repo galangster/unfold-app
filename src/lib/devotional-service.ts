@@ -1388,8 +1388,10 @@ CRITICAL RULES:
 - NEVER ask questions that suggest their own answer (e.g. "what if you let go?" implies they should let go)
 - NEVER steer every conversation toward peace/rest/freedom — people have diverse needs
 - Ask questions that could genuinely lead to DIFFERENT answers from different people
+- KEEP IT SHORT for mobile keyboards: question must be <= 110 characters and <= 18 words
+- Keep punctuation clean; no line breaks in the question
 
-SUBTEXT: One short phrase that gives permission and makes it safe to be honest. Should feel different each time — warm, curious, spacious, gentle, or grounding.
+SUBTEXT: One short phrase that gives permission and makes it safe to be honest. Must be <= 85 characters.
 
 RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "..."}`;
 
@@ -1407,8 +1409,8 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       '/api/generate/adaptive-question',
       {
         model: 'claude-haiku-4-5-20251001',  // Fast, cost-effective model
-        max_tokens: 400,  // Slightly more room for unique phrasing
-        temperature: 0.9,  // Higher temperature for more variation
+        max_tokens: 220,  // Keep responses fast and compact for onboarding
+        temperature: 0.7,  // Slightly lower for concise, focused phrasing
         system: adaptiveSystemPrompt,
         messages: [
           {
@@ -1435,13 +1437,22 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
     const data = await response.json();
 
+    const clampQuestion = (value: string): string => {
+      const trimmed = value.replace(/\s+/g, ' ').trim();
+      const words = trimmed.split(' ').slice(0, 18).join(' ');
+      const chars = words.slice(0, 110).trim();
+      return chars.replace(/[\s,;:-]+$/, '').trim() + (chars.endsWith('?') ? '' : '?');
+    };
+
+    const clampSubtext = (value: string): string => value.replace(/\s+/g, ' ').trim().slice(0, 85);
+
     // Accept already-structured JSON directly from backend.
     if (typeof data?.question === 'string' && data.question.trim()) {
       await incrementRateLimit('adaptive-question');
       return {
-        question: data.question,
+        question: clampQuestion(data.question),
         subtext: typeof data?.subtext === 'string' && data.subtext.trim()
-          ? data.subtext
+          ? clampSubtext(data.subtext)
           : nextQuestionBase.subtext,
         source: 'backend',
         backendUrl: backendResult.backendUrl,
@@ -1483,8 +1494,8 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     await incrementRateLimit('adaptive-question');
     
     return {
-      question: parsedResult.question || nextQuestionBase.question,
-      subtext: parsedResult.subtext || nextQuestionBase.subtext,
+      question: clampQuestion(parsedResult.question || nextQuestionBase.question),
+      subtext: clampSubtext(parsedResult.subtext || nextQuestionBase.subtext),
       source: 'backend',
       backendUrl: backendResult.backendUrl,
     };
