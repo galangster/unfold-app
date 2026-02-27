@@ -16,7 +16,7 @@ export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Backend URL for proxied API calls (keeps API keys server-side)
 // Use remote by default so device builds don't silently point to localhost.
-const DEFAULT_REMOTE_BACKEND_FALLBACK_URL = 'https://oversight-cloning.vibecode.run';
+const DEFAULT_REMOTE_BACKEND_FALLBACK_URL = 'https://unfold-backend-production.up.railway.app';
 
 const PRIMARY_BACKEND_URL =
   process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || DEFAULT_REMOTE_BACKEND_FALLBACK_URL;
