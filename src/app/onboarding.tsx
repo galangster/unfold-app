@@ -1333,63 +1333,66 @@ export default function OnboardingScreen() {
                 <View className="flex-1 px-6" style={{ paddingTop: 40, paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
-                      <View style={{
-                        flex: 1,
-                        minHeight: 420,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}>
-                        <View style={{ width: 88, height: 88, justifyContent: 'center', alignItems: 'center' }}>
-                          <Animated.View
-                            style={[
-                              {
-                                position: 'absolute',
-                                width: 88,
-                                height: 88,
-                                borderRadius: 44,
-                                borderWidth: 1,
-                                borderColor: colors.accent,
-                              },
-                              ripple1Style,
-                            ]}
-                          />
-                          <Animated.View
-                            style={[
-                              {
-                                position: 'absolute',
-                                width: 88,
-                                height: 88,
-                                borderRadius: 44,
-                                borderWidth: 1,
-                                borderColor: colors.accent,
-                              },
-                              ripple2Style,
-                            ]}
-                          />
-                          <Animated.View
-                            style={[
-                              {
-                                position: 'absolute',
-                                width: 88,
-                                height: 88,
-                                borderRadius: 44,
-                                borderWidth: 1,
-                                borderColor: colors.accent,
-                              },
-                              ripple3Style,
-                            ]}
-                          />
-                          <View
-                            style={{
-                              width: 14,
-                              height: 14,
-                              borderRadius: 7,
-                              backgroundColor: colors.accent,
-                              opacity: 0.9,
-                            }}
-                          />
+                      <>
+                        <OnboardingEmbers count={16} />
+                        <View style={{
+                          flex: 1,
+                          minHeight: 420,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}>
+                          <View style={{ width: 88, height: 88, justifyContent: 'center', alignItems: 'center' }}>
+                            <Animated.View
+                              style={[
+                                {
+                                  position: 'absolute',
+                                  width: 88,
+                                  height: 88,
+                                  borderRadius: 44,
+                                  borderWidth: 1,
+                                  borderColor: colors.accent,
+                                },
+                                ripple1Style,
+                              ]}
+                            />
+                            <Animated.View
+                              style={[
+                                {
+                                  position: 'absolute',
+                                  width: 88,
+                                  height: 88,
+                                  borderRadius: 44,
+                                  borderWidth: 1,
+                                  borderColor: colors.accent,
+                                },
+                                ripple2Style,
+                              ]}
+                            />
+                            <Animated.View
+                              style={[
+                                {
+                                  position: 'absolute',
+                                  width: 88,
+                                  height: 88,
+                                  borderRadius: 44,
+                                  borderWidth: 1,
+                                  borderColor: colors.accent,
+                                },
+                                ripple3Style,
+                              ]}
+                            />
+                            <View
+                              style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: 7,
+                                backgroundColor: colors.accent,
+                                opacity: 0.9,
+                              }}
+                            />
+                          </View>
                         </View>
-                      </View>
+                      </>
                     ) : (
                       <TypewriterText
                         text={getStepQuestion()}
