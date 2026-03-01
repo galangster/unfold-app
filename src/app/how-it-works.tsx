@@ -15,18 +15,18 @@ interface Slide {
 const slides: Slide[] = [
   {
     id: 0,
-    title: 'A spiritual experience crafted just for you',
-    subtitle: "The world's most personalized devotional. Every word reflects your story, your struggles, your season.",
+    title: 'A spiritual experience crafted just\u00A0for\u00A0you',
+    subtitle: "The world's most personalized devotional. Every word reflects your story, your\u00A0struggles,\u00A0your\u00A0season.",
   },
   {
     id: 1,
-    title: 'Theology meets artistry',
-    subtitle: 'Trained on profound theology and beautiful writing. Every devotional is uniquely composed with care, precision, and spiritual depth.',
+    title: 'Theology meets\u00A0artistry',
+    subtitle: 'Trained on profound theology and beautiful writing. Every devotional is uniquely composed with care, precision, and\u00A0spiritual\u00A0depth.',
   },
   {
     id: 2,
-    title: 'A rhythm that transforms your life',
-    subtitle: 'Fresh bread every morning, perfectly tuned to where you are. Build a habit of encountering God that lasts a lifetime.',
+    title: 'A rhythm that transforms\u00A0your\u00A0life',
+    subtitle: 'Fresh bread every morning, perfectly tuned to where you are. Build a habit of encountering God that lasts\u00A0a\u00A0lifetime.',
   },
 ];
 

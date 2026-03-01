@@ -891,7 +891,7 @@ export default function GeneratingScreen() {
                   paddingHorizontal: 8,
                 }}
               >
-                We'll send you a quiet notification when your devotional is ready.
+                We'll send you a quiet notification when your devotional is\u00A0ready.
               </Text>
 
               <Pressable

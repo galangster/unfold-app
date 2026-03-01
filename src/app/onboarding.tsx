@@ -182,21 +182,21 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  { id: 'bibleTranslation', question: 'Which Bible translation do you prefer?', subtext: "We'll use this translation for all scripture in your devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
-  { id: 'aboutMe', question: 'Tell me about yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive — it all shapes what we create for you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  { id: 'bibleTranslation', question: 'Which Bible translation do\u00A0you\u00A0prefer?', subtext: "We'll use this translation for all scripture in\u00A0your\u00A0devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
+  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive \u2014 it all shapes what we create\u00A0for\u00A0you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
-  { id: 'themeType', question: 'Is there something specific you want to explore?', subtext: 'Pick one that resonates, or skip to let us guide you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
   { id: 'studySubject', question: 'Which would you like to study?', subtext: 'Pick one to journey through together.', type: 'studySubject' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, conditionalOn: 'selectedType' },
   // DISCOVERY STEP 1: Opening - Where are you right now? (contextual based on study type)
-  { id: 'currentSituation', question: "What's been on your heart lately?", subtext: "The thing that's there when the noise quiets down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  { id: 'currentSituation', question: "What's been on your\u00A0heart\u00A0lately?", subtext: "The thing that's there when the noise\u00A0quiets\u00A0down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   // DISCOVERY STEP 2: Going deeper - What's underneath? (contextual based on study type)
-  { id: 'emotionalState', question: "And what's underneath that?", subtext: "There's usually something deeper. Take your time.", type: 'multiline' as const, placeholder: "When I sit with it, I realize...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  { id: 'emotionalState', question: "And what's underneath\u00A0that?", subtext: "There's usually something deeper. Take\u00A0your\u00A0time.", type: 'multiline' as const, placeholder: "When I sit with it, I realize...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   // DISCOVERY STEP 3: The longing - What would breakthrough look like? (contextual based on study type)
-  { id: 'spiritualSeeking', question: "What would feel like a breath of fresh air right now?", subtext: "If something could shift, what would you hope it would be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  { id: 'spiritualSeeking', question: "What would feel like a breath of fresh air\u00A0right\u00A0now?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "We'll craft each day to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
-  { id: 'devotionalLength', question: 'How long would you like this journey to be?', subtext: 'You can always create another when this one ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'A glimpse' }, { value: 7, label: '7 days', description: 'A week' }, { value: 14, label: '14 days', description: 'Two weeks' }, { value: 30, label: '30 days', description: 'A month' }] },
-  { id: 'reminderTime', question: 'When should we remind you?', subtext: "A gentle nudge to pause and reflect. You can change this anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
+  { id: 'devotionalLength', question: 'How long would you like this journey\u00A0to\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
+  { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
 type StepId = 'name' | 'bibleTranslation' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
@@ -246,7 +246,7 @@ export default function OnboardingScreen() {
   const ripple3 = useSharedValue(0);
   
   // Transition state for animations
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const isTransitioningRef = useRef(false);
   
   // Form data
   const [data, setData] = useState<OnboardingData>({
@@ -449,30 +449,41 @@ export default function OnboardingScreen() {
     inputOpacity.value = withTiming(1, { duration: 300 });
   };
 
+  // Complete onboarding and navigate to generating screen
+  const completeOnboarding = useCallback(() => {
+    console.log('[Onboarding] Completing onboarding, navigating to generating');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.replace('/generating');
+  }, [router]);
+
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
     const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
-    if (currentIdx < STEPS.length - 1) {
-      const nextStepId = STEPS[currentIdx + 1].id as StepId;
-      
-      LayoutAnimation.configureNext({
-        duration: 200,
-        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      });
-      
-      setCurrentStepId(nextStepId);
-      setShowInput(false);
-      setShowListScrollHint(true);
-      inputOpacity.value = 0;
+    if (currentIdx >= STEPS.length - 1) {
+      // Last step — complete onboarding
+      completeOnboarding();
+      return;
     }
-  }, [STEPS, currentStepId, inputOpacity]);
+
+    const nextStepId = STEPS[currentIdx + 1].id as StepId;
+
+    LayoutAnimation.configureNext({
+      duration: 200,
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+
+    setCurrentStepId(nextStepId);
+    setShowInput(false);
+    setShowListScrollHint(true);
+    inputOpacity.value = 0;
+  }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
   // Handle next button press
   const handleNext = () => {
     // Prevent double-clicks during transitions
-    if (isTransitioning) return;
+    if (isTransitioningRef.current) return;
     
     console.log('[Onboarding] handleNext called', {
       currentStepId,
@@ -540,30 +551,33 @@ export default function OnboardingScreen() {
       console.log('[Onboarding] Blocking default advance: in themeType sub-mode');
       return;
     }
-    
+
     // Dismiss keyboard first to prevent layout shift during animation
     Keyboard.dismiss();
-    
+
+    // If leaving an adaptive discovery step, generate the next adaptive question
+    const adaptiveNextMap: Record<string, string> = {
+      currentSituation: 'emotionalState',
+      emotionalState: 'spiritualSeeking',
+    };
+    const nextAdaptiveStepId = adaptiveNextMap[currentStepId];
+    if (nextAdaptiveStepId && baseStep?.adaptive) {
+      // Fire-and-forget: generate adaptive question in background while advancing
+      // The question will be ready by the time the typewriter finishes on the next step
+      generateNextAdaptiveQuestion(nextAdaptiveStepId);
+    }
+
     // Small delay to let keyboard fully dismiss before animating
-    setTimeout(() => {
-      // Configure layout animation before state change
-      LayoutAnimation.configureNext({
-        duration: 200,
-        create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-        delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      }, () => {
-        // Animation complete callback
-        setIsTransitioning(false);
-      });
-      
-      advanceToNextStep();
-    }, 50);
-    
-    setIsTransitioning(true);
+    isTransitioningRef.current = true;
     setShowInput(false);
     setShowListScrollHint(true);
     inputOpacity.value = 0;
+
+    setTimeout(() => {
+      advanceToNextStep();
+      // Reset transitioning flag after animation duration
+      setTimeout(() => { isTransitioningRef.current = false; }, 250);
+    }, 50);
   };
 
   // Handle back button
@@ -607,48 +621,27 @@ export default function OnboardingScreen() {
   const startDiscoveryPreparation = async (selectionType: 'theme' | 'type' | 'guided') => {
     setIsPreparingDiscovery(true);
     setPreparingQuip(getRandomLoadingQuip());
-    
+
     // Rotate through quips
     const quipInterval = setInterval(() => {
       setPreparingQuip(getRandomLoadingQuip());
     }, 2000);
-    
+
     try {
-      // Get user answers for context
-      const answers = {
-        name: data.name,
-        bibleTranslation: data.bibleTranslation,
-        aboutMe: data.aboutMe,
-        selectedThemes: data.selectedThemes,
-        selectedType: data.selectedType,
-        selectedStudySubject: data.selectedStudySubject,
+      // Pre-seed first discovery question based on selection type
+      const firstQuestion: { question: string; subtext: string } = selectionType === 'theme' ? {
+        question: `What does "${data.selectedThemes[0]}" look like in your life right now?`,
+        subtext: "The honest, unfiltered reality of where you are.",
+      } : selectionType === 'type' ? {
+        question: `As you begin this ${data.selectedType?.replace('_', ' ')}, what's on your heart?`,
+        subtext: "The thing that's there when the noise quiets down.",
+      } : {
+        question: "What's been on your heart lately?",
+        subtext: "The thing that's there when the noise quiets down.",
       };
-      
-      // Get positions in discovery flow
-      const discoverySteps = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
-      const stepPositions: Record<string, number> = {
-        currentSituation: 1,
-        emotionalState: 2,
-        spiritualSeeking: 3,
-      };
-      
-      // Pre-seed fallbacks based on selection type
-      const seededAdapted: Record<string, { question: string; subtext: string }> = {
-        currentSituation: selectionType === 'theme' ? {
-          question: `What does "${data.selectedThemes[0]}" look like in your life right now?`,
-          subtext: "The honest, unfiltered reality of where you are.",
-        } : selectionType === 'type' ? {
-          question: `As you begin this ${data.selectedType?.replace('_', ' ')}, what's on your heart?`,
-          subtext: "The thing that's there when the noise quiets down.",
-        } : {
-          question: "What's been on your heart lately?",
-          subtext: "The thing that's there when the noise quiets down.",
-        },
-        emotionalState: selectionType === 'guided' ? 'longing' : 'underneath',
-        spiritualSeeking: selectionType === 'guided' ? 'longing' : 'breakthrough',
-      };
-      
-      // No artificial delay here — move straight into discovery for faster feel.
+
+      // Set the first adaptive question immediately
+      setAdaptedSteps((prev) => ({ ...prev, currentSituation: firstQuestion }));
     } finally {
       clearInterval(quipInterval);
       setIsPreparingDiscovery(false);
@@ -664,6 +657,58 @@ export default function OnboardingScreen() {
       // Reset theme selection mode before advancing
       setThemeSelectionMode('none');
       setCurrentStepId('currentSituation');
+    }
+  };
+
+  // Generate AI adaptive question for the next discovery step
+  const generateNextAdaptiveQuestion = async (nextStepId: string) => {
+    // Collect previous Q&A from all answered discovery steps
+    const discoverySteps = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
+    const previousAnswers: { question: string; answer: string }[] = [];
+
+    for (const stepId of discoverySteps) {
+      if (stepId === nextStepId) break; // Stop before the next step
+      const answer = data[stepId as keyof OnboardingData];
+      if (typeof answer === 'string' && answer.trim()) {
+        const adapted = adaptedSteps[stepId];
+        const baseStepDef = STEPS.find((s) => s.id === stepId);
+        previousAnswers.push({
+          question: adapted?.question ?? baseStepDef?.question ?? '',
+          answer: answer.trim(),
+        });
+      }
+    }
+
+    if (previousAnswers.length === 0) return; // No context to adapt from
+
+    // Determine step position for the prompt
+    const positionMap: Record<string, 'opening' | 'depth' | 'longing'> = {
+      currentSituation: 'opening',
+      emotionalState: 'depth',
+      spiritualSeeking: 'longing',
+    };
+    const stepPosition = positionMap[nextStepId] ?? 'depth';
+
+    // Get fallback from STEPS definition
+    const nextStepDef = STEPS.find((s) => s.id === nextStepId);
+    const fallbackQuestion = {
+      question: nextStepDef?.question ?? "Tell me more about that.",
+      subtext: nextStepDef?.subtext ?? "Take your time.",
+    };
+
+    setIsLoadingAdaptive(true);
+    try {
+      const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition);
+      console.log(`[Adaptive] ${nextStepId}: source=${result.source}, backendUrl=${result.backendUrl ?? 'n/a'}`);
+      setAdaptedSteps((prev) => ({
+        ...prev,
+        [nextStepId]: { question: result.question, subtext: result.subtext },
+      }));
+    } catch (error) {
+      console.warn(`[Adaptive] Failed to generate for ${nextStepId}:`, error);
+      // Falls back to default step question (adaptedSteps won't have an entry)
+    } finally {
+      setIsLoadingAdaptive(false);
     }
   };
 
@@ -748,7 +793,7 @@ export default function OnboardingScreen() {
               }}
             </Pressable>
 
-            {/* Study Type option - Medium prominence */}
+            {/* Study Type option */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -767,29 +812,35 @@ export default function OnboardingScreen() {
                 const showPressed = isSelected || (!selectedMode && pressed);
                 return (
                   <View style={{
-                    paddingVertical: 24,
+                    paddingVertical: 28,
                     borderBottomWidth: 1,
                     borderBottomColor: colors.border,
                     backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <BookOpen size={20} color={colors.accent} />
-                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: colors.text, letterSpacing: -0.2 }}>A style of study</Text>
-                        </View>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted, marginTop: 6, lineHeight: 20, marginLeft: 32 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
+                      <View style={{
+                        width: 56, height: 56, borderRadius: 16,
+                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                        justifyContent: 'center', alignItems: 'center',
+                      }}>
+                        <BookOpen size={26} color={colors.accent} />
+                      </View>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A style of study</Text>
+                        <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
                           Book study, character study, psalms, parables...
                         </Text>
                       </View>
-                      <Text style={{ fontFamily: FontFamily.mono, fontSize: 16, color: colors.accent }}>→</Text>
+                      <View style={{ marginTop: 12 }}>
+                        <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                      </View>
                     </View>
                   </View>
                 );
               }}
             </Pressable>
 
-            {/* Just guide me option - Subtle, smallest */}
+            {/* Just guide me option */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -809,20 +860,26 @@ export default function OnboardingScreen() {
                 const showPressed = isSelected || (!selectedMode && pressed);
                 return (
                   <View style={{
-                    paddingVertical: 20,
+                    paddingVertical: 28,
                     backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
-                    opacity: 0.8,
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <Wand2 size={18} color={colors.textMuted} />
-                        <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>
-                          Just guide me
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
+                      <View style={{
+                        width: 56, height: 56, borderRadius: 16,
+                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                        justifyContent: 'center', alignItems: 'center',
+                      }}>
+                        <Wand2 size={26} color={colors.accent} />
+                      </View>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>Just guide me</Text>
+                        <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
+                          We'll craft something based on what you share
                         </Text>
                       </View>
-                      <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textSubtle }}>
-                        We'll craft something based on what you share
-                      </Text>
+                      <View style={{ marginTop: 12 }}>
+                        <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                      </View>
                     </View>
                   </View>
                 );
@@ -1187,6 +1244,13 @@ export default function OnboardingScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setData((prev) => ({ ...prev, [step.id]: option.value }));
+                  // Auto-advance after a brief delay so user sees their selection
+                  setTimeout(() => {
+                    Keyboard.dismiss();
+                    setShowInput(false);
+                    inputOpacity.value = 0;
+                    setTimeout(() => advanceToNextStep(), 50);
+                  }, 300);
                 }}
               >
                 {({ pressed }) => {
@@ -1270,8 +1334,8 @@ export default function OnboardingScreen() {
               <View style={{ width: 40, height: 40 }} />
             )}
             
-            {/* Continue button - only show when can proceed */}
-            {canProceed() ? (
+            {/* Continue button - hide for choice/timeChoice steps (they auto-advance) */}
+            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' ? (
               <Pressable
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -1334,7 +1398,6 @@ export default function OnboardingScreen() {
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
                       <>
-                        <OnboardingEmbers count={16} />
                         <View style={{
                           flex: 1,
                           minHeight: 420,
@@ -1404,11 +1467,6 @@ export default function OnboardingScreen() {
                   {showInput && (
                     <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 32 }}>
                       <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
-                      {__DEV__ && step?.adaptive && getAdaptiveSource() && (
-                        <Text style={{ marginTop: 8, fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
-                          AI source: {getAdaptiveSource()}
-                        </Text>
-                      )}
                     </Animated.View>
                   )}
                   {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
