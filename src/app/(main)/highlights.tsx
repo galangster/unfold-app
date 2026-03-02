@@ -1,7 +1,15 @@
+import { useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, Highlighter, BookOpen, Quote } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
@@ -83,32 +91,8 @@ export default function HighlightsScreen() {
       </View>
 
       {totalHighlights === 0 ? (
-        // Empty state
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
-          <Highlighter size={48} color={colors.textMuted} style={{ marginBottom: 16, opacity: 0.5 }} />
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 24,
-              color: colors.text,
-              textAlign: 'center',
-              marginBottom: 8,
-            }}
-          >
-            No highlights yet
-          </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 15,
-              color: colors.textMuted,
-              textAlign: 'center',
-              lineHeight: 22,
-            }}
-          >
-            While reading, tap and hold on any text to highlight your favorite quotes and verses.
-          </Text>
-        </View>
+        // Empty state with breathing icon
+        <HighlightsEmptyState colors={colors} />
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
           {/* Stats */}
@@ -216,5 +200,53 @@ export default function HighlightsScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }) {
+  const iconPulse = useSharedValue(1);
+  useEffect(() => {
+    iconPulse.value = withRepeat(
+      withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, [iconPulse]);
+
+  const iconPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconPulse.value }],
+  }));
+
+  return (
+    <Animated.View
+      entering={FadeIn.duration(600)}
+      style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}
+    >
+      <Animated.View style={[{ marginBottom: 16 }, iconPulseStyle]}>
+        <Highlighter size={48} color={colors.textMuted} style={{ opacity: 0.5 }} />
+      </Animated.View>
+      <Text
+        style={{
+          fontFamily: FontFamily.display,
+          fontSize: 24,
+          color: colors.text,
+          textAlign: 'center',
+          marginBottom: 8,
+        }}
+      >
+        No highlights yet
+      </Text>
+      <Text
+        style={{
+          fontFamily: FontFamily.ui,
+          fontSize: 15,
+          color: colors.textMuted,
+          textAlign: 'center',
+          lineHeight: 22,
+        }}
+      >
+        While reading, tap and hold on any text to highlight your favorite quotes and verses.
+      </Text>
+    </Animated.View>
   );
 }

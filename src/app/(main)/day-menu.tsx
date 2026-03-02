@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
@@ -43,7 +44,7 @@ export default function DayMenuScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
+      <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
@@ -67,7 +68,7 @@ export default function DayMenuScreen() {
         >
           Select a Day
         </Text>
-      </View>
+      </Animated.View>
 
       {/* Day List */}
       <ScrollView
@@ -75,13 +76,16 @@ export default function DayMenuScreen() {
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
       >
-        {devotional.days.map((day) => {
+        {devotional.days.map((day, index) => {
           const isActive = day.dayNumber === currentViewingDay;
           const isDayRead = day.isRead;
 
           return (
-            <Pressable
+            <Animated.View
               key={day.dayNumber}
+              entering={FadeInDown.duration(350).delay(Math.min(index * 40, 400))}
+            >
+            <Pressable
               onPress={() => handleSelectDay(day.dayNumber)}
               style={({ pressed }) => ({
                 backgroundColor: isActive
@@ -162,6 +166,7 @@ export default function DayMenuScreen() {
                 />
               )}
             </Pressable>
+            </Animated.View>
           );
         })}
       </ScrollView>

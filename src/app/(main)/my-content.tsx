@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInRight,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ChevronLeft, BookOpen, Highlighter, Bookmark, PenLine, Lock } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
@@ -407,21 +415,42 @@ export default function MyContentScreen() {
 
 function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PenLine; title: string; subtitle: string }) {
   const { colors } = useTheme();
+
+  // Gentle breathing pulse on the icon
+  const iconPulse = useSharedValue(1);
+  useEffect(() => {
+    iconPulse.value = withRepeat(
+      withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, [iconPulse]);
+
+  const iconPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconPulse.value }],
+  }));
+
   return (
-    <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
-      <View
-        style={{
-          width: 64,
-          height: 64,
-          borderRadius: 32,
-          backgroundColor: colors.inputBackground,
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 20,
-        }}
+    <Animated.View
+      entering={FadeIn.duration(600)}
+      style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}
+    >
+      <Animated.View
+        style={[
+          {
+            width: 64,
+            height: 64,
+            borderRadius: 32,
+            backgroundColor: colors.inputBackground,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 20,
+          },
+          iconPulseStyle,
+        ]}
       >
         <Icon size={28} color={colors.textMuted} />
-      </View>
+      </Animated.View>
       <Text
         style={{
           fontFamily: FontFamily.display,
@@ -444,6 +473,6 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PenLine; tit
       >
         {subtitle}
       </Text>
-    </View>
+    </Animated.View>
   );
 }

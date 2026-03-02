@@ -74,6 +74,7 @@ export function DevotionalContent({
       withSpring(0.6, { damping: 10, stiffness: 400 }),
       withSpring(1, { damping: 8, stiffness: 200 })
     );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onToggleBookmark?.();
   }, [bookmarkScale, onToggleBookmark]);
 

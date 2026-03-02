@@ -196,14 +196,12 @@ export default function PaywallScreen() {
           </Text>
         </Animated.View>
 
-        {/* Feature list */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(100)}
-          style={{ marginTop: 16 }}
-        >
-          {FEATURES.map((feature) => (
-            <View
+        {/* Feature list — staggered entrance */}
+        <View style={{ marginTop: 16 }}>
+          {FEATURES.map((feature, index) => (
+            <Animated.View
               key={feature}
+              entering={FadeInDown.duration(400).delay(100 + index * 60)}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -221,9 +219,9 @@ export default function PaywallScreen() {
               >
                 {feature}
               </Text>
-            </View>
+            </Animated.View>
           ))}
-        </Animated.View>
+        </View>
         
         {/* Separator */}
         <View

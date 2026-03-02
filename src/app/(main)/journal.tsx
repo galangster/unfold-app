@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { X, Check, Sparkles, Lock } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
@@ -465,24 +465,28 @@ export default function JournalScreen() {
             )}
           </ScrollView>
 
-          {/* Bottom hint */}
+          {/* Bottom hint — crossfade between states */}
           <Animated.View
             entering={FadeIn.duration(400).delay(400)}
             style={{
               paddingHorizontal: 24,
               paddingBottom: 24,
+              alignItems: 'center',
             }}
           >
-            <Text
+            <Animated.Text
+              key={hasChanges ? 'saving' : justSaved ? 'saved' : 'idle'}
+              entering={FadeIn.duration(300)}
+              exiting={FadeOut.duration(200)}
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 13,
-                color: colors.textHint,
+                color: justSaved ? colors.accent : colors.textHint,
                 textAlign: 'center',
               }}
             >
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}
-            </Text>
+            </Animated.Text>
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
