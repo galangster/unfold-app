@@ -106,11 +106,11 @@ export default function PaywallScreen() {
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
 
-  // Hardcoded new pricing (update in RevenueCat dashboard later)
-  const monthlyPrice = '$3.99';
-  const yearlyPrice = '$29.99';
-  const yearlyRaw = 29.99;
-  const perMonthFromYearly = '$2.50';
+  // Hardcoded pricing (update in RevenueCat dashboard later)
+  const monthlyPrice = '$4.99';
+  const yearlyPrice = '$39.99';
+  const yearlyRaw = 39.99;
+  const perMonthFromYearly = '$3.33';
 
   // Gold CTA button color for better visibility
   const btnBg = colors.accent;
@@ -300,7 +300,7 @@ export default function PaywallScreen() {
                         letterSpacing: 0.5,
                       }}
                     >
-                      Save 25%
+                      Save 33%
                     </Text>
                   </View>
                 </View>
