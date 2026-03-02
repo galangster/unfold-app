@@ -1270,8 +1270,7 @@ export default function SettingsScreen() {
                                 return;
                               }
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              // TODO: Play voice sample
-                              console.log('Playing sample for:', option.name);
+                              // Voice sample playback not yet implemented
                             }}
                             style={{
                               width: 32,

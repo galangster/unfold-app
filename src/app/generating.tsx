@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, AppState, AppStateStatus, AccessibilityInfo } from 'react-native';
+import { View, Text, Pressable, AppState, AppStateStatus, AccessibilityInfo, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -11,6 +11,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInUp,
+  FadeOut,
   interpolate,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -36,26 +37,16 @@ import {
 } from '@/lib/notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 
-// Estimate time based on devotional length and reading duration
-function getTimeEstimate(days: number, readingDuration: number): string {
-  if (readingDuration === 30) {
-    if (days <= 3) return 'about a minute';
-    if (days <= 7) return '2-3 minutes';
-    if (days <= 14) return '4-6 minutes';
-    return '8-12 minutes';
-  }
-  if (readingDuration === 15) {
-    if (days <= 3) return 'about a minute';
-    if (days <= 7) return '1-2 minutes';
-    if (days <= 14) return '3-4 minutes';
-    return '5-7 minutes';
-  }
-  // 5-minute devotionals
-  if (days <= 3) return 'about a minute';
-  if (days <= 7) return '1-2 minutes';
-  if (days <= 14) return '2-3 minutes';
-  return '3-5 minutes';
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Contemplative messages shown while generating
+const WAITING_MESSAGES = [
+  'Reading your story',
+  'Choosing scripture',
+  'Finding the right words',
+  'Weaving your\u00A0narrative',
+  'Crafting something\u00A0personal',
+];
 
 function toFriendlyGenerationError(errorMessage: string): string {
   const normalized = errorMessage.toLowerCase();
@@ -67,19 +58,19 @@ function toFriendlyGenerationError(errorMessage: string): string {
     normalized.includes('timeout') ||
     normalized.includes('timed out')
   ) {
-    return "We couldn’t reach the writing service. Check connection and try again.";
+    return "We couldn\u2019t reach the writing service. Check your connection and\u00A0try\u00A0again.";
   }
 
   if (normalized.includes('content filter')) {
-    return 'We hit a temporary writing limit. Try again with the same answers.';
+    return 'We hit a temporary writing limit. Try again with the\u00A0same\u00A0answers.';
   }
 
-  return 'We couldn’t finish creating this devotional right now. Please try again.';
+  return 'We couldn\u2019t finish creating this devotional right now. Please\u00A0try\u00A0again.';
 }
 
-// Number of ripple rings
-const RIPPLE_COUNT = 3;
-const RIPPLE_DURATION = 2400;
+// Breathing glow animation duration
+const BREATH_DURATION = 3200;
+const MESSAGE_CYCLE_MS = 3800;
 
 export default function GeneratingScreen() {
   const router = useRouter();
@@ -135,26 +126,33 @@ export default function GeneratingScreen() {
   const [hasAskedPermission, setHasAskedPermission] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
+  // Rotating message state
+  const [messageIndex, setMessageIndex] = useState(0);
+
   const devotionalLength = user?.devotionalLength ?? 7;
-  const readingDuration = user?.readingDuration ?? 15;
-  const timeEstimate = getTimeEstimate(devotionalLength, readingDuration);
 
-  // Ripple animation values - staggered for continuous ripple effect
-  const ripple1 = useSharedValue(0);
-  const ripple2 = useSharedValue(0);
-  const ripple3 = useSharedValue(0);
+  // Breathing glow animation
+  const breathe = useSharedValue(0);
 
-  // Check notification permission on mount — always show the prompt during generation
+  // Rotate through waiting messages
+  useEffect(() => {
+    if (!isGenerating || canStartReading) return;
+    const interval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % WAITING_MESSAGES.length);
+    }, MESSAGE_CYCLE_MS);
+    return () => clearInterval(interval);
+  }, [isGenerating, canStartReading]);
+
+  // Check notification permission on mount
   useEffect(() => {
     const checkPermission = async () => {
       const enabled = await areNotificationsEnabled();
       setNotificationPermission(enabled ? 'granted' : 'denied');
 
-      // Always show notification prompt after a short delay if not yet granted
       if (!enabled) {
         notificationPromptTimerRef.current = setTimeout(() => {
           setShowNotificationPrompt(true);
-        }, 3000);
+        }, 6000);
       }
     };
     checkPermission();
@@ -181,7 +179,6 @@ export default function GeneratingScreen() {
     return () => subscription.remove();
   }, []);
 
-  // Send notification if user left app and devotional completed
   useEffect(() => {
     if (pendingNotification && wasInBackground) {
       sendDevotionalReadyNotification(pendingNotification.title);
@@ -189,65 +186,39 @@ export default function GeneratingScreen() {
     }
   }, [pendingNotification, wasInBackground]);
 
-  // Send Day 1 ready notification when first day becomes available
-  // Always send this notification regardless of background state
   useEffect(() => {
     if (canStartReading && currentSeriesTitle) {
-      console.log('[Generation] Day 1 is ready, sending notification...');
       sendDay1ReadyNotification(currentSeriesTitle);
     }
   }, [canStartReading, currentSeriesTitle]);
 
-  // Ripple animations - staggered to create continuous water ripple effect
+  // Breathing animation
   useEffect(() => {
-    // First ripple starts immediately
-    ripple1.value = withRepeat(
-      withTiming(1, { duration: RIPPLE_DURATION, easing: Easing.out(Easing.ease) }),
+    breathe.value = withRepeat(
+      withTiming(1, { duration: BREATH_DURATION, easing: Easing.inOut(Easing.ease) }),
       -1,
-      false
-    );
-
-    // Second ripple starts after 1/3 of the duration
-    ripple2.value = withDelay(
-      RIPPLE_DURATION / 3,
-      withRepeat(
-        withTiming(1, { duration: RIPPLE_DURATION, easing: Easing.out(Easing.ease) }),
-        -1,
-        false
-      )
-    );
-
-    // Third ripple starts after 2/3 of the duration
-    ripple3.value = withDelay(
-      (RIPPLE_DURATION / 3) * 2,
-      withRepeat(
-        withTiming(1, { duration: RIPPLE_DURATION, easing: Easing.out(Easing.ease) }),
-        -1,
-        false
-      )
+      true
     );
 
     return () => {
-      cancelAnimation(ripple1);
-      cancelAnimation(ripple2);
-      cancelAnimation(ripple3);
+      cancelAnimation(breathe);
     };
   }, []);
 
-  // Ripple animated styles
-  const ripple1Style = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple1.value, [0, 0.3, 1], [0.4, 0.25, 0]),
-    transform: [{ scale: interpolate(ripple1.value, [0, 1], [0.3, 1.8]) }],
+  // Animated styles for breathing glow
+  const outerGlowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(breathe.value, [0, 1], [0.03, 0.09]),
+    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.8, 1.2]) }],
   }));
 
-  const ripple2Style = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple2.value, [0, 0.3, 1], [0.4, 0.25, 0]),
-    transform: [{ scale: interpolate(ripple2.value, [0, 1], [0.3, 1.8]) }],
+  const innerGlowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(breathe.value, [0, 1], [0.06, 0.18]),
+    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.85, 1.15]) }],
   }));
 
-  const ripple3Style = useAnimatedStyle(() => ({
-    opacity: interpolate(ripple3.value, [0, 0.3, 1], [0.4, 0.25, 0]),
-    transform: [{ scale: interpolate(ripple3.value, [0, 1], [0.3, 1.8]) }],
+  const coreStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(breathe.value, [0, 1], [0.5, 1]),
+    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.9, 1.1]) }],
   }));
 
   const handleRequestNotifications = async () => {
@@ -273,6 +244,8 @@ export default function GeneratingScreen() {
     setShowNotificationPrompt(false);
   };
 
+  // ========== GENERATION LOGIC (unchanged) ==========
+
   useEffect(() => {
     if (!user || generationInFlightRef.current) return;
 
@@ -280,7 +253,6 @@ export default function GeneratingScreen() {
 
     const hasRecoverableSession = generationSession.status === 'running' && !!generationSession.devotionalId;
 
-    // Reuse persisted devotionalId when recovering from a restart; otherwise start fresh.
     const devotionalId = hasRecoverableSession && generationSession.devotionalId
       ? generationSession.devotionalId
       : `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -295,8 +267,6 @@ export default function GeneratingScreen() {
     const existingDevotional = devotionals.find((d) => d.id === devotionalId);
     let devotionalAddedToStore = Boolean(existingDevotional);
 
-    // Track all days accumulated so far for store updates.
-    // Seed from persisted devotional so progress survives app restarts.
     const accumulatedDays: DevotionalDay[] = existingDevotional ? [...existingDevotional.days] : [];
 
     if (existingDevotional) {
@@ -325,13 +295,10 @@ export default function GeneratingScreen() {
     const generate = async () => {
       markFullGenerationActive(devotionalId);
       try {
-        // Get previously used scriptures to ensure variety
         const recentScriptures = getRecentScriptures(100);
         const previouslyUsedReferences = recentScriptures.map(s => s.reference);
 
-        // Progressive loading callback — fires after each batch completes
         const onDayGenerated: OnDayGeneratedCallback = (day, dayIndex, seriesTitle) => {
-          // Avoid duplicates in our accumulated days
           if (!accumulatedDays.some(d => d.dayNumber === day.dayNumber)) {
             accumulatedDays.push(day);
           }
@@ -347,7 +314,6 @@ export default function GeneratingScreen() {
             currentCount: accumulatedDays.length,
           });
 
-          // Update local UI state
           setGeneratedDays(prev => {
             if (prev.some(d => d.dayNumber === day.dayNumber)) return prev;
             return [...prev, day];
@@ -357,7 +323,6 @@ export default function GeneratingScreen() {
             setCurrentSeriesTitle(seriesTitle);
           }
 
-          // After first batch arrives, create the devotional in the store immediately
           if (!devotionalAddedToStore && seriesTitle) {
             devotionalAddedToStore = true;
             const partialDevotional: Devotional = {
@@ -382,7 +347,6 @@ export default function GeneratingScreen() {
             setCanStartReading(true);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           } else if (devotionalAddedToStore) {
-            // Subsequent batches — update the existing devotional with all days so far
             updateDevotionalDays(devotionalId, [...accumulatedDays], undefined);
           }
         };
@@ -406,11 +370,9 @@ export default function GeneratingScreen() {
           onDayGenerated
         );
 
-        // Final update — ensure all days are in the store with the final title
         if (devotionalAddedToStore) {
           updateDevotionalDays(devotionalId, generated.days, generated.title);
         } else {
-          // Edge case: no onDayGenerated callback fired (shouldn't happen, but safe fallback)
           const devotional = createDevotionalFromGenerated(generated, {
             name: user.name,
             aboutMe: user.aboutMe,
@@ -429,7 +391,6 @@ export default function GeneratingScreen() {
           addDevotional(devotional);
         }
 
-        // Extract and save scriptures for future variety
         const finalDevotional: Devotional = {
           id: devotionalId,
           title: generated.title,
@@ -456,7 +417,6 @@ export default function GeneratingScreen() {
           totalGeneratedDays: generated.days.length,
         });
 
-        // Set pending notification for if user left app
         setPendingNotification({ title: generated.title });
 
         setIsGenerating(false);
@@ -482,28 +442,22 @@ export default function GeneratingScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, retryCount]);
 
+  // ========== HANDLERS ==========
+
   const [isNavigating, setIsNavigating] = useState(false);
 
   const handleBeginReading = () => {
-    // Prevent double-tap
     if (isNavigating) return;
-
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Check if user should see sign-in prompt
-    // Skip sign-in prompt if Firebase Auth isn't available
     let shouldShowSignIn = false;
     try {
       require('@react-native-firebase/auth');
-      // Show sign-in if:
-      // 1. User hasn't seen sign-in prompt before
-      // 2. User is not already authenticated with Apple
       shouldShowSignIn =
         !user?.hasSeenSignInPrompt &&
         user?.authProvider !== 'apple';
     } catch {
-      // Firebase Auth not available, skip sign-in
       shouldShowSignIn = false;
     }
 
@@ -515,18 +469,13 @@ export default function GeneratingScreen() {
   };
 
   const handleStartReadingEarly = () => {
-    // Prevent double-tap
     if (!canStartReading) return;
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Devotional is already in the store from progressive loading — just navigate
     router.replace('/(main)/reading');
   };
 
   const handleRetry = () => {
-    // Prevent double-tap
     if (isGenerating) return;
-
     void logBugEvent('generation', 'generation-user-retry');
     clearGenerationSession();
     setError(null);
@@ -538,14 +487,14 @@ export default function GeneratingScreen() {
   };
 
   const handleRetryFromOnboarding = () => {
-    // Prevent double-tap
     if (isGenerating) return;
-
     void logBugEvent('generation', 'generation-restart-onboarding');
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');
   };
+
+  // ========== RENDER: ERROR STATE ==========
 
   if (error) {
     const displayError = toFriendlyGenerationError(error);
@@ -553,6 +502,23 @@ export default function GeneratingScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+          {/* Error icon */}
+          <View
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              backgroundColor: 'rgba(200, 165, 92, 0.08)',
+              borderWidth: 1,
+              borderColor: 'rgba(200, 165, 92, 0.15)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginBottom: 28,
+            }}
+          >
+            <Text style={{ fontSize: 28 }}>{'  '}</Text>
+          </View>
+
           <Text
             style={{
               fontFamily: FontFamily.display,
@@ -562,7 +528,7 @@ export default function GeneratingScreen() {
               marginBottom: 12,
             }}
           >
-            {isConnectionError ? 'Lost connection' : 'Something went wrong'}
+            {isConnectionError ? 'Lost\u00A0connection' : 'Something went\u00A0wrong'}
           </Text>
           <Text
             style={{
@@ -570,36 +536,37 @@ export default function GeneratingScreen() {
               fontSize: 16,
               color: colors.textMuted,
               textAlign: 'center',
-              marginBottom: 32,
+              marginBottom: 40,
               lineHeight: 24,
+              paddingHorizontal: 8,
             }}
           >
             {displayError}
           </Text>
+
           <Pressable
             onPress={handleRetry}
             disabled={isGenerating}
             accessibilityState={{ disabled: isGenerating }}
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
-              paddingVertical: 16,
-              paddingHorizontal: 32,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
+            style={{
+              backgroundColor: colors.buttonBackground,
+              paddingVertical: 18,
+              paddingHorizontal: 48,
+              borderRadius: 999,
               opacity: isGenerating ? 0.6 : 1,
-            })}
+            }}
           >
             <Text
               style={{
                 fontFamily: FontFamily.uiMedium,
                 fontSize: 16,
-                color: colors.text,
+                color: colors.background,
               }}
             >
               Try again
             </Text>
           </Pressable>
+
           {!isConnectionError && (
             <Pressable
               onPress={handleRetryFromOnboarding}
@@ -623,19 +590,21 @@ export default function GeneratingScreen() {
     );
   }
 
+  // ========== RENDER: COMPLETE STATE ==========
+
   if (isComplete) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
-            <Animated.View entering={FadeIn.duration(600).delay(100)} style={{ marginBottom: 24 }}>
+            <Animated.View entering={FadeIn.duration(600).delay(100)} style={{ marginBottom: 28 }}>
               <Text
                 style={{
-                  fontFamily: FontFamily.body,
-                  fontSize: 15,
-                  color: colors.textMuted,
+                  fontFamily: FontFamily.ui,
+                  fontSize: 13,
+                  color: colors.textSubtle,
                   textAlign: 'center',
-                  letterSpacing: 2,
+                  letterSpacing: 3,
                   textTransform: 'uppercase',
                 }}
               >
@@ -643,7 +612,7 @@ export default function GeneratingScreen() {
               </Text>
             </Animated.View>
 
-            <Animated.View entering={FadeIn.duration(800).delay(300)}>
+            <Animated.View entering={FadeIn.duration(1000).delay(400)}>
               <Text
                 style={{
                   fontFamily: FontFamily.display,
@@ -657,21 +626,21 @@ export default function GeneratingScreen() {
               </Text>
             </Animated.View>
 
-            {/* Decorative line */}
+            {/* Decorative accent line */}
             <Animated.View
-              entering={FadeIn.duration(600).delay(600)}
+              entering={FadeIn.duration(600).delay(800)}
               style={{
-                width: 48,
+                width: 40,
                 height: 2,
                 backgroundColor: colors.accent,
-                marginTop: 36,
-                marginBottom: 36,
+                marginTop: 40,
+                marginBottom: 40,
                 borderRadius: 1,
               }}
             />
 
             <Animated.Text
-              entering={FadeIn.duration(600).delay(800)}
+              entering={FadeIn.duration(600).delay(1000)}
               style={{
                 fontFamily: FontFamily.bodyItalic,
                 fontSize: 16,
@@ -680,268 +649,201 @@ export default function GeneratingScreen() {
                 lineHeight: 24,
               }}
             >
-              Crafted with care, ready when you are.
+              {'Crafted with care,\nready when\u00A0you\u00A0are.'}
             </Animated.Text>
           </View>
 
-          <Animated.View
-            entering={FadeIn.duration(600).delay(1000)}
-            style={{ paddingHorizontal: 24, paddingBottom: 40 }}
-          >
+          <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
             <Pressable
               onPress={handleBeginReading}
               disabled={isNavigating}
               accessibilityState={{ disabled: isNavigating }}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
+              style={{
+                backgroundColor: colors.accent,
                 paddingVertical: 20,
-                borderRadius: 999,
+                borderRadius: 28,
                 opacity: isNavigating ? 0.6 : 1,
-              })}
+              }}
             >
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
                   fontSize: 17,
-                  color: colors.text,
+                  color: colors.background,
                   textAlign: 'center',
                 }}
               >
                 Begin Day 1
               </Text>
             </Pressable>
-          </Animated.View>
+          </View>
         </SafeAreaView>
       </View>
     );
   }
 
+  // ========== RENDER: LOADING / GENERATING STATE ==========
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-          {/* Ripple effect container */}
-          <View style={{ width: 160, height: 160, justifyContent: 'center', alignItems: 'center', marginBottom: 40 }}>
-            {/* Ripple rings */}
-            <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  width: 120,
-                  height: 120,
-                  borderRadius: 60,
-                  borderWidth: 1,
-                  borderColor: colors.textMuted,
-                },
-                ripple1Style,
-              ]}
-            />
-            <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  width: 120,
-                  height: 120,
-                  borderRadius: 60,
-                  borderWidth: 1,
-                  borderColor: colors.textMuted,
-                },
-                ripple2Style,
-              ]}
-            />
-            <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  width: 120,
-                  height: 120,
-                  borderRadius: 60,
-                  borderWidth: 1,
-                  borderColor: colors.textMuted,
-                },
-                ripple3Style,
-              ]}
-            />
 
-            {/* Center dot */}
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: colors.accent,
-              }}
+          {/* Breathing glow orb */}
+          <View style={{ width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 48 }}>
+            {/* Outer glow */}
+            <Animated.View
+              style={[
+                {
+                  position: 'absolute',
+                  width: 180,
+                  height: 180,
+                  borderRadius: 90,
+                  backgroundColor: colors.accent,
+                },
+                outerGlowStyle,
+              ]}
+            />
+            {/* Inner glow */}
+            <Animated.View
+              style={[
+                {
+                  position: 'absolute',
+                  width: 100,
+                  height: 100,
+                  borderRadius: 50,
+                  backgroundColor: colors.accent,
+                },
+                innerGlowStyle,
+              ]}
+            />
+            {/* Core */}
+            <Animated.View
+              style={[
+                {
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: colors.accent,
+                },
+                coreStyle,
+              ]}
             />
           </View>
 
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 24,
-              color: colors.text,
-              textAlign: 'center',
-              marginBottom: 12,
-            }}
-          >
-            {generatedDays.length === 0 ? 'Preparing Day 1' : 'Creating your devotionals'}
-          </Text>
+          {/* Rotating contemplative message */}
+          {!canStartReading && (
+            <View style={{ height: 28, justifyContent: 'center', marginBottom: 12 }}>
+              <Animated.Text
+                key={messageIndex}
+                entering={FadeIn.duration(600)}
+                exiting={FadeOut.duration(300)}
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 17,
+                  color: colors.text,
+                  textAlign: 'center',
+                }}
+              >
+                {WAITING_MESSAGES[messageIndex]}
+              </Animated.Text>
+            </View>
+          )}
 
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: 15,
-              color: colors.textMuted,
-              textAlign: 'center',
-              lineHeight: 22,
-            }}
-          >
-            {generatedDays.length === 0 ? 'Your first day will be ready shortly' : `This takes ${timeEstimate}`}
-          </Text>
-
-          {/* Progress indicator showing days generated */}
-          {generatedDays.length > 0 && (
+          {/* Series title reveal when Day 1 is ready */}
+          {canStartReading && currentSeriesTitle && (
             <Animated.View
-              entering={FadeInUp.duration(400)}
-              style={{
-                marginTop: 28,
-                alignItems: 'center',
-              }}
+              entering={FadeIn.duration(800)}
+              style={{ alignItems: 'center', marginBottom: 12 }}
             >
               <Text
                 style={{
-                  fontFamily: FontFamily.mono,
-                  fontSize: 12,
-                  color: colors.textSubtle,
-                  letterSpacing: 1,
+                  fontFamily: FontFamily.display,
+                  fontSize: 30,
+                  color: colors.text,
+                  textAlign: 'center',
+                  lineHeight: 40,
                 }}
               >
-                {generatedDays.length} of {devotionalLength} days ready
+                {currentSeriesTitle}
               </Text>
-
-              {/* Progress bar */}
-              <View
-                style={{
-                  width: 200,
-                  height: 3,
-                  backgroundColor: colors.border,
-                  borderRadius: 1.5,
-                  marginTop: 12,
-                  overflow: 'hidden',
-                }}
-              >
-                <Animated.View
-                  style={{
-                    width: `${(generatedDays.length / devotionalLength) * 100}%`,
-                    height: '100%',
-                    backgroundColor: colors.accent,
-                    borderRadius: 1.5,
-                  }}
-                />
-              </View>
             </Animated.View>
           )}
 
-          {/* Notification prompt — shown during generation */}
-          {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && (
+          {/* Day progress dots */}
+          {generatedDays.length > 0 && (
             <Animated.View
-              entering={FadeInUp.duration(500)}
+              entering={FadeIn.duration(400)}
               style={{
-                marginTop: 48,
-                width: '100%',
+                flexDirection: 'row',
+                gap: 6,
+                marginTop: 20,
                 alignItems: 'center',
               }}
             >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginBottom: 16,
-                }}
-              >
-                <Bell size={17} color={colors.accent} />
-              </View>
+              {Array.from({ length: devotionalLength }).map((_, i) => {
+                const isReady = i < generatedDays.length;
+                return (
+                  <View
+                    key={i}
+                    style={{
+                      width: isReady ? 8 : 6,
+                      height: isReady ? 8 : 6,
+                      borderRadius: 4,
+                      backgroundColor: isReady ? colors.accent : colors.border,
+                    }}
+                  />
+                );
+              })}
+            </Animated.View>
+          )}
 
-              <Text
-                style={{
-                  fontFamily: FontFamily.bodyItalic,
-                  fontSize: 16,
-                  color: colors.text,
-                  textAlign: 'center',
-                  lineHeight: 24,
-                  marginBottom: 6,
-                }}
-              >
-                You don't have to wait here
-              </Text>
-
-              <Text
-                style={{
-                  fontFamily: FontFamily.body,
-                  fontSize: 14,
-                  color: colors.textMuted,
-                  textAlign: 'center',
-                  lineHeight: 21,
-                  marginBottom: 24,
-                  paddingHorizontal: 8,
-                }}
-              >
-                We'll send you a quiet notification when your devotional is\u00A0ready.
-              </Text>
-
+          {/* Start reading early — appears when Day 1 is ready */}
+          {canStartReading && isGenerating && (
+            <View style={{ width: '100%', alignItems: 'center', marginTop: 48 }}>
               <Pressable
-                onPress={handleRequestNotifications}
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
-                  paddingVertical: 14,
-                  paddingHorizontal: 32,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginBottom: 12,
-                })}
+                onPress={handleStartReadingEarly}
+                style={{
+                  backgroundColor: colors.accent,
+                  paddingVertical: 18,
+                  paddingHorizontal: 48,
+                  borderRadius: 28,
+                }}
               >
                 <Text
                   style={{
                     fontFamily: FontFamily.uiMedium,
-                    fontSize: 15,
-                    color: colors.text,
+                    fontSize: 17,
+                    color: colors.background,
                     textAlign: 'center',
                   }}
                 >
-                  Notify me when it's ready
+                  Start Reading Now
                 </Text>
               </Pressable>
 
-              <Pressable
-                onPress={handleDismissNotificationPrompt}
-                style={{ paddingVertical: 8 }}
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: 13,
+                  color: colors.textSubtle,
+                  marginTop: 16,
+                  textAlign: 'center',
+                  lineHeight: 18,
+                }}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 13,
-                    color: colors.textSubtle,
-                    textAlign: 'center',
-                  }}
-                >
-                  I'll wait
-                </Text>
-              </Pressable>
-            </Animated.View>
+                {'The rest will keep loading as\u00A0you\u00A0read.'}
+              </Text>
+            </View>
           )}
 
-          {/* After enabling notifications — gentle reassurance */}
-          {notificationPermission === 'granted' && hasAskedPermission && (
+          {/* Notification prompt — appears after a delay */}
+          {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && !canStartReading && (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={FadeInUp.duration(500)}
               style={{
-                marginTop: 40,
+                marginTop: 56,
+                width: '100%',
                 alignItems: 'center',
               }}
             >
@@ -949,37 +851,133 @@ export default function GeneratingScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
                   backgroundColor: colors.inputBackground,
-                  borderRadius: 20,
                   borderWidth: 1,
                   borderColor: colors.border,
+                  borderRadius: 16,
+                  paddingVertical: 16,
+                  paddingHorizontal: 20,
+                  width: '100%',
                 }}
               >
-                <Bell size={14} color={colors.accent} />
-                <Text
+                <View
                   style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 13,
-                    color: colors.textMuted,
-                    marginLeft: 8,
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 14,
                   }}
                 >
-                  We'll let you know when it's ready
-                </Text>
+                  <Bell size={16} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 15,
+                      color: colors.text,
+                      marginBottom: 3,
+                    }}
+                  >
+                    {"You don\u2019t have to\u00A0wait"}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: 13,
+                      color: colors.textMuted,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {"We\u2019ll nudge you when it\u2019s\u00A0ready."}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+                <Pressable
+                  onPress={handleRequestNotifications}
+                  style={{
+                    backgroundColor: colors.buttonBackground,
+                    paddingVertical: 12,
+                    paddingHorizontal: 24,
+                    borderRadius: 999,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 14,
+                      color: colors.background,
+                    }}
+                  >
+                    Notify me
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={handleDismissNotificationPrompt}
+                  style={{
+                    paddingVertical: 12,
+                    paddingHorizontal: 20,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: 'transparent',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 14,
+                      color: colors.textMuted,
+                    }}
+                  >
+                    I'll wait
+                  </Text>
+                </Pressable>
               </View>
             </Animated.View>
           )}
 
-          {/* Already had notifications — just show the leave message */}
-          {notificationPermission === 'granted' && !hasAskedPermission && !canStartReading && (
+          {/* After enabling notifications */}
+          {notificationPermission === 'granted' && hasAskedPermission && (
             <Animated.View
-              entering={FadeIn.duration(600).delay(3000)}
+              entering={FadeIn.duration(400)}
               style={{
                 marginTop: 40,
+                flexDirection: 'row',
                 alignItems: 'center',
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                backgroundColor: colors.inputBackground,
+                borderRadius: 20,
+                borderWidth: 1,
+                borderColor: colors.border,
               }}
+            >
+              <Bell size={14} color={colors.accent} />
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 13,
+                  color: colors.textMuted,
+                  marginLeft: 8,
+                }}
+              >
+                {"We\u2019ll let you know when it\u2019s\u00A0ready"}
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* Already had notifications — gentle note */}
+          {notificationPermission === 'granted' && !hasAskedPermission && !canStartReading && (
+            <Animated.View
+              entering={FadeIn.duration(600).delay(4000)}
+              style={{ marginTop: 40 }}
             >
               <Text
                 style={{
@@ -990,75 +988,12 @@ export default function GeneratingScreen() {
                   lineHeight: 21,
                 }}
               >
-                Feel free to step away — we'll notify you when it's done.
+                {'Feel free to step away \u2014 we\u2019ll\u00A0notify\u00A0you.'}
               </Text>
             </Animated.View>
           )}
         </View>
 
-        {/* Start reading early - prominent CTA at bottom */}
-        {canStartReading && isGenerating && (
-          <Animated.View
-            entering={FadeInUp.duration(500).delay(200)}
-            style={{
-              paddingHorizontal: 24,
-              paddingBottom: 40,
-              paddingTop: 16,
-            }}
-          >
-            {currentSeriesTitle ? (
-              <Animated.Text
-                entering={FadeIn.duration(400)}
-                style={{
-                  fontFamily: FontFamily.display,
-                  fontSize: 22,
-                  color: colors.text,
-                  textAlign: 'center',
-                  marginBottom: 20,
-                  lineHeight: 30,
-                }}
-              >
-                {currentSeriesTitle}
-              </Animated.Text>
-            ) : null}
-
-            <Pressable
-              onPress={handleStartReadingEarly}
-              disabled={!canStartReading}
-              accessibilityState={{ disabled: !canStartReading }}
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
-                paddingVertical: 20,
-                borderRadius: 999,
-                opacity: !canStartReading ? 0.6 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 17,
-                  color: colors.text,
-                  textAlign: 'center',
-                }}
-              >
-                Start Reading Now
-              </Text>
-            </Pressable>
-
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 14,
-                color: colors.textSubtle,
-                marginTop: 14,
-                textAlign: 'center',
-                lineHeight: 20,
-              }}
-            >
-              Day 1 is ready — the rest will keep loading as you read.
-            </Text>
-          </Animated.View>
-        )}
       </SafeAreaView>
     </View>
   );

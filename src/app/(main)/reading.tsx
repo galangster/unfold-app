@@ -466,7 +466,6 @@ export default function ReadingScreen() {
 
     // If initial full-series generation is still running, don't start a duplicate continuation job.
     if (isFullGenerationActive(currentDevotional.id)) {
-      console.log('[Reading] Full generation already active; skipping duplicate continue job.');
       void logBugEvent('reading-generation', 'continue-generation-skipped-full-job-active', {
         devotionalId: currentDevotional.id,
       });
@@ -481,7 +480,6 @@ export default function ReadingScreen() {
 
     try {
       const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength);
-      console.log(`[Reading] Continue generation: current days=${currentDevotional.days.length}, totalDays=${currentDevotional.totalDays}, target=${targetTotalDays}`);
       const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
       const allDays = await continueGeneratingDays(
         fixedDevotional,
@@ -617,7 +615,6 @@ export default function ReadingScreen() {
       autoRetryAttemptsRef.current[devotionalId] = attempts;
 
       if (attempts > AUTO_RETRY_MAX_ATTEMPTS) {
-        console.log(`[Reading] Auto-retry cap reached for ${devotionalId}; waiting for manual retry.`);
         void logBugEvent('reading-generation', 'auto-retry-cap-reached', {
           devotionalId,
           attempts,
@@ -629,7 +626,6 @@ export default function ReadingScreen() {
       }
 
       const delayMs = Math.min(AUTO_RETRY_BASE_DELAY_MS * attempts, 60000);
-      console.log(`[Reading] Scheduling auto-retry ${attempts}/${AUTO_RETRY_MAX_ATTEMPTS} in ${Math.round(delayMs / 1000)}s`);
       void logBugEvent('reading-generation', 'auto-retry-scheduled', {
         devotionalId,
         attempt: attempts,
@@ -688,7 +684,6 @@ export default function ReadingScreen() {
 
       try {
         const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
-        console.log(`[Reading] Retry: daysReady=${daysReady}, totalDays=${currentDevotional.totalDays}, target=${targetTotalDays}, viewingDay=${viewingDay}`);
         const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
         const allDays = await continueGeneratingDays(
           fixedDevotional,

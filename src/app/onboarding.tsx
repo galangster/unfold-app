@@ -348,10 +348,6 @@ export default function OnboardingScreen() {
       return true;
     });
     
-    console.log('[Onboarding] STEPS recomputed:', filtered.map(s => s.id), 
-      '| selectedMainOption:', data.selectedMainOption, 
-      '| selectedType:', data.selectedType);
-    
     return filtered;
   }, [existingUser, data.selectedMainOption, data.selectedType]);
   
@@ -361,9 +357,7 @@ export default function OnboardingScreen() {
   
   // Helper to get the index of current step in STEPS array
   const currentStepIndex = useMemo(() => {
-    const idx = STEPS.findIndex((s) => s.id === currentStepId);
-    console.log('[Onboarding] currentStepIndex computed:', idx, '| currentStepId:', currentStepId, '| STEPS:', STEPS.map(s => s.id));
-    return idx;
+    return STEPS.findIndex((s) => s.id === currentStepId);
   }, [STEPS, currentStepId]);
   const isLastStep = currentStepIndex === STEPS.length - 1;
 
@@ -372,7 +366,6 @@ export default function OnboardingScreen() {
 
     // Don't auto-advance if we're in a theme/type sub-mode selection (wait for user to complete selection)
     if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
-      console.log('[Onboarding] Blocking auto-advance: in themeType sub-mode');
       return;
     }
 
@@ -384,7 +377,6 @@ export default function OnboardingScreen() {
       STEPS[0];
 
     if (fallback?.id && fallback.id !== currentStepId) {
-      console.log('[Onboarding] Auto-advancing from', currentStepId, 'to', fallback.id);
       setCurrentStepId(fallback.id as StepId);
     }
   }, [step, STEPS, currentStepId, themeSelectionMode, baseStep?.type]);
@@ -451,7 +443,6 @@ export default function OnboardingScreen() {
 
   // Complete onboarding and navigate to generating screen
   const completeOnboarding = useCallback(() => {
-    console.log('[Onboarding] Completing onboarding, navigating to generating');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.replace('/generating');
   }, [router]);
@@ -484,14 +475,6 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     // Prevent double-clicks during transitions
     if (isTransitioningRef.current) return;
-    
-    console.log('[Onboarding] handleNext called', {
-      currentStepId,
-      baseStepType: baseStep?.type,
-      themeSelectionMode,
-      selectedMainOption: data.selectedMainOption,
-      selectedType: data.selectedType,
-    });
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -548,7 +531,6 @@ export default function OnboardingScreen() {
     // Default: advance to next step
     // BUT: Never advance if we're in a themeType sub-mode (safety guard)
     if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
-      console.log('[Onboarding] Blocking default advance: in themeType sub-mode');
       return;
     }
 
@@ -699,13 +681,11 @@ export default function OnboardingScreen() {
     setIsLoadingAdaptive(true);
     try {
       const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition);
-      console.log(`[Adaptive] ${nextStepId}: source=${result.source}, backendUrl=${result.backendUrl ?? 'n/a'}`);
       setAdaptedSteps((prev) => ({
         ...prev,
         [nextStepId]: { question: result.question, subtext: result.subtext },
       }));
-    } catch (error) {
-      console.warn(`[Adaptive] Failed to generate for ${nextStepId}:`, error);
+    } catch {
       // Falls back to default step question (adaptedSteps won't have an entry)
     } finally {
       setIsLoadingAdaptive(false);
