@@ -669,7 +669,8 @@ export const useUnfoldStore = create<UnfoldState>()(
             // Check if we already earned for this week
             const lastEarnedStreak = Math.floor((state.streakLongest || 0) / 7) * 7;
             if (newStreak > lastEarnedStreak) {
-              newFreezes = Math.min(newFreezes + 1, 1); // Max 1 freeze
+              const maxFreezes = state.user?.isPremium ? 99 : 1;
+              newFreezes = Math.min(newFreezes + 1, maxFreezes);
             }
           }
 
@@ -703,7 +704,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 4, // Increment when state structure changes
+      version: 5, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -743,6 +744,14 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakWeekendAmnesty: true,
             streakFreezes: 0,
           } as UnfoldState;
+        }
+
+        // Migration from version 4 to 5: Add preferredVoice default to user
+        if (version < 5) {
+          if (state.user && typeof state.user === 'object' && !state.user.preferredVoice) {
+            state.user.preferredVoice = '694f9389-aac1-45b6-b726-9d9369183238'; // Katie
+          }
+          return state as UnfoldState;
         }
 
         return state as UnfoldState;

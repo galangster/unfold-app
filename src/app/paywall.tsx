@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, TouchableOpacity, ActivityIndicator, Linking, Platform, Image } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Linking, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -375,10 +375,10 @@ export default function PaywallScreen() {
 
         {/* SUBSCRIBE BUTTON — gold pill-shaped, impossible to miss */}
         <View style={{ marginTop: 8, marginBottom: 12 }}>
-          <TouchableOpacity
+          <Pressable
             onPress={handleSubscribe}
             disabled={isPurchasing}
-            activeOpacity={0.85}
+
             style={{
               backgroundColor: colors.accent,
               paddingVertical: 18,
@@ -403,7 +403,7 @@ export default function PaywallScreen() {
                 {selectedPlan === 'yearly' ? `Subscribe — ${yearlyPrice}/year` : `Subscribe — ${monthlyPrice}/month`}
               </Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Restore + Legal at bottom */}

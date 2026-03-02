@@ -5,19 +5,19 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { Play, Pause } from 'lucide-react-native';
+import { Play, Pause, RotateCcw, RotateCw } from 'lucide-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
-import { streamDevotionalAudio, WordTimestamp } from '@/lib/cartesia';
+import { streamDevotionalAudio } from '@/lib/cartesia';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const SKIP_SECONDS = 15;
+const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 2] as const;
 
 interface AudioPlayerProps {
   title: string;
@@ -31,6 +31,8 @@ interface AudioPlayerProps {
 }
 
 export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
+  title,
+  subtitle,
   content,
   scriptureReference,
   scriptureText,
@@ -41,12 +43,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const { colors, isDark } = useTheme();
 
   const [isLoading, setIsLoading] = useState(false);
-  const [wordTimestamps, setWordTimestamps] = useState<WordTimestamp[]>([]);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragPosition, setDragPosition] = useState(0);
+  const [speedIndex, setSpeedIndex] = useState(0);
 
   const shouldAutoplayRef = useRef(false);
   const audioUrlRef = useRef<string | null>(null);
@@ -63,8 +63,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const currentTime = status.currentTime * 1000;
   const duration = status.duration * 1000;
 
-  // Thinner snap point for horizontal layout (~8-10% height)
-  const snapPoints = useMemo(() => ['10%', '25%'], []);
+  const snapPoints = useMemo(() => ['18%'], []);
 
   const fullText = useMemo(() => {
     return `${content}\n\n${scriptureReference}: ${scriptureText}`;
@@ -103,10 +102,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       try {
         player.pause();
       } catch {}
-      if (audioUrlRef.current) {
-        URL.revokeObjectURL(audioUrlRef.current);
-        audioUrlRef.current = null;
-      }
+      audioUrlRef.current = null;
     };
   }, [player]);
 
@@ -130,16 +126,16 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
         try {
           player.pause();
         } catch {}
-        URL.revokeObjectURL(audioUrlRef.current);
         audioUrlRef.current = null;
       }
 
+      const resolvedVoiceId = voiceId === 'default' ? '694f9389-aac1-45b6-b726-9d9369183238' : voiceId;
+
       Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_STARTED, {
-        voice_id: voiceId,
+        voice_id: resolvedVoiceId,
       });
 
-      const result = await streamDevotionalAudio(fullText, voiceId);
-      setWordTimestamps(result.wordTimestamps);
+      const result = await streamDevotionalAudio(fullText, resolvedVoiceId);
 
       shouldAutoplayRef.current = true;
       setAudioUrl(result.audioUrl);
@@ -165,7 +161,6 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
           position_ms: currentTime,
         });
       } else {
-        // Replay behavior when at end
         if (status.duration > 0 && Math.abs(status.currentTime - status.duration) < 0.05) {
           await player.seekTo(0);
         }
@@ -176,17 +171,51 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     }
   }, [audioUrl, status, loadAndPlayAudio, player, currentTime]);
 
+  const skipBack = useCallback(async () => {
+    if (!audioUrl || !status.isLoaded) return;
+    try {
+      const newPos = Math.max(0, status.currentTime - SKIP_SECONDS);
+      await player.seekTo(newPos);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      logger.error('Error skipping back:', error);
+    }
+  }, [audioUrl, status.isLoaded, status.currentTime, player]);
+
+  const skipForward = useCallback(async () => {
+    if (!audioUrl || !status.isLoaded || status.duration <= 0) return;
+    try {
+      const newPos = Math.min(status.duration, status.currentTime + SKIP_SECONDS);
+      await player.seekTo(newPos);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      logger.error('Error skipping forward:', error);
+    }
+  }, [audioUrl, status.isLoaded, status.currentTime, status.duration, player]);
+
+  const cycleSpeed = useCallback(() => {
+    const nextIndex = (speedIndex + 1) % PLAYBACK_SPEEDS.length;
+    const newSpeed = PLAYBACK_SPEEDS[nextIndex];
+    setSpeedIndex(nextIndex);
+    try {
+      player.setPlaybackRate(newSpeed);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      logger.error('Error setting playback rate:', error);
+    }
+  }, [speedIndex, player]);
+
   const handleProgressBarLayout = useCallback((event: any) => {
     progressBarWidthRef.current = event.nativeEvent.layout.width;
   }, []);
 
   const handleProgressPress = useCallback(async (event: any) => {
     if (!audioUrl || !status.isLoaded || duration <= 0) return;
-    
+
     const { locationX } = event.nativeEvent;
     const progress = Math.max(0, Math.min(1, locationX / progressBarWidthRef.current));
     const newPositionSec = (progress * duration) / 1000;
-    
+
     try {
       await player.seekTo(newPositionSec);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -203,6 +232,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   }, []);
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const currentSpeed = PLAYBACK_SPEEDS[speedIndex];
 
   return (
     <BottomSheet
@@ -232,64 +262,119 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
           style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)' }]}
         />
 
-        {/* Content over blur - Horizontal Layout */}
         <View style={styles.content}>
-          {/* Left side: Progress bar with time labels */}
-          <View style={styles.leftSection}>
-            {/* Progress bar - scrubbable */}
-            <Pressable
-              ref={progressBarRef}
-              onLayout={handleProgressBarLayout}
-              onPress={handleProgressPress}
-              style={[styles.progressBarContainer, { backgroundColor: colors.border }]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: colors.accent,
-                    width: `${progressPercent}%`,
-                  },
-                ]}
-              />
-              {/* Progress thumb */}
-              <View
-                style={[
-                  styles.progressThumb,
-                  {
-                    backgroundColor: colors.accent,
-                    left: `${progressPercent}%`,
-                    transform: [{ translateX: -8 }],
-                  },
-                ]}
-              />
-            </Pressable>
-            
-            {/* Time labels below progress bar */}
-            <View style={styles.timeContainer}>
-              <Text style={[styles.timeText, { color: colors.textMuted }]}>
-                {formatTime(currentTime)}
+          {/* Track title row */}
+          <View style={styles.titleRow}>
+            <View style={styles.titleTextContainer}>
+              <Text
+                style={[styles.titleText, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {title}
               </Text>
-              <Text style={[styles.timeText, { color: colors.textMuted }]}>
-                {formatTime(duration)}
+              <Text
+                style={[styles.subtitleText, { color: colors.textMuted }]}
+                numberOfLines={1}
+              >
+                {subtitle}
               </Text>
             </View>
+            {/* Speed control */}
+            <Pressable
+              onPress={cycleSpeed}
+              style={[styles.speedButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}
+            >
+              <Text style={[styles.speedText, { color: colors.text }]}>
+                {currentSpeed === 1 ? '1x' : `${currentSpeed}x`}
+              </Text>
+            </Pressable>
           </View>
 
-          {/* Right side: Play/pause button */}
+          {/* Progress bar */}
           <Pressable
-            onPress={togglePlayback}
-            style={[styles.playButton, { backgroundColor: colors.accent }]}
-            disabled={isLoading}
+            ref={progressBarRef}
+            onLayout={handleProgressBarLayout}
+            onPress={handleProgressPress}
+            style={[styles.progressBarContainer, { backgroundColor: colors.border }]}
           >
-            {isLoading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : isPlaying ? (
-              <Pause size={24} color="#fff" fill="#fff" />
-            ) : (
-              <Play size={24} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
-            )}
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  backgroundColor: colors.accent,
+                  width: `${progressPercent}%`,
+                },
+              ]}
+            />
+            <View
+              style={[
+                styles.progressThumb,
+                {
+                  backgroundColor: colors.accent,
+                  left: `${progressPercent}%`,
+                  transform: [{ translateX: -6 }],
+                },
+              ]}
+            />
           </Pressable>
+
+          {/* Time + controls row */}
+          <View style={styles.controlsRow}>
+            <Text style={[styles.timeText, { color: colors.textMuted }]}>
+              {formatTime(currentTime)}
+            </Text>
+
+            <View style={styles.transportControls}>
+              {/* Skip back 15s */}
+              <Pressable
+                onPress={skipBack}
+                style={styles.skipButton}
+                disabled={isLoading || !status.isLoaded}
+              >
+                <RotateCcw
+                  size={18}
+                  color={status.isLoaded ? colors.text : colors.textMuted}
+                />
+                <Text style={[styles.skipLabel, { color: status.isLoaded ? colors.text : colors.textMuted }]}>
+                  15
+                </Text>
+              </Pressable>
+
+              {/* Play/pause */}
+              <Pressable
+                onPress={togglePlayback}
+                style={[styles.playButton, { backgroundColor: colors.accent }]}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : isPlaying ? (
+                  <Pause size={20} color="#fff" fill="#fff" />
+                ) : (
+                  <Play size={20} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
+                )}
+              </Pressable>
+
+              {/* Skip forward 15s */}
+              <Pressable
+                onPress={skipForward}
+                style={styles.skipButton}
+                disabled={isLoading || !status.isLoaded}
+              >
+                <RotateCw
+                  size={18}
+                  color={status.isLoaded ? colors.text : colors.textMuted}
+                />
+                <Text style={[styles.skipLabel, { color: status.isLoaded ? colors.text : colors.textMuted }]}>
+                  15
+                </Text>
+              </Pressable>
+            </View>
+
+            <Text style={[styles.timeText, { color: colors.textMuted }]}>
+              {formatTime(duration)}
+            </Text>
+          </View>
 
           {/* Error message overlay */}
           {hasError && (
@@ -318,16 +403,39 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 16,
+    justifyContent: 'center',
+  },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 20,
-    gap: 16,
+    marginBottom: 10,
   },
-  leftSection: {
+  titleTextContainer: {
     flex: 1,
-    justifyContent: 'center',
+    marginRight: 12,
+  },
+  titleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  subtitleText: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  speedButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexShrink: 0,
+  },
+  speedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   progressBarContainer: {
     height: 4,
@@ -341,29 +449,48 @@ const styles = StyleSheet.create({
   },
   progressThumb: {
     position: 'absolute',
-    top: -6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  timeContainer: {
+  controlsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 6,
+    marginTop: 8,
   },
   timeText: {
     fontSize: 11,
     fontVariant: ['tabular-nums'],
+    width: 36,
+  },
+  transportControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  skipButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 36,
+    height: 36,
+  },
+  skipLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: -3,
+    fontVariant: ['tabular-nums'],
   },
   playButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -371,7 +498,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
-    flexShrink: 0,
   },
   errorOverlay: {
     backgroundColor: 'rgba(0,0,0,0.5)',

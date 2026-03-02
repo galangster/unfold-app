@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  Pressable,
   StyleSheet,
-  TouchableOpacity,
   Animated,
   Dimensions,
   StatusBar,
@@ -158,10 +158,10 @@ export default function WelcomeScreen() {
                   { transform: [{ scale: buttonScale1 }] },
                 ]}
               >
-                <TouchableOpacity
+                <Pressable
                   style={styles.quickStartButton}
                   onPress={handleQuickStart}
-                  activeOpacity={0.85}
+
                   onPressIn={() => {
                     Animated.spring(buttonScale1, {
                       toValue: 0.96,
@@ -190,7 +190,7 @@ export default function WelcomeScreen() {
                       Begin in 30 seconds
                     </Text>
                   </LinearGradient>
-                </TouchableOpacity>
+                </Pressable>
               </Animated.View>
 
               {/* Personalize - Secondary */}
@@ -200,7 +200,7 @@ export default function WelcomeScreen() {
                   { transform: [{ scale: buttonScale2 }] },
                 ]}
               >
-                <TouchableOpacity
+                <Pressable
                   style={[
                     styles.personalizeButton,
                     {
@@ -209,7 +209,7 @@ export default function WelcomeScreen() {
                     },
                   ]}
                   onPress={handlePersonalize}
-                  activeOpacity={0.85}
+
                   onPressIn={() => {
                     Animated.spring(buttonScale2, {
                       toValue: 0.96,
@@ -233,7 +233,7 @@ export default function WelcomeScreen() {
                   <Text style={[styles.personalizeSubtitle, { color: colors.textSubtle, fontFamily: FontFamily.body }]}>
                     2 minutes for a tailored experience
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               </Animated.View>
             </View>
 
@@ -242,11 +242,11 @@ export default function WelcomeScreen() {
               <Text style={[styles.footerText, { color: colors.textMuted, fontFamily: FontFamily.body }]}>
                 Already have an account?
               </Text>
-              <TouchableOpacity onPress={handleSignIn}>
+              <Pressable onPress={handleSignIn}>
                 <Text style={[styles.signInText, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
                   Sign In
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </Animated.View>
         </SafeAreaView>

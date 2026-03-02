@@ -317,11 +317,6 @@ export default function OnboardingScreen() {
   // Filter steps based on what we already know
   const STEPS = useMemo(() => {
     const filtered = ALL_STEPS.filter((step) => {
-      // Skip reminderTime for non-premium users (push notifications are premium)
-      if (step.id === 'reminderTime' && !existingUser?.isPremium) {
-        return false;
-      }
-      
       // Skip study subject if user selected themes or guided mode (not a study type)
       if (step.id === 'studySubject') {
         // If they selected themes or guided, skip subject selection

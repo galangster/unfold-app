@@ -17,6 +17,7 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
+import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { CARTESIA_VOICES } from '@/lib/cartesia';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
@@ -90,13 +91,6 @@ export default function SettingsScreen() {
   }, [user?.reminderTime]);
 
   const handleToggleNotifications = async (value: boolean) => {
-    // If not premium, prompt to upgrade
-    if (!user?.isPremium) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      router.push('/paywall');
-      return;
-    }
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (value) {
@@ -1082,8 +1076,8 @@ export default function SettingsScreen() {
                   onPress={() => handleToggleNotifications(!notificationsEnabled)}
                   accessibilityRole="button"
                   accessibilityLabel="Daily reminders"
-                  accessibilityHint={user?.isPremium ? (notificationsEnabled ? "Turn off daily reminder notifications" : "Turn on daily reminder notifications") : "Premium feature. Opens upgrade options"}
-                  accessibilityState={{ disabled: !user?.isPremium, selected: notificationsEnabled && user?.isPremium }}
+                  accessibilityHint={notificationsEnabled ? "Turn off daily reminder notifications" : "Turn on daily reminder notifications"}
+                  accessibilityState={{ selected: notificationsEnabled }}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',

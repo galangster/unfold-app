@@ -4,7 +4,8 @@
  * Then open: http://localhost:8081/showcase
  */
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { ThemeProvider, useTheme } from '../lib/theme';
@@ -71,15 +72,15 @@ function ShowcaseContent() {
         {/* Sparkle Burst */}
         {renderSection('Sparkle Burst Animation', (
           <View style={styles.centerContent}>
-            <TouchableOpacity 
+            <Pressable 
               style={[styles.triggerButton, { backgroundColor: colors.accent }]}
               onPress={() => setSparkleTrigger(Date.now())}
-              activeOpacity={0.8}
+
             >
               <Text style={[styles.triggerText, { fontFamily: FontFamily.uiSemiBold }]}>
                 ✨ Trigger Sparkle
               </Text>
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.sparkleContainer}>
               <SparkleBurst trigger={sparkleTrigger > 0} />
             </View>
@@ -89,7 +90,7 @@ function ShowcaseContent() {
         {/* Audio Waveform */}
         {renderSection('Audio Waveform', (
           <View style={styles.centerContent}>
-            <TouchableOpacity 
+            <Pressable 
               style={[styles.triggerButton, { 
                 backgroundColor: isPlaying ? colors.error : colors.success 
               }]}
@@ -97,12 +98,12 @@ function ShowcaseContent() {
                 setIsPlaying(!isPlaying);
                 if (!isPlaying) setActiveWord(0);
               }}
-              activeOpacity={0.8}
+
             >
               <Text style={[styles.triggerText, { fontFamily: FontFamily.uiSemiBold }]}>
                 {isPlaying ? '⏹ Stop' : '▶ Play'} Waveform
               </Text>
-            </TouchableOpacity>
+            </Pressable>
             <View style={{ height: 24 }} />
             <AudioWaveform 
               isPlaying={isPlaying}

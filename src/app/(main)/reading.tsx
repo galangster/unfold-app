@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Pressable, TouchableOpacity, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -34,6 +34,7 @@ import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
+import { getDefaultVoice } from '@/lib/cartesia';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -1026,11 +1027,11 @@ export default function ReadingScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   if (!isPremium) {
-                    // Never open player for non-premium users; show toast instead
-                    setIsAudioPlayerVisible(false);
-                    setAudioToast({ visible: true, message: 'Audio playback is a premium feature. Upgrade to listen.' });
-                    // Auto-hide after 3 seconds
-                    setTimeout(() => setAudioToast(null), 3000);
+                    setAudioToast({ visible: true, message: 'Audio is a premium feature' });
+                    setTimeout(() => {
+                      setAudioToast(null);
+                      router.push('/paywall');
+                    }, 1200);
                     return;
                   }
                   if (!isAudioPlayerVisible) {
@@ -1115,9 +1116,9 @@ export default function ReadingScreen() {
                     }}
                   >
                     {/* Complete Day Button - 80% width, white text on gold */}
-                    <TouchableOpacity
+                    <Pressable
                       onPress={handleComplete}
-                      activeOpacity={0.85}
+
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
@@ -1142,12 +1143,12 @@ export default function ReadingScreen() {
                       >
                         {isLastDay ? 'Complete Journey' : 'Complete Day'}
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
                     {/* Share Button - icon-only Upload to match top nav style */}
-                    <TouchableOpacity
+                    <Pressable
                       onPress={handleShare}
-                      activeOpacity={0.85}
+
                       accessibilityRole="button"
                       accessibilityLabel="Share devotional"
                       accessibilityHint="Share this day's reading with others"
@@ -1162,7 +1163,7 @@ export default function ReadingScreen() {
                       }}
                     >
                       <Upload size={20} color={isDark ? '#AAAAAA' : '#666666'} strokeWidth={1.5} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 </Animated.View>
               ) : (
@@ -1179,11 +1180,11 @@ export default function ReadingScreen() {
                     }}
                   >
                     {/* Day Completed Button - 80% width, with satisfying spring entrance */}
-                    <TouchableOpacity
+                    <Pressable
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       }}
-                      activeOpacity={0.85}
+
                       accessibilityRole="button"
                       accessibilityLabel="Day completed"
                       accessibilityHint="This day has already been marked as complete"
@@ -1213,12 +1214,12 @@ export default function ReadingScreen() {
                       >
                         Day Completed
                       </Text>
-                    </TouchableOpacity>
+                    </Pressable>
 
                     {/* Share Button - icon-only Upload to match top nav style */}
-                    <TouchableOpacity
+                    <Pressable
                       onPress={handleShare}
-                      activeOpacity={0.85}
+
                       accessibilityRole="button"
                       accessibilityLabel="Share devotional"
                       accessibilityHint="Share this day's reading with others"
@@ -1233,7 +1234,7 @@ export default function ReadingScreen() {
                       }}
                     >
                       <Upload size={20} color={isDark ? '#AAAAAA' : '#666666'} strokeWidth={1.5} />
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
@@ -1387,7 +1388,7 @@ export default function ReadingScreen() {
           content={currentDayData.bodyText}
           scriptureReference={currentDayData.scriptureReference}
           scriptureText={currentDayData.scriptureText}
-          voiceId={user?.preferredVoice || 'default'}
+          voiceId={user?.preferredVoice || getDefaultVoice()}
           isPremium={isPremium}
           onClose={() => {
             setIsAudioPlayerVisible(false);

@@ -1,7 +1,9 @@
 /**
  * Cartesia API Integration
- * Text-to-speech with word-level timestamps for karaoke highlighting
+ * Text-to-speech for devotional audio playback
  */
+
+import { File, Paths } from 'expo-file-system';
 
 const CARTESIA_API_KEY = process.env.EXPO_PUBLIC_CARTESIA_KEY || '';
 const CARTESIA_BASE_URL = 'https://api.cartesia.ai';
@@ -12,7 +14,7 @@ export const CARTESIA_VOICES = [
     id: '694f9389-aac1-45b6-b726-9d9369183238',
     name: 'Katie',
     description: 'Warm, contemplative — perfect for devotionals',
-    premium: true,
+    premium: false,
   },
   {
     id: '03496517-369a-4db1-8236-3d3ae459ddf7',
@@ -65,8 +67,8 @@ export interface TTSResult {
 }
 
 /**
- * Stream audio from Cartesia with word-level timestamps
- * Uses Server-Sent Events (SSE) for real-time streaming
+ * Fetch audio from Cartesia TTS bytes endpoint.
+ * Returns a local file URI for expo-audio playback.
  */
 export async function streamDevotionalAudio(
   text: string,
@@ -74,100 +76,45 @@ export async function streamDevotionalAudio(
   onProgress?: (word: string, timestamp: number) => void
 ): Promise<TTSResult> {
   try {
-    const response = await fetch(`${CARTESIA_BASE_URL}/tts/sse`, {
+    const response = await fetch(`${CARTESIA_BASE_URL}/tts/bytes`, {
       method: 'POST',
       headers: {
-        'Cartesia-Version': '2024-06-10',
+        'Cartesia-Version': '2025-04-16',
         'X-API-Key': CARTESIA_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         model_id: 'sonic-3',
         transcript: text,
-        voice: { 
-          mode: 'id', 
-          id: voiceId 
+        voice: {
+          mode: 'id',
+          id: voiceId,
         },
-        output_format: { 
-          container: 'mp3', 
-          sample_rate: 24000 
+        output_format: {
+          container: 'mp3',
+          sample_rate: 24000,
         },
-        add_timestamps: true,
+        language: 'en',
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Cartesia API error: ${response.status}`);
+      const errorBody = await response.text().catch(() => '');
+      throw new Error(`Cartesia API error: ${response.status} ${errorBody}`);
     }
 
-    // Handle SSE stream
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let audioChunks: Uint8Array[] = [];
-    let wordTimestamps: WordTimestamp[] = [];
+    // Get raw MP3 bytes and write directly to cache file
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
 
-    if (!reader) {
-      throw new Error('No response body');
-    }
+    const file = new File(Paths.cache, `cartesia_tts_${Date.now()}.mp3`);
+    file.write(bytes);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      
-      // Parse SSE events
-      const events = chunk.split('\n\n').filter(e => e.trim());
-      
-      for (const event of events) {
-        if (event.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(event.slice(6));
-            
-            if (data.audio) {
-              // Audio chunk
-              const audioData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
-              audioChunks.push(audioData);
-            }
-            
-            if (data.word_timestamps) {
-              // Word timestamps for karaoke effect
-              wordTimestamps = data.word_timestamps.map((wt: any) => ({
-                word: wt.word,
-                start: wt.start,
-                end: wt.end,
-              }));
-              
-              // Notify progress
-              if (onProgress && wordTimestamps.length > 0) {
-                const lastWord = wordTimestamps[wordTimestamps.length - 1];
-                onProgress(lastWord.word, lastWord.start);
-              }
-            }
-          } catch (e) {
-            console.error('Error parsing SSE event:', e);
-          }
-        }
-      }
-    }
-
-    // Combine audio chunks
-    const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const combinedAudio = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of audioChunks) {
-      combinedAudio.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    // Create blob URL
-    const audioBlob = new Blob([combinedAudio], { type: 'audio/mp3' });
-    const audioUrl = URL.createObjectURL(audioBlob);
-
+    // The /tts/bytes endpoint does not return word timestamps
     return {
-      audioUrl,
-      wordTimestamps,
-      duration: wordTimestamps[wordTimestamps.length - 1]?.end || 0,
+      audioUrl: file.uri,
+      wordTimestamps: [],
+      duration: 0,
     };
   } catch (error) {
     console.error('Cartesia TTS error:', error);
