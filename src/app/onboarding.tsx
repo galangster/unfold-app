@@ -209,6 +209,9 @@ interface OnboardingData {
   selectedThemes: ThemeCategory[];
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
+  currentSituation: string;
+  emotionalState: string;
+  spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
@@ -226,7 +229,9 @@ function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentSt
 export default function OnboardingScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { setUser, updateUser, existingUser } = useUnfoldStore();
+  const existingUser = useUnfoldStore((s) => s.user);
+  const setUser = useUnfoldStore((s) => s.setUser);
+  const updateUser = useUnfoldStore((s) => s.updateUser);
   
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
@@ -251,12 +256,15 @@ export default function OnboardingScreen() {
   // Form data
   const [data, setData] = useState<OnboardingData>({
     name: existingUser?.name || '',
-    bibleTranslation: existingUser?.bibleTranslation || 'niv',
+    bibleTranslation: existingUser?.bibleTranslation || 'NIV',
     aboutMe: existingUser?.aboutMe || '',
     selectedMainOption: undefined,
     selectedThemes: [],
     selectedType: undefined,
     selectedStudySubject: undefined,
+    currentSituation: '',
+    emotionalState: '',
+    spiritualSeeking: '',
     readingDuration: 15,
     devotionalLength: 7,
     reminderTime: '8:00 AM',
@@ -439,8 +447,55 @@ export default function OnboardingScreen() {
   // Complete onboarding and navigate to generating screen
   const completeOnboarding = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Persist ALL collected data to the store
+    const userUpdates: Partial<UserProfile> = {
+      name: data.name,
+      aboutMe: data.aboutMe,
+      currentSituation: data.currentSituation,
+      emotionalState: data.emotionalState,
+      spiritualSeeking: data.spiritualSeeking,
+      readingDuration: data.readingDuration,
+      devotionalLength: data.devotionalLength,
+      reminderTime: data.reminderTime,
+      bibleTranslation: data.bibleTranslation as BibleTranslation,
+      hasCompletedOnboarding: true,
+      ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
+      ...(data.selectedType ? { selectedType: data.selectedType } : {}),
+      ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
+    };
+
+    if (existingUser) {
+      updateUser(userUpdates);
+    } else {
+      setUser({
+        name: data.name,
+        aboutMe: data.aboutMe,
+        personaTraits: [],
+        currentSituation: data.currentSituation,
+        emotionalState: data.emotionalState,
+        spiritualSeeking: data.spiritualSeeking,
+        readingDuration: data.readingDuration,
+        devotionalLength: data.devotionalLength,
+        reminderTime: data.reminderTime,
+        hasCompletedOnboarding: true,
+        hasCompletedStyleOnboarding: false,
+        isPremium: false,
+        fontSize: 'medium',
+        writingStyle: { tone: 'warm', depth: 'balanced', faithBackground: 'growing' },
+        bibleTranslation: data.bibleTranslation as BibleTranslation,
+        themeMode: 'dark',
+        accentTheme: 'gold',
+        readingFont: 'source-serif',
+        preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238',
+        ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
+        ...(data.selectedType ? { selectedType: data.selectedType } : {}),
+        ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
+      });
+    }
+
     router.replace('/generating');
-  }, [router]);
+  }, [router, data, existingUser, updateUser, setUser]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {

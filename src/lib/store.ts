@@ -201,6 +201,15 @@ export interface Highlight {
   createdAt: string;
 }
 
+// Cross-series persona tracking for content freshness
+export interface SeriesPersonaRecord {
+  devotionalId: string;
+  primaryTrait: string;
+  secondaryTrait: string;
+  templateSeed: number;
+  createdAt: string;
+}
+
 export type GenerationSessionStatus = 'idle' | 'running' | 'error' | 'complete';
 
 export interface GenerationSession {
@@ -295,6 +304,10 @@ interface UnfoldState {
   resetStreakGraceDays: () => void;
   toggleWeekendAmnesty: () => void;
 
+  // Cross-series persona tracking
+  seriesPersonaHistory: SeriesPersonaRecord[];
+  addSeriesPersonaRecord: (record: SeriesPersonaRecord) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -326,6 +339,7 @@ const initialState = {
   streakWeekStart: null as string | null,
   streakWeekendAmnesty: true,
   streakFreezes: 0,
+  seriesPersonaHistory: [] as SeriesPersonaRecord[],
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -687,6 +701,14 @@ export const useUnfoldStore = create<UnfoldState>()(
           streakWeekendAmnesty: !state.streakWeekendAmnesty,
         })),
 
+      // Cross-series persona tracking
+      addSeriesPersonaRecord: (record) =>
+        set((state) => {
+          const MAX_HISTORY = 10;
+          const updated = [record, ...state.seriesPersonaHistory].slice(0, MAX_HISTORY);
+          return { seriesPersonaHistory: updated };
+        }),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -698,7 +720,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 5, // Increment when state structure changes
+      version: 6, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -746,6 +768,14 @@ export const useUnfoldStore = create<UnfoldState>()(
             state.user.preferredVoice = '694f9389-aac1-45b6-b726-9d9369183238'; // Katie
           }
           return state as UnfoldState;
+        }
+
+        // Migration from version 5 to 6: Add seriesPersonaHistory
+        if (version < 6) {
+          return {
+            ...state,
+            seriesPersonaHistory: [],
+          } as UnfoldState;
         }
 
         return state as UnfoldState;

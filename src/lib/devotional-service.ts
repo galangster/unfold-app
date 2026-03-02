@@ -1,4 +1,4 @@
-import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType } from './store';
+import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType, SeriesPersonaRecord } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import {
@@ -10,6 +10,20 @@ import {
   BibleBookStudy,
 } from '../constants/devotional-types';
 import { DEVOTIONAL_PERSONAS, DevotionalPersona } from '../constants/devotional-personas';
+import {
+  PersonaTrait,
+  PERSONA_TRAITS,
+  STRUCTURAL_TEMPLATES,
+  HOOK_LIBRARY,
+  HookStyle,
+  TransitionStyle,
+  ClosingStyle,
+  generateDailyVariety,
+  DayConfiguration,
+  getTemplateById,
+  getRandomHook,
+  ALL_TRAITS,
+} from '../constants/devotional-personas-v2';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -191,17 +205,170 @@ interface GenerationContext {
   devotionalLength: 3 | 7 | 14 | 30;
   bibleTranslation: BibleTranslation;
   previouslyUsedScriptures?: string[]; // References to avoid repeating
-  // New: Theme and type
+  // Theme and type
   themeCategory?: ThemeCategory;
   devotionalType?: DevotionalType;
   studySubject?: string; // For book/character studies
-  // New: Writing persona preference
-  personaTraits?: string; // gentle_guide, prophetic_challenger, poetic_mystic, scholarly_pastor, storyteller
+  // Writing persona preference (v1 — kept for backward compat)
+  personaTraits?: string;
+  // Writing style from user preferences
+  writingStyle?: { tone: 'warm' | 'direct' | 'poetic'; depth: 'simple' | 'balanced' | 'theological'; faithBackground: 'new' | 'growing' | 'mature' };
+  // Cross-series freshness history
+  seriesPersonaHistory?: SeriesPersonaRecord[];
 }
 
 interface GeneratedDevotional {
   title: string;
   days: DevotionalDay[];
+}
+
+// ==========================================
+// V2 PERSONA MAPPING & FRESHNESS ENGINE
+// ==========================================
+
+// Map user's WritingStylePreferences to v2 PersonaTrait pair
+function mapWritingStyleToTraits(
+  writingStyle?: GenerationContext['writingStyle']
+): { primary: PersonaTrait; secondary: PersonaTrait } {
+  if (!writingStyle) return { primary: 'gentle', secondary: 'narrative' };
+
+  // Map tone → primary trait
+  const toneMap: Record<string, PersonaTrait> = {
+    warm: 'gentle',
+    direct: 'challenging',
+    poetic: 'poetic',
+  };
+  const primary = toneMap[writingStyle.tone] ?? 'gentle';
+
+  // Map depth → secondary trait (avoiding collision with primary)
+  const depthMap: Record<string, PersonaTrait> = {
+    simple: 'narrative',
+    balanced: 'gentle',
+    theological: 'scholarly',
+  };
+  let secondary = depthMap[writingStyle.depth] ?? 'narrative';
+
+  // Avoid primary == secondary collision
+  if (secondary === primary) {
+    const fallbacks: Record<PersonaTrait, PersonaTrait> = {
+      gentle: 'narrative',
+      challenging: 'scholarly',
+      poetic: 'narrative',
+      scholarly: 'poetic',
+      narrative: 'gentle',
+    };
+    secondary = fallbacks[primary];
+  }
+
+  return { primary, secondary };
+}
+
+// Select a fresh persona combo that differs from recent history
+function selectFreshPersonaCombo(
+  baseTraits: { primary: PersonaTrait; secondary: PersonaTrait },
+  history: SeriesPersonaRecord[] = []
+): { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number } {
+  if (history.length === 0) {
+    return { ...baseTraits, templateSeed: 0 };
+  }
+
+  let { primary, secondary } = baseTraits;
+
+  // Check consecutive usage of primary trait
+  const recentPrimaries = history.slice(0, 3).map((h) => h.primaryTrait as PersonaTrait);
+  const primaryUsedConsecutively = recentPrimaries.filter((t) => t === primary).length >= 2;
+
+  if (primaryUsedConsecutively) {
+    // Swap primary/secondary for variety
+    [primary, secondary] = [secondary, primary];
+  }
+
+  // Ensure secondary differs from last series' secondary
+  const lastRecord = history[0];
+  if (lastRecord && secondary === (lastRecord.secondaryTrait as PersonaTrait)) {
+    const alternatives = ALL_TRAITS.filter((t) => t !== primary && t !== secondary);
+    if (alternatives.length > 0) {
+      secondary = alternatives[Math.floor(Math.random() * alternatives.length)];
+    }
+  }
+
+  // Offset template rotation seed from last series
+  const lastSeed = lastRecord?.templateSeed ?? 0;
+  const templateSeed = (lastSeed + 3) % STRUCTURAL_TEMPLATES.length;
+
+  return { primary, secondary, templateSeed };
+}
+
+// Build per-day variety instructions for the user prompt
+function buildVarietySchedule(
+  startDay: number,
+  endDay: number,
+  totalDays: number,
+  primaryTrait: PersonaTrait,
+  secondaryTrait: PersonaTrait,
+  templateSeed: number
+): string {
+  const configs = generateDailyVariety(totalDays, [primaryTrait, secondaryTrait]);
+
+  // Apply template seed offset
+  const templates = STRUCTURAL_TEMPLATES;
+  const hooks = Object.keys(HOOK_LIBRARY) as HookStyle[];
+  const transitions: TransitionStyle[] = ['gradual', 'pivot', 'mysterious', 'logical', 'narrative'];
+  const closings: ClosingStyle[] = ['question', 'blessing', 'invitation', 'warning', 'reflection', 'doxology'];
+
+  const dayInstructions: string[] = [];
+
+  for (let day = startDay; day <= endDay; day++) {
+    const idx = day - 1; // 0-indexed
+    const templateIdx = (idx + templateSeed) % templates.length;
+    const hookIdx = (idx + templateSeed) % hooks.length;
+    const transitionIdx = (idx + templateSeed) % transitions.length;
+    const closingIdx = (idx + templateSeed) % closings.length;
+
+    const template = templates[templateIdx];
+    const hook = hooks[hookIdx];
+    const transition = transitions[transitionIdx];
+    const closing = closings[closingIdx];
+
+    // Voice intensity varies by day position in series
+    const voiceNote = idx === 0
+      ? `Lead with ${primaryTrait} voice`
+      : idx % 3 === 0
+        ? `Lean into ${secondaryTrait} influence`
+        : `Primary ${primaryTrait}, hint of ${secondaryTrait}`;
+
+    const hookExamples = HOOK_LIBRARY[hook].slice(0, 2).join('" or "');
+
+    dayInstructions.push(
+      `Day ${day}: ${template.name} structure (${template.elements.join(' → ')}). ` +
+      `${voiceNote}. ` +
+      `Open with a ${hook} hook (e.g., "${hookExamples}"). ` +
+      `Use ${transition} transitions. ` +
+      `Close with ${closing} style.`
+    );
+  }
+
+  return `\nPER-DAY VARIETY (each day should feel distinct):\n${dayInstructions.join('\n')}\n`;
+}
+
+// Build a lightweight v2 voice overlay for the system prompt
+function buildV2VoiceOverlay(
+  primary: PersonaTrait,
+  secondary: PersonaTrait
+): string {
+  const p = PERSONA_TRAITS[primary];
+  const s = PERSONA_TRAITS[secondary];
+
+  return `
+
+VOICE PROFILE:
+Primary voice: ${p.voice}
+Sentence rhythm: ${p.sentenceStyle}
+${p.systemPromptAdditions.map((a) => `- ${a}`).join('\n')}
+
+Secondary influence (${secondary}): ${s.voice}
+${s.systemPromptAdditions.slice(0, 2).map((a) => `- ${a}`).join('\n')}
+`;
 }
 
 // Full system prompt for first attempt — rich personalization
@@ -607,7 +774,8 @@ function buildUserPrompt(
   endDay: number,
   seriesTitle: string | null,
   previousDayTitles: string[],
-  retryLevel: number
+  retryLevel: number,
+  varietySchedule: string = ''
 ): string {
   const daysToGenerate = endDay - startDay + 1;
   const isFirstBatch = startDay === 1;
@@ -649,7 +817,7 @@ BIBLE TRANSLATION: ${context.bibleTranslation}
 THEMES: Write about faith, hope, trust in God, and spiritual growth. Choose scriptures that offer comfort, wisdom, and encouragement.
 ${themeGuidance}${typeGuidance}
 ${getReadingLengthGuidance(context.readingDuration)}
-
+${varietySchedule}
 VARIATION: Each day should open differently and feel distinct.
 ${previousTitlesNote}${scriptureAvoidanceNote}
 
@@ -700,7 +868,7 @@ BIBLE TRANSLATION: ${context.bibleTranslation}
 (All scripture quotations MUST be in the ${context.bibleTranslation} translation style.)
 ${themeGuidance}${typeGuidance}
 ${getReadingLengthGuidance(context.readingDuration)}
-
+${varietySchedule}
 VARIATION REQUIREMENTS:
 - Each day should open differently: with Scripture, an image, mid-thought, a question, or a narrative moment
 - Each day MUST feel distinct in voice and approach while maintaining coherence
@@ -731,6 +899,16 @@ ${getJsonSchemaForDuration(context.readingDuration)}
 IMPORTANT: The "days" array should contain exactly ${daysToGenerate} days, numbered ${startDay} through ${endDay}.`;
 }
 
+// Resolve persona traits for the generation — combines user prefs + freshness engine
+function resolvePersonaForGeneration(context: GenerationContext): {
+  primary: PersonaTrait;
+  secondary: PersonaTrait;
+  templateSeed: number;
+} {
+  const baseTraits = mapWritingStyleToTraits(context.writingStyle);
+  return selectFreshPersonaCombo(baseTraits, context.seriesPersonaHistory);
+}
+
 // Generate a single batch of days
 async function generateBatch(
   context: GenerationContext,
@@ -738,12 +916,19 @@ async function generateBatch(
   endDay: number,
   seriesTitle: string | null,
   previousDayTitles: string[],
-  retryLevel: number = 0
+  retryLevel: number = 0,
+  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
 ): Promise<{ title: string; days: DevotionalDay[] }> {
   const baseSystemPrompt = getSystemPrompt(retryLevel);
-  const personaPrompt = getPersonaSystemPrompt(context.personaTraits);
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + personaPrompt + STICKY_SENTENCE_INSTRUCTION;
-  const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel);
+  // V2: Use composable voice overlay instead of dead v1 persona system
+  const persona = resolvedPersona ?? resolvePersonaForGeneration(context);
+  const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
+  // V2: Include per-day variety schedule in the user prompt
+  const varietySchedule = retryLevel === 0
+    ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed)
+    : '';
+  const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule);
 
   // Using Haiku for all days - cost-effective and quality is sufficient for devotionals
   const model = 'claude-haiku-4-5-20251001';
@@ -908,7 +1093,8 @@ async function generateBatchWithRetry(
   endDay: number,
   seriesTitle: string | null,
   previousDayTitles: string[],
-  maxRetries: number = 3
+  maxRetries: number = 3,
+  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
 ): Promise<{ title: string; days: DevotionalDay[] }> {
   let lastError: Error | null = null;
 
@@ -934,7 +1120,8 @@ async function generateBatchWithRetry(
         endDay,
         seriesTitle,
         previousDayTitles,
-        retryLevel
+        retryLevel,
+        resolvedPersona
       );
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -1003,11 +1190,16 @@ function buildContinuationRequestKey(
 // Streaming callback for progressive loading
 export type OnDayGeneratedCallback = (day: DevotionalDay, dayIndex: number, seriesTitle: string) => void;
 
+// Extended return type that includes resolved persona for history tracking
+export interface GeneratedDevotionalResult extends GeneratedDevotional {
+  resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number };
+}
+
 export async function generateDevotional(
   context: GenerationContext,
   onProgress?: (status: string) => void,
   onDayGenerated?: OnDayGeneratedCallback
-): Promise<GeneratedDevotional> {
+): Promise<GeneratedDevotionalResult> {
   // Check rate limit before starting generation
   const rateLimit = await checkRateLimit('devotional');
   if (!rateLimit.allowed) {
@@ -1034,6 +1226,10 @@ export async function generateDevotional(
 
     onProgress?.('Reading your story');
 
+    // Resolve persona once for the entire series
+    const resolvedPersona = resolvePersonaForGeneration(context);
+    console.log(`[Devotional] Resolved persona: primary=${resolvedPersona.primary}, secondary=${resolvedPersona.secondary}, templateSeed=${resolvedPersona.templateSeed}`);
+
     try {
       let seriesTitle: string | null = null;
       const allDays: DevotionalDay[] = [];
@@ -1056,7 +1252,9 @@ export async function generateDevotional(
           startDay,
           endDay,
           seriesTitle,
-          allDayTitles
+          allDayTitles,
+          3,
+          resolvedPersona
         );
 
         // Save the series title from first batch
@@ -1092,6 +1290,7 @@ export async function generateDevotional(
       return {
         title: seriesTitle || 'Your Devotional Journey',
         days: allDays,
+        resolvedPersona,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

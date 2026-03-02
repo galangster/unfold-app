@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { Bell } from 'lucide-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, DevotionalDay, Devotional } from '@/lib/store';
+import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord } from '@/lib/store';
 import {
   generateDevotional,
   createDevotionalFromGenerated,
@@ -93,6 +93,8 @@ export default function GeneratingScreen() {
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
   const getRecentScriptures = useUnfoldStore((s) => s.getRecentScriptures);
+  const seriesPersonaHistory = useUnfoldStore((s) => s.seriesPersonaHistory);
+  const addSeriesPersonaRecord = useUnfoldStore((s) => s.addSeriesPersonaRecord);
   const generationSession = useUnfoldStore((s) => s.generationSession);
   const startGenerationSession = useUnfoldStore((s) => s.startGenerationSession);
   const updateGenerationSessionProgress = useUnfoldStore((s) => s.updateGenerationSessionProgress);
@@ -365,6 +367,8 @@ export default function GeneratingScreen() {
             themeCategory: user.selectedTheme,
             devotionalType: user.selectedType,
             studySubject: user.selectedStudySubject,
+            writingStyle: user.writingStyle,
+            seriesPersonaHistory,
           },
           () => {},
           onDayGenerated
@@ -416,6 +420,17 @@ export default function GeneratingScreen() {
           title: generated.title,
           totalGeneratedDays: generated.days.length,
         });
+
+        // Record persona traits for cross-series freshness tracking
+        if (generated.resolvedPersona) {
+          addSeriesPersonaRecord({
+            devotionalId,
+            primaryTrait: generated.resolvedPersona.primary,
+            secondaryTrait: generated.resolvedPersona.secondary,
+            templateSeed: generated.resolvedPersona.templateSeed,
+            createdAt: new Date().toISOString(),
+          });
+        }
 
         setPendingNotification({ title: generated.title });
 
