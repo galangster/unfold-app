@@ -332,6 +332,9 @@ export default function ReadingScreen() {
           runOnJS(handlePrevious)();
         } else if (goForward) {
           runOnJS(handleNext)();
+        } else {
+          // Rubber-band snap back with subtle haptic
+          runOnJS(Haptics.selectionAsync)();
         }
         translateX.value = withTiming(0, { duration: 200 });
       }),
@@ -709,12 +712,8 @@ export default function ReadingScreen() {
           totalDaysAfterRetry: allDays.length,
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // After generation, try viewing the day that was requested
-        if (allDays.some((d) => d.dayNumber === viewingDay)) {
-          // Force re-render by toggling viewingDay
-          setViewingDay(1);
-          setTimeout(() => setViewingDay(viewingDay), 50);
-        }
+        // After generation, the store update triggers re-render automatically
+        // No need to force re-render — currentDayData will update via useMemo
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Something went wrong';
         console.error('[Reading] Retry generation failed:', msg);

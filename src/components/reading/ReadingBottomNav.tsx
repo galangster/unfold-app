@@ -100,7 +100,7 @@ export function ReadingBottomNav({
           {/* Center actions */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* Share button */}
-            <Pressable onPress={onShare} style={{ marginRight: 6 }}>
+            <Pressable onPress={onShare} style={{ marginRight: 8 }}>
               <View
                 style={{
                   backgroundColor: colors.buttonBackground,
@@ -124,7 +124,7 @@ export function ReadingBottomNav({
             </Pressable>
 
             {/* Journal button */}
-            <Pressable onPress={onJournal} style={{ marginLeft: 6 }}>
+            <Pressable onPress={onJournal} style={{ marginLeft: 8 }}>
               <View
                 style={{
                   backgroundColor: colors.buttonBackground,

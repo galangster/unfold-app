@@ -21,6 +21,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { analyzeNetworkError, isOnline } from '@/lib/network-error-handler';
+import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
 
@@ -43,6 +44,7 @@ export default function JournalScreen() {
   const [content, setContent] = useState(existingEntry?.content ?? '');
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const savedEntryIdRef = useRef<string | null>(existingEntry?.id ?? null);
   const isMountedRef = useRef(true);
 
@@ -120,6 +122,10 @@ export default function JournalScreen() {
       if (isMountedRef.current) {
         setIsSaving(false);
         setHasChanges(false);
+        setJustSaved(true);
+        setTimeout(() => {
+          if (isMountedRef.current) setJustSaved(false);
+        }, 2000);
       }
     }, 1000);
 
@@ -129,6 +135,15 @@ export default function JournalScreen() {
   const handleTextChange = (text: string) => {
     setContent(text);
     setHasChanges(true);
+  };
+
+  const handleSpeechTranscript = (transcript: string) => {
+    if (!transcript.trim()) return;
+    const separator = content.trim() ? ' ' : '';
+    const newContent = content + separator + transcript;
+    setContent(newContent);
+    setHasChanges(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleDone = () => {
@@ -218,7 +233,7 @@ export default function JournalScreen() {
     }
   };
 
-  const showDeeperButton = content.trim().length >= 10 && deeperPrompts.length === 0 && !loadingDeeper;
+  const showDeeperButton = content.trim().length >= 10 && deeperPrompts.length === 0;
 
   return (
     <Pressable style={{ flex: 1, backgroundColor: colors.background }} onPress={Keyboard.dismiss}>
@@ -315,6 +330,11 @@ export default function JournalScreen() {
               />
             </Animated.View>
 
+            {/* Speech-to-text input */}
+            <Animated.View entering={FadeIn.duration(400).delay(300)}>
+              <SpeechToTextButton onTranscript={handleSpeechTranscript} />
+            </Animated.View>
+
             {/* Go Deeper button */}
             {showDeeperButton && (
               <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 24 }}>
@@ -325,7 +345,7 @@ export default function JournalScreen() {
                   accessibilityLabel={isPremium ? "Go deeper" : "Go deeper, premium feature"}
                   accessibilityHint={isPremium ? "Get AI-generated reflection prompts based on your writing" : "Premium feature. Opens upgrade options"}
                   accessibilityState={{ disabled: loadingDeeper || !isPremium }}
-                  style={({ pressed }) => ({
+                  style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -335,23 +355,36 @@ export default function JournalScreen() {
                     borderRadius: 12,
                     borderWidth: 1,
                     borderColor: colors.accent,
-                    backgroundColor: pressed ? colors.accent : 'transparent',
+                    backgroundColor: 'transparent',
                     alignSelf: 'center',
-                    opacity: pressed || loadingDeeper ? 0.6 : 0.9,
-                  })}
+                    opacity: loadingDeeper ? 0.6 : 0.9,
+                  }}
                 >
-                  {({ pressed }) => (
+                  {loadingDeeper ? (
+                    <>
+                      <ActivityIndicator size="small" color={colors.accent} />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: 14,
+                          color: colors.accent,
+                        }}
+                      >
+                        Reflecting...
+                      </Text>
+                    </>
+                  ) : (
                     <>
                       {isPremium ? (
-                        <Sparkles size={16} color={pressed ? colors.background : colors.accent} />
+                        <Sparkles size={16} color={colors.accent} />
                       ) : (
-                        <Lock size={14} color={pressed ? colors.background : colors.accent} />
+                        <Lock size={14} color={colors.accent} />
                       )}
                       <Text
                         style={{
                           fontFamily: FontFamily.uiMedium,
                           fontSize: 14,
-                          color: pressed ? colors.background : colors.accent,
+                          color: colors.accent,
                         }}
                       >
                         Go Deeper
@@ -359,25 +392,6 @@ export default function JournalScreen() {
                     </>
                   )}
                 </Pressable>
-              </Animated.View>
-            )}
-
-            {/* Loading state */}
-            {loadingDeeper && (
-              <Animated.View
-                entering={FadeIn.duration(300)}
-                style={{ marginTop: 24, alignItems: 'center', gap: 10 }}
-              >
-                <ActivityIndicator size="small" color={colors.accent} />
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 13,
-                    color: colors.textMuted,
-                  }}
-                >
-                  Reflecting on your words...
-                </Text>
               </Animated.View>
             )}
 
@@ -467,7 +481,7 @@ export default function JournalScreen() {
                 textAlign: 'center',
               }}
             >
-              {hasChanges ? 'Saving...' : 'Your response is saved automatically'}
+              {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}
             </Text>
           </Animated.View>
         </KeyboardAvoidingView>

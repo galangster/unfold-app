@@ -102,9 +102,8 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       
       // Close modal after sharing
       onClose();
-    } catch (error) {
+    } catch {
       // User cancelled share - don't close modal
-      console.log('Share cancelled or failed:', error);
     } finally {
       setIsSharing(false);
     }

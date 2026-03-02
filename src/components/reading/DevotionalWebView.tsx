@@ -140,22 +140,20 @@ export function DevotionalWebView({
       function positionToolbar() {
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
-        
+
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        
-        // Position toolbar below selection
+
+        // Position toolbar below selection (fixed positioning = viewport-relative)
         let top = rect.bottom + 10;
-        let left = rect.left + (rect.width / 2) - 100; // Center 200px toolbar
-        
-        // Keep toolbar on screen
-        if (top < 50) top = rect.bottom + 10;
+
+        // If toolbar would go off bottom, position above selection
         if (top > window.innerHeight - 60) top = rect.top - 60;
-        if (left < 10) left = 10;
-        if (left > window.innerWidth - 210) left = window.innerWidth - 210;
-        
+        // Clamp to visible area
+        if (top < 10) top = 10;
+
         toolbar.style.top = top + 'px';
-        toolbar.style.left = left + 'px';
+        // Left centering handled by CSS (left:50% + margin-left)
       }
       
       function checkSelection() {
@@ -175,11 +173,11 @@ export function DevotionalWebView({
       
       // Poll for selection changes
       document.addEventListener('selectionchange', () => {
-        setTimeout(checkSelection, 100);
+        setTimeout(checkSelection, 50);
       });
-      
+
       document.addEventListener('touchend', () => {
-        setTimeout(checkSelection, 200);
+        setTimeout(checkSelection, 100);
       });
       
       // Handle color button clicks
@@ -237,11 +235,6 @@ export function DevotionalWebView({
             selectedText = '';
           }
         }
-      });
-      
-      // Hide on scroll
-      window.addEventListener('scroll', () => {
-        toolbar.classList.remove('visible');
       });
       
       true;
@@ -510,7 +503,7 @@ export function DevotionalWebView({
     
     /* Highlight toolbar */
     #highlight-toolbar {
-      position: absolute;
+      position: fixed;
       background: ${isDark ? '#2a2a2a' : '#ffffff'};
       border-radius: 24px;
       padding: 8px 12px;
@@ -522,6 +515,8 @@ export function DevotionalWebView({
       pointer-events: none;
       transition: opacity 0.2s, transform 0.2s;
       transform: translateY(10px);
+      left: 50%;
+      margin-left: -100px;
     }
     
     #highlight-toolbar.visible {
