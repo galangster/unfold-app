@@ -67,8 +67,22 @@ export interface TTSResult {
 }
 
 /**
+ * Simple string hash for deterministic cache filenames.
+ * Not cryptographic — just needs to be consistent for the same input.
+ */
+function hashKey(text: string, voiceId: string): string {
+  const input = `${voiceId}:${text}`;
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
+    hash = ((hash << 5) - hash + char) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+/**
  * Fetch audio from Cartesia TTS bytes endpoint.
- * Returns a local file URI for expo-audio playback.
+ * Caches audio per text+voice combo — replay costs zero API tokens.
  */
 export async function streamDevotionalAudio(
   text: string,
@@ -76,6 +90,18 @@ export async function streamDevotionalAudio(
   onProgress?: (word: string, timestamp: number) => void
 ): Promise<TTSResult> {
   try {
+    const cacheKey = hashKey(text, voiceId);
+    const cachedFile = new File(Paths.cache, `tts_${cacheKey}.mp3`);
+
+    // Return cached audio if it exists and has content
+    if (cachedFile.exists && cachedFile.size > 0) {
+      return {
+        audioUrl: cachedFile.uri,
+        wordTimestamps: [],
+        duration: 0,
+      };
+    }
+
     const response = await fetch(`${CARTESIA_BASE_URL}/tts/bytes`, {
       method: 'POST',
       headers: {
@@ -103,16 +129,13 @@ export async function streamDevotionalAudio(
       throw new Error(`Cartesia API error: ${response.status} ${errorBody}`);
     }
 
-    // Get raw MP3 bytes and write directly to cache file
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
 
-    const file = new File(Paths.cache, `cartesia_tts_${Date.now()}.mp3`);
-    file.write(bytes);
+    cachedFile.write(bytes);
 
-    // The /tts/bytes endpoint does not return word timestamps
     return {
-      audioUrl: file.uri,
+      audioUrl: cachedFile.uri,
       wordTimestamps: [],
       duration: 0,
     };
