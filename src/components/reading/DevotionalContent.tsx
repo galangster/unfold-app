@@ -28,14 +28,6 @@ interface DevotionalContentProps {
   existingHighlights?: Highlight[];
 }
 
-// Truncate text to maxWords, adding ellipsis if truncated
-function truncateText(text: string, maxWords: number = 10): string {
-  if (!text) return '';
-  const words = text.trim().split(/\s+/);
-  if (words.length <= maxWords) return text;
-  return words.slice(0, maxWords).join(' ') + '...';
-}
-
 export function DevotionalContent({ 
   day, 
   fontSize, 
@@ -161,7 +153,7 @@ export function DevotionalContent({
             minHeight: day.scriptureText ? 'auto' : 60,
           }}
         >
-          {day.scriptureText ? `"${preventOrphan(truncateText(day.scriptureText, 10))}"` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
+          {day.scriptureText ? `"${preventOrphan(day.scriptureText)}"` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
         </Text>
       </View>
 

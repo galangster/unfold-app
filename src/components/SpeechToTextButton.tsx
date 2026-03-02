@@ -4,9 +4,17 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Animated,
   Vibration,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  cancelAnimation,
+  interpolate,
+} from 'react-native-reanimated';
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -27,7 +35,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
   const [partialResults, setPartialResults] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseScale = useSharedValue(1);
   const transcriptRef = useRef('');
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -68,24 +76,23 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
   // Pulse animation while recording
   useEffect(() => {
     if (isRecording) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.4,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 600,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
+      pulseScale.value = withRepeat(
+        withSequence(
+          withTiming(1.4, { duration: 600 }),
+          withTiming(1, { duration: 600 }),
+        ),
+        -1,
+      );
     } else {
-      pulseAnim.setValue(1);
+      cancelAnimation(pulseScale);
+      pulseScale.value = 1;
     }
   }, [isRecording]);
+
+  const pulseRingStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulseScale.value, [1, 1.4], [0.4, 0]),
+    transform: [{ scale: pulseScale.value }],
+  }));
 
   // Check permissions on mount
   useEffect(() => {
@@ -179,14 +186,8 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
           <Animated.View
             style={[
               styles.pulseRing,
-              {
-                backgroundColor: colors.accent,
-                opacity: pulseAnim.interpolate({
-                  inputRange: [1, 1.4],
-                  outputRange: [0.4, 0],
-                }),
-                transform: [{ scale: pulseAnim }],
-              },
+              { backgroundColor: colors.accent },
+              pulseRingStyle,
             ]}
           />
         )}

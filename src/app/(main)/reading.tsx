@@ -230,6 +230,14 @@ export default function ReadingScreen() {
     setIsCompleted(isDayCompleted);
   }, [viewingDay, isDayCompleted]);
 
+  // Close audio player when navigating between days
+  useEffect(() => {
+    if (isAudioPlayerVisible) {
+      audioPlayerRef.current?.close();
+      setIsAudioPlayerVisible(false);
+    }
+  }, [viewingDay]);
+
   // Respect deep-linked day number (used by Resume card)
   useEffect(() => {
     if (requestedDayNumber && requestedDayNumber !== viewingDay) {

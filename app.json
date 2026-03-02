@@ -48,6 +48,13 @@
           "configureAndroidBackup": true,
           "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Unfold to use the microphone for voice input.",
+          "speechRecognitionPermission": "Allow Unfold to use speech recognition to convert your voice to text."
+        }
       ]
     ],
     "experiments": {

@@ -92,6 +92,7 @@
         "expo-secure-store": "~55.0.8",
         "expo-sharing": "~55.0.10",
         "expo-sms": "~55.0.8",
+        "expo-speech-recognition": "^3.1.1",
         "expo-splash-screen": "~55.0.9",
         "expo-sqlite": "~55.0.10",
         "expo-status-bar": "~55.0.4",
@@ -169,6 +170,7 @@
     "@shopify/react-native-skia",
   ],
   "overrides": {
+    "expo-location": "~55.1.2",
     "react-native-css-interop": "0.1.22",
   },
   "packages": {
@@ -1532,6 +1534,8 @@
 
     "expo-sms": ["expo-sms@55.0.8", "", { "peerDependencies": { "expo": "*" } }, "sha512-j0RNalPucH5ULHIs4hA/EBtnO07YqxUXBFa4unYHGLtAZ0M5RQHJ1TvMc/lQsCCJxgUfu7cSQuzCcUQW5aXb8A=="],
 
+    "expo-speech-recognition": ["expo-speech-recognition@3.1.1", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-+1rviv+ZecAokY8PUfr3XJuhS4t0uKccewIPPUk5ooeEt5xKEWr6XYpKm3ggapPdJQbgMTjWbmSPT1ahTMyIqA=="],
+
     "expo-splash-screen": ["expo-splash-screen@55.0.9", "", { "dependencies": { "@expo/prebuild-config": "^55.0.7" }, "peerDependencies": { "expo": "*" } }, "sha512-FWAHLg5w6aesnrU1RtNoVNIA3FN11lFQCiWafPHpneqNtI6Wzkxxz3vu+4JTWlSkMIbylZ85F0qJe0CCNI9Eig=="],
 
     "expo-sqlite": ["expo-sqlite@55.0.10", "", { "dependencies": { "await-lock": "^2.2.2" }, "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-yLQXkwcA0OVSKuL4t+a6vv+H/Klh8147n7hH75AN0MkC48p3Go7+6GM+3SFENeaBUsmOnOS3XSFxMxxj6PIg4g=="],
@@ -2823,8 +2827,6 @@
     "@react-navigation/stack/color": ["color@4.2.3", "", { "dependencies": { "color-convert": "^2.0.1", "color-string": "^1.9.0" } }, "sha512-1rXeuUUiGGrykh+CeBdu5Ie7OJwinCgQY0bc7GCRxy5xVHy+moaqkpL/jqQq0MtQOeYcrqEz4abc5f0KtU7W4A=="],
 
     "@svgr/hast-util-to-babel-ast/entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
-
-    "@teovilla/react-native-web-maps/expo-location": ["expo-location@15.1.1", "", { "peerDependencies": { "expo": "*" } }, "sha512-hoKRlmi6Ya+NeZ72Zt385SDcSsIDpJI60TCBVO+Hc9xfKA9Hyminyyo5WiwI8J03igmPTCl8Y37MxBNKY9AWkg=="],
 
     "@testing-library/react-native/pretty-format": ["pretty-format@30.2.0", "", { "dependencies": { "@jest/schemas": "30.0.5", "ansi-styles": "^5.2.0", "react-is": "^18.3.1" } }, "sha512-9uBdv/B4EefsuAL+pWqueZyZS2Ba+LxfFeQ9DN14HU4bN8bhaxKdkpjpB6fs9+pSjIBu+FXQHImEg8j/Lw0+vA=="],
 

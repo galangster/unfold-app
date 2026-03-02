@@ -100,12 +100,6 @@ export interface UserProfile {
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
   preferredVoice: string;
-  // Streak system
-  streakCount: number;
-  longestStreak: number;
-  lastReadDate: string | null;
-  streakFreezes: number;
-  weekendAmnesty: boolean;
   // New: Theme and type preferences for next devotional
   selectedTheme?: ThemeCategory;
   selectedType?: DevotionalType;

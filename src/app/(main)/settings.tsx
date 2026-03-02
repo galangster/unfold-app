@@ -1254,30 +1254,8 @@ export default function SettingsScreen() {
                             </Text>
                           </View>
                           
-                          {/* Preview Button */}
-                          <Pressable
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              if (isLocked) {
-                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                                router.push('/paywall');
-                                return;
-                              }
-                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              // Voice sample playback not yet implemented
-                            }}
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: 16,
-                              backgroundColor: colors.buttonBackground,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              marginRight: 12,
-                            }}
-                          >
-                            <Play size={14} color={colors.text} fill={colors.text} />
-                          </Pressable>
+                          {/* Spacer replacing unimplemented voice preview */}
+                          <View style={{ width: 12 }} />
                           <View
                             style={{
                               width: 20,

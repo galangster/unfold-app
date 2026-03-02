@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
   }, [user, router]);
 
   useEffect(() => {
-    // Skip for returning users
+    // Returning users skip the welcome animation
     if (user?.hasCompletedOnboarding) {
       router.replace('/(main)/home');
       return;
