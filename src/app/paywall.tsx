@@ -14,12 +14,13 @@ import { useUnfoldStore } from '@/lib/store';
 
 const FEATURES = [
   'Unlimited devotional journeys',
-  'Expressive AI narration with follow-along',
+  'AI voice narration with voice selection',
+  'AI-powered journal prompts',
+  'Full highlight color palette',
   'Custom themes & accent colors',
   'Premium reading fonts',
   'Wallpaper share styles',
-  'AI-powered journal prompts',
-  'Daily reminder notifications',
+  'Unlimited streak freezes',
 ];
 
 type PlanChoice = 'yearly' | 'monthly';
