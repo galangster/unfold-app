@@ -1,6 +1,15 @@
+import { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { Flame, Snowflake } from 'lucide-react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -26,6 +35,22 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
     : { flame: 24, number: 18, freeze: 16, padding: 10 };
 
   const config = sizeConfig;
+
+  // Breathing glow for active streaks
+  const flamePulse = useSharedValue(1);
+  useEffect(() => {
+    if (streak > 0) {
+      flamePulse.value = withRepeat(
+        withTiming(1.15, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true
+      );
+    }
+  }, [streak, flamePulse]);
+
+  const flamePulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: flamePulse.value }],
+  }));
 
   if (streak === 0) {
     return (
@@ -75,11 +100,13 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
           gap: 6,
         }}
       >
-        <Flame
-          size={config.flame}
-          color={colors.accent}
-          fill={streak >= 7 ? colors.accent : 'transparent'}
-        />
+        <Animated.View style={flamePulseStyle}>
+          <Flame
+            size={config.flame}
+            color={colors.accent}
+            fill={streak >= 7 ? colors.accent : 'transparent'}
+          />
+        </Animated.View>
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,

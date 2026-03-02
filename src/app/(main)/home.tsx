@@ -8,6 +8,10 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withDelay,
+  withRepeat,
+  withSequence,
+  interpolate,
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -61,9 +65,10 @@ const UNFOLD_TAGLINES = [
   'Unfold the sacred\nin the ordinary.',
 ];
 
-// Animated progress bar component
+// Animated progress bar component with shimmer glow
 function AnimatedProgressBar({ progress, colors }: { progress: number; colors: ColorTheme }) {
   const animatedProgress = useSharedValue(0);
+  const shimmer = useSharedValue(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -72,15 +77,42 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
           duration: 900,
           easing: Easing.out(Easing.cubic),
         });
+
+        // Start shimmer sweep after fill completes
+        shimmer.value = withDelay(
+          1200,
+          withRepeat(
+            withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+            -1,
+            false
+          )
+        );
       }, 400);
 
       return () => clearTimeout(timer);
-    }, [progress, animatedProgress])
+    }, [progress, animatedProgress, shimmer])
   );
 
-  const animatedStyle = useAnimatedStyle(() => ({
+  const barStyle = useAnimatedStyle(() => ({
     width: `${animatedProgress.value}%`,
   }));
+
+  const shimmerStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      shimmer.value,
+      [0, 0.3, 0.5, 0.7, 1],
+      [0, 0, 0.4, 0, 0]
+    );
+    const translateX = interpolate(
+      shimmer.value,
+      [0, 1],
+      [-40, 200]
+    );
+    return {
+      opacity,
+      transform: [{ translateX }],
+    };
+  });
 
   return (
     <View
@@ -96,10 +128,26 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
             height: '100%',
             backgroundColor: colors.accent,
             borderRadius: 1.5,
+            overflow: 'hidden',
           },
-          animatedStyle,
+          barStyle,
         ]}
-      />
+      >
+        {/* Shimmer highlight */}
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              top: -1,
+              width: 40,
+              height: 5,
+              borderRadius: 3,
+              backgroundColor: 'rgba(255, 255, 255, 0.5)',
+            },
+            shimmerStyle,
+          ]}
+        />
+      </Animated.View>
     </View>
   );
 }

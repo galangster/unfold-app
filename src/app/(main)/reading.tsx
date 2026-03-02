@@ -9,7 +9,10 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  withSpring,
+  withDelay,
   runOnJS,
+  Easing,
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
@@ -131,6 +134,7 @@ export default function ReadingScreen() {
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
+  const contentOpacity = useSharedValue(1);
 
   const fontSize = user?.fontSize ?? 'medium';
 
@@ -255,9 +259,13 @@ export default function ReadingScreen() {
   const goToDay = useCallback((day: number) => {
     if (day >= 1 && day <= availableDays) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setViewingDay(day);
+      // Quick fade out → change day → fade in
+      contentOpacity.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) }, () => {
+        runOnJS(setViewingDay)(day);
+      });
+      contentOpacity.value = withDelay(140, withTiming(1, { duration: 250, easing: Easing.in(Easing.ease) }));
     }
-  }, [availableDays]);
+  }, [availableDays, contentOpacity]);
 
   const handlePrevious = useCallback(() => {
     if (viewingDay > 1) {
@@ -312,6 +320,10 @@ export default function ReadingScreen() {
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
+  }));
+
+  const scrollContentStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
   }));
 
   const scrollHintStyle = useAnimatedStyle(() => ({
@@ -1047,9 +1059,9 @@ export default function ReadingScreen() {
             </View>
             </View>
 
-            {/* Content - Scrollable */}
-            <ScrollView
-              style={{ flex: 1 }}
+            {/* Content - Scrollable with day-transition fade */}
+            <Animated.ScrollView
+              style={[{ flex: 1 }, scrollContentStyle]}
               contentContainerStyle={{
                 paddingHorizontal: 24,
                 paddingTop: 20,
@@ -1155,7 +1167,7 @@ export default function ReadingScreen() {
                 </Animated.View>
               ) : (
                 <Animated.View
-                  entering={FadeIn.duration(400)}
+                  entering={FadeIn.duration(400).springify().damping(14).stiffness(120)}
                   style={{ marginTop: 48, paddingHorizontal: 24 }}
                 >
                   {/* Horizontal button row - Day Completed (80%) + Share (20%) */}
@@ -1166,7 +1178,7 @@ export default function ReadingScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    {/* Day Completed Button - 80% width, light gray background with gold border and text */}
+                    {/* Day Completed Button - 80% width, with satisfying spring entrance */}
                     <TouchableOpacity
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1343,7 +1355,7 @@ export default function ReadingScreen() {
                   )}
                 </Animated.View>
               )} 
-            </ScrollView>
+            </Animated.ScrollView>
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>

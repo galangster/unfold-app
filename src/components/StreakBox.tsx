@@ -1,6 +1,14 @@
+import { useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Flame } from 'lucide-react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 
@@ -49,6 +57,22 @@ function generateDaysData(streakCount: number): DayData[] {
 
 export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
   const { colors, isDark } = useTheme();
+
+  // Breathing pulse for active flame
+  const flamePulse = useSharedValue(1);
+  useEffect(() => {
+    if (streakCount > 0) {
+      flamePulse.value = withRepeat(
+        withTiming(1.12, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true
+      );
+    }
+  }, [streakCount, flamePulse]);
+
+  const flamePulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: flamePulse.value }],
+  }));
 
   const daysData = generateDaysData(streakCount);
   const streakLabel = streakCount === 1 ? 'day' : 'days';
@@ -122,11 +146,13 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           {/* Header row - Current Streak label on left, streak count on right */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Flame
-                size={32}
-                color={colors.accent}
-                fill={streakCount >= 7 ? colors.accent : 'transparent'}
-              />
+              <Animated.View style={flamePulseStyle}>
+                <Flame
+                  size={32}
+                  color={colors.accent}
+                  fill={streakCount >= 7 ? colors.accent : 'transparent'}
+                />
+              </Animated.View>
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,

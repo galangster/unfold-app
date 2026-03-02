@@ -1,5 +1,16 @@
+import { useCallback, useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Quote, BookOpen, Bookmark } from 'lucide-react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+  withDelay,
+  Easing,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
@@ -38,6 +49,34 @@ export function DevotionalContent({
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const readingFont = useReadingFont();
 
+  // Accent line grow animation — editorial entrance
+  const accentLineWidth = useSharedValue(0);
+  useEffect(() => {
+    accentLineWidth.value = withDelay(
+      200,
+      withTiming(36, { duration: 600, easing: Easing.out(Easing.cubic) })
+    );
+  }, [accentLineWidth]);
+
+  const accentLineStyle = useAnimatedStyle(() => ({
+    width: accentLineWidth.value,
+  }));
+
+  // Bookmark bounce animation
+  const bookmarkScale = useSharedValue(1);
+  const bookmarkAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: bookmarkScale.value }],
+  }));
+
+  const handleBookmarkPress = useCallback(() => {
+    // Spring bounce: scale down then overshoot up
+    bookmarkScale.value = withSequence(
+      withSpring(0.6, { damping: 10, stiffness: 400 }),
+      withSpring(1, { damping: 8, stiffness: 200 })
+    );
+    onToggleBookmark?.();
+  }, [bookmarkScale, onToggleBookmark]);
+
   return (
     <>
       {/* Day title */}
@@ -55,15 +94,17 @@ export function DevotionalContent({
         {day.title}
       </Text>
 
-      {/* Accent line */}
-      <View
-        style={{
-          width: 36,
-          height: 1.5,
-          backgroundColor: colors.accent,
-          marginBottom: 24,
-          borderRadius: 1,
-        }}
+      {/* Accent line — grows in from zero */}
+      <Animated.View
+        style={[
+          {
+            height: 1.5,
+            backgroundColor: colors.accent,
+            marginBottom: 24,
+            borderRadius: 1,
+          },
+          accentLineStyle,
+        ]}
       />
 
       {/* Scripture reference with bookmark */}
@@ -82,20 +123,22 @@ export function DevotionalContent({
           {day.scriptureReference}
         </Text>
         
-        {/* Bookmark button - inline with reference */}
+        {/* Bookmark button - inline with reference, with bounce animation */}
         {onToggleBookmark && (
           <Pressable
-            onPress={onToggleBookmark}
+            onPress={handleBookmarkPress}
             style={{
               padding: 4,
             }}
           >
-            <Bookmark
-              size={14}
-              color={isBookmarked ? colors.accent : colors.textMuted}
-              fill={isBookmarked ? colors.accent : 'transparent'}
-              strokeWidth={1.5}
-            />
+            <Animated.View style={bookmarkAnimStyle}>
+              <Bookmark
+                size={14}
+                color={isBookmarked ? colors.accent : colors.textMuted}
+                fill={isBookmarked ? colors.accent : 'transparent'}
+                strokeWidth={1.5}
+              />
+            </Animated.View>
           </Pressable>
         )}
       </View>
