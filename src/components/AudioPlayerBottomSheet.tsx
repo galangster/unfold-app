@@ -16,10 +16,18 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { PlayIcon, PauseIcon, ArrowCounterClockwiseIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
+import {
+  PlayIcon,
+  PauseIcon,
+  ArrowCounterClockwiseIcon,
+  ArrowClockwiseIcon,
+  ArrowsClockwiseIcon,
+  WarningCircleIcon,
+} from 'phosphor-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
+import { FontFamily } from '@/constants/fonts';
 import { streamDevotionalAudio } from '@/lib/cartesia';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
@@ -59,12 +67,14 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const shouldAutoplayRef = useRef(false);
   const audioUrlRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
-  const progressBarRef = useRef<View>(null);
   const progressBarWidthRef = useRef(0);
+
+  // Animated progress bar using reanimated shared values for smooth updates
+  const progressAnim = useSharedValue(0);
 
   const player = useAudioPlayer(
     audioUrl ? { uri: audioUrl } : undefined,
-    { updateInterval: 100 }
+    { updateInterval: 50 }
   );
   const status = useAudioPlayerStatus(player);
 
@@ -98,13 +108,36 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     shouldAutoplayRef.current = false;
   }, [status.isLoaded, audioUrl, player]);
 
+  // Smooth progress bar animation driven by playback position
+  useEffect(() => {
+    if (duration > 0) {
+      const percent = Math.min((currentTime / duration) * 100, 100);
+      // Use spring for smooth interpolation between position updates
+      progressAnim.value = withTiming(percent, {
+        duration: 80,
+        easing: Easing.linear,
+      });
+    } else {
+      progressAnim.value = 0;
+    }
+  }, [currentTime, duration]);
+
+  // Auto-collapse bottom sheet when audio finishes
   useEffect(() => {
     if (status.didJustFinish) {
       Analytics.logEvent(AnalyticsEvents.AUDIO_PLAY_COMPLETED, {
         voice_id: voiceId,
       });
+
+      // Snap to minimized state (index 0 = peek height)
+      // The bottom sheet is already at index 0 (25%), so this is a no-op
+      // if it's already minimized. If we had multiple snap points, we'd
+      // snap to the lowest one. For now, ensure it stays at peek.
+      if (ref && typeof ref !== 'function' && ref.current) {
+        ref.current.snapToIndex(0);
+      }
     }
-  }, [status.didJustFinish, voiceId]);
+  }, [status.didJustFinish, voiceId, ref]);
 
   useEffect(() => {
     return () => {
@@ -155,12 +188,33 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     } catch (error) {
       logger.error('Error loading audio:', error);
       setHasError(true);
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to load audio');
+
+      // Provide user-friendly error messages based on error type
+      if (error instanceof Error) {
+        if (error.message.includes('Network') || error.message.includes('fetch')) {
+          setErrorMessage('Unable to connect. Check your internet and try again.');
+        } else if (error.message.includes('429') || error.message.includes('rate')) {
+          setErrorMessage('Too many requests. Please wait a moment and try again.');
+        } else if (error.message.includes('500') || error.message.includes('503')) {
+          setErrorMessage('Audio service is temporarily unavailable. Try again shortly.');
+        } else {
+          setErrorMessage('Could not load audio. Tap to retry.');
+        }
+      } else {
+        setErrorMessage('Could not load audio. Tap to retry.');
+      }
     } finally {
       setIsLoading(false);
       isLoadingRef.current = false;
     }
   }, [isPremium, fullText, voiceId, player]);
+
+  const handleRetry = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setHasError(false);
+    setErrorMessage('');
+    loadAndPlayAudio();
+  }, [loadAndPlayAudio]);
 
   const togglePlayback = useCallback(async () => {
     if (!audioUrl || !status.isLoaded) {
@@ -219,11 +273,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
     }
   }, [speedIndex, player]);
 
-  const handleProgressBarLayout = useCallback((event: any) => {
+  const handleProgressBarLayout = useCallback((event: { nativeEvent: { layout: { width: number } } }) => {
     progressBarWidthRef.current = event.nativeEvent.layout.width;
   }, []);
 
-  const handleProgressPress = useCallback(async (event: any) => {
+  const handleProgressPress = useCallback(async (event: { nativeEvent: { locationX: number } }) => {
     if (!audioUrl || !status.isLoaded || duration <= 0) return;
 
     const { locationX } = event.nativeEvent;
@@ -239,15 +293,27 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   }, [audioUrl, status.isLoaded, duration, player]);
 
   const formatTime = useCallback((ms: number) => {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSeconds = totalSeconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }, []);
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   const currentSpeed = PLAYBACK_SPEEDS[speedIndex];
   const isBuffering = isLoading || (audioUrl != null && !status.isLoaded);
+
+  // Animated progress bar fill driven by shared value
+  const progressFillStyle = useAnimatedStyle(() => ({
+    width: `${progressAnim.value}%` as `${number}%`,
+  }));
+
+  // Animated progress thumb position
+  const progressThumbStyle = useAnimatedStyle(() => ({
+    left: `${progressAnim.value}%` as `${number}%`,
+    transform: [{ translateX: -6 }],
+    // Only show thumb when there's progress
+    opacity: progressAnim.value > 0 ? 1 : 0,
+  }));
 
   // Indeterminate loading shimmer for progress bar
   const loadingShimmer = useSharedValue(0);
@@ -301,142 +367,181 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
         />
 
         <View style={styles.content}>
-          {/* Track title row */}
-          <View style={styles.titleRow}>
-            <View style={styles.titleTextContainer}>
-              <Text
-                style={[styles.titleText, { color: colors.text }]}
-                numberOfLines={1}
-              >
-                {title}
-              </Text>
-              <Text
-                style={[styles.subtitleText, { color: isBuffering ? colors.accent : colors.textMuted }]}
-                numberOfLines={1}
-              >
-                {isBuffering ? 'Loading audio...' : subtitle}
-              </Text>
-            </View>
-            {/* Speed control */}
-            <Pressable
-              onPress={cycleSpeed}
-              style={[styles.speedButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}
-            >
-              <Text style={[styles.speedText, { color: colors.text }]}>
-                {currentSpeed === 1 ? '1x' : `${currentSpeed}x`}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Progress bar */}
-          <Pressable
-            ref={progressBarRef}
-            onLayout={handleProgressBarLayout}
-            onPress={handleProgressPress}
-            style={[styles.progressBarContainer, { backgroundColor: colors.border }]}
-          >
-            {isBuffering ? (
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  { backgroundColor: colors.accent, position: 'absolute' },
-                  loadingBarStyle,
-                ]}
+          {/* Error state — replaces the full content area */}
+          {hasError ? (
+            <View style={styles.errorStateContainer}>
+              <WarningCircleIcon
+                size={28}
+                color={colors.error}
+                weight="light"
               />
-            ) : (
-              <>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      backgroundColor: colors.accent,
-                      width: `${progressPercent}%`,
-                    },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.progressThumb,
-                    {
-                      backgroundColor: colors.accent,
-                      left: `${progressPercent}%`,
-                      transform: [{ translateX: -6 }],
-                    },
-                  ]}
-                />
-              </>
-            )}
-          </Pressable>
-
-          {/* Time + controls row */}
-          <View style={styles.controlsRow}>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(currentTime)}
-            </Text>
-
-            <View style={styles.transportControls}>
-              {/* Skip back 15s */}
-              <Pressable
-                onPress={skipBack}
-                style={styles.skipButton}
-                disabled={isLoading || !status.isLoaded}
+              <Text
+                style={[
+                  styles.errorStateText,
+                  { color: colors.text, fontFamily: FontFamily.body },
+                ]}
+                numberOfLines={2}
               >
-                <ArrowCounterClockwiseIcon
-                  size={18}
-                  color={status.isLoaded ? colors.text : colors.textMuted}
-                  weight="light"
-                />
-                <Text style={[styles.skipLabel, { color: status.isLoaded ? colors.text : colors.textMuted }]}>
-                  15
-                </Text>
-              </Pressable>
+                {errorMessage}
+              </Text>
+              {/* Only show retry for non-premium-related errors */}
+              {isPremium && (
+                <Pressable
+                  onPress={handleRetry}
+                  style={[styles.retryButton, { backgroundColor: colors.accent }]}
+                >
+                  <ArrowsClockwiseIcon size={14} color="#fff" weight="light" />
+                  <Text style={[styles.retryButtonText, { fontFamily: FontFamily.uiSemiBold }]}>
+                    Try again
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          ) : (
+            <>
+              {/* Track title row */}
+              <View style={styles.titleRow}>
+                <View style={styles.titleTextContainer}>
+                  <Text
+                    style={[styles.titleText, { color: colors.text, fontFamily: FontFamily.uiSemiBold }]}
+                    numberOfLines={1}
+                  >
+                    {title}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.subtitleText,
+                      {
+                        color: isBuffering ? colors.accent : colors.textMuted,
+                        fontFamily: FontFamily.ui,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {isBuffering ? 'Loading audio...' : subtitle}
+                  </Text>
+                </View>
+                {/* Speed control */}
+                <Pressable
+                  onPress={cycleSpeed}
+                  style={[styles.speedButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}
+                >
+                  <Text style={[styles.speedText, { color: colors.text, fontFamily: FontFamily.uiSemiBold }]}>
+                    {currentSpeed === 1 ? '1x' : `${currentSpeed}x`}
+                  </Text>
+                </Pressable>
+              </View>
 
-              {/* Play/pause */}
+              {/* Progress bar */}
               <Pressable
-                onPress={togglePlayback}
-                style={[styles.playButton, { backgroundColor: colors.accent }]}
-                disabled={isLoading}
+                onLayout={handleProgressBarLayout}
+                onPress={handleProgressPress}
+                style={[styles.progressBarContainer, { backgroundColor: colors.border }]}
               >
-                {isLoading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : isPlaying ? (
-                  <PauseIcon size={20} color="#fff" weight="fill" />
+                {isBuffering ? (
+                  <Animated.View
+                    style={[
+                      styles.progressFill,
+                      { backgroundColor: colors.accent, position: 'absolute' },
+                      loadingBarStyle,
+                    ]}
+                  />
                 ) : (
-                  <PlayIcon size={20} color="#fff" weight="fill" style={{ marginLeft: 2 }} />
+                  <>
+                    <Animated.View
+                      style={[
+                        styles.progressFill,
+                        { backgroundColor: colors.accent },
+                        progressFillStyle,
+                      ]}
+                    />
+                    <Animated.View
+                      style={[
+                        styles.progressThumb,
+                        { backgroundColor: colors.accent },
+                        progressThumbStyle,
+                      ]}
+                    />
+                  </>
                 )}
               </Pressable>
 
-              {/* Skip forward 15s */}
-              <Pressable
-                onPress={skipForward}
-                style={styles.skipButton}
-                disabled={isLoading || !status.isLoaded}
-              >
-                <ArrowClockwiseIcon
-                  size={18}
-                  color={status.isLoaded ? colors.text : colors.textMuted}
-                  weight="light"
-                />
-                <Text style={[styles.skipLabel, { color: status.isLoaded ? colors.text : colors.textMuted }]}>
-                  15
+              {/* Time + controls row */}
+              <View style={styles.controlsRow}>
+                <Text style={[styles.timeText, { color: colors.textMuted, fontFamily: FontFamily.mono }]}>
+                  {formatTime(currentTime)}
                 </Text>
-              </Pressable>
-            </View>
 
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(duration)}
-            </Text>
-          </View>
+                <View style={styles.transportControls}>
+                  {/* Skip back 15s */}
+                  <Pressable
+                    onPress={skipBack}
+                    style={styles.skipButton}
+                    disabled={isLoading || !status.isLoaded}
+                  >
+                    <ArrowCounterClockwiseIcon
+                      size={18}
+                      color={status.isLoaded ? colors.text : colors.textMuted}
+                      weight="light"
+                    />
+                    <Text
+                      style={[
+                        styles.skipLabel,
+                        {
+                          color: status.isLoaded ? colors.text : colors.textMuted,
+                          fontFamily: FontFamily.uiSemiBold,
+                        },
+                      ]}
+                    >
+                      15
+                    </Text>
+                  </Pressable>
 
-          {/* Error message overlay */}
-          {hasError && (
-            <View style={[StyleSheet.absoluteFill, styles.errorOverlay]}>
-              <View style={[styles.errorContainer, { backgroundColor: isDark ? 'rgba(239,68,68,0.85)' : 'rgba(220,38,38,0.9)' }]}>
-                <Text style={[styles.errorText, { color: '#ffffff' }]}>
-                  {errorMessage}
+                  {/* Play/pause */}
+                  <Pressable
+                    onPress={togglePlayback}
+                    style={[styles.playButton, { backgroundColor: colors.accent }]}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : isPlaying ? (
+                      <PauseIcon size={20} color="#fff" weight="fill" />
+                    ) : (
+                      <PlayIcon size={20} color="#fff" weight="fill" style={{ marginLeft: 2 }} />
+                    )}
+                  </Pressable>
+
+                  {/* Skip forward 15s */}
+                  <Pressable
+                    onPress={skipForward}
+                    style={styles.skipButton}
+                    disabled={isLoading || !status.isLoaded}
+                  >
+                    <ArrowClockwiseIcon
+                      size={18}
+                      color={status.isLoaded ? colors.text : colors.textMuted}
+                      weight="light"
+                    />
+                    <Text
+                      style={[
+                        styles.skipLabel,
+                        {
+                          color: status.isLoaded ? colors.text : colors.textMuted,
+                          fontFamily: FontFamily.uiSemiBold,
+                        },
+                      ]}
+                    >
+                      15
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <Text style={[styles.timeText, { color: colors.textMuted, fontFamily: FontFamily.mono, textAlign: 'right' }]}>
+                  {formatTime(duration)}
                 </Text>
               </View>
-            </View>
+            </>
           )}
         </View>
       </BottomSheetView>
@@ -471,7 +576,6 @@ const styles = StyleSheet.create({
   },
   titleText: {
     fontSize: 14,
-    fontWeight: '600',
     letterSpacing: -0.2,
   },
   subtitleText: {
@@ -486,7 +590,6 @@ const styles = StyleSheet.create({
   },
   speedText: {
     fontSize: 12,
-    fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   progressBarContainer: {
@@ -520,7 +623,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 11,
     fontVariant: ['tabular-nums'],
-    width: 36,
+    width: 40,
   },
   transportControls: {
     flexDirection: 'row',
@@ -535,7 +638,6 @@ const styles = StyleSheet.create({
   },
   skipLabel: {
     fontSize: 9,
-    fontWeight: '700',
     marginTop: -3,
     fontVariant: ['tabular-nums'],
   },
@@ -551,22 +653,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  errorOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  // Error state styles — inline within the content area, not an overlay
+  errorStateContainer: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    gap: 12,
   },
-  errorContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    maxWidth: '100%',
+  errorStateText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
-  errorText: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    flexShrink: 0,
+  },
+  retryButtonText: {
+    fontSize: 13,
+    color: '#fff',
   },
 });
 

@@ -122,6 +122,7 @@
     "memoize-one": "^6.0.0",
     "nativewind": "~4.1.23",
     "patch-package": "^8.0.0",
+    "phosphor-react-native": "^3.0.3",
     "pretty-format": "^29.7.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
