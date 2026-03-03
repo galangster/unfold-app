@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Crown, Trash2, Lock, Play, Star, ChevronDown, MessageSquare, Layers, Compass, Book, Sun, Moon, Monitor, UserCircle, Pencil, Check, Palette, Type } from 'lucide-react-native';
+import { CaretLeftIcon, CrownIcon, TrashIcon, LockIcon, PlayIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
@@ -36,10 +36,10 @@ const FONT_SIZES: { value: FontSize; label: string }[] = [
   { value: 'large', label: 'Large' },
 ];
 
-const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Monitor },
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof SunIcon }[] = [
+  { value: 'light', label: 'Light', icon: SunIcon },
+  { value: 'dark', label: 'Dark', icon: MoonIcon },
+  { value: 'system', label: 'System', icon: MonitorIcon },
 ];
 
 const TONE_OPTIONS: { value: WritingTone; label: string; description: string }[] = [
@@ -361,7 +361,7 @@ export default function SettingsScreen() {
             accessibilityHint="Return to the previous screen"
             style={{ padding: 8 }}
           >
-            <ChevronLeft size={24} color={colors.textMuted} />
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </Pressable>
 
           <Text
@@ -411,7 +411,7 @@ export default function SettingsScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    <Crown size={22} color={colors.text} />
+                    <CrownIcon size={22} color={colors.text} weight="light" />
                   </View>
                   <View style={{ marginLeft: 16, flex: 1 }}>
                     <Text
@@ -465,7 +465,7 @@ export default function SettingsScreen() {
                   accessibilityLabel="Edit profile"
                   accessibilityHint="Edit your name and about information"
                 >
-                  <Pencil size={14} color={colors.textSubtle} />
+                  <PencilSimpleIcon size={14} color={colors.textSubtle} weight="light" />
                 </Pressable>
               ) : (
                 <View style={{ flexDirection: 'row', gap: 16 }}>
@@ -520,7 +520,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <UserCircle size={18} color={colors.text} />
+                  <UserCircleIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -792,6 +792,7 @@ export default function SettingsScreen() {
                           <Icon
                             size={14}
                             color={isSelected ? colors.background : colors.text}
+                            weight="light"
                           />
                           <Text
                             style={{
@@ -837,7 +838,7 @@ export default function SettingsScreen() {
                     borderRadius: 6,
                   }}
                 >
-                  <Lock size={10} color={colors.textSubtle} />
+                  <LockIcon size={10} color={colors.textSubtle} weight="light" />
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -877,7 +878,7 @@ export default function SettingsScreen() {
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Palette size={18} color={colors.text} />
+                    <PaletteIcon size={18} color={colors.text} weight="light" />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
@@ -888,9 +889,10 @@ export default function SettingsScreen() {
                       Accent Colors
                     </Text>
                   </View>
-                  <ChevronDown
+                  <CaretDownIcon
                     size={18}
                     color={colors.textMuted}
+                    weight="light"
                     style={{
                       transform: [{ rotate: expandedPremium === 'colors' ? '180deg' : '0deg' }],
                     }}
@@ -933,7 +935,7 @@ export default function SettingsScreen() {
                               }}
                             >
                               {isSelected && (
-                                <Check size={16} color={isDark ? '#000' : '#fff'} strokeWidth={3} />
+                                <CheckIcon size={16} color={isDark ? '#000' : '#fff'} weight="bold" />
                               )}
                             </View>
                             <Text
@@ -971,7 +973,7 @@ export default function SettingsScreen() {
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Type size={18} color={colors.text} />
+                    <TextAaIcon size={18} color={colors.text} weight="light" />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
@@ -992,9 +994,10 @@ export default function SettingsScreen() {
                     >
                       {READING_FONTS.find(f => f.id === (user?.readingFont ?? 'source-serif'))?.name}
                     </Text>
-                    <ChevronDown
+                    <CaretDownIcon
                       size={18}
                       color={colors.textMuted}
+                      weight="light"
                       style={{
                         transform: [{ rotate: expandedPremium === 'fonts' ? '180deg' : '0deg' }],
                       }}
@@ -1050,7 +1053,7 @@ export default function SettingsScreen() {
                             </Text>
                           </View>
                           {isSelected && (
-                            <Check size={18} color={colors.accent} strokeWidth={2.5} />
+                            <CheckIcon size={18} color={colors.accent} weight="bold" />
                           )}
                         </Pressable>
                       );
@@ -1166,7 +1169,7 @@ export default function SettingsScreen() {
                       alignItems: 'center',
                     }}
                   >
-                    <Play size={18} color={colors.text} fill={colors.text} />
+                    <PlayIcon size={18} color={colors.text} weight="fill" />
                   </View>
                   <View style={{ marginLeft: 14, flex: 1 }}>
                     <Text
@@ -1189,9 +1192,10 @@ export default function SettingsScreen() {
                       {CARTESIA_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Katie'}
                     </Text>
                   </View>
-                  <ChevronDown
+                  <CaretDownIcon
                     size={20}
                     color={colors.textMuted}
+                    weight="light"
                     style={{
                       transform: [{ rotate: expandedPremium === 'voice' ? '180deg' : '0deg' }],
                     }}
@@ -1239,7 +1243,7 @@ export default function SettingsScreen() {
                                 {option.name}
                               </Text>
                               {option.premium && !user?.isPremium && (
-                                <Lock size={14} color={colors.textMuted} />
+                                <LockIcon size={14} color={colors.textMuted} weight="light" />
                               )}
                             </View>
                             <Text
@@ -1378,7 +1382,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Book size={18} color={colors.text} />
+                  <BookIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -1401,9 +1405,10 @@ export default function SettingsScreen() {
                     {BIBLE_TRANSLATIONS.find((t) => t.value === user?.bibleTranslation)?.label ?? 'NIV'}
                   </Text>
                 </View>
-                <ChevronDown
+                <CaretDownIcon
                   size={20}
                   color={colors.textMuted}
+                  weight="light"
                   style={{
                     transform: [{ rotate: expandedPreference === 'translation' ? '180deg' : '0deg' }],
                   }}
@@ -1531,7 +1536,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <MessageSquare size={18} color={colors.text} />
+                  <ChatDotsIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -1554,9 +1559,10 @@ export default function SettingsScreen() {
                     {TONE_OPTIONS.find((o) => o.value === user?.writingStyle?.tone)?.label ?? 'Like a friend'}
                   </Text>
                 </View>
-                <ChevronDown
+                <CaretDownIcon
                   size={20}
                   color={colors.textMuted}
+                  weight="light"
                   style={{
                     transform: [{ rotate: expandedPreference === 'tone' ? '180deg' : '0deg' }],
                   }}
@@ -1666,7 +1672,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Layers size={18} color={colors.text} />
+                  <StackIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -1689,9 +1695,10 @@ export default function SettingsScreen() {
                     {DEPTH_OPTIONS.find((o) => o.value === user?.writingStyle?.depth)?.label ?? 'A good balance'}
                   </Text>
                 </View>
-                <ChevronDown
+                <CaretDownIcon
                   size={20}
                   color={colors.textMuted}
+                  weight="light"
                   style={{
                     transform: [{ rotate: expandedPreference === 'depth' ? '180deg' : '0deg' }],
                   }}
@@ -1799,7 +1806,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Compass size={18} color={colors.text} />
+                  <CompassIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -1822,9 +1829,10 @@ export default function SettingsScreen() {
                     {FAITH_OPTIONS.find((o) => o.value === user?.writingStyle?.faithBackground)?.label ?? "I'm growing"}
                   </Text>
                 </View>
-                <ChevronDown
+                <CaretDownIcon
                   size={20}
                   color={colors.textMuted}
+                  weight="light"
                   style={{
                     transform: [{ rotate: expandedPreference === 'faith' ? '180deg' : '0deg' }],
                   }}
@@ -1959,7 +1967,7 @@ export default function SettingsScreen() {
                   {isExportingData ? (
                     <ActivityIndicator size="small" color={colors.accent} />
                   ) : (
-                    <MessageSquare size={18} color={colors.text} />
+                    <ChatDotsIcon size={18} color={colors.text} weight="light" />
                   )}
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
@@ -2005,7 +2013,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Star size={18} color={colors.text} fill={colors.text} />
+                  <StarIcon size={18} color={colors.text} weight="fill" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -2050,7 +2058,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Lock size={18} color={colors.text} />
+                  <LockIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -2083,7 +2091,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Book size={18} color={colors.text} />
+                  <BookIcon size={18} color={colors.text} weight="light" />
                 </View>
                 <View style={{ marginLeft: 14, flex: 1 }}>
                   <Text
@@ -2128,7 +2136,7 @@ export default function SettingsScreen() {
                 {isDeletingAccount ? (
                   <ActivityIndicator size="small" color={colors.error} />
                 ) : (
-                  <Trash2 size={20} color={colors.error} />
+                  <TrashIcon size={20} color={colors.error} weight="light" />
                 )}
                 <Text
                   style={{

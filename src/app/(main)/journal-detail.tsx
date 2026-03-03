@@ -3,7 +3,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft } from 'lucide-react-native';
+import { CaretLeftIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -46,7 +46,7 @@ export default function JournalDetailScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
-            <ChevronLeft size={24} color={colors.textMuted} />
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </Pressable>
 
           <Text

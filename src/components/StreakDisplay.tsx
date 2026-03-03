@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { View, Text } from 'react-native';
-import { Flame, Snowflake } from 'lucide-react-native';
+import { FireIcon, SnowflakeIcon } from 'phosphor-react-native';
 import Animated, {
   FadeIn,
   FadeInUp,
@@ -66,7 +66,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
           gap: 6,
         }}
       >
-        <Flame size={config.flame} color={colors.textMuted} />
+        <FireIcon size={config.flame} color={colors.textMuted} weight="light" />
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
@@ -101,10 +101,10 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
         }}
       >
         <Animated.View style={flamePulseStyle}>
-          <Flame
+          <FireIcon
             size={config.flame}
             color={colors.accent}
-            fill={streak >= 7 ? colors.accent : 'transparent'}
+            weight={streak >= 7 ? "fill" : "light"}
           />
         </Animated.View>
         <Text
@@ -141,7 +141,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             gap: 4,
           }}
         >
-          <Snowflake size={config.freeze} color={colors.textSubtle} />
+          <SnowflakeIcon size={config.freeze} color={colors.textSubtle} weight="light" />
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,

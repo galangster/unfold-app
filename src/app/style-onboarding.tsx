@@ -17,7 +17,7 @@ import Animated, {
   FadeOut,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { TypewriterText } from '@/components/TypewriterText';
@@ -221,7 +221,7 @@ export default function StyleOnboardingScreen() {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 8 }}
             >
-              <ChevronLeft size={24} color={colors.textMuted} />
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </Pressable>
           ) : (
             <View style={{ width: 40 }} />

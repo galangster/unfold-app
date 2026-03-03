@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronRight, PenLine } from 'lucide-react-native';
+import { CaretLeftIcon, CaretRightIcon, PencilLineIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -50,7 +50,7 @@ export default function MyResponsesScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
-            <ChevronLeft size={24} color={colors.textMuted} />
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </Pressable>
 
           <Text
@@ -74,7 +74,7 @@ export default function MyResponsesScreen() {
               entering={FadeIn.duration(400)}
               style={{ alignItems: 'center', paddingTop: 60 }}
             >
-              <PenLine size={48} color={colors.textHint} />
+              <PencilLineIcon size={48} color={colors.textHint} weight="light" />
               <Text
                 style={{
                   fontFamily: FontFamily.body,
@@ -204,7 +204,7 @@ export default function MyResponsesScreen() {
                             >
                               Read more
                             </Text>
-                            <ChevronRight size={14} color={colors.textSubtle} />
+                            <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
                           </View>
                         )}
                       </View>

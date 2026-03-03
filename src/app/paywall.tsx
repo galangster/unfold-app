@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { X, Check, Crown } from 'lucide-react-native';
+import { XIcon, CheckIcon, CrownIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -134,7 +134,7 @@ export default function PaywallScreen() {
           opacity: isPurchasing ? 0.5 : 1,
         }}
       >
-        <X size={22} color={colors.textSubtle} />
+        <XIcon size={22} color={colors.textSubtle} weight="light" />
       </Pressable>
 
       {/* Top section — hero + features */}
@@ -209,7 +209,7 @@ export default function PaywallScreen() {
                 paddingVertical: 4,
               }}
             >
-              <Check size={18} color={colors.accent} strokeWidth={2.5} />
+              <CheckIcon size={18} color={colors.accent} weight="bold" />
               <Text
                 style={{
                   fontFamily: FontFamily.ui,

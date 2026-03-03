@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, BookOpen, Lock, Check } from 'lucide-react-native';
+import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
@@ -145,7 +145,7 @@ export default function PastDevotionalsScreen() {
               <ActivityIndicator size="small" color={colors.accent} />
             ) : exportSuccessId === item.id ? (
               <>
-                <Check size={12} color={colors.accent} />
+                <CheckIcon size={12} color={colors.accent} weight="bold" />
                 <Text
                   style={{
                     fontFamily: FontFamily.ui,
@@ -169,7 +169,7 @@ export default function PastDevotionalsScreen() {
                   Download PDF
                 </Text>
                 {!user?.isPremium && (
-                  <Lock size={10} color={colors.textHint} style={{ marginLeft: 6 }} />
+                  <LockIcon size={10} color={colors.textHint} weight="light" style={{ marginLeft: 6 }} />
                 )}
               </>
             )}
@@ -192,7 +192,7 @@ export default function PastDevotionalsScreen() {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 8 }}
             >
-              <ChevronLeft size={24} color={colors.textMuted} />
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </Pressable>
 
             <Text
@@ -211,7 +211,7 @@ export default function PastDevotionalsScreen() {
             entering={FadeIn.duration(400)}
             style={{ alignItems: 'center', paddingTop: 60 }}
           >
-            <BookOpen size={48} color={colors.textHint} />
+            <BookOpenIcon size={48} color={colors.textHint} weight="light" />
             <Text
               style={{
                 fontFamily: FontFamily.body,
@@ -241,7 +241,7 @@ export default function PastDevotionalsScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
-            <ChevronLeft size={24} color={colors.textMuted} />
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </Pressable>
 
           <Text

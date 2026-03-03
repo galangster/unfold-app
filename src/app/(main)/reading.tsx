@@ -19,7 +19,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { Home, Bookmark, RefreshCw, ChevronDown, BookOpen, ChevronLeft, ChevronRight, Play, Check, Upload } from 'lucide-react-native';
+import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -878,7 +878,7 @@ export default function ReadingScreen() {
                   opacity: pressed ? 0.85 : 1,
                 })}
               >
-                <RefreshCw size={16} color={btnText} />
+                <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
                 <Text
                   style={{
                     fontFamily: FontFamily.uiSemiBold,
@@ -952,7 +952,7 @@ export default function ReadingScreen() {
                 accessibilityHint="Returns to the home screen"
                 style={{ padding: 8 }}
               >
-                <Home size={22} color={colors.textMuted} />
+                <HouseIcon size={22} color={colors.textMuted} weight="light" />
               </Pressable>
 
               <Pressable
@@ -979,7 +979,7 @@ export default function ReadingScreen() {
               >
                 {/* Left Chevron - show if not on day 1 */}
                 {viewingDay > 1 ? (
-                  <ChevronLeft size={16} color={colors.textMuted} strokeWidth={1.5} />
+                  <CaretLeftIcon size={16} color={colors.textMuted} weight="light" />
                 ) : (
                   <View style={{ width: 16 }} />
                 )}
@@ -997,7 +997,7 @@ export default function ReadingScreen() {
                 
                 {/* Right Chevron - show if more days available */}
                 {viewingDay < availableDays ? (
-                  <ChevronRight size={16} color={colors.textMuted} strokeWidth={1.5} />
+                  <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
                 ) : (
                   <View style={{ width: 16 }} />
                 )}
@@ -1023,10 +1023,10 @@ export default function ReadingScreen() {
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <BookOpen
+                <BookOpenIcon
                   size={22}
                   color={colors.text}
-                  strokeWidth={1.5}
+                  weight="light"
                 />
               </Pressable>
 
@@ -1058,11 +1058,10 @@ export default function ReadingScreen() {
                 accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
                 style={{ padding: 8 }}
               >
-                <Play
+                <PlayIcon
                   size={22}
                   color={colors.text}
-                  strokeWidth={1.5}
-                  fill={colors.text}
+                  weight="fill"
                 />
               </Pressable>
             </View>
@@ -1104,7 +1103,7 @@ export default function ReadingScreen() {
                   }}
                 >
                   <Animated.View style={scrollHintStyle}>
-                    <ChevronDown size={28} color={colors.accent} strokeWidth={1.5} />
+                    <CaretDownIcon size={28} color={colors.accent} weight="light" />
                   </Animated.View>
                 </Animated.View>
               )}
@@ -1170,7 +1169,7 @@ export default function ReadingScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <Upload size={20} color={isDark ? '#AAAAAA' : '#666666'} strokeWidth={1.5} />
+                      <UploadSimpleIcon size={20} color={isDark ? '#AAAAAA' : '#666666'} weight="light" />
                     </Pressable>
                   </View>
                 </Animated.View>
@@ -1210,7 +1209,7 @@ export default function ReadingScreen() {
                         gap: 8,
                       }}
                     >
-                      <Check size={18} color={colors.accent} strokeWidth={2.5} />
+                      <CheckIcon size={18} color={colors.accent} weight="bold" />
                       <Text
                         style={{
                           fontFamily: FontFamily.uiSemiBold,
@@ -1241,7 +1240,7 @@ export default function ReadingScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <Upload size={20} color={isDark ? '#AAAAAA' : '#666666'} strokeWidth={1.5} />
+                      <UploadSimpleIcon size={20} color={isDark ? '#AAAAAA' : '#666666'} weight="light" />
                     </Pressable>
                   </View>
 
@@ -1317,7 +1316,7 @@ export default function ReadingScreen() {
                               minWidth: 240,
                             })}
                           >
-                            <RefreshCw size={15} color={retryCtaButtonText} />
+                            <ArrowsClockwiseIcon size={15} color={retryCtaButtonText} weight="light" />
                             <Text
                               style={{
                                 fontFamily: FontFamily.uiSemiBold,

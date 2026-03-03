@@ -11,7 +11,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Highlighter, BookOpen, Quote } from 'lucide-react-native';
+import { CaretLeftIcon, HighlighterIcon, BookOpenIcon, QuotesIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
@@ -76,7 +76,7 @@ export default function HighlightsScreen() {
         }}
       >
         <Pressable onPress={handleBack} style={{ padding: 8 }}>
-          <ChevronLeft size={24} color={colors.text} />
+          <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </Pressable>
         <Text
           style={{
@@ -122,7 +122,7 @@ export default function HighlightsScreen() {
             >
               {/* Devotional Title */}
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-                <BookOpen size={16} color={colors.accent} />
+                <BookOpenIcon size={16} color={colors.accent} weight="light" />
                 <Text
                   style={{
                     fontFamily: FontFamily.uiSemiBold,
@@ -179,7 +179,7 @@ export default function HighlightsScreen() {
 
                   {/* Highlighted text */}
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Quote size={14} color={colors.accent} style={{ marginTop: 2, opacity: 0.6 }} />
+                    <QuotesIcon size={14} color={colors.accent} weight="light" style={{ marginTop: 2, opacity: 0.6 }} />
                     <Text
                       style={{
                         fontFamily: FontFamily.bodyItalic,
@@ -223,7 +223,7 @@ function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>[
       style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}
     >
       <Animated.View style={[{ marginBottom: 16 }, iconPulseStyle]}>
-        <Highlighter size={48} color={colors.textMuted} style={{ opacity: 0.5 }} />
+        <HighlighterIcon size={48} color={colors.textMuted} weight="light" style={{ opacity: 0.5 }} />
       </Animated.View>
       <Text
         style={{

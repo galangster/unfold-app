@@ -19,7 +19,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore } from '@/lib/store';
-import { Plus, BookOpen, PenLine, Settings, Bookmark } from 'lucide-react-native';
+import { PlusIcon, BookOpenIcon, PencilLineIcon, GearIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
@@ -430,7 +430,7 @@ export default function HomeScreen() {
               accessibilityLabel="Settings"
               accessibilityHint="Open app settings and preferences"
             >
-              <Settings size={22} color={colors.textSubtle} strokeWidth={1.5} />
+              <GearIcon size={22} color={colors.textSubtle} weight="light" />
             </Pressable>
           </Animated.View>
 
@@ -771,7 +771,7 @@ export default function HomeScreen() {
                         paddingVertical: 10,
                       }}
                     >
-                      <Plus size={14} color={colors.textSubtle} strokeWidth={2} />
+                      <PlusIcon size={14} color={colors.textSubtle} weight="light" />
                       <Text
                         style={{
                           fontFamily: FontFamily.uiMedium,
@@ -828,7 +828,7 @@ export default function HomeScreen() {
                       padding: 18,
                     }}
                   >
-                    <BookOpen size={20} color={colors.accent} strokeWidth={1.5} style={{ marginBottom: 12 }} />
+                    <BookOpenIcon size={20} color={colors.accent} weight="light" style={{ marginBottom: 12 }} />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
@@ -875,7 +875,7 @@ export default function HomeScreen() {
                       padding: 18,
                     }}
                   >
-                    <PenLine size={20} color={colors.accent} strokeWidth={1.5} style={{ marginBottom: 12 }} />
+                    <PencilLineIcon size={20} color={colors.accent} weight="light" style={{ marginBottom: 12 }} />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
@@ -931,7 +931,7 @@ export default function HomeScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Bookmark size={20} color={colors.accent} strokeWidth={1.5} />
+                  <BookmarkSimpleIcon size={20} color={colors.accent} weight="light" />
                   <View style={{ marginLeft: 14, flex: 1 }}>
                     <Text
                       style={{

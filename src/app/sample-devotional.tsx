@@ -6,7 +6,7 @@ import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
-import { ChevronLeft, ArrowRight } from 'lucide-react-native';
+import { CaretLeftIcon, ArrowRightIcon } from 'phosphor-react-native';
 
 interface DevotionalContent {
   title: string;
@@ -77,7 +77,7 @@ export default function SampleDevotionalScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, height: 60 }}>
           <Pressable onPress={handleBack} style={{ padding: 8, marginLeft: -8 }}>
-            <ChevronLeft size={24} color={colors.textMuted} />
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </Pressable>
         </View>
 
@@ -183,7 +183,7 @@ export default function SampleDevotionalScreen() {
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.background }}>
                       Continue Setup
                     </Text>
-                    <ArrowRight size={18} color={colors.background} />
+                    <ArrowRightIcon size={18} color={colors.background} weight="light" />
                   </View>
                 )}
               </Pressable>

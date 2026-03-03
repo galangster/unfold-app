@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
-import { X, Lock, Crown } from 'lucide-react-native';
+import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -240,7 +240,7 @@ export default function WallpaperScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
-            <X size={22} color={colors.textMuted} />
+            <XIcon size={22} color={colors.textMuted} weight="light" />
           </Pressable>
           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>
             Share Quote
@@ -362,7 +362,7 @@ export default function WallpaperScreen() {
                             alignItems: 'center',
                           }}
                         >
-                          <Lock size={18} color="rgba(255,255,255,0.9)" />
+                          <LockIcon size={18} color="rgba(255,255,255,0.9)" weight="light" />
                         </View>
                       )}
                     </View>
@@ -451,7 +451,7 @@ export default function WallpaperScreen() {
                 transform: [{ scale: pressed ? 0.98 : 1 }],
               })}
             >
-              <Crown size={16} color={isDark ? '#000' : '#fff'} />
+              <CrownIcon size={16} color={isDark ? '#000' : '#fff'} weight="light" />
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,

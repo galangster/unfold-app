@@ -6,7 +6,7 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { X, Upload } from 'lucide-react-native';
+import { XIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { DevotionalDay } from '@/lib/store';
@@ -128,7 +128,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingVertical: 16 }}>
           <Pressable onPress={onClose} hitSlop={12}>
-            <X size={24} color="#ffffff" />
+            <XIcon size={24} color="#ffffff" weight="light" />
           </Pressable>
         </View>
 
@@ -217,7 +217,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                   <ActivityIndicator size="small" color={pressed ? '#000000' : '#ffffff'} />
                 ) : (
                   <>
-                    <Upload size={18} color={pressed ? '#000000' : '#ffffff'} />
+                    <UploadSimpleIcon size={18} color={pressed ? '#000000' : '#ffffff'} weight="light" />
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,

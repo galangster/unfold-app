@@ -29,7 +29,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, ChevronDown, ArrowRight, Hand, Fingerprint, Moon, Compass, Heart, Sparkles, Wind, Mountain, Sun, Eye, Flame, Sparkle, CloudRain, Scale, Target, Stars, BookOpen, Users, Music, Crown, Leaf, MessageCircle, Calendar, Wheat, User, Wand2, Smile, Gift, Telescope } from 'lucide-react-native';
+import { CaretLeftIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
@@ -151,33 +151,33 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
 // Icon map for themes and types
 const iconMap: Record<string, React.ReactNode> = {
   // Themes
-  trust: <Fingerprint size={18} color="#9A7B3C" />,
-  courage: <Flame size={18} color="#9A7B3C" />,
-  joy: <Smile size={18} color="#9A7B3C" />,
-  lament: <CloudRain size={18} color="#9A7B3C" />,
-  discipline: <Target size={18} color="#9A7B3C" />,
-  identity: <Fingerprint size={18} color="#9A7B3C" />,
-  purpose: <Compass size={18} color="#9A7B3C" />,
-  healing: <Heart size={18} color="#9A7B3C" />,
-  gratitude: <Gift size={18} color="#9A7B3C" />,
-  hope: <Sparkle size={18} color="#9A7B3C" />,
-  rest: <Moon size={18} color="#9A7B3C" />,
-  presence: <Eye size={18} color="#9A7B3C" />,
-  conviction: <Scale size={18} color="#9A7B3C" />,
-  surrender: <Hand size={18} color="#9A7B3C" />,
-  justice: <Scale size={18} color="#9A7B3C" />,
-  wonder: <Telescope size={18} color="#9A7B3C" />,
+  trust: <FingerprintIcon size={18} color="#9A7B3C" weight="regular" />,
+  courage: <FireIcon size={18} color="#9A7B3C" weight="regular" />,
+  joy: <SmileyIcon size={18} color="#9A7B3C" weight="regular" />,
+  lament: <CloudRainIcon size={18} color="#9A7B3C" weight="regular" />,
+  discipline: <CrosshairIcon size={18} color="#9A7B3C" weight="regular" />,
+  identity: <FingerprintIcon size={18} color="#9A7B3C" weight="regular" />,
+  purpose: <CompassIcon size={18} color="#9A7B3C" weight="regular" />,
+  healing: <HeartIcon size={18} color="#9A7B3C" weight="regular" />,
+  gratitude: <GiftIcon size={18} color="#9A7B3C" weight="regular" />,
+  hope: <SparkleIcon size={18} color="#9A7B3C" weight="regular" />,
+  rest: <MoonIcon size={18} color="#9A7B3C" weight="regular" />,
+  presence: <EyeIcon size={18} color="#9A7B3C" weight="regular" />,
+  conviction: <ScalesIcon size={18} color="#9A7B3C" weight="regular" />,
+  surrender: <HandIcon size={18} color="#9A7B3C" weight="regular" />,
+  justice: <ScalesIcon size={18} color="#9A7B3C" weight="regular" />,
+  wonder: <BinocularsIcon size={18} color="#9A7B3C" weight="regular" />,
   // Study types
-  personal_journey: <Compass size={20} color="#9A7B3C" />,
-  book_study: <BookOpen size={20} color="#9A7B3C" />,
-  character_study: <Users size={20} color="#9A7B3C" />,
-  psalm_journey: <Music size={20} color="#9A7B3C" />,
-  beatitudes: <Crown size={20} color="#9A7B3C" />,
-  fruit_of_spirit: <Leaf size={20} color="#9A7B3C" />,
-  lords_prayer: <MessageCircle size={20} color="#9A7B3C" />,
-  names_of_god: <Flame size={20} color="#9A7B3C" />,
-  seasons: <Calendar size={20} color="#9A7B3C" />,
-  parables: <MessageCircle size={20} color="#9A7B3C" />,
+  personal_journey: <CompassIcon size={20} color="#9A7B3C" weight="regular" />,
+  book_study: <BookOpenIcon size={20} color="#9A7B3C" weight="regular" />,
+  character_study: <UsersIcon size={20} color="#9A7B3C" weight="regular" />,
+  psalm_journey: <MusicNotesIcon size={20} color="#9A7B3C" weight="regular" />,
+  beatitudes: <CrownIcon size={20} color="#9A7B3C" weight="regular" />,
+  fruit_of_spirit: <LeafIcon size={20} color="#9A7B3C" weight="regular" />,
+  lords_prayer: <ChatCircleIcon size={20} color="#9A7B3C" weight="regular" />,
+  names_of_god: <FireIcon size={20} color="#9A7B3C" weight="regular" />,
+  seasons: <CalendarIcon size={20} color="#9A7B3C" weight="regular" />,
+  parables: <ChatCircleIcon size={20} color="#9A7B3C" weight="regular" />,
 };
 
 const ALL_STEPS = [
@@ -806,7 +806,7 @@ export default function OnboardingScreen() {
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
                         justifyContent: 'center', alignItems: 'center',
                       }}>
-                        <Heart size={26} color={colors.accent} />
+                        <HeartIcon size={26} color={colors.accent} weight="light" />
                       </View>
                       <View style={{ flex: 1, paddingRight: 8 }}>
                         <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A theme or topic</Text>
@@ -853,7 +853,7 @@ export default function OnboardingScreen() {
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
                         justifyContent: 'center', alignItems: 'center',
                       }}>
-                        <BookOpen size={26} color={colors.accent} />
+                        <BookOpenIcon size={26} color={colors.accent} weight="light" />
                       </View>
                       <View style={{ flex: 1, paddingRight: 8 }}>
                         <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A style of study</Text>
@@ -899,7 +899,7 @@ export default function OnboardingScreen() {
                         backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
                         justifyContent: 'center', alignItems: 'center',
                       }}>
-                        <Wand2 size={26} color={colors.accent} />
+                        <MagicWandIcon size={26} color={colors.accent} weight="light" />
                       </View>
                       <View style={{ flex: 1, paddingRight: 8 }}>
                         <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>Just guide me</Text>
@@ -1056,7 +1056,7 @@ export default function OnboardingScreen() {
               <View style={{ gap: 10, paddingBottom: 200 }}>
                 {DEVOTIONAL_TYPES.map((type) => {
                   const isSelected = data.selectedType === type.id;
-                  const Icon = iconMap[type.id] || <BookOpen size={20} color={colors.textMuted} />;
+                  const Icon = iconMap[type.id] || <BookOpenIcon size={20} color={colors.textMuted} weight="regular" />;
                   const needsSubject = TYPES_WITH_SUBJECT_SELECTION.includes(type.id);
                   
                   return (
@@ -1112,7 +1112,7 @@ export default function OnboardingScreen() {
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Crown size={18} color={colors.textMuted} />
+                    <CrownIcon size={18} color={colors.textMuted} weight="light" />
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.textMuted }}>More study types coming soon</Text>
                   </View>
                 </View>
@@ -1358,7 +1358,7 @@ export default function OnboardingScreen() {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
               >
-                <ChevronLeft size={24} color={colors.textMuted} />
+                <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
               </Pressable>
             ) : (
               <View style={{ width: 40, height: 40 }} />

@@ -16,7 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { X, Check, Sparkles, Lock } from 'lucide-react-native';
+import { XIcon, CheckIcon, SparkleIcon, LockIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -252,7 +252,7 @@ export default function JournalScreen() {
               accessibilityHint="Close without saving changes"
               style={{ padding: 8 }}
             >
-              <X size={22} color={colors.textMuted} />
+              <XIcon size={22} color={colors.textMuted} weight="light" />
             </Pressable>
 
             <Text
@@ -275,7 +275,7 @@ export default function JournalScreen() {
               accessibilityState={{ disabled: !content.trim() }}
               style={{ padding: 8 }}
             >
-              <Check size={22} color={content.trim() ? colors.text : colors.textHint} />
+              <CheckIcon size={22} color={content.trim() ? colors.text : colors.textHint} weight="bold" />
             </Pressable>
           </View>
 
@@ -376,9 +376,9 @@ export default function JournalScreen() {
                   ) : (
                     <>
                       {isPremium ? (
-                        <Sparkles size={16} color={colors.accent} />
+                        <SparkleIcon size={16} color={colors.accent} weight="light" />
                       ) : (
-                        <Lock size={14} color={colors.accent} />
+                        <LockIcon size={14} color={colors.accent} weight="light" />
                       )}
                       <Text
                         style={{

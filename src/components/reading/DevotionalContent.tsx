@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Quote, BookOpen, Bookmark } from 'lucide-react-native';
+import { QuotesIcon, BookOpenIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -111,11 +111,10 @@ export function DevotionalContent({
               padding: 4,
             }}
           >
-            <Bookmark
+            <BookmarkSimpleIcon
               size={14}
               color={isBookmarked ? colors.accent : colors.textMuted}
-              fill={isBookmarked ? colors.accent : 'transparent'}
-              strokeWidth={1.5}
+              weight={isBookmarked ? "fill" : "light"}
             />
           </Pressable>
         )}
@@ -160,7 +159,7 @@ export function DevotionalContent({
               marginBottom: 16,
             }}
           >
-            <BookOpen size={15} color={colors.accent} strokeWidth={1.5} />
+            <BookOpenIcon size={15} color={colors.accent} weight="light" />
             <Text
               style={{
                 fontFamily: FontFamily.mono,

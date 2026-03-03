@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { Flame } from 'lucide-react-native';
+import { FireIcon } from 'phosphor-react-native';
 import Animated, {
   FadeInDown,
   useSharedValue,
@@ -147,10 +147,10 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Animated.View style={flamePulseStyle}>
-                <Flame
+                <FireIcon
                   size={32}
                   color={colors.accent}
-                  fill={streakCount >= 7 ? colors.accent : 'transparent'}
+                  weight={streakCount >= 7 ? "fill" : "light"}
                 />
               </Animated.View>
               <Text

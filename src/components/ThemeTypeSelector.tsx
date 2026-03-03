@@ -9,34 +9,34 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
-  Hand,
-  Fingerprint,
-  Moon,
-  Compass,
-  Heart,
-  Sparkles,
-  Wind,
-  Mountain,
-  Sun,
-  Eye,
-  User,
-  BookOpen,
-  Users,
-  Music,
-  Crown,
-  Leaf,
-  MessageCircle,
-  Flame,
-  Calendar,
-  Wheat,
-  ChevronRight,
-  CloudRain,
-  Scale,
-  Target,
-  Gift,
-  Smile,
-  Telescope,
-} from 'lucide-react-native';
+  HandIcon,
+  FingerprintIcon,
+  MoonIcon,
+  CompassIcon,
+  HeartIcon,
+  SparkleIcon,
+  WindIcon,
+  MountainsIcon,
+  SunIcon,
+  EyeIcon,
+  UserIcon,
+  BookOpenIcon,
+  UsersIcon,
+  MusicNotesIcon,
+  CrownIcon,
+  LeafIcon,
+  ChatCircleIcon,
+  FireIcon,
+  CalendarIcon,
+  PlantIcon,
+  CaretRightIcon,
+  CloudRainIcon,
+  ScalesIcon,
+  CrosshairIcon,
+  GiftIcon,
+  SmileyIcon,
+  BinocularsIcon,
+} from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import {
@@ -52,37 +52,37 @@ import {
 } from '@/constants/devotional-types';
 
 // Icon mapping
-const THEME_ICONS: Record<string, React.FC<{ size: number; color: string }>> = {
-  Hand,
-  Fingerprint,
-  Moon,
-  Compass,
-  Heart,
-  Sparkles,
-  Wind,
-  Mountain,
-  Sun,
-  Eye,
-  CloudRain,
-  Scale,
-  Target,
-  Gift,
-  Smile,
-  Telescope,
-  Flame,
+const THEME_ICONS: Record<string, React.FC<{ size: number; color: string; weight?: string }>> = {
+  Hand: HandIcon,
+  Fingerprint: FingerprintIcon,
+  Moon: MoonIcon,
+  Compass: CompassIcon,
+  Heart: HeartIcon,
+  Sparkles: SparkleIcon,
+  Wind: WindIcon,
+  Mountain: MountainsIcon,
+  Sun: SunIcon,
+  Eye: EyeIcon,
+  CloudRain: CloudRainIcon,
+  Scale: ScalesIcon,
+  Target: CrosshairIcon,
+  Gift: GiftIcon,
+  Smile: SmileyIcon,
+  Telescope: BinocularsIcon,
+  Flame: FireIcon,
 };
 
-const TYPE_ICONS: Record<string, React.FC<{ size: number; color: string }>> = {
-  User,
-  BookOpen,
-  Users,
-  Music,
-  Crown,
-  Leaf,
-  MessageCircle,
-  Flame,
-  Calendar,
-  Wheat,
+const TYPE_ICONS: Record<string, React.FC<{ size: number; color: string; weight?: string }>> = {
+  User: UserIcon,
+  BookOpen: BookOpenIcon,
+  Users: UsersIcon,
+  Music: MusicNotesIcon,
+  Crown: CrownIcon,
+  Leaf: LeafIcon,
+  MessageCircle: ChatCircleIcon,
+  Flame: FireIcon,
+  Calendar: CalendarIcon,
+  Wheat: PlantIcon,
 };
 
 interface ThemeTypeSelectorProps {
@@ -402,9 +402,10 @@ export function ThemeTypeSelector({
                     {type.description}
                   </Text>
                 </View>
-                <ChevronRight
+                <CaretRightIcon
                   size={18}
                   color={isSelected ? colors.text : colors.textSubtle}
+                  weight="regular"
                 />
               </Pressable>
             </Animated.View>

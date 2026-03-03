@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Flame, Snowflake, Calendar, Info } from 'lucide-react-native';
+import { CaretLeftIcon, FireIcon, SnowflakeIcon, CalendarIcon, InfoIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -45,7 +45,7 @@ export default function StreakSettingsScreen() {
         }}
       >
         <Pressable onPress={handleBack} style={{ padding: 8 }}>
-          <ChevronLeft size={24} color={colors.text} />
+          <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </Pressable>
         <Text
           style={{
@@ -105,7 +105,7 @@ export default function StreakSettingsScreen() {
               alignItems: 'center',
             }}
           >
-            <Flame size={24} color={colors.accent} />
+            <FireIcon size={24} color={colors.accent} weight="light" />
             <Text
               style={{
                 fontFamily: FontFamily.uiBold,
@@ -136,7 +136,7 @@ export default function StreakSettingsScreen() {
               alignItems: 'center',
             }}
           >
-            <Snowflake size={24} color={colors.textSubtle} />
+            <SnowflakeIcon size={24} color={colors.textSubtle} weight="light" />
             <Text
               style={{
                 fontFamily: FontFamily.uiBold,
@@ -167,7 +167,7 @@ export default function StreakSettingsScreen() {
               alignItems: 'center',
             }}
           >
-            <Calendar size={24} color={colors.textSubtle} />
+            <CalendarIcon size={24} color={colors.textSubtle} weight="light" />
             <Text
               style={{
                 fontFamily: FontFamily.uiBold,
@@ -247,7 +247,7 @@ export default function StreakSettingsScreen() {
             borderRadius: 12,
           }}
         >
-          <Info size={18} color={colors.textMuted} style={{ marginRight: 12, marginTop: 2 }} />
+          <InfoIcon size={18} color={colors.textMuted} weight="light" style={{ marginRight: 12, marginTop: 2 }} />
           <View style={{ flex: 1 }}>
             <Text
               style={{

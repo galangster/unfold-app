@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Bookmark, Trash2 } from 'lucide-react-native';
+import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -27,7 +27,7 @@ export default function SavedPassagesScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
           >
-            <ChevronLeft size={24} color={colors.textMuted} />
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </Pressable>
           <Text
             style={{
@@ -43,7 +43,7 @@ export default function SavedPassagesScreen() {
 
         {bookmarks.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 48 }}>
-            <Bookmark size={32} color={colors.textHint} strokeWidth={1.2} />
+            <BookmarkSimpleIcon size={32} color={colors.textHint} weight="light" />
             <Text
               style={{
                 fontFamily: FontFamily.body,
@@ -100,7 +100,7 @@ export default function SavedPassagesScreen() {
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       style={{ padding: 4 }}
                     >
-                      <Trash2 size={16} color={colors.textHint} strokeWidth={1.5} />
+                      <TrashIcon size={16} color={colors.textHint} weight="light" />
                     </Pressable>
                   </View>
 

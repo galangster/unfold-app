@@ -21,7 +21,7 @@ import {
 } from 'expo-speech-recognition';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
-import { Mic } from 'lucide-react-native';
+import { MicrophoneIcon } from 'phosphor-react-native';
 
 interface SpeechToTextButtonProps {
   onTranscript: (text: string) => void;
@@ -205,10 +205,10 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
           ]}
         >
           <View style={styles.iconContainer}>
-            <Mic
+            <MicrophoneIcon
               size={28}
               color={buttonColors.icon}
-              strokeWidth={2}
+              weight="light"
             />
           </View>
         </Pressable>

@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, Flame, BookOpen, Calendar, Target, Award, Sparkles } from 'lucide-react-native';
+import { CaretLeftIcon, FireIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
 import { useTheme } from '@/lib/theme';
@@ -184,7 +184,7 @@ export default function StatsScreen() {
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 8 }}
             >
-              <ChevronLeft size={24} color={colors.textMuted} />
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </Pressable>
             <Text
               style={{
@@ -270,7 +270,7 @@ export default function StatsScreen() {
                 marginBottom: 24,
               }}
             >
-              <Flame size={32} color={colors.accent} strokeWidth={1.5} />
+              <FireIcon size={32} color={colors.accent} weight="light" />
               <Text
                 style={{
                   fontFamily: FontFamily.display,
@@ -312,7 +312,7 @@ export default function StatsScreen() {
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
             <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flex: 1 }}>
               <StatCard
-                icon={<Calendar size={18} color={colors.accent} strokeWidth={1.5} />}
+                icon={<CalendarIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalDaysCompleted}
                 label="Days completed"
                 colors={colors}
@@ -320,7 +320,7 @@ export default function StatsScreen() {
             </Animated.View>
             <Animated.View entering={FadeInDown.duration(500).delay(150)} style={{ flex: 1 }}>
               <StatCard
-                icon={<BookOpen size={18} color={colors.accent} strokeWidth={1.5} />}
+                icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.uniqueScriptures}
                 label="Scriptures read"
                 colors={colors}
@@ -331,7 +331,7 @@ export default function StatsScreen() {
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
             <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flex: 1 }}>
               <StatCard
-                icon={<Target size={18} color={colors.accent} strokeWidth={1.5} />}
+                icon={<CrosshairIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.completedJourneys}
                 label={stats.completedJourneys === 1 ? 'Journey finished' : 'Journeys finished'}
                 colors={colors}
@@ -339,7 +339,7 @@ export default function StatsScreen() {
             </Animated.View>
             <Animated.View entering={FadeInDown.duration(500).delay(250)} style={{ flex: 1 }}>
               <StatCard
-                icon={<Sparkles size={18} color={colors.accent} strokeWidth={1.5} />}
+                icon={<SparkleIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.themesExplored}
                 label="Themes explored"
                 colors={colors}
@@ -350,7 +350,7 @@ export default function StatsScreen() {
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
             <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ flex: 1 }}>
               <StatCard
-                icon={<Award size={18} color={colors.accent} strokeWidth={1.5} />}
+                icon={<TrophyIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJournalEntries}
                 label={stats.totalJournalEntries === 1 ? 'Journal entry' : 'Journal entries'}
                 colors={colors}
@@ -358,7 +358,7 @@ export default function StatsScreen() {
             </Animated.View>
             <Animated.View entering={FadeInDown.duration(500).delay(350)} style={{ flex: 1 }}>
               <StatCard
-                icon={<BookOpen size={18} color={colors.accent} strokeWidth={1.5} />}
+                icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJourneys}
                 label={stats.totalJourneys === 1 ? 'Journey started' : 'Journeys started'}
                 colors={colors}

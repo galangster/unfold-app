@@ -16,7 +16,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Bell } from 'lucide-react-native';
+import { BellIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord } from '@/lib/store';
@@ -923,7 +923,7 @@ export default function GeneratingScreen() {
                     marginRight: 14,
                   }}
                 >
-                  <Bell size={16} color={colors.accent} />
+                  <BellIcon size={16} color={colors.accent} weight="light" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text
@@ -1011,7 +1011,7 @@ export default function GeneratingScreen() {
                 borderColor: colors.border,
               }}
             >
-              <Bell size={14} color={colors.accent} />
+              <BellIcon size={14} color={colors.accent} weight="light" />
               <Text
                 style={{
                   fontFamily: FontFamily.ui,

@@ -16,7 +16,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Play, Pause, RotateCcw, RotateCw } from 'lucide-react-native';
+import { PlayIcon, PauseIcon, ArrowCounterClockwiseIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
@@ -381,9 +381,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
                 style={styles.skipButton}
                 disabled={isLoading || !status.isLoaded}
               >
-                <RotateCcw
+                <ArrowCounterClockwiseIcon
                   size={18}
                   color={status.isLoaded ? colors.text : colors.textMuted}
+                  weight="light"
                 />
                 <Text style={[styles.skipLabel, { color: status.isLoaded ? colors.text : colors.textMuted }]}>
                   15
@@ -399,9 +400,9 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
                 {isLoading ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : isPlaying ? (
-                  <Pause size={20} color="#fff" fill="#fff" />
+                  <PauseIcon size={20} color="#fff" weight="fill" />
                 ) : (
-                  <Play size={20} color="#fff" fill="#fff" style={{ marginLeft: 2 }} />
+                  <PlayIcon size={20} color="#fff" weight="fill" style={{ marginLeft: 2 }} />
                 )}
               </Pressable>
 
@@ -411,9 +412,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
                 style={styles.skipButton}
                 disabled={isLoading || !status.isLoaded}
               >
-                <RotateCw
+                <ArrowClockwiseIcon
                   size={18}
                   color={status.isLoaded ? colors.text : colors.textMuted}
+                  weight="light"
                 />
                 <Text style={[styles.skipLabel, { color: status.isLoaded ? colors.text : colors.textMuted }]}>
                   15

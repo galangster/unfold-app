@@ -2,7 +2,7 @@ import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { Check } from 'lucide-react-native';
+import { CheckIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -116,7 +116,7 @@ export default function DayMenuScreen() {
                 }}
               >
                 {isDayRead ? (
-                  <Check size={16} color={colors.background} strokeWidth={2.5} />
+                  <CheckIcon size={16} color={colors.background} weight="bold" />
                 ) : (
                   <Text
                     style={{

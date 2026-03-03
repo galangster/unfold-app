@@ -10,7 +10,7 @@ import Animated, {
   withDelay,
   runOnJS,
 } from 'react-native-reanimated';
-import { Flame, Sparkles } from 'lucide-react-native';
+import { FireIcon, SparkleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 
 interface StreakCelebrationProps {
@@ -75,9 +75,9 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
         {isMilestone ? (
           <View style={{ alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Sparkles size={40} color={colors.accent} />
-              <Flame size={60} color={colors.accent} fill={colors.accent} />
-              <Sparkles size={40} color={colors.accent} />
+              <SparkleIcon size={40} color={colors.accent} weight="light" />
+              <FireIcon size={60} color={colors.accent} weight="fill" />
+              <SparkleIcon size={40} color={colors.accent} weight="light" />
             </View>
             <Animated.Text
               entering={FadeIn.delay(200)}
@@ -94,7 +94,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
           </View>
         ) : (
           <View style={{ alignItems: 'center' }}>
-            <Flame size={50} color={colors.accent} fill={colors.accent} />
+            <FireIcon size={50} color={colors.accent} weight="fill" />
             <Animated.Text
               entering={FadeIn.delay(200)}
               style={{

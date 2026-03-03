@@ -1,5 +1,5 @@
 import { View, Text, Pressable } from 'react-native';
-import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react-native';
+import { CaretLeftIcon, CaretRightIcon, CaretDownIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeIn,
@@ -69,7 +69,7 @@ export function ReadingBottomNav({
               exiting={FadeOut.duration(300)}
               style={chevronAnimatedStyle}
             >
-              <ChevronDown size={24} color={colors.textSubtle} />
+              <CaretDownIcon size={24} color={colors.textSubtle} weight="light" />
             </Animated.View>
           )}
         </LinearGradient>
@@ -94,7 +94,7 @@ export function ReadingBottomNav({
               padding: 12,
             }}
           >
-            <ChevronLeft size={28} color={colors.text} />
+            <CaretLeftIcon size={28} color={colors.text} weight="light" />
           </Pressable>
 
           {/* Center actions */}
@@ -157,7 +157,7 @@ export function ReadingBottomNav({
               padding: 12,
             }}
           >
-            <ChevronRight size={28} color={colors.text} />
+            <CaretRightIcon size={28} color={colors.text} weight="light" />
           </Pressable>
         </View>
       </View>

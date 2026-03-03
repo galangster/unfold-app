@@ -12,7 +12,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ChevronLeft, BookOpen, Highlighter, Bookmark, PenLine, Lock } from 'lucide-react-native';
+import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
@@ -67,7 +67,7 @@ export default function MyContentScreen() {
         }}
       >
         <Pressable onPress={handleBack} style={{ padding: 8 }}>
-          <ChevronLeft size={24} color={colors.text} />
+          <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </Pressable>
         <View style={{ marginLeft: 12 }}>
           <Text
@@ -168,7 +168,7 @@ export default function MyContentScreen() {
                     marginBottom: 20,
                   }}
                 >
-                  <PenLine size={28} color={colors.textMuted} />
+                  <PencilLineIcon size={28} color={colors.textMuted} weight="light" />
                 </View>
                 <Text
                   style={{
@@ -253,7 +253,7 @@ export default function MyContentScreen() {
                     })}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                      <BookOpen size={14} color={colors.accent} />
+                      <BookOpenIcon size={14} color={colors.accent} weight="light" />
                       <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                         {devotional?.title || 'Unknown Journey'}
                       </Text>
@@ -283,7 +283,7 @@ export default function MyContentScreen() {
           <Animated.View entering={FadeInRight.duration(300)}>
             {highlights.length === 0 ? (
               <EmptyState
-                icon={Highlighter}
+                icon={HighlighterIcon}
                 title="No highlights yet"
                 subtitle="Select text while reading to save your favorite quotes."
               />
@@ -345,7 +345,7 @@ export default function MyContentScreen() {
           <Animated.View entering={FadeInRight.duration(300)}>
             {bookmarks.length === 0 ? (
               <EmptyState
-                icon={Bookmark}
+                icon={BookmarkSimpleIcon}
                 title="No bookmarks yet"
                 subtitle="Tap the bookmark icon while reading to save scriptures."
               />
@@ -379,7 +379,7 @@ export default function MyContentScreen() {
                         gap: 8,
                       }}
                     >
-                      <Bookmark size={14} color={colors.accent} fill={colors.accent} />
+                      <BookmarkSimpleIcon size={14} color={colors.accent} weight="fill" />
                       <Text
                         style={{
                           fontFamily: FontFamily.mono,
@@ -413,7 +413,7 @@ export default function MyContentScreen() {
   );
 }
 
-function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PenLine; title: string; subtitle: string }) {
+function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIcon; title: string; subtitle: string }) {
   const { colors } = useTheme();
 
   // Gentle breathing pulse on the icon

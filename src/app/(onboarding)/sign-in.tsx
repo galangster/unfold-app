@@ -14,7 +14,7 @@ import Animated, {
   FadeIn,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Cloud, Shield, Sparkles } from 'lucide-react-native';
+import { CloudIcon, ShieldIcon, SparkleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
@@ -299,17 +299,17 @@ export default function SignInScreen() {
 
   const benefits: Omit<BenefitItemProps, 'colors' | 'delay'>[] = [
     {
-      icon: <Cloud size={20} color={colors.accent} strokeWidth={1.5} />,
+      icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
       title: 'Sync across devices',
       description: 'Access your devotionals on any iPhone or iPad',
     },
     {
-      icon: <Shield size={20} color={colors.accent} strokeWidth={1.5} />,
+      icon: <ShieldIcon size={20} color={colors.accent} weight="light" />,
       title: 'Secure backup',
       description: 'Never lose your progress or journal entries',
     },
     {
-      icon: <Sparkles size={20} color={colors.accent} strokeWidth={1.5} />,
+      icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
       title: 'Seamless experience',
       description: 'Pick up exactly where you left off',
     },
