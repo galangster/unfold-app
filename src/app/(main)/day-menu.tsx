@@ -42,7 +42,7 @@ export default function DayMenuScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       {/* Header */}
       <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
         <Text

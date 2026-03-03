@@ -290,7 +290,7 @@ export default function StatsScreen() {
                   marginTop: -4,
                 }}
               >
-                {stats.currentStreak === 1 ? 'day streak' : 'day streak'}
+                day streak
               </Text>
               {stats.longestStreak > stats.currentStreak && (
                 <Text

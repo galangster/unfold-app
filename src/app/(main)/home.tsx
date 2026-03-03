@@ -201,7 +201,6 @@ export default function HomeScreen() {
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
-
   const getReadingDayLabel = () => {
     if (!currentDevotional) return 'Today';
     const previousDayData = currentDevotional.days.find(d => d.dayNumber === currentDevotional.currentDay - 1);
@@ -248,7 +247,6 @@ export default function HomeScreen() {
       },
     });
   };
-
 
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -359,14 +357,15 @@ export default function HomeScreen() {
   const isFirstDay = currentDevotional.currentDay === 1 && daysCompleted === 0;
   const isLastDay = currentDevotional.currentDay === currentDevotional.totalDays;
 
+  const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
+
   const getCtaText = () => {
-    const streak = useUnfoldStore.getState().streakCurrent;
-    if (isFirstDay && streak === 0) return 'Begin Your Journey';
+    if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
     if (isFirstDay) return 'Build Your Rhythm';
     if (isLastDay && !isJourneyComplete) return 'Finish Your Journey';
-    if (streak >= 7) return 'Deepen Your Practice';
-    if (streak >= 3) return 'Stay Rooted';
-    if (streak >= 1) return 'Keep Going';
+    if (streakCurrent >= 7) return 'Deepen Your Practice';
+    if (streakCurrent >= 3) return 'Stay Rooted';
+    if (streakCurrent >= 1) return 'Keep Going';
     return 'Continue Reading';
   };
 
@@ -795,7 +794,7 @@ export default function HomeScreen() {
             style={{ paddingHorizontal: 24, marginTop: 24 }}
           >
             <StreakBox
-              streakCount={useUnfoldStore.getState().streakCurrent}
+              streakCount={streakCurrent}
               onPress={() => router.push('/(main)/streak-settings')}
             />
           </Animated.View>
