@@ -4,8 +4,6 @@ import { Quote, BookOpen, Bookmark } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-  withSequence,
   withTiming,
   withDelay,
   Easing,
@@ -54,21 +52,10 @@ export function DevotionalContent({
     width: accentLineWidth.value,
   }));
 
-  // Bookmark bounce animation
-  const bookmarkScale = useSharedValue(1);
-  const bookmarkAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: bookmarkScale.value }],
-  }));
-
   const handleBookmarkPress = useCallback(() => {
-    // Spring bounce: scale down then overshoot up
-    bookmarkScale.value = withSequence(
-      withSpring(0.6, { damping: 10, stiffness: 400 }),
-      withSpring(1, { damping: 8, stiffness: 200 })
-    );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onToggleBookmark?.();
-  }, [bookmarkScale, onToggleBookmark]);
+  }, [onToggleBookmark]);
 
   return (
     <>
@@ -116,7 +103,7 @@ export function DevotionalContent({
           {day.scriptureReference}
         </Text>
         
-        {/* Bookmark button - inline with reference, with bounce animation */}
+        {/* Bookmark button - instant fill on tap */}
         {onToggleBookmark && (
           <Pressable
             onPress={handleBookmarkPress}
@@ -124,14 +111,12 @@ export function DevotionalContent({
               padding: 4,
             }}
           >
-            <Animated.View style={bookmarkAnimStyle}>
-              <Bookmark
-                size={14}
-                color={isBookmarked ? colors.accent : colors.textMuted}
-                fill={isBookmarked ? colors.accent : 'transparent'}
-                strokeWidth={1.5}
-              />
-            </Animated.View>
+            <Bookmark
+              size={14}
+              color={isBookmarked ? colors.accent : colors.textMuted}
+              fill={isBookmarked ? colors.accent : 'transparent'}
+              strokeWidth={1.5}
+            />
           </Pressable>
         )}
       </View>

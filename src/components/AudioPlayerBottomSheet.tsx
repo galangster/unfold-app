@@ -7,6 +7,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Play, Pause, RotateCcw, RotateCw } from 'lucide-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
@@ -50,6 +58,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
 
   const shouldAutoplayRef = useRef(false);
   const audioUrlRef = useRef<string | null>(null);
+  const isLoadingRef = useRef(false);
   const progressBarRef = useRef<View>(null);
   const progressBarWidthRef = useRef(0);
 
@@ -63,7 +72,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   const currentTime = status.currentTime * 1000;
   const duration = status.duration * 1000;
 
-  const snapPoints = useMemo(() => ['18%'], []);
+  const snapPoints = useMemo(() => ['25%'], []);
 
   const fullText = useMemo(() => {
     return `${content}\n\n${scriptureReference}: ${scriptureText}`;
@@ -117,6 +126,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
   }, []);
 
   const loadAndPlayAudio = useCallback(async () => {
+    // Prevent concurrent loads (multiple taps)
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+
     try {
       setIsLoading(true);
       setHasError(false);
@@ -145,6 +158,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       setErrorMessage(error instanceof Error ? error.message : 'Failed to load audio');
     } finally {
       setIsLoading(false);
+      isLoadingRef.current = false;
     }
   }, [isPremium, fullText, voiceId, player]);
 
@@ -233,6 +247,29 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   const currentSpeed = PLAYBACK_SPEEDS[speedIndex];
+  const isBuffering = isLoading || (audioUrl != null && !status.isLoaded);
+
+  // Indeterminate loading shimmer for progress bar
+  const loadingShimmer = useSharedValue(0);
+
+  useEffect(() => {
+    if (isBuffering) {
+      loadingShimmer.value = withRepeat(
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true
+      );
+    } else {
+      cancelAnimation(loadingShimmer);
+      loadingShimmer.value = 0;
+    }
+  }, [isBuffering]);
+
+  const loadingBarStyle = useAnimatedStyle(() => ({
+    width: '30%',
+    left: `${loadingShimmer.value * 70}%`,
+    opacity: 0.6,
+  }));
 
   return (
     <BottomSheet
@@ -240,6 +277,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
       index={0}
       snapPoints={snapPoints}
       enablePanDownToClose={true}
+      enableOverDrag={false}
       onClose={onClose}
       backgroundStyle={{
         backgroundColor: 'transparent',
@@ -273,10 +311,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
                 {title}
               </Text>
               <Text
-                style={[styles.subtitleText, { color: colors.textMuted }]}
+                style={[styles.subtitleText, { color: isBuffering ? colors.accent : colors.textMuted }]}
                 numberOfLines={1}
               >
-                {subtitle}
+                {isBuffering ? 'Loading audio...' : subtitle}
               </Text>
             </View>
             {/* Speed control */}
@@ -297,25 +335,37 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(({
             onPress={handleProgressPress}
             style={[styles.progressBarContainer, { backgroundColor: colors.border }]}
           >
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  backgroundColor: colors.accent,
-                  width: `${progressPercent}%`,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.progressThumb,
-                {
-                  backgroundColor: colors.accent,
-                  left: `${progressPercent}%`,
-                  transform: [{ translateX: -6 }],
-                },
-              ]}
-            />
+            {isBuffering ? (
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { backgroundColor: colors.accent, position: 'absolute' },
+                  loadingBarStyle,
+                ]}
+              />
+            ) : (
+              <>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      backgroundColor: colors.accent,
+                      width: `${progressPercent}%`,
+                    },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.progressThumb,
+                    {
+                      backgroundColor: colors.accent,
+                      left: `${progressPercent}%`,
+                      transform: [{ translateX: -6 }],
+                    },
+                  ]}
+                />
+              </>
+            )}
           </Pressable>
 
           {/* Time + controls row */}
@@ -403,15 +453,15 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 16,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 20,
     justifyContent: 'center',
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   titleTextContainer: {
     flex: 1,
@@ -463,7 +513,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 12,
   },
   timeText: {
     fontSize: 11,
