@@ -51,8 +51,8 @@ export function ReadingBottomNav({
         <LinearGradient
           colors={
             isDark
-              ? ['rgba(10, 10, 10, 0)', 'rgba(10, 10, 10, 0.95)', '#0A0A0A']
-              : ['rgba(250, 247, 242, 0)', 'rgba(250, 247, 242, 0.95)', '#FAF7F2']
+              ? [`${colors.background}00`, `${colors.background}F2`, colors.background]
+              : [`${colors.background}00`, `${colors.background}F2`, colors.background]
           }
           locations={[0, 0.5, 1]}
           style={{
@@ -81,7 +81,7 @@ export function ReadingBottomNav({
           paddingHorizontal: 24,
           paddingBottom: 40,
           paddingTop: 12,
-          backgroundColor: isDark ? '#0A0A0A' : '#FAF7F2',
+          backgroundColor: colors.background,
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

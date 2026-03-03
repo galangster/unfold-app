@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { FireIcon, SnowflakeIcon } from 'phosphor-react-native';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeIn,
   FadeInUp,
@@ -19,10 +21,12 @@ interface StreakDisplayProps {
   compact?: boolean;
   showFreeze?: boolean;
   hideDayLabel?: boolean;
+  onPress?: () => void;
 }
 
-export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hideDayLabel }: StreakDisplayProps) {
+export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hideDayLabel, onPress }: StreakDisplayProps) {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
 
@@ -52,45 +56,57 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
     transform: [{ scale: flamePulse.value }],
   }));
 
+  const handlePress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (onPress) {
+      onPress();
+    } else {
+      router.push('/(main)/streak-settings');
+    }
+  };
+
   if (streak === 0) {
     return (
-      <Animated.View
-        entering={FadeIn}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: colors.inputBackground,
-          paddingHorizontal: config.padding,
-          paddingVertical: config.padding * 0.6,
-          borderRadius: 20,
-          gap: 6,
-        }}
-      >
-        <FireIcon size={config.flame} color={colors.textMuted} weight="light" />
-        <Text
+      <Pressable onPress={handlePress}>
+        <Animated.View
+          entering={FadeIn}
           style={{
-            fontFamily: FontFamily.uiSemiBold,
-            fontSize: config.number,
-            color: colors.textMuted,
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: colors.inputBackground,
+            paddingHorizontal: config.padding,
+            paddingVertical: config.padding * 0.6,
+            borderRadius: 20,
+            gap: 6,
           }}
         >
-          Start streak
-        </Text>
-      </Animated.View>
+          <FireIcon size={config.flame} color={colors.textMuted} weight="light" />
+          <Text
+            style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: config.number,
+              color: colors.textMuted,
+            }}
+          >
+            Start streak
+          </Text>
+        </Animated.View>
+      </Pressable>
     );
   }
 
   return (
-    <Animated.View
-      entering={FadeInUp}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-      }}
-    >
-      <View
+    <Pressable onPress={handlePress}>
+      <Animated.View
+        entering={FadeInUp}
         style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <View
+          style={{
           flexDirection: 'row',
           alignItems: 'center',
           backgroundColor: isDark ? `${colors.accent}26` : `${colors.accent}1A`,
@@ -153,6 +169,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
           </Text>
         </View>
       )}
-    </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }

@@ -20,7 +20,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
 import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon } from 'phosphor-react-native';
-import { SymbolView } from 'expo-symbols';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
@@ -156,10 +155,10 @@ export default function ReadingScreen() {
   }, [highlights, currentDevotionalId, viewingDay]);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   const showIncompleteJourneyRetry = availableDays < expectedDays;
-  const retryCtaButtonBg = '#1C1710';
-  const retryCtaButtonText = '#FFFFFF';
-  const btnText = retryCtaButtonText; // Alias for compatibility
-  const retryCtaButtonBorder = isDark ? 'rgba(245, 240, 235, 0.28)' : 'rgba(28, 23, 16, 0.22)';
+  const retryCtaButtonBg = colors.accent;
+  const retryCtaButtonText = colors.background;
+  const btnText = retryCtaButtonText;
+  const retryCtaButtonBorder = colors.border;
 
   const canGoBack = viewingDay > 1;
   const canGoForward = viewingDay < availableDays;
@@ -767,12 +766,7 @@ export default function ReadingScreen() {
               accessibilityHint="Return to home screen"
               style={{ padding: 8 }}
             >
-              <SymbolView
-                name="chevron.left"
-                size={24}
-                tintColor={colors.textMuted}
-                weight="medium"
-              />
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </Pressable>
           </View>
 
@@ -1125,11 +1119,10 @@ export default function ReadingScreen() {
                     {/* Complete Day Button - 80% width, white text on gold */}
                     <Pressable
                       onPress={handleComplete}
-
                       accessibilityRole="button"
                       accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
                       accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
-                      style={{
+                      style={({ pressed }) => ({
                         flex: 4,
                         backgroundColor: colors.accent,
                         paddingVertical: 18,
@@ -1137,7 +1130,9 @@ export default function ReadingScreen() {
                         borderRadius: 28,
                         alignItems: 'center',
                         justifyContent: 'center',
-                      }}
+                        transform: [{ scale: pressed ? 0.97 : 1 }],
+                        opacity: pressed ? 0.9 : 1,
+                      })}
                     >
                       <Text
                         style={{
