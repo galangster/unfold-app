@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { FireIcon } from 'phosphor-react-native';
+import { FireIcon, SnowflakeIcon } from 'phosphor-react-native';
 import Animated, {
   FadeInDown,
+  FadeIn,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -11,6 +12,16 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+
+/** Returns motivational micro-copy based on streak length */
+function getStreakMotivation(streak: number): string {
+  if (streak === 0) return 'Start your journey today';
+  if (streak <= 2) return "You're building momentum!";
+  if (streak <= 6) return 'Keep going \u2014 a freeze awaits at day 7!';
+  if (streak <= 13) return 'Amazing week! Keep the flame alive';
+  if (streak <= 29) return "Two weeks strong! You're on fire";
+  return `Incredible dedication! ${streak} days and counting`;
+}
 
 interface DayData {
   day: string; // 'S', 'M', 'T', 'W', 'T', 'F', 'S'
@@ -76,6 +87,12 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
 
   const daysData = generateDaysData(streakCount);
   const streakLabel = streakCount === 1 ? 'day' : 'days';
+  const motivation = useMemo(() => getStreakMotivation(streakCount), [streakCount]);
+
+  // Freeze progress: how many days into the current 7-day cycle
+  const freezeProgress = streakCount > 0 ? streakCount % 7 : 0;
+  // If freezeProgress is 0 and streak > 0, they just earned a freeze (show full)
+  const freezeDots = streakCount > 0 && freezeProgress === 0 ? 7 : freezeProgress;
 
   const weekDays = daysData.map((day, index) => {
     const isCompleted = day.completed;
@@ -201,6 +218,63 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           >
             {weekDays}
           </View>
+
+          {/* Motivational micro-copy */}
+          <Animated.Text
+            entering={FadeIn.delay(600).duration(400)}
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 13,
+              color: colors.textMuted,
+              textAlign: 'center',
+              marginTop: 14,
+            }}
+          >
+            {motivation}
+          </Animated.Text>
+
+          {/* Freeze progress dots */}
+          {streakCount > 0 && (
+            <Animated.View
+              entering={FadeIn.delay(700).duration(400)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 10,
+                gap: 6,
+              }}
+            >
+              <SnowflakeIcon size={12} color={colors.textSubtle} weight="light" />
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: i < freezeDots
+                        ? colors.accent
+                        : isDark
+                          ? 'rgba(245, 240, 235, 0.12)'
+                          : 'rgba(28, 23, 16, 0.08)',
+                    }}
+                  />
+                ))}
+              </View>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 10,
+                  color: colors.textSubtle,
+                  marginLeft: 2,
+                }}
+              >
+                {freezeDots === 7 ? 'Freeze earned!' : `${freezeDots}/7`}
+              </Text>
+            </Animated.View>
+          )}
         </View>
       </Pressable>
     </Animated.View>

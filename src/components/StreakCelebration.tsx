@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import Animated, {
   FadeIn,
@@ -6,11 +6,14 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
-  withSequence,
   withDelay,
+  withRepeat,
+  withSequence,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { FireIcon, SparkleIcon } from 'phosphor-react-native';
+import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 
 interface StreakCelebrationProps {
@@ -18,19 +21,122 @@ interface StreakCelebrationProps {
   onComplete?: () => void;
 }
 
+/** Milestone thresholds mapped to their display labels */
+const MILESTONE_LABELS: Record<number, string> = {
+  7: '1 Week!',
+  14: '2 Weeks!',
+  30: '1 Month!',
+  60: '2 Months!',
+  100: '100 Days!',
+  365: '1 Year!',
+};
+
+const MILESTONE_KEYS = Object.keys(MILESTONE_LABELS).map(Number);
+
+/** Returns a scale multiplier for how "big" the celebration should be */
+function getMilestoneScale(streak: number): number {
+  if (streak >= 365) return 1.4;
+  if (streak >= 100) return 1.3;
+  if (streak >= 60) return 1.2;
+  if (streak >= 30) return 1.15;
+  if (streak >= 14) return 1.1;
+  if (streak >= 7) return 1.05;
+  return 1;
+}
+
+/** Sparkle particle positioned around the center */
+function SparkleParticle({
+  angle,
+  distance,
+  delay,
+  size,
+  color,
+}: {
+  angle: number;
+  distance: number;
+  delay: number;
+  size: number;
+  color: string;
+}) {
+  const particleOpacity = useSharedValue(0);
+  const particleScale = useSharedValue(0.3);
+  const particleTranslateX = useSharedValue(0);
+  const particleTranslateY = useSharedValue(0);
+
+  const radians = (angle * Math.PI) / 180;
+  const targetX = Math.cos(radians) * distance;
+  const targetY = Math.sin(radians) * distance;
+
+  useEffect(() => {
+    // Fade in + move outward
+    particleOpacity.value = withDelay(
+      delay,
+      withSequence(
+        withTiming(1, { duration: 200 }),
+        withDelay(600, withTiming(0, { duration: 400 }))
+      )
+    );
+    particleScale.value = withDelay(
+      delay,
+      withSequence(
+        withSpring(1, { damping: 8, stiffness: 100 }),
+        withDelay(400, withTiming(0.2, { duration: 400 }))
+      )
+    );
+    particleTranslateX.value = withDelay(
+      delay,
+      withTiming(targetX, { duration: 800, easing: Easing.out(Easing.cubic) })
+    );
+    particleTranslateY.value = withDelay(
+      delay,
+      withTiming(targetY, { duration: 800, easing: Easing.out(Easing.cubic) })
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: particleOpacity.value,
+    transform: [
+      { translateX: particleTranslateX.value },
+      { translateY: particleTranslateY.value },
+      { scale: particleScale.value },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          alignSelf: 'center',
+        },
+        animatedStyle,
+      ]}
+    >
+      <SparkleIcon size={size} color={color} weight="fill" />
+    </Animated.View>
+  );
+}
+
 export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps) {
   const { colors } = useTheme();
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
+  const isMilestone = MILESTONE_KEYS.includes(streak);
+  const milestoneLabel = MILESTONE_LABELS[streak];
+  const milestoneScale = getMilestoneScale(streak);
+
+  // Longer hold time for bigger milestones
+  const holdDuration = isMilestone ? 2200 : 1700;
+
   useEffect(() => {
     // Fade in
     opacity.value = withTiming(1, { duration: 200 });
-    // Spring scale in, hold, then fade out
-    scale.value = withSpring(1, { damping: 6, stiffness: 40 });
+    // Spring scale in with milestone-aware target
+    scale.value = withSpring(milestoneScale, { damping: 6, stiffness: 40 });
     // After hold, fade out and call onComplete
     opacity.value = withDelay(
-      1700,
+      holdDuration,
       withTiming(0, { duration: 300 }, (finished) => {
         if (finished && onComplete) {
           runOnJS(onComplete)();
@@ -47,7 +153,44 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
     transform: [{ scale: scale.value }],
   }));
 
-  const isMilestone = [7, 14, 30, 60, 100].includes(streak);
+  // Generate sparkle particles for milestones
+  const sparkleParticles = useMemo(() => {
+    if (!isMilestone) return null;
+
+    // More particles for bigger milestones
+    let particleCount: number;
+    if (streak >= 365) particleCount = 16;
+    else if (streak >= 100) particleCount = 14;
+    else if (streak >= 60) particleCount = 12;
+    else if (streak >= 30) particleCount = 10;
+    else if (streak >= 14) particleCount = 8;
+    else particleCount = 6;
+
+    const particles = [];
+    const angleStep = 360 / particleCount;
+
+    for (let i = 0; i < particleCount; i++) {
+      const angle = angleStep * i + (i % 2 === 0 ? 0 : angleStep / 2);
+      const distance = 50 + (i % 3) * 20;
+      const size = i % 3 === 0 ? 20 : i % 3 === 1 ? 16 : 12;
+      const delay = 100 + i * 50;
+
+      particles.push(
+        <SparkleParticle
+          key={i}
+          angle={angle}
+          distance={distance}
+          delay={delay}
+          size={size}
+          color={colors.accent}
+        />
+      );
+    }
+    return particles;
+  }, [isMilestone, streak, colors.accent]);
+
+  // Fire icon size scales with milestone significance
+  const fireSize = isMilestone ? 60 + (milestoneScale - 1) * 60 : 50;
 
   return (
     <Animated.View
@@ -74,22 +217,37 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
       >
         {isMilestone ? (
           <View style={{ alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <SparkleIcon size={40} color={colors.accent} weight="light" />
-              <FireIcon size={60} color={colors.accent} weight="fill" />
-              <SparkleIcon size={40} color={colors.accent} weight="light" />
+            {/* Radiating sparkle particles */}
+            <View style={{ position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
+              {sparkleParticles}
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <SparkleIcon size={40} color={colors.accent} weight="light" />
+                <FireIcon size={fireSize} color={colors.accent} weight="fill" />
+                <SparkleIcon size={40} color={colors.accent} weight="light" />
+              </View>
             </View>
             <Animated.Text
               entering={FadeIn.delay(200)}
               style={{
-                fontFamily: 'System',
-                fontSize: 28,
-                fontWeight: 'bold',
+                fontFamily: FontFamily.display,
+                fontSize: 32 + (milestoneScale - 1) * 20,
                 color: colors.accent,
                 marginTop: 16,
+                textAlign: 'center',
               }}
             >
-              {streak} Days!
+              {milestoneLabel}
+            </Animated.Text>
+            <Animated.Text
+              entering={FadeIn.delay(400)}
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 14,
+                color: colors.textMuted,
+                marginTop: 6,
+              }}
+            >
+              {streak}-day streak
             </Animated.Text>
           </View>
         ) : (
@@ -98,9 +256,8 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
             <Animated.Text
               entering={FadeIn.delay(200)}
               style={{
-                fontFamily: 'System',
-                fontSize: 24,
-                fontWeight: '600',
+                fontFamily: FontFamily.display,
+                fontSize: 28,
                 color: colors.accent,
                 marginTop: 12,
               }}
