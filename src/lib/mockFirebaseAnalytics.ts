@@ -15,6 +15,12 @@ const analytics = () => {
     setUserProperty: async (name: string, value: string | null) => {
       console.log('[Mock Analytics] Property:', name, value);
     },
+    getAppInstanceId: async () => {
+      return 'mock-instance-id';
+    },
+    setAnalyticsCollectionEnabled: async (enabled: boolean) => {
+      console.log('[Mock Analytics] Collection enabled:', enabled);
+    },
   };
 };
 

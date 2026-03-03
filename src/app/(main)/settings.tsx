@@ -1991,6 +1991,8 @@ export default function SettingsScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   padding: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
                 }}
               >
                 <View
@@ -2024,6 +2026,74 @@ export default function SettingsScreen() {
                     }}
                   >
                     Leave a review
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Lock size={18} color={colors.text} />
+                </View>
+                <View style={{ marginLeft: 14, flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Privacy Policy
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                onPress={() => Linking.openURL('https://unfoldapp.co/terms')}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Book size={18} color={colors.text} />
+                </View>
+                <View style={{ marginLeft: 14, flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Terms of Use
                   </Text>
                 </View>
               </Pressable>

@@ -24,6 +24,11 @@ import {
   getRandomHook,
   ALL_TRAITS,
 } from '../constants/devotional-personas-v2';
+import {
+  CRAFT_FOUNDATION,
+  getCraftInfluencesForTraits,
+  getDailyCraftDirective,
+} from '../constants/writing-craft';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -256,6 +261,8 @@ function mapWritingStyleToTraits(
       poetic: 'narrative',
       scholarly: 'poetic',
       narrative: 'gentle',
+      raw: 'narrative',
+      warm: 'gentle',
     };
     secondary = fallbacks[primary];
   }
@@ -339,12 +346,15 @@ function buildVarietySchedule(
 
     const hookExamples = HOOK_LIBRARY[hook].slice(0, 2).join('" or "');
 
+    const craftDirective = getDailyCraftDirective(day);
+
     dayInstructions.push(
       `Day ${day}: ${template.name} structure (${template.elements.join(' → ')}). ` +
       `${voiceNote}. ` +
       `Open with a ${hook} hook (e.g., "${hookExamples}"). ` +
       `Use ${transition} transitions. ` +
-      `Close with ${closing} style.`
+      `Close with ${closing} style.\n` +
+      `CRAFT: ${craftDirective.directive}`
     );
   }
 
@@ -359,6 +369,8 @@ function buildV2VoiceOverlay(
   const p = PERSONA_TRAITS[primary];
   const s = PERSONA_TRAITS[secondary];
 
+  const craftInfluences = getCraftInfluencesForTraits(primary, secondary);
+
   return `
 
 VOICE PROFILE:
@@ -368,6 +380,7 @@ ${p.systemPromptAdditions.map((a) => `- ${a}`).join('\n')}
 
 Secondary influence (${secondary}): ${s.voice}
 ${s.systemPromptAdditions.slice(0, 2).map((a) => `- ${a}`).join('\n')}
+${craftInfluences}
 `;
 }
 
@@ -922,9 +935,14 @@ async function generateBatch(
   const baseSystemPrompt = getSystemPrompt(retryLevel);
   // V2: Use composable voice overlay instead of dead v1 persona system
   const persona = resolvedPersona ?? resolvePersonaForGeneration(context);
+  // Craft engine layers degrade gracefully on retry:
+  // retryLevel 0: full craft (foundation + persona influences + daily directives)
+  // retryLevel 1: foundation only (drop persona influences and daily directives)
+  // retryLevel 2: no craft additions (minimal prompt)
+  const craftFoundation = retryLevel <= 1 ? CRAFT_FOUNDATION : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
-  // V2: Include per-day variety schedule in the user prompt
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
+  // V2: Include per-day variety schedule (with craft directives) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed)
     : '';

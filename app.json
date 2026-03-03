@@ -5,14 +5,23 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121214"
+    },
     "scheme": "unfold",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vibecode.unfold",
+      "bundleIdentifier": "com.vibecode.unfold.x9fj08t",
       "buildNumber": "1.0.0",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow Unfold to use speech recognition to convert your voice to text.",
+        "NSMicrophoneUsageDescription": "Allow Unfold to use the microphone for voice input."
       }
     },
     "android": {
@@ -20,8 +29,11 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.vibecode.unfold",
-      "versionCode": 1
+      "package": "com.vibecode.unfold.x9fj08t",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -46,7 +58,7 @@
         "expo-secure-store",
         {
           "configureAndroidBackup": true,
-          "faceIDPermission": "Allow $(PRODUCT_NAME) to access your Face ID biometric data."
+          "faceIDPermission": "Allow Unfold to use Face ID for secure authentication."
         }
       ],
       [
@@ -54,6 +66,13 @@
         {
           "microphonePermission": "Allow Unfold to use the microphone for voice input.",
           "speechRecognitionPermission": "Allow Unfold to use speech recognition to convert your voice to text."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#121214"
         }
       ]
     ],
@@ -67,8 +86,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "7f3bd89f-5b75-421d-81d3-3097787c984b"
       }
-    }
+    },
+    "owner": "0xgala"
   }
 }

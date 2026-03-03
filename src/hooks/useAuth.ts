@@ -4,8 +4,7 @@
  * Also handles RevenueCat user linking for subscription tracking
  */
 import { useEffect, useState, useCallback } from 'react';
-// Use mock Firebase for UI debugging when native modules aren't available
-import auth, { FirebaseAuthTypes } from '@/lib/mockFirebaseAuth';
+import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { useUnfoldStore } from '@/lib/store';
 import { isRevenueCatEnabled, setUserId, logoutUser } from '@/lib/revenuecatClient';
 import { logger } from '@/lib/logger';

@@ -3,12 +3,14 @@
 // Mix personas, structures, and elements dynamically
 // ==========================================
 
-export type PersonaTrait = 
+export type PersonaTrait =
   | 'gentle'
-  | 'challenging' 
+  | 'challenging'
   | 'poetic'
   | 'scholarly'
-  | 'narrative';
+  | 'narrative'
+  | 'raw'
+  | 'warm';
 
 export type StructuralElement = 
   | 'opening'
@@ -117,6 +119,30 @@ export const PERSONA_TRAITS: Record<PersonaTrait, {
       'Use humor and self-deprecation',
       'Story is the sermon, not decoration',
       'Close with callbacks to opening story',
+    ],
+  },
+
+  raw: {
+    voice: 'unfiltered, honest, sits-in-the-mess',
+    sentenceStyle: 'Fragmented. Incomplete sometimes. Like texting a friend at 2am.',
+    keyPhrases: ['I don\'t have this figured out...', 'Can I be real?', 'This is the part nobody says out loud...', 'I\'m still learning...'],
+    systemPromptAdditions: [
+      'Write like you\'re processing in real-time, not teaching from a stage',
+      'Use incomplete thoughts — let the reader finish them',
+      'Admit when theology doesn\'t wrap up neatly',
+      'Close with solidarity, not solutions',
+    ],
+  },
+
+  warm: {
+    voice: 'approachable, conversational, your-favorite-mentor-over-coffee',
+    sentenceStyle: 'Simple and direct. Like talking. Natural pauses.',
+    keyPhrases: ['Here\'s what I think...', 'You know what\'s funny?', 'I was just thinking...', 'Can I tell you something?'],
+    systemPromptAdditions: [
+      'Write at an accessible reading level without being condescending',
+      'Use everyday analogies — sports, cooking, school, friendships',
+      'One big idea per day, explained like you\'re sitting across the table',
+      'Close with warmth and reassurance',
     ],
   },
 };
@@ -295,6 +321,17 @@ export function generateHybridPersona(traits: PersonaTrait[]): HybridPersona {
     'poetic_narrative': 'Lyrical storytelling that lingers',
     'gentle_challenging': 'Conviction with compassion',
     'scholarly_narrative': 'Biblical truth through real stories',
+    'gentle_raw': 'Honest comfort from someone who gets it',
+    'challenging_raw': 'Uncomfortable truths from someone who lives them',
+    'narrative_raw': 'Real stories, unedited and unflinching',
+    'poetic_raw': 'Beauty found in the brokenness',
+    'raw_scholarly': 'Intellectual honesty about the hard questions',
+    'raw_warm': 'Vulnerable and accessible — a real conversation',
+    'gentle_warm': 'A hug in written form',
+    'challenging_warm': 'Tough love from your favorite mentor',
+    'narrative_warm': 'Stories told like a friend catching you up',
+    'poetic_warm': 'Simple words that somehow shimmer',
+    'scholarly_warm': 'Big ideas made accessible',
   };
   
   const key = traits.slice(0, 2).sort().join('_');
@@ -316,6 +353,12 @@ export const POPULAR_HYBRIDS: HybridPersona[] = [
   generateHybridPersona(['poetic', 'narrative']),
   generateHybridPersona(['gentle', 'challenging']),
   generateHybridPersona(['scholarly', 'narrative']),
+  generateHybridPersona(['raw', 'gentle']),
+  generateHybridPersona(['raw', 'narrative']),
+  generateHybridPersona(['warm', 'narrative']),
+  generateHybridPersona(['warm', 'gentle']),
+  generateHybridPersona(['raw', 'warm']),
+  generateHybridPersona(['challenging', 'warm']),
 ];
 
 // ==========================================
@@ -427,7 +470,7 @@ export function getTemplateById(id: string): StructuralTemplate | undefined {
   return STRUCTURAL_TEMPLATES.find(t => t.id === id);
 }
 
-export const ALL_TRAITS: PersonaTrait[] = ['gentle', 'challenging', 'poetic', 'scholarly', 'narrative'];
+export const ALL_TRAITS: PersonaTrait[] = ['gentle', 'challenging', 'poetic', 'scholarly', 'narrative', 'raw', 'warm'];
 export const ALL_HOOK_STYLES: HookStyle[] = Object.keys(HOOK_LIBRARY) as HookStyle[];
 export const ALL_TRANSITIONS: TransitionStyle[] = ['gradual', 'pivot', 'mysterious', 'logical', 'narrative'];
 export const ALL_CLOSINGS: ClosingStyle[] = ['question', 'blessing', 'invitation', 'warning', 'reflection', 'doxology'];
