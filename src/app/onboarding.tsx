@@ -1351,7 +1351,7 @@ export default function OnboardingScreen() {
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'height' : 'height'}>
-          <View className="flex-row items-center justify-between px-4 py-3" style={{ minHeight: 52 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
             {currentStepIndex > 0 ? (
               <Pressable
                 onPress={handleBack}
@@ -1393,8 +1393,8 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
-              <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <View className="flex-1 px-6" style={{ paddingTop: 40 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40 }}>
                   <View>
                     <TypewriterText 
                       text={
@@ -1423,8 +1423,8 @@ export default function OnboardingScreen() {
                 </View>
               </ScrollView>
             ) : (
-              <ScrollView className="flex-1" contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <View className="flex-1 px-6" style={{ paddingTop: 40, paddingBottom: 120 }}>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
                       <>

@@ -112,11 +112,6 @@ export default function PaywallScreen() {
   const yearlyRaw = 39.99;
   const perMonthFromYearly = '$3.33';
 
-  // Gold CTA button color for better visibility
-  const btnBg = colors.accent;
-  const btnText = '#1C1710';
-  const btnBorder = colors.accent;
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Close button — higher position */}
@@ -228,7 +223,7 @@ export default function PaywallScreen() {
         <View
           style={{
             height: 1,
-            backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+            backgroundColor: colors.border,
             marginVertical: 20,
           }}
         />
@@ -390,13 +385,13 @@ export default function PaywallScreen() {
             }}
           >
             {isPurchasing ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color={colors.background} size="small" />
             ) : (
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 17,
-                  color: '#FFFFFF',
+                  color: colors.background,
                   textAlign: 'center',
                   letterSpacing: 0.3,
                 }}

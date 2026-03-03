@@ -214,7 +214,7 @@ export default function StyleOnboardingScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View className="flex-row items-center justify-between px-4 py-3">
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
           {currentStep > 0 ? (
             <Pressable
               onPress={handleBack}
@@ -228,7 +228,7 @@ export default function StyleOnboardingScreen() {
           )}
 
           {/* Progress dots */}
-          <View className="flex-row space-x-2">
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             {STYLE_QUESTIONS.map((_, index) => (
               <View
                 key={index}
@@ -256,7 +256,7 @@ export default function StyleOnboardingScreen() {
                   color: colors.text,
                 }}
               >
-                {isLastStep ? 'Continue' : 'Continue'}
+                Continue
               </Text>
             </Pressable>
           ) : (
@@ -266,7 +266,7 @@ export default function StyleOnboardingScreen() {
 
         {/* Content */}
         <ScrollView
-          className="flex-1 px-6"
+          style={{ flex: 1, paddingHorizontal: 24 }}
           contentContainerStyle={{ paddingTop: 40, paddingBottom: 160 }}
           showsVerticalScrollIndicator={false}
         >
@@ -304,7 +304,7 @@ export default function StyleOnboardingScreen() {
           {/* Options */}
           {showOptions && (
             <Animated.View style={optionsAnimatedStyle}>
-              <View className="space-y-3">
+              <View style={{ gap: 12 }}>
                 {currentQuestion.options.map((option, index) => {
                   const isSelected = currentValue === option.value;
 
@@ -328,7 +328,7 @@ export default function StyleOnboardingScreen() {
                           borderColor: isSelected ? colors.accent : colors.border,
                         })}
                       >
-                        <View className="flex-row items-start justify-between">
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                           <View style={{ flex: 1, marginRight: 16 }}>
                             <Text
                               style={{
