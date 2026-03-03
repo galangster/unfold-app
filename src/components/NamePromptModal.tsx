@@ -7,7 +7,7 @@ import {
   Modal,
   StyleSheet,
 } from 'react-native';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -21,7 +21,7 @@ interface NamePromptModalProps {
 }
 
 export function NamePromptModal({ visible, onComplete }: NamePromptModalProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
@@ -115,7 +115,7 @@ export function NamePromptModal({ visible, onComplete }: NamePromptModalProps) {
               marginTop: 8,
             })}
           >
-            <Text style={{ color: isDark ? '#000' : '#fff', fontFamily: FontFamily.uiSemiBold, fontSize: 16 }}>
+            <Text style={{ color: colors.background, fontFamily: FontFamily.uiSemiBold, fontSize: 16 }}>
               {isSubmitting ? 'Saving...' : 'Continue'}
             </Text>
           </Pressable>

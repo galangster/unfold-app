@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { View, Text, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -118,7 +118,7 @@ function EmberParticle({
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(30);
@@ -195,7 +195,7 @@ export default function WelcomeScreen() {
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: 36,
-                  color: isDark ? '#000' : '#fff',
+                  color: colors.background,
                 }}
               >
                 U
@@ -261,7 +261,7 @@ export default function WelcomeScreen() {
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 17,
-                  color: isDark ? '#000' : '#fff',
+                  color: colors.background,
                   letterSpacing: 0.3,
                 }}
               >

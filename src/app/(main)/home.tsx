@@ -1,5 +1,5 @@
 import { useMemo, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, AccessibilityInfo } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {

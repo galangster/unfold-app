@@ -1156,7 +1156,7 @@ export default function ReadingScreen() {
                       accessibilityHint="Share this day's reading with others"
                       style={{
                         flex: 1,
-                        backgroundColor: isDark ? '#3A3A3A' : '#E5E5E5',
+                        backgroundColor: colors.buttonBackgroundPressed,
                         paddingVertical: 18,
                         paddingHorizontal: 16,
                         borderRadius: 28,
@@ -1164,7 +1164,7 @@ export default function ReadingScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <UploadSimpleIcon size={20} color={isDark ? '#AAAAAA' : '#666666'} weight="light" />
+                      <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
                     </Pressable>
                   </View>
                 </Animated.View>
@@ -1192,7 +1192,7 @@ export default function ReadingScreen() {
                       accessibilityHint="This day has already been marked as complete"
                       style={{
                         flex: 4,
-                        backgroundColor: isDark ? '#2A2A2A' : '#F0F0F0',
+                        backgroundColor: colors.inputBackground,
                         paddingVertical: 18,
                         paddingHorizontal: 32,
                         borderRadius: 28,
@@ -1227,7 +1227,7 @@ export default function ReadingScreen() {
                       accessibilityHint="Share this day's reading with others"
                       style={{
                         flex: 1,
-                        backgroundColor: isDark ? '#3A3A3A' : '#E5E5E5',
+                        backgroundColor: colors.buttonBackgroundPressed,
                         paddingVertical: 18,
                         paddingHorizontal: 16,
                         borderRadius: 28,
@@ -1235,7 +1235,7 @@ export default function ReadingScreen() {
                         justifyContent: 'center',
                       }}
                     >
-                      <UploadSimpleIcon size={20} color={isDark ? '#AAAAAA' : '#666666'} weight="light" />
+                      <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
                     </Pressable>
                   </View>
 

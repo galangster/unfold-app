@@ -29,7 +29,7 @@ interface SpeechToTextButtonProps {
 }
 
 export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTextButtonProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const [isRecording, setIsRecording] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const [partialResults, setPartialResults] = useState('');
@@ -155,15 +155,15 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
     }
     if (isPressed) {
       return {
-        background: isDark ? '#4A4A4A' : '#D0D0D0',
+        background: colors.buttonBackgroundPressed,
         icon: colors.text,
-        border: isDark ? '#666666' : '#CCCCCC',
+        border: colors.border,
       };
     }
     return {
-      background: isDark ? '#2A2A2A' : '#F0F0F0',
+      background: colors.inputBackground,
       icon: colors.accent,
-      border: isDark ? '#3A3A3A' : '#E0E0E0',
+      border: colors.border,
     };
   };
 
@@ -171,7 +171,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.hint, { color: errorMessage ? '#FF6B6B' : colors.textMuted }]}>
+      <Text style={[styles.hint, { color: errorMessage ? colors.error : colors.textMuted }]}>
         {errorMessage
           ? errorMessage
           : isRecording

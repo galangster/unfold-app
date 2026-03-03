@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, Linking, Platform, Alert, TextInput, ActivityIndicator, AccessibilityInfo } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, Pressable, ScrollView, Linking, Platform, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -984,7 +984,7 @@ export default function SettingsScreen() {
                               }}
                             >
                               {isSelected && (
-                                <CheckIcon size={16} color={isDark ? '#000' : '#fff'} weight="bold" />
+                                <CheckIcon size={16} color={colors.background} weight="bold" />
                               )}
                             </View>
                             <Text

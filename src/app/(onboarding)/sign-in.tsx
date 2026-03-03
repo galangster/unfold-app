@@ -393,12 +393,12 @@ export default function SignInScreen() {
                 style={({ pressed }) => [
                   styles.fallbackButton,
                   {
-                    backgroundColor: isDark ? '#fff' : '#000',
+                    backgroundColor: colors.text,
                     opacity: pressed || isLoading ? 0.8 : 1,
                   },
                 ]}
               >
-                <Text style={[styles.fallbackButtonText, { color: isDark ? '#000' : '#fff', fontFamily: FontFamily.uiSemiBold }]}>
+                <Text style={[styles.fallbackButtonText, { color: colors.background, fontFamily: FontFamily.uiSemiBold }]}>
                   {isLoading ? 'Signing in...' : 'Sign in with Apple'}
                 </Text>
               </Pressable>

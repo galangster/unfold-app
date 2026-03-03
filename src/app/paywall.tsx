@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Linking, Platform, Image } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Linking, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -142,7 +142,7 @@ export default function PaywallScreen() {
               width: 72,
               height: 72,
               borderRadius: 16,
-              backgroundColor: isDark ? '#1C1710' : '#F5F5F3',
+              backgroundColor: colors.inputBackground,
               justifyContent: 'center',
               alignItems: 'center',
               marginBottom: 16,

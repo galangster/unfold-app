@@ -109,8 +109,8 @@ export function HomeOnboardingTooltips() {
     }
   };
 
-  const tooltipCardBg = isDark ? '#1A1816' : '#FFFFFF';
-  const tooltipCardBorder = isDark ? 'rgba(245, 240, 235, 0.12)' : 'rgba(28, 23, 16, 0.1)';
+  const tooltipCardBg = colors.inputBackground;
+  const tooltipCardBorder = colors.border;
 
   return (
     <Animated.View
@@ -250,7 +250,7 @@ export function HomeOnboardingTooltips() {
               style={{
                 fontFamily: FontFamily.uiSemiBold,
                 fontSize: 15,
-                color: isDark ? '#1C1710' : '#FFFFFF',
+                color: colors.background,
                 letterSpacing: 0.3,
               }}
             >

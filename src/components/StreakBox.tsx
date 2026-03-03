@@ -67,7 +67,7 @@ function generateDaysData(streakCount: number): DayData[] {
 }
 
 export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   // Breathing pulse for active flame
   const flamePulse = useSharedValue(1);
@@ -117,7 +117,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
               style={{
                 fontFamily: FontFamily.uiSemiBold,
                 fontSize: 10,
-                color: isDark ? '#1C1710' : '#FFFFFF',
+                color: colors.background,
               }}
             >
               {day.day}
@@ -256,9 +256,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
                       borderRadius: 3,
                       backgroundColor: i < freezeDots
                         ? colors.accent
-                        : isDark
-                          ? 'rgba(245, 240, 235, 0.12)'
-                          : 'rgba(28, 23, 16, 0.08)',
+                        : colors.border,
                     }}
                   />
                 ))}
