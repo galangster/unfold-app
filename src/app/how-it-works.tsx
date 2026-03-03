@@ -81,6 +81,19 @@ export default function HowItWorksScreen() {
     router.replace('/onboarding');
   }, [router]);
 
+  const handleSkip = useCallback(() => {
+    if (isTransitioning.current) return;
+    isTransitioning.current = true;
+    contentOpacity.value = withTiming(0, {
+      duration: DISSOLVE_OUT,
+      easing: EASE,
+    }, (finished) => {
+      if (finished) {
+        runOnJS(navigateToOnboarding)();
+      }
+    });
+  }, [navigateToOnboarding]);
+
   const goToNext = useCallback(() => {
     if (isTransitioning.current) return;
 
@@ -142,7 +155,7 @@ export default function HowItWorksScreen() {
             </Text>
           </Pressable>
 
-          <Pressable onPress={navigateToOnboarding}>
+          <Pressable onPress={handleSkip}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip</Text>
           </Pressable>
         </View>
