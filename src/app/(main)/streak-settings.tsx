@@ -108,7 +108,7 @@ export default function StreakSettingsScreen() {
             <FireIcon size={24} color={colors.accent} weight="light" />
             <Text
               style={{
-                fontFamily: FontFamily.uiBold,
+                fontFamily: FontFamily.uiSemiBold,
                 fontSize: 24,
                 color: colors.text,
                 marginTop: 8,
@@ -139,7 +139,7 @@ export default function StreakSettingsScreen() {
             <SnowflakeIcon size={24} color={colors.textSubtle} weight="light" />
             <Text
               style={{
-                fontFamily: FontFamily.uiBold,
+                fontFamily: FontFamily.uiSemiBold,
                 fontSize: 24,
                 color: colors.text,
                 marginTop: 8,
@@ -170,7 +170,7 @@ export default function StreakSettingsScreen() {
             <CalendarIcon size={24} color={colors.textSubtle} weight="light" />
             <Text
               style={{
-                fontFamily: FontFamily.uiBold,
+                fontFamily: FontFamily.uiSemiBold,
                 fontSize: 24,
                 color: colors.text,
                 marginTop: 8,

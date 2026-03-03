@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, Linking, Platform, Alert, TextInput, ActivityIndicator, AccessibilityInfo } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, CrownIcon, TrashIcon, LockIcon, PlayIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, CrownIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import {
   scheduleDailyReminder,
   cancelAllReminders,
@@ -18,7 +19,7 @@ import {
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
-import { CARTESIA_VOICES } from '@/lib/cartesia';
+import { CARTESIA_VOICES, streamDevotionalAudio } from '@/lib/cartesia';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'https://oversight-cloning.vibecode.run';
 
@@ -80,6 +81,54 @@ export default function SettingsScreen() {
   // Loading states for async operations
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Voice preview state
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewPlayer = useAudioPlayer(null);
+  const previewStatus = useAudioPlayerStatus(previewPlayer);
+
+  const VOICE_SAMPLE_TEXT = 'Be still, and know that I am God. In the quiet moments, His presence fills every corner of your heart.';
+
+  const handleVoicePreview = useCallback(async (voiceId: string) => {
+    // If already playing this voice, stop it
+    if (previewingVoiceId === voiceId && previewStatus.playing) {
+      previewPlayer.pause();
+      setPreviewingVoiceId(null);
+      return;
+    }
+
+    try {
+      setPreviewLoading(true);
+      setPreviewingVoiceId(voiceId);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const result = await streamDevotionalAudio(VOICE_SAMPLE_TEXT, voiceId);
+      previewPlayer.replace({ uri: result.audioUrl });
+      previewPlayer.play();
+      setPreviewLoading(false);
+    } catch (error) {
+      console.error('Voice preview error:', error);
+      setPreviewLoading(false);
+      setPreviewingVoiceId(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [previewingVoiceId, previewStatus.playing, previewPlayer]);
+
+  // Stop preview when voice section collapses
+  useEffect(() => {
+    if (expandedPremium !== 'voice' && previewingVoiceId) {
+      previewPlayer.pause();
+      setPreviewingVoiceId(null);
+    }
+  }, [expandedPremium, previewingVoiceId, previewPlayer]);
+
+  // Auto-stop when playback finishes
+  useEffect(() => {
+    if (previewingVoiceId && !previewStatus.playing && !previewLoading && previewStatus.currentTime > 0) {
+      setPreviewingVoiceId(null);
+    }
+  }, [previewStatus.playing, previewingVoiceId, previewLoading, previewStatus.currentTime]);
 
   // Check notification status on mount
   useEffect(() => {
@@ -1258,8 +1307,36 @@ export default function SettingsScreen() {
                             </Text>
                           </View>
                           
-                          {/* Spacer replacing unimplemented voice preview */}
-                          <View style={{ width: 12 }} />
+                          {/* Voice preview button */}
+                          {!isLocked && (
+                            <Pressable
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleVoicePreview(option.id);
+                              }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: 16,
+                                backgroundColor: previewingVoiceId === option.id ? colors.accent : colors.buttonBackground,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                marginRight: 10,
+                              }}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Preview ${option.name} voice`}
+                            >
+                              {previewLoading && previewingVoiceId === option.id ? (
+                                <ActivityIndicator size="small" color={colors.background} />
+                              ) : previewingVoiceId === option.id && previewStatus.playing ? (
+                                <PauseIcon size={14} color={colors.background} weight="fill" />
+                              ) : (
+                                <SpeakerHighIcon size={14} color={previewingVoiceId === option.id ? colors.background : colors.textMuted} weight="light" />
+                              )}
+                            </Pressable>
+                          )}
+                          {isLocked && <View style={{ width: 10 }} />}
                           <View
                             style={{
                               width: 20,
