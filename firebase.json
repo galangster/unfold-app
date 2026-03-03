@@ -1,0 +1,18 @@
+{
+  "react-native": {
+    "analytics_auto_collection_enabled": false,
+    "analytics_collection_deactivated": true,
+    "analytics_idfv_collection_enabled": false,
+    "google_analytics_automatic_screen_reporting_enabled": false,
+    "google_analytics_registration_with_ad_network_enabled": false,
+    "crashlytics_auto_collection_enabled": false,
+    "crashlytics_debug_enabled": false,
+    "crashlytics_is_error_generation_on_js_crash_enabled": false,
+    "crashlytics_javascript_exception_handler_chaining_enabled": false,
+    "perf_auto_collection_enabled": false,
+    "perf_collection_deactivated": true,
+    "messaging_auto_init_enabled": false,
+    "in_app_messaging_auto_collection_enabled": false,
+    "app_data_collection_default_enabled": false
+  }
+}
