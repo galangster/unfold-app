@@ -24,14 +24,11 @@ export async function generateNonce(length = 32): Promise<string> {
 /**
  * Hash a nonce using SHA-256
  * Apple requires the nonce to be hashed before sending
+ * Uses expo-crypto which works in Hermes (crypto.subtle does not)
  */
 export async function sha256(nonce: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(nonce);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  const { digestStringAsync, CryptoDigestAlgorithm } = await import('expo-crypto');
+  return digestStringAsync(CryptoDigestAlgorithm.SHA256, nonce);
 }
 
 export interface AppleAuthResult {

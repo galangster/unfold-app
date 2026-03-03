@@ -68,8 +68,10 @@ function toFriendlyGenerationError(errorMessage: string): string {
   return 'We couldn\u2019t finish creating this devotional right now. Please\u00A0try\u00A0again.';
 }
 
-// Breathing glow animation duration
-const BREATH_DURATION = 3200;
+// Ripple animation
+const RIPPLE_DURATION = 2800;
+const RIPPLE_COUNT = 3;
+const RIPPLE_STAGGER = 900;
 const MESSAGE_CYCLE_MS = 3800;
 
 export default function GeneratingScreen() {
@@ -133,8 +135,10 @@ export default function GeneratingScreen() {
 
   const devotionalLength = user?.devotionalLength ?? 7;
 
-  // Breathing glow animation
-  const breathe = useSharedValue(0);
+  // Ripple animation — rings expand outward from center
+  const ripple0 = useSharedValue(0);
+  const ripple1 = useSharedValue(0);
+  const ripple2 = useSharedValue(0);
 
   // Rotate through waiting messages
   useEffect(() => {
@@ -194,33 +198,50 @@ export default function GeneratingScreen() {
     }
   }, [canStartReading, currentSeriesTitle]);
 
-  // Breathing animation
+  // Ripple animations — staggered rings expanding outward
   useEffect(() => {
-    breathe.value = withRepeat(
-      withTiming(1, { duration: BREATH_DURATION, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
+    const startRipple = (sv: typeof ripple0, delay: number) => {
+      sv.value = withDelay(
+        delay,
+        withRepeat(
+          withTiming(1, { duration: RIPPLE_DURATION, easing: Easing.out(Easing.cubic) }),
+          -1,
+          false
+        )
+      );
+    };
+
+    startRipple(ripple0, 0);
+    startRipple(ripple1, RIPPLE_STAGGER);
+    startRipple(ripple2, RIPPLE_STAGGER * 2);
 
     return () => {
-      cancelAnimation(breathe);
+      cancelAnimation(ripple0);
+      cancelAnimation(ripple1);
+      cancelAnimation(ripple2);
     };
   }, []);
 
-  // Animated styles for breathing glow
-  const outerGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(breathe.value, [0, 1], [0.03, 0.09]),
-    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.8, 1.2]) }],
+  // Each ripple: starts small at center, expands outward, fades as it grows
+  const rippleStyle0 = useAnimatedStyle(() => ({
+    opacity: interpolate(ripple0.value, [0, 0.3, 1], [0.25, 0.15, 0]),
+    transform: [{ scale: interpolate(ripple0.value, [0, 1], [0.1, 1]) }],
   }));
 
-  const innerGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(breathe.value, [0, 1], [0.06, 0.18]),
-    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.85, 1.15]) }],
+  const rippleStyle1 = useAnimatedStyle(() => ({
+    opacity: interpolate(ripple1.value, [0, 0.3, 1], [0.25, 0.15, 0]),
+    transform: [{ scale: interpolate(ripple1.value, [0, 1], [0.1, 1]) }],
   }));
 
+  const rippleStyle2 = useAnimatedStyle(() => ({
+    opacity: interpolate(ripple2.value, [0, 0.3, 1], [0.25, 0.15, 0]),
+    transform: [{ scale: interpolate(ripple2.value, [0, 1], [0.1, 1]) }],
+  }));
+
+  // Core dot — gentle pulse
   const coreStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(breathe.value, [0, 1], [0.5, 1]),
-    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.9, 1.1]) }],
+    opacity: interpolate(ripple0.value, [0, 0.5, 1], [0.6, 1, 0.6]),
+    transform: [{ scale: interpolate(ripple0.value, [0, 0.5, 1], [0.9, 1.1, 0.9]) }],
   }));
 
   const handleRequestNotifications = async () => {
@@ -704,9 +725,9 @@ export default function GeneratingScreen() {
       <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
 
-          {/* Breathing glow orb */}
+          {/* Water ripple — rings expanding from center */}
           <View style={{ width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 48 }}>
-            {/* Outer glow */}
+            {/* Ripple ring 0 */}
             <Animated.View
               style={[
                 {
@@ -714,31 +735,47 @@ export default function GeneratingScreen() {
                   width: 180,
                   height: 180,
                   borderRadius: 90,
-                  backgroundColor: colors.accent,
+                  borderWidth: 1.5,
+                  borderColor: colors.accent,
                 },
-                outerGlowStyle,
+                rippleStyle0,
               ]}
             />
-            {/* Inner glow */}
+            {/* Ripple ring 1 */}
             <Animated.View
               style={[
                 {
                   position: 'absolute',
-                  width: 100,
-                  height: 100,
-                  borderRadius: 50,
-                  backgroundColor: colors.accent,
+                  width: 180,
+                  height: 180,
+                  borderRadius: 90,
+                  borderWidth: 1,
+                  borderColor: colors.accent,
                 },
-                innerGlowStyle,
+                rippleStyle1,
               ]}
             />
-            {/* Core */}
+            {/* Ripple ring 2 */}
             <Animated.View
               style={[
                 {
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
+                  position: 'absolute',
+                  width: 180,
+                  height: 180,
+                  borderRadius: 90,
+                  borderWidth: 0.5,
+                  borderColor: colors.accent,
+                },
+                rippleStyle2,
+              ]}
+            />
+            {/* Core dot */}
+            <Animated.View
+              style={[
+                {
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
                   backgroundColor: colors.accent,
                 },
                 coreStyle,

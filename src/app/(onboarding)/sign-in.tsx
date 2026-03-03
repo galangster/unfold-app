@@ -14,6 +14,7 @@ import Animated, {
   FadeIn,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { Cloud, Shield, Sparkles } from 'lucide-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
@@ -25,7 +26,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Feature benefit item component
 interface BenefitItemProps {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
   delay: number;
@@ -49,7 +50,7 @@ function BenefitItem({ icon, title, description, delay, colors }: BenefitItemPro
   return (
     <Animated.View style={[styles.benefitItem, animatedStyle]}>
       <View style={[styles.benefitIcon, { backgroundColor: colors.inputBackground }]}>
-        <Text style={[styles.benefitIconText, { color: colors.accent }]}>{icon}</Text>
+        {icon}
       </View>
       <View style={styles.benefitTextContainer}>
         <Text style={[styles.benefitTitle, { color: colors.text, fontFamily: FontFamily.uiSemiBold }]}>
@@ -202,21 +203,27 @@ export default function SignInScreen() {
         });
 
         logger.error('[SignIn] Apple Sign In failed', { error: result.error });
-        
+
         // Show user-friendly error message
         let friendlyError = 'Unable to sign in. Please try again.';
         if (result.error?.includes('network')) {
           friendlyError = 'Network error. Check your connection and try again.';
         } else if (result.error?.includes('credential') || result.error?.includes('already')) {
           friendlyError = 'This Apple account is already linked to another user.';
-        } else if (result.error?.includes('unavailable')) {
-          friendlyError = 'Apple Sign In is currently unavailable. Please try again later.';
+        } else if (result.error?.includes('unavailable') || result.error?.includes('digest')) {
+          friendlyError = 'Apple Sign In requires a real device. Try "Continue without signing in" for now.';
         }
         setErrorMessage(friendlyError);
       }
     } catch (error) {
-      logger.error('[SignIn] Unexpected error during Apple Sign In', { error });
-      setErrorMessage('Something went wrong. Please try again.');
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[SignIn] Unexpected error during Apple Sign In', { error: msg });
+
+      if (msg.includes('digest') || msg.includes('subtle')) {
+        setErrorMessage('Apple Sign In requires a real device. Try "Continue without signing in" for now.');
+      } else {
+        setErrorMessage('Something went wrong. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -232,6 +239,8 @@ export default function SignInScreen() {
     // Track skip tapped
     Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
 
+    const currentCount = userProfile?.signInPromptCount ?? 0;
+
     try {
       // Create anonymous user if needed
       const result = await signInAnonymously();
@@ -243,8 +252,6 @@ export default function SignInScreen() {
         });
         Analytics.setUserId(result.user.uid);
         Analytics.setUserProperty('auth_provider', 'anonymous');
-
-        const currentCount = userProfile?.signInPromptCount ?? 0;
 
         updateUser({
           authUserId: result.user.uid,
@@ -261,24 +268,30 @@ export default function SignInScreen() {
         // Navigate to home
         router.replace('/(main)/home');
       } else {
-        // Track error
-        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
-          auth_provider: 'anonymous',
-          error_type: result.error || 'unknown',
+        // Firebase anonymous auth failed — proceed with local-only mode
+        logger.warn('[SignIn] Firebase anonymous auth failed, continuing locally', { error: result.error });
+
+        updateUser({
+          authUserId: `local-${Date.now()}`,
+          authProvider: 'anonymous',
+          hasSeenSignInPrompt: true,
+          signInPromptCount: currentCount + 1,
         });
 
-        // Show error for anonymous sign-in failure
-        logger.error('[SignIn] Anonymous sign in failed', { error: result.error });
-        setErrorMessage('Unable to continue. Please try again.');
+        router.replace('/(main)/home');
       }
     } catch (error) {
-      Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
-        auth_provider: 'anonymous',
-        error_type: 'exception',
+      // Even on exception, let user through with local-only mode
+      logger.warn('[SignIn] Anonymous auth exception, continuing locally', { error });
+
+      updateUser({
+        authUserId: `local-${Date.now()}`,
+        authProvider: 'anonymous',
+        hasSeenSignInPrompt: true,
+        signInPromptCount: currentCount + 1,
       });
 
-      logger.error('[SignIn] Error continuing anonymously', { error });
-      setErrorMessage('Something went wrong. Please try again.');
+      router.replace('/(main)/home');
     } finally {
       setIsLoading(false);
     }
@@ -286,17 +299,17 @@ export default function SignInScreen() {
 
   const benefits: Omit<BenefitItemProps, 'colors' | 'delay'>[] = [
     {
-      icon: '☁️',
+      icon: <Cloud size={20} color={colors.accent} strokeWidth={1.5} />,
       title: 'Sync across devices',
       description: 'Access your devotionals on any iPhone or iPad',
     },
     {
-      icon: '🔒',
+      icon: <Shield size={20} color={colors.accent} strokeWidth={1.5} />,
       title: 'Secure backup',
       description: 'Never lose your progress or journal entries',
     },
     {
-      icon: '✨',
+      icon: <Sparkles size={20} color={colors.accent} strokeWidth={1.5} />,
       title: 'Seamless experience',
       description: 'Pick up exactly where you left off',
     },
@@ -531,7 +544,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   benefitIconText: {
-    fontSize: 22,
+    fontSize: 20,
   },
   benefitTextContainer: {
     flex: 1,
