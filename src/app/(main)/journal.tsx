@@ -23,7 +23,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { analyzeNetworkError, isOnline } from '@/lib/network-error-handler';
 import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'https://oversight-cloning.vibecode.run';
 
 export default function JournalScreen() {
   const router = useRouter();

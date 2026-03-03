@@ -20,7 +20,7 @@ import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { CARTESIA_VOICES } from '@/lib/cartesia';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'http://localhost:3000';
+const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'https://oversight-cloning.vibecode.run';
 
 const REMINDER_TIMES = [
   { value: '6:00 AM', label: 'Early morning' },
