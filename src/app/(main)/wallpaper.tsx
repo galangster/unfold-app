@@ -5,8 +5,7 @@ import {
   Pressable,
   Dimensions,
   FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -155,13 +154,13 @@ export default function WallpaperScreen() {
     try {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        alert('Permission needed to save to your photo library');
+        Alert.alert('Permission Needed', 'Permission needed to save to your photo library');
         setSaving(false);
         return;
       }
       const uri = await captureWallpaper();
       if (!uri) {
-        alert('Could not capture the image. Please try again.');
+        Alert.alert('Capture Failed', 'Could not capture the image. Please try again.');
         setSaving(false);
         return;
       }
@@ -171,7 +170,7 @@ export default function WallpaperScreen() {
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error('Failed to save wallpaper:', error);
-      alert('Failed to save. Please try again.');
+      Alert.alert('Save Failed', 'Failed to save. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setSaving(false);
@@ -185,13 +184,13 @@ export default function WallpaperScreen() {
     try {
       const uri = await captureWallpaper();
       if (!uri) {
-        alert('Could not capture the image. Please try again.');
+        Alert.alert('Capture Failed', 'Could not capture the image. Please try again.');
         setSaving(false);
         return;
       }
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
-        alert('Sharing is not available on this device');
+        Alert.alert('Sharing Unavailable', 'Sharing is not available on this device');
         setSaving(false);
         return;
       }
@@ -451,12 +450,12 @@ export default function WallpaperScreen() {
                 transform: [{ scale: pressed ? 0.98 : 1 }],
               })}
             >
-              <CrownIcon size={16} color={isDark ? '#000' : '#fff'} weight="light" />
+              <CrownIcon size={16} color={colors.background} weight="light" />
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
                   fontSize: 15,
-                  color: isDark ? '#000' : '#fff',
+                  color: colors.background,
                 }}
               >
                 Upgrade to Premium

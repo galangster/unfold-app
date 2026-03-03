@@ -33,15 +33,16 @@ export default function MyResponsesScreen() {
   };
 
   // Gradient colors for fade effect based on theme
-  const fadeGradient: [string, string] = isDark
-    ? ['transparent', 'rgba(255, 255, 255, 0.05)']
-    : ['transparent', 'rgba(26, 22, 18, 0.04)'];
+  const fadeGradient: [string, string] = [
+    'transparent',
+    `${colors.inputBackground}`,
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View className="flex-row items-center px-4 py-3">
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

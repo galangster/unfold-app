@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -30,7 +30,6 @@ type Tab = 'journal' | 'highlights' | 'bookmarks';
 export default function MyContentScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const { width } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState<Tab>('journal');
   
   const highlights = useUnfoldStore((s) => s.highlights);

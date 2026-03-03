@@ -243,7 +243,7 @@ export default function JournalScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           {/* Header */}
-          <View className="flex-row items-center justify-between px-4 py-3">
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
             <Pressable
               onPress={handleSkip}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

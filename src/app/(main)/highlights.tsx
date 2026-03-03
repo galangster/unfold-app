@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, FlatList } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
