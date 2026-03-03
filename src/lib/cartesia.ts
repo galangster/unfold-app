@@ -5,8 +5,7 @@
 
 import { File, Paths } from 'expo-file-system';
 
-const CARTESIA_API_KEY = process.env.EXPO_PUBLIC_CARTESIA_KEY || '';
-const CARTESIA_BASE_URL = 'https://api.cartesia.ai';
+const TTS_PROXY_URL = 'https://tts-proxy-five.vercel.app/api/tts';
 
 // Voice options for Unfold - ALL PREMIUM
 export const CARTESIA_VOICES = [
@@ -102,31 +101,20 @@ export async function streamDevotionalAudio(
       };
     }
 
-    const response = await fetch(`${CARTESIA_BASE_URL}/tts/bytes`, {
+    const response = await fetch(TTS_PROXY_URL, {
       method: 'POST',
       headers: {
-        'Cartesia-Version': '2025-04-16',
-        'X-API-Key': CARTESIA_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model_id: 'sonic-3',
-        transcript: text,
-        voice: {
-          mode: 'id',
-          id: voiceId,
-        },
-        output_format: {
-          container: 'mp3',
-          sample_rate: 24000,
-        },
-        language: 'en',
+        text,
+        voiceId,
       }),
     });
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '');
-      throw new Error(`Cartesia API error: ${response.status} ${errorBody}`);
+      throw new Error(`TTS proxy error: ${response.status} ${errorBody}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();

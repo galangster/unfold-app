@@ -1,11 +1,14 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  withDelay,
   Easing,
   cancelAnimation,
+  interpolateColor,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
@@ -20,66 +23,67 @@ interface TypewriterTextProps {
   style?: TextStyle;
 }
 
-interface WordProps {
-  word: string;
-  wordIndex: number;
-  startCharIndex: number;
-  charDelay: number;
-  baseDelay: number;
-  style?: TextStyle;
-}
-
-interface CharacterProps {
+// ─── Magical character that animates on mount ──────────────────────
+const MagicalChar = React.memo(({
+  char,
+  accentColor,
+  textColor,
+  style,
+  isWordStart,
+}: {
   char: string;
-  globalIndex: number;
-  charDelay: number;
-  baseDelay: number;
+  accentColor: string;
+  textColor: string;
   style?: TextStyle;
-  triggerHaptic?: boolean;
-}
-
-const AnimatedChar = ({ char, globalIndex, charDelay, baseDelay, style, triggerHaptic }: CharacterProps) => {
-  const { colors } = useTheme();
+  isWordStart: boolean;
+}) => {
   const opacity = useSharedValue(0);
-  const translateY = useSharedValue(4);
-  const isMounted = useRef(true);
+  const translateY = useSharedValue(6);
+  const scale = useSharedValue(0.85);
+  const colorProgress = useSharedValue(0);
 
   useEffect(() => {
-    isMounted.current = true;
+    Haptics.selectionAsync();
 
-    // Add slight randomness for organic feel (±10ms)
-    const randomOffset = (Math.random() - 0.5) * 20;
-    const animDelay = baseDelay + globalIndex * charDelay + randomOffset;
+    // Fade + rise
+    opacity.value = withTiming(1, {
+      duration: 100,
+      easing: Easing.out(Easing.cubic),
+    });
+    translateY.value = withTiming(0, {
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+    });
 
-    const timer = setTimeout(() => {
-      if (!isMounted.current) return;
+    // Scale spring
+    scale.value = withSpring(1, {
+      damping: 14,
+      stiffness: 220,
+      mass: 0.4,
+    });
 
-      // Trigger haptic for first char of each word
-      if (triggerHaptic) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-
-      opacity.value = withTiming(1, {
-        duration: 60,
-        easing: Easing.out(Easing.ease),
-      });
-      translateY.value = withTiming(0, {
-        duration: 60,
-        easing: Easing.out(Easing.ease),
-      });
-    }, Math.max(0, animDelay));
+    // Golden glow → normal text color
+    colorProgress.value = withDelay(
+      50,
+      withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }),
+    );
 
     return () => {
-      isMounted.current = false;
-      clearTimeout(timer);
       cancelAnimation(opacity);
       cancelAnimation(translateY);
+      cancelAnimation(scale);
+      cancelAnimation(colorProgress);
     };
-  }, [globalIndex, charDelay, baseDelay, triggerHaptic, opacity, translateY]);
+  }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.value }, { scale: scale.value }],
+    color: interpolateColor(
+      colorProgress.value,
+      [0, 1],
+      [accentColor, textColor],
+    ),
   }));
 
   return (
@@ -88,7 +92,6 @@ const AnimatedChar = ({ char, globalIndex, charDelay, baseDelay, style, triggerH
         {
           fontFamily: FontFamily.display,
           fontSize: 28,
-          color: colors.text,
         },
         style,
         animatedStyle,
@@ -97,127 +100,106 @@ const AnimatedChar = ({ char, globalIndex, charDelay, baseDelay, style, triggerH
       {char}
     </Animated.Text>
   );
-};
+});
 
-// Render a word as a unit that won't break
-const AnimatedWord = ({ word, startCharIndex, charDelay, baseDelay, style }: Omit<WordProps, 'wordIndex'>) => {
-  const characters = word.split('');
-
-  return (
-    <View style={{ flexDirection: 'row' }}>
-      {characters.map((char, charIndex) => (
-        <AnimatedChar
-          key={`${startCharIndex + charIndex}-${char}`}
-          char={char}
-          globalIndex={startCharIndex + charIndex}
-          charDelay={charDelay}
-          baseDelay={baseDelay}
-          style={style}
-          triggerHaptic={charIndex === 0} // Haptic on first char of word
-        />
-      ))}
-    </View>
-  );
-};
-
-// Render a space character
-const AnimatedSpace = ({ globalIndex, charDelay, baseDelay, style }: Omit<CharacterProps, 'char' | 'triggerHaptic'>) => {
-  const { colors } = useTheme();
-  const opacity = useSharedValue(0);
-  const isMounted = useRef(true);
-
-  useEffect(() => {
-    isMounted.current = true;
-    const animDelay = baseDelay + globalIndex * charDelay;
-
-    const timer = setTimeout(() => {
-      if (!isMounted.current) return;
-      opacity.value = withTiming(1, { duration: 30 });
-    }, Math.max(0, animDelay));
-
-    return () => {
-      isMounted.current = false;
-      clearTimeout(timer);
-      cancelAnimation(opacity);
-    };
-  }, [globalIndex, charDelay, baseDelay, opacity]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.Text
-      style={[
-        {
-          fontFamily: FontFamily.display,
-          fontSize: 28,
-          color: colors.text,
-        },
-        style,
-        animatedStyle,
-      ]}
-    >
-      {' '}
-    </Animated.Text>
-  );
-};
-
+// ─── Main component ────────────────────────────────────────────────
 export function TypewriterText({
   text,
   onComplete,
   delay = 0,
-  charDelay = 35, // Faster: was 60, now 35
+  charDelay = 20,
   style,
 }: TypewriterTextProps) {
-  // Normalize whitespace: replace all whitespace sequences (including newlines) with single spaces
-  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  const { colors } = useTheme();
+  const normalizedText = useMemo(() => text.replace(/\s+/g, ' ').trim(), [text]);
+  const totalChars = normalizedText.length;
 
+  const [visibleCount, setVisibleCount] = useState(0);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+
+  const isComplete = visibleCount >= totalChars;
+
+  // Progressively reveal characters
   useEffect(() => {
-    const totalDuration = delay + normalizedText.length * charDelay + 150;
-    const timer = setTimeout(() => {
-      onComplete?.();
-    }, totalDuration);
+    setVisibleCount(0);
+    let count = 0;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
-    return () => clearTimeout(timer);
-  }, [normalizedText, delay, charDelay, onComplete]);
+    const delayId = setTimeout(() => {
+      intervalId = setInterval(() => {
+        count++;
+        setVisibleCount(count);
+        if (count >= totalChars) {
+          if (intervalId) clearInterval(intervalId);
+          // Brief pause before signalling completion
+          setTimeout(() => onCompleteRef.current?.(), 400);
+        }
+      }, charDelay);
+    }, delay);
 
-  // Split text into words, preserving spaces as separate items
-  const words = normalizedText.split(/(\s+)/);
+    return () => {
+      clearTimeout(delayId);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [normalizedText, delay, charDelay, totalChars]);
 
-  let charIndex = 0;
+  // Build visible segments
+  const visibleText = normalizedText.slice(0, visibleCount);
+  const segments = visibleText.split(/(\s+)/);
+
+  // Determine text color from style or theme
+  const textColor = (style?.color as string) || colors.text;
+
+  // Track global char index for stable keys
+  let globalIdx = 0;
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-      {words.map((segment, wordIndex) => {
-        const startIndex = charIndex;
-        charIndex += segment.length;
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
+      {segments.map((segment, segIndex) => {
+        if (!segment) return null;
 
-        // If it's whitespace, render spaces
+        // Space segments
         if (/^\s+$/.test(segment)) {
-          return segment.split('').map((_, spaceIndex) => (
-            <AnimatedSpace
-              key={`space-${startIndex + spaceIndex}`}
-              globalIndex={startIndex + spaceIndex}
-              charDelay={charDelay}
-              baseDelay={delay}
-              style={style}
-            />
-          ));
+          const idx = globalIdx;
+          globalIdx += segment.length;
+          return (
+            <Animated.Text
+              key={`s-${idx}`}
+              style={[
+                {
+                  fontFamily: FontFamily.display,
+                  fontSize: 28,
+                  color: textColor,
+                },
+                style,
+              ]}
+            >
+              {segment}
+            </Animated.Text>
+          );
         }
 
-        // Render word as a unit (won't break mid-word)
+        // Word segments — each char is a MagicalChar
+        const wordStart = globalIdx;
+        globalIdx += segment.length;
+
         return (
-          <AnimatedWord
-            key={`word-${wordIndex}`}
-            word={segment}
-            startCharIndex={startIndex}
-            charDelay={charDelay}
-            baseDelay={delay}
-            style={style}
-          />
+          <View key={`w-${wordStart}`} style={{ flexDirection: 'row' }}>
+            {segment.split('').map((char, charIdx) => (
+              <MagicalChar
+                key={`c-${wordStart + charIdx}`}
+                char={char}
+                accentColor={colors.accent}
+                textColor={textColor}
+                style={style}
+                isWordStart={charIdx === 0}
+              />
+            ))}
+          </View>
         );
       })}
+
     </View>
   );
 }

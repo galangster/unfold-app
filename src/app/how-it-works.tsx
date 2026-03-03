@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  runOnJS,
+} from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { WordRevealText } from '@/components/WordRevealText';
+
 
 interface Slide {
   id: number;
@@ -30,59 +38,134 @@ const slides: Slide[] = [
   },
 ];
 
+const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
+const DISSOLVE_OUT = 300;
+const DISSOLVE_IN = 400;
+
 export default function HowItWorksScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const isTransitioning = useRef(false);
 
-  const goToNext = () => {
+  // Content dissolve opacity
+  const contentOpacity = useSharedValue(1);
+  const subtitleOpacity = useSharedValue(0);
+
+  const contentAnimStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+  }));
+
+  const subtitleAnimStyle = useAnimatedStyle(() => ({
+    opacity: subtitleOpacity.value,
+  }));
+
+  const handleTitleComplete = useCallback(() => {
+    subtitleOpacity.value = withTiming(1, {
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, []);
+
+  // Named callbacks for runOnJS (can't use inline anonymous functions)
+  const fadeInContent = useCallback(() => {
+    subtitleOpacity.value = 0;
+    contentOpacity.value = withTiming(1, {
+      duration: DISSOLVE_IN,
+      easing: EASE,
+    });
+    isTransitioning.current = false;
+  }, []);
+
+  const navigateToOnboarding = useCallback(() => {
+    router.replace('/onboarding');
+  }, [router]);
+
+  const goToNext = useCallback(() => {
+    if (isTransitioning.current) return;
+
     if (currentSlide < slides.length - 1) {
-      setCurrentSlide(currentSlide + 1);
-    } else {
-      router.replace('/onboarding');
-    }
-  };
+      isTransitioning.current = true;
+      const nextSlide = currentSlide + 1;
 
-  const goToPrevious = () => {
-    if (currentSlide > 0) {
-      setCurrentSlide(currentSlide - 1);
+      // Dissolve out, switch slide, dissolve in
+      contentOpacity.value = withTiming(0, {
+        duration: DISSOLVE_OUT,
+        easing: EASE,
+      }, (finished) => {
+        if (finished) {
+          runOnJS(setCurrentSlide)(nextSlide);
+          runOnJS(fadeInContent)();
+        }
+      });
+    } else {
+      // Last slide — dissolve out then navigate
+      isTransitioning.current = true;
+      contentOpacity.value = withTiming(0, {
+        duration: DISSOLVE_OUT,
+        easing: EASE,
+      }, (finished) => {
+        if (finished) {
+          runOnJS(navigateToOnboarding)();
+        }
+      });
     }
-  };
+  }, [currentSlide, fadeInContent, navigateToOnboarding]);
+
+  const goToPrevious = useCallback(() => {
+    if (isTransitioning.current || currentSlide === 0) return;
+    isTransitioning.current = true;
+    const prevSlide = currentSlide - 1;
+
+    contentOpacity.value = withTiming(0, {
+      duration: DISSOLVE_OUT,
+      easing: EASE,
+    }, (finished) => {
+      if (finished) {
+        runOnJS(setCurrentSlide)(prevSlide);
+        runOnJS(fadeInContent)();
+      }
+    });
+  }, [currentSlide, fadeInContent]);
 
   const slide = slides[currentSlide];
   const isLastSlide = currentSlide === slides.length - 1;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={goToPrevious} disabled={currentSlide === 0}>
-            <Text style={[styles.backText, { color: currentSlide === 0 ? colors.border : colors.textMuted }]}>
+          <Pressable onPress={goToPrevious} disabled={currentSlide === 0} style={{ opacity: currentSlide === 0 ? 0 : 1 }}>
+            <Text style={[styles.backText, { color: colors.textMuted }]}>
               Back
             </Text>
           </Pressable>
 
-          <Pressable onPress={() => router.replace('/onboarding')}>
+          <Pressable onPress={navigateToOnboarding}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip</Text>
           </Pressable>
         </View>
 
-        {/* Content */}
-        <View style={styles.content}>
-          <Animated.View
-            key={currentSlide}
-            entering={FadeInUp.duration(400)}
-            style={styles.slideContent}
-          >
-            <Text style={[styles.title, { color: colors.text }]}>
-              {slide.title}
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        {/* Content — wraps in animated dissolve layer */}
+        <Animated.View style={[styles.content, contentAnimStyle]}>
+          <View key={currentSlide} style={styles.slideContent}>
+            <View style={styles.titleWrap}>
+              <WordRevealText
+                text={slide.title}
+                onComplete={handleTitleComplete}
+                delay={200}
+                wordDelay={120}
+                style={{ fontSize: 32, letterSpacing: -0.5, color: colors.text }}
+              />
+            </View>
+            <Animated.Text
+              style={[styles.subtitle, { color: colors.textMuted }, subtitleAnimStyle]}
+            >
               {slide.subtitle}
-            </Text>
-          </Animated.View>
-        </View>
+            </Animated.Text>
+          </View>
+        </Animated.View>
 
         {/* Bottom */}
         <View style={styles.bottom}>
@@ -158,11 +241,7 @@ const styles = StyleSheet.create({
   slideContent: {
     alignItems: 'center',
   },
-  title: {
-    fontFamily: FontFamily.display,
-    fontSize: 32,
-    letterSpacing: -0.5,
-    textAlign: 'center',
+  titleWrap: {
     marginBottom: 16,
   },
   subtitle: {

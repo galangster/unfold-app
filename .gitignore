@@ -82,3 +82,4 @@ local.properties
 expo-env.d.ts
 # @end expo-cliios/Unfold/GoogleService-Info.plist
 .env
+.vercel

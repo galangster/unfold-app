@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.unfold.x9fj08t",
-      "buildNumber": "1.0.0",
+      "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
       },

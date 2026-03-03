@@ -515,7 +515,7 @@ export default function GeneratingScreen() {
     const displayError = toFriendlyGenerationError(error);
     const isConnectionError = displayError.toLowerCase().includes('connection');
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
           {/* Error icon */}
           <View
@@ -609,7 +609,7 @@ export default function GeneratingScreen() {
 
   if (isComplete) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
             <Animated.View entering={FadeIn.duration(600).delay(100)} style={{ marginBottom: 28 }}>
@@ -700,7 +700,7 @@ export default function GeneratingScreen() {
   // ========== RENDER: LOADING / GENERATING STATE ==========
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
 

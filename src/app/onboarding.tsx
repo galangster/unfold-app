@@ -1318,16 +1318,16 @@ export default function OnboardingScreen() {
   // Loading state during discovery preparation
   if (isPreparingDiscovery) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
           </View>
-          <Text style={{ 
-            fontFamily: FontFamily.ui, 
-            fontSize: 15, 
+          <Text style={{
+            fontFamily: FontFamily.ui,
+            fontSize: 15,
             color: colors.textMuted,
             letterSpacing: 0.5,
             textAlign: 'center',
@@ -1341,14 +1341,14 @@ export default function OnboardingScreen() {
 
   if (!step) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted }}>Loading next question…</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'height' : 'height'}>
           <View className="flex-row items-center justify-between px-4 py-3" style={{ minHeight: 52 }}>

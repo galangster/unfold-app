@@ -14,6 +14,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useAuth } from '@/hooks/useAuth';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { GlowBackground } from '@/components/GlowBackground';
 
 export const unstable_settings = {
   initialRouteName: 'index',
@@ -35,13 +36,15 @@ function RootLayoutNav() {
 
   return (
     <NavigationThemeProvider value={navigationTheme}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: 'fade',
-        }}
-      >
+      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+        <GlowBackground color={colors.accent} intensity={0.6} emberCount={14} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: 'transparent' },
+            animation: 'fade',
+          }}
+        >
         <Stack.Screen name="index" />
         <Stack.Screen name="style-onboarding" />
         <Stack.Screen name="onboarding" />
@@ -55,7 +58,8 @@ function RootLayoutNav() {
             animation: 'slide_from_bottom',
           }}
         />
-      </Stack>
+        </Stack>
+      </View>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </NavigationThemeProvider>
   );
