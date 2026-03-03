@@ -24,6 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { StreakBox } from '@/components/StreakBox';
+import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -959,6 +960,9 @@ export default function HomeScreen() {
 
         </ScrollView>
       </SafeAreaView>
+
+      {/* First-time onboarding tooltips overlay */}
+      <HomeOnboardingTooltips />
     </View>
   );
 }

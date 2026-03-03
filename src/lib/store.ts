@@ -308,6 +308,10 @@ interface UnfoldState {
   seriesPersonaHistory: SeriesPersonaRecord[];
   addSeriesPersonaRecord: (record: SeriesPersonaRecord) => void;
 
+  // Home onboarding tooltips
+  hasSeenHomeTooltips: boolean;
+  setHasSeenHomeTooltips: (seen: boolean) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -340,6 +344,7 @@ const initialState = {
   streakWeekendAmnesty: true,
   streakFreezes: 0,
   seriesPersonaHistory: [] as SeriesPersonaRecord[],
+  hasSeenHomeTooltips: false,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -709,6 +714,9 @@ export const useUnfoldStore = create<UnfoldState>()(
           return { seriesPersonaHistory: updated };
         }),
 
+      // Home onboarding tooltips
+      setHasSeenHomeTooltips: (seen) => set({ hasSeenHomeTooltips: seen }),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -720,7 +728,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 6, // Increment when state structure changes
+      version: 7, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -775,6 +783,14 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             ...state,
             seriesPersonaHistory: [],
+          } as UnfoldState;
+        }
+
+        // Migration from version 6 to 7: Add hasSeenHomeTooltips
+        if (version < 7) {
+          return {
+            ...state,
+            hasSeenHomeTooltips: false,
           } as UnfoldState;
         }
 
