@@ -14,9 +14,9 @@ export const FontFamily = {
   bodyMedium: 'Inter_500Medium',
   bodyBold: 'Inter_700Bold',
 
-  // User input - monospace (kept for code-like readability)
-  mono: 'JetBrainsMono_400Regular',
-  monoMedium: 'JetBrainsMono_500Medium',
+  // Aliases kept for backwards compat — now mapped to Inter
+  mono: 'Inter_400Regular',
+  monoMedium: 'Inter_500Medium',
 
   // UI labels - Inter
   ui: 'Inter_400Regular',

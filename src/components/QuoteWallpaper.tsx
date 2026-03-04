@@ -124,7 +124,7 @@ export const QuoteWallpaper = forwardRef<QuoteWallpaperRef, QuoteWallpaperProps>
               marginBottom: 24,
             }}
           >
-            "{quote.text}"
+            {quote.text}
           </Text>
           
           {/* Attribution if provided */}

@@ -26,6 +26,7 @@ import {
 } from '../constants/devotional-personas-v2';
 import {
   CRAFT_FOUNDATION,
+  ANTI_SLOP_DIRECTIVE,
   getCraftInfluencesForTraits,
   getDailyCraftDirective,
 } from '../constants/writing-craft';
@@ -397,15 +398,19 @@ PERSONAL CONNECTION:
 - Address them conversationally: "You know this tension..." / "What if you..." / "You've felt this before..."
 - The reader's name should appear sparingly—roughly once every 5 days, never at the beginning of a day. When you do use it, bury it mid-sentence at a moment of encouragement. Example: "And perhaps, [Name], this is exactly where grace meets you."
 
-WHAT TO AVOID (these sound artificial and hollow):
-- "Here's the thing..." / "Here's the uncomfortable truth..."
-- "Let that sink in" / "Read that again"
+WHAT TO AVOID (these sound artificial and hollow — instant AI tells):
+- "Here's the thing..." / "Here's the uncomfortable truth..." / "Here's what's remarkable..."
+- "Let that sink in" / "Read that again" / "Let that land"
 - "Friend, ..." or addressing the reader with pet names
+- "This is the part that haunts" / "This is the part that matters"
+- "There's something profound about..." / "There's something beautiful about..."
 - Rhetorical questions followed immediately by their answers
 - Lists of application points
-- Phrases like "powerful," "journey," "season of," "step into," "lean into," "sit with that"
-- Starting paragraphs with "You see," or "The truth is," or "Think about it"
+- Phrases like "powerful," "journey," "season of," "step into," "lean into," "sit with that," "hits different"
+- Starting paragraphs with "You see," or "The truth is," or "Think about it," or "In a world where"
 - Manufactured urgency or false intimacy
+- The Rule of Three: do NOT structure every insight as three parallel items. Vary structure.
+- Empty intensifiers: "deeply," "profoundly," "truly," "really" — cut them all.
 - Narrating the reader's life back to them. Never say things like "at the intersection of ministry and design" or "as someone who balances fatherhood with creative work."
 - Spelling out their identity, roles, or circumstances. They know who they are.
 
@@ -940,8 +945,9 @@ async function generateBatch(
   // retryLevel 1: foundation only (drop persona influences and daily directives)
   // retryLevel 2: no craft additions (minimal prompt)
   const craftFoundation = retryLevel <= 1 ? CRAFT_FOUNDATION : '';
+  const antiSlop = retryLevel <= 1 ? ANTI_SLOP_DIRECTIVE : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
   // V2: Include per-day variety schedule (with craft directives) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed)

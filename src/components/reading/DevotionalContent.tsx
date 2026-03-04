@@ -87,53 +87,52 @@ export function DevotionalContent({
         ]}
       />
 
-      {/* Scripture reference with bookmark */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, gap: 8 }}>
-        <Text
-          style={{
-            fontFamily: FontFamily.mono,
-            fontSize: 11,
-            color: colors.accent,
-            textAlign: 'center',
-            letterSpacing: 1.5,
-            textTransform: 'uppercase',
-            opacity: 0.8,
-          }}
-        >
-          {day.scriptureReference}
-        </Text>
-        
-        {/* Bookmark button - instant fill on tap */}
-        {onToggleBookmark && (
-          <Pressable
-            onPress={handleBookmarkPress}
-            style={{
-              padding: 4,
-            }}
-          >
-            <BookmarkSimpleIcon
-              size={14}
-              color={isBookmarked ? colors.accent : colors.textMuted}
-              weight={isBookmarked ? "fill" : "light"}
-            />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Scripture text - NATIVE (not selectable for quotes) */}
+      {/* Scripture block — traditional left-aligned with accent border */}
       <View
         style={{
-          paddingHorizontal: 16,
+          borderLeftWidth: 2.5,
+          borderLeftColor: colors.accent,
+          paddingLeft: 18,
           marginBottom: 36,
         }}
       >
+        {/* Reference + bookmark */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+          <Text
+            style={{
+              fontFamily: FontFamily.mono,
+              fontSize: 11,
+              color: colors.accent,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              opacity: 0.8,
+            }}
+          >
+            {day.scriptureReference}
+          </Text>
+
+          {onToggleBookmark && (
+            <Pressable
+              onPress={handleBookmarkPress}
+              style={{ padding: 4 }}
+            >
+              <BookmarkSimpleIcon
+                size={14}
+                color={isBookmarked ? colors.accent : colors.textMuted}
+                weight={isBookmarked ? "fill" : "light"}
+              />
+            </Pressable>
+          )}
+        </View>
+
+        {/* Scripture text — left-aligned, traditional paragraph style */}
         <Text
           style={{
             fontFamily: readingFont.bodyItalic,
             fontSize: fontSizes.scripture,
             color: colors.textMuted,
             lineHeight: fontSizes.scripture * 1.7,
-            textAlign: 'center',
+            textAlign: 'left',
             minHeight: day.scriptureText ? 'auto' : 60,
           }}
         >

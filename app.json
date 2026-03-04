@@ -74,6 +74,40 @@
           "icon": "./assets/images/icon.png",
           "color": "#121214"
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.vibecode.unfold.x9fj08t.widgets",
+          "groupIdentifier": "group.com.vibecode.unfold.x9fj08t",
+          "enablePushNotifications": false,
+          "widgets": [
+            {
+              "name": "UnfoldStreak",
+              "displayName": "Streak",
+              "description": "Your daily reading streak at a glance",
+              "supportedFamilies": ["systemSmall", "accessoryCircular"]
+            },
+            {
+              "name": "UnfoldToday",
+              "displayName": "Today's Reading",
+              "description": "Today's devotional with scripture preview",
+              "supportedFamilies": ["systemMedium"]
+            },
+            {
+              "name": "UnfoldDashboard",
+              "displayName": "Devotional",
+              "description": "Your devotional journey at a glance",
+              "supportedFamilies": ["systemLarge"]
+            }
+          ]
+        }
       ]
     ],
     "experiments": {

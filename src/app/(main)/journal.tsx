@@ -10,7 +10,6 @@ import {
   ScrollView,
   ActivityIndicator,
   AccessibilityInfo,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,10 +19,10 @@ import { XIcon, CheckIcon, SparkleIcon, LockIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import { analyzeNetworkError, isOnline } from '@/lib/network-error-handler';
+import { isOnline } from '@/lib/network-error-handler';
 import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'https://oversight-cloning.vibecode.run';
+const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || 'https://unfold-backend-production.up.railway.app';
 
 export default function JournalScreen() {
   const router = useRouter();
@@ -159,7 +158,6 @@ export default function JournalScreen() {
   };
 
   const handleGoDeeper = async () => {
-    // Prevent double-tap
     if (loadingDeeper) return;
 
     if (!isPremium) {
@@ -170,13 +168,10 @@ export default function JournalScreen() {
 
     if (content.trim().length < 10) return;
 
-    // Check online status first
     const online = await isOnline();
     if (!online) {
-      Alert.alert(
-        'Offline',
-        'You appear to be offline. Please check your connection and try again.'
-      );
+      setDeeperError(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
@@ -187,29 +182,57 @@ export default function JournalScreen() {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-      
-      const response = await fetch(`${BACKEND_URL}/api/generate/journal-prompts`, {
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+      const systemPrompt = `You are a thoughtful spiritual director helping someone reflect more deeply on their journal entry about a Christian devotional. Generate exactly 3 follow-up reflection prompts that feel personal and specific to what they wrote, help them go deeper into their emotions, experiences, or spiritual insights, are warm, curious, and inviting — not preachy or prescriptive, vary in approach (one explores feelings, one connects to daily life, one invites imagination or prayer), and are concise (1-2 sentences each). RESPOND WITH ONLY A JSON ARRAY OF EXACTLY 3 STRINGS. No other text.`;
+
+      const userMessage = `Devotional: "${currentDevotional?.title ?? 'Devotional'}"
+Day: "${currentDay?.title ?? `Day ${dayNumber}`}"
+Scripture: ${currentDay?.scriptureReference ?? 'N/A'}
+
+Their journal entry:
+"${content}"`;
+
+      const response = await fetch(`${BACKEND_URL}/api/generate/go-deeper`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          journalContent: content,
-          devotionalTitle: currentDevotional?.title ?? 'Devotional',
-          scriptureReference: currentDay?.scriptureReference ?? '',
-          dayTitle: currentDay?.title ?? `Day ${dayNumber}`,
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 400,
+          temperature: 0.8,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
         }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
-
-      if (!response.ok) throw new Error('Failed to generate');
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        console.error('[Go Deeper] Backend error:', response.status, errBody);
+        throw new Error(`Backend ${response.status}: ${errBody.slice(0, 200)}`);
+      }
 
       const data = await response.json();
-      const textContent = data?.content?.[0]?.text ?? '';
+      console.log('[Go Deeper] Backend response:', JSON.stringify(data).slice(0, 300));
 
-      // Parse JSON array from response
-      const parsed = JSON.parse(textContent);
+      // Backend may return { content: [{ text: "..." }] } or direct array
+      let parsed: string[];
+      if (Array.isArray(data)) {
+        parsed = data;
+      } else {
+        const text = data?.content?.[0]?.text ?? data?.text ?? (typeof data === 'string' ? data : null);
+        if (!text) throw new Error('Empty response from backend');
+
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          const match = text.match(/\[[\s\S]*\]/);
+          if (match) parsed = JSON.parse(match[0]);
+          else throw new Error('Could not parse response');
+        }
+      }
+
       if (Array.isArray(parsed) && parsed.length > 0) {
         setDeeperPrompts(parsed.slice(0, 3));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -218,14 +241,6 @@ export default function JournalScreen() {
       }
     } catch (error) {
       console.error('Go Deeper error:', error);
-      
-      // Show user-friendly error
-      Alert.alert(
-        'Unable to Generate Prompts',
-        'This feature is temporarily unavailable. Please try again later.',
-        [{ text: 'OK' }]
-      );
-      
       setDeeperError(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {

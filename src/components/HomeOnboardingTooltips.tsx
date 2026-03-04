@@ -7,7 +7,7 @@ import Animated, {
   FadeOutDown,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowDownIcon, BookOpenIcon, FireIcon, SquaresFourIcon } from 'phosphor-react-native';
+import { ArrowDownIcon, BookOpenIcon, SunIcon, SquaresFourIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -52,7 +52,7 @@ function StepIcon({ step, color, size }: { step: TooltipStep['icon']; color: str
     case 'journey':
       return <BookOpenIcon size={size} color={color} weight="light" />;
     case 'streak':
-      return <FireIcon size={size} color={color} weight="light" />;
+      return <SunIcon size={size} color={color} weight="light" />;
     case 'links':
       return <SquaresFourIcon size={size} color={color} weight="light" />;
   }

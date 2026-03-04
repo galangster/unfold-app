@@ -19,7 +19,18 @@ import {
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
-import { CARTESIA_VOICES, streamDevotionalAudio } from '@/lib/cartesia';
+import { CARTESIA_VOICES } from '@/lib/cartesia';
+
+/** Bundled voice samples — Psalm 23:1 read by each voice. Instant playback, zero network. */
+const VOICE_SAMPLES: Record<string, any> = {
+  '694f9389-aac1-45b6-b726-9d9369183238': require('@/assets/audio/voice-samples/katie.mp3'),
+  '03496517-369a-4db1-8236-3d3ae459ddf7': require('@/assets/audio/voice-samples/elena.mp3'),
+  '1463a4e1-56a1-4b41-b257-728d56e93605': require('@/assets/audio/voice-samples/marcus.mp3'),
+  '00967b2f-88a6-4a31-8153-110a92134b9f': require('@/assets/audio/voice-samples/sophia.mp3'),
+  '3246e36c-ac8c-418d-83cd-4eaad5a3b887': require('@/assets/audio/voice-samples/david.mp3'),
+  '15a9cd88-84b0-4a8b-95f2-5d583b54c72e': require('@/assets/audio/voice-samples/grace.mp3'),
+  'a924b0e6-9253-4711-8fc3-5cb8e0188c94': require('@/assets/audio/voice-samples/michael.mp3'),
+};
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL || 'https://oversight-cloning.vibecode.run';
 
@@ -82,15 +93,12 @@ export default function SettingsScreen() {
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
-  // Voice preview state
+  // Voice preview state — uses bundled MP3 samples (instant, no network)
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const previewPlayer = useAudioPlayer(null);
   const previewStatus = useAudioPlayerStatus(previewPlayer);
 
-  const VOICE_SAMPLE_TEXT = 'Be still, and know that I am God. In the quiet moments, His presence fills every corner of your heart.';
-
-  const handleVoicePreview = useCallback(async (voiceId: string) => {
+  const handleVoicePreview = useCallback((voiceId: string) => {
     // If already playing this voice, stop it
     if (previewingVoiceId === voiceId && previewStatus.playing) {
       previewPlayer.pause();
@@ -98,20 +106,13 @@ export default function SettingsScreen() {
       return;
     }
 
-    try {
-      setPreviewLoading(true);
-      setPreviewingVoiceId(voiceId);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPreviewingVoiceId(voiceId);
 
-      const result = await streamDevotionalAudio(VOICE_SAMPLE_TEXT, voiceId);
-      previewPlayer.replace({ uri: result.audioUrl });
+    const sample = VOICE_SAMPLES[voiceId];
+    if (sample) {
+      previewPlayer.replace(sample);
       previewPlayer.play();
-      setPreviewLoading(false);
-    } catch (error) {
-      console.error('Voice preview error:', error);
-      setPreviewLoading(false);
-      setPreviewingVoiceId(null);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   }, [previewingVoiceId, previewStatus.playing, previewPlayer]);
 
@@ -125,10 +126,10 @@ export default function SettingsScreen() {
 
   // Auto-stop when playback finishes
   useEffect(() => {
-    if (previewingVoiceId && !previewStatus.playing && !previewLoading && previewStatus.currentTime > 0) {
+    if (previewingVoiceId && !previewStatus.playing && previewStatus.currentTime > 0) {
       setPreviewingVoiceId(null);
     }
-  }, [previewStatus.playing, previewingVoiceId, previewLoading, previewStatus.currentTime]);
+  }, [previewStatus.playing, previewingVoiceId, previewStatus.currentTime]);
 
   // Check notification status on mount
   useEffect(() => {
@@ -1327,9 +1328,7 @@ export default function SettingsScreen() {
                               accessibilityRole="button"
                               accessibilityLabel={`Preview ${option.name} voice`}
                             >
-                              {previewLoading && previewingVoiceId === option.id ? (
-                                <ActivityIndicator size="small" color={colors.background} />
-                              ) : previewingVoiceId === option.id && previewStatus.playing ? (
+                              {previewingVoiceId === option.id && previewStatus.playing ? (
                                 <PauseIcon size={14} color={colors.background} weight="fill" />
                               ) : (
                                 <SpeakerHighIcon size={14} color={previewingVoiceId === option.id ? colors.background : colors.textMuted} weight="light" />

@@ -1,11 +1,47 @@
 /**
  * Apple Authentication module
  * Handles Apple Sign In and Firebase Auth integration
+ *
+ * Graceful degradation: All Firebase calls go through getAuthInstance()
+ * which returns null if Firebase is not configured. Every function
+ * handles that null case and falls back to local-only mode.
  */
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { getRandomBytesAsync } from 'expo-crypto';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { logger } from './logger';
+
+// Re-export the type so consumers don't need to import Firebase directly
+export type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+
+/**
+ * Safely get the Firebase Auth instance.
+ * Returns null if Firebase is not configured or the module fails to load.
+ */
+function getAuthInstance(): ReturnType<typeof import('@react-native-firebase/auth').default> | null {
+  try {
+    const auth = require('@react-native-firebase/auth').default;
+    // Calling auth() will throw if Firebase app is not initialized
+    return auth();
+  } catch (error) {
+    logger.warn('[AppleAuth] Firebase Auth not available, running in local-only mode', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * Safely get the Firebase Auth module (for static methods like AppleAuthProvider).
+ * Returns null if the module fails to load.
+ */
+function getAuthModule(): typeof import('@react-native-firebase/auth').default | null {
+  try {
+    return require('@react-native-firebase/auth').default;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Generate a random nonce for Apple Sign In
@@ -79,13 +115,25 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
     }
 
     // Create Firebase credential
-    const appleCredential = auth.AppleAuthProvider.credential(
+    const authModule = getAuthModule();
+    const authInstance = getAuthInstance();
+
+    if (!authModule || !authInstance) {
+      logger.warn('[AppleAuth] Firebase not available, cannot complete Apple Sign In');
+      return {
+        success: false,
+        user: null,
+        error: 'Firebase is not configured. Sign in is unavailable.',
+      };
+    }
+
+    const appleCredential = authModule.AppleAuthProvider.credential(
       credential.identityToken,
       nonce
     );
 
     // Sign in to Firebase
-    const userCredential = await auth().signInWithCredential(appleCredential);
+    const userCredential = await authInstance.signInWithCredential(appleCredential);
 
     // Update user profile if display name is available (only on first sign-in)
     if (credential.fullName) {
@@ -140,8 +188,18 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
  */
 export async function signInAnonymously(): Promise<AppleAuthResult> {
   try {
-    const userCredential = await auth().signInAnonymously();
-    
+    const authInstance = getAuthInstance();
+    if (!authInstance) {
+      logger.warn('[AppleAuth] Firebase not available, cannot sign in anonymously');
+      return {
+        success: false,
+        user: null,
+        error: 'Firebase is not configured',
+      };
+    }
+
+    const userCredential = await authInstance.signInAnonymously();
+
     logger.log('[AppleAuth] Signed in anonymously', {
       userId: userCredential.user.uid,
     });
@@ -163,34 +221,51 @@ export async function signInAnonymously(): Promise<AppleAuthResult> {
 
 /**
  * Get the current authenticated user
+ * Returns null if Firebase is not available
  */
 export function getCurrentUser(): FirebaseAuthTypes.User | null {
-  return auth().currentUser;
+  const authInstance = getAuthInstance();
+  return authInstance?.currentUser ?? null;
 }
 
 /**
  * Sign out the current user
+ * No-ops if Firebase is not available
  */
 export async function signOut(): Promise<void> {
   try {
-    await auth().signOut();
+    const authInstance = getAuthInstance();
+    if (!authInstance) {
+      logger.log('[AppleAuth] Firebase not available, sign out is a no-op');
+      return;
+    }
+
+    await authInstance.signOut();
     logger.log('[AppleAuth] User signed out');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('[AppleAuth] Sign out error', { error: errorMessage });
-    throw error;
+    // Don't re-throw -- callers should not crash on sign-out failure
   }
 }
 
 /**
  * Update the current user's display name
  * Used when user sets their name manually (e.g., after Apple Sign In with hidden email)
+ * Silently no-ops if Firebase is not available
  */
 export async function updateUserProfile(displayName: string): Promise<void> {
   try {
-    const currentUser = auth().currentUser;
+    const authInstance = getAuthInstance();
+    if (!authInstance) {
+      logger.log('[AppleAuth] Firebase not available, skipping profile update');
+      return;
+    }
+
+    const currentUser = authInstance.currentUser;
     if (!currentUser) {
-      throw new Error('No current user');
+      logger.warn('[AppleAuth] No current user to update profile for');
+      return;
     }
 
     await currentUser.updateProfile({ displayName });
@@ -198,7 +273,7 @@ export async function updateUserProfile(displayName: string): Promise<void> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('[AppleAuth] Update profile error', { error: errorMessage });
-    throw error;
+    // Don't re-throw -- callers already handle failure gracefully
   }
 }
 
@@ -220,7 +295,13 @@ export async function isAppleSignInAvailable(): Promise<boolean> {
  */
 export async function deleteAccount(): Promise<{ success: boolean; error?: string }> {
   try {
-    const currentUser = auth().currentUser;
+    const authInstance = getAuthInstance();
+    if (!authInstance) {
+      logger.log('[AppleAuth] Firebase not available, no account to delete');
+      return { success: true };
+    }
+
+    const currentUser = authInstance.currentUser;
 
     if (!currentUser) {
       logger.log('[AppleAuth] No user to delete');
@@ -257,9 +338,15 @@ export async function deleteAccount(): Promise<{ success: boolean; error?: strin
  */
 export async function initializeAuth(): Promise<FirebaseAuthTypes.User | null> {
   try {
+    const authInstance = getAuthInstance();
+    if (!authInstance) {
+      logger.log('[AppleAuth] Firebase not available, skipping auth initialization (local-only mode)');
+      return null;
+    }
+
     // Check if there's already a current user
-    const currentUser = auth().currentUser;
-    
+    const currentUser = authInstance.currentUser;
+
     if (currentUser) {
       logger.log('[AppleAuth] Found existing user session', {
         userId: currentUser.uid,
@@ -270,7 +357,7 @@ export async function initializeAuth(): Promise<FirebaseAuthTypes.User | null> {
 
     // No existing user, check if Apple Sign In is available
     const appleAvailable = await isAppleSignInAvailable();
-    
+
     if (appleAvailable) {
       logger.log('[AppleAuth] Apple Sign In available but no user signed in');
       // Return null - UI will prompt for sign in
@@ -294,8 +381,19 @@ export async function initializeAuth(): Promise<FirebaseAuthTypes.User | null> {
  */
 export async function linkAnonymousToApple(): Promise<AppleAuthResult> {
   try {
-    const currentUser = auth().currentUser;
-    
+    const authInstance = getAuthInstance();
+    const authModule = getAuthModule();
+
+    if (!authInstance || !authModule) {
+      return {
+        success: false,
+        user: null,
+        error: 'Firebase is not configured',
+      };
+    }
+
+    const currentUser = authInstance.currentUser;
+
     if (!currentUser) {
       return {
         success: false,
@@ -344,13 +442,13 @@ export async function linkAnonymousToApple(): Promise<AppleAuthResult> {
     }
 
     // Create Firebase credential and link
-    const appleCredential = auth.AppleAuthProvider.credential(
+    const appleCredential = authModule.AppleAuthProvider.credential(
       credential.identityToken,
       nonce
     );
 
     const linkedCredential = await currentUser.linkWithCredential(appleCredential);
-    
+
     // Update display name if available
     if (credential.fullName) {
       const displayName = [
@@ -377,11 +475,11 @@ export async function linkAnonymousToApple(): Promise<AppleAuthResult> {
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+
     if (errorMessage.includes('canceled') || errorMessage.includes('cancelled')) {
       return {
         success: false,
-        user: auth().currentUser,
+        user: getCurrentUser(),
         isCancelled: true,
         error: 'User cancelled sign in',
       };
@@ -390,7 +488,7 @@ export async function linkAnonymousToApple(): Promise<AppleAuthResult> {
     logger.error('[AppleAuth] Link anonymous to Apple error', { error: errorMessage });
     return {
       success: false,
-      user: auth().currentUser,
+      user: getCurrentUser(),
       error: errorMessage,
     };
   }

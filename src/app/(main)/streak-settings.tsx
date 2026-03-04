@@ -1,15 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
-  FireIcon,
-  FlameIcon,
-  CrownIcon,
-  LightningIcon,
+  SunDimIcon,
+  SunIcon,
+  SparkleIcon,
+  StarIcon,
   SnowflakeIcon,
   CalendarIcon,
   InfoIcon,
@@ -27,45 +27,45 @@ interface StreakTier {
   maxDays: number; // exclusive upper bound (Infinity for top tier)
   accentColor: string;
   accentColorLight: string;
-  iconComponent: 'fire' | 'flame' | 'lightning' | 'crown';
+  iconComponent: 'sundim' | 'sun' | 'sparkle' | 'star';
 }
 
 const STREAK_TIERS: StreakTier[] = [
   {
-    id: 'ember',
-    name: 'Ember',
+    id: 'spark',
+    name: 'Spark',
     minDays: 0,
     maxDays: 7,
-    accentColor: 'rgba(245, 240, 235, 0.35)',
-    accentColorLight: 'rgba(28, 23, 16, 0.25)',
-    iconComponent: 'fire',
+    accentColor: '', // uses theme accent
+    accentColorLight: '',
+    iconComponent: 'sundim',
   },
   {
-    id: 'flame',
-    name: 'Flame',
+    id: 'glow',
+    name: 'Glow',
     minDays: 7,
     maxDays: 30,
-    accentColor: '#E8913A',
-    accentColorLight: '#D07A28',
-    iconComponent: 'flame',
+    accentColor: '',
+    accentColorLight: '',
+    iconComponent: 'sun',
   },
   {
-    id: 'blaze',
-    name: 'Blaze',
+    id: 'shine',
+    name: 'Shine',
     minDays: 30,
     maxDays: 90,
-    accentColor: '#F05E23',
-    accentColorLight: '#D94E18',
-    iconComponent: 'lightning',
+    accentColor: '',
+    accentColorLight: '',
+    iconComponent: 'sparkle',
   },
   {
-    id: 'inferno',
-    name: 'Inferno',
+    id: 'radiance',
+    name: 'Radiance',
     minDays: 90,
     maxDays: Infinity,
-    accentColor: '#FFD700',
-    accentColorLight: '#B8960F',
-    iconComponent: 'crown',
+    accentColor: '',
+    accentColorLight: '',
+    iconComponent: 'star',
   },
 ];
 
@@ -107,21 +107,24 @@ function TierIcon({
   weight: 'light' | 'fill';
 }) {
   switch (tier.iconComponent) {
-    case 'fire':
-      return <FireIcon size={size} color={color} weight={weight} />;
-    case 'flame':
-      return <FlameIcon size={size} color={color} weight={weight} />;
-    case 'lightning':
-      return <LightningIcon size={size} color={color} weight={weight} />;
-    case 'crown':
-      return <CrownIcon size={size} color={color} weight={weight} />;
+    case 'sundim':
+      return <SunDimIcon size={size} color={color} weight={weight} />;
+    case 'sun':
+      return <SunIcon size={size} color={color} weight={weight} />;
+    case 'sparkle':
+      return <SparkleIcon size={size} color={color} weight={weight} />;
+    case 'star':
+      return <StarIcon size={size} color={color} weight={weight} />;
   }
 }
+
+type StatTooltipId = 'best' | 'freezes' | 'toFreeze';
 
 export default function StreakSettingsScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  
+  const [activeTooltip, setActiveTooltip] = useState<StatTooltipId | null>(null);
+
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const longestStreak = useUnfoldStore((s) => s.streakLongest);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
@@ -132,6 +135,11 @@ export default function StreakSettingsScreen() {
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
+  };
+
+  const handleStatTap = (id: StatTooltipId) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveTooltip((prev) => (prev === id ? null : id));
   };
 
   const handleToggleAmnesty = () => {
@@ -148,7 +156,7 @@ export default function StreakSettingsScreen() {
   const currentTier = useMemo(() => getCurrentTier(streak), [streak]);
   const nextTier = useMemo(() => getNextTier(currentTier), [currentTier]);
   const tierProgress = useMemo(() => getTierProgress(streak, currentTier), [streak, currentTier]);
-  const tierColor = isDark ? currentTier.accentColor : currentTier.accentColorLight;
+  const tierColor = colors.accent;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
@@ -184,11 +192,7 @@ export default function StreakSettingsScreen() {
             backgroundColor: colors.inputBackground,
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: currentTier.id === 'inferno'
-              ? (isDark ? 'rgba(255, 215, 0, 0.25)' : 'rgba(184, 150, 15, 0.2)')
-              : currentTier.id === 'ember'
-                ? colors.border
-                : (isDark ? `${currentTier.accentColor}30` : `${currentTier.accentColorLight}20`),
+            borderColor: isDark ? `${colors.accent}30` : `${colors.accent}20`,
             padding: 24,
             marginBottom: 24,
             overflow: 'hidden',
@@ -202,9 +206,7 @@ export default function StreakSettingsScreen() {
                   width: 48,
                   height: 48,
                   borderRadius: 24,
-                  backgroundColor: currentTier.id === 'ember'
-                    ? (isDark ? 'rgba(245, 240, 235, 0.06)' : 'rgba(28, 23, 16, 0.04)')
-                    : (isDark ? `${currentTier.accentColor}1A` : `${currentTier.accentColorLight}15`),
+                  backgroundColor: isDark ? `${colors.accent}1A` : `${colors.accent}15`,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
@@ -213,7 +215,7 @@ export default function StreakSettingsScreen() {
                   tier={currentTier}
                   size={26}
                   color={tierColor}
-                  weight={currentTier.id === 'ember' ? 'light' : 'fill'}
+                  weight={streak >= 7 ? 'fill' : 'light'}
                 />
               </View>
               <View>
@@ -232,7 +234,7 @@ export default function StreakSettingsScreen() {
                   style={{
                     fontFamily: FontFamily.display,
                     fontSize: 24,
-                    color: currentTier.id === 'ember' ? colors.text : tierColor,
+                    color: tierColor,
                     marginTop: 1,
                   }}
                 >
@@ -350,11 +352,7 @@ export default function StreakSettingsScreen() {
           {STREAK_TIERS.map((tier) => {
             const isActive = tier.id === currentTier.id;
             const isPast = tier.minDays < currentTier.minDays;
-            const iconColor = isActive
-              ? (isDark ? tier.accentColor : tier.accentColorLight)
-              : isPast
-                ? (isDark ? tier.accentColor : tier.accentColorLight)
-                : colors.textHint;
+            const iconColor = isActive || isPast ? colors.accent : colors.textHint;
 
             return (
               <View
@@ -363,13 +361,13 @@ export default function StreakSettingsScreen() {
                   flex: 1,
                   alignItems: 'center',
                   backgroundColor: isActive
-                    ? (isDark ? 'rgba(245, 240, 235, 0.06)' : 'rgba(28, 23, 16, 0.03)')
+                    ? (isDark ? `${colors.accent}10` : `${colors.accent}08`)
                     : 'transparent',
                   borderRadius: 10,
                   paddingVertical: 10,
                   borderWidth: isActive ? 1 : 0,
                   borderColor: isActive
-                    ? (isDark ? `${tier.accentColor}30` : `${tier.accentColorLight}20`)
+                    ? (isDark ? `${colors.accent}30` : `${colors.accent}20`)
                     : 'transparent',
                 }}
               >
@@ -412,97 +410,187 @@ export default function StreakSettingsScreen() {
             marginBottom: 24,
           }}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: colors.inputBackground,
-              borderRadius: 12,
-              padding: 16,
-              alignItems: 'center',
-            }}
-          >
-            <FireIcon size={24} color={colors.accent} weight="light" />
-            <Text
+          {/* Best Streak */}
+          <View style={{ flex: 1 }}>
+            <Pressable
+              onPress={() => handleStatTap('best')}
               style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: 24,
-                color: colors.text,
-                marginTop: 8,
+                backgroundColor: colors.inputBackground,
+                borderRadius: 12,
+                padding: 16,
+                alignItems: 'center',
+                borderWidth: activeTooltip === 'best' ? 1 : 0,
+                borderColor: activeTooltip === 'best' ? colors.border : 'transparent',
               }}
             >
-              {longestStreak}
-            </Text>
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 12,
-                color: colors.textMuted,
-              }}
-            >
-              Best Streak
-            </Text>
+              <SunIcon size={24} color={colors.accent} weight="light" />
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 24,
+                  color: colors.text,
+                  marginTop: 8,
+                }}
+              >
+                {longestStreak}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 12,
+                  color: colors.textMuted,
+                }}
+              >
+                Best Streak
+              </Text>
+            </Pressable>
+            {activeTooltip === 'best' && (
+              <Animated.View
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(150)}
+                style={{
+                  backgroundColor: colors.inputBackground,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 12,
+                    color: colors.textMuted,
+                    lineHeight: 17,
+                  }}
+                >
+                  Your longest consecutive streak of daily devotionals
+                </Text>
+              </Animated.View>
+            )}
           </View>
 
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: colors.inputBackground,
-              borderRadius: 12,
-              padding: 16,
-              alignItems: 'center',
-            }}
-          >
-            <SnowflakeIcon size={24} color={colors.textSubtle} weight="light" />
-            <Text
+          {/* Freezes */}
+          <View style={{ flex: 1 }}>
+            <Pressable
+              onPress={() => handleStatTap('freezes')}
               style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: 24,
-                color: colors.text,
-                marginTop: 8,
+                backgroundColor: colors.inputBackground,
+                borderRadius: 12,
+                padding: 16,
+                alignItems: 'center',
+                borderWidth: activeTooltip === 'freezes' ? 1 : 0,
+                borderColor: activeTooltip === 'freezes' ? colors.border : 'transparent',
               }}
             >
-              {freezes}
-            </Text>
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 12,
-                color: colors.textMuted,
-              }}
-            >
-              Freezes
-            </Text>
+              <SnowflakeIcon size={24} color={colors.textSubtle} weight="light" />
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 24,
+                  color: colors.text,
+                  marginTop: 8,
+                }}
+              >
+                {freezes}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 12,
+                  color: colors.textMuted,
+                }}
+              >
+                Freezes
+              </Text>
+            </Pressable>
+            {activeTooltip === 'freezes' && (
+              <Animated.View
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(150)}
+                style={{
+                  backgroundColor: colors.inputBackground,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 12,
+                    color: colors.textMuted,
+                    lineHeight: 17,
+                  }}
+                >
+                  Freezes protect your streak if you miss a day. They're used automatically.
+                </Text>
+              </Animated.View>
+            )}
           </View>
 
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: colors.inputBackground,
-              borderRadius: 12,
-              padding: 16,
-              alignItems: 'center',
-            }}
-          >
-            <CalendarIcon size={24} color={colors.textSubtle} weight="light" />
-            <Text
+          {/* Days to Freeze */}
+          <View style={{ flex: 1 }}>
+            <Pressable
+              onPress={() => handleStatTap('toFreeze')}
               style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: 24,
-                color: colors.text,
-                marginTop: 8,
+                backgroundColor: colors.inputBackground,
+                borderRadius: 12,
+                padding: 16,
+                alignItems: 'center',
+                borderWidth: activeTooltip === 'toFreeze' ? 1 : 0,
+                borderColor: activeTooltip === 'toFreeze' ? colors.border : 'transparent',
               }}
             >
-              {adjustedDaysUntilFreeze}
-            </Text>
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 12,
-                color: colors.textMuted,
-              }}
-            >
-              To Freeze
-            </Text>
+              <CalendarIcon size={24} color={colors.textSubtle} weight="light" />
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 24,
+                  color: colors.text,
+                  marginTop: 8,
+                }}
+              >
+                {adjustedDaysUntilFreeze}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 12,
+                  color: colors.textMuted,
+                }}
+              >
+                Days to Freeze
+              </Text>
+            </Pressable>
+            {activeTooltip === 'toFreeze' && (
+              <Animated.View
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(150)}
+                style={{
+                  backgroundColor: colors.inputBackground,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  padding: 12,
+                  marginTop: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 12,
+                    color: colors.textMuted,
+                    lineHeight: 17,
+                  }}
+                >
+                  Complete {adjustedDaysUntilFreeze} more {adjustedDaysUntilFreeze === 1 ? 'day' : 'days'} to earn your next streak freeze
+                </Text>
+              </Animated.View>
+            )}
           </View>
         </View>
 

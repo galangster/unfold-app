@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FireIcon, SnowflakeIcon } from 'phosphor-react-native';
+import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeIn,
@@ -80,7 +80,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             gap: 6,
           }}
         >
-          <FireIcon size={config.flame} color={colors.textMuted} weight="light" />
+          <SunIcon size={config.flame} color={colors.textMuted} weight="light" />
           <Text
             style={{
               fontFamily: FontFamily.uiSemiBold,
@@ -117,7 +117,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
         }}
       >
         <Animated.View style={flamePulseStyle}>
-          <FireIcon
+          <SunIcon
             size={config.flame}
             color={colors.accent}
             weight={streak >= 7 ? "fill" : "light"}

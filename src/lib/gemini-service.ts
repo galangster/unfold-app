@@ -1,34 +1,13 @@
 /**
- * Gemini Flash 2.5 Direct Integration
- * For truly unique, dynamic question generation
- * 
- * KEY PRINCIPLES:
- * - Each question makes a DIRECT API call to Gemini (no backend proxy)
- * - No caching - every call is unique
- * - Uses Gemini 2.5 Flash for speed + cost efficiency
- * - Falls back to existing backend if Gemini fails
+ * Adaptive Question Generation (via Backend Proxy)
+ * All API calls go through the backend — no API keys on the frontend.
  */
 
 import { logBugError } from './bug-logger';
 
-// Gemini Configuration
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-
-// Get API key from environment
-function getGeminiApiKey(): string | null {
-  // Try various env var names
-  const key = 
-    process.env.EXPO_PUBLIC_GEMINI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    null;
-  
-  if (!key) {
-    console.warn('[Gemini] No API key found in environment');
-  }
-  
-  return key;
-}
+const BACKEND_URL =
+  process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() ||
+  'https://unfold-backend-production.up.railway.app';
 
 interface GeminiQuestionResponse {
   question: string;
@@ -36,21 +15,14 @@ interface GeminiQuestionResponse {
 }
 
 /**
- * Generate an adaptive question using Gemini Flash 2.5 directly
- * Each call is unique - no caching, no duplicate requests
+ * Generate an adaptive question via the backend proxy.
+ * Each call is unique — no caching, no duplicate requests.
  */
 export async function generateAdaptiveQuestionWithGemini(
   previousAnswers: { question: string; answer: string }[],
   nextQuestionBase: { question: string; subtext: string },
   stepPosition?: 'opening' | 'depth' | 'longing'
 ): Promise<{ question: string; subtext: string } | null> {
-  const apiKey = getGeminiApiKey();
-  
-  if (!apiKey) {
-    console.log('[Gemini] No API key available, skipping Gemini integration');
-    return null;
-  }
-
   if (previousAnswers.length === 0) {
     return null;
   }
@@ -135,102 +107,80 @@ IMPORTANT: If they chose a specific study type, book, character, or theme, YOUR 
 
 Make them feel heard. Do NOT ask a question that steers them toward a predetermined answer.`;
 
-    // Build the request body for Gemini
-    const requestBody = {
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: `${systemPrompt}\n\n${userPrompt}` }
-          ]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.85, // High creativity but not chaotic
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 400,
-        responseMimeType: 'application/json'
-      }
-    };
+    console.log(`[Adaptive] Calling backend, step: ${currentStep}, answers: ${previousAnswers.length}`);
 
-    // Generate unique request ID to prevent any caching
-    const uniqueRequestId = `gemini_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${previousAnswers.length}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    console.log(`[Gemini] Making unique API call: ${uniqueRequestId}`);
-    console.log(`[Gemini] Step position: ${currentStep}, Previous answers: ${previousAnswers.length}`);
-
-    // Make direct API call to Gemini
-    const url = `${GEMINI_API_URL}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-    
-    const response = await fetch(url, {
+    const response = await fetch(`${BACKEND_URL}/api/generate/adaptive-question`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Request-ID': uniqueRequestId, // Unique ID prevents caching
-      },
-      body: JSON.stringify(requestBody),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        temperature: 0.85,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[Gemini] API error: ${response.status}`, errorText);
-      throw new Error(`Gemini API error: ${response.status}`);
+      console.error(`[Adaptive] Backend error: ${response.status}`, errorText);
+      throw new Error(`Backend API error: ${response.status}`);
     }
 
     const data = await response.json();
-    
-    // Extract the text response
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!text) {
-      console.error('[Gemini] No text in response:', data);
-      throw new Error('Empty response from Gemini');
-    }
 
-    // Parse JSON from response
+    // Backend may return structured JSON directly or { content: [{ text: "..." }] }
     let parsedResult: GeminiQuestionResponse;
-    
-    try {
-      // Try direct parse first
-      parsedResult = JSON.parse(text);
-    } catch (e) {
-      // Try to extract JSON from markdown code blocks
-      const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) || 
-                        text.match(/```\n?([\s\S]*?)\n?```/);
-      
-      if (jsonMatch) {
-        parsedResult = JSON.parse(jsonMatch[1]);
-      } else {
-        // Try to find JSON object in text
-        const objectMatch = text.match(/\{[\s\S]*\}/);
-        if (objectMatch) {
-          parsedResult = JSON.parse(objectMatch[0]);
+
+    if (typeof data?.question === 'string' && data.question.trim()) {
+      parsedResult = data as GeminiQuestionResponse;
+    } else {
+      const text = data?.content?.[0]?.text ?? data?.text;
+      if (!text) {
+        console.error('[Adaptive] No text in response:', data);
+        throw new Error('Empty response from backend');
+      }
+
+      try {
+        parsedResult = JSON.parse(text);
+      } catch {
+        const jsonMatch = text.match(/```json\n?([\s\S]*?)\n?```/) ||
+                          text.match(/```\n?([\s\S]*?)\n?```/);
+        if (jsonMatch) {
+          parsedResult = JSON.parse(jsonMatch[1]);
         } else {
-          throw new Error('Could not parse JSON from response');
+          const objectMatch = text.match(/\{[\s\S]*\}/);
+          if (objectMatch) {
+            parsedResult = JSON.parse(objectMatch[0]);
+          } else {
+            throw new Error('Could not parse JSON from response');
+          }
         }
       }
     }
 
-    // Validate the response
     if (!parsedResult.question || !parsedResult.subtext) {
-      console.error('[Gemini] Invalid response structure:', parsedResult);
-      throw new Error('Invalid response structure from Gemini');
+      console.error('[Adaptive] Invalid response structure:', parsedResult);
+      throw new Error('Invalid response structure');
     }
 
-    // Check if it's actually different from base
-    const isDifferent = parsedResult.question.trim().toLowerCase() !== 
+    const isDifferent = parsedResult.question.trim().toLowerCase() !==
                        nextQuestionBase.question.trim().toLowerCase();
 
     if (!isDifferent) {
-      console.log('[Gemini] Response too similar to base, treating as failure');
+      console.log('[Adaptive] Response too similar to base, treating as failure');
       return null;
     }
 
-    console.log(`[Gemini] Successfully generated unique question:`, {
+    console.log(`[Adaptive] Generated unique question:`, {
       question: parsedResult.question.substring(0, 60) + '...',
       subtext: parsedResult.subtext.substring(0, 40) + '...',
-      requestId: uniqueRequestId
     });
 
     return {
@@ -239,9 +189,9 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     };
 
   } catch (error) {
-    console.error('[Gemini] Error generating question:', error);
-    logBugError('gemini_question_generation_failed', 
-      error instanceof Error ? error.message : 'Unknown error', 
+    console.error('[Adaptive] Error generating question:', error);
+    logBugError('adaptive_question_generation_failed',
+      error instanceof Error ? error.message : 'Unknown error',
       { stepPosition, answerCount: previousAnswers.length }
     );
     return null;
@@ -249,10 +199,10 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 }
 
 /**
- * Check if Gemini is available (has API key)
+ * Check if the backend is available (always true — no client-side key needed)
  */
 export function isGeminiAvailable(): boolean {
-  return getGeminiApiKey() !== null;
+  return true;
 }
 
 export default {

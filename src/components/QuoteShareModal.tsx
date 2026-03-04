@@ -161,7 +161,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
               marginBottom: 24,
             }}
           >
-            "{quote.text}"
+            {quote.text}
           </Text>
           
           {/* Day Title if provided */}

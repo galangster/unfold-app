@@ -2,14 +2,31 @@
  * Authentication Hook
  * Manages Firebase Auth state and syncs with Zustand store
  * Also handles RevenueCat user linking for subscription tracking
+ *
+ * Graceful degradation: If Firebase Auth is not available, the hook
+ * will still work -- it simply treats the user as unauthenticated
+ * and the app operates in local-only mode.
  */
 import { useEffect, useState, useCallback } from 'react';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { useUnfoldStore } from '@/lib/store';
 import { isRevenueCatEnabled, setUserId, logoutUser } from '@/lib/revenuecatClient';
 import { logger } from '@/lib/logger';
 import { initializeAuth } from '@/lib/appleAuth';
 import { Analytics } from '@/lib/analytics';
+
+/**
+ * Safely get the Firebase Auth instance for subscribing to state changes.
+ * Returns null if Firebase is not configured.
+ */
+function getAuthInstance(): ReturnType<typeof import('@react-native-firebase/auth').default> | null {
+  try {
+    const auth = require('@react-native-firebase/auth').default;
+    return auth();
+  } catch {
+    return null;
+  }
+}
 
 interface AuthState {
   user: FirebaseAuthTypes.User | null;
@@ -141,36 +158,51 @@ export function useAuth() {
     };
   }, [syncAuthToStore, linkRevenueCatUser]);
 
-  // Subscribe to auth state changes
+  // Subscribe to auth state changes (only if Firebase is available)
   useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(async (user) => {
-      logger.log('[useAuth] Auth state changed', {
-        hasUser: !!user,
-        isAnonymous: user?.isAnonymous,
+    const authInstance = getAuthInstance();
+    if (!authInstance) {
+      logger.log('[useAuth] Firebase Auth not available, skipping onAuthStateChanged subscription');
+      return;
+    }
+
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = authInstance.onAuthStateChanged(async (user) => {
+        logger.log('[useAuth] Auth state changed', {
+          hasUser: !!user,
+          isAnonymous: user?.isAnonymous,
+        });
+
+        const providerId = user?.providerData[0]?.providerId;
+        const authProvider: 'apple' | 'anonymous' | null =
+          user?.isAnonymous ? 'anonymous' :
+          providerId === 'apple.com' ? 'apple' :
+          null;
+
+        setAuthState({
+          user,
+          isAuthenticated: !!user,
+          isAnonymous: user?.isAnonymous ?? true,
+          isLoading: false,
+          authProvider,
+        });
+
+        // Sync to store
+        syncAuthToStore(user);
+
+        // Link/unlink RevenueCat user
+        await linkRevenueCatUser(user?.uid ?? null);
       });
-
-      const providerId = user?.providerData[0]?.providerId;
-      const authProvider: 'apple' | 'anonymous' | null = 
-        user?.isAnonymous ? 'anonymous' :
-        providerId === 'apple.com' ? 'apple' :
-        null;
-
-      setAuthState({
-        user,
-        isAuthenticated: !!user,
-        isAnonymous: user?.isAnonymous ?? true,
-        isLoading: false,
-        authProvider,
+    } catch (error) {
+      logger.error('[useAuth] Failed to subscribe to auth state changes', {
+        error: error instanceof Error ? error.message : String(error),
       });
+    }
 
-      // Sync to store
-      syncAuthToStore(user);
-
-      // Link/unlink RevenueCat user
-      await linkRevenueCatUser(user?.uid ?? null);
-    });
-
-    return unsubscribe;
+    return () => {
+      unsubscribe?.();
+    };
   }, [syncAuthToStore, linkRevenueCatUser]);
 
   // Get current user's display name

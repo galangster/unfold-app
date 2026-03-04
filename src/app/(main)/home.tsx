@@ -25,6 +25,8 @@ import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
+import { FeatureOnboarding } from '@/components/FeatureOnboarding';
+import { syncWidgets } from '@/lib/widget-bridge';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -163,6 +165,7 @@ export default function HomeScreen() {
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const bookmarkCount = useUnfoldStore((s) => s.bookmarks.length);
+  const hasSeenFeatureOnboarding = useUnfoldStore((s) => s.hasSeenFeatureOnboarding);
 
   // Check premium status from RevenueCat
   const { data: premiumResult } = useQuery({
@@ -179,6 +182,13 @@ export default function HomeScreen() {
       updateUser({ isPremium: premiumResult.data });
     }
   }, [premiumResult, user?.isPremium, updateUser]);
+
+  // Sync widget data whenever home screen mounts or re-focuses
+  useFocusEffect(
+    useCallback(() => {
+      syncWidgets();
+    }, [])
+  );
 
   // Get a quote based on the day
   const dailyQuote = useMemo(() => {
@@ -962,6 +972,9 @@ export default function HomeScreen() {
 
       {/* First-time onboarding tooltips overlay */}
       <HomeOnboardingTooltips />
+
+      {/* Feature onboarding carousel -- shown once after first devotional is generated */}
+      {!hasSeenFeatureOnboarding && <FeatureOnboarding />}
     </View>
   );
 }

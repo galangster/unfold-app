@@ -107,10 +107,10 @@ export default function PaywallScreen() {
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
 
   // Hardcoded pricing (update in RevenueCat dashboard later)
-  const monthlyPrice = '$4.99';
-  const yearlyPrice = '$39.99';
-  const yearlyRaw = 39.99;
-  const perMonthFromYearly = '$3.33';
+  const monthlyPrice = '$5.99';
+  const yearlyPrice = '$49.99';
+  const yearlyRaw = 49.99;
+  const perMonthFromYearly = '$4.17';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -295,7 +295,7 @@ export default function PaywallScreen() {
                         letterSpacing: 0.5,
                       }}
                     >
-                      Save 33%
+                      Save 30%
                     </Text>
                   </View>
                 </View>

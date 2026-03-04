@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
-    "@bittingz/expo-widgets": "^3.0.2",
     "@bottom-tabs/react-navigation": "^0.12.2",
     "@codeherence/react-native-header": "^1.0.0",
     "@expo-google-fonts/crimson-text": "^0.4.0",
@@ -35,6 +34,7 @@
     "@expo/html-elements": "^0.13.7",
     "@expo/metro-runtime": "~55.0.6",
     "@expo/react-native-action-sheet": "^4.1.1",
+    "@expo/ui": "55.0.1",
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5",
     "@kolking/react-native-avatar": "^2.1.6",
@@ -117,6 +117,7 @@
     "expo-video": "~55.0.9",
     "expo-video-thumbnails": "~55.0.9",
     "expo-web-browser": "~55.0.9",
+    "expo-widgets": "^55.0.2",
     "lottie-react-native": "~7.3.1",
     "lucide-react-native": "^0.468.0",
     "memoize-one": "^6.0.0",

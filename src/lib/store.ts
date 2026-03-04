@@ -312,6 +312,10 @@ interface UnfoldState {
   hasSeenHomeTooltips: boolean;
   setHasSeenHomeTooltips: (seen: boolean) => void;
 
+  // Feature onboarding carousel (shown once after first devotional generated)
+  hasSeenFeatureOnboarding: boolean;
+  setHasSeenFeatureOnboarding: (seen: boolean) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -345,6 +349,7 @@ const initialState = {
   streakFreezes: 0,
   seriesPersonaHistory: [] as SeriesPersonaRecord[],
   hasSeenHomeTooltips: false,
+  hasSeenFeatureOnboarding: false,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -717,6 +722,9 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Home onboarding tooltips
       setHasSeenHomeTooltips: (seen) => set({ hasSeenHomeTooltips: seen }),
 
+      // Feature onboarding carousel
+      setHasSeenFeatureOnboarding: (seen) => set({ hasSeenFeatureOnboarding: seen }),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -728,7 +736,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 7, // Increment when state structure changes
+      version: 8, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -791,6 +799,14 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             ...state,
             hasSeenHomeTooltips: false,
+          } as UnfoldState;
+        }
+
+        // Migration from version 7 to 8: Add hasSeenFeatureOnboarding
+        if (version < 8) {
+          return {
+            ...state,
+            hasSeenFeatureOnboarding: false,
           } as UnfoldState;
         }
 

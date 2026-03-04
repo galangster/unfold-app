@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { FireIcon, SnowflakeIcon } from 'phosphor-react-native';
+import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import Animated, {
   FadeInDown,
   FadeIn,
@@ -18,8 +18,8 @@ function getStreakMotivation(streak: number): string {
   if (streak === 0) return 'Start your journey today';
   if (streak <= 2) return "You're building momentum!";
   if (streak <= 6) return 'Keep going \u2014 a freeze awaits at day 7!';
-  if (streak <= 13) return 'Amazing week! Keep the flame alive';
-  if (streak <= 29) return "Two weeks strong! You're on fire";
+  if (streak <= 13) return 'Amazing week! Keep the light shining';
+  if (streak <= 29) return "Two weeks strong! You're glowing";
   return `Incredible dedication! ${streak} days and counting`;
 }
 
@@ -164,7 +164,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Animated.View style={flamePulseStyle}>
-                <FireIcon
+                <SunIcon
                   size={32}
                   color={colors.accent}
                   weight={streakCount >= 7 ? "fill" : "light"}

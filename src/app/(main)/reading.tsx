@@ -33,7 +33,8 @@ import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
-import { getDefaultVoice } from '@/lib/cartesia';
+import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
+import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -165,6 +166,14 @@ export default function ReadingScreen() {
   const isLastDay = viewingDay === totalDays;
   const isDayCompleted = currentDayData?.isRead ?? false;
 
+  // Prefetch audio while user reads — by the time they tap play, it's cached
+  useEffect(() => {
+    if (!isPremium || !currentDayData) return;
+    const voiceId = user?.preferredVoice || getDefaultVoice();
+    const fullText = `${currentDayData.bodyText}\n\n${currentDayData.scriptureReference}: ${currentDayData.scriptureText}`;
+    prefetchDevotionalAudio(fullText, voiceId);
+  }, [isPremium, currentDayData, user?.preferredVoice]);
+
   // Start the chevron bounce animation
   useEffect(() => {
     chevronBounce.value = withRepeat(
@@ -229,11 +238,11 @@ export default function ReadingScreen() {
     setIsCompleted(isDayCompleted);
   }, [viewingDay, isDayCompleted]);
 
-  // Close audio player when navigating between days
+  // Stop audio and close player when navigating between days
   useEffect(() => {
     if (isAudioPlayerVisible) {
-      audioPlayerRef.current?.close();
       setIsAudioPlayerVisible(false);
+      endReadingSession();
     }
   }, [viewingDay]);
 
@@ -434,8 +443,9 @@ export default function ReadingScreen() {
         refreshDailyReminder();
       }
 
-      // Record streak read
+      // Record streak read & sync widgets
       recordStreakRead();
+      syncWidgets();
 
       // Check for review prompt eligibility
       const reviewManager = createReviewPromptManager({
@@ -1038,6 +1048,15 @@ export default function ReadingScreen() {
                   }
                   if (!isAudioPlayerVisible) {
                     setIsAudioPlayerVisible(true);
+                    // Start Live Activity for the reading/listening session
+                    startReadingSession({
+                      devotionalTitle: currentDevotional?.title ?? 'Unfold',
+                      dayTitle: currentDayData?.title ?? 'Reading',
+                      dayNumber: viewingDay,
+                      totalDays: totalDays,
+                      totalMinutes: user?.readingDuration ?? 5,
+                      isListening: true,
+                    });
                     // Small delay to let component mount before expanding
                     setTimeout(() => {
                       audioPlayerRef.current?.expand();
@@ -1066,7 +1085,7 @@ export default function ReadingScreen() {
               style={[{ flex: 1 }, scrollContentStyle]}
               contentContainerStyle={{
                 paddingHorizontal: 24,
-                paddingTop: 20,
+                paddingTop: 40,
                 paddingBottom: 300,
               }}
               showsVerticalScrollIndicator={false}
@@ -1102,135 +1121,80 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
 
-              {/* Complete button + Share button row - always show Share, toggle Complete button state */}
-              {!isCompleted ? (
-                <Animated.View
-                  exiting={FadeOut.duration(200)}
-                  style={{ marginTop: 48, paddingHorizontal: 24 }}
+              {/* Complete button + Share button row */}
+              <View style={{ marginTop: 48, paddingHorizontal: 24 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 12,
+                    alignItems: 'center',
+                  }}
                 >
-                  {/* Horizontal button row - Complete Day (70%) + Share (30%) */}
+                  {/* Complete Day / Day Completed — View wrapper guarantees pill renders */}
                   <View
                     style={{
-                      flexDirection: 'row',
-                      gap: 16,
-                      alignItems: 'center',
+                      flex: 1,
+                      backgroundColor: isCompleted ? 'transparent' : colors.accent,
+                      borderWidth: 1.5,
+                      borderColor: colors.accent,
+                      borderRadius: 28,
+                      overflow: 'hidden',
                     }}
                   >
-                    {/* Complete Day Button - 80% width, white text on gold */}
                     <Pressable
-                      onPress={handleComplete}
+                      onPress={!isCompleted ? handleComplete : undefined}
                       accessibilityRole="button"
-                      accessibilityLabel={isLastDay ? "Complete Journey" : "Complete Day"}
-                      accessibilityHint={isLastDay ? "Marks your final day as complete and finishes this journey" : "Marks today's reading as complete"}
-                      style={({ pressed }) => ({
-                        flex: 4,
-                        backgroundColor: colors.accent,
+                      accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Journey' : 'Complete Day')}
+                      style={{
                         paddingVertical: 18,
                         paddingHorizontal: 32,
-                        borderRadius: 28,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transform: [{ scale: pressed ? 0.97 : 1 }],
-                        opacity: pressed ? 0.9 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiSemiBold,
-                          fontSize: 17,
-                          color: '#ffffff',
-                          textAlign: 'center',
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        {isLastDay ? 'Complete Journey' : 'Complete Day'}
-                      </Text>
-                    </Pressable>
-
-                    {/* Share Button - icon-only Upload to match top nav style */}
-                    <Pressable
-                      onPress={handleShare}
-
-                      accessibilityRole="button"
-                      accessibilityLabel="Share devotional"
-                      accessibilityHint="Share this day's reading with others"
-                      style={{
-                        flex: 1,
-                        backgroundColor: colors.buttonBackgroundPressed,
-                        paddingVertical: 18,
-                        paddingHorizontal: 16,
-                        borderRadius: 28,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
-                    </Pressable>
-                  </View>
-                </Animated.View>
-              ) : (
-                <Animated.View
-                  entering={FadeIn.duration(400).springify().damping(14).stiffness(120)}
-                  style={{ marginTop: 48, paddingHorizontal: 24 }}
-                >
-                  {/* Horizontal button row - Day Completed (80%) + Share (20%) */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      gap: 16,
-                      alignItems: 'center',
-                    }}
-                  >
-                    {/* Day Completed Button - 80% width, with satisfying spring entrance */}
-                    <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      }}
-
-                      accessibilityRole="button"
-                      accessibilityLabel="Day completed"
-                      accessibilityHint="This day has already been marked as complete"
-                      style={{
-                        flex: 4,
-                        backgroundColor: colors.inputBackground,
-                        paddingVertical: 18,
-                        paddingHorizontal: 32,
-                        borderRadius: 28,
-                        borderWidth: 2,
-                        borderColor: colors.accent,
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexDirection: 'row',
                         gap: 8,
                       }}
                     >
-                      <CheckIcon size={18} color={colors.accent} weight="bold" />
+                      {isCompleted && (
+                        <CheckIcon size={18} color={colors.accent} weight="bold" />
+                      )}
                       <Text
                         style={{
                           fontFamily: FontFamily.uiSemiBold,
                           fontSize: 17,
-                          color: colors.accent,
+                          color: isCompleted ? colors.accent : '#ffffff',
                           textAlign: 'center',
                           letterSpacing: 0.5,
                         }}
                       >
-                        Day Completed
+                        {isCompleted
+                          ? 'Day Completed'
+                          : isLastDay
+                            ? 'Complete Journey'
+                            : 'Complete Day'}
                       </Text>
                     </Pressable>
+                  </View>
 
-                    {/* Share Button - icon-only Upload to match top nav style */}
+                  {/* Share — small icon circle, View wrapper for reliable styling */}
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      backgroundColor: colors.inputBackground,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
                     <Pressable
                       onPress={handleShare}
-
                       accessibilityRole="button"
                       accessibilityLabel="Share devotional"
-                      accessibilityHint="Share this day's reading with others"
                       style={{
-                        flex: 1,
-                        backgroundColor: colors.buttonBackgroundPressed,
-                        paddingVertical: 18,
-                        paddingHorizontal: 16,
-                        borderRadius: 28,
+                        width: 56,
+                        height: 56,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
@@ -1238,6 +1202,7 @@ export default function ReadingScreen() {
                       <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
                     </Pressable>
                   </View>
+                </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
                   {showIncompleteJourneyRetry && (
@@ -1356,8 +1321,7 @@ export default function ReadingScreen() {
                         )}
                       </View>
                   )}
-                </Animated.View>
-              )} 
+              </View>
             </Animated.ScrollView>
           </SafeAreaView>
         </Animated.View>
@@ -1394,6 +1358,7 @@ export default function ReadingScreen() {
           isPremium={isPremium}
           onClose={() => {
             setIsAudioPlayerVisible(false);
+            endReadingSession();
           }}
         />
       )}

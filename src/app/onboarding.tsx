@@ -29,7 +29,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
@@ -776,7 +776,7 @@ export default function OnboardingScreen() {
         
         return (
           <View style={{ gap: 0 }}>
-            {/* Theme/Topic option - Editorial style, largest */}
+            {/* Theme/Topic option */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -789,38 +789,32 @@ export default function OnboardingScreen() {
                 }));
                 setThemeSelectionMode('theme');
               }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
-              {({ pressed }) => {
-                const isSelected = selectedMode === 'theme';
-                const showPressed = isSelected || (!selectedMode && pressed);
-                return (
+              <View style={{
+                paddingVertical: 28,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
-                    paddingVertical: 28,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
+                    width: 56, height: 56, borderRadius: 16,
+                    backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                    justifyContent: 'center', alignItems: 'center',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
-                      <View style={{
-                        width: 56, height: 56, borderRadius: 16,
-                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
-                        justifyContent: 'center', alignItems: 'center',
-                      }}>
-                        <HeartIcon size={26} color={colors.accent} weight="light" />
-                      </View>
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A theme or topic</Text>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
-                          Trust, courage, joy, lament, discipline...
-                        </Text>
-                      </View>
-                      <View style={{ marginTop: 12 }}>
-                        <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
-                      </View>
-                    </View>
+                    <HeartIcon size={26} color={colors.accent} weight="light" />
                   </View>
-                );
-              }}
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A theme or topic</Text>
+                    <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
+                      Trust, courage, joy, lament, discipline...
+                    </Text>
+                  </View>
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                  </View>
+                </View>
+              </View>
             </Pressable>
 
             {/* Study Type option */}
@@ -836,38 +830,32 @@ export default function OnboardingScreen() {
                 }));
                 setThemeSelectionMode('type');
               }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
-              {({ pressed }) => {
-                const isSelected = selectedMode === 'type';
-                const showPressed = isSelected || (!selectedMode && pressed);
-                return (
+              <View style={{
+                paddingVertical: 28,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
-                    paddingVertical: 28,
-                    borderBottomWidth: 1,
-                    borderBottomColor: colors.border,
-                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
+                    width: 56, height: 56, borderRadius: 16,
+                    backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                    justifyContent: 'center', alignItems: 'center',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
-                      <View style={{
-                        width: 56, height: 56, borderRadius: 16,
-                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
-                        justifyContent: 'center', alignItems: 'center',
-                      }}>
-                        <BookOpenIcon size={26} color={colors.accent} weight="light" />
-                      </View>
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A style of study</Text>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
-                          Book study, character study, psalms, parables...
-                        </Text>
-                      </View>
-                      <View style={{ marginTop: 12 }}>
-                        <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
-                      </View>
-                    </View>
+                    <BookOpenIcon size={26} color={colors.accent} weight="light" />
                   </View>
-                );
-              }}
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A style of study</Text>
+                    <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
+                      Book study, character study, psalms, parables...
+                    </Text>
+                  </View>
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                  </View>
+                </View>
+              </View>
             </Pressable>
 
             {/* Just guide me option */}
@@ -884,36 +872,28 @@ export default function OnboardingScreen() {
                 setThemeSelectionMode('none');
                 startDiscoveryPreparation('guided');
               }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
-              {({ pressed }) => {
-                const isSelected = selectedMode === 'guided';
-                const showPressed = isSelected || (!selectedMode && pressed);
-                return (
+              <View style={{ paddingVertical: 28 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
-                    paddingVertical: 28,
-                    backgroundColor: showPressed ? colors.buttonBackgroundPressed : 'transparent',
+                    width: 56, height: 56, borderRadius: 16,
+                    backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
+                    justifyContent: 'center', alignItems: 'center',
                   }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
-                      <View style={{
-                        width: 56, height: 56, borderRadius: 16,
-                        backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
-                        justifyContent: 'center', alignItems: 'center',
-                      }}>
-                        <MagicWandIcon size={26} color={colors.accent} weight="light" />
-                      </View>
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>Just guide me</Text>
-                        <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
-                          We'll craft something based on what you share
-                        </Text>
-                      </View>
-                      <View style={{ marginTop: 12 }}>
-                        <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
-                      </View>
-                    </View>
+                    <MagicWandIcon size={26} color={colors.accent} weight="light" />
                   </View>
-                );
-              }}
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>Just guide me</Text>
+                    <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
+                      We'll craft something based on what you share
+                    </Text>
+                  </View>
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                  </View>
+                </View>
+              </View>
             </Pressable>
           </View>
         );
@@ -1361,7 +1341,19 @@ export default function OnboardingScreen() {
                 <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
               </Pressable>
             ) : (
-              <View style={{ width: 40, height: 40 }} />
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.back();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                accessibilityHint="Go back to the home screen"
+                style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+              >
+                <XIcon size={22} color={colors.textMuted} weight="light" />
+              </Pressable>
             )}
             
             {/* Continue button - hide for choice/timeChoice steps (they auto-advance) */}

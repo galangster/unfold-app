@@ -12,7 +12,7 @@ import Animated, {
   runOnJS,
   Easing,
 } from 'react-native-reanimated';
-import { FireIcon, SparkleIcon } from 'phosphor-react-native';
+import { SunIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 
@@ -222,7 +222,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
               {sparkleParticles}
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 <SparkleIcon size={40} color={colors.accent} weight="light" />
-                <FireIcon size={fireSize} color={colors.accent} weight="fill" />
+                <SunIcon size={fireSize} color={colors.accent} weight="fill" />
                 <SparkleIcon size={40} color={colors.accent} weight="light" />
               </View>
             </View>
@@ -252,7 +252,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
           </View>
         ) : (
           <View style={{ alignItems: 'center' }}>
-            <FireIcon size={50} color={colors.accent} weight="fill" />
+            <SunIcon size={50} color={colors.accent} weight="fill" />
             <Animated.Text
               entering={FadeIn.delay(200)}
               style={{

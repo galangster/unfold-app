@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, FireIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
 import { useTheme } from '@/lib/theme';
@@ -270,7 +270,7 @@ export default function StatsScreen() {
                 marginBottom: 24,
               }}
             >
-              <FireIcon size={32} color={colors.accent} weight="light" />
+              <SunIcon size={32} color={colors.accent} weight="light" />
               <Text
                 style={{
                   fontFamily: FontFamily.display,

@@ -24,6 +24,42 @@ WRITING CRAFT (non-negotiable):
 6. EARN THE EMOTION — build to moments, never announce them. If you write "this is powerful," it isn't.`;
 
 // ==========================================
+// ANTI-SLOP DIRECTIVE
+// Injected into every generation's system prompt alongside CRAFT_FOUNDATION
+// Blocks patterns that instantly signal AI-generated text
+// ==========================================
+
+export const ANTI_SLOP_DIRECTIVE = `
+
+DEAD PHRASES (never use — these are instant AI tells):
+- "This is the part that haunts" / "This is the part that matters" / "This is the part that changes everything"
+- "Here's what's remarkable" / "Here's the beautiful thing" / "Here's what we often miss"
+- "And here's the truth:" / "And here's the invitation:"
+- "In a world where..." / "In a culture that..."
+- "It's worth noting" / "It's worth pausing here"
+- "There's something profound about..." / "There's something beautiful about..."
+- "What if I told you..." / "What if the answer isn't..."
+- "Think about that for a moment" / "Let that land"
+- "I want you to hear this:" / "Hear me on this:"
+- "The reality is..." / "The beautiful truth is..."
+- "It hits different when..." / "This changes everything"
+- "Maybe, just maybe..."
+- "Not in spite of, but because of"
+- "That's the gospel" / "That's grace" (as sentence-ending punctuation)
+- "Can I be honest?" / "Can we be real for a second?"
+
+STRUCTURAL SLOP (patterns that reveal the machine):
+- The Rule of Three trap: do NOT structure every point as three parallel items. Vary between 1, 2, and 4+. Three-part lists are the AI default — break the pattern.
+- The Buildup-Then-Pivot formula: "We think X. But what if Y?" used more than once per devotional is a tell. Use it once at most.
+- Repetitive sentence cadence: if 3+ consecutive sentences have the same length and rhythm, rewrite. Monotony is the enemy.
+- The "bookend" move: starting and ending with the same phrase/image. Do this rarely (1 in 7 days max), not as a default.
+- Empty intensifiers: "deeply," "profoundly," "truly," "really," "incredibly" — cut them. If the sentence needs an intensifier to work, the sentence is weak.
+- Hedge-then-declare: "It's not about X. It's about Y." Once per series is fine. Every day is a pattern.
+
+SOPHISTICATION TEST:
+Before finalizing, mentally ask: "Would a reader who has heard 100 AI-generated devotionals recognize this as one more?" If yes, rewrite the flagged sections. The goal is writing that sounds like it came from a specific human with a specific life — not from a language model.`;
+
+// ==========================================
 // LAYER B: PERSONA-ALIGNED CRAFT INFLUENCES
 // Modern + classic writers mapped to each voice trait
 // Injected via buildV2VoiceOverlay() — varies per series

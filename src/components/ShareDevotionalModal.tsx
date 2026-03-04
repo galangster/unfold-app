@@ -164,7 +164,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                   lineHeight: 34,
                   textAlign: 'center',
                 }}>
-                  "{day.quotableLine}"
+                  {day.quotableLine}
                 </Text>
               </View>
 
