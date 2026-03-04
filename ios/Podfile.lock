@@ -12,6 +12,8 @@ PODS:
   - EXConstants (55.0.7):
     - ExpoModulesCore
   - EXJSONUtils (55.0.0)
+  - EXLocation (15.1.1):
+    - ExpoModulesCore
   - EXManifests (55.0.9):
     - ExpoModulesCore
   - Expo (55.0.2):
@@ -303,8 +305,6 @@ PODS:
   - ExpoLinking (55.0.7):
     - ExpoModulesCore
   - ExpoLivePhoto (55.0.8):
-    - ExpoModulesCore
-  - ExpoLocation (55.1.2):
     - ExpoModulesCore
   - ExpoLogBox (55.0.7):
     - React-Core
@@ -4055,6 +4055,7 @@ DEPENDENCIES:
   - EXApplication (from `../node_modules/expo-application/ios`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
   - EXJSONUtils (from `../node_modules/expo-json-utils/ios`)
+  - "EXLocation (from `../node_modules/@teovilla/react-native-web-maps/node_modules/expo-location/ios`)"
   - EXManifests (from `../node_modules/expo-manifests/ios`)
   - Expo (from `../node_modules/expo`)
   - expo-dev-client (from `../node_modules/expo-dev-client/ios`)
@@ -4084,7 +4085,6 @@ DEPENDENCIES:
   - ExpoLinearGradient (from `../node_modules/expo-linear-gradient/ios`)
   - ExpoLinking (from `../node_modules/expo-linking/ios`)
   - ExpoLivePhoto (from `../node_modules/expo-live-photo/ios`)
-  - ExpoLocation (from `../node_modules/expo-location/ios`)
   - "ExpoLogBox (from `../node_modules/@expo/log-box`)"
   - ExpoMailComposer (from `../node_modules/expo-mail-composer/ios`)
   - ExpoMediaLibrary (from `../node_modules/expo-media-library/ios`)
@@ -4265,6 +4265,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-constants/ios"
   EXJSONUtils:
     :path: "../node_modules/expo-json-utils/ios"
+  EXLocation:
+    :path: "../node_modules/@teovilla/react-native-web-maps/node_modules/expo-location/ios"
   EXManifests:
     :path: "../node_modules/expo-manifests/ios"
   Expo:
@@ -4323,8 +4325,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-linking/ios"
   ExpoLivePhoto:
     :path: "../node_modules/expo-live-photo/ios"
-  ExpoLocation:
-    :path: "../node_modules/expo-location/ios"
   ExpoLogBox:
     :path: "../node_modules/@expo/log-box"
   ExpoMailComposer:
@@ -4601,6 +4601,7 @@ SPEC CHECKSUMS:
   EXApplication: b86f81225a9cd817cfe86a79655b9829f12629db
   EXConstants: b3c63be5f8648e4ab8e6ff5099b62f629247f969
   EXJSONUtils: 0080c14b673cfa9a6be5e3fe429768ffe3d42dfb
+  EXLocation: 8aef79bf650f304812fb77fdd5eb3d28689a41d2
   EXManifests: 2b53302deb6d7275ae26005b8014f5a1aee42a0e
   Expo: d815d0bb5b85a180cced5bb225b4754561d80994
   expo-dev-client: 8d2a339b9653c00801f37bdf9646702645717b12
@@ -4630,7 +4631,6 @@ SPEC CHECKSUMS:
   ExpoLinearGradient: 499856f296f83c05279d18447bdb57ab0e06d294
   ExpoLinking: 88ba36a28c83525e564b8229e02d451347accb70
   ExpoLivePhoto: f39411c565637e3b4f40e7312c7ecff28154326d
-  ExpoLocation: ac9ed9d974a7370210a215a2b09e81ae7a6ad724
   ExpoLogBox: 89b634d5a8a64c4a6a7caad8f9985a28463c7002
   ExpoMailComposer: fb9c80ee9c67839c20204cc59c573b96e4974647
   ExpoMediaLibrary: f8e720ddfc229477f09ac94174b6e4a00b4a91ee

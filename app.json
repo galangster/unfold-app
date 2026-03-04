@@ -16,12 +16,15 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.vibecode.unfold.x9fj08t",
       "buildNumber": "1",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow Unfold to use speech recognition to convert your voice to text.",
-        "NSMicrophoneUsageDescription": "Allow Unfold to use the microphone for voice input."
+        "NSMicrophoneUsageDescription": "Allow Unfold to use the microphone for voice input.",
+        "NSPhotoLibraryAddUsageDescription": "Allow Unfold to save devotional quotes and wallpapers to your photo library.",
+        "NSPhotoLibraryUsageDescription": "Allow Unfold to access your photos for sharing devotional content."
       }
     },
     "android": {
@@ -42,6 +45,7 @@
     },
     "plugins": [
       "expo-router",
+      "@react-native-firebase/app",
       [
         "expo-build-properties",
         {
