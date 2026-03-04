@@ -21,7 +21,8 @@ WRITING CRAFT (non-negotiable):
 3. CONCRETE OVER ABSTRACT — "The kitchen table where you sit alone at 6 AM" beats "a place of solitude." Ground every idea in a physical image.
 4. THE UNEXPECTED TURN — place a surprise where a cliché would go. If the reader can predict your next sentence, rewrite it.
 5. RHYTHM AND BREATH — alternate long sentences that unspool across the page with short ones. For impact.
-6. EARN THE EMOTION — build to moments, never announce them. If you write "this is powerful," it isn't.`;
+6. EARN THE EMOTION — build to moments, never announce them. If you write "this is powerful," it isn't.
+7. STORIES DO WORK — When a parable or analogy appears, it advances the argument. It doesn't decorate. The reader should understand the point MORE clearly after the story, not just feel warm.`;
 
 // ==========================================
 // ANTI-SLOP DIRECTIVE
@@ -58,6 +59,253 @@ STRUCTURAL SLOP (patterns that reveal the machine):
 
 SOPHISTICATION TEST:
 Before finalizing, mentally ask: "Would a reader who has heard 100 AI-generated devotionals recognize this as one more?" If yes, rewrite the flagged sections. The goal is writing that sounds like it came from a specific human with a specific life — not from a language model.`;
+
+// ==========================================
+// STORY & PARABLE SYSTEM
+// 8 story types, 7 transition techniques, anti-patterns
+// Injected per-day via getStoryDirectiveForDay()
+// ==========================================
+
+export interface StoryType {
+  id: string;
+  name: string;
+  desc: string;
+  example: string;
+  faithLevel: ('new' | 'growing' | 'mature')[];
+}
+
+export const STORY_TYPES: StoryType[] = [
+  { id: 'everyday_moment', name: 'Everyday Moment', desc: 'A mundane situation that reveals spiritual truth', example: 'A barista remembering your name illustrating how God knows you', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'historical_vignette', name: 'Historical Vignette', desc: 'A real moment from history that illuminates the point', example: 'Dietrich Bonhoeffer writing letters from prison on hope', faithLevel: ['growing', 'mature'] },
+  { id: 'nature_parable', name: 'Nature Parable', desc: 'Natural world as spiritual metaphor', example: 'A forest fire that clears deadwood so new growth can begin', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'confession_story', name: 'Confession Story', desc: 'Vulnerable first-person admission that builds trust', example: 'Admitting you prayed for patience then lost it in traffic', faithLevel: ['growing', 'mature'] },
+  { id: 'cultural_parable', name: 'Cultural Parable', desc: 'Modern culture/technology as spiritual lens', example: 'Phone notifications vs. God\'s still small voice', faithLevel: ['new', 'growing'] },
+  { id: 'ancient_wisdom', name: 'Ancient Wisdom Tale', desc: 'Desert fathers, rabbinical stories, church history', example: 'A desert mother who carried two bags of sand to understand forgiveness', faithLevel: ['mature'] },
+  { id: 'relationship_scene', name: 'Relationship Scene', desc: 'A specific interaction between people that carries the lesson', example: 'A father teaching his daughter to ride a bike — letting go as trust', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'reversal_story', name: 'Reversal Story', desc: 'Setup leads one direction, truth emerges from the opposite', example: 'The "successful" CEO who envies the janitor\'s peace', faithLevel: ['growing', 'mature'] },
+];
+
+export const STORY_TRANSITIONS = [
+  'bridge_phrase',       // "It's a bit like..." / "Consider this..."
+  'cold_open',           // Start mid-scene, reveal the point after
+  'question_to_story',   // "Have you ever wondered why...?" → story
+  'scripture_to_scene',  // Quote scripture, then dramatize it
+  'bookend',             // Open with story fragment, close by completing it
+  'parallel_thread',     // Weave story through multiple paragraphs
+  'surprising_pivot',    // "You might expect X. But actually..."
+] as const;
+
+export type StoryTransition = typeof STORY_TRANSITIONS[number];
+
+export const PARABLE_ANTI_PATTERNS = `
+STORY GUARDRAILS — When including a story or parable:
+- NEVER start with "Imagine a..." or "Picture this..." — just begin the scene
+- NEVER use a story that perfectly resolves with no tension remaining
+- NEVER name the character "Sarah" or "James" in a generic modern story — use unexpected names or no names
+- NEVER explain the moral immediately after — let the reader sit with it for at least one sentence
+- NEVER use more than ONE extended story per devotional — additional points use brief analogies (1-2 sentences max)
+- Stories must feel SPECIFIC (exact details: "a Tuesday morning," "the 6am train," "her grandmother's kitchen") not generic
+- The story should do WORK — it must advance the devotional's argument, not just decorate it
+- Vary the era: ancient, medieval, modern, futuristic thought experiments — don't default to "contemporary suburban"
+- If the story involves struggle, don't rush to resolution — sit in the tension`;
+
+/**
+ * Deterministically select a story directive for a given day.
+ * Returns null on "no story" days — stories are a spice, not a staple.
+ *
+ * Frequency targets (stories should NOT dominate):
+ *   5-min:  ~20% of days (brief analogy on ~1 in 5 days)
+ *   15-min: ~35% of days (developed story on ~1 in 3 days)
+ *   30-min: ~45% of days (substantial narrative on ~1 in 2 days)
+ *
+ * Day 1 never gets a story — let the series establish its voice first.
+ * Uses dayNumber for deterministic selection — same day always gets same config.
+ */
+export function getStoryDirectiveForDay(
+  dayNumber: number,
+  readingDuration: '5min' | '15min' | '30min',
+  faithBackground: 'new' | 'growing' | 'mature' = 'growing'
+): string | null {
+  // Day 1: no story — establish voice and trust first
+  if (dayNumber === 1) return null;
+
+  // Deterministic hash: spreads evenly across 0-9, no clustering
+  const hash = ((dayNumber * 7) + 3) % 10;
+  // Thresholds (story if hash < threshold):
+  //   5min → 2/10 (~17% of days) — brief analogy, rare
+  //   15min → 3/10 (~27% of days) — developed scene, sometimes
+  //   30min → 4/10 (~37% of days) — substantial narrative, often but not default
+  const frequencyThreshold = readingDuration === '5min' ? 2 : readingDuration === '15min' ? 3 : 4;
+  if (hash >= frequencyThreshold) return null;
+
+  // Filter story types by faith level
+  const eligible = STORY_TYPES.filter(s => s.faithLevel.includes(faithBackground));
+  const storyIdx = (dayNumber - 1) % eligible.length;
+  const story = eligible[storyIdx];
+
+  // Select transition technique
+  const transitionIdx = (dayNumber + 2) % STORY_TRANSITIONS.length;
+  const transition = STORY_TRANSITIONS[transitionIdx];
+
+  // Word budget by duration
+  const wordBudget = readingDuration === '5min'
+    ? '40-60 words (brief analogy only — 1-2 sentences)'
+    : readingDuration === '15min'
+      ? '80-150 words (a developed scene or anecdote)'
+      : '150-250 words (a substantial narrative with specific details)';
+
+  // Transition technique descriptions
+  const transitionDesc: Record<StoryTransition, string> = {
+    bridge_phrase: 'Use a bridge phrase to enter the story: "It\'s a bit like..." or "Consider this..."',
+    cold_open: 'Cold open: start mid-scene with the story, then reveal the spiritual point after',
+    question_to_story: 'Lead with a question, then answer it with the story',
+    scripture_to_scene: 'Quote the scripture first, then dramatize the same truth as a lived scene',
+    bookend: 'Open with a story fragment (unresolved), close the devotional by completing it',
+    parallel_thread: 'Weave the story through multiple paragraphs — don\'t tell it all at once',
+    surprising_pivot: 'Set up an expectation, then pivot: "You might expect X. But actually..."',
+  };
+
+  return `STORY FOR THIS DAY:
+Type: ${story.name} — ${story.desc}
+Example direction: ${story.example}
+Transition: ${transitionDesc[transition]}
+Word budget for story: ${wordBudget}
+The story must serve the day's scripture and theme — not exist alongside them.`;
+}
+
+// ==========================================
+// DIALOGUE SYSTEM
+// 7 dialogue types drawn from master writers
+// Injected per-day via getDialogueDirectiveForDay()
+// Complements the story system — they never overlap on the same day
+// ==========================================
+
+export interface DialogueType {
+  id: string;
+  name: string;
+  desc: string;
+  example: string;
+  craftNote: string;
+  faithLevel: ('new' | 'growing' | 'mature')[];
+}
+
+export const DIALOGUE_TYPES: DialogueType[] = [
+  {
+    id: 'overheard_exchange',
+    name: 'Overheard Exchange',
+    desc: 'A brief reported conversation between real people that detonates assumptions (Yancey/Buechner pattern)',
+    example: 'A friend asked a struggling woman if she\'d tried church. She said: "Church? Why would I go there? I already feel terrible about myself."',
+    craftNote: 'Set the exchange down gently, then step back. Do NOT explain what it means. Let the reader do the theological work.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'internal_dialogue',
+    name: 'Internal Dialogue',
+    desc: 'Voice the reader\'s own inner argument — the objection they haven\'t admitted (Nouwen pattern)',
+    example: '"But what if I\'ve waited too long?" That voice — you know it. It shows up at 2 AM, in the shower, during the sermon.',
+    craftNote: 'Voice the HARDEST version of the objection, not the softest. If it\'s easy to knock down, it wasn\'t the real objection.',
+    faithLevel: ['growing', 'mature'],
+  },
+  {
+    id: 'author_to_god',
+    name: 'Author-to-God Monologue',
+    desc: 'Write directly TO God while the reader overhears — prayer as prose (Augustine pattern)',
+    example: '"God, I don\'t know how to say this without sounding like I\'m performing. So I\'ll just say it: I\'m angry at you. And I think you can handle that."',
+    craftNote: 'The reader is eavesdropping on a real conversation, not being preached at. This only works if the writer is more aware of God than of the audience.',
+    faithLevel: ['growing', 'mature'],
+  },
+  {
+    id: 'dramatic_exchange',
+    name: 'Dramatic Exchange',
+    desc: 'Two distinct voices in tension — resistance meeting grace, doubt meeting truth (Herbert pattern)',
+    example: '"Sit down," Love said. "I can\'t. I\'m not worthy." "I know. Sit down anyway."',
+    craftNote: 'Both voices must be distinct. Maintain tension until the very last line. Neither voice should sound like a theological position — they should sound like people.',
+    faithLevel: ['mature'],
+  },
+  {
+    id: 'scripture_as_speech',
+    name: 'Scripture as Living Speech',
+    desc: 'Render a verse as if someone is saying it aloud to you right now — not quoting, speaking (Peterson pattern)',
+    example: 'Instead of citing Romans 8:1, write: "No condemnation. None. Not for you — not now, not after what you did, not ever."',
+    craftNote: 'Remove the archaic register. Make familiar text strange again by making it sound like something someone would actually say to you over the table.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'reported_conversation',
+    name: 'Reported Conversation',
+    desc: 'Recount exact words from a real exchange that became a theological hinge point (Buechner pattern)',
+    example: 'My grandfather, three weeks before he died, said: "I wasted so many years being afraid of the wrong things." He didn\'t explain. He didn\'t need to.',
+    craftNote: 'Extreme specificity — give the exact words, the pause, the setting. Then do NOT explain the exchange. Trust the reader to feel its weight.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'self_imperative',
+    name: 'Self-Addressed Imperative',
+    desc: 'Commands written to the self — the writer instructing their own heart (Nouwen\'s Inner Voice pattern)',
+    example: '"Stop waiting for permission to grieve. Stop performing strength. Let the tears come — they are not weakness, they are language."',
+    craftNote: 'The writer is not preaching to the reader. They are showing what they told themselves in extremity. Vulnerability precedes advice.',
+    faithLevel: ['growing', 'mature'],
+  },
+];
+
+export const DIALOGUE_ANTI_PATTERNS = `
+DIALOGUE GUARDRAILS — When including dialogue or spoken exchange:
+- NEVER put explicit words in God's mouth presented as direct divine speech — use indirect encounter instead (prayer, overheard, dramatized scripture)
+- NEVER write on-the-nose dialogue where characters state their emotions: "I feel so alone because God seems distant" — nobody talks like that
+- NEVER use dialogue tags with adverbs: "she said earnestly," "he whispered prayerfully" — if the line needs an adverb, the line is weak
+- NEVER strawman the objection — voice the hardest version of the reader's doubt, not a weak one that's easy to defeat
+- NEVER create generic stand-in characters ("a friend of mine once told me...") without specific detail — give a name, a place, a moment
+- Dialogue should carry MORE weight than it declares — what's unsaid matters more than what's said
+- Keep exchanges SHORT: 2-4 lines max. This is a devotional, not a screenplay
+- The reader should fill in the meaning themselves — cut the last line if it explains the point`;
+
+/**
+ * Deterministically select a dialogue directive for a given day.
+ * Returns null on "no dialogue" days AND on days that already have a story directive.
+ * Dialogue and stories never overlap — each day gets at most one technique.
+ *
+ * Frequency targets (dialogue is a second spice):
+ *   5-min:  ~15% of days (brief exchange, 1-2 lines)
+ *   15-min: ~25% of days (developed exchange, 2-4 lines)
+ *   30-min: ~30% of days (exchange + surrounding context)
+ */
+export function getDialogueDirectiveForDay(
+  dayNumber: number,
+  readingDuration: '5min' | '15min' | '30min',
+  faithBackground: 'new' | 'growing' | 'mature' = 'growing',
+  hasStoryToday: boolean = false
+): string | null {
+  // Never overlap with story days — one technique per day
+  if (hasStoryToday) return null;
+
+  // Day 1 and 2: no dialogue — let the series establish voice first
+  if (dayNumber <= 2) return null;
+
+  // Different hash from story system (different multiplier + offset avoids clustering)
+  const hash = ((dayNumber * 3) + 11) % 10;
+  // Thresholds: 5min → 2/10 (~15-20%), 15min → 3/10 (~25%), 30min → 3/10 (~25-30%)
+  const frequencyThreshold = readingDuration === '5min' ? 2 : readingDuration === '15min' ? 3 : 3;
+  if (hash >= frequencyThreshold) return null;
+
+  // Filter dialogue types by faith level
+  const eligible = DIALOGUE_TYPES.filter(d => d.faithLevel.includes(faithBackground));
+  const dialogueIdx = (dayNumber + 3) % eligible.length;
+  const dialogue = eligible[dialogueIdx];
+
+  // Word budget
+  const wordBudget = readingDuration === '5min'
+    ? '20-40 words (a single brief exchange — 1-2 lines of dialogue)'
+    : readingDuration === '15min'
+      ? '40-80 words (a short exchange with minimal surrounding context)'
+      : '60-120 words (an exchange with scene-setting and aftermath)';
+
+  return `DIALOGUE FOR THIS DAY:
+Type: ${dialogue.name} — ${dialogue.desc}
+Example: ${dialogue.example}
+Craft rule: ${dialogue.craftNote}
+Word budget for dialogue: ${wordBudget}
+The dialogue must serve the day's argument — it replaces explanation, not decorates it.`;
+}
 
 // ==========================================
 // LAYER B: PERSONA-ALIGNED CRAFT INFLUENCES

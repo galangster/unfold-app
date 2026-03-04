@@ -28,8 +28,12 @@ import {
 import {
   CRAFT_FOUNDATION,
   ANTI_SLOP_DIRECTIVE,
+  PARABLE_ANTI_PATTERNS,
+  DIALOGUE_ANTI_PATTERNS,
   getCraftInfluencesForTraits,
   getDailyCraftDirective,
+  getStoryDirectiveForDay,
+  getDialogueDirectiveForDay,
 } from '../constants/writing-craft';
 
 // Re-export for use in components
@@ -304,7 +308,9 @@ function buildVarietySchedule(
   totalDays: number,
   primaryTrait: PersonaTrait,
   secondaryTrait: PersonaTrait,
-  templateSeed: number
+  templateSeed: number,
+  readingDuration?: 5 | 15 | 30,
+  faithBackground?: 'new' | 'growing' | 'mature'
 ): string {
   const configs = generateDailyVariety(totalDays, [primaryTrait, secondaryTrait]);
 
@@ -313,6 +319,9 @@ function buildVarietySchedule(
   const hooks = Object.keys(HOOK_LIBRARY) as HookStyle[];
   const transitions: TransitionStyle[] = ['gradual', 'pivot', 'mysterious', 'logical', 'narrative'];
   const closings: ClosingStyle[] = ['question', 'blessing', 'invitation', 'warning', 'reflection', 'doxology'];
+
+  // Map reading duration for story system
+  const durationKey = readingDuration === 5 ? '5min' : readingDuration === 30 ? '30min' : '15min';
 
   const dayInstructions: string[] = [];
 
@@ -339,14 +348,26 @@ function buildVarietySchedule(
 
     const craftDirective = getDailyCraftDirective(day);
 
-    dayInstructions.push(
+    // Story directive for this day (may be null on "no story" days)
+    const storyDirective = getStoryDirectiveForDay(day, durationKey, faithBackground ?? 'growing');
+    // Dialogue directive — never overlaps with story days
+    const dialogueDirective = getDialogueDirectiveForDay(day, durationKey, faithBackground ?? 'growing', !!storyDirective);
+
+    let dayInstruction =
       `Day ${day}: ${template.name} structure (${template.elements.join(' → ')}). ` +
       `${voiceNote}. ` +
       `Open with a ${hook} hook (e.g., "${hookExamples}"). ` +
       `Use ${transition} transitions. ` +
       `Close with ${closing} style.\n` +
-      `CRAFT: ${craftDirective.directive}`
-    );
+      `CRAFT: ${craftDirective.directive}`;
+
+    if (storyDirective) {
+      dayInstruction += `\n${storyDirective}`;
+    } else if (dialogueDirective) {
+      dayInstruction += `\n${dialogueDirective}`;
+    }
+
+    dayInstructions.push(dayInstruction);
   }
 
   return `\nPER-DAY VARIETY (each day should feel distinct):\n${dayInstructions.join('\n')}\n`;
@@ -551,6 +572,7 @@ const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
 - Body text: 250-350 words of reflection
 - Include 1 brief quote from a theologian, author, or church father that illuminates the theme
 - End with 1 reflection question for the reader to carry with them
+- If a story/analogy is included: keep it to 40-60 words max (a brief analogy, not a full narrative)
 - Total reading time: ~5 minutes`;
     case 15:
       return `15-MINUTE DEVOTIONAL FORMAT:
@@ -560,6 +582,7 @@ const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
 - Include 2-3 quotes from theologians, authors, poets, or church fathers (e.g., C.S. Lewis, Augustine, Dietrich Bonhoeffer, A.W. Tozer, Julian of Norwich, Frederick Buechner, Brennan Manning, etc.) that deepen the meditation
 - End with 2-3 reflection questions that invite genuine self-examination
 - Consider including a brief historical or cultural context note where it enriches understanding
+- If a story/parable is included: 80-150 words — a developed scene or anecdote, not a sprawling narrative
 - Total reading time: ~10-12 minutes, leaving 3-5 minutes for journaling/reflection`;
     case 30:
       return `30-MINUTE DEVOTIONAL FORMAT:
@@ -570,6 +593,7 @@ const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
 - Include brief historical or cultural context where it enriches understanding
 - End with 3-4 reflection questions that progressively deepen
 - Include a brief closing prayer or benediction
+- If a story/parable is included: 150-250 words — a substantial narrative with specific details and sensory grounding
 - Total reading time: ~20 minutes, leaving 10 minutes for journaling/reflection`;
   }
 };
@@ -936,11 +960,13 @@ async function generateBatch(
   // retryLevel 2: no craft additions (minimal prompt)
   const craftFoundation = retryLevel <= 1 ? CRAFT_FOUNDATION : '';
   const antiSlop = retryLevel <= 1 ? ANTI_SLOP_DIRECTIVE : '';
+  const parableGuardrails = retryLevel <= 1 ? PARABLE_ANTI_PATTERNS : '';
+  const dialogueGuardrails = retryLevel <= 1 ? DIALOGUE_ANTI_PATTERNS : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
-  // V2: Include per-day variety schedule (with craft directives) in the user prompt
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + parableGuardrails + dialogueGuardrails + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
+  // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
-    ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed)
+    ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
     : '';
   const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule);
 

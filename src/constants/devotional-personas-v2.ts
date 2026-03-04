@@ -209,6 +209,13 @@ export const STRUCTURAL_TEMPLATES: StructuralTemplate[] = [
     elements: ['opening', 'scripture_block', 'reflection', 'application', 'blessing'],
     idealFor: ['conversation_days', 'relational_moments'],
   },
+  {
+    id: 'parable_driven',
+    name: 'Parable-Driven',
+    description: 'Open with a vivid story or parable (not labeled as such). Let the narrative breathe. Then pivot to scripture that illuminates the same truth from a different angle. Close with a brief reflection that ties story and scripture together without over-explaining.',
+    elements: ['story', 'scripture_block', 'reflection', 'contemplation'],
+    idealFor: ['story_days', 'parable_moments'],
+  },
 ];
 
 // ==========================================
@@ -374,6 +381,7 @@ export interface DayConfiguration {
   hookStyle: HookStyle;
   transitionStyle: TransitionStyle;
   closingStyle: ClosingStyle;
+  storyDirective?: string | null;
 }
 
 export function generateDailyVariety(
