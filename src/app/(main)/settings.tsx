@@ -1478,7 +1478,7 @@ export default function SettingsScreen() {
                       marginTop: 2,
                     }}
                   >
-                    {BIBLE_TRANSLATIONS.find((t) => t.value === user?.bibleTranslation)?.label ?? 'NIV'}
+                    {BIBLE_TRANSLATIONS.find((t) => t.value === user?.bibleTranslation)?.label ?? 'WEB'}
                   </Text>
                 </View>
                 <CaretDownIcon
@@ -1494,12 +1494,32 @@ export default function SettingsScreen() {
               {/* Translation options */}
               {expandedPreference === 'translation' && (
                 <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                  {!user?.isPremium && (
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 12,
+                        color: colors.textMuted,
+                        marginBottom: 10,
+                        paddingHorizontal: 4,
+                        lineHeight: 17,
+                      }}
+                    >
+                      Licensed translations — we pay for each one so you can read them here. Included with Premium.
+                    </Text>
+                  )}
                   {BIBLE_TRANSLATIONS.map((option) => {
-                    const isSelected = (user?.bibleTranslation ?? 'NIV') === option.value;
+                    const isSelected = (user?.bibleTranslation ?? 'WEB') === option.value;
+                    const isLocked = option.premium && !user?.isPremium;
                     return (
                       <Pressable
                         key={option.value}
                         onPress={() => {
+                          if (isLocked) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                            router.push('/paywall');
+                            return;
+                          }
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           updateUser({ bibleTranslation: option.value });
                         }}
@@ -1511,18 +1531,24 @@ export default function SettingsScreen() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           marginBottom: 4,
+                          opacity: isLocked ? 0.6 : 1,
                         }}
                       >
                         <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 15,
-                              color: colors.text,
-                            }}
-                          >
-                            {option.label}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.uiMedium,
+                                fontSize: 15,
+                                color: colors.text,
+                              }}
+                            >
+                              {option.label}
+                            </Text>
+                            {option.premium && !user?.isPremium && (
+                              <LockIcon size={14} color={colors.textMuted} weight="light" />
+                            )}
+                          </View>
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,

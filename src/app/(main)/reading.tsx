@@ -519,7 +519,7 @@ export default function ReadingScreen() {
         {
           spiritualSeeking: user.spiritualSeeking ?? '',
           readingDuration: user.readingDuration,
-          bibleTranslation: user.bibleTranslation ?? 'NIV',
+          bibleTranslation: user.bibleTranslation ?? 'WEB',
         },
         (day) => {
           const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
@@ -723,7 +723,7 @@ export default function ReadingScreen() {
           {
             spiritualSeeking: user.spiritualSeeking ?? '',
             readingDuration: user.readingDuration,
-            bibleTranslation: user.bibleTranslation ?? 'NIV',
+            bibleTranslation: user.bibleTranslation ?? 'WEB',
           },
           (day) => {
             const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
