@@ -171,7 +171,6 @@
     "@shopify/react-native-skia",
   ],
   "overrides": {
-    "expo-location": "~55.1.2",
     "react-native-css-interop": "0.1.22",
   },
   "packages": {
@@ -1501,7 +1500,7 @@
 
     "expo-live-photo": ["expo-live-photo@55.0.8", "", { "peerDependencies": { "expo": "*", "react": "*", "react-native": "*" } }, "sha512-LnEOsjf03uNI4JEWtqrxRH+tdtY2XUXCig6qV216UJVF7UzzTm9uizE94F+lIMcrKrc833AT6cfrG0kfeS092g=="],
 
-    "expo-location": ["expo-location@55.1.2", "", { "dependencies": { "@expo/image-utils": "^0.8.12" }, "peerDependencies": { "expo": "*" } }, "sha512-QT/9Hh0mjBnsJD1A6VYVKskFK9PODTpHVMA3DmGDTbvKS55yhY/fj6f28dn3zAYTaLAWIZa5j3/C+LCJSq7kwA=="],
+    "expo-location": ["expo-location@15.1.1", "", { "peerDependencies": { "expo": "*" } }, "sha512-hoKRlmi6Ya+NeZ72Zt385SDcSsIDpJI60TCBVO+Hc9xfKA9Hyminyyo5WiwI8J03igmPTCl8Y37MxBNKY9AWkg=="],
 
     "expo-mail-composer": ["expo-mail-composer@55.0.8", "", { "peerDependencies": { "expo": "*" } }, "sha512-WoOug1xq0nrKf3abziXynFeeF5jNlmwMbm1bWHV8Fwj6GBxuHNQ0aW4p1Y/7BlMfH0kpeg6u93VmHA3N1MLtJw=="],
 
