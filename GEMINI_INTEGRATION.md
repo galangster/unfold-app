@@ -127,7 +127,7 @@ The app looks for the API key in this order:
 
 Already added to `.env`:
 ```
-EXPO_PUBLIC_GEMINI_API_KEY=AIzaSyDNSBGHiKd2vcsqHu973X1D98fSRSJJ0CQ
+EXPO_PUBLIC_GEMINI_API_KEY=<your-key-here>
 ```
 
 ---

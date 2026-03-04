@@ -83,3 +83,6 @@ expo-env.d.ts
 # @end expo-cli
 .env
 .vercel
+*.bak
+.revyl/
+AUDIO_PLUGIN_NEEDED.md
