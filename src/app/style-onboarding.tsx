@@ -186,7 +186,7 @@ export default function StyleOnboardingScreen() {
           isPremium: false,
           fontSize: 'medium',
           writingStyle: selections,
-          bibleTranslation: 'NIV',
+          bibleTranslation: 'WEB',
           themeMode: 'dark',
           accentTheme: 'gold',
           readingFont: 'source-serif',

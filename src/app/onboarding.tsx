@@ -182,7 +182,6 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  { id: 'bibleTranslation', question: 'Which Bible translation do\u00A0you\u00A0prefer?', subtext: "We'll use this translation for all scripture in\u00A0your\u00A0devotionals.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: BIBLE_TRANSLATIONS.map((t) => ({ value: t.value, label: t.label, description: t.description })) },
   { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive \u2014 it all shapes what we create\u00A0for\u00A0you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
@@ -199,7 +198,7 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'name' | 'bibleTranslation' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 interface OnboardingData {
   name: string;
@@ -256,7 +255,7 @@ export default function OnboardingScreen() {
   // Form data
   const [data, setData] = useState<OnboardingData>({
     name: existingUser?.name || '',
-    bibleTranslation: existingUser?.bibleTranslation || 'NIV',
+    bibleTranslation: existingUser?.bibleTranslation || 'WEB',
     aboutMe: existingUser?.aboutMe || '',
     selectedMainOption: undefined,
     selectedThemes: [],
@@ -344,7 +343,6 @@ export default function OnboardingScreen() {
       if (step.skipIfHasValue) {
         const stepId = step.id as StepId;
         if (stepId === 'name' && existingUser?.name) return false;
-        if (stepId === 'bibleTranslation' && existingUser?.bibleTranslation) return false;
         if (stepId === 'aboutMe' && existingUser?.aboutMe) return false;
         if (stepId === 'reminderTime' && existingUser?.reminderTime) return false;
       }

@@ -60,13 +60,14 @@ export const FONT_SIZE_VALUES: Record<FontSize, { body: number; scripture: numbe
 };
 
 // Bible translation preferences
-export type BibleTranslation = 'NIV' | 'ESV' | 'KJV' | 'NLT';
+export type BibleTranslation = 'WEB' | 'NIV' | 'ESV' | 'KJV' | 'NLT';
 
-export const BIBLE_TRANSLATIONS: { value: BibleTranslation; label: string; description: string }[] = [
-  { value: 'NIV', label: 'NIV', description: 'New International Version - balanced and readable' },
-  { value: 'ESV', label: 'ESV', description: 'English Standard Version - literal and precise' },
+export const BIBLE_TRANSLATIONS: { value: BibleTranslation; label: string; description: string; premium?: boolean }[] = [
+  { value: 'WEB', label: 'WEB', description: 'World English Bible - clear, modern, and free' },
   { value: 'KJV', label: 'KJV', description: 'King James Version - classic and traditional' },
-  { value: 'NLT', label: 'NLT', description: 'New Living Translation - easy to understand' },
+  { value: 'NIV', label: 'NIV', description: 'New International Version - balanced and readable', premium: true },
+  { value: 'ESV', label: 'ESV', description: 'English Standard Version - literal and precise', premium: true },
+  { value: 'NLT', label: 'NLT', description: 'New Living Translation - easy to understand', premium: true },
 ];
 
 // Writing style preferences
