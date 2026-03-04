@@ -4,6 +4,7 @@
  */
 
 import { File, Paths } from 'expo-file-system';
+import { logger } from '@/lib/logger';
 
 const TTS_PROXY_URL = 'https://tts-proxy-five.vercel.app/api/tts';
 
@@ -255,7 +256,7 @@ async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
   const timeout = setTimeout(() => controller.abort(), 55000); // 55s safety margin
 
   try {
-    console.log(`[TTS] fetchChunk: starting fetch (${text.length} chars)...`);
+    logger.log(`[TTS] fetchChunk: starting fetch (${text.length} chars)...`);
     const response = await fetch(TTS_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -264,7 +265,7 @@ async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
     });
 
     clearTimeout(timeout);
-    console.log(`[TTS] fetchChunk: response status=${response.status}`);
+    logger.log(`[TTS] fetchChunk: response status=${response.status}`);
 
     if (!response.ok) {
       const errorBody = await response.text().catch(() => '');
@@ -273,18 +274,18 @@ async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
 
     // Parse JSON with base64 audio — fully reliable in RN/Hermes
     const json = await response.json();
-    console.log(`[TTS] fetchChunk: got base64 audio, size=${json.size}`);
+    logger.log(`[TTS] fetchChunk: got base64 audio, size=${json.size}`);
 
     if (!json.audio) {
       throw new Error('TTS proxy returned empty audio');
     }
 
     const bytes = base64ToUint8Array(json.audio);
-    console.log(`[TTS] fetchChunk: decoded ${bytes.length} bytes`);
+    logger.log(`[TTS] fetchChunk: decoded ${bytes.length} bytes`);
     return bytes;
   } catch (error) {
     clearTimeout(timeout);
-    console.log(`[TTS] fetchChunk ERROR:`, error);
+    logger.log(`[TTS] fetchChunk ERROR:`, error);
     throw error;
   }
 }
@@ -313,14 +314,14 @@ function id3HeaderSize(buf: Uint8Array): number {
 async function downloadAudio(text: string, voiceId: string, cacheKey: string): Promise<TTSResult> {
   const cachedFile = new File(Paths.cache, `tts_${cacheKey}.mp3`);
 
-  console.log(`[TTS] downloadAudio START — textLen=${text.length}, voiceId=${voiceId}, cacheKey=${cacheKey}`);
+  logger.log(`[TTS] downloadAudio START — textLen=${text.length}, voiceId=${voiceId}, cacheKey=${cacheKey}`);
 
   try {
     // Apply SSML narration — speed, volume, and break tags for expressive reading
     const ssmlText = addSSMLNarration(text);
-    console.log(`[TTS] SSML applied — ${text.length} → ${ssmlText.length} chars`);
+    logger.log(`[TTS] SSML applied — ${text.length} → ${ssmlText.length} chars`);
     const chunks = splitTextIntoChunks(ssmlText);
-    console.log(`[TTS] split into ${chunks.length} chunks (${chunks.map(c => c.length).join(', ')} chars)`);
+    logger.log(`[TTS] split into ${chunks.length} chunks (${chunks.map(c => c.length).join(', ')} chars)`);
 
     const fetchStart = Date.now();
     let finalBytes: Uint8Array;
@@ -328,17 +329,17 @@ async function downloadAudio(text: string, voiceId: string, cacheKey: string): P
     if (chunks.length === 1) {
       // Short text — single request
       finalBytes = await fetchChunk(chunks[0], voiceId);
-      console.log(`[TTS] single chunk done — ${finalBytes.length} bytes, ${Date.now() - fetchStart}ms`);
+      logger.log(`[TTS] single chunk done — ${finalBytes.length} bytes, ${Date.now() - fetchStart}ms`);
     } else {
       // Long text — sequential requests with brief delay to avoid rate limits
       const chunkBytes: Uint8Array[] = [];
       for (let i = 0; i < chunks.length; i++) {
         if (i > 0) await new Promise(r => setTimeout(r, 300));
-        console.log(`[TTS] chunk ${i + 1}/${chunks.length} fetching (${chunks[i].length} chars)...`);
+        logger.log(`[TTS] chunk ${i + 1}/${chunks.length} fetching (${chunks[i].length} chars)...`);
         chunkBytes.push(await fetchChunk(chunks[i], voiceId));
-        console.log(`[TTS] chunk ${i + 1} done — ${Date.now() - fetchStart}ms`);
+        logger.log(`[TTS] chunk ${i + 1} done — ${Date.now() - fetchStart}ms`);
       }
-      console.log(`[TTS] all ${chunkBytes.length} chunks done — ${Date.now() - fetchStart}ms`);
+      logger.log(`[TTS] all ${chunkBytes.length} chunks done — ${Date.now() - fetchStart}ms`);
 
       // Concatenate: keep first chunk's ID3 header, strip from subsequent chunks
       const parts: Uint8Array[] = [];
@@ -363,11 +364,11 @@ async function downloadAudio(text: string, voiceId: string, cacheKey: string): P
         finalBytes.set(part, offset);
         offset += part.length;
       }
-      console.log(`[TTS] concatenated ${totalSize} bytes from ${parts.length} chunks`);
+      logger.log(`[TTS] concatenated ${totalSize} bytes from ${parts.length} chunks`);
     }
 
     cachedFile.write(finalBytes);
-    console.log(`[TTS] ✅ cache written — ${cachedFile.size} bytes, total ${Date.now() - fetchStart}ms`);
+    logger.log(`[TTS] ✅ cache written — ${cachedFile.size} bytes, total ${Date.now() - fetchStart}ms`);
 
     return {
       audioUrl: cachedFile.uri,
@@ -375,7 +376,7 @@ async function downloadAudio(text: string, voiceId: string, cacheKey: string): P
       duration: 0,
     };
   } catch (error) {
-    console.log(`[TTS] ❌ downloadAudio ERROR:`, error);
+    logger.log(`[TTS] ❌ downloadAudio ERROR:`, error);
     throw error;
   } finally {
     inFlightRequests.delete(cacheKey);
@@ -396,29 +397,29 @@ export async function streamDevotionalAudio(
     const key = hashKey(text, voiceId);
     const cachedFile = new File(Paths.cache, `tts_${key}.mp3`);
 
-    console.log(`[TTS] streamDevotionalAudio — key=${key}, textLen=${text.length}`);
+    logger.log(`[TTS] streamDevotionalAudio — key=${key}, textLen=${text.length}`);
 
     // Return cached audio if it exists and has content
     if (cachedFile.exists && cachedFile.size > 0) {
-      console.log(`[TTS] ✅ cache HIT — size=${cachedFile.size}, uri=${cachedFile.uri}`);
+      logger.log(`[TTS] ✅ cache HIT — size=${cachedFile.size}, uri=${cachedFile.uri}`);
       return {
         audioUrl: cachedFile.uri,
         wordTimestamps: [],
         duration: 0,
       };
     }
-    console.log('[TTS] cache MISS — downloading');
+    logger.log('[TTS] cache MISS — downloading');
 
     // If a prefetch (or prior call) is already downloading this exact audio, await it
     const existing = inFlightRequests.get(key);
     if (existing) {
-      console.log('[TTS] in-flight request found — piggybacking');
+      logger.log('[TTS] in-flight request found — piggybacking');
       try {
         return await existing;
       } catch {
         // Prior request failed — clean up and retry below
         inFlightRequests.delete(key);
-        console.log('[TTS] piggybacked request failed — retrying');
+        logger.log('[TTS] piggybacked request failed — retrying');
       }
     }
 

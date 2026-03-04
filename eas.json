@@ -21,9 +21,7 @@
     },
     "production": {
       "env": {
-        "BACKEND_URL": "https://oversight-cloning.vibecode.run",
-        "EXPO_PUBLIC_BACKEND_URL": "https://oversight-cloning.vibecode.run",
-        "EXPO_PUBLIC_VIBECODE_BACKEND_URL": "https://oversight-cloning.vibecode.run",
+        "EXPO_PUBLIC_BACKEND_URL": "https://unfold-backend-production.up.railway.app",
         "EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY": "appl_yArZKPHiJJZTcLihIkzvYkhZOsq",
         "EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
         "EAS_USE_CACHE": "1"

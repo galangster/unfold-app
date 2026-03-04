@@ -21,6 +21,7 @@
  */
 
 import { Platform } from "react-native";
+import { logger } from '@/lib/logger';
 import Purchases, {
   type PurchasesOfferings,
   type CustomerInfo,
@@ -66,14 +67,14 @@ const guardRevenueCatUsage = async <T>(
   operation: () => Promise<T>,
 ): Promise<RevenueCatResult<T>> => {
   if (isWeb) {
-    console.log(
+    logger.log(
       `${LOG_PREFIX} ${action} skipped: payments are not supported on web.`,
     );
     return { ok: false, reason: "web_not_supported" };
   }
 
   if (!isEnabled) {
-    console.log(`${LOG_PREFIX} ${action} skipped: RevenueCat not configured`);
+    logger.log(`${LOG_PREFIX} ${action} skipped: RevenueCat not configured`);
     return { ok: false, reason: "not_configured" };
   }
 
@@ -81,7 +82,7 @@ const guardRevenueCatUsage = async <T>(
     const data = await operation();
     return { ok: true, data };
   } catch (error) {
-    console.log(`${LOG_PREFIX} ${action} failed:`, error);
+    logger.log(`${LOG_PREFIX} ${action} failed:`, error);
     return { ok: false, reason: "sdk_error", error };
   }
 };
@@ -95,12 +96,12 @@ if (isEnabled) {
 
       // Log ERROR messages normally
       if (logLevel === Purchases.LOG_LEVEL.ERROR) {
-        console.log(LOG_PREFIX, message);
+        logger.log(LOG_PREFIX, message);
       }
     });
 
     Purchases.configure({ apiKey: apiKey! });
-    console.log(`${LOG_PREFIX} SDK initialized successfully`);
+    logger.log(`${LOG_PREFIX} SDK initialized successfully`);
   } catch (error) {
     console.error(`${LOG_PREFIX} Failed to initialize:`, error);
   }

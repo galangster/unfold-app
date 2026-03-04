@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
 import { logBugError } from './bug-logger';
+import { mmkvStorage } from './mmkv-storage';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -735,7 +735,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     }),
     {
       name: 'unfold-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => mmkvStorage),
       version: 8, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {

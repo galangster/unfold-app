@@ -1,5 +1,6 @@
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType, SeriesPersonaRecord } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
+import { logger } from '@/lib/logger';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import {
   getThemeById,
@@ -35,28 +36,17 @@ import {
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Backend URL for proxied API calls (keeps API keys server-side)
-// Use remote by default so device builds don't silently point to localhost.
-const DEFAULT_REMOTE_BACKEND_FALLBACK_URL = 'https://unfold-backend-production.up.railway.app';
+const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
 
 const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || DEFAULT_REMOTE_BACKEND_FALLBACK_URL;
-const EXPLICIT_FALLBACK_BACKEND_URL =
-  process.env.EXPO_PUBLIC_VIBECODE_BACKEND_FALLBACK_URL?.trim() || '';
+  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
 
 function getBackendCandidates(): string[] {
   const candidates = [PRIMARY_BACKEND_URL];
 
-  // Respect explicit fallback first, but always keep the known remote fallback
-  // as a final safety net unless already included.
-  if (EXPLICIT_FALLBACK_BACKEND_URL && !candidates.includes(EXPLICIT_FALLBACK_BACKEND_URL)) {
-    candidates.push(EXPLICIT_FALLBACK_BACKEND_URL);
-  }
-
-  if (
-    DEFAULT_REMOTE_BACKEND_FALLBACK_URL &&
-    !candidates.includes(DEFAULT_REMOTE_BACKEND_FALLBACK_URL)
-  ) {
-    candidates.push(DEFAULT_REMOTE_BACKEND_FALLBACK_URL);
+  // Always keep Railway as a safety net fallback
+  if (!candidates.includes(RAILWAY_BACKEND_URL)) {
+    candidates.push(RAILWAY_BACKEND_URL);
   }
 
   return candidates;
@@ -104,7 +94,7 @@ async function postJsonWithBackendFallback(
       // This specifically guards against stale/misconfigured deployments returning
       // HTML 404 pages for API routes.
       if (!response.ok && hasAnotherCandidate) {
-        console.warn(
+        logger.warn(
           `[Devotional] Backend ${backendUrl} returned ${response.status}; trying fallback ${backendCandidates[i + 1]}`
         );
         continue;
@@ -122,7 +112,7 @@ async function postJsonWithBackendFallback(
       const aborted = controller.signal.aborted;
       if (hasAnotherCandidate) {
         const reason = aborted ? 'timed out' : 'failed';
-        console.warn(
+        logger.warn(
           `[Devotional] Backend ${backendUrl} ${reason}; trying fallback ${backendCandidates[i + 1]}`
         );
         continue;
@@ -958,7 +948,7 @@ async function generateBatch(
   const model = 'claude-haiku-4-5-20251001';
   const timeoutMs = 180000; // 3 min timeout for all days
 
-  console.log(`[Devotional] generateBatch days ${startDay}-${endDay}, retryLevel=${retryLevel}, model=${model}, systemPrompt=${systemPrompt.length}chars, userPrompt=${userPrompt.length}chars`);
+  logger.log(`[Devotional] generateBatch days ${startDay}-${endDay}, retryLevel=${retryLevel}, model=${model}, systemPrompt=${systemPrompt.length}chars, userPrompt=${userPrompt.length}chars`);
   void logBugEvent('devotional-service', 'batch-request-started', {
     startDay,
     endDay,
@@ -969,7 +959,7 @@ async function generateBatch(
   let response: Response;
   let backendUrlUsed = PRIMARY_BACKEND_URL;
   try {
-    console.log(`[Devotional] Sending request to backend for days ${startDay}-${endDay} with model ${model}...`);
+    logger.log(`[Devotional] Sending request to backend for days ${startDay}-${endDay} with model ${model}...`);
 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/devotional',
@@ -999,14 +989,14 @@ async function generateBatch(
       }, 'warn');
     }
 
-    console.log(
+    logger.log(
       `[Devotional] Got response: status=${response.status} for days ${startDay}-${endDay} (backend: ${backendUrlUsed})`
     );
   } catch (fetchError) {
     const fetchMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
 
     if (fetchMessage.toLowerCase().includes('timed out')) {
-      console.log(`[Devotional] Request timed out after ${timeoutMs / 1000} seconds`);
+      logger.log(`[Devotional] Request timed out after ${timeoutMs / 1000} seconds`);
       void logBugEvent('devotional-service', 'batch-request-timeout', {
         startDay,
         endDay,
@@ -1015,7 +1005,7 @@ async function generateBatch(
       throw new Error('The request took too long. Please try again — it usually works on the second attempt.');
     }
 
-    console.log('[Devotional] Fetch error:', fetchMessage);
+    logger.log('[Devotional] Fetch error:', fetchMessage);
     void logBugError('devotional-service', fetchError, {
       startDay,
       endDay,
@@ -1034,13 +1024,13 @@ async function generateBatch(
     }, response.status >= 500 ? 'error' : 'warn');
 
     if (response.status === 400 && (errorText.includes('content filtering') || errorText.includes('Output blocked'))) {
-      console.log('[Devotional] Content filter triggered, will retry with simplified context...');
+      logger.log('[Devotional] Content filter triggered, will retry with simplified context...');
       throw new Error('CONTENT_FILTER_ERROR');
     }
 
     // Mark transient upstream/server errors so retry logic can handle them.
     if (response.status === 500 || response.status === 502 || response.status === 503 || response.status === 504) {
-      console.log('[Devotional] Service temporarily unavailable:', response.status);
+      logger.log('[Devotional] Service temporarily unavailable:', response.status);
       throw new Error('TRANSIENT_UPSTREAM_ERROR');
     }
 
@@ -1136,7 +1126,7 @@ async function generateBatchWithRetry(
       // retryLevel controls both system prompt and user prompt complexity
       const retryLevel = attempt;
 
-      console.log(`[Devotional] Attempt ${attempt + 1}/${maxRetries + 1}, retryLevel=${retryLevel}`);
+      logger.log(`[Devotional] Attempt ${attempt + 1}/${maxRetries + 1}, retryLevel=${retryLevel}`);
 
       return await generateBatch(
         contextToUse,
@@ -1163,7 +1153,7 @@ async function generateBatchWithRetry(
             : isTransientUpstreamError
               ? 'upstream service unavailable'
               : 'network error';
-          console.log(`[Devotional] ${reason} on attempt ${attempt + 1}, retrying (${attempt + 2}/${maxRetries + 1})...`);
+          logger.log(`[Devotional] ${reason} on attempt ${attempt + 1}, retrying (${attempt + 2}/${maxRetries + 1})...`);
           // Wait before retry — longer for upstream/network instability
           const delay = (isNetworkError(lastError) || isTransientUpstreamError)
             ? 2000 + attempt * 1000
@@ -1227,7 +1217,7 @@ export async function generateDevotional(
   // Check rate limit before starting generation
   const rateLimit = await checkRateLimit('devotional');
   if (!rateLimit.allowed) {
-    console.warn('[Devotional] Rate limit exceeded:', rateLimit);
+    logger.warn('[Devotional] Rate limit exceeded:', rateLimit);
     throw new Error(`Daily devotional generation limit reached. Please try again in ${getTimeUntilReset(rateLimit.resetTime)}.`);
   }
 
@@ -1235,24 +1225,24 @@ export async function generateDevotional(
   const existingRequest = inFlightFullGenerationRequests.get(requestKey);
 
   if (existingRequest) {
-    console.log('[Devotional] Reusing in-flight full generation request');
+    logger.log('[Devotional] Reusing in-flight full generation request');
     void logBugEvent('devotional-service', 'full-generation-deduped');
     return existingRequest;
   }
 
   const requestPromise = (async () => {
-    console.log(`[Devotional] Generating ${context.devotionalLength}-day, ${context.readingDuration}-minute devotional`);
+    logger.log(`[Devotional] Generating ${context.devotionalLength}-day, ${context.readingDuration}-minute devotional`);
 
     const totalDays = context.devotionalLength;
     const batches = buildBatchPlan(totalDays, context.readingDuration);
 
-    console.log(`[Devotional] Will generate in ${batches.length} batch(es): ${batches.map(b => `${b.start}-${b.end}`).join(', ')}`);
+    logger.log(`[Devotional] Will generate in ${batches.length} batch(es): ${batches.map(b => `${b.start}-${b.end}`).join(', ')}`);
 
     onProgress?.('Reading your story');
 
     // Resolve persona once for the entire series
     const resolvedPersona = resolvePersonaForGeneration(context);
-    console.log(`[Devotional] Resolved persona: primary=${resolvedPersona.primary}, secondary=${resolvedPersona.secondary}, templateSeed=${resolvedPersona.templateSeed}`);
+    logger.log(`[Devotional] Resolved persona: primary=${resolvedPersona.primary}, secondary=${resolvedPersona.secondary}, templateSeed=${resolvedPersona.templateSeed}`);
 
     try {
       let seriesTitle: string | null = null;
@@ -1262,7 +1252,7 @@ export async function generateDevotional(
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const { start: startDay, end: endDay } = batches[batchIndex];
 
-        console.log(`Generating batch ${batchIndex + 1}/${batches.length}: days ${startDay}-${endDay}`);
+        logger.log(`Generating batch ${batchIndex + 1}/${batches.length}: days ${startDay}-${endDay}`);
 
         // Update progress based on batch
         if (batchIndex === 0) {
@@ -1371,7 +1361,7 @@ export async function continueGeneratingDays(
   const existingRequest = inFlightContinuationRequests.get(requestKey);
 
   if (existingRequest) {
-    console.log(`[Devotional] Reusing in-flight continuation request for ${devotional.id}`);
+    logger.log(`[Devotional] Reusing in-flight continuation request for ${devotional.id}`);
     void logBugEvent('devotional-service', 'continuation-deduped', {
       devotionalId: devotional.id,
     });
@@ -1380,7 +1370,7 @@ export async function continueGeneratingDays(
 
   const requestPromise = (async () => {
     const startDay = existingDayCount + 1;
-    console.log(`[Devotional] Continuing generation: days ${startDay}-${targetDays} (${existingDayCount} already exist)`);
+    logger.log(`[Devotional] Continuing generation: days ${startDay}-${targetDays} (${existingDayCount} already exist)`);
     void logBugEvent('devotional-service', 'continuation-started', {
       devotionalId: devotional.id,
       startDay,
@@ -1418,7 +1408,7 @@ export async function continueGeneratingDays(
 
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const { start, end } = batches[batchIndex];
-        console.log(`[Devotional] Continue batch ${batchIndex + 1}/${batches.length}: days ${start}-${end}`);
+        logger.log(`[Devotional] Continue batch ${batchIndex + 1}/${batches.length}: days ${start}-${end}`);
 
         const result = await generateBatchWithRetry(
           context,
@@ -1505,7 +1495,7 @@ export async function generateAdaptiveQuestion(
   // Check rate limit before making API call
   const rateLimit = await checkRateLimit('adaptive-question');
   if (!rateLimit.allowed) {
-    console.warn('[Adaptive] Rate limit exceeded:', rateLimit);
+    logger.warn('[Adaptive] Rate limit exceeded:', rateLimit);
     // Fall back to base question if rate limited
     return { ...nextQuestionBase, source: 'fallback' };
   }
@@ -1645,16 +1635,16 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       { timeoutMs: 15000 }  // 15 seconds instead of 20
     );
 
-    console.log('[Adaptive] Backend candidates:', getBackendCandidates());
-    console.log('[Adaptive] Backend URL used:', backendResult.backendUrl);
-    console.log('[Adaptive] Backend attempts:', backendResult.attempts);
-    console.log('[Adaptive] Backend used fallback:', backendResult.usedFallback);
+    logger.log('[Adaptive] Backend candidates:', getBackendCandidates());
+    logger.log('[Adaptive] Backend URL used:', backendResult.backendUrl);
+    logger.log('[Adaptive] Backend attempts:', backendResult.attempts);
+    logger.log('[Adaptive] Backend used fallback:', backendResult.usedFallback);
 
     const { response } = backendResult;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.warn('[Adaptive] Backend API error (recoverable, using fallback question):', response.status, errorText.substring(0, 200));
+      logger.warn('[Adaptive] Backend API error (recoverable, using fallback question):', response.status, errorText.substring(0, 200));
       return { ...nextQuestionBase, source: 'fallback' };
     }
 
@@ -1685,30 +1675,30 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const content = data?.content?.[0]?.text;
 
     if (!content || typeof content !== 'string') {
-      console.warn('[Adaptive] Backend returned no parseable content (recoverable, using fallback question):', data);
+      logger.warn('[Adaptive] Backend returned no parseable content (recoverable, using fallback question):', data);
       return { ...nextQuestionBase, source: 'fallback' };
     }
 
-    console.log('[Adaptive] Backend raw content:', content.substring(0, 200));
+    logger.log('[Adaptive] Backend raw content:', content.substring(0, 200));
 
     // Handle markdown-wrapped JSON (```json ... ```)
     let jsonText = content;
     const markdownMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
     if (markdownMatch) {
       jsonText = markdownMatch[1].trim();
-      console.log('[Adaptive] Extracted JSON from markdown');
+      logger.log('[Adaptive] Extracted JSON from markdown');
     } else {
       // Try extracting first JSON object from mixed prose responses.
       const objectMatch = content.match(/\{[\s\S]*\}/);
       if (objectMatch) {
         jsonText = objectMatch[0];
-        console.log('[Adaptive] Extracted JSON object from mixed response');
+        logger.log('[Adaptive] Extracted JSON object from mixed response');
       }
     }
 
     const parsedResult = JSON.parse(jsonText) as { question?: string; subtext?: string };
     
-    console.log('[Adaptive] Backend parsed result:', {
+    logger.log('[Adaptive] Backend parsed result:', {
       question: parsedResult.question?.substring(0, 60),
       subtext: parsedResult.subtext?.substring(0, 40)
     });
@@ -1723,7 +1713,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       backendUrl: backendResult.backendUrl,
     };
   } catch (err) {
-    console.warn('[Adaptive] Backend parse error (recoverable, using fallback question):', err);
+    logger.warn('[Adaptive] Backend parse error (recoverable, using fallback question):', err);
     return { ...nextQuestionBase, source: 'fallback' };
   }
 }
@@ -1737,7 +1727,7 @@ export async function extractShareableQuotes(
   // Check rate limit before making API call
   const rateLimit = await checkRateLimit('extract-quotes');
   if (!rateLimit.allowed) {
-    console.warn('[ExtractQuotes] Rate limit exceeded');
+    logger.warn('[ExtractQuotes] Rate limit exceeded');
     return []; // Return empty if rate limited
   }
 
@@ -1787,7 +1777,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     const { response } = backendResult;
 
     if (!response.ok) {
-      console.log('[Quote Extraction] Backend request failed, using fallback');
+      logger.log('[Quote Extraction] Backend request failed, using fallback');
       return [];
     }
 
@@ -1805,7 +1795,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     
     return parsedResult.quotes?.slice(0, count) || [];
   } catch (err) {
-    console.log('[Quote Extraction] Error:', err);
+    logger.log('[Quote Extraction] Error:', err);
     return [];
   }
 }

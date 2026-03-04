@@ -4,9 +4,10 @@
  */
 
 import { logBugError } from './bug-logger';
+import { logger } from '@/lib/logger';
 
 const BACKEND_URL =
-  process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() ||
+  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() ||
   'https://unfold-backend-production.up.railway.app';
 
 interface GeminiQuestionResponse {
@@ -107,7 +108,7 @@ IMPORTANT: If they chose a specific study type, book, character, or theme, YOUR 
 
 Make them feel heard. Do NOT ask a question that steers them toward a predetermined answer.`;
 
-    console.log(`[Adaptive] Calling backend, step: ${currentStep}, answers: ${previousAnswers.length}`);
+    logger.log(`[Adaptive] Calling backend, step: ${currentStep}, answers: ${previousAnswers.length}`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -174,11 +175,11 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
                        nextQuestionBase.question.trim().toLowerCase();
 
     if (!isDifferent) {
-      console.log('[Adaptive] Response too similar to base, treating as failure');
+      logger.log('[Adaptive] Response too similar to base, treating as failure');
       return null;
     }
 
-    console.log(`[Adaptive] Generated unique question:`, {
+    logger.log(`[Adaptive] Generated unique question:`, {
       question: parsedResult.question.substring(0, 60) + '...',
       subtext: parsedResult.subtext.substring(0, 40) + '...',
     });

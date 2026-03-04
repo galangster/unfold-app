@@ -6,6 +6,7 @@
  * Widgets run in a separate process and can't access Zustand directly.
  * Data flows: App → Widget.updateSnapshot() → WidgetKit renders
  */
+import { logger } from '@/lib/logger';
 import UnfoldStreakWidget from '@/widgets/ios/UnfoldStreak';
 import UnfoldTodayWidget from '@/widgets/ios/UnfoldToday';
 import UnfoldDashboardWidget from '@/widgets/ios/UnfoldDashboard';
@@ -72,7 +73,7 @@ export function syncWidgets(): void {
     UnfoldDashboardWidget.updateSnapshot(sharedProps);
   } catch (error) {
     // Widgets may not be configured yet — fail silently
-    console.log('[Widgets] sync error (non-fatal):', error);
+    logger.log('[Widgets] sync error (non-fatal):', error);
   }
 }
 
@@ -129,7 +130,7 @@ export function startReadingSession(params: {
       streakCount: state.streakCurrent,
     });
   } catch (error) {
-    console.log('[Widgets] startReadingSession error:', error);
+    logger.log('[Widgets] startReadingSession error:', error);
   }
 }
 
@@ -157,7 +158,7 @@ export function updateReadingSession(elapsedMinutes: number, isListening?: boole
       streakCount: state.streakCurrent,
     });
   } catch (error) {
-    console.log('[Widgets] updateReadingSession error:', error);
+    logger.log('[Widgets] updateReadingSession error:', error);
   }
 }
 
@@ -174,7 +175,7 @@ export function endReadingSession(): void {
     // Also sync widgets to reflect the completed reading
     syncWidgets();
   } catch (error) {
-    console.log('[Widgets] endReadingSession error:', error);
+    logger.log('[Widgets] endReadingSession error:', error);
   }
 }
 

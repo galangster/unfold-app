@@ -184,5 +184,10 @@
   "overrides": {
     "react-native-css-interop": "0.1.22"
   },
-  "patchedDependencies": {}
+  "patchedDependencies": {},
+  "expo": {
+    "autolinking": {
+      "exclude": ["expo-location"]
+    }
+  }
 }

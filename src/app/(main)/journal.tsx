@@ -22,7 +22,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
 import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || 'https://unfold-backend-production.up.railway.app';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://unfold-backend-production.up.railway.app';
 
 export default function JournalScreen() {
   const router = useRouter();

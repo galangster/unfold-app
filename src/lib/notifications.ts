@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { useUnfoldStore } from './store';
+import { logger } from '@/lib/logger';
 
 // Teaser content for daily notifications
 export interface NotificationTeaser {
@@ -14,7 +15,7 @@ export interface NotificationTeaser {
 // This is critical for showing notifications when the user is in the app
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
-    console.log('[Notifications] Received notification in foreground:', notification.request.content.title);
+    logger.log('[Notifications] Received notification in foreground:', notification.request.content.title);
     return {
       shouldShowAlert: true,
       shouldPlaySound: true,
@@ -126,7 +127,7 @@ function generateNotificationTitle(teaser: NotificationTeaser | null): string {
 // Schedule a daily reminder notification
 export async function scheduleDailyReminder(timeString: string): Promise<string | null> {
   if (Platform.OS === 'web') {
-    console.log('[Notifications] Not available on web');
+    logger.log('[Notifications] Not available on web');
     return null;
   }
 
@@ -135,7 +136,7 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
 
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
-    console.log('[Notifications] Permission not granted');
+    logger.log('[Notifications] Permission not granted');
     return null;
   }
 
@@ -158,9 +159,9 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
       },
     });
 
-    console.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
+    logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
     if (teaser) {
-      console.log(`[Notifications] Teaser: "${teaser.quotableLine.substring(0, 50)}..."`);
+      logger.log(`[Notifications] Teaser: "${teaser.quotableLine.substring(0, 50)}..."`);
     }
     return identifier;
   } catch (error) {
@@ -176,19 +177,19 @@ export async function cancelAllReminders(): Promise<void> {
   }
 
   await Notifications.cancelAllScheduledNotificationsAsync();
-  console.log('[Notifications] All reminders cancelled');
+  logger.log('[Notifications] All reminders cancelled');
 }
 
 // Send a test notification immediately
 export async function sendTestNotification(): Promise<boolean> {
   if (Platform.OS === 'web') {
-    console.log('[Notifications] Not available on web');
+    logger.log('[Notifications] Not available on web');
     return false;
   }
 
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
-    console.log('[Notifications] Permission not granted');
+    logger.log('[Notifications] Permission not granted');
     return false;
   }
 
@@ -208,9 +209,9 @@ export async function sendTestNotification(): Promise<boolean> {
       },
     });
 
-    console.log('[Notifications] Test notification scheduled for 3 seconds');
+    logger.log('[Notifications] Test notification scheduled for 3 seconds');
     if (teaser) {
-      console.log(`[Notifications] Teaser: "${teaser.quotableLine.substring(0, 50)}..."`);
+      logger.log(`[Notifications] Teaser: "${teaser.quotableLine.substring(0, 50)}..."`);
     }
     return true;
   } catch (error) {
@@ -231,15 +232,15 @@ export async function getScheduledNotifications(): Promise<Notifications.Notific
 // Send a notification when Day 1 is ready (user may have left the app)
 export async function sendDay1ReadyNotification(title: string): Promise<boolean> {
   if (Platform.OS === 'web') {
-    console.log('[Notifications] Not available on web');
+    logger.log('[Notifications] Not available on web');
     return false;
   }
 
   const hasPermission = await areNotificationsEnabled();
-  console.log('[Notifications] Day 1 ready - permission status:', hasPermission);
+  logger.log('[Notifications] Day 1 ready - permission status:', hasPermission);
 
   if (!hasPermission) {
-    console.log('[Notifications] Permission not granted for Day 1 notification');
+    logger.log('[Notifications] Permission not granted for Day 1 notification');
     return false;
   }
 
@@ -253,7 +254,7 @@ export async function sendDay1ReadyNotification(title: string): Promise<boolean>
       trigger: null, // Send immediately
     });
 
-    console.log('[Notifications] Day 1 ready notification sent, id:', notificationId);
+    logger.log('[Notifications] Day 1 ready notification sent, id:', notificationId);
     return true;
   } catch (error) {
     console.error('[Notifications] Failed to send Day 1 notification:', error);
@@ -264,15 +265,15 @@ export async function sendDay1ReadyNotification(title: string): Promise<boolean>
 // Send a notification when devotional is ready
 export async function sendDevotionalReadyNotification(title: string): Promise<boolean> {
   if (Platform.OS === 'web') {
-    console.log('[Notifications] Not available on web');
+    logger.log('[Notifications] Not available on web');
     return false;
   }
 
   const hasPermission = await areNotificationsEnabled();
-  console.log('[Notifications] Devotional ready - permission status:', hasPermission);
+  logger.log('[Notifications] Devotional ready - permission status:', hasPermission);
 
   if (!hasPermission) {
-    console.log('[Notifications] Permission not granted for completion notification');
+    logger.log('[Notifications] Permission not granted for completion notification');
     return false;
   }
 
@@ -286,7 +287,7 @@ export async function sendDevotionalReadyNotification(title: string): Promise<bo
       trigger: null, // Send immediately
     });
 
-    console.log('[Notifications] Devotional ready notification sent, id:', notificationId);
+    logger.log('[Notifications] Devotional ready notification sent, id:', notificationId);
     return true;
   } catch (error) {
     console.error('[Notifications] Failed to send completion notification:', error);
@@ -306,14 +307,14 @@ export async function refreshDailyReminder(): Promise<boolean> {
   const reminderTime = state.user?.reminderTime;
 
   if (!reminderTime) {
-    console.log('[Notifications] No reminder time set, skipping refresh');
+    logger.log('[Notifications] No reminder time set, skipping refresh');
     return false;
   }
 
   // Check if we have permission before refreshing
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) {
-    console.log('[Notifications] No permission, skipping refresh');
+    logger.log('[Notifications] No permission, skipping refresh');
     return false;
   }
 

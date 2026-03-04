@@ -5,6 +5,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from '@/lib/logger';
 
 interface RateLimitConfig {
   maxRequests: number;
@@ -114,7 +115,7 @@ export async function incrementRateLimit(endpoint: string): Promise<void> {
     state.count++;
     await AsyncStorage.setItem(storageKey, JSON.stringify(state));
     
-    console.log(`[RateLimit] ${endpoint}: ${state.count}/${config.maxRequests}`);
+    logger.log(`[RateLimit] ${endpoint}: ${state.count}/${config.maxRequests}`);
   } catch (error) {
     console.error('[RateLimit] Error incrementing rate limit:', error);
   }
@@ -145,7 +146,7 @@ export async function resetAllRateLimits(): Promise<void> {
     const keys = await AsyncStorage.getAllKeys();
     const rateLimitKeys = keys.filter(key => key.startsWith(RATE_LIMIT_STORAGE_KEY));
     await AsyncStorage.multiRemove(rateLimitKeys);
-    console.log('[RateLimit] All rate limits reset');
+    logger.log('[RateLimit] All rate limits reset');
   } catch (error) {
     console.error('[RateLimit] Error resetting rate limits:', error);
   }
