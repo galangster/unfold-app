@@ -38,7 +38,7 @@ import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
-import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo } from '@/constants/devotional-types';
+import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
   pickRandomVariation,
   getRandomDurationSubtext,
@@ -182,7 +182,7 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story, your struggles, what makes you come alive \u2014 it all shapes what we create\u00A0for\u00A0you.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 we never train AI on your\u00A0private\u00A0writing.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -196,9 +196,11 @@ const ALL_STEPS = [
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "We'll craft each day to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long would you like this journey\u00A0to\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
+  // MIRROR-BACK: Reflect the user's answers back and ask for commitment
+  { id: 'mirrorBack', question: "Here's what I\u00A0heard.", subtext: 'Before we build this, I want to make sure I got\u00A0it\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
+type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack';
 
 interface OnboardingData {
   name: string;
@@ -214,6 +216,7 @@ interface OnboardingData {
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
+  mirrorBackCommitted: boolean;
 }
 
 // Progress indicator component
@@ -267,6 +270,7 @@ export default function OnboardingScreen() {
     readingDuration: 15,
     devotionalLength: 7,
     reminderTime: '8:00 AM',
+    mirrorBackCommitted: false,
   });
   
   // UI animation states
@@ -432,7 +436,12 @@ export default function OnboardingScreen() {
       const value = data[step.id as keyof OnboardingData];
       return value !== undefined && value !== '';
     }
-    
+
+    // Mirror-back always allows proceeding (commitment is optional encouragement)
+    if (step.type === 'mirrorBack') {
+      return true;
+    }
+
     return true;
   };
   
@@ -1103,7 +1112,7 @@ export default function OnboardingScreen() {
       return null;
     }
 
-    if (baseStep.type === 'studySubject') {
+    if (baseStep?.type === 'studySubject') {
       const getSubjectList = () => {
         if (data.selectedType === 'book_study') {
           return BIBLE_BOOKS_FOR_STUDY.map(book => ({
@@ -1188,7 +1197,7 @@ export default function OnboardingScreen() {
               borderColor: colors.border,
             }}
             autoFocus
-            maxLength={INPUT_LIMITS.name}
+            maxLength={INPUT_LIMITS.NAME.max}
           />
         </View>
       );
@@ -1221,7 +1230,7 @@ export default function OnboardingScreen() {
               }}
               multiline
               autoFocus
-              maxLength={step.id === 'aboutMe' ? INPUT_LIMITS.aboutMe : INPUT_LIMITS.multiline}
+              maxLength={step.id === 'aboutMe' ? INPUT_LIMITS.LONG_TEXT.max : INPUT_LIMITS.LONG_TEXT.max}
             />
           </View>
           <View style={{ marginTop: 16 }}>
@@ -1236,12 +1245,12 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'choice' || step.type === 'timeChoice') {
-      const options = step.hasDynamicOptions && step.id === 'readingDuration' 
-        ? step.options 
+      const options = step.hasDynamicOptions && step.id === 'readingDuration'
+        ? step.options
         : step.hasDynamicOptions && step.id === 'devotionalLength'
           ? step.options
           : step.options || [];
-      
+
       return (
         <View style={{ gap: 12, marginTop: 8 }}>
           {options.map((option) => {
@@ -1286,6 +1295,86 @@ export default function OnboardingScreen() {
               </Pressable>
             );
           })}
+        </View>
+      );
+    }
+
+    // Mirror-back step: reflect user's answers and commitment button
+    if (step.type === 'mirrorBack') {
+      // Build the mirror-back text from user data
+      const themeName = data.selectedThemes.length > 0
+        ? getThemeById(data.selectedThemes[0])?.name ?? ''
+        : data.selectedType
+          ? getDevotionalTypeById(data.selectedType)?.name ?? ''
+          : '';
+
+      const emotionalSnippet = data.emotionalState
+        ? data.emotionalState.split(/[.!?]/)[0].trim().toLowerCase()
+        : data.currentSituation
+          ? data.currentSituation.split(/[.!?]/)[0].trim().toLowerCase()
+          : '';
+
+      const seekingSnippet = data.spiritualSeeking
+        ? data.spiritualSeeking.split(/[.!?]/)[0].trim().toLowerCase()
+        : '';
+
+      return (
+        <View style={{ gap: 24, marginTop: 8 }}>
+          {/* Mirror-back reflection */}
+          <View style={{
+            backgroundColor: colors.inputBackground,
+            borderRadius: 20,
+            padding: 24,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}>
+            <Text style={{
+              fontFamily: FontFamily.displayItalic,
+              fontSize: 17,
+              color: colors.text,
+              lineHeight: 28,
+            }}>
+              {emotionalSnippet && seekingSnippet
+                ? `You said you're ${emotionalSnippet}. ${themeName ? `You picked "${themeName}" because that's where you actually are.` : ''} And what you're looking for — ${seekingSnippet}. That tells me something about what you need right now.`
+                : emotionalSnippet
+                  ? `You said you're ${emotionalSnippet}. ${themeName ? `"${themeName}" — that's not a random pick. That's where you are.` : ''} I hear you.`
+                  : `${themeName ? `"${themeName}" — ` : ''}you chose this for a reason. Let's build something for exactly where you are.`
+              }
+            </Text>
+          </View>
+
+          {/* Commitment button */}
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
+              // Auto-advance after commitment
+              setTimeout(() => {
+                setShowInput(false);
+                inputOpacity.value = 0;
+                setTimeout(() => advanceToNextStep(), 50);
+              }, 400);
+            }}
+          >
+            {({ pressed }) => (
+              <View style={{
+                backgroundColor: pressed ? colors.accent : colors.accent,
+                opacity: pressed ? 0.85 : 1,
+                paddingVertical: 18,
+                paddingHorizontal: 24,
+                borderRadius: 16,
+                alignItems: 'center',
+              }}>
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 16,
+                  color: '#FFFFFF',
+                }}>
+                  I'm ready to show up for this
+                </Text>
+              </View>
+            )}
+          </Pressable>
         </View>
       );
     }

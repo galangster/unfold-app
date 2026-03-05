@@ -11,6 +11,7 @@ import {
   StudyContext,
 } from './adaptive-questions';
 import { logBugEvent } from './bug-logger';
+import { PERSONA_BRIEF } from '@/constants/persona';
 
 interface UseAdaptiveQuestionsOptions {
   studyContext: StudyContext;
@@ -112,15 +113,30 @@ export function useAdaptiveQuestions({
       // Build prompt for GLaD
       const prompt = buildAdaptivePrompt(qa, pool, studyContext, confidence);
 
-      // Call GLaD API (Haiku for speed)
+      // Call backend API (Gemini 2.5 Flash for speed + cost)
       const response = await fetch('/api/generate/adaptive-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'gemini-3.1-flash-lite-preview',
           max_tokens: 300,
           temperature: 0.8,
-          system: `You are a warm spiritual guide. Generate ONE conversational follow-up question that emerges naturally from the conversation history. Make it feel personal and specific to what they've shared.`,
+          system: `${PERSONA_BRIEF}
+
+WHAT YOU'RE DOING: Generating ONE deeply personal follow-up question that emerges naturally from what this specific person shared.
+
+RULES:
+- The question MUST feel like it could only be asked to THIS person — never generic
+- Pick up their emotional thread, not biographical details (no family roles, job titles, locations)
+- Keep it short for mobile: question <= 110 characters, <= 18 words
+- Vary your style: sometimes direct, sometimes metaphorical, sometimes a simple "why"
+- NEVER start with "And" — vary openings
+- NEVER ask leading questions that suggest their own answer
+- NEVER steer toward peace/rest/freedom — people have diverse needs
+
+SUBTEXT: One short warm phrase (<=85 chars) that gives permission to be honest.
+
+RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "..."}`,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
