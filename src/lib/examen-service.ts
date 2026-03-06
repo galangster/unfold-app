@@ -162,7 +162,7 @@ async function postToBackend(
   let lastError: unknown = null;
 
   const payload = {
-    model: 'gemini-3.1-flash-lite-preview',
+    model: 'claude-sonnet-4-6',
     max_tokens: 600,
     temperature: 0.7,
     system: EXAMEN_SYSTEM_PROMPT,

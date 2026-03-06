@@ -29,6 +29,7 @@ import { FeatureOnboarding } from '@/components/FeatureOnboarding';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
+import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -146,12 +147,11 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
   );
 }
 
-// Midday Check-In card — appears after noon, placeholder until Phase 2
-function MiddayCheckInCard({ colors, onPress }: { colors: ColorTheme; onPress: () => void }) {
+function MiddayCheckInCard({ colors, onPress, message }: { colors: ColorTheme; onPress: () => void; message: string }) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(600).delay(250)}
-      style={{ paddingHorizontal: 24, marginTop: 20 }}
+      entering={FadeInDown.duration(500).delay(150)}
+      style={{ paddingHorizontal: 24, marginTop: 12 }}
     >
       <Pressable
         onPress={onPress}
@@ -163,47 +163,31 @@ function MiddayCheckInCard({ colors, onPress }: { colors: ColorTheme; onPress: (
         <View
           style={{
             backgroundColor: colors.inputBackground,
-            borderRadius: 16,
+            borderRadius: 12,
             borderWidth: 1,
             borderColor: colors.border,
-            padding: 20,
+            borderLeftWidth: 3,
+            borderLeftColor: colors.accent,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
             flexDirection: 'row',
             alignItems: 'center',
           }}
         >
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              backgroundColor: colors.accent + '15',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 14,
-            }}
-          >
-            <ChatCircleDotsIcon size={20} color={colors.accent} weight="light" />
-          </View>
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 15,
-                color: colors.text,
-                marginBottom: 3,
-              }}
-            >
-              How's your day going?
-            </Text>
-            <Text
-              style={{
                 fontFamily: FontFamily.body,
-                fontSize: 13,
-                color: colors.textSubtle,
+                fontSize: 14,
+                color: colors.text,
+                lineHeight: 20,
               }}
             >
-              Quick check-in — takes 30 seconds
+              {message}
             </Text>
+          </View>
+          <View style={{ marginLeft: 12 }}>
+            <ChatCircleDotsIcon size={16} color={colors.textSubtle} weight="light" />
           </View>
         </View>
       </Pressable>
@@ -296,12 +280,11 @@ function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme })
   );
 }
 
-// Evening Wind-Down card — appears after 5pm
-function EveningWindDownCard({ colors, onPress }: { colors: ColorTheme; onPress: () => void }) {
+function EveningWindDownCard({ colors, onPress, message }: { colors: ColorTheme; onPress: () => void; message: string }) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(600).delay(250)}
-      style={{ paddingHorizontal: 24, marginTop: 20 }}
+      entering={FadeInDown.duration(500).delay(200)}
+      style={{ paddingHorizontal: 24, marginTop: 8 }}
     >
       <Pressable
         onPress={onPress}
@@ -313,47 +296,31 @@ function EveningWindDownCard({ colors, onPress }: { colors: ColorTheme; onPress:
         <View
           style={{
             backgroundColor: colors.inputBackground,
-            borderRadius: 16,
+            borderRadius: 12,
             borderWidth: 1,
             borderColor: colors.border,
-            padding: 20,
+            borderLeftWidth: 3,
+            borderLeftColor: colors.accent + '80',
+            paddingVertical: 14,
+            paddingHorizontal: 16,
             flexDirection: 'row',
             alignItems: 'center',
           }}
         >
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              backgroundColor: colors.accent + '15',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: 14,
-            }}
-          >
-            <MoonIcon size={20} color={colors.accent} weight="light" />
-          </View>
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 15,
-                color: colors.text,
-                marginBottom: 3,
-              }}
-            >
-              End your day in peace
-            </Text>
-            <Text
-              style={{
                 fontFamily: FontFamily.body,
-                fontSize: 13,
-                color: colors.textSubtle,
+                fontSize: 14,
+                color: colors.text,
+                lineHeight: 20,
               }}
             >
-              Evening prayer or narrated scripture
+              {message}
             </Text>
+          </View>
+          <View style={{ marginLeft: 12 }}>
+            <MoonIcon size={16} color={colors.textSubtle} weight="light" />
           </View>
         </View>
       </Pressable>
@@ -414,6 +381,9 @@ export default function HomeScreen() {
   );
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
+
+  const middayMessage = useMemo(() => getMessageForToday(MIDDAY_MESSAGES), []);
+  const eveningMessage = useMemo(() => getMessageForToday(EVENING_MESSAGES), []);
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
@@ -738,6 +708,14 @@ export default function HomeScreen() {
             <DailyBridgeCard text={bridgeText} colors={colors} />
           )}
 
+          {/* Notification cards — above journey card */}
+          {showCheckInCard && (
+            <MiddayCheckInCard colors={colors} onPress={handleCheckIn} message={middayMessage} />
+          )}
+          {showEveningCard && (
+            <EveningWindDownCard colors={colors} onPress={handleEveningWindDown} message={eveningMessage} />
+          )}
+
           {/* Resume card */}
           {shouldShowResumeCard && resumeContext && resumeDevotional && (
             <Animated.View
@@ -1059,15 +1037,6 @@ export default function HomeScreen() {
               </Pressable>
             )}
           </Animated.View>
-
-          {/* Time-aware cards */}
-          {showCheckInCard && (
-            <MiddayCheckInCard colors={colors} onPress={handleCheckIn} />
-          )}
-
-          {showEveningCard && (
-            <EveningWindDownCard colors={colors} onPress={handleEveningWindDown} />
-          )}
 
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
