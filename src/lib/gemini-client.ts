@@ -5,10 +5,10 @@
  * supplementary AI calls. The mobile app does NOT call Gemini directly —
  * all AI calls are routed through the backend for security.
  *
- * Model: claude-haiku-4-5-20251001
- * - Input:  $0.25/1M tokens
- * - Output: $2.50/1M tokens
- * - ~10x cheaper than Claude Sonnet on input, ~6x on output
+ * Model: gemini-2.5-flash
+ * - Input:  $0.15/1M tokens
+ * - Output: $0.60/1M tokens
+ * - ~8x cheaper than Claude Haiku, ~50x cheaper than Sonnet
  *
  * Used for:
  * - Bridge generation (/api/generate-bridge)
@@ -27,7 +27,7 @@
  *   const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
  */
 
-export const GEMINI_MODEL = 'claude-haiku-4-5-20251001';
+export const GEMINI_MODEL = 'gemini-2.5-flash';
 
 /**
  * Cost estimates per call at scale (10K DAU):

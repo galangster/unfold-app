@@ -162,7 +162,7 @@ async function postToBackend(
   let lastError: unknown = null;
 
   const payload = {
-    model: 'claude-haiku-4-5-20251001',
+    model: 'gemini-2.5-flash',
     max_tokens: 600,
     temperature: 0.7,
     system: EXAMEN_SYSTEM_PROMPT,

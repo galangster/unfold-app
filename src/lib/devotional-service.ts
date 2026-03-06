@@ -1856,7 +1856,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: 'gemini-2.5-flash',
         max_tokens: 220,
         temperature: 0.7,
         system: adaptiveSystemPrompt,
@@ -2005,7 +2005,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/extract-quotes',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: 'gemini-2.5-flash',
         max_tokens: 500,
         system: extractionSystemPrompt,
         messages: [
