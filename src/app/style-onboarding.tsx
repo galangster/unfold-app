@@ -21,7 +21,7 @@ import { CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { TypewriterText } from '@/components/TypewriterText';
-import { useUnfoldStore, WritingTone, ContentDepth, FaithBackground } from '@/lib/store';
+import { useUnfoldStore, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
 
 interface StyleQuestion {
   id: string;
@@ -59,6 +59,17 @@ const STYLE_QUESTIONS: StyleQuestion[] = [
         description: "Well-versed and seeking deeper study",
         example: "Rich theological depth and challenging reflections",
       },
+    ],
+  },
+  {
+    id: 'lifeStage',
+    question: "What season of life are you in?",
+    subtext: "So we can speak your language.",
+    options: [
+      { value: 'student', label: "I'm a student", description: "Figuring things out and finding my footing" },
+      { value: 'building', label: "I'm building my life", description: "Career, relationships, and big decisions" },
+      { value: 'midlife', label: "I'm in the thick of it", description: "Family, work, and a thousand responsibilities" },
+      { value: 'reflective', label: "I'm in a reflective season", description: "Looking back, looking forward, finding meaning" },
     ],
   },
   {
@@ -126,10 +137,12 @@ export default function StyleOnboardingScreen() {
     tone: WritingTone;
     depth: ContentDepth;
     faithBackground: FaithBackground;
+    lifeStage: LifeStage;
   }>({
     tone: 'warm',
     depth: 'balanced',
     faithBackground: 'growing',
+    lifeStage: 'building',
   });
 
   const currentQuestion = STYLE_QUESTIONS[currentStep];
@@ -175,6 +188,7 @@ export default function StyleOnboardingScreen() {
         setUser({
           name: '',
           aboutMe: '',
+          personaTraits: [],
           currentSituation: '',
           emotionalState: '',
           spiritualSeeking: '',

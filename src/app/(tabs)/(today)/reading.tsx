@@ -19,7 +19,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon } from 'phosphor-react-native';
+import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
@@ -28,13 +28,16 @@ import { useUnfoldStore } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
+import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
+import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -115,9 +118,12 @@ export default function ReadingScreen() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
   const audioPlayerRef = useRef<BottomSheet>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -129,6 +135,8 @@ export default function ReadingScreen() {
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
+  const [bridgeText, setBridgeText] = useState<string | null>(null);
+  const [isBridgeLoading, setIsBridgeLoading] = useState(false);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -136,6 +144,7 @@ export default function ReadingScreen() {
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
+  const bridgeOpacity = useSharedValue(0);
 
   const fontSize = user?.fontSize ?? 'medium';
 
@@ -165,6 +174,66 @@ export default function ReadingScreen() {
   const canGoForward = viewingDay < availableDays;
   const isLastDay = viewingDay === totalDays;
   const isDayCompleted = currentDayData?.isRead ?? false;
+
+  // Tomorrow preview data — next day in the series (0-indexed lookup)
+  const tomorrowDayData = useMemo(() => {
+    if (!currentDevotional) return null;
+    // viewingDay is 1-indexed, so currentDevotional.days[viewingDay] is the next day
+    return currentDevotional.days.find((d) => d.dayNumber === viewingDay + 1) ?? null;
+  }, [currentDevotional, viewingDay]);
+
+  const tomorrowTeaser = useMemo(() => {
+    if (!tomorrowDayData?.bodyText) return null;
+    // Extract first sentence as a teaser
+    const firstSentence = tomorrowDayData.bodyText.match(/^[^.!?]+[.!?]/);
+    return firstSentence ? firstSentence[0].trim() : tomorrowDayData.bodyText.slice(0, 120).trim() + '...';
+  }, [tomorrowDayData]);
+
+  // Bridge text — personalized transition passage for Day 2+
+  useEffect(() => {
+    if (viewingDay < 2 || !currentDevotional || !currentDayData || !user) {
+      setBridgeText(null);
+      setIsBridgeLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsBridgeLoading(true);
+    bridgeOpacity.value = 0;
+
+    // Find yesterday's check-in if available
+    const checkIns = useUnfoldStore.getState().checkIns;
+    const yesterdayCheckIn = checkIns.find(
+      (c) => c.devotionalId === currentDevotional.id && c.dayNumber === viewingDay - 1
+    );
+
+    void generateBridge(
+      {
+        userName: user.name,
+        yesterdayCheckIn: yesterdayCheckIn
+          ? { mood: yesterdayCheckIn.mood, moodLabel: yesterdayCheckIn.moodLabel, chipAnswer: yesterdayCheckIn.chipAnswer, freeText: yesterdayCheckIn.freeText }
+          : undefined,
+        todayTheme: currentDayData.title,
+        todayScripture: `${currentDayData.scriptureReference}: ${currentDayData.scriptureText}`,
+        currentSituation: user.currentSituation ?? '',
+      },
+      currentDevotional.id,
+      viewingDay
+    ).then((text) => {
+      if (cancelled) return;
+      setBridgeText(text);
+      setIsBridgeLoading(false);
+      if (text) {
+        bridgeOpacity.value = withTiming(1, { duration: 400 });
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [viewingDay, currentDevotional?.id, currentDayData?.title, user?.name]);
+
+  const bridgeAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: bridgeOpacity.value,
+  }));
 
   // Prefetch audio while user reads — by the time they tap play, it's cached
   useEffect(() => {
@@ -391,7 +460,7 @@ export default function ReadingScreen() {
     }
 
     router.push({
-      pathname: '/(main)/journal',
+      pathname: '/(tabs)/(today)/journal',
       params: {
         devotionalId: currentDevotionalId ?? '',
         dayNumber: viewingDay.toString(),
@@ -401,7 +470,7 @@ export default function ReadingScreen() {
 
   const handleGoHome = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(main)/home');
+    router.push('/(tabs)/(today)');
   }, [router]);
 
   // Memoized scroll handler to prevent re-renders during scroll
@@ -768,7 +837,7 @@ export default function ReadingScreen() {
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/(main)/home');
+                router.push('/(tabs)/(today)');
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
@@ -963,7 +1032,7 @@ export default function ReadingScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
-                    pathname: '/(main)/day-menu',
+                    pathname: '/(tabs)/(today)/day-menu',
                     params: {
                       devotionalId: currentDevotionalId ?? '',
                       currentDay: viewingDay.toString(),
@@ -1011,7 +1080,7 @@ export default function ReadingScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
-                    pathname: '/(main)/journal',
+                    pathname: '/(tabs)/(today)/journal',
                     params: {
                       devotionalId: currentDevotionalId,
                       dayNumber: String(viewingDay),
@@ -1042,7 +1111,8 @@ export default function ReadingScreen() {
                     setAudioToast({ visible: true, message: 'Audio is a premium feature' });
                     setTimeout(() => {
                       setAudioToast(null);
-                      router.push('/paywall');
+                      setPremiumFeature('audio');
+                      setShowPremiumSheet(true);
                     }, 1200);
                     return;
                   }
@@ -1094,6 +1164,55 @@ export default function ReadingScreen() {
               scrollEventThrottle={150}
               removeClippedSubviews={true}
             >
+              {/* Bridge text — personalized transition for Day 2+ */}
+              {viewingDay >= 2 && isBridgeLoading && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  style={{
+                    marginBottom: 24,
+                    padding: 16,
+                    borderRadius: 12,
+                    backgroundColor: colors.inputBackground,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  {/* Shimmer skeleton lines */}
+                  <View style={{ gap: 8 }}>
+                    <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.buttonBackground, width: '90%' }} />
+                    <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.buttonBackground, width: '75%' }} />
+                    <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.buttonBackground, width: '60%' }} />
+                  </View>
+                </Animated.View>
+              )}
+              {viewingDay >= 2 && bridgeText && !isBridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
+                <Animated.View
+                  style={[
+                    {
+                      marginBottom: 24,
+                      paddingVertical: 16,
+                      paddingHorizontal: 18,
+                      borderRadius: 12,
+                      backgroundColor: colors.inputBackground,
+                      borderLeftWidth: 3,
+                      borderLeftColor: colors.accent,
+                    },
+                    bridgeAnimatedStyle,
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.displayItalic,
+                      fontSize: 15,
+                      lineHeight: 24,
+                      color: colors.textMuted,
+                    }}
+                  >
+                    {bridgeText}
+                  </Text>
+                </Animated.View>
+              )}
+
               <DevotionalContent
                 day={currentDayData}
                 fontSize={fontSize}
@@ -1102,6 +1221,7 @@ export default function ReadingScreen() {
                 onToggleBookmark={handleToggleBookmark}
                 onQuoteSelected={handleQuoteSelected}
                 existingHighlights={currentDayHighlights}
+                onScriptureTap={(ref) => setScriptureSheetRef(ref)}
               />
 
               {/* Chevron at top of content area - invites scroll */}
@@ -1291,7 +1411,8 @@ export default function ReadingScreen() {
                           <Pressable
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                              router.push('/paywall');
+                              setPremiumFeature('series');
+                              setShowPremiumSheet(true);
                             }}
                             style={({ pressed }) => ({
                               backgroundColor: retryCtaButtonBg,
@@ -1321,6 +1442,60 @@ export default function ReadingScreen() {
                         )}
                       </View>
                   )}
+
+                  {/* Tomorrow Preview — shown after completing today's reading */}
+                  {isCompleted && !showCelebration && tomorrowDayData && tomorrowTeaser && (
+                    <Animated.View
+                      entering={FadeIn.delay(300).duration(400)}
+                      style={{
+                        marginTop: 32,
+                        paddingVertical: 18,
+                        paddingHorizontal: 20,
+                        borderRadius: 14,
+                        backgroundColor: colors.inputBackground,
+                        borderWidth: 1.5,
+                        borderColor: colors.accent,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <SunHorizonIcon size={18} color={colors.accent} weight="light" />
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiMedium,
+                            fontSize: 12,
+                            color: colors.accent,
+                            letterSpacing: 1,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Tomorrow
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 20,
+                          color: colors.text,
+                          lineHeight: 26,
+                          marginBottom: 8,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {tomorrowDayData.title}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.body,
+                          fontSize: 14,
+                          color: colors.textMuted,
+                          lineHeight: 21,
+                        }}
+                        numberOfLines={3}
+                      >
+                        {tomorrowTeaser}
+                      </Text>
+                    </Animated.View>
+                  )}
               </View>
             </Animated.ScrollView>
           </SafeAreaView>
@@ -1332,7 +1507,6 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
-          router.push('/(main)/home');
         }}
         type={celebrationType}
       />
@@ -1376,6 +1550,23 @@ export default function ReadingScreen() {
           <Text style={styles.toastText}>{audioToast.message}</Text>
         </Animated.View>
       )}
+
+      {/* Scripture Tap Sheet */}
+      <ScriptureTapSheet
+        visible={!!scriptureSheetRef}
+        onClose={() => setScriptureSheetRef(null)}
+        reference={scriptureSheetRef ?? ''}
+        devotionalId={currentDevotional.id}
+        dayNumber={viewingDay}
+        dayTitle={currentDayData?.title}
+        devotionalTitle={currentDevotional.title}
+      />
+
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature={premiumFeature}
+      />
     </View>
   );
 }

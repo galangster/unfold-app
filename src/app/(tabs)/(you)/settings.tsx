@@ -4,9 +4,9 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, CrownIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, CrownIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
-import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
+import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, LifeStage, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
@@ -20,6 +20,7 @@ import {
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { CARTESIA_VOICES } from '@/lib/cartesia';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 
 /** Bundled voice samples — Psalm 23:1 read by each voice. Instant playback, zero network. */
 const VOICE_SAMPLES: Record<string, any> = {
@@ -72,6 +73,13 @@ const FAITH_OPTIONS: { value: FaithBackground; label: string; description: strin
   { value: 'mature', label: "I'm grounded", description: 'Well-versed and seeking deeper study' },
 ];
 
+const LIFE_STAGE_OPTIONS: { value: LifeStage; label: string; description: string }[] = [
+  { value: 'student', label: "I'm a student", description: 'Figuring things out and finding my footing' },
+  { value: 'building', label: "I'm building my life", description: 'Career, relationships, and big decisions' },
+  { value: 'midlife', label: "I'm in the thick of it", description: 'Family, work, and a thousand responsibilities' },
+  { value: 'reflective', label: "I'm in a reflective season", description: 'Looking back, looking forward, finding meaning' },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
@@ -81,7 +89,7 @@ export default function SettingsScreen() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
-  const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'translation' | null>(null);
+  const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'lifeStage' | 'translation' | null>(null);
   const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | 'voice' | null>('colors');
 
   // Profile editing state
@@ -92,6 +100,7 @@ export default function SettingsScreen() {
   // Loading states for async operations
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'translation' | 'general' | null>(null);
 
   // Voice preview state — uses bundled MP3 samples (instant, no network)
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
@@ -171,7 +180,7 @@ export default function SettingsScreen() {
 
   const handleUpgrade = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/paywall');
+    setPremiumFeature('general');
   };
 
   const handleResetData = async () => {
@@ -961,7 +970,7 @@ export default function SettingsScreen() {
                             onPress={() => {
                               if (!user?.isPremium) {
                                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                                router.push('/paywall');
+                                setPremiumFeature('theme');
                                 return;
                               }
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1065,7 +1074,7 @@ export default function SettingsScreen() {
                           onPress={() => {
                             if (!user?.isPremium) {
                               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                              router.push('/paywall');
+                              setPremiumFeature('font');
                               return;
                             }
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1264,7 +1273,7 @@ export default function SettingsScreen() {
                           onPress={() => {
                             if (isLocked) {
                               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                              router.push('/paywall');
+                              setPremiumFeature('voice');
                               return;
                             }
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1517,7 +1526,7 @@ export default function SettingsScreen() {
                         onPress={() => {
                           if (isLocked) {
                             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                            router.push('/paywall');
+                            setPremiumFeature('translation');
                             return;
                           }
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -2019,8 +2028,212 @@ export default function SettingsScreen() {
                   })}
                 </Animated.View>
               )}
+
+              {/* Life stage preference */}
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'lifeStage' ? null : 'lifeStage');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 16,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <HourglassIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: 14, flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Life Stage
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 12,
+                      color: colors.textMuted,
+                      marginTop: 2,
+                    }}
+                  >
+                    {LIFE_STAGE_OPTIONS.find((o) => o.value === user?.writingStyle?.lifeStage)?.label ?? "I'm building my life"}
+                  </Text>
+                </View>
+                <CaretDownIcon
+                  size={20}
+                  color={colors.textMuted}
+                  weight="light"
+                  style={{
+                    transform: [{ rotate: expandedPreference === 'lifeStage' ? '180deg' : '0deg' }],
+                  }}
+                />
+              </Pressable>
+
+              {/* Life stage options */}
+              {expandedPreference === 'lifeStage' && (
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                  {LIFE_STAGE_OPTIONS.map((option) => {
+                    const isSelected = (user?.writingStyle?.lifeStage ?? 'building') === option.value;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({
+                            writingStyle: {
+                              ...user?.writingStyle,
+                              tone: user?.writingStyle?.tone ?? 'warm',
+                              depth: user?.writingStyle?.depth ?? 'balanced',
+                              faithBackground: user?.writingStyle?.faithBackground ?? 'growing',
+                              lifeStage: option.value,
+                            },
+                          });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: 12,
+                          paddingHorizontal: 12,
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.uiMedium,
+                              fontSize: 15,
+                              color: colors.text,
+                            }}
+                          >
+                            {option.label}
+                          </Text>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.ui,
+                              fontSize: 12,
+                              color: colors.textMuted,
+                              marginTop: 2,
+                            }}
+                          >
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 4,
+                                backgroundColor: colors.background,
+                              }}
+                            />
+                          )}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </Animated.View>
+              )}
             </View>
           </Animated.View>
+          {/* Your Privacy */}
+          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 12,
+                color: colors.textHint,
+                letterSpacing: 1,
+                marginBottom: 12,
+              }}
+            >
+              Your Privacy
+            </Text>
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 20,
+                marginBottom: 24,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiMedium,
+                  fontSize: 15,
+                  color: colors.text,
+                  marginBottom: 12,
+                }}
+              >
+                Your data stays yours
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: 14,
+                  color: colors.textMuted,
+                  lineHeight: 22,
+                  marginBottom: 8,
+                }}
+              >
+                Your journal entries, reflections, and personal story stay on your device.
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: 14,
+                  color: colors.textMuted,
+                  lineHeight: 22,
+                  marginBottom: 8,
+                }}
+              >
+                We never train AI models on your private writing.
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: 14,
+                  color: colors.textMuted,
+                  lineHeight: 22,
+                }}
+              >
+                Your data is yours — export or delete anytime.
+              </Text>
+            </View>
+          </Animated.View>
+
           <Animated.View entering={FadeInDown.duration(400).delay(175)}>
             <Text
               style={{
@@ -2281,6 +2494,12 @@ export default function SettingsScreen() {
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
+
+      <PremiumFeatureSheet
+        visible={!!premiumFeature}
+        onClose={() => setPremiumFeature(null)}
+        feature={premiumFeature ?? 'general'}
+      />
     </View>
   );
 }

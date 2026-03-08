@@ -31,10 +31,10 @@ export async function scheduleMorningReminder(hour: number = 8, minute: number =
       sound: true,
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
       minute,
-      repeats: true,
-    } as Notifications.DailyTriggerInput,
+    },
   });
 }
 
@@ -74,9 +74,10 @@ export async function scheduleEveningWarning(): Promise<void> {
       sound: true,
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour: 20,
       minute: 0,
-    } as Notifications.DailyTriggerInput,
+    },
   });
 }
 
@@ -210,6 +211,8 @@ export async function checkNotificationPermissions(): Promise<boolean> {
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),

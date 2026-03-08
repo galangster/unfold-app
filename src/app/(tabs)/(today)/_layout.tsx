@@ -1,30 +1,20 @@
 import { Stack } from 'expo-router';
-import { Colors } from '@/constants/colors';
 
-export default function MainLayout() {
+export default function TodayLayout() {
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: Colors.background },
+        contentStyle: { backgroundColor: 'transparent' },
         animation: 'fade',
       }}
     >
-      <Stack.Screen name="home" />
-      <Stack.Screen 
-        name="reading" 
-        options={{
-          animation: 'fade',
-        }}
-      />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="reading" />
       <Stack.Screen name="journal" />
       <Stack.Screen name="journal-detail" />
-      <Stack.Screen name="past-devotionals" />
-      <Stack.Screen name="your-journey" />
-      <Stack.Screen name="my-responses" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="stats" />
-      <Stack.Screen name="saved-passages" />
+      <Stack.Screen name="highlights" />
+      <Stack.Screen name="evening-wind-down" />
       <Stack.Screen
         name="wallpaper"
         options={{

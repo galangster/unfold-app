@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   bottomSection: {
-    paddingBottom: 56,
+    paddingBottom: 120,
     paddingHorizontal: 32,
     alignItems: 'center',
   },

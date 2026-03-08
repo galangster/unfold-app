@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
@@ -17,6 +18,7 @@ import { captureRef } from 'react-native-view-shot';
 import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useUnfoldStore } from '@/lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -127,11 +129,13 @@ export default function WallpaperScreen() {
   const dayNumber = params.dayNumber ?? '1';
   const dayTitle = params.dayTitle ?? '';
 
+  const tabBarHeight = useBottomTabBarHeight();
   const wallpaperStyles = getWallpaperStyles(isDark);
 
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<string>('default');
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const wallpaperRef = useRef<View>(null);
 
   const activeStyle = wallpaperStyles.find((s) => s.id === selectedStyle) ?? wallpaperStyles[0];
@@ -210,7 +214,7 @@ export default function WallpaperScreen() {
   const handleSelectStyle = (style: WallpaperStyle) => {
     if (style.premium && !isPremium) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      router.push('/paywall');
+      setShowPremiumSheet(true);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -283,8 +287,11 @@ export default function WallpaperScreen() {
                 >
                   {quote}
                 </Text>
-                <View style={{ position: 'absolute', bottom: 32, alignItems: 'center' }}>
+                <View style={{ position: 'absolute', bottom: 32, left: 16, right: 16, alignItems: 'center' }}>
                   <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
                     style={{
                       fontFamily: FontFamily.ui,
                       fontSize: 9,
@@ -313,7 +320,7 @@ export default function WallpaperScreen() {
         </View>
 
         {/* Style Carousel */}
-        <View style={{ paddingBottom: isPremium ? 16 : 140 }}>
+        <View style={{ paddingBottom: isPremium ? 100 : 140 }}>
           <Animated.View entering={FadeIn.duration(400).delay(100)}>
             <FlatList
               data={wallpaperStyles}
@@ -412,7 +419,7 @@ export default function WallpaperScreen() {
             entering={FadeInUp.duration(300).delay(200)}
             style={{
               position: 'absolute',
-              bottom: 90,
+              bottom: 90 + tabBarHeight,
               left: 0,
               right: 0,
               paddingHorizontal: 24,
@@ -436,9 +443,9 @@ export default function WallpaperScreen() {
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/paywall');
+                setShowPremiumSheet(true);
               }}
-              style={({ pressed }) => ({
+              style={{
                 backgroundColor: colors.accent,
                 paddingVertical: 14,
                 borderRadius: 12,
@@ -446,9 +453,7 @@ export default function WallpaperScreen() {
                 justifyContent: 'center',
                 alignItems: 'center',
                 gap: 8,
-                opacity: pressed ? 0.9 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              })}
+              }}
             >
               <CrownIcon size={16} color={colors.background} weight="light" />
               <Text
@@ -470,7 +475,7 @@ export default function WallpaperScreen() {
           style={{
             flexDirection: 'row',
             justifyContent: 'center',
-            paddingBottom: 24,
+            paddingBottom: 24 + tabBarHeight,
             paddingHorizontal: 24,
             gap: 16,
           }}
@@ -498,32 +503,36 @@ export default function WallpaperScreen() {
             </View>
           </Pressable>
 
-          <Pressable onPress={handleShare} disabled={saving}>
-            {({ pressed }) => (
-              <View
+          <Pressable onPress={handleShare} disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
+            <View
+              style={{
+                backgroundColor: colors.buttonBackground,
+                paddingVertical: 16,
+                paddingHorizontal: 28,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Text
                 style={{
-                  backgroundColor: pressed ? colors.text : colors.buttonBackground,
-                  paddingVertical: 16,
-                  paddingHorizontal: 28,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: pressed ? colors.text : colors.border,
+                  fontFamily: FontFamily.uiMedium,
+                  fontSize: 15,
+                  color: colors.text,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 15,
-                    color: pressed ? colors.background : colors.text,
-                  }}
-                >
-                  Share
-                </Text>
-              </View>
-            )}
+                Share
+              </Text>
+            </View>
           </Pressable>
         </Animated.View>
       </SafeAreaView>
+
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature="wallpaper"
+      />
     </View>
   );
 }

@@ -52,7 +52,7 @@ import {
 } from '@/constants/devotional-types';
 
 // Icon mapping
-const THEME_ICONS: Record<string, React.FC<{ size: number; color: string; weight?: string }>> = {
+const THEME_ICONS: Record<string, any> = {
   Hand: HandIcon,
   Fingerprint: FingerprintIcon,
   Moon: MoonIcon,
@@ -72,7 +72,7 @@ const THEME_ICONS: Record<string, React.FC<{ size: number; color: string; weight
   Flame: FireIcon,
 };
 
-const TYPE_ICONS: Record<string, React.FC<{ size: number; color: string; weight?: string }>> = {
+const TYPE_ICONS: Record<string, any> = {
   User: UserIcon,
   BookOpen: BookOpenIcon,
   Users: UsersIcon,

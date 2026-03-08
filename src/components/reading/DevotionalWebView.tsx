@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor } from '@/lib/store';
+import { parseScriptureReferences } from '@/lib/scripture-parser';
 
 interface Quote {
   text: string;
@@ -17,6 +18,7 @@ interface DevotionalWebViewProps {
   fontSize: FontSize;
   onQuoteSelected?: (quote: Quote) => void;
   existingHighlights?: Highlight[];
+  onScriptureTap?: (reference: string) => void;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -31,11 +33,12 @@ const HIGHLIGHT_COLORS = {
   red: { light: 'rgba(255, 100, 100, 0.4)', dark: 'rgba(255, 100, 100, 0.25)' },
 };
 
-export function DevotionalWebView({ 
-  day, 
-  fontSize, 
+export function DevotionalWebView({
+  day,
+  fontSize,
   onQuoteSelected,
-  existingHighlights = [] 
+  existingHighlights = [],
+  onScriptureTap,
 }: DevotionalWebViewProps) {
   const { colors, isDark } = useTheme();
   const readingFont = useReadingFont();
@@ -128,6 +131,19 @@ export function DevotionalWebView({
         initRangy();
       }
       
+      // Scripture reference tap handling
+      document.addEventListener('click', function(e) {
+        const ref = e.target.closest('.scripture-ref');
+        if (ref) {
+          e.preventDefault();
+          e.stopPropagation();
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'SCRIPTURE_TAP',
+            reference: ref.dataset.ref
+          }));
+        }
+      });
+
       // Backup height reports
       setTimeout(reportHeight, 500);
       setTimeout(reportHeight, 1000);
@@ -268,18 +284,34 @@ export function DevotionalWebView({
     const firstLetter = day.bodyText?.charAt(0) || '';
     const remainingText = day.bodyText?.slice(1) || '';
     const hasDropCap = firstLetter.match(/[A-Za-z]/);
-    
+
     const paragraphs = remainingText
       .split(/\n\n+/)
       .map(p => p.trim())
       .filter(p => p.length > 0);
-    
+
+    // Escape HTML and wrap scripture references in tappable spans
+    const escapeAndLinkScripture = (text: string): string => {
+      const refs = parseScriptureReferences(text);
+      if (refs.length === 0) return escapeHtml(text);
+
+      let result = '';
+      let lastIdx = 0;
+      for (const ref of refs) {
+        result += escapeHtml(text.substring(lastIdx, ref.startIndex));
+        result += `<span class="scripture-ref" data-ref="${escapeHtml(ref.reference)}">${escapeHtml(ref.reference)}</span>`;
+        lastIdx = ref.endIndex;
+      }
+      result += escapeHtml(text.substring(lastIdx));
+      return result;
+    };
+
     const bodyHtml = hasDropCap
       ? `
-        <p class="first-paragraph"><span class="drop-cap">${firstLetter}</span>${escapeHtml(paragraphs[0] || '')}</p>
-        ${paragraphs.slice(1).map(p => `<p>${escapeHtml(p)}</p>`).join('')}
+        <p class="first-paragraph"><span class="drop-cap">${firstLetter}</span>${escapeAndLinkScripture(paragraphs[0] || '')}</p>
+        ${paragraphs.slice(1).map(p => `<p>${escapeAndLinkScripture(p)}</p>`).join('')}
       `
-      : paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+      : paragraphs.map(p => `<p>${escapeAndLinkScripture(p)}</p>`).join('');
 
     const quotesHtml = day.quotes?.length
       ? day.quotes.map(q => `
@@ -547,6 +579,17 @@ export function DevotionalWebView({
     .color-btn.blue { background: linear-gradient(135deg, #74C0FC, #4DABF7); }
     .color-btn.purple { background: linear-gradient(135deg, #E599F7, #DA77F2); }
     .color-btn.red { background: linear-gradient(135deg, #FF8787, #FF6B6B); }
+
+    /* Scripture reference links */
+    .scripture-ref {
+      color: ${accentColor};
+      text-decoration: underline;
+      text-decoration-color: ${accentColor}60;
+      text-underline-offset: 3px;
+      cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -578,6 +621,8 @@ export function DevotionalWebView({
           serializedRange: data.serializedRange,
           color: data.color,
         });
+      } else if (data.type === 'SCRIPTURE_TAP' && onScriptureTap) {
+        onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {
         setWebViewHeight(Math.max(data.height, 200));
       }

@@ -24,16 +24,18 @@ interface DevotionalContentProps {
   onToggleBookmark?: () => void;
   onQuoteSelected?: (quote: { text: string; context: string }) => void;
   existingHighlights?: Highlight[];
+  onScriptureTap?: (reference: string) => void;
 }
 
-export function DevotionalContent({ 
-  day, 
-  fontSize, 
-  titleSharedTransitionTag, 
-  isBookmarked, 
+export function DevotionalContent({
+  day,
+  fontSize,
+  titleSharedTransitionTag,
+  isBookmarked,
   onToggleBookmark,
   onQuoteSelected,
-  existingHighlights
+  existingHighlights,
+  onScriptureTap,
 }: DevotionalContentProps) {
   const { colors } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
@@ -141,11 +143,12 @@ export function DevotionalContent({
       </View>
 
       {/* Body text, quotes, and related content - WEBVIEW (selectable for quotes) */}
-      <DevotionalWebView 
-        day={day} 
+      <DevotionalWebView
+        day={day}
         fontSize={fontSize}
         onQuoteSelected={onQuoteSelected}
         existingHighlights={existingHighlights}
+        onScriptureTap={onScriptureTap}
       />
 
       {/* Cross References Section - NATIVE (structured) */}

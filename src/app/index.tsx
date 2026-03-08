@@ -109,7 +109,7 @@ export default function WelcomeScreen() {
 
   const navigate = useCallback(() => {
     if (user?.hasCompletedOnboarding) {
-      router.replace('/(main)/home');
+      router.replace('/(tabs)/(today)');
     } else {
       router.replace('/how-it-works');
     }
@@ -125,7 +125,7 @@ export default function WelcomeScreen() {
   useEffect(() => {
     // Returning users skip the welcome animation
     if (user?.hasCompletedOnboarding) {
-      router.replace('/(main)/home');
+      router.replace('/(tabs)/(today)');
       return;
     }
 

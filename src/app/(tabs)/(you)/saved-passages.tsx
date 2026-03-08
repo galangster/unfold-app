@@ -59,7 +59,7 @@ export default function SavedPassagesScreen() {
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 48 }}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
           >
             {bookmarks.map((bookmark, index) => (

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
@@ -18,6 +18,8 @@ export default function PastDevotionalsScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const user = useUnfoldStore((s) => s.user);
+  const journalEntries = useUnfoldStore((s) => s.journalEntries);
+  const checkIns = useUnfoldStore((s) => s.checkIns);
 
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportSuccessId, setExportSuccessId] = useState<string | null>(null);
@@ -25,17 +27,18 @@ export default function PastDevotionalsScreen() {
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCurrentDevotional(id);
-    router.push('/(main)/reading');
+    router.push('/(tabs)/(today)/reading');
   }, [setCurrentDevotional, router]);
 
   const handleExportPDF = useCallback(async (devotional: Devotional) => {
     if (exportingId) return;
 
-    if (!user?.isPremium) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      router.push('/paywall');
-      return;
-    }
+    // TODO: re-enable premium gate after testing
+    // if (!user?.isPremium) {
+    //   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    //   router.push('/paywall');
+    //   return;
+    // }
 
     if (!isPDFExportSupported()) {
       return;
@@ -43,13 +46,35 @@ export default function PastDevotionalsScreen() {
 
     setExportingId(devotional.id);
     try {
-      await exportDevotionalToPDF(devotional);
+      // Gather journal entries for this devotional
+      const devJournals = journalEntries
+        .filter((j) => j.devotionalId === devotional.id)
+        .map((j) => ({
+          dayNumber: j.dayNumber,
+          content: j.content,
+          questionResponses: j.questionResponses,
+        }));
+
+      // Gather check-ins for this devotional
+      const devCheckIns = checkIns
+        .filter((c) => c.devotionalId === devotional.id)
+        .map((c) => ({
+          dayNumber: c.dayNumber,
+          mood: c.mood,
+          moodLabel: c.moodLabel,
+        }));
+
+      await exportDevotionalToPDF(devotional, {
+        accentColor: colors.accent,
+        journalEntries: devJournals,
+        checkIns: devCheckIns,
+      });
       setExportSuccessId(devotional.id);
       setTimeout(() => setExportSuccessId(null), 2000);
     } finally {
       setExportingId(null);
     }
-  }, [exportingId, user?.isPremium, router]);
+  }, [exportingId, user?.isPremium, router, journalEntries, checkIns, colors.accent]);
 
   const renderItem = useCallback(({ item }: { item: Devotional }) => {
     const completedDays = item.days.filter((d) => d.isRead).length;
@@ -57,61 +82,91 @@ export default function PastDevotionalsScreen() {
     const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
 
     return (
-      <Pressable
-        onPress={() => handleSelectDevotional(item.id)}
-        style={({ pressed }) => ({
-          backgroundColor: pressed ? colors.inputBackgroundFocused : colors.inputBackground,
+      <View
+        style={{
+          backgroundColor: colors.inputBackground,
           borderRadius: 16,
           borderWidth: 1,
           borderColor: colors.border,
           padding: 20,
           marginBottom: 12,
-        })}
+        }}
       >
-        <Text
-          style={{
-            fontFamily: FontFamily.mono,
-            fontSize: 11,
-            color: colors.textHint,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            marginBottom: 6,
-          }}
-        >
-          {createdDate}
-        </Text>
-
-        <Text
-          style={{
-            fontFamily: FontFamily.display,
-            fontSize: 22,
-            color: colors.text,
-            lineHeight: 28,
-            marginBottom: 12,
-          }}
-        >
-          {item.title}
-        </Text>
-
-        <View
-          style={{
-            height: 2,
-            backgroundColor: colors.border,
-            borderRadius: 1,
-            marginBottom: 8,
-          }}
-        >
-          <View
+        {/* Top row: date + download circle */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text
             style={{
-              height: '100%',
-              width: `${progress}%`,
-              backgroundColor: colors.accent,
-              borderRadius: 1,
+              fontFamily: FontFamily.mono,
+              fontSize: 11,
+              color: colors.textHint,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
             }}
-          />
+          >
+            {createdDate}
+          </Text>
+
+          <Pressable
+            onPress={() => handleExportPDF(item)}
+            disabled={exportingId !== null}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: pressed ? `${colors.accent}30` : `${colors.accent}15`,
+              justifyContent: 'center',
+              alignItems: 'center',
+              opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
+            })}
+          >
+            {exportingId === item.id ? (
+              <ActivityIndicator size={18} color={colors.accent} />
+            ) : exportSuccessId === item.id ? (
+              <CheckIcon size={22} color={colors.accent} weight="bold" />
+            ) : (
+              <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
+            )}
+          </Pressable>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Tappable content area */}
+        <Pressable
+          onPress={() => handleSelectDevotional(item.id)}
+          style={({ pressed }) => ({
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 22,
+              color: colors.text,
+              lineHeight: 28,
+              marginBottom: 12,
+            }}
+          >
+            {item.title}
+          </Text>
+
+          <View
+            style={{
+              height: 2,
+              backgroundColor: colors.border,
+              borderRadius: 1,
+              marginBottom: 8,
+            }}
+          >
+            <View
+              style={{
+                height: '100%',
+                width: `${progress}%`,
+                backgroundColor: colors.accent,
+                borderRadius: 1,
+              }}
+            />
+          </View>
+
           <Text
             style={{
               fontFamily: FontFamily.ui,
@@ -121,61 +176,8 @@ export default function PastDevotionalsScreen() {
           >
             Day {item.currentDay} of {item.totalDays}
           </Text>
-
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation?.();
-              handleExportPDF(item);
-            }}
-            disabled={exportingId !== null}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.buttonBackground,
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: exportingId !== null ? 0.6 : 1,
-            })}
-          >
-            {exportingId === item.id ? (
-              <ActivityIndicator size="small" color={colors.accent} />
-            ) : exportSuccessId === item.id ? (
-              <>
-                <CheckIcon size={12} color={colors.accent} weight="bold" />
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.accent,
-                    marginLeft: 4,
-                  }}
-                >
-                  Saved
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textMuted,
-                  }}
-                >
-                  Download PDF
-                </Text>
-                {!user?.isPremium && (
-                  <LockIcon size={10} color={colors.textHint} weight="light" style={{ marginLeft: 6 }} />
-                )}
-              </>
-            )}
-          </Pressable>
-        </View>
-      </Pressable>
+        </Pressable>
+      </View>
     );
   }, [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, user?.isPremium]);
 
@@ -259,10 +261,9 @@ export default function PastDevotionalsScreen() {
         <FlashList
           data={devotionals}
           renderItem={renderItem as any}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
+          keyExtractor={(item: Devotional) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 } as any}
           showsVerticalScrollIndicator={false}
-          estimatedItemSize={150}
         />
       </SafeAreaView>
     </View>

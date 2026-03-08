@@ -184,7 +184,7 @@ export default function StreakSettingsScreen() {
         </Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
         {/* Streak Society Tier Card */}
         <Animated.View
           entering={FadeInDown.duration(500)}

@@ -27,7 +27,7 @@ export default function MyResponsesScreen() {
   const handleEntryPress = (entryId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push({
-      pathname: '/(main)/journal-detail',
+      pathname: '/(tabs)/(today)/journal-detail',
       params: { entryId },
     });
   };

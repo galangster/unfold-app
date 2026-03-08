@@ -74,11 +74,13 @@ export const BIBLE_TRANSLATIONS: { value: BibleTranslation; label: string; descr
 export type WritingTone = 'warm' | 'direct' | 'poetic';
 export type ContentDepth = 'simple' | 'balanced' | 'theological';
 export type FaithBackground = 'new' | 'growing' | 'mature';
+export type LifeStage = 'student' | 'building' | 'midlife' | 'reflective';
 
 export interface WritingStylePreferences {
   tone: WritingTone;
   depth: ContentDepth;
   faithBackground: FaithBackground;
+  lifeStage?: LifeStage;
 }
 
 export interface UserProfile {
@@ -101,6 +103,13 @@ export interface UserProfile {
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
   preferredVoice: string;
+  // Auth-related fields (synced from Firebase)
+  authUserId?: string | null;
+  authProvider?: 'apple' | 'anonymous' | null;
+  authEmail?: string | null;
+  authDisplayName?: string | null;
+  signInPromptCount?: number;
+  hasSeenSignInPrompt?: boolean;
   // New: Theme and type preferences for next devotional
   selectedTheme?: ThemeCategory;
   selectedType?: DevotionalType;
@@ -133,6 +142,11 @@ export interface DevotionalDay {
   contextNote?: string;
   wordStudy?: { term: string; original: string; meaning: string };
   closingPrayer?: string;
+  // Phase 2: Midday check-in question + chips (generated with devotional)
+  checkInQuestion?: string;
+  checkInChips?: string[];
+  // Phase 5: Evening scripture reference for wind-down
+  eveningScriptureRef?: string;
 }
 
 export interface Devotional {
@@ -162,6 +176,24 @@ export interface JournalEntry {
   content: string;
   createdAt: string;
   updatedAt: string;
+  // Phase 4: Per-question responses for Go Deeper
+  questionResponses?: { question: string; response: string }[];
+}
+
+// Phase 2: Midday Check-In
+export type MoodLevel = 1 | 2 | 3 | 4 | 5;
+export type CheckInTimeOfDay = 'morning' | 'midday' | 'evening' | 'companion';
+
+export interface CheckIn {
+  id: string;
+  devotionalId: string;
+  dayNumber: number;
+  mood: MoodLevel; // 1=Struggling, 2=Low, 3=Okay, 4=Good, 5=Grateful
+  moodLabel: string;
+  chipAnswer?: string;
+  freeText?: string;
+  createdAt: string;
+  timeOfDay: CheckInTimeOfDay;
 }
 
 // Scripture tracking for variety
@@ -254,6 +286,7 @@ interface UnfoldState {
   journalEntries: JournalEntry[];
   addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateJournalEntry: (id: string, content: string) => void;
+  updateQuestionResponse: (entryId: string, question: string, response: string) => void;
   getJournalEntry: (devotionalId: string, dayNumber: number) => JournalEntry | undefined;
 
   // Scripture tracking for variety
@@ -289,9 +322,11 @@ interface UnfoldState {
   reviewPromptLastDate: string | null;
   reviewPromptCount: number;
   hasReviewed: boolean;
+  hasSeenDay1Review: boolean;
   reviewPromptDaysAtLast: number;
   recordReviewPrompt: (daysCompleted: number) => void;
   markAsReviewed: () => void;
+  setHasSeenDay1Review: () => void;
 
   // Streak tracking
   streakLastReadDate: string | null;
@@ -309,6 +344,18 @@ interface UnfoldState {
   seriesPersonaHistory: SeriesPersonaRecord[];
   addSeriesPersonaRecord: (record: SeriesPersonaRecord) => void;
 
+  // Check-ins (Phase 2)
+  checkIns: CheckIn[];
+  addCheckIn: (checkIn: Omit<CheckIn, 'id' | 'createdAt'>) => void;
+  getCheckIn: (devotionalId: string, dayNumber: number, timeOfDay: CheckInTimeOfDay) => CheckIn | undefined;
+  getRecentCheckIns: (count: number) => CheckIn[];
+
+  // Companion orb state
+  hasSeenCompanionIntro: boolean;
+  setHasSeenCompanionIntro: (seen: boolean) => void;
+  lastCompanionCheckInDate: string | null;
+  setLastCompanionCheckInDate: (date: string) => void;
+
   // Home onboarding tooltips
   hasSeenHomeTooltips: boolean;
   setHasSeenHomeTooltips: (seen: boolean) => void;
@@ -316,6 +363,12 @@ interface UnfoldState {
   // Feature onboarding carousel (shown once after first devotional generated)
   hasSeenFeatureOnboarding: boolean;
   setHasSeenFeatureOnboarding: (seen: boolean) => void;
+
+  // Card dismiss tracking (date strings — reset daily)
+  dismissedMiddayCardDate: string | null;
+  dismissedEveningCardDate: string | null;
+  setDismissedMiddayCardDate: (date: string) => void;
+  setDismissedEveningCardDate: (date: string) => void;
 
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
@@ -340,6 +393,7 @@ const initialState = {
   reviewPromptLastDate: null as string | null,
   reviewPromptCount: 0,
   hasReviewed: false,
+  hasSeenDay1Review: false,
   reviewPromptDaysAtLast: 0,
   streakLastReadDate: null as string | null,
   streakCurrent: 0,
@@ -349,8 +403,13 @@ const initialState = {
   streakWeekendAmnesty: true,
   streakFreezes: 0,
   seriesPersonaHistory: [] as SeriesPersonaRecord[],
+  checkIns: [] as CheckIn[],
+  hasSeenCompanionIntro: false,
+  lastCompanionCheckInDate: null as string | null,
   hasSeenHomeTooltips: false,
   hasSeenFeatureOnboarding: false,
+  dismissedMiddayCardDate: null as string | null,
+  dismissedEveningCardDate: null as string | null,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -468,6 +527,22 @@ export const useUnfoldStore = create<UnfoldState>()(
               ? { ...e, content, updatedAt: new Date().toISOString() }
               : e
           ),
+        })),
+
+      updateQuestionResponse: (entryId, question, response) =>
+        set((state) => ({
+          journalEntries: state.journalEntries.map((e) => {
+            if (e.id !== entryId) return e;
+            const existing = e.questionResponses ?? [];
+            const idx = existing.findIndex((qr) => qr.question === question);
+            let updated: { question: string; response: string }[];
+            if (idx >= 0) {
+              updated = existing.map((qr, i) => (i === idx ? { question, response } : qr));
+            } else {
+              updated = [...existing, { question, response }];
+            }
+            return { ...e, questionResponses: updated, updatedAt: new Date().toISOString() };
+          }),
         })),
 
       getJournalEntry: (devotionalId, dayNumber) => {
@@ -616,6 +691,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           reviewPromptDaysAtLast: daysCompleted,
         })),
       markAsReviewed: () => set({ hasReviewed: true }),
+      setHasSeenDay1Review: () => set({ hasSeenDay1Review: true }),
 
       // Streak actions
       recordStreakRead: () =>
@@ -720,11 +796,36 @@ export const useUnfoldStore = create<UnfoldState>()(
           return { seriesPersonaHistory: updated };
         }),
 
+      // Check-ins (Phase 2)
+      addCheckIn: (checkIn) =>
+        set((state) => ({
+          checkIns: [
+            { ...checkIn, id: `checkin_${Date.now()}`, createdAt: new Date().toISOString() },
+            ...state.checkIns,
+          ].slice(0, 200), // Cap at 200 entries
+        })),
+      getCheckIn: (devotionalId, dayNumber, timeOfDay) => {
+        return get().checkIns.find(
+          (c) => c.devotionalId === devotionalId && c.dayNumber === dayNumber && c.timeOfDay === timeOfDay
+        );
+      },
+      getRecentCheckIns: (count) => {
+        return get().checkIns.slice(0, count);
+      },
+
+      // Companion orb state
+      setHasSeenCompanionIntro: (seen) => set({ hasSeenCompanionIntro: seen }),
+      setLastCompanionCheckInDate: (date) => set({ lastCompanionCheckInDate: date }),
+
       // Home onboarding tooltips
       setHasSeenHomeTooltips: (seen) => set({ hasSeenHomeTooltips: seen }),
 
       // Feature onboarding carousel
       setHasSeenFeatureOnboarding: (seen) => set({ hasSeenFeatureOnboarding: seen }),
+
+      // Card dismiss tracking
+      setDismissedMiddayCardDate: (date) => set({ dismissedMiddayCardDate: date }),
+      setDismissedEveningCardDate: (date) => set({ dismissedEveningCardDate: date }),
 
       // Helpers
       getCurrentDevotional: () => {
@@ -737,7 +838,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 8, // Increment when state structure changes
+      version: 13, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -811,6 +912,38 @@ export const useUnfoldStore = create<UnfoldState>()(
           } as UnfoldState;
         }
 
+        // Migration from version 8 to 9: Add checkIns array
+        if (version < 9) {
+          return {
+            ...state,
+            checkIns: [],
+          } as UnfoldState;
+        }
+
+        if (version < 10) {
+          return {
+            ...state,
+            hasSeenDay1Review: false,
+          } as UnfoldState;
+        }
+
+        // Migration from version 11 to 12: Add companion orb state
+        if (version < 12) {
+          return {
+            ...state,
+            hasSeenCompanionIntro: false,
+            lastCompanionCheckInDate: null,
+          } as UnfoldState;
+        }
+
+        if (version < 13) {
+          return {
+            ...state,
+            dismissedMiddayCardDate: null,
+            dismissedEveningCardDate: null,
+          } as UnfoldState;
+        }
+
         return state as UnfoldState;
       },
       // Validate state on rehydration
@@ -847,6 +980,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               state.generationSession = initialState.generationSession;
               state.resumeContext = initialState.resumeContext;
               state.currentDevotionalId = initialState.currentDevotionalId;
+              state.checkIns = initialState.checkIns;
               // Preserve user if it seems valid
               if (!state.user || typeof state.user !== 'object') {
                 state.user = initialState.user;

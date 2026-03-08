@@ -118,8 +118,6 @@ function ShowcaseContent() {
           <View style={styles.colorGrid}>
             {[
               ['accent', colors.accent],
-              ['accentLight', colors.accentLight],
-              ['accentDark', colors.accentDark],
               ['background', colors.background],
               ['text', colors.text],
               ['textMuted', colors.textMuted],

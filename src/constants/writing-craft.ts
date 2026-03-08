@@ -57,8 +57,61 @@ STRUCTURAL SLOP (patterns that reveal the machine):
 - Empty intensifiers: "deeply," "profoundly," "truly," "really," "incredibly" — cut them. If the sentence needs an intensifier to work, the sentence is weak.
 - Hedge-then-declare: "It's not about X. It's about Y." Once per series is fine. Every day is a pattern.
 
+TITLE SLOP (series titles that scream "AI devotional"):
+- "The [Weight/Burden/Thing] You [Carry/Hold/Bear]" — body/weight/carrying metaphors are overused
+- "What You've Been [Carrying/Holding/Bearing/Searching]" — the "What You've Been X" formula is a tell
+- "The [Ground/Path/Road] [Beneath/Before/Ahead]" — generic journey metaphors
+- "[Bread/Water/Light] for the [Morning/Journey/Road]" — provision-for-journey clichés
+- "Learning to [Trust/Let Go/Breathe/Rest]" — the "Learning to X" formula
+- "When the [Ground/World/Silence] [Shifts/Breaks/Speaks]" — "When the X Y" is overdone
+- "The [Quiet/Hidden/Slow] [Work/Grace/Miracle]" — adjective + spiritual noun combos
+- Series titles should be surprising enough that a bookstore browser would pick them up. If the title could apply to any devotional, it's too generic.
+
 SOPHISTICATION TEST:
 Before finalizing, mentally ask: "Would a reader who has heard 100 AI-generated devotionals recognize this as one more?" If yes, rewrite the flagged sections. The goal is writing that sounds like it came from a specific human with a specific life — not from a language model.`;
+
+// ==========================================
+// CONVICTION DIRECTIVE
+// Injected into system prompt alongside CRAFT_FOUNDATION
+// The "sword that pierces" — Hebrews 4:12 writing
+// Not accusation. A mirror held so close the reader sees themselves.
+// ==========================================
+
+export const CONVICTION_DIRECTIVE = `
+
+CONVICTION & GODLY SORROW (the word that cuts to the heart):
+The best devotional writing doesn't just comfort — it convicts. Hebrews 4:12: "sharper than any two-edged sword, piercing to the division of soul and spirit." 2 Corinthians 7:10: "Godly sorrow produces repentance leading to salvation."
+
+THE NATHAN PRINCIPLE:
+Nathan didn't accuse David. He told a story. David condemned himself. THAT is the pattern:
+- Never point the finger. Hold up the mirror.
+- Let the reader arrive at their own conviction. The moment THEY see it is ten times more powerful than you telling them.
+- The best convicting line feels like the reader wrote it about themselves.
+
+HOW TO CONVICT WITHOUT ACCUSING:
+1. NAME THE COMFORTABLE LIE — "You've been calling it 'boundaries' but it might just be self-protection."
+2. CLOSE THE GAP — Show the distance between their theology and their Tuesday. "You say you trust God with your future but won't release control of your afternoon."
+3. REFRAME THE PRAYER — "You've been praying for patience while engineering a life that requires none."
+4. THE UNCOMFORTABLE QUESTION — One question so specific it follows the reader home. "What if the reason you're not content isn't that God hasn't given you enough — but that you've decided the cross isn't enough?"
+5. COST-OF-COMFORT — "David didn't fall because he was weak. He fell because he was comfortable. Comfort told him he'd earned the right to stop fighting."
+
+CONVICTION WRITING STANDARD:
+- NEVER command the reader to feel something: "Let that land," "Sit with that," "Did you hear that?" — if the line needs a command to work, the line is weak. A precise sentence creates its own weight without instruction.
+- NEVER announce the conviction: "Here's the hard truth" or "This might sting." Just say it. The reader will feel it.
+- The convicting line should read like a statement of fact, not a performance. Understatement convicts harder than volume. A whisper in the right ear does more than a shout from a stage.
+
+CONVICTION PLACEMENT (narrative arc):
+- Day 1-2 of a series: NEVER convict. Build trust first. The reader must feel known before they'll accept the mirror.
+- Day 3-5: The turn. This is where conviction lives. The reader is invested. Now the ground can shift.
+- Mid-series: Alternate — conviction day followed by comfort day. The wound needs time to breathe before the salve.
+- Final day: Not conviction. Send them out with benediction, not a wound.
+
+CONVICTION GUARDRAILS:
+- NEVER moralize. "You should feel bad about this" is preaching. "Does this describe you?" is a mirror.
+- NEVER use guilt as motivation. Godly sorrow moves toward God, not away. The conviction should make the reader want MORE of God, not less.
+- ONE convicting moment per devotional maximum. A sermon with five points convicts no one. A single precise sentence can change a life.
+- The tone is a surgeon, not a drill sergeant. Precise. Compassionate. Necessary.
+- Always pair conviction with the gospel. The sword that wounds is held by the Healer. Never leave the reader cut open without offering Christ.`;
 
 // ==========================================
 // STORY & PARABLE SYSTEM
@@ -328,11 +381,11 @@ export const CRAFT_INFLUENCES: Record<PersonaTrait, {
 
   challenging: {
     primary: [
-      'John Mark Comer: name the cultural current, then offer the ancient counterflow. "Everyone is hurrying. Jesus walked."',
-      'Jackie Hill Perry: theological precision in spoken-word rhythm. Short declaratives that read like poetry. No softening.',
-      'Jon Tyson: frame obedience as resistance. Following Jesus is the most counter-cultural act available.',
+      'John Mark Comer: name the cultural current, then offer the ancient counterflow. "Everyone is hurrying. Jesus walked." Close the gap between belief and behavior.',
+      'Jackie Hill Perry: theological precision that pierces. Short declaratives that land like verdicts. "Perhaps Jesus isn\'t enough for you" said so precisely the reader can\'t dodge it.',
+      'Jon Tyson: frame comfort as the enemy of calling. The Nathan-to-David mirror — tell a story, let the reader condemn themselves, then say "You are that person."',
     ],
-    secondaryPick: 'Bonhoeffer: "cheap vs costly" — name what discipleship actually costs. No discount gospel.',
+    secondaryPick: 'Bonhoeffer: "cheap vs costly" — name what discipleship actually costs. "When Christ calls a man, he bids him come and die." No discount gospel.',
   },
 
   poetic: {
@@ -453,6 +506,11 @@ export const DAILY_CRAFT_TECHNIQUES: CraftTechnique[] = [
     id: 'radical_subtraction',
     name: 'Radical Subtraction',
     directive: 'After writing, mentally cut the first paragraph. Start where the real energy begins. Trust the reader.',
+  },
+  {
+    id: 'prophetic_conviction',
+    name: 'Prophetic Conviction',
+    directive: 'Include one moment of piercing conviction — a mirror, not a finger. Name the comfortable lie. Close the gap between theology and Tuesday. The reader should feel the floor shift beneath a belief they didn\'t know was fragile. Pair the wound with the gospel — the sword is held by the Healer.',
   },
 ];
 

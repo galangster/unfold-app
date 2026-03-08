@@ -1,7 +1,7 @@
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType, SeriesPersonaRecord } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
 import { logger } from '@/lib/logger';
-import { checkRateLimit, incrementRateLimit } from './rate-limit';
+import { checkRateLimit, incrementRateLimit, getTimeUntilReset } from './rate-limit';
 import {
   getThemeById,
   getDevotionalTypeById,
@@ -28,6 +28,7 @@ import {
 import {
   CRAFT_FOUNDATION,
   ANTI_SLOP_DIRECTIVE,
+  CONVICTION_DIRECTIVE,
   PARABLE_ANTI_PATTERNS,
   DIALOGUE_ANTI_PATTERNS,
   getCraftInfluencesForTraits,
@@ -35,6 +36,8 @@ import {
   getStoryDirectiveForDay,
   getDialogueDirectiveForDay,
 } from '../constants/writing-craft';
+import { PERSONA_FULL } from '../constants/persona';
+import { buildVoiceAdaptationDirective } from '../constants/voice-adaptation';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -163,6 +166,147 @@ export function extractBookFromReference(reference: string): string {
   return match ? match[1].trim() : reference.split(' ')[0];
 }
 
+// ---------------------------------------------------------------------------
+// SCRIPTURE VARIANCE ENGINE
+// ---------------------------------------------------------------------------
+// The Bible has 66 books across 9 major regions. Most devotional apps
+// over-index on Psalms, Romans, John, and a handful of Paul's epistles.
+// This engine ensures each user's experience spans the full canon over time.
+
+const BIBLE_CANON_REGIONS: Record<string, { label: string; books: string[] }> = {
+  pentateuch: {
+    label: 'Pentateuch (Torah)',
+    books: ['Genesis', 'Exodus', 'Leviticus', 'Numbers', 'Deuteronomy'],
+  },
+  historical: {
+    label: 'Historical Books',
+    books: ['Joshua', 'Judges', 'Ruth', '1 Samuel', '2 Samuel', '1 Kings', '2 Kings', '1 Chronicles', '2 Chronicles', 'Ezra', 'Nehemiah', 'Esther'],
+  },
+  wisdom: {
+    label: 'Wisdom & Poetry',
+    books: ['Job', 'Psalms', 'Proverbs', 'Ecclesiastes', 'Song of Solomon'],
+  },
+  majorProphets: {
+    label: 'Major Prophets',
+    books: ['Isaiah', 'Jeremiah', 'Lamentations', 'Ezekiel', 'Daniel'],
+  },
+  minorProphets: {
+    label: 'Minor Prophets',
+    books: ['Hosea', 'Joel', 'Amos', 'Obadiah', 'Jonah', 'Micah', 'Nahum', 'Habakkuk', 'Zephaniah', 'Haggai', 'Zechariah', 'Malachi'],
+  },
+  gospels: {
+    label: 'Gospels & Acts',
+    books: ['Matthew', 'Mark', 'Luke', 'John', 'Acts'],
+  },
+  pauline: {
+    label: 'Pauline Epistles',
+    books: ['Romans', '1 Corinthians', '2 Corinthians', 'Galatians', 'Ephesians', 'Philippians', 'Colossians', '1 Thessalonians', '2 Thessalonians', '1 Timothy', '2 Timothy', 'Titus', 'Philemon'],
+  },
+  generalEpistles: {
+    label: 'General Epistles',
+    books: ['Hebrews', 'James', '1 Peter', '2 Peter', '1 John', '2 John', '3 John', 'Jude'],
+  },
+  apocalyptic: {
+    label: 'Apocalyptic',
+    books: ['Revelation'],
+  },
+};
+
+/**
+ * Analyze a user's scripture history to find overused books, underexplored
+ * regions, and generate smart variety directives for the generation prompt.
+ */
+export function analyzeScriptureVariety(usedScriptures: UsedScripture[]): {
+  overusedBooks: string[];
+  underexploredRegions: string[];
+  suggestedBooks: string[];
+  varietyDirective: string;
+} {
+  if (usedScriptures.length === 0) {
+    return {
+      overusedBooks: [],
+      underexploredRegions: [],
+      suggestedBooks: [],
+      varietyDirective: '',
+    };
+  }
+
+  // Count book usage
+  const bookCounts: Record<string, number> = {};
+  for (const s of usedScriptures) {
+    const book = s.book;
+    bookCounts[book] = (bookCounts[book] || 0) + 1;
+  }
+
+  // Find overused books (used 3+ times — they've been explored enough recently)
+  const totalReferences = usedScriptures.length;
+  const overusedBooks = Object.entries(bookCounts)
+    .filter(([, count]) => count >= 3)
+    .sort((a, b) => b[1] - a[1])
+    .map(([book]) => book);
+
+  // Find which regions are covered vs. missing
+  const usedBooks = new Set(Object.keys(bookCounts));
+  const regionCoverage: Record<string, { total: number; used: number }> = {};
+  const underexploredRegions: string[] = [];
+  const suggestedBooks: string[] = [];
+
+  for (const [regionKey, region] of Object.entries(BIBLE_CANON_REGIONS)) {
+    const used = region.books.filter((b) => usedBooks.has(b)).length;
+    regionCoverage[regionKey] = { total: region.books.length, used };
+
+    // Region is underexplored if less than 25% of its books have been used
+    if (used / region.books.length < 0.25) {
+      underexploredRegions.push(region.label);
+      // Suggest 2-3 specific books from underexplored regions
+      const unused = region.books.filter((b) => !usedBooks.has(b));
+      const picks = unused.sort(() => Math.random() - 0.5).slice(0, 2);
+      suggestedBooks.push(...picks);
+    }
+  }
+
+  // Build the directive
+  const parts: string[] = [];
+
+  parts.push(`SCRIPTURE VARIETY & CANON BREADTH (IMPORTANT):
+The goal is to help the reader encounter the FULL breadth of Scripture over time — familiar favorites AND hidden gems. Every book of the Bible has something to teach.`);
+
+  if (overusedBooks.length > 0) {
+    parts.push(`\nBooks this reader has seen heavily in recent devotionals: ${overusedBooks.join(', ')}.
+These are great books — but for THIS series, lean toward passages from OTHER books to keep their experience fresh. You can still reference these in cross-references, just don't make them the primary scripture for most days.`);
+  }
+
+  if (underexploredRegions.length > 0) {
+    parts.push(`\nRegions of the Bible this reader has NOT explored much yet: ${underexploredRegions.join(', ')}.
+Try to include at least 1-2 primary passages from these regions. Great options: ${suggestedBooks.join(', ')}.`);
+  }
+
+  parts.push(`\nSCRIPTURE SELECTION PRINCIPLES:
+- Mix well-known passages with lesser-studied ones. A devotional on hope doesn't always need Romans 8 — try Lamentations 3, Habakkuk 3, or Zephaniah 3:17.
+- For a ${totalReferences > 50 ? 'long-term' : 'newer'} reader: ${totalReferences > 50 ? 'prioritize depth over familiarity — they know the greatest hits' : 'balance familiar anchors with fresh discoveries'}.
+- Draw from at least 3 different regions of the Bible across this series.
+- The Minor Prophets, wisdom literature (Ecclesiastes, Song of Solomon), and narrative books (Ruth, Esther, Nehemiah, Judges) are gold mines most devotional apps ignore.
+- Don't shy away from difficult or surprising texts — Job's complaints, Ecclesiastes's skepticism, Lamentations's grief, Habakkuk's questions. Real faith includes wrestling.`);
+
+  // List previously used references (compact) so the model can simply avoid exact duplicates
+  if (usedScriptures.length > 0) {
+    const recentRefs = usedScriptures
+      .slice(0, 80)
+      .map((s) => s.reference);
+    // Deduplicate
+    const uniqueRefs = [...new Set(recentRefs)];
+    parts.push(`\nPreviously used references (avoid exact duplicates as primary scripture, but feel free to reference in cross-references):
+${uniqueRefs.slice(0, 60).join(', ')}`);
+  }
+
+  return {
+    overusedBooks,
+    underexploredRegions,
+    suggestedBooks,
+    varietyDirective: parts.join('\n'),
+  };
+}
+
 // Helper to extract scriptures from a devotional for tracking
 export function extractScripturesFromDevotional(devotional: Devotional): UsedScripture[] {
   const scriptures: UsedScripture[] = [];
@@ -204,7 +348,8 @@ interface GenerationContext {
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   bibleTranslation: BibleTranslation;
-  previouslyUsedScriptures?: string[]; // References to avoid repeating
+  previouslyUsedScriptures?: string[]; // References to avoid repeating (legacy)
+  usedScriptureHistory?: UsedScripture[]; // Full scripture objects for variance analysis
   // Theme and type
   themeCategory?: ThemeCategory;
   devotionalType?: DevotionalType;
@@ -212,9 +357,11 @@ interface GenerationContext {
   // Writing persona preference (v1 — kept for backward compat)
   personaTraits?: string;
   // Writing style from user preferences
-  writingStyle?: { tone: 'warm' | 'direct' | 'poetic'; depth: 'simple' | 'balanced' | 'theological'; faithBackground: 'new' | 'growing' | 'mature' };
+  writingStyle?: { tone: 'warm' | 'direct' | 'poetic'; depth: 'simple' | 'balanced' | 'theological'; faithBackground: 'new' | 'growing' | 'mature'; lifeStage?: 'student' | 'building' | 'midlife' | 'reflective' };
   // Cross-series freshness history
   seriesPersonaHistory?: SeriesPersonaRecord[];
+  // Previously generated series titles — used to prevent repetitive titles across series
+  previousSeriesTitles?: string[];
 }
 
 interface GeneratedDevotional {
@@ -397,57 +544,44 @@ ${craftInfluences}
 }
 
 // Full system prompt for first attempt — rich personalization
-const SYSTEM_PROMPT_FULL = `You are a contemplative Christian writer with the literary depth of Wendell Berry, the theological precision of N.T. Wright, and the pastoral warmth of Henri Nouwen. You write devotionals that feel like letters from a trusted mentor who has walked through darkness and found light.
+const SYSTEM_PROMPT_FULL = `${PERSONA_FULL}
 
-YOUR VOICE:
+DEVOTIONAL-SPECIFIC CRAFT:
 - Write as if composing something worth reading twice. Each sentence should carry weight.
-- Vary your openings dramatically—never start consecutive days the same way. Some days begin mid-thought, others with a question, others with an image, others with Scripture itself.
+- Vary openings dramatically — never start consecutive days the same way. Some days begin mid-thought, others with a question, others with an image, others with Scripture itself.
 - Trust silence. Not every sentence needs to explain. Let truth sit without commentary.
-
-PERSONAL CONNECTION:
-- Write to the reader using "you" frequently. This is a personal letter, not an essay.
-- Address them conversationally: "You know this tension..." / "What if you..." / "You've felt this before..."
-- The reader's name should appear sparingly—roughly once every 5 days, never at the beginning of a day. When you do use it, bury it mid-sentence at a moment of encouragement. Example: "And perhaps, [Name], this is exactly where grace meets you."
-
-WHAT TO AVOID (these sound artificial and hollow — instant AI tells):
-- "Here's the thing..." / "Here's the uncomfortable truth..." / "Here's what's remarkable..."
-- "Let that sink in" / "Read that again" / "Let that land"
-- "Friend, ..." or addressing the reader with pet names
-- "This is the part that haunts" / "This is the part that matters"
-- "There's something profound about..." / "There's something beautiful about..."
-- Rhetorical questions followed immediately by their answers
-- Lists of application points
-- Phrases like "powerful," "journey," "season of," "step into," "lean into," "sit with that," "hits different"
-- Starting paragraphs with "You see," or "The truth is," or "Think about it," or "In a world where"
-- Manufactured urgency or false intimacy
-- The Rule of Three: do NOT structure every insight as three parallel items. Vary structure.
-- Empty intensifiers: "deeply," "profoundly," "truly," "really" — cut them all.
-- Narrating the reader's life back to them. Never say things like "at the intersection of ministry and design" or "as someone who balances fatherhood with creative work."
-- Spelling out their identity, roles, or circumstances. They know who they are.
+- The reader's name should appear sparingly — roughly once every 5 days, never at the beginning of a day. Bury it mid-sentence at a moment of encouragement.
 
 THE SHOW-DON'T-TELL PRINCIPLE:
-The reader has shared some context about their life. Use this to INFORM your writing, not to NARRATE it.
+The reader has shared context about their life. Use this to INFORM your writing, not to NARRATE it.
 - WRONG: "As a father who works in ministry and design, you understand the tension between calling and responsibility."
-- RIGHT: Write about vocation, creativity, or stewardship in ways that will resonate—let them make the connection.
+- RIGHT: Write about vocation, creativity, or stewardship in ways that will resonate — let them make the connection.
+- Never spell out their identity, roles, or circumstances. They know who they are.
 
-The devotional should feel like it was written for any thoughtful Christian—but happens to land well for THIS person because you've chosen themes, scriptures, and angles that speak to their situation without announcing it.
+The devotional should feel like it was written for any thoughtful Christian — but happens to land well for THIS person because you've chosen themes, scriptures, and angles that speak to their situation without announcing it.
 
-WHAT MAKES WRITING RESONATE:
-- Direct address. Use "you" liberally.
-- Universal truths that feel personal because of how precisely they're stated.
-- Restraint. Say less than you want to. The reader's imagination does the rest.
-- Surprise. Place an unexpected word where a cliché would go.
-- Rhythm. Alternate between long sentences that unfold slowly and short ones that land.
-- Earned emotion. Build to moments; don't announce them.
-- Grounded imagery (a specific object, a time of day, a texture) rather than abstract concepts.
+ADDITIONAL ANTI-PATTERNS:
+- No rhetorical questions followed immediately by their answers
+- No lists of application points
+- No "Friend, ..." or pet names
+- No manufactured urgency or false intimacy
+- No narrating the reader's life back to them
+- The Rule of Three: do NOT structure every insight as three parallel items. Vary.
 
 SCRIPTURE HANDLING:
 - Let Scripture do the heavy lifting. Quote it fully, then sit with it.
 - Sometimes the best commentary is simply placing the text next to the reader's situation and letting the resonance speak.
 - Weave 2-3 cross-references naturally, not as proof-texts but as echoes.
 
+SCRIPTURE SELECTION — CANON BREADTH:
+- Draw from the FULL breadth of the Bible. Don't default to the "greatest hits" (Psalm 23, Romans 8, John 3, Philippians 4).
+- Every series should touch at least 3 different regions: OT narrative, prophets, wisdom literature, gospels, epistles.
+- Mine hidden gems: Minor Prophets (Habakkuk, Micah, Zephaniah), wisdom lit (Ecclesiastes, Song of Solomon), OT narrative (Ruth, Esther, Nehemiah, Joseph in Genesis 50).
+- Connect unexpected books — pair a Psalm with Habakkuk, link Paul with Ecclesiastes.
+- Difficult/surprising texts welcome: Job's complaints, Lamentations's grief, Ecclesiastes's skepticism. Real faith includes hard questions.
+
 STRUCTURE:
-- Begin in varied ways—sometimes with Scripture, sometimes with an image, sometimes in the middle of a thought
+- Begin in varied ways — sometimes with Scripture, sometimes with an image, sometimes mid-thought
 - End with invitation, not instruction. The reader should feel drawn forward, not commanded.
 
 IMPORTANT: Respond with valid JSON only. No markdown, no code blocks.`;
@@ -476,6 +610,7 @@ WHAT MAKES WRITING RESONATE:
 SCRIPTURE HANDLING:
 - Let Scripture do the heavy lifting. Quote it fully, then sit with it.
 - Weave 2-3 cross-references naturally.
+- Draw from the full Bible — not just Psalms, Romans, and John. Include lesser-known books (Minor Prophets, Ruth, Ecclesiastes, Nehemiah, Habakkuk) alongside familiar ones.
 
 STRUCTURE:
 - Begin in varied ways—sometimes with Scripture, sometimes with an image, sometimes mid-thought.
@@ -571,19 +706,21 @@ const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
 - Scripture: One focused passage (4-6 verses)
 - Body text: 250-350 words of reflection
 - Include 1 brief quote from a theologian, author, or church father that illuminates the theme
-- End with 1 reflection question for the reader to carry with them
+- End with 1 reflection question (see below)
 - If a story/analogy is included: keep it to 40-60 words max (a brief analogy, not a full narrative)
-- Total reading time: ~5 minutes`;
+- Total reading time: ~5 minutes
+${REFLECTION_QUESTION_CRAFT}`;
     case 15:
       return `15-MINUTE DEVOTIONAL FORMAT:
 - Primary Scripture: A substantial passage (6-10 verses)
 - Secondary Scripture: 1-2 cross-reference passages woven into the reflection (include full text, 2-4 verses each)
 - Body text: 600-800 words of rich, layered reflection
 - Include 2-3 quotes from theologians, authors, poets, or church fathers (e.g., C.S. Lewis, Augustine, Dietrich Bonhoeffer, A.W. Tozer, Julian of Norwich, Frederick Buechner, Brennan Manning, etc.) that deepen the meditation
-- End with 2-3 reflection questions that invite genuine self-examination
+- End with 2-3 reflection questions (see REFLECTION QUESTION CRAFT below)
 - Consider including a brief historical or cultural context note where it enriches understanding
 - If a story/parable is included: 80-150 words — a developed scene or anecdote, not a sprawling narrative
-- Total reading time: ~10-12 minutes, leaving 3-5 minutes for journaling/reflection`;
+- Total reading time: ~10-12 minutes, leaving 3-5 minutes for journaling/reflection
+${REFLECTION_QUESTION_CRAFT}`;
     case 30:
       return `30-MINUTE DEVOTIONAL FORMAT:
 - Primary Scripture: A meaningful passage (6-10 verses)
@@ -591,12 +728,47 @@ const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
 - Body text: 800-1000 words of deep, contemplative reflection
 - Include 2-3 quotes from theologians, mystics, or authors (C.S. Lewis, Henri Nouwen, Thomas Merton, A.W. Tozer, etc.)
 - Include brief historical or cultural context where it enriches understanding
-- End with 3-4 reflection questions that progressively deepen
+- End with 3-4 reflection questions that progressively deepen (see REFLECTION QUESTION CRAFT below)
 - Include a brief closing prayer or benediction
 - If a story/parable is included: 150-250 words — a substantial narrative with specific details and sensory grounding
-- Total reading time: ~20 minutes, leaving 10 minutes for journaling/reflection`;
+- Total reading time: ~20 minutes, leaving 10 minutes for journaling/reflection
+${REFLECTION_QUESTION_CRAFT}`;
   }
 };
+
+const REFLECTION_QUESTION_CRAFT = `
+REFLECTION QUESTION CRAFT:
+Good reflection questions are specific to the day's scripture and make the reader pause. Bad ones are vague, preachy, or use the same formula every day.
+
+NEVER USE THESE PATTERNS (they are lazy and repetitive):
+- "What would it actually feel like to..." — this is a crutch. Ban it entirely.
+- "What would it look like if you..." — same formula, different words.
+- "How does [concept] challenge you to..." — too on-the-nose.
+- "In what ways do you..." — stiff, essay-prompt energy.
+- "How might God be inviting you to..." — too churchy, assumes the answer.
+- Any question that answers itself or implies what the "right" response should be.
+
+WHAT MAKES A GOOD QUESTION:
+- It creates genuine tension or curiosity — the reader doesn't know the answer immediately.
+- It's rooted in something specific from TODAY'S text — not a generic spiritual prompt.
+- It's short (under 20 words is ideal).
+- It trusts the reader to connect the dots — no hand-holding.
+- It sometimes catches the reader off guard.
+
+GOOD EXAMPLES (notice the variety):
+- "Where are you holding on too tightly right now?"
+- "Name one thing you're afraid to ask God for."
+- "When was the last time you let yourself be weak in front of someone?"
+- "What are you pretending is fine?"
+- "If you dropped the performance — what would be left?"
+- "Who do you need to forgive that you haven't admitted yet?"
+- "What would you do differently today if you believed this verse?"
+
+VARIETY RULES:
+- Never start two consecutive questions the same way.
+- Mix question types: some begin with "What," some with "When/Where/Who," some with "If."
+- At least one question per series should be surprisingly direct or uncomfortable.
+- Questions should escalate: surface → personal → vulnerable.`;
 
 const getJsonSchemaForDuration = (duration: 5 | 15 | 30): string => {
   const baseSchema = `{
@@ -610,10 +782,16 @@ const getJsonSchemaForDuration = (duration: 5 | 15 | 30): string => {
       "bodyText": "The devotional reflection...",
       "quotableLine": "A memorable quote..."`;
 
+  // Common fields for midday check-in and evening wind-down
+  const checkInFields = `,
+      "checkInQuestion": "A midday reflection question tied to today's theme (15 words max)...",
+      "checkInChips": ["Chip answer 1", "Chip answer 2", "Chip answer 3"],
+      "eveningScriptureRef": "A calming Psalm or passage for evening reading, e.g. Psalm 4:8"`;
+
   if (duration === 5) {
     return baseSchema + `,
       "quotes": [{"text": "Quote text...", "author": "Author Name"}],
-      "reflectionQuestions": ["One question to carry with them..."]
+      "reflectionQuestions": ["One question to carry with them..."]${checkInFields}
     }
   ]
 }`;
@@ -627,7 +805,7 @@ const getJsonSchemaForDuration = (duration: 5 | 15 | 30): string => {
         {"reference": "Book Chapter:Verses", "text": "Full scripture text..."}
       ],
       "reflectionQuestions": ["Question 1...", "Question 2...", "Question 3..."],
-      "contextNote": "Optional historical or cultural context..."
+      "contextNote": "Optional historical or cultural context..."${checkInFields}
     }
   ]
 }`;
@@ -642,7 +820,7 @@ const getJsonSchemaForDuration = (duration: 5 | 15 | 30): string => {
       ],
       "reflectionQuestions": ["Question 1...", "Question 2...", "Question 3..."],
       "contextNote": "Brief historical or cultural context...",
-      "closingPrayer": "A brief prayer or benediction..."
+      "closingPrayer": "A brief prayer or benediction..."${checkInFields}
     }
   ]
 }`;
@@ -812,12 +990,26 @@ function buildUserPrompt(
   const daysToGenerate = endDay - startDay + 1;
   const isFirstBatch = startDay === 1;
 
+  // Build previous series titles avoidance block
+  const previousSeriesTitlesBlock = isFirstBatch && context.previousSeriesTitles && context.previousSeriesTitles.length > 0
+    ? `\n   PREVIOUSLY USED SERIES TITLES (do NOT reuse these titles or their themes/metaphors — find fresh, surprising angles):
+${context.previousSeriesTitles.map(t => `   - "${t}"`).join('\n')}`
+    : '';
+
   const titleInstruction = isFirstBatch
     ? `1. An evocative, poetic title for the whole series (3-6 words)
    TITLE REQUIREMENTS:
    - Vary structure across different devotionals: noun phrases ("The Quiet Work"), imperatives ("Hold Fast"), single evocative words with modifier ("Unshaken"), metaphorical images ("Salt & Light"), questions without question marks ("Where Mercy Lives"), fragments ("Before the Dawn"), or occasional "When" phrases ("When the Ground Shifts")
    - Make it surprising, not generic—avoid clichés like "Finding Peace" or "A Journey Through"
-   - Each title should feel like it could be a book you'd want to pick up`
+   - Each title should feel like it could be a book you'd want to pick up
+   BANNED TITLE PATTERNS (never use these overused structures):
+   - "The [Weight/Burden/Thing] You [Carry/Hold/Bear]"
+   - "What You've Been [Carrying/Holding/Bearing/Searching]"
+   - "The [Ground/Path/Road] [Beneath/Before/Ahead]"
+   - "[Bread/Water/Light] for the [Morning/Journey/Road]"
+   - "Learning to [Trust/Let Go/Breathe/Rest]"
+   - Avoid body/weight/carrying metaphors unless the theme specifically calls for it
+   - Avoid generic journey/path/road metaphors — find unexpected imagery instead${previousSeriesTitlesBlock}`
     : `1. Use this exact series title: "${seriesTitle}"`;
 
   const previousTitlesNote = previousDayTitles.length > 0
@@ -825,13 +1017,20 @@ function buildUserPrompt(
 ${previousDayTitles.map((t, i) => `Day ${i + 1}: "${t}"`).join('\n')}`
     : '';
 
-  // Build scripture avoidance instruction if we have previously used scriptures
-  const scriptureAvoidanceNote = context.previouslyUsedScriptures && context.previouslyUsedScriptures.length > 0
-    ? `\n\nSCRIPTURE VARIETY REQUIREMENT (IMPORTANT):
-The reader has previously read devotionals with these scriptures. To keep their experience fresh, please AVOID using these exact passages as primary scriptures. You may reference them briefly or use different verses from the same books, but choose NEW primary passages:
-${context.previouslyUsedScriptures.slice(0, 50).join(', ')}
-
-Instead, explore less common but equally meaningful passages that speak to similar themes.`
+  // Build scripture variety directive using the variance engine
+  const scriptureVariety = context.usedScriptureHistory && context.usedScriptureHistory.length > 0
+    ? analyzeScriptureVariety(context.usedScriptureHistory)
+    : context.previouslyUsedScriptures && context.previouslyUsedScriptures.length > 0
+      // Legacy fallback: convert string refs to minimal UsedScripture objects
+      ? analyzeScriptureVariety(context.previouslyUsedScriptures.map((ref) => ({
+          reference: ref,
+          book: extractBookFromReference(ref),
+          usedAt: new Date().toISOString(),
+          devotionalId: 'unknown',
+        })))
+      : null;
+  const scriptureAvoidanceNote = scriptureVariety
+    ? `\n\n${scriptureVariety.varietyDirective}`
     : '';
 
   // Build theme and type guidance
@@ -960,18 +1159,26 @@ async function generateBatch(
   // retryLevel 2: no craft additions (minimal prompt)
   const craftFoundation = retryLevel <= 1 ? CRAFT_FOUNDATION : '';
   const antiSlop = retryLevel <= 1 ? ANTI_SLOP_DIRECTIVE : '';
+  const convictionDirective = retryLevel <= 1 ? CONVICTION_DIRECTIVE : '';
   const parableGuardrails = retryLevel <= 1 ? PARABLE_ANTI_PATTERNS : '';
   const dialogueGuardrails = retryLevel <= 1 ? DIALOGUE_ANTI_PATTERNS : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + parableGuardrails + dialogueGuardrails + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
+  const voiceAdaptation = retryLevel === 0
+    ? buildVoiceAdaptationDirective(
+        context.writingStyle?.lifeStage,
+        context.writingStyle?.faithBackground,
+        context.writingStyle?.depth
+      )
+    : '';
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + convictionDirective + parableGuardrails + dialogueGuardrails + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
   // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
     : '';
   const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule);
 
-  // Using Haiku for all days - cost-effective and quality is sufficient for devotionals
-  const model = 'claude-haiku-4-5-20251001';
+  // Sonnet 4.6 for core devotional generation — quality is the product
+  const model = 'claude-sonnet-4-6';
   const timeoutMs = 180000; // 3 min timeout for all days
 
   logger.log(`[Devotional] generateBatch days ${startDay}-${endDay}, retryLevel=${retryLevel}, model=${model}, systemPrompt=${systemPrompt.length}chars, userPrompt=${userPrompt.length}chars`);
@@ -991,7 +1198,7 @@ async function generateBatch(
       '/api/generate/devotional',
       {
         model,
-        max_tokens: 12000, // Token limit for Haiku
+        max_tokens: 16000, // Token limit for Sonnet
         system: systemPrompt,
         messages: [
           {
@@ -1071,12 +1278,34 @@ async function generateBatch(
     throw new Error(`API request failed: ${response.status}`);
   }
 
-  const data = await response.json();
-  const content = data.content?.[0]?.text;
+  // Read raw text first so we can debug if JSON parsing fails
+  const rawResponseText = await response.text();
+  logger.log(`[Devotional] Raw response length: ${rawResponseText.length} chars`);
+
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(rawResponseText) as Record<string, unknown>;
+  } catch (jsonErr) {
+    logger.error('[Devotional] response JSON parse failed. First 500 chars:', rawResponseText.substring(0, 500));
+    logger.error('[Devotional] Last 200 chars:', rawResponseText.substring(rawResponseText.length - 200));
+    throw new Error('Backend response was not valid JSON');
+  }
+
+  // Check if the LLM output was truncated
+  const stopReason = (data as Record<string, unknown>).stop_reason;
+  if (stopReason === 'max_tokens') {
+    logger.warn('[Devotional] Output was truncated (stop_reason: max_tokens). Retrying...');
+    throw new Error('TRANSIENT_UPSTREAM_ERROR');
+  }
+
+  const content = (data as { content?: { text?: string }[] }).content?.[0]?.text;
 
   if (!content) {
+    logger.error('[Devotional] No content in response. Data keys:', Object.keys(data));
     throw new Error('No content in response');
   }
+
+  logger.log(`[Devotional] Response content length: ${content.length} chars, stop_reason: ${stopReason}`);
 
   // Parse the JSON response
   let parsed: GeneratedDevotional;
@@ -1085,13 +1314,19 @@ async function generateBatch(
   } catch {
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('Failed to parse JSON. Raw content:', content.substring(0, 500));
+      logger.error('[Devotional] Failed to parse JSON. Raw content (first 500 chars):', content.substring(0, 500));
       throw new Error('Could not parse response as JSON');
     }
     const cleanedJson = jsonMatch[0]
       .replace(/,\s*}/g, '}')
       .replace(/,\s*]/g, ']');
-    parsed = JSON.parse(cleanedJson) as GeneratedDevotional;
+    try {
+      parsed = JSON.parse(cleanedJson) as GeneratedDevotional;
+    } catch (innerErr) {
+      logger.error('[Devotional] Second JSON parse also failed. Cleaned JSON (last 200 chars):', cleanedJson.substring(cleanedJson.length - 200));
+      logger.error('[Devotional] Cleaned JSON length:', cleanedJson.length, 'Original content length:', content.length);
+      throw new Error('Could not parse LLM output as JSON — output may be truncated');
+    }
   }
 
   // Ensure day numbers are correct
@@ -1647,9 +1882,9 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'claude-haiku-4-5-20251001',  // Fast, cost-effective model
-        max_tokens: 220,  // Keep responses fast and compact for onboarding
-        temperature: 0.7,  // Slightly lower for concise, focused phrasing
+        model: 'grok-4-1-fast-non-reasoning',
+        max_tokens: 220,
+        temperature: 0.7,
         system: adaptiveSystemPrompt,
         messages: [
           {
@@ -1658,7 +1893,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
           },
         ],
       },
-      { timeoutMs: 15000 }  // 15 seconds instead of 20
+      { timeoutMs: 15000 }
     );
 
     logger.log('[Adaptive] Backend candidates:', getBackendCandidates());
@@ -1758,24 +1993,33 @@ export async function extractShareableQuotes(
   }
 
   try {
-    const extractionSystemPrompt = `You are a quote curator. Extract the most shareable, quotable sentences from this devotional content.
+    const extractionSystemPrompt = `You are a quote curator for a Christian devotional app. Extract the most shareable, screenshot-worthy sentences from devotional content.
 
-A shareable quote is:
-- Under 20 words ideally (max 30)
-- Stands alone without context
-- Contains surprise, reversal, or profound simplicity
+WHAT MAKES A QUOTE SHAREABLE:
+- Stands completely alone without any surrounding context
+- Contains surprise, reversal, paradox, or profound simplicity
 - Uses "you" or speaks directly to the reader
-- Theological depth in plain language
-- Memorable enough to screenshot or share
+- Theological depth expressed in plain, conversational language
+- Short enough to fit on an Instagram story (under 20 words ideal, max 30)
+- The kind of line someone would text to a friend or highlight in a book
 
-Score each quote 1-10 based on:
-- Stickiness (surprise, reversal): +3 points
-- Brevity (under 15 words): +2 points
-- Direct address ("you"): +1 point
-- Concrete imagery: +1 point
-- Ends with impact: +1 point
+WHAT TO AVOID:
+- Generic Christian platitudes ("God is good," "trust His plan")
+- Sentences that need the paragraph around them to make sense
+- Anything that reads like a greeting card or bumper sticker
+- Overly complex theological language
 
-Respond with valid JSON only: {"quotes": [{"text": "...", "score": 8}, ...]}`;
+SCORING (1-10):
+- Surprise factor (reversal, unexpected angle): +3
+- Brevity (under 15 words): +2
+- Direct address ("you"): +1
+- Concrete imagery (not abstract): +1
+- Strong ending (lands with impact): +1
+- Would stop someone mid-scroll: +2
+
+Extract ONLY quotes that appear verbatim in the source content. Do not rephrase or combine sentences.
+
+Respond with valid JSON only: {"quotes": [{"text": "exact quote from content", "score": 8}, ...]}`;
 
     const extractionUserPrompt = `Day Title: "${dayTitle}"
 
@@ -1787,7 +2031,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/extract-quotes',
       {
-        model: 'claude-haiku-4-5-20251001',
+        model: 'grok-4-1-fast-non-reasoning',
         max_tokens: 500,
         system: extractionSystemPrompt,
         messages: [

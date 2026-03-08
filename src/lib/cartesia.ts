@@ -29,12 +29,6 @@ export const CARTESIA_VOICES = [
     premium: true,
   },
   {
-    id: '00967b2f-88a6-4a31-8153-110a92134b9f',
-    name: 'Sophia',
-    description: 'Soft, peaceful tone',
-    premium: true,
-  },
-  {
     id: '3246e36c-ac8c-418d-83cd-4eaad5a3b887',
     name: 'David',
     description: 'Warm, pastoral presence',
@@ -44,12 +38,6 @@ export const CARTESIA_VOICES = [
     id: '15a9cd88-84b0-4a8b-95f2-5d583b54c72e',
     name: 'Grace',
     description: 'Ethereal, angelic quality',
-    premium: true,
-  },
-  {
-    id: 'a924b0e6-9253-4711-8fc3-5cb8e0188c94',
-    name: 'Michael',
-    description: 'Strong, reassuring male voice',
     premium: true,
   },
 ];
@@ -165,7 +153,7 @@ export function addSSMLNarration(text: string): string {
  * Uses two independent hashes (djb2 + sdbm) concatenated to minimize collision risk.
  */
 function hashKey(text: string, voiceId: string): string {
-  const input = `v2:${voiceId}:${text}`; // v2 = 16kHz + SSML enabled
+  const input = `v3:${voiceId}:${text}`; // v3 = SSML disabled, cache invalidation
   let h1 = 5381;  // djb2
   let h2 = 0;     // sdbm
   for (let i = 0; i < input.length; i++) {
@@ -318,8 +306,9 @@ async function downloadAudio(text: string, voiceId: string, cacheKey: string): P
 
   try {
     // Apply SSML narration — speed, volume, and break tags for expressive reading
-    const ssmlText = addSSMLNarration(text);
-    logger.log(`[TTS] SSML applied — ${text.length} → ${ssmlText.length} chars`);
+    // SSML disabled — may cause AVPlayer format errors via proxy
+    const ssmlText = text;
+    logger.log(`[TTS] SSML disabled — using plain text (${text.length} chars)`);
     const chunks = splitTextIntoChunks(ssmlText);
     logger.log(`[TTS] split into ${chunks.length} chunks (${chunks.map(c => c.length).join(', ')} chars)`);
 

@@ -4,8 +4,8 @@ import {
   Text,
   Pressable,
   StyleSheet,
-  Vibration,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -120,7 +120,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
     }
 
     setErrorMessage('');
-    Vibration.vibrate(50);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
@@ -131,6 +131,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
   }, [isActive, hasPermission]);
 
   const stopRecording = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     ExpoSpeechRecognitionModule.stop();
   }, []);
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, AppState, AppStateStatus, AccessibilityInfo, Dimensions } from 'react-native';
+import { View, Text, Pressable, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -16,7 +16,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { BellIcon } from 'phosphor-react-native';
+import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord } from '@/lib/store';
@@ -38,6 +38,20 @@ import {
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Sample devotional content shown as a preview while generating
+const SAMPLE_PREVIEW = {
+  themeTitle: 'Learning to Trust Again',
+  scripture: 'Psalm 56:3\u20134',
+  paragraphs: [
+    'Trust is a choice we make before we feel it. It\u2019s saying, \u201CI don\u2019t know what You\u2019re doing, God, but I know who You are.\u201D',
+    'Every devotional you receive will meet you where you are \u2014 not with platitudes, but with words that feel like they were written by someone who actually knows your story.',
+  ],
+  reflectionQuestion: 'What\u2019s one area of your life where you\u2019re being invited to trust before you understand?',
+};
+
+// Delay before showing the sample preview card (ms)
+const SAMPLE_PREVIEW_DELAY_MS = 5000;
 
 // Contemplative messages shown while generating
 const WAITING_MESSAGES = [
@@ -130,6 +144,9 @@ export default function GeneratingScreen() {
   const [hasAskedPermission, setHasAskedPermission] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
+  // Sample preview state — shows after a short delay to give users something to read
+  const [showSamplePreview, setShowSamplePreview] = useState(false);
+
   // Rotating message state
   const [messageIndex, setMessageIndex] = useState(0);
 
@@ -148,6 +165,15 @@ export default function GeneratingScreen() {
     }, MESSAGE_CYCLE_MS);
     return () => clearInterval(interval);
   }, [isGenerating, canStartReading]);
+
+  // Show sample preview after a delay (only during initial loading, before Day 1 is ready)
+  useEffect(() => {
+    if (canStartReading || !isGenerating) return;
+    const timer = setTimeout(() => {
+      setShowSamplePreview(true);
+    }, SAMPLE_PREVIEW_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [canStartReading, isGenerating]);
 
   // Check notification permission on mount
   useEffect(() => {
@@ -318,7 +344,7 @@ export default function GeneratingScreen() {
     const generate = async () => {
       markFullGenerationActive(devotionalId);
       try {
-        const recentScriptures = getRecentScriptures(100);
+        const recentScriptures = getRecentScriptures(200);
         const previouslyUsedReferences = recentScriptures.map(s => s.reference);
 
         const onDayGenerated: OnDayGeneratedCallback = (day, dayIndex, seriesTitle) => {
@@ -374,6 +400,12 @@ export default function GeneratingScreen() {
           }
         };
 
+        // Extract previous series titles for de-duplication (last 10 to keep prompt concise)
+        const previousSeriesTitles = devotionals
+          .map(d => d.title)
+          .filter((t): t is string => Boolean(t))
+          .slice(-10);
+
         const generated = await generateDevotional(
           {
             name: user.name,
@@ -385,11 +417,13 @@ export default function GeneratingScreen() {
             devotionalLength: user.devotionalLength,
             bibleTranslation: user.bibleTranslation ?? 'WEB',
             previouslyUsedScriptures: previouslyUsedReferences,
+            usedScriptureHistory: recentScriptures,
             themeCategory: user.selectedTheme,
             devotionalType: user.selectedType,
             studySubject: user.selectedStudySubject,
             writingStyle: user.writingStyle,
             seriesPersonaHistory,
+            previousSeriesTitles,
           },
           () => {},
           onDayGenerated
@@ -500,14 +534,14 @@ export default function GeneratingScreen() {
     if (shouldShowSignIn) {
       router.replace('/(onboarding)/sign-in');
     } else {
-      router.replace('/(main)/home');
+      router.replace('/(tabs)/(today)');
     }
   };
 
   const handleStartReadingEarly = () => {
     if (!canStartReading) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.replace('/(main)/reading');
+    router.replace('/(tabs)/(today)/reading');
   };
 
   const handleRetry = () => {
@@ -722,8 +756,17 @@ export default function GeneratingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-      <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 32,
+            paddingBottom: 40,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
 
           {/* Water ripple — rings expanding from center */}
           <View style={{ width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 48 }}>
@@ -1044,8 +1087,161 @@ export default function GeneratingScreen() {
               </Text>
             </Animated.View>
           )}
-        </View>
 
+          {/* ========== SAMPLE DEVOTIONAL PREVIEW ========== */}
+          {/* Shows after a delay to give users a taste of the devotional format */}
+          {showSamplePreview && !canStartReading && isGenerating && (
+            <Animated.View
+              entering={FadeIn.duration(800)}
+              style={{
+                marginTop: 48,
+                width: '100%',
+                alignItems: 'center',
+              }}
+            >
+              {/* Label */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}
+              >
+                <BookOpenTextIcon
+                  size={16}
+                  color={colors.accent}
+                  weight="light"
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  style={{
+                    fontFamily: FontFamily.uiMedium,
+                    fontSize: 13,
+                    color: colors.textSubtle,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {"Here\u2019s a taste of what yours will feel\u00A0like"}
+                </Text>
+              </View>
+
+              {/* Preview card */}
+              <View
+                style={{
+                  width: '100%',
+                  backgroundColor: colors.cardBackground,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  padding: 24,
+                }}
+              >
+                {/* Scripture reference */}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.uiMedium,
+                    fontSize: 12,
+                    color: colors.accent,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    marginBottom: 8,
+                  }}
+                >
+                  {SAMPLE_PREVIEW.scripture}
+                </Text>
+
+                {/* Theme title */}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.display,
+                    fontSize: 22,
+                    color: colors.text,
+                    marginBottom: 16,
+                    lineHeight: 30,
+                  }}
+                >
+                  {SAMPLE_PREVIEW.themeTitle}
+                </Text>
+
+                {/* Divider */}
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                    marginBottom: 16,
+                  }}
+                />
+
+                {/* Devotional paragraphs */}
+                {SAMPLE_PREVIEW.paragraphs.map((paragraph, index) => (
+                  <Text
+                    key={index}
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: 15,
+                      color: colors.text,
+                      lineHeight: 24,
+                      marginBottom: index < SAMPLE_PREVIEW.paragraphs.length - 1 ? 12 : 20,
+                      opacity: 0.9,
+                    }}
+                  >
+                    {paragraph}
+                  </Text>
+                ))}
+
+                {/* Reflection question */}
+                <View
+                  style={{
+                    backgroundColor: 'rgba(200, 165, 92, 0.06)',
+                    borderRadius: 12,
+                    padding: 16,
+                    borderLeftWidth: 3,
+                    borderLeftColor: colors.accent,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 11,
+                      color: colors.accent,
+                      letterSpacing: 1.5,
+                      textTransform: 'uppercase',
+                      marginBottom: 8,
+                    }}
+                  >
+                    REFLECT
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.bodyItalic,
+                      fontSize: 14,
+                      color: colors.textMuted,
+                      lineHeight: 22,
+                    }}
+                  >
+                    {SAMPLE_PREVIEW.reflectionQuestion}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Reassurance note below card */}
+              <Animated.Text
+                entering={FadeIn.duration(600).delay(400)}
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 13,
+                  color: colors.textSubtle,
+                  textAlign: 'center',
+                  marginTop: 16,
+                  lineHeight: 20,
+                }}
+              >
+                {'Yours will be written just for\u00A0you.'}
+              </Animated.Text>
+            </Animated.View>
+          )}
+
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
