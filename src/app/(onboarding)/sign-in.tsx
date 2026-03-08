@@ -191,7 +191,7 @@ export default function SignInScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
         // Navigate to home
-        router.replace('/(main)/home');
+        router.replace('/(tabs)/(today)');
       } else if (result.isCancelled) {
         logger.log('[SignIn] User cancelled Apple Sign In');
         // Stay on screen, user can try again or skip
@@ -266,7 +266,7 @@ export default function SignInScreen() {
         });
 
         // Navigate to home
-        router.replace('/(main)/home');
+        router.replace('/(tabs)/(today)');
       } else {
         // Firebase anonymous auth failed — proceed with local-only mode
         logger.warn('[SignIn] Firebase anonymous auth failed, continuing locally', { error: result.error });
@@ -278,7 +278,7 @@ export default function SignInScreen() {
           signInPromptCount: currentCount + 1,
         });
 
-        router.replace('/(main)/home');
+        router.replace('/(tabs)/(today)');
       }
     } catch (error) {
       // Even on exception, let user through with local-only mode
@@ -291,7 +291,7 @@ export default function SignInScreen() {
         signInPromptCount: currentCount + 1,
       });
 
-      router.replace('/(main)/home');
+      router.replace('/(tabs)/(today)');
     } finally {
       setIsLoading(false);
     }

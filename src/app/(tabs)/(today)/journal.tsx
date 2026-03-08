@@ -21,8 +21,8 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
-import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 import { PERSONA_BRIEF } from '@/constants/persona';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://unfold-backend-production.up.railway.app';
 
@@ -55,6 +55,8 @@ export default function JournalScreen() {
   const [deeperPrompts, setDeeperPrompts] = useState<string[]>([]);
   const [loadingDeeper, setLoadingDeeper] = useState(false);
   const [deeperError, setDeeperError] = useState(false);
+
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
 
   // Expandable question response state
   const [expandedQuestionIndex, setExpandedQuestionIndex] = useState<number | null>(null);
@@ -310,7 +312,7 @@ export default function JournalScreen() {
 
     if (!isPremium) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      router.push('/paywall');
+      setShowPremiumSheet(true);
       return;
     }
 
@@ -363,7 +365,7 @@ Their journal entry:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-2.5-flash',
+          model: 'grok-4-1-fast-non-reasoning',
           max_tokens: 400,
           temperature: 0.8,
           system: systemPrompt,
@@ -483,11 +485,36 @@ Their journal entry:
                   fontFamily: FontFamily.body,
                   fontSize: 15,
                   color: colors.textMuted,
-                  marginBottom: 32,
+                  marginBottom: currentDay?.scriptureReference ? 16 : 32,
                 }}
               >
                 Take a moment to reflect. This is just for you.
               </Text>
+
+              {/* Scripture anchor — connects the blank page to today's content */}
+              {currentDay && (
+                <View
+                  style={{
+                    marginBottom: 32,
+                    paddingLeft: 12,
+                    borderLeftWidth: 2,
+                    borderLeftColor: colors.accent + '40',
+                    borderRadius: 1,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.bodyItalic,
+                      fontSize: 14,
+                      color: colors.textMuted,
+                      lineHeight: 20,
+                    }}
+                  >
+                    {currentDay.title}
+                    {currentDay.scriptureReference ? ` — ${currentDay.scriptureReference}` : ''}
+                  </Text>
+                </View>
+              )}
             </Animated.View>
 
             <Animated.View entering={FadeIn.duration(400).delay(200)}>
@@ -495,7 +522,7 @@ Their journal entry:
                 ref={inputRef}
                 value={content}
                 onChangeText={handleTextChange}
-                placeholder="Write your thoughts..."
+                placeholder={currentDay?.reflectionQuestions?.[0] ?? "Write your thoughts..."}
                 placeholderTextColor={colors.textHint}
                 multiline
                 textAlignVertical="top"
@@ -512,10 +539,7 @@ Their journal entry:
               />
             </Animated.View>
 
-            {/* Speech-to-text input */}
-            <Animated.View entering={FadeIn.duration(400).delay(300)}>
-              <SpeechToTextButton onTranscript={handleSpeechTranscript} />
-            </Animated.View>
+            {/* Voice input removed — keyboard mic is sufficient */}
 
             {/* Go Deeper button */}
             {showDeeperButton && (
@@ -784,6 +808,12 @@ Their journal entry:
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature="journal"
+      />
     </Pressable>
   );
 }

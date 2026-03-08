@@ -201,7 +201,7 @@ export default function MyContentScreen() {
                     const currentDevotional = devotionals.find(d => d.id === currentDevotionalId);
                     if (currentDevotional) {
                       router.push({
-                        pathname: '/(main)/journal',
+                        pathname: '/(tabs)/(today)/journal',
                         params: {
                           devotionalId: currentDevotionalId,
                           dayNumber: currentDevotional.currentDay.toString(),
@@ -240,7 +240,7 @@ export default function MyContentScreen() {
                   <Pressable
                     key={entry.id}
                     onPress={() => router.push({
-                      pathname: '/(main)/journal-detail',
+                      pathname: '/(tabs)/(today)/journal-detail',
                       params: { entryId: entry.id }
                     })}
                     style={({ pressed }) => ({
@@ -293,7 +293,7 @@ export default function MyContentScreen() {
                   <Pressable
                     key={highlight.id}
                     onPress={() => router.push({
-                      pathname: '/(main)/reading',
+                      pathname: '/(tabs)/(today)/reading',
                       params: { 
                         devotionalId: highlight.devotionalId,
                         dayNumber: highlight.dayNumber.toString(),
@@ -356,7 +356,7 @@ export default function MyContentScreen() {
                   <Pressable
                     key={bookmark.id}
                     onPress={() => router.push({
-                      pathname: '/(main)/reading',
+                      pathname: '/(tabs)/(today)/reading',
                       params: { 
                         devotionalId: bookmark.devotionalId,
                         dayNumber: bookmark.dayNumber.toString(),

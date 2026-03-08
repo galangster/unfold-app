@@ -61,7 +61,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
     if (onPress) {
       onPress();
     } else {
-      router.push('/(main)/streak-settings');
+      router.push('/(tabs)/(you)/streak-settings');
     }
   };
 

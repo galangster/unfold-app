@@ -252,6 +252,11 @@ export default function OnboardingScreen() {
   const ripple2 = useSharedValue(0);
   const ripple3 = useSharedValue(0);
   
+  // Track whether the user has already seen the paywall during onboarding
+  const hasSeenPaywallRef = useRef(false);
+  // Track the step to resume after paywall dismissal
+  const postPaywallStepRef = useRef<StepId | null>(null);
+
   // Transition state for animations
   const isTransitioningRef = useRef(false);
   
@@ -501,6 +506,7 @@ export default function OnboardingScreen() {
       });
     }
 
+    // Paywall was shown early (after name step) — go straight to generating
     router.replace('/generating');
   }, [router, data, existingUser, updateUser, setUser]);
 
@@ -510,6 +516,14 @@ export default function OnboardingScreen() {
     if (currentIdx >= STEPS.length - 1) {
       // Last step — complete onboarding
       completeOnboarding();
+      return;
+    }
+
+    // Show paywall early — after the name step, before anything else
+    if (currentStepId === 'name' && !hasSeenPaywallRef.current) {
+      hasSeenPaywallRef.current = true;
+      postPaywallStepRef.current = STEPS[currentIdx + 1].id as StepId;
+      router.push({ pathname: '/paywall', params: { source: 'onboarding_early' } });
       return;
     }
 
@@ -526,7 +540,7 @@ export default function OnboardingScreen() {
     setShowInput(false);
     setShowListScrollHint(true);
     inputOpacity.value = 0;
-  }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
+  }, [STEPS, currentStepId, inputOpacity, completeOnboarding, router]);
 
   // Handle next button press
   const handleNext = () => {

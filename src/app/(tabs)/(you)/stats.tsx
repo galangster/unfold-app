@@ -202,7 +202,7 @@ export default function StatsScreen() {
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.replace('/(main)/stats');
+                router.replace('/(tabs)/(you)/stats');
               }}
               style={({ pressed }) => ({
                 opacity: pressed ? 0.7 : 1,
@@ -228,7 +228,7 @@ export default function StatsScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 48 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
           {selectedThemeName && (

@@ -74,11 +74,13 @@ export const BIBLE_TRANSLATIONS: { value: BibleTranslation; label: string; descr
 export type WritingTone = 'warm' | 'direct' | 'poetic';
 export type ContentDepth = 'simple' | 'balanced' | 'theological';
 export type FaithBackground = 'new' | 'growing' | 'mature';
+export type LifeStage = 'student' | 'building' | 'midlife' | 'reflective';
 
 export interface WritingStylePreferences {
   tone: WritingTone;
   depth: ContentDepth;
   faithBackground: FaithBackground;
+  lifeStage?: LifeStage;
 }
 
 export interface UserProfile {
@@ -180,7 +182,7 @@ export interface JournalEntry {
 
 // Phase 2: Midday Check-In
 export type MoodLevel = 1 | 2 | 3 | 4 | 5;
-export type CheckInTimeOfDay = 'morning' | 'midday' | 'evening';
+export type CheckInTimeOfDay = 'morning' | 'midday' | 'evening' | 'companion';
 
 export interface CheckIn {
   id: string;
@@ -348,6 +350,12 @@ interface UnfoldState {
   getCheckIn: (devotionalId: string, dayNumber: number, timeOfDay: CheckInTimeOfDay) => CheckIn | undefined;
   getRecentCheckIns: (count: number) => CheckIn[];
 
+  // Companion orb state
+  hasSeenCompanionIntro: boolean;
+  setHasSeenCompanionIntro: (seen: boolean) => void;
+  lastCompanionCheckInDate: string | null;
+  setLastCompanionCheckInDate: (date: string) => void;
+
   // Home onboarding tooltips
   hasSeenHomeTooltips: boolean;
   setHasSeenHomeTooltips: (seen: boolean) => void;
@@ -355,6 +363,12 @@ interface UnfoldState {
   // Feature onboarding carousel (shown once after first devotional generated)
   hasSeenFeatureOnboarding: boolean;
   setHasSeenFeatureOnboarding: (seen: boolean) => void;
+
+  // Card dismiss tracking (date strings — reset daily)
+  dismissedMiddayCardDate: string | null;
+  dismissedEveningCardDate: string | null;
+  setDismissedMiddayCardDate: (date: string) => void;
+  setDismissedEveningCardDate: (date: string) => void;
 
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
@@ -390,8 +404,12 @@ const initialState = {
   streakFreezes: 0,
   seriesPersonaHistory: [] as SeriesPersonaRecord[],
   checkIns: [] as CheckIn[],
+  hasSeenCompanionIntro: false,
+  lastCompanionCheckInDate: null as string | null,
   hasSeenHomeTooltips: false,
   hasSeenFeatureOnboarding: false,
+  dismissedMiddayCardDate: null as string | null,
+  dismissedEveningCardDate: null as string | null,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -795,11 +813,19 @@ export const useUnfoldStore = create<UnfoldState>()(
         return get().checkIns.slice(0, count);
       },
 
+      // Companion orb state
+      setHasSeenCompanionIntro: (seen) => set({ hasSeenCompanionIntro: seen }),
+      setLastCompanionCheckInDate: (date) => set({ lastCompanionCheckInDate: date }),
+
       // Home onboarding tooltips
       setHasSeenHomeTooltips: (seen) => set({ hasSeenHomeTooltips: seen }),
 
       // Feature onboarding carousel
       setHasSeenFeatureOnboarding: (seen) => set({ hasSeenFeatureOnboarding: seen }),
+
+      // Card dismiss tracking
+      setDismissedMiddayCardDate: (date) => set({ dismissedMiddayCardDate: date }),
+      setDismissedEveningCardDate: (date) => set({ dismissedEveningCardDate: date }),
 
       // Helpers
       getCurrentDevotional: () => {
@@ -812,7 +838,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 10, // Increment when state structure changes
+      version: 13, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -898,6 +924,23 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             ...state,
             hasSeenDay1Review: false,
+          } as UnfoldState;
+        }
+
+        // Migration from version 11 to 12: Add companion orb state
+        if (version < 12) {
+          return {
+            ...state,
+            hasSeenCompanionIntro: false,
+            lastCompanionCheckInDate: null,
+          } as UnfoldState;
+        }
+
+        if (version < 13) {
+          return {
+            ...state,
+            dismissedMiddayCardDate: null,
+            dismissedEveningCardDate: null,
           } as UnfoldState;
         }
 

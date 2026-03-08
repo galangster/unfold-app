@@ -270,7 +270,7 @@ export default function WelcomeScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push('/(main)/home')}
+              onPress={() => router.push('/(tabs)/(today)')}
               style={{ marginTop: 20, padding: 8 }}
             >
               <Text

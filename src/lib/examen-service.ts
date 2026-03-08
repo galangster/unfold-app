@@ -121,25 +121,28 @@ function setCachedExamen(cacheKey: string, prayer: ExamenPrayer): void {
 
 const EXAMEN_SYSTEM_PROMPT = `${PERSONA_FULL}
 
-WHAT YOU'RE DOING: Guiding someone through a personalized evening Ignatian Examen prayer.
+WHAT YOU'RE DOING: Writing a personalized evening Examen prayer for someone to pray aloud or silently.
 
-Generate a 5-movement prayer based on their day. Each movement: 30-50 words, second-person prayer language ("you" voice). Write as if sitting next to someone in the dark before sleep.
+Generate a 5-movement evening prayer in FIRST PERSON — the user is speaking directly to God. Use "I" and "we" voice, never "you." These are words the user prays, not instructions about how to pray. Think Common Prayer by Shane Claiborne — liturgical, intimate, honest.
+
+CRITICAL: Each movement MUST be 2-3 sentences, no more than 40 words. Be concise and intimate. Do NOT write long paragraphs.
 
 The 5 movements:
-1. GRATITUDE — Help them notice what they're thankful for today, connecting to their devotional theme
-2. PRESENCE — Where might they have sensed God today? Draw from their check-in or situation
-3. HONESTY — Name what was hard. Reference their mood or struggles without judgment
-4. TURNING — Invite them to release what they're carrying. Grace, not guilt
-5. HOPE — Close with anticipation for tomorrow. Light, not heavy
+1. GRATITUDE — "Lord, I thank you for..." Thank God for specific gifts from today, woven into their devotional theme
+2. PRESENCE — "I felt you near when..." Name where God showed up today
+3. HONESTY — "I confess that..." or "Lord, I struggled with..." Name what was hard, without shame
+4. TURNING — "I release..." or "I lay down..." Let go of what they're carrying. Grace, not guilt
+5. HOPE — "Tomorrow, I trust that..." or "I look forward to..." Anticipation, light
 
 RULES:
-- Each movement should feel distinct — vary emotional register
-- Reference their specific context (theme, scripture, mood) naturally
+- FIRST PERSON ONLY — "I thank you," "I felt," "I confess," "I release," "I trust"
+- Address God directly — "Lord," "Father," "God" — like a conversation
+- Reference their specific context naturally
+- Vary emotional register between movements
+- These are prayers to be PRAYED, not reflections to be READ
 
-RESPOND WITH ONLY A JSON OBJECT in this exact format:
-{"movements": [{"title": "Gratitude", "prayer": "..."}, {"title": "Presence", "prayer": "..."}, {"title": "Honesty", "prayer": "..."}, {"title": "Turning", "prayer": "..."}, {"title": "Hope", "prayer": "..."}]}
-
-No markdown, no code blocks, just the JSON.`;
+RESPOND WITH ONLY valid JSON, no markdown, no code blocks:
+{"movements": [{"title": "Gratitude", "prayer": "..."}, {"title": "Presence", "prayer": "..."}, {"title": "Honesty", "prayer": "..."}, {"title": "Turning", "prayer": "..."}, {"title": "Hope", "prayer": "..."}]}`;
 
 function buildExamenUserMessage(input: ExamenInput): string {
   let msg = `Name: ${input.userName}\nToday's theme: "${input.todayTheme}"\nScripture: ${input.todayScripture}`;
@@ -162,8 +165,8 @@ async function postToBackend(
   let lastError: unknown = null;
 
   const payload = {
-    model: 'gemini-2.5-flash',
-    max_tokens: 600,
+    model: 'grok-4-1-fast-non-reasoning',
+    max_tokens: 2000,
     temperature: 0.7,
     system: EXAMEN_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: buildExamenUserMessage(input) }],
@@ -235,6 +238,147 @@ function countWords(text: string): number {
 
 const EXPECTED_TITLES = ['Gratitude', 'Presence', 'Honesty', 'Turning', 'Hope'];
 
+/**
+ * Extract the text payload from the backend response.
+ *
+ * The /api/generate/go-deeper endpoint may return data in several shapes
+ * depending on the backend version and the underlying LLM provider:
+ *
+ *   1. { content: [{ text: "..." }] }               — standard proxy wrapper
+ *   2. { content: "..." }                            — string variant
+ *   3. { text: "..." }                               — flat text field
+ *   4. { candidates: [{ content: { parts: [{ text }] } }] } — raw Gemini SDK
+ *   5. { movements: [...] }                          — already-parsed JSON
+ *   6. plain string                                  — raw text
+ */
+function extractTextFromBackendResponse(rawData: unknown): string | Record<string, unknown> {
+  if (!rawData || typeof rawData !== 'object') {
+    if (typeof rawData === 'string') return rawData;
+    throw new Error('Backend returned empty or non-object response');
+  }
+
+  const data = rawData as Record<string, unknown>;
+
+  // Shape 5: already has movements at top level — return as-is for direct parsing
+  if (Array.isArray(data.movements)) {
+    return data as Record<string, unknown>;
+  }
+
+  // Shape 1: { content: [{ text: "..." }] }
+  if (Array.isArray(data.content) && data.content.length > 0) {
+    const firstItem = data.content[0] as Record<string, unknown> | undefined;
+    if (firstItem && typeof firstItem.text === 'string') {
+      return firstItem.text;
+    }
+  }
+
+  // Shape 2: { content: "..." }
+  if (typeof data.content === 'string') {
+    return data.content;
+  }
+
+  // Shape 3: { text: "..." }
+  if (typeof data.text === 'string') {
+    return data.text;
+  }
+
+  // Shape 4: { candidates: [{ content: { parts: [{ text: "..." }] } }] }
+  if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+    const candidate = data.candidates[0] as Record<string, unknown> | undefined;
+    if (candidate?.content && typeof candidate.content === 'object') {
+      const contentObj = candidate.content as Record<string, unknown>;
+      if (Array.isArray(contentObj.parts) && contentObj.parts.length > 0) {
+        const firstPart = contentObj.parts[0] as Record<string, unknown> | undefined;
+        if (firstPart && typeof firstPart.text === 'string') {
+          return firstPart.text;
+        }
+      }
+    }
+  }
+
+  // Shape 5 alternate: nested under prayer.movements
+  if (
+    data.prayer &&
+    typeof data.prayer === 'object' &&
+    Array.isArray((data.prayer as Record<string, unknown>).movements)
+  ) {
+    return data as Record<string, unknown>;
+  }
+
+  throw new Error(
+    `Unrecognized backend response shape. Keys: [${Object.keys(data).join(', ')}]`
+  );
+}
+
+/**
+ * Parse a JSON string that may be wrapped in markdown code fences.
+ *
+ * Gemini frequently returns ```json\n{...}\n``` even when instructed not to.
+ * This function strips code fences first, then falls back to regex extraction.
+ */
+function parseJsonFromText(text: string): unknown {
+  const trimmed = text.trim();
+
+  // 1. Try direct parse (ideal case — clean JSON)
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // continue to fallback strategies
+  }
+
+  // 2. Strip markdown code fences: ```json ... ``` or ``` ... ```
+  const codeFenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (codeFenceMatch) {
+    try {
+      return JSON.parse(codeFenceMatch[1].trim());
+    } catch {
+      // code fence content wasn't valid JSON — continue
+    }
+  }
+
+  // 3. Extract the outermost JSON object using brace counting (safer than greedy regex)
+  const startIdx = trimmed.indexOf('{');
+  if (startIdx !== -1) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+
+    for (let i = startIdx; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          const candidate = trimmed.slice(startIdx, i + 1);
+          try {
+            return JSON.parse(candidate);
+          } catch {
+            // matched braces but not valid JSON — keep searching
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  throw new Error('Could not extract valid JSON from response text');
+}
+
 function parseExamenResponse(data: unknown): ExamenPrayer {
   if (!data || typeof data !== 'object') {
     throw new Error('Invalid examen response: not an object');
@@ -243,7 +387,12 @@ function parseExamenResponse(data: unknown): ExamenPrayer {
   const obj = data as Record<string, unknown>;
   let movements: unknown[];
 
-  if (Array.isArray(obj.movements)) {
+  // Handle multiple response shapes: { movements: [...] }, { prayer: { movements: [...] } },
+  // or even a bare array of movements
+  if (Array.isArray(data)) {
+    // LLM returned a bare array of movements directly
+    movements = data;
+  } else if (Array.isArray(obj.movements)) {
     movements = obj.movements;
   } else if (
     obj.prayer &&
@@ -252,7 +401,9 @@ function parseExamenResponse(data: unknown): ExamenPrayer {
   ) {
     movements = (obj.prayer as Record<string, unknown>).movements as unknown[];
   } else {
-    throw new Error('Invalid examen response: missing movements array');
+    throw new Error(
+      `Invalid examen response: missing movements array. Keys: [${Object.keys(obj).join(', ')}]`
+    );
   }
 
   if (movements.length !== 5) {
@@ -316,63 +467,82 @@ export async function generateExamen(
   const cached = getCachedExamen(cacheKey);
   if (cached) return cached;
 
-  // 2. Call backend (backend routes to Gemini 2.5 Flash)
-  try {
-    logger.log(
-      `[Examen] Generating for "${input.userName}" — theme="${input.todayTheme}", ` +
-        `day=${context.dayNumber}, mood=${input.middayCheckIn?.moodLabel ?? 'none'}`
-    );
+  // 2. Call backend with retry on parse failure (backend routes to Gemini 2.5 Flash)
+  const MAX_ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      logger.log(
+        `[Examen] Generating for "${input.userName}" — theme="${input.todayTheme}", ` +
+          `day=${context.dayNumber}, mood=${input.middayCheckIn?.moodLabel ?? 'none'}` +
+          (attempt > 1 ? ` (retry ${attempt}/${MAX_ATTEMPTS})` : '')
+      );
 
-    const response = await postToBackend(input, 30_000);
+      const response = await postToBackend(input, 30_000);
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown');
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'unknown');
+        logger.error(
+          `[Examen] Backend returned ${response.status}: ${errorText}`
+        );
+        if (attempt < MAX_ATTEMPTS) continue;
+        return null;
+      }
+
+      const rawData = await response.json();
+
+      // Log the raw response shape for debugging (truncated to avoid log spam)
+      const rawPreview = JSON.stringify(rawData).slice(0, 500);
+      logger.log(`[Examen] Raw backend response: ${rawPreview}`);
+
+      // Extract the text/object payload from the backend's wrapper format
+      const extracted = extractTextFromBackendResponse(rawData);
+
+      // If extractTextFromBackendResponse returned an object directly (already
+      // has movements), pass it straight to validation. Otherwise parse the
+      // text string which may contain raw JSON or markdown-wrapped JSON.
+      let parsed: unknown;
+      if (typeof extracted === 'object') {
+        parsed = extracted;
+      } else {
+        try {
+          parsed = parseJsonFromText(extracted);
+        } catch (parseErr) {
+          // Log but don't throw immediately — retry if we have attempts left
+          logger.warn(
+            `[Examen] Failed to parse JSON from extracted text (attempt ${attempt}, len=${extracted.length}): ` +
+              extracted.slice(0, 300)
+          );
+          if (attempt < MAX_ATTEMPTS) continue;
+          throw parseErr;
+        }
+      }
+
+      const prayer = parseExamenResponse(parsed);
+
+      logger.log(
+        `[Examen] Generated ${prayer.movements.length} movements, ` +
+          `${prayer.totalWordCount} words total`
+      );
+
+      // 3. Cache the result
+      setCachedExamen(cacheKey, prayer);
+      return prayer;
+    } catch (error) {
+      if (attempt < MAX_ATTEMPTS) {
+        logger.warn(
+          `[Examen] Attempt ${attempt} failed, retrying:`,
+          error instanceof Error ? error.message : String(error)
+        );
+        continue;
+      }
       logger.error(
-        `[Examen] Backend returned ${response.status}: ${errorText}`
+        '[Examen] Generation failed after retries:',
+        error instanceof Error ? error.message : String(error)
       );
       return null;
     }
-
-    const rawData = await response.json();
-
-    // The go-deeper endpoint returns { content: [{ text: "..." }] } or similar
-    let jsonText: string;
-    if (rawData?.movements) {
-      // Direct JSON response
-      jsonText = JSON.stringify(rawData);
-    } else {
-      const text = rawData?.content?.[0]?.text ?? rawData?.text ?? (typeof rawData === 'string' ? rawData : null);
-      if (!text) throw new Error('Empty response from backend');
-      jsonText = text;
-    }
-
-    // Parse the JSON, extracting from markdown if needed
-    let parsed: unknown;
-    try {
-      parsed = typeof jsonText === 'string' ? JSON.parse(jsonText) : jsonText;
-    } catch {
-      const match = jsonText.match(/\{[\s\S]*\}/);
-      if (match) parsed = JSON.parse(match[0]);
-      else throw new Error('Could not parse examen response');
-    }
-
-    const prayer = parseExamenResponse(parsed);
-
-    logger.log(
-      `[Examen] Generated ${prayer.movements.length} movements, ` +
-        `${prayer.totalWordCount} words total`
-    );
-
-    // 3. Cache the result
-    setCachedExamen(cacheKey, prayer);
-    return prayer;
-  } catch (error) {
-    logger.error(
-      '[Examen] Generation failed:',
-      error instanceof Error ? error.message : String(error)
-    );
-    return null;
   }
+  return null;
 }
 
 /**

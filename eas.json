@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">=16.17.4"
+    "version": ">=16.17.4",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -20,6 +21,7 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_BACKEND_URL": "https://unfold-backend-production.up.railway.app",
         "EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY": "appl_yArZKPHiJJZTcLihIkzvYkhZOsq",

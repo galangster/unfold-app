@@ -1,46 +1,46 @@
 /**
- * Gemini Model Configuration
+ * Supplementary AI Model Configuration
  *
- * Documents which Gemini model the Railway backend should use for
- * supplementary AI calls. The mobile app does NOT call Gemini directly —
- * all AI calls are routed through the backend for security.
+ * Documents which model the Railway backend uses for supplementary AI calls.
+ * The mobile app does NOT call xAI directly — all AI calls are routed
+ * through the backend for security.
  *
- * Model: gemini-2.5-flash
- * - Input:  $0.15/1M tokens
- * - Output: $0.60/1M tokens
- * - ~8x cheaper than Claude Haiku, ~50x cheaper than Sonnet
+ * Model: grok-4-1-fast-non-reasoning (xAI)
+ * - Input:  $0.20/1M tokens
+ * - Output: $0.50/1M tokens
+ * - Creative Writing v3 Elo: 1708.6 (#3), EQ-Bench3: 1585 (#2)
+ * - Cheaper and better creative writing than Gemini 2.5 Flash
  *
  * Used for:
  * - Bridge generation (/api/generate-bridge)
  * - Examen prayer generation (/api/generate-examen)
  * - Adaptive onboarding questions (/api/generate/adaptive-question)
  * - Quote extraction (/api/generate/extract-quotes)
+ * - Go Deeper journal (/api/generate/go-deeper)
+ * - Scripture commentary (/api/generate-commentary)
  *
  * NOT used for:
  * - Core devotional generation → stays on Claude Sonnet 4.6
  *
- * Backend endpoints should use the Google Generative AI SDK:
- *   npm install @google/generative-ai
- *
- *   import { GoogleGenerativeAI } from '@google/generative-ai';
- *   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
- *   const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+ * Backend routes grok-* models to xAI's OpenAI-compatible API:
+ *   https://api.x.ai/v1/chat/completions
+ *   Auth: Bearer XAI_API_KEY
  */
 
-export const GEMINI_MODEL = 'gemini-2.5-flash';
+export const FAST_MODEL = 'grok-4-1-fast-non-reasoning';
 
 /**
  * Cost estimates per call at scale (10K DAU):
  *
  * | Feature              | Per call  | Daily (10K DAU) |
  * |----------------------|-----------|-----------------|
- * | Bridge               | $0.0005   | $5/day          |
- * | Examen prayer        | $0.0007   | $7/day          |
- * | Adaptive question    | $0.0002   | $2/day          |
- * | Quote extraction     | $0.0003   | $1-3/day        |
- * | Scripture commentary | $0.0003   | $1-3/day        |
- * | Go Deeper journal    | $0.0003   | $3/day          |
- * | TOTAL                |           | ~$16-24/day     |
+ * | Bridge               | $0.00019  | $1.90/day       |
+ * | Examen prayer        | $0.00030  | $3.00/day       |
+ * | Adaptive question    | $0.00008  | $0.80/day       |
+ * | Quote extraction     | $0.00012  | $0.60-1.50/day  |
+ * | Scripture commentary | $0.00012  | $0.60-1.50/day  |
+ * | Go Deeper journal    | $0.00012  | $1.20/day       |
+ * | TOTAL                |           | ~$8-10/day      |
  */
 
 // ---------------------------------------------------------------------------

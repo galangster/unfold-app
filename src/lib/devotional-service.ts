@@ -28,6 +28,7 @@ import {
 import {
   CRAFT_FOUNDATION,
   ANTI_SLOP_DIRECTIVE,
+  CONVICTION_DIRECTIVE,
   PARABLE_ANTI_PATTERNS,
   DIALOGUE_ANTI_PATTERNS,
   getCraftInfluencesForTraits,
@@ -36,6 +37,7 @@ import {
   getDialogueDirectiveForDay,
 } from '../constants/writing-craft';
 import { PERSONA_FULL } from '../constants/persona';
+import { buildVoiceAdaptationDirective } from '../constants/voice-adaptation';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -355,9 +357,11 @@ interface GenerationContext {
   // Writing persona preference (v1 — kept for backward compat)
   personaTraits?: string;
   // Writing style from user preferences
-  writingStyle?: { tone: 'warm' | 'direct' | 'poetic'; depth: 'simple' | 'balanced' | 'theological'; faithBackground: 'new' | 'growing' | 'mature' };
+  writingStyle?: { tone: 'warm' | 'direct' | 'poetic'; depth: 'simple' | 'balanced' | 'theological'; faithBackground: 'new' | 'growing' | 'mature'; lifeStage?: 'student' | 'building' | 'midlife' | 'reflective' };
   // Cross-series freshness history
   seriesPersonaHistory?: SeriesPersonaRecord[];
+  // Previously generated series titles — used to prevent repetitive titles across series
+  previousSeriesTitles?: string[];
 }
 
 interface GeneratedDevotional {
@@ -986,12 +990,26 @@ function buildUserPrompt(
   const daysToGenerate = endDay - startDay + 1;
   const isFirstBatch = startDay === 1;
 
+  // Build previous series titles avoidance block
+  const previousSeriesTitlesBlock = isFirstBatch && context.previousSeriesTitles && context.previousSeriesTitles.length > 0
+    ? `\n   PREVIOUSLY USED SERIES TITLES (do NOT reuse these titles or their themes/metaphors — find fresh, surprising angles):
+${context.previousSeriesTitles.map(t => `   - "${t}"`).join('\n')}`
+    : '';
+
   const titleInstruction = isFirstBatch
     ? `1. An evocative, poetic title for the whole series (3-6 words)
    TITLE REQUIREMENTS:
    - Vary structure across different devotionals: noun phrases ("The Quiet Work"), imperatives ("Hold Fast"), single evocative words with modifier ("Unshaken"), metaphorical images ("Salt & Light"), questions without question marks ("Where Mercy Lives"), fragments ("Before the Dawn"), or occasional "When" phrases ("When the Ground Shifts")
    - Make it surprising, not generic—avoid clichés like "Finding Peace" or "A Journey Through"
-   - Each title should feel like it could be a book you'd want to pick up`
+   - Each title should feel like it could be a book you'd want to pick up
+   BANNED TITLE PATTERNS (never use these overused structures):
+   - "The [Weight/Burden/Thing] You [Carry/Hold/Bear]"
+   - "What You've Been [Carrying/Holding/Bearing/Searching]"
+   - "The [Ground/Path/Road] [Beneath/Before/Ahead]"
+   - "[Bread/Water/Light] for the [Morning/Journey/Road]"
+   - "Learning to [Trust/Let Go/Breathe/Rest]"
+   - Avoid body/weight/carrying metaphors unless the theme specifically calls for it
+   - Avoid generic journey/path/road metaphors — find unexpected imagery instead${previousSeriesTitlesBlock}`
     : `1. Use this exact series title: "${seriesTitle}"`;
 
   const previousTitlesNote = previousDayTitles.length > 0
@@ -1141,10 +1159,18 @@ async function generateBatch(
   // retryLevel 2: no craft additions (minimal prompt)
   const craftFoundation = retryLevel <= 1 ? CRAFT_FOUNDATION : '';
   const antiSlop = retryLevel <= 1 ? ANTI_SLOP_DIRECTIVE : '';
+  const convictionDirective = retryLevel <= 1 ? CONVICTION_DIRECTIVE : '';
   const parableGuardrails = retryLevel <= 1 ? PARABLE_ANTI_PATTERNS : '';
   const dialogueGuardrails = retryLevel <= 1 ? DIALOGUE_ANTI_PATTERNS : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + parableGuardrails + dialogueGuardrails + voiceOverlay + STICKY_SENTENCE_INSTRUCTION;
+  const voiceAdaptation = retryLevel === 0
+    ? buildVoiceAdaptationDirective(
+        context.writingStyle?.lifeStage,
+        context.writingStyle?.faithBackground,
+        context.writingStyle?.depth
+      )
+    : '';
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + convictionDirective + parableGuardrails + dialogueGuardrails + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
   // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
@@ -1856,7 +1882,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'gemini-2.5-flash',
+        model: 'grok-4-1-fast-non-reasoning',
         max_tokens: 220,
         temperature: 0.7,
         system: adaptiveSystemPrompt,
@@ -2005,7 +2031,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/extract-quotes',
       {
-        model: 'gemini-2.5-flash',
+        model: 'grok-4-1-fast-non-reasoning',
         max_tokens: 500,
         system: extractionSystemPrompt,
         messages: [

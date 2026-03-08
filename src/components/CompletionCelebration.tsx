@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Dimensions, StyleSheet, Modal } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -331,7 +331,7 @@ export function CompletionCelebration({
   const title = type === 'series' ? 'Journey\nComplete' : 'Day\nComplete';
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
       <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
@@ -447,6 +447,6 @@ export function CompletionCelebration({
           </Animated.View>
         </Animated.View>
       </Pressable>
-    </View>
+    </Modal>
   );
 }

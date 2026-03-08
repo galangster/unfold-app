@@ -37,6 +37,7 @@ import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -117,6 +118,8 @@ export default function ReadingScreen() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
   const audioPlayerRef = useRef<BottomSheet>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -1108,7 +1111,8 @@ export default function ReadingScreen() {
                     setAudioToast({ visible: true, message: 'Audio is a premium feature' });
                     setTimeout(() => {
                       setAudioToast(null);
-                      router.push('/paywall');
+                      setPremiumFeature('audio');
+                      setShowPremiumSheet(true);
                     }, 1200);
                     return;
                   }
@@ -1181,7 +1185,7 @@ export default function ReadingScreen() {
                   </View>
                 </Animated.View>
               )}
-              {viewingDay >= 2 && bridgeText && !isBridgeLoading && (
+              {viewingDay >= 2 && bridgeText && !isBridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
                 <Animated.View
                   style={[
                     {
@@ -1407,7 +1411,8 @@ export default function ReadingScreen() {
                           <Pressable
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                              router.push('/paywall');
+                              setPremiumFeature('series');
+                              setShowPremiumSheet(true);
                             }}
                             style={({ pressed }) => ({
                               backgroundColor: retryCtaButtonBg,
@@ -1502,7 +1507,6 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
-          router.push('/(tabs)/(today)');
         }}
         type={celebrationType}
       />
@@ -1556,6 +1560,12 @@ export default function ReadingScreen() {
         dayNumber={viewingDay}
         dayTitle={currentDayData?.title}
         devotionalTitle={currentDevotional.title}
+      />
+
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature={premiumFeature}
       />
     </View>
   );

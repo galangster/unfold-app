@@ -113,12 +113,12 @@ export function useAdaptiveQuestions({
       // Build prompt for GLaD
       const prompt = buildAdaptivePrompt(qa, pool, studyContext, confidence);
 
-      // Call backend API (Gemini 2.5 Flash for speed + cost)
+      // Call backend API (Grok 4.1 Fast for speed + cost + creative quality)
       const response = await fetch('/api/generate/adaptive-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gemini-2.5-flash',
+          model: 'grok-4-1-fast-non-reasoning',
           max_tokens: 300,
           temperature: 0.8,
           system: `${PERSONA_BRIEF}

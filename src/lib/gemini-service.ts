@@ -118,7 +118,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gemini-2.5-flash',
+        model: 'grok-4-1-fast-non-reasoning',
         max_tokens: 400,
         temperature: 0.85,
         system: systemPrompt,

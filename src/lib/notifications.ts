@@ -295,6 +295,66 @@ export async function sendDevotionalReadyNotification(title: string): Promise<bo
   }
 }
 
+// Schedule midday check-in notification (Phase 2)
+// Fires at 12:30pm local time, daily
+export async function scheduleMiddayCheckIn(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+
+  const hasPermission = await areNotificationsEnabled();
+  if (!hasPermission) return null;
+
+  try {
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Quick check-in',
+        body: "How's that landing — the thing you read this morning?",
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 12,
+        minute: 30,
+      },
+    });
+
+    logger.log('[Notifications] Midday check-in scheduled for 12:30 PM');
+    return identifier;
+  } catch (error) {
+    console.error('[Notifications] Failed to schedule midday check-in:', error);
+    return null;
+  }
+}
+
+// Schedule evening wind-down notification (Phase 5)
+// Fires at 8:30pm local time, daily
+export async function scheduleEveningWindDown(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+
+  const hasPermission = await areNotificationsEnabled();
+  if (!hasPermission) return null;
+
+  try {
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'One last thing',
+        body: 'One last thing before you close your eyes tonight.',
+        sound: true,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: 20,
+        minute: 30,
+      },
+    });
+
+    logger.log('[Notifications] Evening wind-down scheduled for 8:30 PM');
+    return identifier;
+  } catch (error) {
+    console.error('[Notifications] Failed to schedule evening wind-down:', error);
+    return null;
+  }
+}
+
 // Refresh daily reminder with new content (call when day advances)
 // This re-schedules the notification with the latest teaser content
 export async function refreshDailyReminder(): Promise<boolean> {

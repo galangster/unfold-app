@@ -400,6 +400,12 @@ export default function GeneratingScreen() {
           }
         };
 
+        // Extract previous series titles for de-duplication (last 10 to keep prompt concise)
+        const previousSeriesTitles = devotionals
+          .map(d => d.title)
+          .filter((t): t is string => Boolean(t))
+          .slice(-10);
+
         const generated = await generateDevotional(
           {
             name: user.name,
@@ -417,6 +423,7 @@ export default function GeneratingScreen() {
             studySubject: user.selectedStudySubject,
             writingStyle: user.writingStyle,
             seriesPersonaHistory,
+            previousSeriesTitles,
           },
           () => {},
           onDayGenerated

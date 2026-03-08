@@ -15,6 +15,7 @@ import Animated, {
 import { SunIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { AccentGlow } from './AccentGlow';
 
 interface StreakCelebrationProps {
   streak: number;
@@ -226,18 +227,20 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
                 <SparkleIcon size={40} color={colors.accent} weight="light" />
               </View>
             </View>
-            <Animated.Text
-              entering={FadeIn.delay(200)}
-              style={{
-                fontFamily: FontFamily.display,
-                fontSize: 32 + (milestoneScale - 1) * 20,
-                color: colors.accent,
-                marginTop: 16,
-                textAlign: 'center',
-              }}
-            >
-              {milestoneLabel}
-            </Animated.Text>
+            <AccentGlow color={colors.accent} intensity="strong" active={isMilestone}>
+              <Animated.Text
+                entering={FadeIn.delay(200)}
+                style={{
+                  fontFamily: FontFamily.display,
+                  fontSize: 32 + (milestoneScale - 1) * 20,
+                  color: colors.accent,
+                  marginTop: 16,
+                  textAlign: 'center',
+                }}
+              >
+                {milestoneLabel}
+              </Animated.Text>
+            </AccentGlow>
             <Animated.Text
               entering={FadeIn.delay(400)}
               style={{

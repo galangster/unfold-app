@@ -12,6 +12,7 @@
 
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
+import { buildPromptWithPersona } from '@/constants/persona';
 
 // ---------------------------------------------------------------------------
 // Backend URL (mirrors devotional-service.ts)
@@ -84,6 +85,12 @@ function getCachedBridge(cacheKey: string): string | null {
 }
 
 function setCachedBridge(cacheKey: string, text: string): void {
+  // Don't cache incomplete bridges (truncated responses, partial text)
+  const trimmed = text.trim();
+  if (trimmed.length < 20 || !/[.!?…"']$/.test(trimmed)) {
+    logger.warn(`${LOG_PREFIX} skipping cache — bridge looks incomplete: "${trimmed.slice(0, 50)}..."`);
+    return;
+  }
   bridgeCache.set(cacheKey, text);
   logger.log(`${LOG_PREFIX} cache SET — key=${cacheKey}, len=${text.length}`);
 }
@@ -133,17 +140,23 @@ async function postBridgeRequest(
         );
       }
 
-      const data: BridgeResponse = await response.json();
+      const data = await response.json();
 
-      if (!data.bridgeText || typeof data.bridgeText !== 'string') {
+      // Backend returns Anthropic-format: { content: [{ type, text }], ... }
+      const bridgeText =
+        data.bridgeText ??
+        data.content?.[0]?.text;
+
+      if (!bridgeText || typeof bridgeText !== 'string') {
+        logger.error(`${LOG_PREFIX} unexpected response shape`, JSON.stringify(data).slice(0, 200));
         throw new Error('Invalid bridge response: missing bridgeText');
       }
 
       logger.log(
-        `${LOG_PREFIX} generated — ${data.bridgeText.split(/\s+/).length} words`
+        `${LOG_PREFIX} generated — ${bridgeText.split(/\s+/).length} words`
       );
 
-      return data;
+      return { bridgeText };
     } catch (error) {
       lastError = error;
 
@@ -171,6 +184,48 @@ async function postBridgeRequest(
   throw lastError instanceof Error
     ? lastError
     : new Error('All configured backend endpoints failed for bridge');
+}
+
+// ---------------------------------------------------------------------------
+// Bridge prompt construction
+// ---------------------------------------------------------------------------
+
+const BRIDGE_INSTRUCTIONS = `TASK: Write a daily bridge — a 2-4 sentence (40-70 word) passage that transitions the reader from yesterday's reflection into today's devotional theme.
+
+RULES:
+- Address the reader by name once, early and naturally.
+- If yesterday's check-in data is provided, acknowledge what they shared — their mood, their words. Make them feel heard before moving forward.
+- If no check-in data is available, write a lighter opening that connects their broader situation to today's theme.
+- End by naturally leading into today's scripture or theme — not by summarizing it, but by creating curiosity or resonance.
+- Keep it warm, grounded, and specific. No generic spiritual greeting cards.
+
+OUTPUT: Return ONLY the bridge text. No labels, no JSON, no preamble.`;
+
+function buildBridgeUserMessage(input: BridgeInput): string {
+  const parts: string[] = [];
+
+  parts.push(`Reader's name: ${input.userName}`);
+
+  if (input.yesterdayCheckIn) {
+    const ci = input.yesterdayCheckIn;
+    parts.push(`\nYesterday's check-in:`);
+    parts.push(`- Mood: ${ci.moodLabel} (${ci.mood}/5)`);
+    if (ci.chipAnswer) parts.push(`- Quick response: "${ci.chipAnswer}"`);
+    if (ci.freeText) parts.push(`- In their own words: "${ci.freeText}"`);
+  } else {
+    parts.push(`\nNo check-in data from yesterday.`);
+  }
+
+  if (input.currentSituation) {
+    parts.push(`\nTheir current situation: ${input.currentSituation}`);
+  }
+
+  parts.push(`\nToday's devotional theme: ${input.todayTheme}`);
+  parts.push(`Today's scripture: ${input.todayScripture}`);
+
+  parts.push(`\nWrite the bridge.`);
+
+  return parts.join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -204,14 +259,17 @@ export async function generateBridge(
     return cached;
   }
 
-  // 2. Generate via backend (backend uses Gemini 2.5 Flash)
+  // 2. Build the prompt and send as Anthropic-format payload to the backend
+  const systemPrompt = buildPromptWithPersona('full', BRIDGE_INSTRUCTIONS);
+  const userMessage = buildBridgeUserMessage(input);
+
   try {
     const result = await postBridgeRequest({
-      userName: input.userName,
-      yesterdayCheckIn: input.yesterdayCheckIn ?? null,
-      todayTheme: input.todayTheme,
-      todayScripture: input.todayScripture,
-      currentSituation: input.currentSituation,
+      model: 'grok-4-1-fast-non-reasoning',
+      max_tokens: 300,
+      temperature: 0.7,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
     });
 
     setCachedBridge(cacheKey, result.bridgeText);

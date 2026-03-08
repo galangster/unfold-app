@@ -36,7 +36,7 @@ export default function DayMenuScreen() {
     // Navigate back with the selected day as a param
     // The reading screen will pick this up via params or we navigate directly
     router.replace({
-      pathname: '/(main)/reading',
+      pathname: '/(tabs)/(today)/reading',
       params: { dayNumber: dayNumber.toString() },
     });
   };

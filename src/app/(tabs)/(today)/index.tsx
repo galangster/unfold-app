@@ -5,19 +5,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeInDown,
+  FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
   withRepeat,
+  withSpring,
   interpolate,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore } from '@/lib/store';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
@@ -27,9 +31,15 @@ import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { FeatureOnboarding } from '@/components/FeatureOnboarding';
 import { CheckInSheet } from '@/components/CheckInSheet';
+import { CompanionOrb } from '@/components/CompanionOrb';
+import { CompanionCheckInSheet } from '@/components/CompanionCheckInSheet';
+import { CompanionTooltip } from '@/components/CompanionTooltip';
+import { AccentGlow } from '@/components/AccentGlow';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
+import { selectTooltipMessage } from '@/constants/companion-messages';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -147,50 +157,157 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
   );
 }
 
-function MiddayCheckInCard({ colors, onPress, message }: { colors: ColorTheme; onPress: () => void; message: string }) {
+// Mini companion ring — lightweight visual reference to the companion orb
+function MiniCompanionRing({ accentColor }: { accentColor: string }) {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true
+    );
+  }, [pulse]);
+
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.3, 0.8]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.15]) }],
+  }));
+
+  return (
+    <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        style={[
+          {
+            position: 'absolute',
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: accentColor,
+          },
+          ringStyle,
+        ]}
+      />
+      <View
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: 7,
+          backgroundColor: accentColor + '30',
+          borderWidth: 1,
+          borderColor: accentColor + '60',
+        }}
+      />
+    </View>
+  );
+}
+
+// Swipeable notification card — shared by midday check-in and evening wind-down
+function NotificationCard({
+  colors,
+  onPress,
+  onDismiss,
+  message,
+  icon,
+  accentColor,
+  delay = 150,
+}: {
+  colors: ColorTheme;
+  onPress: () => void;
+  onDismiss: () => void;
+  message: string;
+  icon: React.ReactNode;
+  accentColor: string;
+  delay?: number;
+}) {
+  const translateX = useSharedValue(0);
+  const dismissed = useSharedValue(false);
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX(20)
+    .onUpdate((e) => {
+      if (e.translationX > 0) {
+        translateX.value = e.translationX;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationX > 120) {
+        translateX.value = withTiming(400, { duration: 200 });
+        dismissed.value = true;
+        runOnJS(onDismiss)();
+      } else {
+        translateX.value = withSpring(0, { damping: 15 });
+      }
+    });
+
+  const cardAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+    opacity: interpolate(translateX.value, [0, 200], [1, 0]),
+  }));
+
   return (
     <Animated.View
-      entering={FadeInDown.duration(500).delay(150)}
+      entering={FadeInDown.duration(500).delay(delay)}
+      exiting={FadeOut.duration(300)}
       style={{ paddingHorizontal: 24, marginTop: 12 }}
     >
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => ({
-          opacity: pressed ? 0.8 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-        })}
-      >
-        <View
-          style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderLeftWidth: 3,
-            borderLeftColor: colors.accent,
-            paddingVertical: 14,
-            paddingHorizontal: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
+      <GestureDetector gesture={swipeGesture}>
+        <Animated.View style={cardAnimStyle}>
+          <Pressable
+            onPress={onPress}
+            style={{ opacity: 1 }}
+          >
+            <View
               style={{
-                fontFamily: FontFamily.body,
-                fontSize: 14,
-                color: colors.text,
-                lineHeight: 20,
+                backgroundColor: accentColor + '0D',
+                borderRadius: 14,
+                paddingVertical: 16,
+                paddingHorizontal: 16,
+                paddingRight: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
               }}
             >
-              {message}
-            </Text>
-          </View>
-          <View style={{ marginLeft: 12 }}>
-            <ChatCircleDotsIcon size={16} color={colors.textSubtle} weight="light" />
-          </View>
-        </View>
-      </Pressable>
+              {/* Mini companion ring — signals this is from the companion */}
+              <View style={{ marginRight: 12 }}>
+                <MiniCompanionRing accentColor={accentColor} />
+              </View>
+
+              {/* Message text */}
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.body,
+                    fontSize: 14,
+                    color: colors.text,
+                    lineHeight: 20,
+                  }}
+                >
+                  {message}
+                </Text>
+              </View>
+
+              {/* Icon */}
+              <View style={{ marginLeft: 8, marginRight: 4 }}>
+                {icon}
+              </View>
+
+              {/* Dismiss X */}
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onDismiss();
+                }}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
+                style={{ padding: 4 }}
+              >
+                <XIcon size={14} color={colors.textSubtle} weight="light" />
+              </Pressable>
+            </View>
+          </Pressable>
+        </Animated.View>
+      </GestureDetector>
     </Animated.View>
   );
 }
@@ -280,53 +397,7 @@ function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme })
   );
 }
 
-function EveningWindDownCard({ colors, onPress, message }: { colors: ColorTheme; onPress: () => void; message: string }) {
-  return (
-    <Animated.View
-      entering={FadeInDown.duration(500).delay(200)}
-      style={{ paddingHorizontal: 24, marginTop: 8 }}
-    >
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => ({
-          opacity: pressed ? 0.8 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-        })}
-      >
-        <View
-          style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderLeftWidth: 3,
-            borderLeftColor: colors.accent + '80',
-            paddingVertical: 14,
-            paddingHorizontal: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 14,
-                color: colors.text,
-                lineHeight: 20,
-              }}
-            >
-              {message}
-            </Text>
-          </View>
-          <View style={{ marginLeft: 12 }}>
-            <MoonIcon size={16} color={colors.textSubtle} weight="light" />
-          </View>
-        </View>
-      </Pressable>
-    </Animated.View>
-  );
-}
+// EveningWindDownCard removed — now uses shared NotificationCard component
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -345,9 +416,25 @@ export default function HomeScreen() {
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
+  const dismissedMiddayCardDate = useUnfoldStore((s) => s.dismissedMiddayCardDate);
+  const dismissedEveningCardDate = useUnfoldStore((s) => s.dismissedEveningCardDate);
+  const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
+  const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
+
+  // Companion orb state
+  const hasSeenCompanionIntro = useUnfoldStore((s) => s.hasSeenCompanionIntro);
+  const setHasSeenCompanionIntro = useUnfoldStore((s) => s.setHasSeenCompanionIntro);
+  const lastCompanionCheckInDate = useUnfoldStore((s) => s.lastCompanionCheckInDate);
+  const setLastCompanionCheckInDate = useUnfoldStore((s) => s.setLastCompanionCheckInDate);
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [showCompanionSheet, setShowCompanionSheet] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipMessage, setTooltipMessage] = useState('');
+  const [tooltipDismissed, setTooltipDismissed] = useState(false);
+  const [companionSessionCheckedIn, setCompanionSessionCheckedIn] = useState(false);
 
   // Update time of day every minute
   useEffect(() => {
@@ -378,6 +465,70 @@ export default function HomeScreen() {
     useCallback(() => {
       syncWidgets();
     }, [])
+  );
+
+  // Companion orb — compute context for check-in + tooltip
+  const hasActiveSeries = !!currentDevotionalId && devotionals.some((d) => d.id === currentDevotionalId);
+  const hasReadToday = useMemo(() => {
+    if (!currentDevotionalId) return false;
+    const dev = devotionals.find((d) => d.id === currentDevotionalId);
+    if (!dev) return false;
+    const today = new Date().toDateString();
+    return dev.days.some((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === today);
+  }, [currentDevotionalId, devotionals]);
+
+  const daysSinceLastOpen = useMemo(() => {
+    if (!lastCompanionCheckInDate) return 999;
+    const diff = Date.now() - new Date(lastCompanionCheckInDate).getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  }, [lastCompanionCheckInDate]);
+
+  const isCompanionActive = useMemo(() => {
+    if (!lastCompanionCheckInDate) return true;
+    const today = new Date().toDateString();
+    const lastDate = new Date(lastCompanionCheckInDate).toDateString();
+    if (lastDate === today) return false;
+    // Active if 2+ hours since last check-in
+    const hoursSince = (Date.now() - new Date(lastCompanionCheckInDate).getTime()) / (1000 * 60 * 60);
+    return hoursSince >= 2;
+  }, [lastCompanionCheckInDate]);
+
+  const showBadge = isCompanionActive && tooltipDismissed && !companionSessionCheckedIn;
+
+  // Tooltip trigger — once per screen focus, max 1 per session
+  useFocusEffect(
+    useCallback(() => {
+      if (tooltipDismissed || companionSessionCheckedIn || showCompanionSheet) return;
+
+      // Determine tooltip condition
+      let condition = 'first_open_morning';
+      const hour = new Date().getHours();
+      if (!hasSeenCompanionIntro) {
+        condition = 'first_open_morning';
+      } else if (daysSinceLastOpen >= 3) {
+        condition = 'returning_after_gap';
+      } else if (!hasActiveSeries) {
+        condition = 'between_series';
+      } else if (streakCurrent > 0 && streakCurrent % 7 === 0) {
+        condition = 'streak_milestone';
+      } else if (hour < 12) {
+        condition = 'first_open_morning';
+      } else if (hour < 17) {
+        condition = 'first_open_afternoon';
+      } else {
+        condition = 'first_open_evening';
+      }
+
+      const msg = selectTooltipMessage(condition);
+      if (msg && isCompanionActive) {
+        // Small delay so the screen settles before tooltip appears
+        const timer = setTimeout(() => {
+          setTooltipMessage(msg);
+          setShowTooltip(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }, [tooltipDismissed, companionSessionCheckedIn, showCompanionSheet, hasSeenCompanionIntro, daysSinceLastOpen, hasActiveSeries, streakCurrent, isCompanionActive])
   );
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
@@ -490,7 +641,7 @@ export default function HomeScreen() {
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isPremium && devotionals.length >= 1) {
-      router.push('/paywall');
+      setShowPremiumSheet(true);
     } else {
       router.push('/onboarding');
     }
@@ -520,19 +671,78 @@ export default function HomeScreen() {
     setShowCheckInSheet(false);
   };
 
+  const handleCompanionOpen = () => {
+    setShowTooltip(false);
+    setTooltipDismissed(true);
+    setShowCompanionSheet(true);
+  };
+
+  const handleCompanionComplete = (data: { mood: number; moodLabel: string; chipAnswer?: string }) => {
+    const devotionalId = currentDevotional?.id || 'none';
+    const dayNumber = currentDevotional?.currentDay || 0;
+    addCheckIn({
+      devotionalId,
+      dayNumber,
+      mood: Math.min(5, data.mood) as 1 | 2 | 3 | 4 | 5,
+      moodLabel: data.moodLabel,
+      chipAnswer: data.chipAnswer,
+      timeOfDay: 'companion',
+    });
+    setLastCompanionCheckInDate(new Date().toISOString());
+    if (!hasSeenCompanionIntro) {
+      setHasSeenCompanionIntro(true);
+    }
+    setCompanionSessionCheckedIn(true);
+    setShowCompanionSheet(false);
+  };
+
+  const handleTooltipTap = () => {
+    setShowTooltip(false);
+    setTooltipDismissed(true);
+    setShowCompanionSheet(true);
+  };
+
+  const handleTooltipDismiss = () => {
+    setShowTooltip(false);
+    setTooltipDismissed(true);
+  };
+
   const handleEveningWindDown = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/(today)/evening-wind-down');
   };
 
-  // Check if midday check-in already completed today
+  // Check if midday/evening check-ins already completed today
   const todayCheckIn = currentDevotional
     ? getCheckIn(currentDevotional.id, currentDevotional.currentDay, 'midday')
     : undefined;
+  const todayEveningCheckIn = currentDevotional
+    ? getCheckIn(currentDevotional.id, currentDevotional.currentDay, 'evening')
+    : undefined;
 
-  // Time-aware card visibility
-  const showCheckInCard = timeOfDay === 'afternoon' && !!currentDevotional && !todayCheckIn;
-  const showEveningCard = !!currentDevotional;
+  const todayDateStr = new Date().toISOString().split('T')[0];
+
+  // Time-aware card visibility — hidden if completed, dismissed today, or wrong time
+  const showCheckInCard =
+    timeOfDay === 'afternoon' &&
+    !!currentDevotional &&
+    !todayCheckIn &&
+    dismissedMiddayCardDate !== todayDateStr;
+  const showEveningCard =
+    (timeOfDay === 'evening' || timeOfDay === 'night') &&
+    !!currentDevotional &&
+    !todayEveningCheckIn &&
+    dismissedEveningCardDate !== todayDateStr;
+
+  const handleDismissMiddayCard = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDismissedMiddayCardDate(todayDateStr);
+  };
+
+  const handleDismissEveningCard = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDismissedEveningCardDate(todayDateStr);
+  };
 
   const handleDay1ReviewOption = async (option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -594,36 +804,37 @@ export default function HomeScreen() {
             </Animated.Text>
 
             <Animated.View entering={FadeIn.duration(600).delay(800)}>
-              <Pressable
-                onPress={handleCreateNew}
-                accessibilityRole="button"
-                accessibilityLabel="Begin your devotional journey"
-              >
-                {({ pressed }) => (
-                  <View
-                    style={{
-                      paddingVertical: 18,
-                      paddingHorizontal: 32,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: colors.accent,
-                      backgroundColor: pressed ? colors.accent : 'transparent',
-                      alignSelf: 'flex-start',
-                    }}
-                  >
-                    <Text
+              <AccentGlow color={colors.accent} intensity="medium" style={{ borderRadius: 14, alignSelf: 'flex-start' }}>
+                <Pressable
+                  onPress={handleCreateNew}
+                  accessibilityRole="button"
+                  accessibilityLabel="Begin your devotional journey"
+                >
+                  {({ pressed }) => (
+                    <View
                       style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: pressed ? colors.background : colors.accent,
-                        letterSpacing: 0.5,
+                        paddingVertical: 18,
+                        paddingHorizontal: 32,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: colors.accent,
+                        backgroundColor: pressed ? colors.accent : 'transparent',
                       }}
                     >
-                      Begin Your Journey
-                    </Text>
-                  </View>
-                )}
-              </Pressable>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: 15,
+                          color: pressed ? colors.background : colors.accent,
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        Begin Your Journey
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              </AccentGlow>
             </Animated.View>
           </View>
         </SafeAreaView>
@@ -665,38 +876,52 @@ export default function HomeScreen() {
               paddingBottom: 12,
             }}
           >
-            <View
-              style={{
-                width: 24,
-                height: 1.5,
-                backgroundColor: colors.accent,
-                marginBottom: 16,
-                borderRadius: 1,
-                opacity: 0.5,
-              }}
-            />
-            <Text
-              style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: 15,
-                color: colors.textSubtle,
-                marginBottom: 6,
-              }}
-            >
-              {getGreeting()}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.display,
-                  fontSize: 34,
-                  color: colors.text,
-                  letterSpacing: -0.5,
-                }}
-              >
-                {user?.name}
-              </Text>
-              <StreakDisplay compact hideDayLabel />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', overflow: 'visible' }}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.bodyItalic,
+                    fontSize: 15,
+                    color: colors.textSubtle,
+                    marginBottom: 6,
+                  }}
+                >
+                  {getGreeting()}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.display,
+                      fontSize: 34,
+                      color: colors.text,
+                      letterSpacing: -0.5,
+                    }}
+                  >
+                    {user?.name}
+                  </Text>
+                  <StreakDisplay compact hideDayLabel />
+                </View>
+              </View>
+
+              {/* Companion Orb + Tooltip */}
+              <View style={{ position: 'relative', overflow: 'visible' }}>
+                {showTooltip && tooltipMessage && (
+                  <CompanionTooltip
+                    message={tooltipMessage}
+                    accentColor={colors.accent}
+                    textColor={colors.text}
+                    onTap={handleTooltipTap}
+                    onDismiss={handleTooltipDismiss}
+                  />
+                )}
+                <CompanionOrb
+                  accentColor={colors.accent}
+                  size={48}
+                  onPress={handleCompanionOpen}
+                  isActive={isCompanionActive}
+                  showBadge={showBadge}
+                />
+              </View>
             </View>
           </Animated.View>
 
@@ -704,16 +929,32 @@ export default function HomeScreen() {
           {bridgeLoading && bridgeInput && (
             <BridgeShimmer colors={colors} />
           )}
-          {bridgeText && !bridgeLoading && (
+          {bridgeText && !bridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
             <DailyBridgeCard text={bridgeText} colors={colors} />
           )}
 
           {/* Notification cards — above journey card */}
           {showCheckInCard && (
-            <MiddayCheckInCard colors={colors} onPress={handleCheckIn} message={middayMessage} />
+            <NotificationCard
+              colors={colors}
+              onPress={handleCheckIn}
+              onDismiss={handleDismissMiddayCard}
+              message={middayMessage}
+              icon={<ChatCircleDotsIcon size={16} color={colors.textSubtle} weight="light" />}
+              accentColor={colors.accent}
+              delay={150}
+            />
           )}
           {showEveningCard && (
-            <EveningWindDownCard colors={colors} onPress={handleEveningWindDown} message={eveningMessage} />
+            <NotificationCard
+              colors={colors}
+              onPress={handleEveningWindDown}
+              onDismiss={handleDismissEveningCard}
+              message={eveningMessage}
+              icon={<MoonIcon size={16} color={colors.textSubtle} weight="light" />}
+              accentColor={colors.accent}
+              delay={200}
+            />
           )}
 
           {/* Resume card */}
@@ -796,7 +1037,7 @@ export default function HomeScreen() {
               >
                 <View
                   style={{
-                    borderRadius: 20,
+                    borderRadius: 16,
                     borderWidth: 1,
                     borderColor: colors.border,
                     padding: 28,
@@ -982,25 +1223,32 @@ export default function HomeScreen() {
                   </View>
 
                   {/* CTA Button */}
-                  <View
-                    style={{
-                      backgroundColor: colors.accent,
-                      paddingVertical: 15,
-                      borderRadius: 12,
-                      alignItems: 'center',
-                    }}
+                  <AccentGlow
+                    color={colors.accent}
+                    intensity="medium"
+                    active={!isJourneyComplete}
+                    style={{ borderRadius: 12 }}
                   >
-                    <Text
+                    <View
                       style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.background,
-                        letterSpacing: 0.3,
+                        backgroundColor: colors.accent,
+                        paddingVertical: 15,
+                        borderRadius: 12,
+                        alignItems: 'center',
                       }}
                     >
-                      {getCtaText()}
-                    </Text>
-                  </View>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: 15,
+                          color: colors.background,
+                          letterSpacing: 0.3,
+                        }}
+                      >
+                        {getCtaText()}
+                      </Text>
+                    </View>
+                  </AccentGlow>
 
                   {/* New Journey - Secondary Action */}
                   <Pressable
@@ -1074,57 +1322,63 @@ export default function HomeScreen() {
                   Your honest take helps us get better.
                 </Text>
 
-                <View style={{ gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Pressable
                     onPress={() => handleDay1ReviewOption('love')}
-                    style={({ pressed }) => ({
+                    style={{
+                      flex: 1,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 10,
+                      justifyContent: 'center',
+                      gap: 6,
                       paddingVertical: 12,
-                      paddingHorizontal: 14,
+                      paddingHorizontal: 10,
                       borderRadius: 12,
-                      backgroundColor: pressed ? colors.accent + '15' : colors.buttonBackground,
-                    })}
+                      backgroundColor: colors.buttonBackground,
+                    }}
                   >
-                    <HeartIcon size={18} color={colors.accent} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.text }}>
-                      I love it
+                    <HeartIcon size={16} color={colors.accent} weight="light" />
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
+                      Love it
                     </Text>
                   </Pressable>
 
                   <Pressable
                     onPress={() => handleDay1ReviewOption('okay')}
-                    style={({ pressed }) => ({
+                    style={{
+                      flex: 1,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 10,
+                      justifyContent: 'center',
+                      gap: 6,
                       paddingVertical: 12,
-                      paddingHorizontal: 14,
+                      paddingHorizontal: 10,
                       borderRadius: 12,
-                      backgroundColor: pressed ? colors.accent + '15' : colors.buttonBackground,
-                    })}
+                      backgroundColor: colors.buttonBackground,
+                    }}
                   >
-                    <HandIcon size={18} color={colors.textMuted} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.text }}>
+                    <HandIcon size={16} color={colors.textMuted} weight="light" />
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                       It's okay
                     </Text>
                   </Pressable>
 
                   <Pressable
                     onPress={() => handleDay1ReviewOption('not-for-me')}
-                    style={({ pressed }) => ({
+                    style={{
+                      flex: 1,
                       flexDirection: 'row',
                       alignItems: 'center',
-                      gap: 10,
+                      justifyContent: 'center',
+                      gap: 6,
                       paddingVertical: 12,
-                      paddingHorizontal: 14,
+                      paddingHorizontal: 10,
                       borderRadius: 12,
-                      backgroundColor: pressed ? colors.accent + '15' : colors.buttonBackground,
-                    })}
+                      backgroundColor: colors.buttonBackground,
+                    }}
                   >
-                    <XIcon size={18} color={colors.textMuted} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.text }}>
+                    <XIcon size={16} color={colors.textMuted} weight="light" />
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                       Not for me
                     </Text>
                   </Pressable>
@@ -1160,6 +1414,23 @@ export default function HomeScreen() {
           dayNumber={currentDevotional.currentDay}
         />
       )}
+
+      <CompanionCheckInSheet
+        visible={showCompanionSheet}
+        onClose={() => setShowCompanionSheet(false)}
+        onComplete={handleCompanionComplete}
+        hasActiveSeries={hasActiveSeries}
+        hasReadToday={hasReadToday}
+        daysSinceLastOpen={daysSinceLastOpen}
+        streakCurrent={streakCurrent}
+        isFirstCompanionCheckIn={!hasSeenCompanionIntro}
+      />
+
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature="series"
+      />
     </View>
   );
 }

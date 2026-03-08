@@ -39,7 +39,7 @@ export default function HighlightsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Navigate to the specific day with the highlight
     router.push({
-      pathname: '/(main)/reading',
+      pathname: '/(tabs)/(today)/reading',
       params: { 
         devotionalId: highlight.devotionalId,
         dayNumber: highlight.dayNumber.toString(),

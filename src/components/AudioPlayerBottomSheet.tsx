@@ -33,6 +33,7 @@ import {
   SparkleIcon,
 } from 'phosphor-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -160,6 +161,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
     ref
   ) => {
     const { colors, isDark } = useTheme();
+    const tabBarHeight = useBottomTabBarHeight();
 
     const [isLoading, setIsLoading] = useState(false);
     const [hasError, setHasError] = useState(false);
@@ -172,6 +174,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
     const audioUrlRef = useRef<string | null>(null);
     const isLoadingRef = useRef(false);
     const shouldAutoplayRef = useRef(false);
+    const replaceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Animated values
     const progressAnim = useSharedValue(0);
@@ -230,6 +233,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
             if (
               prev.isLoaded !== s.isLoaded ||
               prev.playing !== s.playing ||
+              prev.playbackState !== s.playbackState ||
               Math.abs(prev.currentTime - s.currentTime) > 0.02 ||
               Math.abs(prev.duration - s.duration) > 0.1 ||
               prev.didJustFinish !== s.didJustFinish
@@ -252,7 +256,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
     const currentTime = status.currentTime * 1000;
     const duration = status.duration * 1000;
 
-    const snapPoints = useMemo(() => ['48%'], []);
+    const snapPoints = useMemo(() => ['52%'], []);
 
     // Scripture first in audio, matching the visual reading order
     const fullText = useMemo(() => {
@@ -279,9 +283,27 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
       const audioReady = status.isLoaded || status.playing || status.duration > 0;
       if (!audioReady) return;
       shouldAutoplayRef.current = false;
+      if (replaceTimeoutRef.current) {
+        clearTimeout(replaceTimeoutRef.current);
+        replaceTimeoutRef.current = null;
+      }
       console.log('[AudioPlayer] ▶️ auto-playing');
       try { player.play(); } catch {}
     }, [status.isLoaded, status.duration, player]);
+
+    // Detect playback failure — expo-audio's AudioPlayer.swift never emits .failed
+    // but currentStatus getter does include playbackState as a string
+    useEffect(() => {
+      if ((status as any).playbackState === 'failed' && audioUrl && !hasError) {
+        console.log('[AudioPlayer] playbackState=failed detected');
+        setHasError(true);
+        setErrorMessage('Audio format error. Tap to retry.');
+        if (replaceTimeoutRef.current) {
+          clearTimeout(replaceTimeoutRef.current);
+          replaceTimeoutRef.current = null;
+        }
+      }
+    }, [(status as any).playbackState, audioUrl, hasError]);
 
     // Smooth progress bar driven by playback
     useEffect(() => {
@@ -310,6 +332,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
         try { player.pause(); } catch {}
         audioUrlRef.current = null;
         shouldAutoplayRef.current = false;
+        if (replaceTimeoutRef.current) {
+          clearTimeout(replaceTimeoutRef.current);
+          replaceTimeoutRef.current = null;
+        }
       };
     }, [player]);
 
@@ -381,6 +407,23 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
         setAudioUrl(result.audioUrl);
         audioUrlRef.current = result.audioUrl;
         player.replace({ uri: result.audioUrl });
+
+        // 15s timeout safety net — if audio never loads, show error with retry
+        if (replaceTimeoutRef.current) clearTimeout(replaceTimeoutRef.current);
+        replaceTimeoutRef.current = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          // Check if audio is still not ready
+          try {
+            const s = player.currentStatus;
+            const ready = s.isLoaded || s.playing || s.duration > 0;
+            if (!ready && !hasError) {
+              console.log('[AudioPlayer] 15s timeout — audio never loaded');
+              setHasError(true);
+              setErrorMessage('Audio took too long to load. Tap to retry.');
+            }
+          } catch {}
+          replaceTimeoutRef.current = null;
+        }, 15000);
       } catch (error) {
         if (!isMountedRef.current) return;
         console.log('[AudioPlayer] ❌ loadAndPlayAudio error:', error);
@@ -561,6 +604,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
           ref={ref}
           index={0}
           snapPoints={snapPoints}
+          bottomInset={tabBarHeight}
           enablePanDownToClose={true}
           enableOverDrag={false}
           onClose={handleClose}

@@ -12,7 +12,7 @@ export type PersonaTrait =
   | 'raw'
   | 'warm';
 
-export type StructuralElement = 
+export type StructuralElement =
   | 'opening'
   | 'scripture_block'
   | 'reflection'
@@ -23,7 +23,9 @@ export type StructuralElement =
   | 'blessing'
   | 'challenge'
   | 'contemplation'
-  | 'wonder';
+  | 'wonder'
+  | 'invitation'
+  | 'doxology';
 
 export type HookStyle =
   | 'confession'
@@ -75,14 +77,15 @@ export const PERSONA_TRAITS: Record<PersonaTrait, {
   },
   
   challenging: {
-    voice: 'urgent, direct, compelling',
-    sentenceStyle: 'Punched. Short. One-two rhythm.',
-    keyPhrases: ['Listen...', 'Stop...', 'We must...', 'Don\'t waste...'],
+    voice: 'piercing, prophetic, lovingly relentless — a surgeon not a drill sergeant',
+    sentenceStyle: 'Punched. Short. One-two rhythm. Then one long sentence that lands like a verdict.',
+    keyPhrases: ['Listen...', 'Stop...', 'What if the problem isn\'t...', 'You already know this...'],
     systemPromptAdditions: [
-      'Use binary framing: two paths, two masters',
-      'Elevate stakes: "Eternity hangs in the balance"',
-      'Stack rhetorical questions: "Are you? Will you? Can you?"',
-      'Close with calls to action',
+      'Hold up a mirror, never point a finger. Let the reader convict themselves.',
+      'Close the gap between their theology and their Tuesday — "You say you trust God but..."',
+      'Name the comfortable lie they\'ve been telling themselves. Reframe their prayer.',
+      'One devastating question per devotional — specific enough to follow them into the shower.',
+      'Always pair the wound with the gospel. The sword is held by the Healer.',
     ],
   },
   

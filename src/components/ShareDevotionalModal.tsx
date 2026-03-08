@@ -1,11 +1,11 @@
 import { useRef, useState, useEffect } from 'react';
-import { View, Text, Pressable, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, Dimensions, ActivityIndicator, Alert, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+// ShareQuote kept for potential future carousel expansion
 import { XIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -13,10 +13,14 @@ import { DevotionalDay } from '@/lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// iPhone Pro Max / Instagram Stories dimensions (9:19.5 aspect ratio)
-const STORY_ASPECT_RATIO = 9 / 19.5;
-const CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.60, 520);
-const CARD_WIDTH = CARD_HEIGHT * STORY_ASPECT_RATIO;
+// Card dimensions
+const CARD_ASPECT_RATIO = 9 / 19.5; // Instagram Stories
+const ACTIVE_CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.55, 480);
+const ACTIVE_CARD_WIDTH = ACTIVE_CARD_HEIGHT * CARD_ASPECT_RATIO;
+interface ShareQuote {
+  text: string;
+  type: 'quotable';
+}
 
 interface ShareDevotionalModalProps {
   visible: boolean;
@@ -26,68 +30,38 @@ interface ShareDevotionalModalProps {
 }
 
 export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: ShareDevotionalModalProps) {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const cardRef = useRef<View>(null);
   const [isSharing, setIsSharing] = useState(false);
-  const [capturedUri, setCapturedUri] = useState<string | null>(null);
 
-  // Colors for the share image based on theme - pure black/white, no blue gradient
   const shareImageColors = isDark
-    ? { gradient: ['#000000', '#1a1a1a', '#2d2d2d'] as const, text: '#ffffff', subtle: 'rgba(255,255,255,0.4)', appName: 'rgba(255,255,255,0.3)' }
-    : { gradient: ['#FFFFFF', '#F5F5F5', '#E8E8E8'] as const, text: '#000000', subtle: 'rgba(0,0,0,0.45)', appName: 'rgba(0,0,0,0.3)' };
+    ? { gradient: ['#000000', '#1a1a1a', '#2d2d2d'] as const, text: '#ffffff', subtle: 'rgba(255,255,255,0.4)' }
+    : { gradient: ['#FFFFFF', '#F5F5F5', '#E8E8E8'] as const, text: '#000000', subtle: 'rgba(0,0,0,0.45)' };
 
-  // Auto-capture when modal opens
-  useEffect(() => {
-    if (visible && !capturedUri) {
-      captureCard().then(uri => {
-        if (uri) setCapturedUri(uri);
-      });
-    }
-  }, [visible, capturedUri]);
+  const quote = day.quotableLine || '';
 
-  // Reset captured URI when modal closes
   useEffect(() => {
-    if (!visible) {
-      setCapturedUri(null);
+    if (visible) {
       setIsSharing(false);
     }
   }, [visible]);
 
-  const captureCard = async (): Promise<string | null> => {
-    if (!cardRef.current) return null;
-
-    try {
-      // Small delay to ensure view is fully rendered
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const uri = await captureRef(cardRef.current, {
-        format: 'png',
-        quality: 1,
-      });
-
-      return uri;
-    } catch (error) {
-      console.error('Capture error:', error);
-      return null;
-    }
-  };
-
   const handleShare = async () => {
     if (isSharing) return;
-
     setIsSharing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const uri = capturedUri || await captureCard();
-
-      if (!uri) {
+      if (!cardRef.current) {
         Alert.alert('Error', 'Could not capture the image. Please try again.');
         setIsSharing(false);
         return;
       }
 
-      // Check if sharing is available
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         Alert.alert('Error', 'Sharing is not available on this device');
@@ -99,11 +73,10 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
         mimeType: 'image/png',
         dialogTitle: `${seriesTitle} · Day ${day.dayNumber}`,
       });
-      
-      // Close modal after sharing
+
       onClose();
     } catch {
-      // User cancelled share - don't close modal
+      // User cancelled share
     } finally {
       setIsSharing(false);
     }
@@ -112,128 +85,127 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
   if (!visible) return null;
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(200)}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.92)',
-      }}
-    >
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingVertical: 16 }}>
-          <Pressable onPress={onClose} hitSlop={12}>
-            <XIcon size={24} color="#ffffff" weight="light" />
-          </Pressable>
-        </View>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.92)' }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingVertical: 16 }}>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <XIcon size={24} color="#ffffff" weight="light" />
+            </Pressable>
+          </View>
 
-        {/* Preview Card - Story Format */}
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <View
-            ref={cardRef}
-            collapsable={false}
-            style={{
-              width: CARD_WIDTH,
-              height: CARD_HEIGHT,
-              borderRadius: 16,
-              overflow: 'hidden',
-            }}
-          >
-            <LinearGradient
-              colors={shareImageColors.gradient}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
+          {/* Share Card */}
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <View
+              ref={cardRef}
+              collapsable={false}
               style={{
-                flex: 1,
-                paddingHorizontal: 32,
-                paddingVertical: 48,
-                justifyContent: 'center',
+                width: ACTIVE_CARD_WIDTH,
+                height: ACTIVE_CARD_HEIGHT,
+                borderRadius: 16,
+                overflow: 'hidden',
               }}
             >
-              {/* Quote */}
-              <View style={{ flex: 1, justifyContent: 'center' }}>
-                <Text style={{
-                  fontFamily: FontFamily.display,
-                  fontSize: 22,
-                  color: shareImageColors.text,
-                  lineHeight: 34,
-                  textAlign: 'center',
-                }}>
-                  {day.quotableLine}
-                </Text>
-              </View>
-
-              {/* Bottom info */}
-              <View style={{ alignItems: 'center', paddingTop: 20 }}>
-                <Text style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 10,
-                  color: shareImageColors.subtle,
-                  textAlign: 'center',
-                  letterSpacing: 0.5,
-                }}>
-                  {seriesTitle} · Day {day.dayNumber}
-                </Text>
-                <Text style={{
-                  fontFamily: FontFamily.display,
-                  fontSize: 12,
-                  color: shareImageColors.appName,
-                  marginTop: 6,
-                }}>
-                  Unfold
-                </Text>
-              </View>
-            </LinearGradient>
-          </View>
-        </View>
-
-        {/* Single Share Button */}
-        <View style={{ paddingBottom: 32, paddingHorizontal: 24 }}>
-          <Pressable
-            onPress={handleShare}
-            disabled={isSharing}
-          >
-            {({ pressed }) => (
-              <View
+              <LinearGradient
+                colors={shareImageColors.gradient as any}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
                 style={{
-                  backgroundColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.15)',
-                  paddingVertical: 16,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.3)',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 10,
-                  opacity: isSharing ? 0.6 : 1,
+                  flex: 1,
+                  paddingHorizontal: 28,
+                  paddingTop: 48,
+                  paddingBottom: 32,
+                  justifyContent: 'space-between',
                 }}
               >
-                {isSharing ? (
-                  <ActivityIndicator size="small" color={pressed ? '#000000' : '#ffffff'} />
-                ) : (
-                  <>
-                    <UploadSimpleIcon size={18} color={pressed ? '#000000' : '#ffffff'} weight="light" />
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 16,
-                        color: pressed ? '#000000' : '#ffffff',
-                      }}
-                    >
-                      Share
-                    </Text>
-                  </>
-                )}
-              </View>
-            )}
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </Animated.View>
+                {/* Quote content */}
+                <View style={{ flex: 1, justifyContent: 'center' }}>
+                  <Text style={{
+                    fontFamily: FontFamily.display,
+                    fontSize: quote.length > 80 ? 18 : 22,
+                    color: shareImageColors.text,
+                    lineHeight: quote.length > 80 ? 28 : 34,
+                    textAlign: 'center',
+                  }}>
+                    {quote}
+                  </Text>
+                </View>
+
+                {/* Bottom info */}
+                <View style={{ alignItems: 'center', paddingTop: 16 }}>
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 10,
+                      color: shareImageColors.subtle,
+                      textAlign: 'center',
+                      letterSpacing: 0.5,
+                    }}>
+                    {seriesTitle} · Day {day.dayNumber}
+                  </Text>
+                  <Image
+                    source={require('@/app/icon-paywall-light.png')}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      marginTop: 8,
+                      tintColor: shareImageColors.subtle,
+                      opacity: 0.6,
+                    }}
+                    resizeMode="contain"
+                  />
+                </View>
+              </LinearGradient>
+            </View>
+          </View>
+
+          {/* Share Button */}
+          <View style={{ paddingBottom: 32, paddingHorizontal: 24 }}>
+            <Pressable
+              onPress={handleShare}
+              disabled={isSharing}
+            >
+              {({ pressed }) => (
+                <View
+                  style={{
+                    backgroundColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.15)',
+                    paddingVertical: 16,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.3)',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    opacity: isSharing ? 0.6 : 1,
+                  }}
+                >
+                  {isSharing ? (
+                    <ActivityIndicator size="small" color={pressed ? '#000000' : '#ffffff'} />
+                  ) : (
+                    <>
+                      <UploadSimpleIcon size={18} color={pressed ? '#000000' : '#ffffff'} weight="light" />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: 16,
+                          color: pressed ? '#000000' : '#ffffff',
+                        }}
+                      >
+                        Share
+                      </Text>
+                    </>
+                  )}
+                </View>
+              )}
+            </Pressable>
+          </View>
+        </SafeAreaView>
+      </View>
+    </Modal>
   );
 }
