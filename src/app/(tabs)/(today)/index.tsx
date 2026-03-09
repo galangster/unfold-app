@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeInDown,
+  FadeInUp,
   FadeOut,
   useSharedValue,
   useAnimatedStyle,
@@ -12,6 +13,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSpring,
+  withSequence,
   interpolate,
   Easing,
   runOnJS,
@@ -267,6 +269,12 @@ function NotificationCard({
                 paddingRight: 12,
                 flexDirection: 'row',
                 alignItems: 'center',
+                // Subtle lift for notification cards
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                elevation: 1,
               }}
             >
               {/* Mini companion ring — signals this is from the companion */}
@@ -340,6 +348,11 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
           borderWidth: 1,
           borderColor: colors.border,
           padding: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 2,
         }}
       >
         <Animated.View style={shimmerStyle}>
@@ -380,6 +393,12 @@ function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme })
           borderWidth: 1,
           borderColor: colors.border,
           padding: 18,
+          // Subtle depth for bridge card
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 2,
         }}
       >
         <Text
@@ -607,6 +626,12 @@ export default function HomeScreen() {
     }
     return 'Today';
   };
+
+  // Button press micro-interaction — spring scale
+  const journeyCardScale = useSharedValue(1);
+  const journeyCardAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: journeyCardScale.value }],
+  }));
 
   const handleContinueReading = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -867,9 +892,9 @@ export default function HomeScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Header — greeting + orb */}
           <Animated.View
-            entering={FadeIn.duration(700)}
+            entering={FadeInDown.delay(0).duration(600)}
             style={{
               paddingHorizontal: 24,
               paddingTop: 20,
@@ -979,6 +1004,12 @@ export default function HomeScreen() {
                     borderWidth: 1,
                     borderColor: colors.border,
                     padding: 16,
+                    // Light elevation for resume card
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 8,
+                    elevation: 2,
                   }}
                 >
                   <Text
@@ -1021,28 +1052,39 @@ export default function HomeScreen() {
 
           {/* Main Journey Card */}
           <Animated.View
-            entering={FadeInDown.duration(700).delay(100)}
-            style={{ paddingHorizontal: 24, marginTop: 20 }}
+            entering={FadeInUp.delay(200).duration(600)}
+            style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
           >
             {isJourneyComplete ? (
               <Pressable
                 onPress={handleCreateNew}
+                onPressIn={() => {
+                  journeyCardScale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
+                }}
+                onPressOut={() => {
+                  journeyCardScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                }}
                 accessibilityRole="button"
                 accessibilityLabel="Start a new journey"
-                style={({ pressed }) => ({
+                style={{
                   borderRadius: 20,
                   overflow: 'hidden',
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                }}
               >
                 <View
                   style={{
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: colors.accent + '18',
                     padding: 28,
                     alignItems: 'center',
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor: colors.backgroundElevated,
+                    // Hero card elevation
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 16,
+                    elevation: 4,
                   }}
                 >
                   <View
@@ -1105,21 +1147,32 @@ export default function HomeScreen() {
             ) : (
               <Pressable
                 onPress={handleContinueReading}
+                onPressIn={() => {
+                  journeyCardScale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
+                }}
+                onPressOut={() => {
+                  journeyCardScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`Continue ${currentDevotional.title}, day ${currentDevotional.currentDay} of ${currentDevotional.totalDays}`}
-                style={({ pressed }) => ({
+                style={{
                   borderRadius: 20,
                   overflow: 'hidden',
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                }}
               >
                 <View
                   style={{
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: colors.accent + '18',
                     padding: 24,
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor: colors.backgroundElevated,
+                    // Hero card — strongest elevation in the hierarchy
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 16,
+                    elevation: 4,
                   }}
                 >
                   {/* Series label + day pill */}
@@ -1299,6 +1352,12 @@ export default function HomeScreen() {
                   borderWidth: 1,
                   borderColor: colors.border,
                   padding: 20,
+                  // Light elevation for secondary card
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  elevation: 2,
                 }}
               >
                 <Text
@@ -1389,7 +1448,7 @@ export default function HomeScreen() {
 
           {/* Streak Box */}
           <Animated.View
-            entering={FadeInDown.duration(600).delay(300)}
+            entering={FadeInUp.delay(350).duration(600)}
             style={{ paddingHorizontal: 24, marginTop: 24 }}
           >
             <StreakBox

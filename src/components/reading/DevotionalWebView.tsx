@@ -313,14 +313,17 @@ export function DevotionalWebView({
       `
       : paragraphs.map(p => `<p>${escapeAndLinkScripture(p)}</p>`).join('');
 
+    // Divider between body paragraphs and quotes
+    const bodyToQuoteDivider = (day.quotes?.length)
+      ? '<div class="section-divider"><span class="divider-dots">&middot;&ensp;&middot;&ensp;&middot;</span></div>'
+      : '';
+
     const quotesHtml = day.quotes?.length
       ? day.quotes.map(q => `
         <blockquote>
-          <svg class="quote-icon" viewBox="0 0 24 24" fill="none" stroke="${accentColor}" stroke-width="1.5">
-            <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3"/>
-          </svg>
+          <span class="deco-quote">\u201C</span>
           <p>${escapeHtml(q.text)}</p>
-          <cite>— ${escapeHtml(q.author)}</cite>
+          <cite>\u2014\u2009${escapeHtml(q.author)}</cite>
         </blockquote>
       `).join('')
       : '';
@@ -354,7 +357,7 @@ export function DevotionalWebView({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
   
   <!-- Rangy for robust text highlighting -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/rangy/1.3.0/rangy-core.min.js"></script>
@@ -439,53 +442,84 @@ export function DevotionalWebView({
     mark.highlight-purple { background: ${HIGHLIGHT_COLORS.purple[isDark ? 'dark' : 'light']}; }
     mark.highlight-red { background: ${HIGHLIGHT_COLORS.red[isDark ? 'dark' : 'light']}; }
     
-    /* Body text with drop cap */
+    /* Body text -- generous paragraph spacing */
     p {
-      margin-bottom: ${lineHeight * 0.8}px;
+      margin-bottom: ${lineHeight * 0.95}px;
       font-family: '${webFont}', Georgia, serif;
     }
-    
+
     p.first-paragraph {
       margin-top: 8px;
     }
-    
+
+    /* Drop cap -- decorative serif initial using display font */
     .drop-cap {
       float: left;
-      font-family: Georgia, serif;
-      font-size: ${bodyFontSize * 3.2}px;
-      line-height: ${bodyFontSize * 3.4}px;
+      font-family: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+      font-size: ${bodyFontSize * 3.4}px;
+      line-height: ${bodyFontSize * 2.8}px;
       color: ${accentColor};
-      margin-right: 8px;
-      margin-top: -4px;
+      margin-right: 6px;
+      margin-top: 4px;
+      padding-right: 2px;
       font-weight: 400;
     }
-    
-    /* Quotes */
+
+    /* Section divider -- centered dots */
+    .section-divider {
+      text-align: center;
+      margin: 36px 0 32px;
+      opacity: 0;
+      animation: fadeInUp 0.5s ease-out forwards;
+      animation-delay: 0.35s;
+    }
+
+    .divider-dots {
+      font-size: 14px;
+      color: ${mutedColor};
+      opacity: 0.35;
+      letter-spacing: 4px;
+    }
+
+    /* Quotes -- elevated with oversized decorative mark */
     blockquote {
-      margin: 44px 0 24px;
-      padding-left: 20px;
+      margin: 32px 0 28px;
+      padding: 24px 22px 20px;
       border-left: 2px solid ${accentColor};
       position: relative;
+      background: ${isDark ? `${accentColor}06` : `${accentColor}05`};
+      border-radius: 0 8px 8px 0;
     }
-    
-    .quote-icon {
-      width: 16px;
-      height: 16px;
-      margin-bottom: 12px;
-      opacity: 0.6;
+
+    /* Large decorative opening quote mark */
+    .deco-quote {
+      display: block;
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 64px;
+      line-height: 28px;
+      color: ${accentColor};
+      opacity: 0.12;
+      margin-bottom: 8px;
+      margin-left: -4px;
+      font-weight: 400;
     }
-    
+
     blockquote p {
       font-style: italic;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
+      line-height: ${lineHeight * 1.05}px;
+      padding-left: 2px;
     }
-    
+
     blockquote cite {
       font-family: 'Inter', sans-serif;
-      font-size: 13px;
+      font-size: 12px;
       color: ${mutedColor};
       font-style: normal;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      display: block;
+      padding-left: 2px;
     }
     
     /* Context box */
@@ -594,6 +628,7 @@ export function DevotionalWebView({
 </head>
 <body>
   ${bodyHtml}
+  ${bodyToQuoteDivider}
   ${quotesHtml}
   ${contextHtml}
   ${wordStudyHtml}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
-import { QuotesIcon, BookOpenIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
+import { BookOpenIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,6 +27,75 @@ interface DevotionalContentProps {
   onScriptureTap?: (reference: string) => void;
 }
 
+/**
+ * Elegant section divider -- three centered dots with fine rules on each side.
+ * Used between major content sections for a book-like feel.
+ */
+function SectionDivider({ color, style }: { color: string; style?: object }) {
+  return (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginVertical: 40,
+          paddingHorizontal: 40,
+        },
+        style,
+      ]}
+    >
+      <View style={{ flex: 1, height: 0.5, backgroundColor: color, opacity: 0.2 }} />
+      <Text
+        style={{
+          fontSize: 12,
+          color,
+          opacity: 0.35,
+          letterSpacing: 6,
+          marginHorizontal: 16,
+        }}
+      >
+        {'···'}
+      </Text>
+      <View style={{ flex: 1, height: 0.5, backgroundColor: color, opacity: 0.2 }} />
+    </View>
+  );
+}
+
+/**
+ * Ornamental header with decorative lines flanking a centered label.
+ * Used for "FOR REFLECTION" and "A PRAYER" section headers.
+ */
+function OrnamentalHeader({ label, accentColor }: { label: string; accentColor: string }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 28,
+      }}
+    >
+      <View style={{ width: 32, height: 0.5, backgroundColor: accentColor, opacity: 0.4 }} />
+      <Text
+        style={{
+          fontFamily: FontFamily.uiMedium,
+          fontSize: 10,
+          color: accentColor,
+          letterSpacing: 2.5,
+          textTransform: 'uppercase',
+          textAlign: 'center',
+          marginHorizontal: 14,
+          opacity: 0.75,
+        }}
+      >
+        {label}
+      </Text>
+      <View style={{ width: 32, height: 0.5, backgroundColor: accentColor, opacity: 0.4 }} />
+    </View>
+  );
+}
+
 export function DevotionalContent({
   day,
   fontSize,
@@ -37,11 +106,11 @@ export function DevotionalContent({
   existingHighlights,
   onScriptureTap,
 }: DevotionalContentProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const readingFont = useReadingFont();
 
-  // Accent line grow animation — editorial entrance
+  // Accent line grow animation -- editorial entrance
   const accentLineWidth = useSharedValue(0);
   useEffect(() => {
     accentLineWidth.value = withDelay(
@@ -59,6 +128,11 @@ export function DevotionalContent({
     onToggleBookmark?.();
   }, [onToggleBookmark]);
 
+  // Subtle scripture background tint (accent at 4% opacity)
+  const scriptureBgColor = isDark
+    ? `${colors.accent}0A`  // ~4% opacity on dark
+    : `${colors.accent}08`; // ~3% opacity on light
+
   return (
     <>
       {/* Day title */}
@@ -68,7 +142,7 @@ export function DevotionalContent({
           fontFamily: FontFamily.display,
           fontSize: fontSizes.title,
           color: colors.text,
-          lineHeight: fontSizes.title * 1.25,
+          lineHeight: fontSizes.title * 1.2,
           marginBottom: 20,
           letterSpacing: -0.5,
         }}
@@ -76,38 +150,43 @@ export function DevotionalContent({
         {day.title}
       </Text>
 
-      {/* Accent line — grows in from zero */}
+      {/* Accent line -- grows in from zero */}
       <Animated.View
         style={[
           {
             height: 1.5,
             backgroundColor: colors.accent,
-            marginBottom: 24,
+            marginBottom: 28,
             borderRadius: 1,
           },
           accentLineStyle,
         ]}
       />
 
-      {/* Scripture block — traditional left-aligned with accent border */}
+      {/* Scripture block -- accent border + subtle background tint */}
       <View
         style={{
           borderLeftWidth: 2.5,
           borderLeftColor: colors.accent,
           paddingLeft: 18,
-          marginBottom: 36,
+          paddingRight: 14,
+          paddingVertical: 16,
+          marginBottom: 8,
+          backgroundColor: scriptureBgColor,
+          borderRadius: 4,
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
         }}
       >
-        {/* Reference + bookmark */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+        {/* Reference + bookmark -- refined small-caps style */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 10 }}>
           <Text
             style={{
-              fontFamily: FontFamily.mono,
-              fontSize: 11,
+              fontFamily: FontFamily.uiMedium,
+              fontSize: 10.5,
               color: colors.accent,
-              letterSpacing: 1.5,
+              letterSpacing: 2,
               textTransform: 'uppercase',
-              opacity: 0.8,
             }}
           >
             {day.scriptureReference}
@@ -116,31 +195,37 @@ export function DevotionalContent({
           {onToggleBookmark && (
             <Pressable
               onPress={handleBookmarkPress}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
               style={{ padding: 4 }}
             >
               <BookmarkSimpleIcon
-                size={14}
-                color={isBookmarked ? colors.accent : colors.textMuted}
-                weight={isBookmarked ? "fill" : "light"}
+                size={15}
+                color={isBookmarked ? colors.accent : colors.textSubtle}
+                weight={isBookmarked ? "fill" : "regular"}
               />
             </Pressable>
           )}
         </View>
 
-        {/* Scripture text — left-aligned, traditional paragraph style */}
+        {/* Scripture text -- generous line-height for readability */}
         <Text
           style={{
             fontFamily: readingFont.bodyItalic,
             fontSize: fontSizes.scripture,
             color: colors.textMuted,
-            lineHeight: fontSizes.scripture * 1.7,
+            lineHeight: fontSizes.scripture * 1.75,
             textAlign: 'left',
             minHeight: day.scriptureText ? 'auto' : 60,
           }}
         >
-          {day.scriptureText ? `"${preventOrphan(day.scriptureText)}"` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
+          {day.scriptureText ? `\u201C${preventOrphan(day.scriptureText)}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
         </Text>
       </View>
+
+      {/* Section divider: scripture -> body */}
+      <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
 
       {/* Body text, quotes, and related content - WEBVIEW (selectable for quotes) */}
       <DevotionalWebView
@@ -164,13 +249,12 @@ export function DevotionalContent({
             <BookOpenIcon size={15} color={colors.accent} weight="light" />
             <Text
               style={{
-                fontFamily: FontFamily.mono,
-                fontSize: 11,
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 10.5,
                 color: colors.accent,
-                letterSpacing: 1.2,
+                letterSpacing: 1.8,
                 textTransform: 'uppercase',
-                marginLeft: 8,
-                opacity: 0.8,
+                marginLeft: 10,
               }}
             >
               Related Scripture
@@ -190,12 +274,12 @@ export function DevotionalContent({
             >
               <Text
                 style={{
-                  fontFamily: FontFamily.mono,
-                  fontSize: 11,
+                  fontFamily: FontFamily.uiMedium,
+                  fontSize: 10.5,
                   color: colors.accent,
-                  letterSpacing: 0.8,
-                  marginBottom: 8,
-                  opacity: 0.7,
+                  letterSpacing: 1.2,
+                  marginBottom: 10,
+                  opacity: 0.8,
                 }}
               >
                 {ref.reference}
@@ -205,10 +289,10 @@ export function DevotionalContent({
                   fontFamily: readingFont.bodyItalic,
                   fontSize: fontSizes.body - 1,
                   color: colors.textMuted,
-                  lineHeight: (fontSizes.body - 1) * 1.65,
+                  lineHeight: (fontSizes.body - 1) * 1.7,
                 }}
               >
-                "{preventOrphan(ref.text)}"
+                {`\u201C${preventOrphan(ref.text)}\u201D`}
               </Text>
             </View>
           ))}
@@ -217,49 +301,49 @@ export function DevotionalContent({
 
       {/* Reflection Questions Section - NATIVE (structured) */}
       {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
-        <View style={{ marginTop: 52 }}>
-          <View
-            style={{
-              width: 32,
-              height: 1.5,
-              backgroundColor: colors.accent,
-              alignSelf: 'center',
-              marginBottom: 28,
-              borderRadius: 1,
-            }}
-          />
-          <Text
-            style={{
-              fontFamily: FontFamily.mono,
-              fontSize: 11,
-              color: colors.accent,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              textAlign: 'center',
-              marginBottom: 24,
-              opacity: 0.8,
-            }}
-          >
-            For Reflection
-          </Text>
+        <View style={{ marginTop: 48 }}>
+          {/* Section divider */}
+          <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
+
+          {/* Ornamental header: --- FOR REFLECTION --- */}
+          <OrnamentalHeader label="For Reflection" accentColor={colors.accent} />
+
           {day.reflectionQuestions.map((question, index) => (
             <View
               key={index}
               style={{
-                marginBottom: 20,
-                paddingLeft: 16,
+                marginBottom: 24,
+                paddingLeft: 20,
+                paddingRight: 8,
               }}
             >
-              <Text
-                style={{
-                  fontFamily: readingFont.bodyItalic,
-                  fontSize: fontSizes.body,
-                  color: colors.text,
-                  lineHeight: fontSizes.body * 1.65,
-                }}
-              >
-                {index + 1}. {question}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.display,
+                    fontSize: fontSizes.body + 2,
+                    color: colors.accent,
+                    opacity: 0.5,
+                    marginRight: 12,
+                    marginTop: 1,
+                    minWidth: 16,
+                  }}
+                >
+                  {index + 1}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: readingFont.bodyItalic,
+                    fontSize: fontSizes.body,
+                    color: colors.text,
+                    lineHeight: fontSizes.body * 1.7,
+                    flex: 1,
+                    opacity: 0.9,
+                  }}
+                >
+                  {preventOrphan(question)}
+                </Text>
+              </View>
             </View>
           ))}
         </View>
@@ -267,31 +351,13 @@ export function DevotionalContent({
 
       {/* Closing Prayer Section - NATIVE (structured) */}
       {day.closingPrayer && (
-        <View style={{ marginTop: 52 }}>
-          <View
-            style={{
-              width: 32,
-              height: 1.5,
-              backgroundColor: colors.accent,
-              alignSelf: 'center',
-              marginBottom: 28,
-              borderRadius: 1,
-            }}
-          />
-          <Text
-            style={{
-              fontFamily: FontFamily.mono,
-              fontSize: 11,
-              color: colors.accent,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              textAlign: 'center',
-              marginBottom: 22,
-              opacity: 0.8,
-            }}
-          >
-            A Prayer
-          </Text>
+        <View style={{ marginTop: 48 }}>
+          {/* Section divider */}
+          <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
+
+          {/* Ornamental header: --- A PRAYER --- */}
+          <OrnamentalHeader label="A Prayer" accentColor={colors.accent} />
+
           <Text
             style={{
               fontFamily: readingFont.bodyItalic,
@@ -299,7 +365,8 @@ export function DevotionalContent({
               color: colors.text,
               lineHeight: fontSizes.body * 1.8,
               textAlign: 'center',
-              paddingHorizontal: 12,
+              paddingHorizontal: 16,
+              opacity: 0.9,
             }}
           >
             {preventOrphan(day.closingPrayer)}

@@ -6,17 +6,18 @@ export default function YouLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: 'transparent' },
-        animation: 'fade',
+        animation: 'ios_from_right',
+        animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="streak-settings" />
-      <Stack.Screen name="past-devotionals" />
-      <Stack.Screen name="saved-passages" />
-      <Stack.Screen name="my-content" />
-      <Stack.Screen name="stats" />
-      <Stack.Screen name="your-journey" />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
+      <Stack.Screen name="settings" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="streak-settings" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="past-devotionals" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="saved-passages" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="my-content" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="stats" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="your-journey" options={{ animation: 'ios_from_right' }} />
     </Stack>
   );
 }

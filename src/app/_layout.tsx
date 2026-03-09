@@ -46,10 +46,16 @@ function RootLayoutNav() {
           }}
         >
         <Stack.Screen name="index" />
-        <Stack.Screen name="style-onboarding" />
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="generating" />
-        <Stack.Screen name="(onboarding)/sign-in" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="style-onboarding" options={{ animation: 'fade' }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+        <Stack.Screen name="generating" options={{ animation: 'fade_from_bottom' }} />
+        <Stack.Screen
+          name="(onboarding)/sign-in"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+          }}
+        />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen
           name="paywall"
