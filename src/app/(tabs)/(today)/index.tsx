@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,6 +15,8 @@ import Animated, {
   withSpring,
   withSequence,
   interpolate,
+  interpolateColor,
+  cancelAnimation,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
@@ -163,6 +165,41 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
 }
 
 // MiniCompanionRing removed — replaced by CompanionOrb (size=28) for visual consistency
+
+// ─── Character reveal for "Unfold" title ─────────────────────────
+const GOLD = '#C8A55C';
+const REVEAL_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
+
+const RevealChar = React.memo(({ char, animDelay }: { char: string; animDelay: number }) => {
+  const opacity = useSharedValue(0);
+  const colorProgress = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(animDelay, withTiming(1, { duration: 600, easing: REVEAL_EASE }));
+    colorProgress.value = withDelay(animDelay, withTiming(1, { duration: 1200, easing: Easing.out(Easing.cubic) }));
+    return () => { cancelAnimation(opacity); cancelAnimation(colorProgress); };
+  }, [animDelay]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    color: interpolateColor(colorProgress.value, [0, 1], ['#FFFFFF', GOLD]),
+  }));
+
+  return (
+    <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 56, letterSpacing: -1.5 }, animatedStyle]}>
+      {char}
+    </Animated.Text>
+  );
+});
+
+function shuffleRevealOrder(length: number): number[] {
+  const indices = Array.from({ length }, (_, i) => i);
+  for (let i = length - 1; i > 0; i--) {
+    const j = Math.floor((Math.sin(i * 7919 + 104729) * 0.5 + 0.5) * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
 
 // Swipeable notification card — shared by midday check-in and evening wind-down
 function NotificationCard({
@@ -753,81 +790,74 @@ export default function HomeScreen() {
     }
   };
 
-  // Empty state
+  // Empty state — animated welcome with character reveal + embers
+  const titleChars = useMemo(() => 'Unfold'.split(''), []);
+  const charOrder = useMemo(() => shuffleRevealOrder(titleChars.length), [titleChars.length]);
+  const charDelays = useMemo(() => {
+    const baseDelay = 500;
+    const stagger = 200;
+    return titleChars.map((_, i) => baseDelay + charOrder[i] * stagger);
+  }, [titleChars, charOrder]);
+  const titleEndTime = useMemo(() => Math.max(...charDelays) + 700, [charDelays]);
+
   if (!currentDevotional) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <GoldEmberField density="medium" />
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 32 }}>
-            <Animated.View
-              entering={FadeIn.duration(1200)}
-              style={{
-                width: 40,
-                height: 1,
-                backgroundColor: colors.accent,
-                marginBottom: 32,
-                borderRadius: 1,
-                opacity: 0.6,
-              }}
-            />
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+            {/* Character-by-character "Unfold" reveal */}
+            <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+              {titleChars.map((char, i) => (
+                <RevealChar key={`c-${i}`} char={char} animDelay={charDelays[i]} />
+              ))}
+            </View>
 
             <Animated.Text
-              entering={FadeIn.duration(1000).delay(200)}
-              style={{
-                fontFamily: FontFamily.display,
-                fontSize: 48,
-                color: colors.text,
-                letterSpacing: -1,
-                marginBottom: 20,
-              }}
-            >
-              Unfold
-            </Animated.Text>
-
-            <Animated.Text
-              entering={FadeIn.duration(800).delay(500)}
+              entering={FadeIn.duration(800).delay(titleEndTime)}
               style={{
                 fontFamily: FontFamily.bodyItalic,
-                fontSize: 20,
-                color: colors.textMuted,
-                lineHeight: 30,
+                fontSize: 18,
+                color: 'rgba(200, 165, 92, 0.7)',
+                textAlign: 'center',
+                lineHeight: 28,
                 marginBottom: 56,
               }}
             >
               The world's most personal{'\n'}Bible studies.
             </Animated.Text>
 
-            <Animated.View entering={FadeIn.duration(600).delay(800)}>
-              <AccentGlow color={colors.accent} intensity="medium" style={{ borderRadius: 14, alignSelf: 'flex-start' }}>
-                <Pressable
-                  onPress={handleCreateNew}
-                  accessibilityRole="button"
-                  accessibilityLabel="Begin your devotional journey"
-                  style={{ opacity: 1 }}
+            <Animated.View entering={FadeIn.duration(600).delay(titleEndTime + 400)}>
+              <Pressable
+                onPress={handleCreateNew}
+                accessibilityRole="button"
+                accessibilityLabel="Begin your devotional journey"
+                style={{ opacity: 1 }}
+              >
+                <View
+                  style={{
+                    paddingVertical: 18,
+                    paddingHorizontal: 48,
+                    borderRadius: 28,
+                    backgroundColor: colors.accent,
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 12,
+                  }}
                 >
-                  <View
+                  <Text
                     style={{
-                      paddingVertical: 18,
-                      paddingHorizontal: 32,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: colors.accent,
-                      backgroundColor: 'transparent',
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 17,
+                      color: colors.background,
+                      letterSpacing: 0.3,
                     }}
                   >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.accent,
-                        letterSpacing: 0.5,
-                      }}
-                    >
-                      Begin Your Journey
-                    </Text>
-                  </View>
-                </Pressable>
-              </AccentGlow>
+                    Begin Your Journey
+                  </Text>
+                </View>
+              </Pressable>
             </Animated.View>
           </View>
         </SafeAreaView>
