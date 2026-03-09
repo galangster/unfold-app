@@ -232,10 +232,6 @@ export function HomeOnboardingTooltips() {
               ? 'Dismiss the onboarding tooltips'
               : `Go to tooltip ${currentStep + 2} of ${TOOLTIP_STEPS.length}`
           }
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.85 : 1,
-            transform: [{ scale: pressed ? 0.97 : 1 }],
-          })}
         >
           <View
             style={{

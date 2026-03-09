@@ -283,7 +283,7 @@ export default function EveningWindDownScreen() {
               router.back();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 8 })}
+            style={{ padding: 8 }}
           >
             <CaretLeftIcon size={22} color={colors.text} weight="light" />
           </Pressable>
@@ -375,7 +375,7 @@ export default function EveningWindDownScreen() {
                     setError(false);
                     loadExamen();
                   }}
-                  style={({ pressed }) => ({
+                  style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 8,
@@ -384,8 +384,7 @@ export default function EveningWindDownScreen() {
                     borderRadius: 12,
                     borderWidth: 1,
                     borderColor: colors.accent,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
+                  }}
                 >
                   <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
                     <ArrowClockwiseIcon size={16} color={colors.accent} weight="light" />
@@ -527,10 +526,6 @@ export default function EveningWindDownScreen() {
               <Animated.View entering={FadeIn.duration(400).delay(1200)} style={{ marginTop: 16, marginBottom: 8 }}>
                 <Pressable
                   onPress={handleShowCelebration}
-                  style={({ pressed }) => ({
-                    opacity: pressed ? 0.8 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  })}
                 >
                   <View
                     style={{

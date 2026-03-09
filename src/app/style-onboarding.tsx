@@ -329,18 +329,16 @@ export default function StyleOnboardingScreen() {
                     >
                       <Pressable
                         onPress={() => handleSelect(option.value)}
-                        style={({ pressed }) => ({
+                        style={{
                           backgroundColor: isSelected
                             ? colors.buttonBackgroundPressed
-                            : pressed
-                              ? colors.inputBackground
-                              : colors.inputBackground,
+                            : colors.inputBackground,
                           paddingHorizontal: 20,
                           paddingVertical: 20,
                           borderRadius: 16,
                           borderWidth: 1.5,
                           borderColor: isSelected ? colors.accent : colors.border,
-                        })}
+                        }}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                           <View style={{ flex: 1, marginRight: 16 }}>

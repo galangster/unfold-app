@@ -28,6 +28,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
+import { CompanionOrb } from '@/components/CompanionOrb';
 import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
@@ -955,7 +956,7 @@ export default function ReadingScreen() {
                 accessibilityLabel="Generate remaining days"
                 accessibilityHint={`Generate the remaining ${expectedDays - daysReady} days of your devotional`}
                 accessibilityState={{ disabled: isRetrying }}
-                style={({ pressed }) => ({
+                style={{
                   backgroundColor: retryCtaButtonBg,
                   paddingVertical: 18,
                   borderRadius: 14,
@@ -965,8 +966,8 @@ export default function ReadingScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 10,
-                  opacity: pressed ? 0.85 : 1,
-                })}
+                  opacity: 1,
+                }}
               >
                 <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
                 <Text
@@ -990,15 +991,15 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Go back to day ${daysReady}`}
                   accessibilityHint="Return to the last available day"
-                  style={({ pressed }) => ({
+                  style={{
                     backgroundColor: retryCtaButtonBg,
                     paddingVertical: 16,
                     borderRadius: 14,
                     borderWidth: 1,
                     borderColor: retryCtaButtonBorder,
                     alignItems: 'center',
-                    opacity: pressed ? 0.85 : 1,
-                  })}
+                    opacity: 1,
+                  }}
                 >
                   <Text
                     style={{
@@ -1034,20 +1035,16 @@ export default function ReadingScreen() {
                   paddingVertical: 10,
                 }}
               >
-              {/* Home button with press animation */}
+              {/* Home button */}
               <Pressable
                 onPress={handleGoHome}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go home"
                 accessibilityHint="Returns to the home screen"
-                style={{ padding: 8 }}
+                style={{ padding: 8, opacity: 1 }}
               >
-                {({ pressed }) => (
-                  <Animated.View style={{ transform: [{ scale: pressed ? 0.85 : 1 }] }}>
-                    <HouseIcon size={22} color={colors.textMuted} weight="light" />
-                  </Animated.View>
-                )}
+                <HouseIcon size={22} color={colors.textMuted} weight="light" />
               </Pressable>
 
               {/* Day indicator -- editorial serif typography */}
@@ -1074,47 +1071,43 @@ export default function ReadingScreen() {
                   gap: 10,
                 }}
               >
-                {({ pressed }) => (
-                  <>
-                    {/* Left Chevron */}
-                    {viewingDay > 1 ? (
-                      <CaretLeftIcon size={14} color={colors.textSubtle} weight="bold" />
-                    ) : (
-                      <View style={{ width: 14 }} />
-                    )}
+                {/* Left Chevron */}
+                {viewingDay > 1 ? (
+                  <CaretLeftIcon size={14} color={colors.textSubtle} weight="bold" />
+                ) : (
+                  <View style={{ width: 14 }} />
+                )}
 
-                    <View style={{ alignItems: 'center' }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 18,
-                          color: pressed ? colors.accent : colors.text,
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        Day {viewingDay}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 10,
-                          color: colors.textHint,
-                          letterSpacing: 2,
-                          textTransform: 'uppercase',
-                          marginTop: -1,
-                        }}
-                      >
-                        of {currentDevotional.totalDays}
-                      </Text>
-                    </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.display,
+                      fontSize: 18,
+                      color: colors.text,
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Day {viewingDay}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 10,
+                      color: colors.textHint,
+                      letterSpacing: 2,
+                      textTransform: 'uppercase',
+                      marginTop: -1,
+                    }}
+                  >
+                    of {currentDevotional.totalDays}
+                  </Text>
+                </View>
 
-                    {/* Right Chevron */}
-                    {viewingDay < availableDays ? (
-                      <CaretRightIcon size={14} color={colors.textSubtle} weight="bold" />
-                    ) : (
-                      <View style={{ width: 14 }} />
-                    )}
-                  </>
+                {/* Right Chevron */}
+                {viewingDay < availableDays ? (
+                  <CaretRightIcon size={14} color={colors.textSubtle} weight="bold" />
+                ) : (
+                  <View style={{ width: 14 }} />
                 )}
               </Pressable>
 
@@ -1135,17 +1128,13 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open journal"
                   accessibilityHint="Write a reflection about today's reading"
-                  style={{ padding: 8 }}
+                  style={{ padding: 8, opacity: 1 }}
                 >
-                  {({ pressed }) => (
-                    <Animated.View style={{ transform: [{ scale: pressed ? 0.85 : 1 }] }}>
-                      <BookOpenIcon
-                        size={22}
-                        color={colors.text}
-                        weight="light"
-                      />
-                    </Animated.View>
-                  )}
+                  <BookOpenIcon
+                    size={22}
+                    color={colors.text}
+                    weight="light"
+                  />
                 </Pressable>
 
                 {/* Audio Player Button */}
@@ -1184,17 +1173,13 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Listen to devotional"
                   accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
-                  style={{ padding: 8 }}
+                  style={{ padding: 8, opacity: 1 }}
                 >
-                  {({ pressed }) => (
-                    <Animated.View style={{ transform: [{ scale: pressed ? 0.85 : 1 }] }}>
-                      <PlayIcon
-                        size={22}
-                        color={colors.text}
-                        weight="fill"
-                      />
-                    </Animated.View>
-                  )}
+                  <PlayIcon
+                    size={22}
+                    color={colors.text}
+                    weight="fill"
+                  />
                 </Pressable>
               </View>
             </View>
@@ -1274,26 +1259,38 @@ export default function ReadingScreen() {
                   style={[
                     {
                       marginBottom: 24,
-                      paddingVertical: 16,
-                      paddingHorizontal: 18,
-                      borderRadius: 12,
-                      backgroundColor: colors.inputBackground,
-                      borderLeftWidth: 3,
-                      borderLeftColor: colors.accent,
+                      flexDirection: 'row',
+                      alignItems: 'flex-start',
+                      gap: 10,
                     },
                     bridgeAnimatedStyle,
                   ]}
                 >
-                  <Text
+                  <View style={{ marginTop: 10 }}>
+                    <CompanionOrb accentColor={colors.accent} size={24} />
+                  </View>
+                  <View
                     style={{
-                      fontFamily: FontFamily.displayItalic,
-                      fontSize: 15,
-                      lineHeight: 24,
-                      color: colors.textMuted,
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 16,
+                      backgroundColor: colors.accent + '10',
+                      borderWidth: 1,
+                      borderColor: colors.accent + '20',
                     }}
                   >
-                    {bridgeText}
-                  </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.body,
+                        fontSize: 14,
+                        lineHeight: 22,
+                        color: colors.text,
+                      }}
+                    >
+                      {bridgeText}
+                    </Text>
+                  </View>
                 </Animated.View>
               )}
 
@@ -1494,7 +1491,7 @@ export default function ReadingScreen() {
                         ) : isPremium ? (
                           <Pressable
                             onPress={handleGenerateMore}
-                            style={({ pressed }) => ({
+                            style={{
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: 16,
                               paddingHorizontal: 32,
@@ -1505,9 +1502,9 @@ export default function ReadingScreen() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: 10,
-                              opacity: pressed ? 0.85 : 1,
+                              opacity: 1,
                               minWidth: 240,
-                            })}
+                            }}
                           >
                             <ArrowsClockwiseIcon size={15} color={retryCtaButtonText} weight="light" />
                             <Text
@@ -1527,7 +1524,7 @@ export default function ReadingScreen() {
                               setPremiumFeature('series');
                               setShowPremiumSheet(true);
                             }}
-                            style={({ pressed }) => ({
+                            style={{
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: 16,
                               paddingHorizontal: 32,
@@ -1538,9 +1535,9 @@ export default function ReadingScreen() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: 10,
-                              opacity: pressed ? 0.85 : 1,
+                              opacity: 1,
                               minWidth: 240,
-                            })}
+                            }}
                           >
                             <Text
                               style={{

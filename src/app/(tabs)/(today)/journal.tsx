@@ -676,15 +676,15 @@ Their journal entry:
                         accessibilityLabel={`Reflection prompt ${index + 1}: ${prompt}`}
                         accessibilityHint={isExpanded ? 'Tap to collapse' : 'Tap to write a response'}
                         accessibilityState={{ expanded: isExpanded }}
-                        style={({ pressed }) => ({
-                          opacity: pressed ? 0.7 : 1,
+                        style={{
+                          opacity: 1,
                           flexDirection: 'row',
                           alignItems: 'flex-start',
                           paddingLeft: 14,
                           borderLeftWidth: 2,
                           borderLeftColor: isAnswered ? colors.accent : colors.border,
                           gap: 10,
-                        })}
+                        }}
                       >
                         <View style={{ marginTop: 3 }}>
                           {isAnswered ? (

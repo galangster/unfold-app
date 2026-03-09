@@ -209,18 +209,18 @@ export default function MyContentScreen() {
                       });
                     }
                   }}
-                  style={({ pressed }) => ({
+                  style={{
                     paddingVertical: 14,
                     paddingHorizontal: 24,
                     borderRadius: 12,
                     borderWidth: 1.5,
                     borderColor: colors.accent,
                     backgroundColor: 'transparent',
-                    opacity: pressed ? 0.7 : 1,
+                    opacity: 1,
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 8,
-                  })}
+                  }}
                 >
                   <Text
                     style={{
@@ -243,13 +243,13 @@ export default function MyContentScreen() {
                       pathname: '/(tabs)/(today)/journal-detail',
                       params: { entryId: entry.id }
                     })}
-                    style={({ pressed }) => ({
+                    style={{
                       backgroundColor: colors.inputBackground,
                       borderRadius: 16,
                       padding: 20,
                       marginBottom: 12,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
+                      opacity: 1,
+                    }}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
                       <BookOpenIcon size={14} color={colors.accent} weight="light" />
@@ -299,15 +299,15 @@ export default function MyContentScreen() {
                         dayNumber: highlight.dayNumber.toString(),
                       },
                     })}
-                    style={({ pressed }) => ({
+                    style={{
                       backgroundColor: colors.inputBackground,
                       borderRadius: 16,
                       padding: 20,
                       marginBottom: 12,
-                      opacity: pressed ? 0.7 : 1,
+                      opacity: 1,
                       borderLeftWidth: 4,
                       borderLeftColor: HIGHLIGHT_COLORS[highlight.color || 'yellow'][isDark ? 'dark' : 'light'],
-                    })}
+                    }}
                   >
                     <Text
                       style={{
@@ -362,13 +362,13 @@ export default function MyContentScreen() {
                         dayNumber: bookmark.dayNumber.toString(),
                       },
                     })}
-                    style={({ pressed }) => ({
+                    style={{
                       backgroundColor: colors.inputBackground,
                       borderRadius: 16,
                       padding: 20,
                       marginBottom: 12,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
+                      opacity: 1,
+                    }}
                   >
                     <View
                       style={{

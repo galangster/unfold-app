@@ -39,6 +39,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
+import { CompanionOrb } from '@/components/CompanionOrb';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
@@ -202,11 +203,13 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Reflect the user's answers back and ask for commitment
   { id: 'mirrorBack', question: "Here's what I\u00A0heard.", subtext: 'Before we build this, I want to make sure I got\u00A0it\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // COMPANION INTRO: Introduce the companion orb
+  { id: 'companionIntro', question: 'Meet your\u00A0companion.', subtext: 'Every day, it learns more about you. The longer you stay, the more personal\u00A0it\u00A0gets.', type: 'companionIntro' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SIGN-IN: Optional Apple Sign In before generating
   { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your journey safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'signIn';
+type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'companionIntro' | 'signIn';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -493,8 +496,8 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back always allows proceeding (commitment is optional encouragement)
-    if (step.type === 'mirrorBack') {
+    // Mirror-back and companion intro always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'companionIntro') {
       return true;
     }
 
@@ -1596,6 +1599,90 @@ export default function OnboardingScreen() {
               </View>
             )}
           </Pressable>
+        </View>
+      );
+    }
+
+    // Companion intro step: introduce the companion orb
+    if (step.type === 'companionIntro') {
+      return (
+        <View style={{ alignItems: 'center', gap: 32, marginTop: 24 }}>
+          {/* Large companion orb — the star of the show */}
+          <Animated.View
+            entering={FadeIn.delay(200).duration(800)}
+            style={{ marginBottom: 8 }}
+          >
+            <CompanionOrb accentColor={colors.accent} size={96} isActive showBadge={false} />
+          </Animated.View>
+
+          {/* Description */}
+          <View style={{ gap: 16, paddingHorizontal: 8 }}>
+            <Animated.Text
+              entering={FadeIn.delay(500).duration(600)}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 16,
+                color: colors.text,
+                lineHeight: 26,
+                textAlign: 'center',
+              }}
+            >
+              This is your companion. It checks in with you, remembers what you share, and shapes each day around where you are.
+            </Animated.Text>
+
+            <Animated.Text
+              entering={FadeIn.delay(800).duration(600)}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 16,
+                color: colors.textMuted,
+                lineHeight: 26,
+                textAlign: 'center',
+              }}
+            >
+              The more you use Unfold, the more it understands you. Day 30 feels completely different from Day 1.
+            </Animated.Text>
+          </View>
+
+          {/* Feature hints */}
+          <Animated.View
+            entering={FadeIn.delay(1100).duration(600)}
+            style={{ gap: 12, width: '100%', paddingHorizontal: 4 }}
+          >
+            {[
+              { text: 'Greets you based on your mood and time of day' },
+              { text: 'Learns what resonates with you over time' },
+              { text: 'Bridges yesterday into today, just for you' },
+            ].map((item, i) => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  backgroundColor: colors.accent + '08',
+                  borderRadius: 12,
+                }}
+              >
+                <View style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: colors.accent,
+                }} />
+                <Text style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 14,
+                  color: colors.text,
+                  flex: 1,
+                }}>
+                  {item.text}
+                </Text>
+              </View>
+            ))}
+          </Animated.View>
         </View>
       );
     }

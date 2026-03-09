@@ -239,14 +239,13 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         {/* CTA button */}
         <Pressable
           onPress={handleStartTrial}
-          style={({ pressed }) => ({
+          style={{
             backgroundColor: colors.accent,
             paddingVertical: 16,
             borderRadius: 14,
             alignItems: 'center',
-            opacity: pressed ? 0.9 : 1,
-            transform: [{ scale: pressed ? 0.98 : 1 }],
-          })}
+            opacity: 1,
+          }}
         >
           <Text
             style={{

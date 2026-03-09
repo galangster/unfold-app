@@ -25,6 +25,7 @@ interface EmberParticle {
   delay: number;
   drift: number;
   opacity: number;
+  riseHeight: number; // Pre-computed to avoid Math.random() in worklet
 }
 
 interface EmberParticleProps {
@@ -45,12 +46,12 @@ function EmberParticleComponent({ particle, onComplete, colors }: EmberParticleP
     // Initial delay before this particle spawns
     const spawnDelay = particle.delay;
     
-    // Animate the upward progress
+    // Animate the upward progress — linear rise like real embers drifting up
     progress.value = withDelay(
       spawnDelay,
       withTiming(1, {
         duration: particle.duration,
-        easing: Easing.out(Easing.ease),
+        easing: Easing.linear,
       }, (finished) => {
         if (finished) {
           runOnJS(onComplete)();
@@ -58,23 +59,23 @@ function EmberParticleComponent({ particle, onComplete, colors }: EmberParticleP
       })
     );
 
-    // Fade in quickly, stay visible, then fade out at the end
+    // Fade in, hold, then slowly fade out over the last 30%
     opacityProgress.value = withDelay(
       spawnDelay,
       withSequence(
-        withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: particle.duration * 0.6 }),
-        withTiming(0, { duration: 600, easing: Easing.in(Easing.ease) })
+        withTiming(1, { duration: 800, easing: Easing.out(Easing.ease) }),
+        withTiming(1, { duration: particle.duration * 0.5 }),
+        withTiming(0, { duration: particle.duration * 0.3, easing: Easing.in(Easing.ease) })
       )
     );
 
-    // Gentle horizontal drift using sine-like motion
+    // Wider, slower horizontal drift — like embers floating in warm air
     driftOffset.value = withDelay(
       spawnDelay,
       withRepeat(
         withSequence(
-          withTiming(15, { duration: 2000, easing: Easing.linear }),
-          withTiming(-15, { duration: 2000, easing: Easing.linear })
+          withTiming(25, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(-25, { duration: 3000, easing: Easing.inOut(Easing.ease) })
         ),
         -1,
         true
@@ -89,10 +90,10 @@ function EmberParticleComponent({ particle, onComplete, colors }: EmberParticleP
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const y = interpolate(progress.value, [0, 1], [particle.y, particle.y - 200 - Math.random() * 100]);
+    const y = interpolate(progress.value, [0, 1], [particle.y, particle.y - particle.riseHeight]);
     const x = particle.x + driftOffset.value * particle.drift;
     const scale = interpolate(progress.value, [0, 0.1, 0.9, 1], [0, 1, 1, 0.5]);
-    
+
     return {
       transform: [
         { translateX: x },
@@ -156,12 +157,13 @@ export function GoldEmberField({
     return {
       id,
       x: Math.random() * SCREEN_WIDTH,
-      y: SCREEN_HEIGHT + 20 + Math.random() * 100, // Start below screen
-      size: 2 + Math.random() * 4, // 2-6px
-      duration: 4000 + Math.random() * 3000, // 4-7 seconds
-      delay: Math.random() * 2000, // Random initial delay
-      drift: 0.5 + Math.random() * 0.5, // Drift intensity
-      opacity: 0.4 + Math.random() * 0.6, // Random opacity
+      y: SCREEN_HEIGHT + 20 + Math.random() * 60, // Start just below screen
+      size: 2 + Math.random() * 3, // 2-5px
+      duration: 6000 + Math.random() * 6000, // 6-12 seconds — slow rise
+      delay: Math.random() * 3000, // Staggered initial delay
+      drift: 0.3 + Math.random() * 0.7, // Drift intensity
+      opacity: 0.3 + Math.random() * 0.5, // Softer opacity range
+      riseHeight: SCREEN_HEIGHT + 60 + Math.random() * 100, // Rise full screen height and beyond
     };
   }, []);
 
@@ -187,11 +189,11 @@ export function GoldEmberField({
     );
   }, [createParticle]);
 
-  // Ember colors - golden and amber tones
+  // Ember colors - use theme accent with a lighter variant
   const emberColors = useMemo(() => ({
     accent: colors.accent,
-    accentLight: isDark ? '#D4A85C' : '#C9A55C', // Warmer amber
-  }), [colors.accent, isDark]);
+    accentLight: colors.accent + 'AA', // Slightly transparent variant of accent
+  }), [colors.accent]);
 
   if (!active) return null;
 

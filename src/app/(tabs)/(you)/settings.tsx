@@ -180,7 +180,7 @@ export default function SettingsScreen() {
 
   const handleUpgrade = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPremiumFeature('general');
+    router.push('/paywall');
   };
 
   const handleResetData = async () => {

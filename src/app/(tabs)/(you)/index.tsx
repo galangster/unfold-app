@@ -155,12 +155,9 @@ export default function YouScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowPremiumSheet(true);
+                  router.push('/paywall');
                 }}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.92 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                style={{ opacity: 1 }}
               >
                 <View
                   style={{
@@ -243,10 +240,7 @@ export default function YouScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push(item.route as any);
                   }}
-                  style={({ pressed }) => ({
-                    opacity: pressed ? 0.7 : 1,
-                    backgroundColor: pressed ? colors.inputBackground : 'transparent',
-                  })}
+                  style={{ opacity: 1 }}
                 >
                   <View
                     style={{

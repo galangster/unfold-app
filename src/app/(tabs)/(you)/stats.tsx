@@ -204,15 +204,15 @@ export default function StatsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.replace('/(tabs)/(you)/stats');
               }}
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.7 : 1,
+              style={{
                 paddingHorizontal: 10,
                 paddingVertical: 6,
                 borderRadius: 999,
                 borderWidth: 1,
                 borderColor: colors.border,
                 backgroundColor: colors.inputBackground,
-              })}
+                opacity: 1,
+              }}
             >
               <Text
                 style={{

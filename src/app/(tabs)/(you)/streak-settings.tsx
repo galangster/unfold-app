@@ -563,7 +563,7 @@ export default function StreakSettingsScreen() {
                   color: colors.textMuted,
                 }}
               >
-                Days to Freeze
+                Till Freeze
               </Text>
             </Pressable>
             {activeTooltip === 'toFreeze' && (

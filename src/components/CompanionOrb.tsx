@@ -206,7 +206,7 @@ export function CompanionOrb({
   });
 
   const glowOpacity = useDerivedValue(() => {
-    return interpolate(breathe.value, [0, 1], [0.25, 0.6]);
+    return interpolate(breathe.value, [0, 1], [0.2, 0.4]);
   });
 
   const glowBlur = useDerivedValue(() => {
@@ -216,14 +216,12 @@ export function CompanionOrb({
   });
 
   const containerStyle = useAnimatedStyle(() => {
-    const scaleMin = isActive ? 0.95 : 0.97;
-    const scaleMax = isActive ? 1.05 : 1.02;
+    const scaleMin = isActive ? 0.97 : 0.98;
+    const scaleMax = isActive ? 1.03 : 1.01;
     const scale = interpolate(breathe.value, [0, 1], [scaleMin, scaleMax]);
     const tapBoost = interpolate(tapPulse.value, [0, 1], [1, 1.15]);
-    const containerOpacity = interpolate(breathe.value, [0, 1], [0.75, 1.0]);
     return {
       transform: [{ scale: scale * tapBoost }],
-      opacity: containerOpacity,
     };
   });
 

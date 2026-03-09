@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ export default function DayMenuScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const devotional = devotionals.find((d) => d.id === params.devotionalId);
   const currentViewingDay = parseInt(params.currentDay ?? '1', 10);
+  const [pressedDay, setPressedDay] = useState<number | null>(null);
 
   if (!devotional) {
     return (
@@ -87,10 +89,12 @@ export default function DayMenuScreen() {
             >
             <Pressable
               onPress={() => handleSelectDay(day.dayNumber)}
-              style={({ pressed }) => ({
+              onPressIn={() => setPressedDay(day.dayNumber)}
+              onPressOut={() => setPressedDay(null)}
+              style={{
                 backgroundColor: isActive
                   ? colors.buttonBackgroundPressed
-                  : pressed
+                  : pressedDay === day.dayNumber
                   ? colors.glassBackground
                   : 'transparent',
                 paddingVertical: 16,
@@ -101,7 +105,7 @@ export default function DayMenuScreen() {
                 marginBottom: 6,
                 borderWidth: 1,
                 borderColor: isActive ? colors.border : 'transparent',
-              })}
+              }}
             >
               {/* Completion indicator */}
               <View

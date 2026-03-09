@@ -31,13 +31,13 @@ export interface CompanionQuestion {
 }
 
 export const COMPANION_QUESTIONS: CompanionQuestion[] = [
-  { condition: 'first_time', text: "Hey. I'm here whenever you want to check in." },
-  { condition: 'returning_after_gap', text: "It's good to see you. How have you been?" },
-  { condition: 'streak_milestone', text: "You're building something real. How does it feel?" },
-  { condition: 'read_today', text: "How did today's reading land?" },
-  { condition: 'has_active_not_read', text: 'No rush — how are you today?' },
-  { condition: 'between_series', text: "What's been on your mind since your last series?" },
-  { condition: 'default', text: 'Quick honest moment — how\'s today going?' },
+  { condition: 'first_time', text: "Hey! I'm here whenever you wanna check in." },
+  { condition: 'returning_after_gap', text: "Hey, good to see you! How've you been?" },
+  { condition: 'streak_milestone', text: "Look at that streak! How are you feeling?" },
+  { condition: 'read_today', text: "What'd you think of today's reading?" },
+  { condition: 'has_active_not_read', text: 'No rush — how are you doing today?' },
+  { condition: 'between_series', text: "What's been on your mind lately?" },
+  { condition: 'default', text: 'Real talk — how\'s today going?' },
 ];
 
 export function selectCompanionQuestion(ctx: {
@@ -73,40 +73,40 @@ type ResponseKey = `${CompanionMoodLabel}_${CompanionContext}`;
 
 const COMPANION_RESPONSES: Record<ResponseKey, string> = {
   // Grateful
-  Grateful_has_active_series: "That gratitude? It's the reading taking root. Hold onto it.",
-  Grateful_between_series: 'Grateful between the chapters. That says a lot about where you are.',
-  Grateful_first_time: "Starting from a place of gratitude. That's a good sign.",
-  Grateful_returning_after_gap: "Glad you're back — and grateful. That's a beautiful place to be.",
+  Grateful_has_active_series: "Love that. Gratitude hits different when you're in a rhythm.",
+  Grateful_between_series: "Grateful even in the in-between — that's real growth.",
+  Grateful_first_time: "Starting grateful? I love that energy.",
+  Grateful_returning_after_gap: "Back and grateful — that's a great place to be.",
 
   // Peaceful
-  Peaceful_has_active_series: 'Peace in the middle of it all. Let that settle deep.',
-  Peaceful_between_series: "Peaceful in the pause. That's rare — enjoy it.",
-  Peaceful_first_time: "Peace is a good starting point. Let's stay here a minute.",
-  Peaceful_returning_after_gap: 'Peaceful return. No rush. This is your pace.',
+  Peaceful_has_active_series: "That peace is the good stuff. Soak it in.",
+  Peaceful_between_series: "Peaceful in the pause — that's actually rare. Enjoy it.",
+  Peaceful_first_time: "Starting from a peaceful place. I love that for you.",
+  Peaceful_returning_after_gap: "Peaceful return. No rush — go at your own pace.",
 
   // Hopeful
-  Hopeful_has_active_series: 'Hope has a way of showing up when you stay consistent.',
-  Hopeful_between_series: "Hopeful for what's next? That energy is worth following.",
-  Hopeful_first_time: 'Hope brought you here. That matters more than you think.',
-  Hopeful_returning_after_gap: 'Coming back with hope. That takes something real.',
+  Hopeful_has_active_series: "Hope and consistency go hand in hand. You're proving it.",
+  Hopeful_between_series: "Feeling hopeful about what's next? Follow that.",
+  Hopeful_first_time: "Hope is what brought you here. That matters.",
+  Hopeful_returning_after_gap: "Coming back hopeful — I respect that.",
 
   // Restless
-  Restless_has_active_series: 'Restlessness can be God stirring something. Pay attention to it.',
-  Restless_between_series: "Restless in the gap. Maybe it's time for something new.",
-  Restless_first_time: "Restless is honest. You don't have to have it figured out.",
-  Restless_returning_after_gap: "Restless but here. That's enough for today.",
+  Restless_has_active_series: "Restless can mean something's shifting. Pay attention to that.",
+  Restless_between_series: "Feeling restless? Maybe it's time to start something new.",
+  Restless_first_time: "Restless is honest. You don't need to have it all figured out.",
+  Restless_returning_after_gap: "Restless but you showed up. That counts.",
 
   // Heavy
-  Heavy_has_active_series: "Heavy is honest. You don't have to carry it alone.",
+  Heavy_has_active_series: "I hear you. You don't have to carry that alone.",
   Heavy_between_series: "Heavy days happen. You don't have to push through — just be here.",
-  Heavy_first_time: "You brought something heavy here. That takes courage.",
-  Heavy_returning_after_gap: "Heavy and still showed up. That's not nothing.",
+  Heavy_first_time: "Thanks for being honest about that. It takes guts.",
+  Heavy_returning_after_gap: "Heavy and still here. That says something about you.",
 
   // Confused
-  Confused_has_active_series: "Confusion is part of the process. Stay with it.",
-  Confused_between_series: "Not sure what's next? That's okay. Clarity comes.",
-  Confused_first_time: "Confused is a fine place to start. No need to rush to answers.",
-  Confused_returning_after_gap: "Back with questions. That's more honest than pretending to have answers.",
+  Confused_has_active_series: "Confusion is part of the process. It won't last forever.",
+  Confused_between_series: "Not sure what's next? Totally fine. Clarity will come.",
+  Confused_first_time: "Confused is a fine place to start. No rush.",
+  Confused_returning_after_gap: "Coming back with questions is more honest than faking answers.",
 };
 
 export function getCompanionResponse(
@@ -134,31 +134,31 @@ export interface TooltipTrigger {
 export const TOOLTIP_TRIGGERS: TooltipTrigger[] = [
   {
     condition: 'first_open_morning',
-    messages: ['Good morning. How are you today?', 'New day. How are you feeling?'],
+    messages: ['Morning! How are you feeling?', 'Hey, how\'d you sleep?'],
   },
   {
     condition: 'first_open_afternoon',
-    messages: ['Hey. How\'s the day going?', 'Afternoon check — how are you?'],
+    messages: ['Hey! How\'s your day going?', 'What\'s on your mind today?'],
   },
   {
     condition: 'first_open_evening',
-    messages: ['Winding down? How was today?', 'Evening. How are you sitting?'],
+    messages: ['Winding down? How was today?', 'Hey, how are you doing tonight?'],
   },
   {
     condition: 'after_reading',
-    messages: ['That one was something. How did it land?', 'How are you sitting with that?'],
+    messages: ['What stood out to you in that one?', 'How are you feeling after that?'],
   },
   {
     condition: 'returning_after_gap',
-    messages: ['Hey, good to see you.', 'Welcome back. No guilt.'],
+    messages: ['Hey! Good to see you back.', 'Welcome back — no pressure.'],
   },
   {
     condition: 'streak_milestone',
-    messages: ['Look at that streak. That\'s real.'],
+    messages: ['That streak is legit. Keep it up!'],
   },
   {
     condition: 'between_series',
-    messages: ['What\'s been on your mind lately?', 'Ready for something new?'],
+    messages: ['What\'s been on your mind lately?', 'Ready to start something new?'],
   },
 ];
 

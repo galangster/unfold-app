@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
@@ -32,6 +32,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
   const { colors } = useTheme();
+  const [pressedIndex, setPressedIndex] = useState<number | null>(null);
   const translateY = useSharedValue(400);
   const backdropOpacity = useSharedValue(0);
   const scale = useSharedValue(0.95);
@@ -155,15 +156,17 @@ export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     item.onPress();
                   }}
-                  style={({ pressed }) => ({
+                  onPressIn={() => setPressedIndex(index)}
+                  onPressOut={() => setPressedIndex(null)}
+                  style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     paddingVertical: 16,
                     paddingHorizontal: 20,
                     borderRadius: 12,
-                    backgroundColor: pressed ? colors.buttonBackgroundPressed : 'transparent',
+                    backgroundColor: pressedIndex === index ? colors.buttonBackgroundPressed : 'transparent',
                     marginHorizontal: 4,
-                  })}
+                  }}
                 >
                   <View style={{ width: 24, alignItems: 'center' }}>
                     {item.icon}

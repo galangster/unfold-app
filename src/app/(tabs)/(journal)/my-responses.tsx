@@ -115,9 +115,6 @@ export default function MyResponsesScreen() {
                   >
                     <Pressable
                       onPress={() => handleEntryPress(entry.id)}
-                      style={({ pressed }) => ({
-                        transform: [{ scale: pressed ? 0.98 : 1 }],
-                      })}
                     >
                       <View
                         style={{

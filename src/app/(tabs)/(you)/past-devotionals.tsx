@@ -110,15 +110,15 @@ export default function PastDevotionalsScreen() {
             onPress={() => handleExportPDF(item)}
             disabled={exportingId !== null}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={({ pressed }) => ({
+            style={{
               width: 44,
               height: 44,
               borderRadius: 22,
-              backgroundColor: pressed ? `${colors.accent}30` : `${colors.accent}15`,
+              backgroundColor: `${colors.accent}15`,
               justifyContent: 'center',
               alignItems: 'center',
               opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
-            })}
+            }}
           >
             {exportingId === item.id ? (
               <ActivityIndicator size={18} color={colors.accent} />
@@ -133,9 +133,7 @@ export default function PastDevotionalsScreen() {
         {/* Tappable content area */}
         <Pressable
           onPress={() => handleSelectDevotional(item.id)}
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.7 : 1,
-          })}
+          style={{ opacity: 1 }}
         >
           <Text
             style={{
