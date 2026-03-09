@@ -12,6 +12,7 @@ import {
   LayoutAnimation,
   Keyboard,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,7 +30,11 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon } from 'phosphor-react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
+import { logger } from '@/lib/logger';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
@@ -197,9 +202,11 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Reflect the user's answers back and ask for commitment
   { id: 'mirrorBack', question: "Here's what I\u00A0heard.", subtext: 'Before we build this, I want to make sure I got\u00A0it\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // SIGN-IN: Optional Apple Sign In before generating
+  { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your journey safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack';
+type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'signIn';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -256,6 +263,11 @@ export default function OnboardingScreen() {
   
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
+
+  // Sign-in step state
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(true);
+  const [signInError, setSignInError] = useState<string | null>(null);
   
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
@@ -314,6 +326,11 @@ export default function OnboardingScreen() {
   const inputAnimatedStyle = useAnimatedStyle(() => ({
     opacity: inputOpacity.value,
   }));
+
+  // Check Apple Sign In availability on mount
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
+  }, []);
 
   const ripple1Style = useAnimatedStyle(() => ({
     opacity: Math.max(0, 0.35 - ripple1.value * 0.35),
@@ -375,6 +392,11 @@ export default function OnboardingScreen() {
         }
       }
       
+      // Skip sign-in if user is already authenticated with Apple
+      if (step.id === 'signIn' && existingUser?.authProvider === 'apple') {
+        return false;
+      }
+
       if (step.skipIfHasValue) {
         const stepId = step.id as StepId;
         if (stepId === 'name' && existingUser?.name) return false;
@@ -476,6 +498,11 @@ export default function OnboardingScreen() {
       return true;
     }
 
+    // Sign-in step — handled by its own buttons, hide Continue from header
+    if (step.type === 'signIn') {
+      return false;
+    }
+
     return true;
   };
   
@@ -538,6 +565,88 @@ export default function OnboardingScreen() {
     // Paywall was shown early (after name step) — go straight to generating
     router.replace('/generating');
   }, [router, data, existingUser, updateUser, setUser]);
+
+  // Handle Apple Sign In during onboarding
+  const handleOnboardingAppleSignIn = useCallback(async () => {
+    if (isSigningIn) return;
+
+    setIsSigningIn(true);
+    setSignInError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
+
+    try {
+      const result = await signInWithApple();
+
+      if (result.success && result.user) {
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, { auth_provider: 'apple' });
+        Analytics.setUserId(result.user.uid);
+        Analytics.setUserProperty('auth_provider', 'apple');
+
+        updateUser({
+          authUserId: result.user.uid,
+          authProvider: 'apple',
+          authEmail: result.user.email,
+          authDisplayName: result.user.displayName,
+          hasSeenSignInPrompt: true,
+        });
+
+        logger.log('[Onboarding] Successfully signed in with Apple', { userId: result.user.uid });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        // Proceed to complete onboarding
+        completeOnboarding();
+      } else if (result.isCancelled) {
+        logger.log('[Onboarding] User cancelled Apple Sign In');
+        // Stay on step, user can retry or skip
+      } else {
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
+          auth_provider: 'apple',
+          error_type: result.error || 'unknown',
+        });
+        logger.error('[Onboarding] Apple Sign In failed', { error: result.error });
+
+        let friendlyError = 'Unable to sign in. Please try again.';
+        if (result.error?.includes('network')) {
+          friendlyError = 'Network error. Check your connection and try again.';
+        } else if (result.error?.includes('credential') || result.error?.includes('already')) {
+          friendlyError = 'This Apple account is already linked to another user.';
+        } else if (result.error?.includes('unavailable') || result.error?.includes('digest')) {
+          friendlyError = 'Apple Sign In requires a real device. Try skipping for now.';
+        }
+        setSignInError(friendlyError);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[Onboarding] Unexpected Apple Sign In error', { error: msg });
+
+      if (msg.includes('digest') || msg.includes('subtle')) {
+        setSignInError('Apple Sign In requires a real device. Try skipping for now.');
+      } else {
+        setSignInError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  }, [isSigningIn, updateUser, completeOnboarding]);
+
+  // Handle skipping sign-in during onboarding
+  const handleSkipSignIn = useCallback(async () => {
+    if (isSigningIn) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
+
+    updateUser({
+      hasSeenSignInPrompt: true,
+      signInPromptCount: (existingUser?.signInPromptCount ?? 0) + 1,
+    });
+
+    logger.log('[Onboarding] User skipped sign-in during onboarding');
+
+    // Proceed to complete onboarding
+    completeOnboarding();
+  }, [isSigningIn, updateUser, existingUser?.signInPromptCount, completeOnboarding]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -1487,6 +1596,196 @@ export default function OnboardingScreen() {
               </View>
             )}
           </Pressable>
+        </View>
+      );
+    }
+
+    // Sign-in step: optional Apple Sign In
+    if (step.type === 'signIn') {
+      const screenWidth = Dimensions.get('window').width;
+
+      const benefits = [
+        {
+          icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
+          title: 'Sync across devices',
+          description: 'Pick up where you left off on any device',
+        },
+        {
+          icon: <ShieldIcon size={20} color={colors.accent} weight="light" />,
+          title: 'Secure backup',
+          description: 'Never lose your devotionals or journal',
+        },
+        {
+          icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
+          title: 'Personalized experience',
+          description: 'Unlock features tailored to your journey',
+        },
+      ];
+
+      return (
+        <View style={{ gap: 32, marginTop: 8 }}>
+          {/* Benefits list */}
+          <View style={{ gap: 20, paddingHorizontal: 4 }}>
+            {benefits.map((benefit, index) => (
+              <Animated.View
+                key={benefit.title}
+                entering={FadeIn.delay(200 + index * 150).duration(500)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 16,
+                }}
+              >
+                <View style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: colors.inputBackground,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {benefit.icon}
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{
+                    fontFamily: FontFamily.uiSemiBold,
+                    fontSize: 15,
+                    color: colors.text,
+                    letterSpacing: -0.2,
+                  }}>
+                    {benefit.title}
+                  </Text>
+                  <Text style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 13,
+                    color: colors.textMuted,
+                    lineHeight: 18,
+                  }}>
+                    {benefit.description}
+                  </Text>
+                </View>
+              </Animated.View>
+            ))}
+          </View>
+
+          {/* Error message */}
+          {signInError && (
+            <Animated.View
+              entering={FadeIn.duration(300)}
+              style={{
+                backgroundColor: '#EF4444',
+                borderRadius: 12,
+                padding: 14,
+              }}
+            >
+              <Text style={{
+                color: '#FFFFFF',
+                fontFamily: FontFamily.ui,
+                fontSize: 14,
+                textAlign: 'center',
+                lineHeight: 20,
+              }}>
+                {signInError}
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* Apple Sign In button */}
+          <Animated.View entering={FadeIn.delay(650).duration(400)}>
+            {isAppleAvailable ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={isDark
+                  ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                  : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={14}
+                style={{ width: screenWidth - 48, height: 54 }}
+                onPress={handleOnboardingAppleSignIn}
+              />
+            ) : (
+              <Pressable
+                onPress={handleOnboardingAppleSignIn}
+                disabled={isSigningIn}
+                style={{
+                  width: screenWidth - 48,
+                  height: 54,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.text,
+                  opacity: isSigningIn ? 0.8 : 1,
+                }}
+              >
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 16,
+                  color: colors.background,
+                }}>
+                  {isSigningIn ? 'Signing in...' : 'Sign in with Apple'}
+                </Text>
+              </Pressable>
+            )}
+          </Animated.View>
+
+          {/* Skip option */}
+          <Animated.View entering={FadeIn.delay(800).duration(400)}>
+            <Pressable
+              onPress={handleSkipSignIn}
+              disabled={isSigningIn}
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 12,
+                opacity: isSigningIn ? 0.4 : 1,
+              }}
+            >
+              <Text style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 15,
+                color: colors.textMuted,
+              }}>
+                Continue without signing in
+              </Text>
+            </Pressable>
+          </Animated.View>
+
+          {/* Privacy note */}
+          <Animated.View entering={FadeIn.delay(900).duration(400)}>
+            <Text style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 12,
+              color: colors.textSubtle,
+              textAlign: 'center',
+            }}>
+              Your privacy matters. We never share your information.
+            </Text>
+          </Animated.View>
+
+          {/* Loading overlay */}
+          {isSigningIn && (
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              left: -24,
+              right: -24,
+              bottom: -120,
+              backgroundColor: colors.background + 'E6',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderRadius: 16,
+            }}>
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text style={{
+                marginTop: 16,
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 15,
+                color: colors.textMuted,
+              }}>
+                Signing in...
+              </Text>
+            </View>
+          )}
         </View>
       );
     }

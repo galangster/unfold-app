@@ -40,6 +40,8 @@ import { AccentGlow } from '@/components/AccentGlow';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
+import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
 import { selectTooltipMessage } from '@/constants/companion-messages';
 
@@ -479,10 +481,15 @@ export default function HomeScreen() {
     }
   }, [premiumResult, user?.isPremium, updateUser]);
 
+  // Premium nudge system
+  const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'home' });
+
   // Sync widget data whenever home screen mounts or re-focuses
+  // Also reset nudge session so one nudge can show per focus cycle
   useFocusEffect(
     useCallback(() => {
       syncWidgets();
+      useUnfoldStore.getState().resetNudgeSession();
     }, [])
   );
 
@@ -1456,6 +1463,20 @@ export default function HomeScreen() {
               onPress={() => router.push('/(tabs)/(you)/streak-settings')}
             />
           </Animated.View>
+
+          {/* Premium Nudge Card — contextual, inline upsell */}
+          {premiumNudge && (
+            <View style={{ paddingHorizontal: 24, marginTop: 16 }}>
+              <PremiumNudgeCard
+                type={premiumNudge.type}
+                message={premiumNudge.message}
+                cta={premiumNudge.cta}
+                premiumFeature={premiumNudge.premiumFeature}
+                onAction={nudgeAction}
+                onDismiss={nudgeDismiss}
+              />
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
 

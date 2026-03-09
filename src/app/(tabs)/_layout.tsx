@@ -21,7 +21,6 @@ type TabBarProps = {
 };
 
 const SPRING_CONFIG = { damping: 15, stiffness: 200, mass: 0.6 };
-const TAB_COUNT = 3;
 
 /** Animated wrapper for each tab icon -- handles scale spring + dot indicator */
 function AnimatedTabIcon({

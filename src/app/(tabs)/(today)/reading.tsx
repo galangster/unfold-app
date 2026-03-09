@@ -38,6 +38,8 @@ import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
+import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -106,6 +108,9 @@ export default function ReadingScreen() {
   const recordStreakRead = useUnfoldStore((s) => s.recordStreakRead);
 
   const isPremium = user?.isPremium ?? false;
+
+  // Premium nudge system (audio teaser on reading screen)
+  const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
 
   const currentDevotional = useMemo(
     () => devotionals.find((d) => d.id === currentDevotionalId),
@@ -506,6 +511,12 @@ export default function ReadingScreen() {
       const completingLastDay = viewingDay >= expectedTotal;
       setCelebrationType(completingLastDay ? 'series' : 'day');
       setShowCelebration(true);
+
+      // Set flag for premium nudge system when series completes
+      if (completingLastDay && currentDevotional?.title) {
+        useUnfoldStore.getState().justCompletedSeriesTitle = null; // clear first
+        useUnfoldStore.setState({ justCompletedSeriesTitle: currentDevotional.title });
+      }
 
       // Announce completion to screen reader
       const announcement = completingLastDay
@@ -1152,6 +1163,8 @@ export default function ReadingScreen() {
                     }
                     if (!isAudioPlayerVisible) {
                       setIsAudioPlayerVisible(true);
+                      // Track that user has used audio (for premium nudge system)
+                      useUnfoldStore.getState().setHasUsedAudio();
                       startReadingSession({
                         devotionalTitle: currentDevotional?.title ?? 'Unfold',
                         dayTitle: currentDayData?.title ?? 'Reading',
@@ -1207,6 +1220,19 @@ export default function ReadingScreen() {
               />
             </View>
             </View>
+
+            {/* Premium nudge banner — audio teaser */}
+            {premiumNudge && (
+              <PremiumNudgeCard
+                type={premiumNudge.type}
+                message={premiumNudge.message}
+                cta={premiumNudge.cta}
+                premiumFeature={premiumNudge.premiumFeature}
+                onAction={nudgeAction}
+                onDismiss={nudgeDismiss}
+                variant="banner"
+              />
+            )}
 
             {/* Content - Scrollable with day-transition fade */}
             <Animated.ScrollView
