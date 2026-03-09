@@ -17,9 +17,9 @@ const FEATURES = [
   'Unlimited devotional journeys',
   'AI voice narration with voice selection',
   'AI-powered journal prompts',
-  'Full highlight color palette',
   'Custom themes & accent colors',
   'Premium reading fonts',
+  'Premium Bible translations',
   'Wallpaper share styles',
   'Unlimited streak freezes',
 ];
@@ -725,21 +725,23 @@ export default function PaywallScreen() {
               onPress={handleRestore}
               disabled={isPurchasing}
               accessibilityLabel="Restore purchases"
-              style={({ pressed }) => ({
+              style={{
                 padding: 6,
-                opacity: pressed ? 0.5 : 1,
-              })}
+              }}
             >
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 13,
-                  color: colors.textSubtle,
-                  textAlign: 'center',
-                }}
-              >
-                Restore purchases
-              </Text>
+              {({ pressed }) => (
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 13,
+                    color: colors.textSubtle,
+                    textAlign: 'center',
+                    opacity: pressed ? 0.5 : 1,
+                  }}
+                >
+                  Restore purchases
+                </Text>
+              )}
             </Pressable>
           </View>
 
@@ -747,21 +749,24 @@ export default function PaywallScreen() {
           {isFromOnboarding && (
             <Pressable
               onPress={handleClose}
-              style={({ pressed }) => ({
+              style={{
                 padding: 12,
                 alignSelf: 'center',
-                opacity: pressed ? 0.5 : 1,
-              })}
+              }}
             >
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 14,
-                  color: colors.textSubtle,
-                }}
-              >
-                Maybe later
-              </Text>
+              {({ pressed }) => (
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 14,
+                    color: colors.textSubtle,
+                    textAlign: 'center',
+                    opacity: pressed ? 0.5 : 1,
+                  }}
+                >
+                  Maybe later
+                </Text>
+              )}
             </Pressable>
           )}
 

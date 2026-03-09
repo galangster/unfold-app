@@ -12,6 +12,7 @@ import {
   LayoutAnimation,
   Keyboard,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,12 +30,16 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon } from 'phosphor-react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
+import { logger } from '@/lib/logger';
+import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
-import { SpeechToTextButton } from '@/components/SpeechToTextButton';
+import { CompanionOrb } from '@/components/CompanionOrb';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
@@ -198,9 +203,33 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Reflect the user's answers back and ask for commitment
   { id: 'mirrorBack', question: "Here's what I\u00A0heard.", subtext: 'Before we build this, I want to make sure I got\u00A0it\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // COMPANION INTRO: Introduce the companion orb
+  { id: 'companionIntro', question: 'Meet your\u00A0companion.', subtext: 'Every day, it learns more about you. The longer you stay, the more personal\u00A0it\u00A0gets.', type: 'companionIntro' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // SIGN-IN: Optional Apple Sign In before generating
+  { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your journey safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack';
+type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'companionIntro' | 'signIn';
+
+// Discovery chips — tappable quick-select options for the 3 discovery questions
+// Each chip is a feeling/situation that seeds context without requiring typing
+const DISCOVERY_CHIPS: Record<string, string[]> = {
+  currentSituation: [
+    'Anxious', 'Grateful', 'Searching', 'Tired', 'Hopeful',
+    'Overwhelmed', 'Growing', 'Waiting', 'Restless', 'At peace',
+    'In transition', 'Grieving',
+  ],
+  emotionalState: [
+    'Fear', 'Loneliness', 'Doubt', 'Grief', 'Anger',
+    'Shame', 'Restlessness', 'Yearning', 'Emptiness',
+    'Burnout', 'Confusion', 'Numbness',
+  ],
+  spiritualSeeking: [
+    'Peace', 'Clarity', 'Direction', 'Healing', 'Purpose',
+    'Forgiveness', 'Strength', 'Rest', 'Joy', 'Community',
+    'Patience', 'Hope',
+  ],
+};
 
 interface OnboardingData {
   name: string;
@@ -237,6 +266,11 @@ export default function OnboardingScreen() {
   
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
+
+  // Sign-in step state
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isAppleAvailable, setIsAppleAvailable] = useState(true);
+  const [signInError, setSignInError] = useState<string | null>(null);
   
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
@@ -252,6 +286,13 @@ export default function OnboardingScreen() {
   const ripple2 = useSharedValue(0);
   const ripple3 = useSharedValue(0);
   
+  // Discovery chips — multi-select state per step
+  const [selectedChips, setSelectedChips] = useState<Record<string, string[]>>({
+    currentSituation: [],
+    emotionalState: [],
+    spiritualSeeking: [],
+  });
+
   // Track whether the user has already seen the paywall during onboarding
   const hasSeenPaywallRef = useRef(false);
   // Track the step to resume after paywall dismissal
@@ -288,6 +329,11 @@ export default function OnboardingScreen() {
   const inputAnimatedStyle = useAnimatedStyle(() => ({
     opacity: inputOpacity.value,
   }));
+
+  // Check Apple Sign In availability on mount
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
+  }, []);
 
   const ripple1Style = useAnimatedStyle(() => ({
     opacity: Math.max(0, 0.35 - ripple1.value * 0.35),
@@ -349,6 +395,11 @@ export default function OnboardingScreen() {
         }
       }
       
+      // Skip sign-in if user is already authenticated with Apple
+      if (step.id === 'signIn' && existingUser?.authProvider === 'apple') {
+        return false;
+      }
+
       if (step.skipIfHasValue) {
         const stepId = step.id as StepId;
         if (stepId === 'name' && existingUser?.name) return false;
@@ -431,6 +482,9 @@ export default function OnboardingScreen() {
     // For text/multiline inputs
     if (step.type === 'text' || step.type === 'multiline') {
       const value = data[step.id as keyof OnboardingData];
+      // Discovery steps can proceed with chips OR typed text
+      const chips = selectedChips[step.id] ?? [];
+      if (chips.length > 0) return true;
       if (typeof value === 'string') {
         return value.trim().length > 0;
       }
@@ -442,9 +496,14 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back always allows proceeding (commitment is optional encouragement)
-    if (step.type === 'mirrorBack') {
+    // Mirror-back and companion intro always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'companionIntro') {
       return true;
+    }
+
+    // Sign-in step — handled by its own buttons, hide Continue from header
+    if (step.type === 'signIn') {
+      return false;
     }
 
     return true;
@@ -509,6 +568,88 @@ export default function OnboardingScreen() {
     // Paywall was shown early (after name step) — go straight to generating
     router.replace('/generating');
   }, [router, data, existingUser, updateUser, setUser]);
+
+  // Handle Apple Sign In during onboarding
+  const handleOnboardingAppleSignIn = useCallback(async () => {
+    if (isSigningIn) return;
+
+    setIsSigningIn(true);
+    setSignInError(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
+
+    try {
+      const result = await signInWithApple();
+
+      if (result.success && result.user) {
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, { auth_provider: 'apple' });
+        Analytics.setUserId(result.user.uid);
+        Analytics.setUserProperty('auth_provider', 'apple');
+
+        updateUser({
+          authUserId: result.user.uid,
+          authProvider: 'apple',
+          authEmail: result.user.email,
+          authDisplayName: result.user.displayName,
+          hasSeenSignInPrompt: true,
+        });
+
+        logger.log('[Onboarding] Successfully signed in with Apple', { userId: result.user.uid });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        // Proceed to complete onboarding
+        completeOnboarding();
+      } else if (result.isCancelled) {
+        logger.log('[Onboarding] User cancelled Apple Sign In');
+        // Stay on step, user can retry or skip
+      } else {
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
+          auth_provider: 'apple',
+          error_type: result.error || 'unknown',
+        });
+        logger.error('[Onboarding] Apple Sign In failed', { error: result.error });
+
+        let friendlyError = 'Unable to sign in. Please try again.';
+        if (result.error?.includes('network')) {
+          friendlyError = 'Network error. Check your connection and try again.';
+        } else if (result.error?.includes('credential') || result.error?.includes('already')) {
+          friendlyError = 'This Apple account is already linked to another user.';
+        } else if (result.error?.includes('unavailable') || result.error?.includes('digest')) {
+          friendlyError = 'Apple Sign In requires a real device. Try skipping for now.';
+        }
+        setSignInError(friendlyError);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('[Onboarding] Unexpected Apple Sign In error', { error: msg });
+
+      if (msg.includes('digest') || msg.includes('subtle')) {
+        setSignInError('Apple Sign In requires a real device. Try skipping for now.');
+      } else {
+        setSignInError('Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  }, [isSigningIn, updateUser, completeOnboarding]);
+
+  // Handle skipping sign-in during onboarding
+  const handleSkipSignIn = useCallback(async () => {
+    if (isSigningIn) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
+
+    updateUser({
+      hasSeenSignInPrompt: true,
+      signInPromptCount: (existingUser?.signInPromptCount ?? 0) + 1,
+    });
+
+    logger.log('[Onboarding] User skipped sign-in during onboarding');
+
+    // Proceed to complete onboarding
+    completeOnboarding();
+  }, [isSigningIn, updateUser, existingUser?.signInPromptCount, completeOnboarding]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -603,6 +744,21 @@ export default function OnboardingScreen() {
     // BUT: Never advance if we're in a themeType sub-mode (safety guard)
     if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
       return;
+    }
+
+    // Merge discovery chips into the text value before advancing
+    const discoveryStepIds = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
+    if (discoveryStepIds.includes(currentStepId)) {
+      const chips = selectedChips[currentStepId] ?? [];
+      if (chips.length > 0) {
+        const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
+        const chipPrefix = chips.join(', ');
+        // Merge: "Anxious, Searching — I've been thinking about..."
+        const merged = currentText
+          ? `${chipPrefix} — ${currentText}`
+          : chipPrefix;
+        setData((prev) => ({ ...prev, [currentStepId]: merged }));
+      }
     }
 
     // Dismiss keyboard first to prevent layout shift during animation
@@ -810,12 +966,13 @@ export default function OnboardingScreen() {
                 }));
                 setThemeSelectionMode('theme');
               }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
+              {({ pressed }) => (
               <View style={{
                 paddingVertical: 28,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
+                opacity: pressed ? 0.6 : 1,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
@@ -836,6 +993,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+              )}
             </Pressable>
 
             {/* Study Type option */}
@@ -851,12 +1009,13 @@ export default function OnboardingScreen() {
                 }));
                 setThemeSelectionMode('type');
               }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
+              {({ pressed }) => (
               <View style={{
                 paddingVertical: 28,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
+                opacity: pressed ? 0.6 : 1,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
@@ -877,6 +1036,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+              )}
             </Pressable>
 
             {/* Just guide me option */}
@@ -893,9 +1053,9 @@ export default function OnboardingScreen() {
                 setThemeSelectionMode('none');
                 startDiscoveryPreparation('guided');
               }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
-              <View style={{ paddingVertical: 28 }}>
+              {({ pressed }) => (
+              <View style={{ paddingVertical: 28, opacity: pressed ? 0.6 : 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: 16,
@@ -915,6 +1075,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+              )}
             </Pressable>
           </View>
         );
@@ -1218,40 +1379,89 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'multiline') {
+      const chips = DISCOVERY_CHIPS[step.id];
+      const isDiscoveryStep = !!chips;
+      const currentChips = selectedChips[step.id] ?? [];
+
       return (
         <View style={{ flex: 1 }}>
+          {/* Discovery chips — quick-select feelings/situations */}
+          {isDiscoveryStep && (
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+              marginBottom: 16,
+            }}>
+              {chips.map((chip) => {
+                const isChipSelected = currentChips.includes(chip);
+                return (
+                  <Pressable
+                    key={chip}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedChips((prev) => {
+                        const current = prev[step.id] ?? [];
+                        const updated = current.includes(chip)
+                          ? current.filter((c) => c !== chip)
+                          : [...current, chip];
+                        return { ...prev, [step.id]: updated };
+                      });
+                    }}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: isChipSelected ? colors.accent + '18' : colors.inputBackground,
+                      borderWidth: 1,
+                      borderColor: isChipSelected ? colors.accent + '50' : colors.border,
+                    }}
+                  >
+                    {({ pressed }) => (
+                      <Text style={{
+                        fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
+                        fontSize: 14,
+                        color: isChipSelected ? colors.accent : colors.textMuted,
+                        opacity: pressed ? 0.7 : 1,
+                      }}>
+                        {chip}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Text input — primary for aboutMe, optional elaboration for discovery */}
           <View style={{
-            flex: 1,
+            flex: isDiscoveryStep ? undefined : 1,
             backgroundColor: colors.inputBackground,
             borderRadius: 20,
             borderWidth: 1,
             borderColor: colors.border,
             padding: 20,
-            minHeight: 200,
+            minHeight: isDiscoveryStep ? 100 : 200,
           }}>
             <TextInput
               value={data[step.id as keyof OnboardingData] as string}
               onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
-              placeholder={step.placeholder}
+              placeholder={isDiscoveryStep && currentChips.length > 0
+                ? 'Want to share more? (optional)'
+                : step.placeholder}
               placeholderTextColor={colors.textMuted}
               style={{
-                flex: 1,
+                flex: isDiscoveryStep ? undefined : 1,
                 fontFamily: FontFamily.body,
                 fontSize: 17,
                 color: colors.text,
                 lineHeight: 26,
                 textAlignVertical: 'top',
+                minHeight: isDiscoveryStep ? 60 : undefined,
               }}
               multiline
-              autoFocus
-              maxLength={step.id === 'aboutMe' ? INPUT_LIMITS.LONG_TEXT.max : INPUT_LIMITS.LONG_TEXT.max}
-            />
-          </View>
-          <View style={{ marginTop: 16 }}>
-            <SpeechToTextButton 
-              onTranscript={(text) => {
-                setData((prev) => ({ ...prev, [step.id]: text }));
-              }}
+              autoFocus={!isDiscoveryStep}
+              maxLength={INPUT_LIMITS.LONG_TEXT.max}
             />
           </View>
         </View>
@@ -1384,11 +1594,285 @@ export default function OnboardingScreen() {
                   fontSize: 16,
                   color: '#FFFFFF',
                 }}>
-                  I'm ready to show up for this
+                  Build my devotional
                 </Text>
               </View>
             )}
           </Pressable>
+        </View>
+      );
+    }
+
+    // Companion intro step: introduce the companion orb
+    if (step.type === 'companionIntro') {
+      return (
+        <View style={{ alignItems: 'center', gap: 32, marginTop: 24 }}>
+          {/* Large companion orb — the star of the show */}
+          <Animated.View
+            entering={FadeIn.delay(200).duration(800)}
+            style={{ marginBottom: 8 }}
+          >
+            <CompanionOrb accentColor={colors.accent} size={96} isActive showBadge={false} />
+          </Animated.View>
+
+          {/* Description */}
+          <View style={{ gap: 16, paddingHorizontal: 8 }}>
+            <Animated.Text
+              entering={FadeIn.delay(500).duration(600)}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 16,
+                color: colors.text,
+                lineHeight: 26,
+                textAlign: 'center',
+              }}
+            >
+              This is your companion. It checks in with you, remembers what you share, and shapes each day around where you are.
+            </Animated.Text>
+
+            <Animated.Text
+              entering={FadeIn.delay(800).duration(600)}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 16,
+                color: colors.textMuted,
+                lineHeight: 26,
+                textAlign: 'center',
+              }}
+            >
+              The more you use Unfold, the more it understands you. Day 30 feels completely different from Day 1.
+            </Animated.Text>
+          </View>
+
+          {/* Feature hints */}
+          <Animated.View
+            entering={FadeIn.delay(1100).duration(600)}
+            style={{ gap: 12, width: '100%', paddingHorizontal: 4 }}
+          >
+            {[
+              { text: 'Greets you based on your mood and time of day' },
+              { text: 'Learns what resonates with you over time' },
+              { text: 'Bridges yesterday into today, just for you' },
+            ].map((item, i) => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  backgroundColor: colors.accent + '08',
+                  borderRadius: 12,
+                }}
+              >
+                <View style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: colors.accent,
+                }} />
+                <Text style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 14,
+                  color: colors.text,
+                  flex: 1,
+                }}>
+                  {item.text}
+                </Text>
+              </View>
+            ))}
+          </Animated.View>
+        </View>
+      );
+    }
+
+    // Sign-in step: optional Apple Sign In
+    if (step.type === 'signIn') {
+      const screenWidth = Dimensions.get('window').width;
+
+      const benefits = [
+        {
+          icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
+          title: 'Sync across devices',
+          description: 'Pick up where you left off on any device',
+        },
+        {
+          icon: <ShieldIcon size={20} color={colors.accent} weight="light" />,
+          title: 'Secure backup',
+          description: 'Never lose your devotionals or journal',
+        },
+        {
+          icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
+          title: 'Personalized experience',
+          description: 'Unlock features tailored to your journey',
+        },
+      ];
+
+      return (
+        <View style={{ gap: 32, marginTop: 8 }}>
+          {/* Benefits list */}
+          <View style={{ gap: 20, paddingHorizontal: 4 }}>
+            {benefits.map((benefit, index) => (
+              <Animated.View
+                key={benefit.title}
+                entering={FadeIn.delay(200 + index * 150).duration(500)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 16,
+                }}
+              >
+                <View style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  backgroundColor: colors.inputBackground,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {benefit.icon}
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{
+                    fontFamily: FontFamily.uiSemiBold,
+                    fontSize: 15,
+                    color: colors.text,
+                    letterSpacing: -0.2,
+                  }}>
+                    {benefit.title}
+                  </Text>
+                  <Text style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 13,
+                    color: colors.textMuted,
+                    lineHeight: 18,
+                  }}>
+                    {benefit.description}
+                  </Text>
+                </View>
+              </Animated.View>
+            ))}
+          </View>
+
+          {/* Error message */}
+          {signInError && (
+            <Animated.View
+              entering={FadeIn.duration(300)}
+              style={{
+                backgroundColor: '#EF4444',
+                borderRadius: 12,
+                padding: 14,
+              }}
+            >
+              <Text style={{
+                color: '#FFFFFF',
+                fontFamily: FontFamily.ui,
+                fontSize: 14,
+                textAlign: 'center',
+                lineHeight: 20,
+              }}>
+                {signInError}
+              </Text>
+            </Animated.View>
+          )}
+
+          {/* Apple Sign In button */}
+          <Animated.View entering={FadeIn.delay(650).duration(400)}>
+            {isAppleAvailable ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={isDark
+                  ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                  : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={14}
+                style={{ width: screenWidth - 48, height: 54 }}
+                onPress={handleOnboardingAppleSignIn}
+              />
+            ) : (
+              <Pressable
+                onPress={handleOnboardingAppleSignIn}
+                disabled={isSigningIn}
+                style={{
+                  width: screenWidth - 48,
+                  height: 54,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.text,
+                  opacity: isSigningIn ? 0.8 : 1,
+                }}
+              >
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 16,
+                  color: colors.background,
+                }}>
+                  {isSigningIn ? 'Signing in...' : 'Sign in with Apple'}
+                </Text>
+              </Pressable>
+            )}
+          </Animated.View>
+
+          {/* Skip option */}
+          <Animated.View entering={FadeIn.delay(800).duration(400)}>
+            <Pressable
+              onPress={handleSkipSignIn}
+              disabled={isSigningIn}
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 12,
+                opacity: isSigningIn ? 0.4 : 1,
+              }}
+            >
+              <Text style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 15,
+                color: colors.textMuted,
+              }}>
+                Continue without signing in
+              </Text>
+            </Pressable>
+          </Animated.View>
+
+          {/* Privacy note */}
+          <Animated.View entering={FadeIn.delay(900).duration(400)}>
+            <Text style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 12,
+              color: colors.textSubtle,
+              textAlign: 'center',
+            }}>
+              Your privacy matters. We never share your information.
+            </Text>
+          </Animated.View>
+
+          {/* Loading overlay */}
+          {isSigningIn && (
+            <View style={{
+              position: 'absolute',
+              top: 0,
+              left: -24,
+              right: -24,
+              bottom: -120,
+              backgroundColor: colors.background + 'E6',
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderRadius: 16,
+            }}>
+              <ActivityIndicator size="large" color={colors.accent} />
+              <Text style={{
+                marginTop: 16,
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 15,
+                color: colors.textMuted,
+              }}>
+                Signing in...
+              </Text>
+            </View>
+          )}
         </View>
       );
     }

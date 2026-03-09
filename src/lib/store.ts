@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
 import { logBugError } from './bug-logger';
 import { mmkvStorage } from './mmkv-storage';
+import type { NudgeType, NudgeImpression, NudgeState } from './nudges';
+import { NUDGE_INITIAL_STATE } from './nudges';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -370,6 +372,23 @@ interface UnfoldState {
   setDismissedMiddayCardDate: (date: string) => void;
   setDismissedEveningCardDate: (date: string) => void;
 
+  // Premium nudge system
+  nudgeImpressions: NudgeImpression[];
+  nudgeShownThisSession: boolean;
+  nudgeDismissals: { type: NudgeType; dismissedAt: string }[];
+  recordNudgeImpression: (type: NudgeType) => void;
+  recordNudgeDismissal: (type: NudgeType) => void;
+  resetNudgeSession: () => void;
+  /** Flag set when streak transitions from >0 to 0 */
+  streakJustReset: boolean;
+  clearStreakJustReset: () => void;
+  /** Title of a series the user just completed (set from reading screen) */
+  justCompletedSeriesTitle: string | null;
+  clearJustCompletedSeriesTitle: () => void;
+  /** Whether user has ever played audio */
+  hasUsedAudio: boolean;
+  setHasUsedAudio: () => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -410,6 +429,11 @@ const initialState = {
   hasSeenFeatureOnboarding: false,
   dismissedMiddayCardDate: null as string | null,
   dismissedEveningCardDate: null as string | null,
+  // Premium nudge system
+  ...NUDGE_INITIAL_STATE,
+  streakJustReset: false,
+  justCompletedSeriesTitle: null as string | null,
+  hasUsedAudio: false,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -827,6 +851,27 @@ export const useUnfoldStore = create<UnfoldState>()(
       setDismissedMiddayCardDate: (date) => set({ dismissedMiddayCardDate: date }),
       setDismissedEveningCardDate: (date) => set({ dismissedEveningCardDate: date }),
 
+      // Premium nudge system
+      recordNudgeImpression: (type) =>
+        set((state) => ({
+          nudgeImpressions: [
+            ...state.nudgeImpressions,
+            { type, shownAt: new Date().toISOString() },
+          ].slice(-50), // Cap at 50 entries to prevent unbounded growth
+          nudgeShownThisSession: true,
+        })),
+      recordNudgeDismissal: (type) =>
+        set((state) => ({
+          nudgeDismissals: [
+            ...state.nudgeDismissals,
+            { type, dismissedAt: new Date().toISOString() },
+          ].slice(-20),
+        })),
+      resetNudgeSession: () => set({ nudgeShownThisSession: false }),
+      clearStreakJustReset: () => set({ streakJustReset: false }),
+      clearJustCompletedSeriesTitle: () => set({ justCompletedSeriesTitle: null }),
+      setHasUsedAudio: () => set({ hasUsedAudio: true }),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -838,7 +883,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 13, // Increment when state structure changes
+      version: 14, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -944,6 +989,19 @@ export const useUnfoldStore = create<UnfoldState>()(
           } as UnfoldState;
         }
 
+        // Migration from version 13 to 14: Add premium nudge system
+        if (version < 14) {
+          return {
+            ...state,
+            nudgeImpressions: [],
+            nudgeShownThisSession: false,
+            nudgeDismissals: [],
+            streakJustReset: false,
+            justCompletedSeriesTitle: null,
+            hasUsedAudio: false,
+          } as UnfoldState;
+        }
+
         return state as UnfoldState;
       },
       // Validate state on rehydration
@@ -986,6 +1044,10 @@ export const useUnfoldStore = create<UnfoldState>()(
                 state.user = initialState.user;
               }
             }
+
+            // Reset session-scoped state on app launch (not persisted across sessions)
+            state.nudgeShownThisSession = false;
+            state.streakJustReset = false;
           }
         };
       },

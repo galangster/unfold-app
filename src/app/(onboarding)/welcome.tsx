@@ -244,18 +244,16 @@ export default function WelcomeScreen() {
           <Animated.View style={buttonStyle}>
             <Pressable
               onPress={handleGetStarted}
-              style={({ pressed }) => ({
+              style={{
                 backgroundColor: colors.accent,
                 paddingVertical: 18,
                 paddingHorizontal: 48,
                 borderRadius: 16,
-                opacity: pressed ? 0.9 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
                 shadowColor: colors.accent,
                 shadowOffset: { width: 0, height: 6 },
                 shadowOpacity: 0.3,
                 shadowRadius: 12,
-              })}
+              }}
             >
               <Text
                 style={{

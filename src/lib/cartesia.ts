@@ -86,63 +86,97 @@ function makeScripturesSpeakable(text: string): string {
 /**
  * SSML Dynamic Narration Preprocessor
  * Adds Cartesia SSML tags to devotional text for expressive, dynamic narration.
- * Uses speed, volume, and break tags to create natural pacing variation.
+ *
+ * Audio text format: "ScriptureRef.\nScriptureText\n\nBodyParagraph1\n\nBodyParagraph2..."
+ * Uses Cartesia's custom tags: <speed ratio="">, <volume ratio="">, <break time="">
+ *   speed: 0.6–1.5 (1.0 = default)
+ *   volume: 0.5–2.0 (1.0 = default)
+ *   break: seconds ("1s") or milliseconds ("500ms")
  */
 export function addSSMLNarration(text: string): string {
-  // First make scripture references speakable
-  let result = makeScripturesSpeakable(text);
+  // Make scripture references speakable first
+  let processed = makeScripturesSpeakable(text);
 
-  // 1. Add pauses between major sections (scripture ref → scripture text → body)
-  result = result.replace(/\.\n\n/g, '.<break time="1.2s"/>\n\n');
-  result = result.replace(/\.\n([A-Z])/g, '.<break time="0.6s"/>\n$1');
+  // Split into scripture section (before first \n\n) and body (after)
+  const firstDoubleBreak = processed.indexOf('\n\n');
+  let scripturePart = '';
+  let bodyPart = processed;
 
-  // 2. Scripture section: slower, slightly quieter (reverent)
-  // After makeScripturesSpeakable, refs look like "Mark chapter 4, verses 35 through 41"
-  const scriptureRefMatch = result.match(/^(.+?(?:chapter\s+\d+,\s+verses?\s+\d+(?:\s+through\s+\d+)?|\d+[:.]\d+(?:-\d+)?))[.\n]/);
-  if (scriptureRefMatch) {
-    const refEnd = result.indexOf('\n', scriptureRefMatch.index ?? 0);
-    const bodyStart = result.indexOf('\n\n', refEnd);
-    if (bodyStart > refEnd) {
-      // Wrap scripture section with slower speed and softer volume
-      const before = result.slice(0, refEnd + 1);
-      const scripture = result.slice(refEnd + 1, bodyStart);
-      const after = result.slice(bodyStart);
-      result = before
-        + '<speed ratio="0.9"/><volume ratio="0.85"/>'
-        + scripture
-        + '<break time="1.5s"/><speed ratio="1.0"/><volume ratio="1.0"/>'
-        + after;
+  if (firstDoubleBreak > 0) {
+    scripturePart = processed.slice(0, firstDoubleBreak);
+    bodyPart = processed.slice(firstDoubleBreak + 2);
+  }
+
+  // IMPORTANT: SSML tags must be INLINE with text, never as standalone chunks.
+  // The text splitter splits on \n\n, so every paragraph must contain real text.
+
+  let result = '';
+
+  // --- Scripture section: slower, softer, reverent ---
+  if (scripturePart) {
+    const refLineEnd = scripturePart.indexOf('\n');
+    if (refLineEnd > 0) {
+      const ref = scripturePart.slice(0, refLineEnd);
+      const scriptureText = scripturePart.slice(refLineEnd + 1);
+      // Reference + pause, then scripture at slower pace
+      result += ref + '.<break time="800ms"/> <speed ratio="0.88"/><volume ratio="0.85"/>' + scriptureText;
+      // Reset speed/volume inline before body
+      result += '<break time="1.5s"/><speed ratio="1.0"/><volume ratio="1.0"/>';
+    } else {
+      result += scripturePart + '.<break time="1.2s"/>';
     }
   }
 
-  // 3. Sentences ending with ! or ? — slightly louder (emphasis/passion)
-  result = result.replace(
-    /([.!?]["']?\s+)([A-Z][^.!?]*[!])/g,
-    '$1<volume ratio="1.15"/>$2<volume ratio="1.0"/>'
-  );
+  // --- Body paragraphs: varied pacing for natural narration ---
+  if (bodyPart) {
+    const paragraphs = bodyPart.split(/\n\n+/).filter(p => p.trim());
+    const lastIdx = paragraphs.length - 1;
 
-  // 4. Short powerful sentences (under 40 chars) — slight pause before and slower
-  result = result.replace(
-    /(\.\s+)([A-Z][^.!?]{4,38}\.)/g,
-    (match, punctuation, sentence) => {
-      // Only apply to sentences that look like emphasis (not scripture refs, etc.)
-      if (/^\d/.test(sentence) || /\d+:\d+/.test(sentence)) return match;
-      return punctuation + '<break time="0.4s"/><speed ratio="0.92"/>' + sentence + '<speed ratio="1.0"/>';
-    }
-  );
+    paragraphs.forEach((para, i) => {
+      // Separate from previous section/paragraph — break tag goes INLINE
+      if (result) {
+        result += '\n\n';
+      }
 
-  // 5. Quotes from theologians — slower, more deliberate
-  result = result.replace(
-    /("[^"]{20,}")\s*—\s*([A-Z][a-z]+ [A-Z][a-z]+)/g,
-    '<speed ratio="0.88"/><volume ratio="0.9"/>$1<volume ratio="1.0"/><speed ratio="1.0"/> — $2'
-  );
+      let p = para;
 
-  // 6. Final paragraph — slow down slightly for the closing
-  const lastParaBreak = result.lastIndexOf('\n\n');
-  if (lastParaBreak > 0 && lastParaBreak < result.length - 20) {
-    result = result.slice(0, lastParaBreak)
-      + '\n\n<break time="0.8s"/><speed ratio="0.93"/>'
-      + result.slice(lastParaBreak + 2);
+      // Theologian/author quotes — slower, more deliberate
+      p = p.replace(
+        /("[^"]{15,}")\s*[—–-]\s*([A-Z][a-zA-Z.]+ [A-Z][a-zA-Z.]+)/g,
+        '<break time="300ms"/><speed ratio="0.86"/><volume ratio="0.9"/>$1<volume ratio="1.0"/><speed ratio="1.0"/> — $2'
+      );
+
+      // Questions to the reader — brief pause before, slight slowdown
+      p = p.replace(
+        /([.!]\s+)([A-Z][^.!?]{8,}[?])/g,
+        '$1<break time="400ms"/><speed ratio="0.94"/>$2<speed ratio="1.0"/>'
+      );
+
+      // Exclamatory sentences — slightly bolder
+      p = p.replace(
+        /([.?]\s+)([A-Z][^.!?]{5,}[!])/g,
+        '$1<volume ratio="1.12"/>$2<volume ratio="1.0"/>'
+      );
+
+      // Short powerful sentences (6-45 chars) — pause + slower for weight
+      p = p.replace(
+        /(\.\s+)([A-Z][^.!?]{4,43}\.)/g,
+        (_match, punct, sentence) => {
+          if (/\d+:\d+/.test(sentence)) return _match;
+          return punct + '<break time="350ms"/><speed ratio="0.91"/>' + sentence + '<speed ratio="1.0"/>';
+        }
+      );
+
+      // Final paragraph — slow down for closing/prayer (tag prefix, inline)
+      if (i === lastIdx && paragraphs.length > 2) {
+        result += '<break time="600ms"/><speed ratio="0.92"/>' + p;
+      } else if (i > 0) {
+        // Inter-paragraph pause, inline with the paragraph text
+        result += '<break time="1s"/>' + p;
+      } else {
+        result += p;
+      }
+    });
   }
 
   return result;
@@ -153,7 +187,7 @@ export function addSSMLNarration(text: string): string {
  * Uses two independent hashes (djb2 + sdbm) concatenated to minimize collision risk.
  */
 function hashKey(text: string, voiceId: string): string {
-  const input = `v3:${voiceId}:${text}`; // v3 = SSML disabled, cache invalidation
+  const input = `v4:${voiceId}:${text}`; // v4 = SSML re-enabled with Cartesia tags
   let h1 = 5381;  // djb2
   let h2 = 0;     // sdbm
   for (let i = 0; i < input.length; i++) {
@@ -240,19 +274,14 @@ function base64ToUint8Array(base64: string): Uint8Array {
  * Each chunk is short enough to complete well within Vercel's 60s limit.
  */
 async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55000); // 55s safety margin
-
   try {
     logger.log(`[TTS] fetchChunk: starting fetch (${text.length} chars)...`);
     const response = await fetch(TTS_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voiceId, format: 'base64' }),
-      signal: controller.signal,
     });
 
-    clearTimeout(timeout);
     logger.log(`[TTS] fetchChunk: response status=${response.status}`);
 
     if (!response.ok) {
@@ -260,7 +289,6 @@ async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
       throw new Error(`TTS proxy error: ${response.status} ${errorBody}`);
     }
 
-    // Parse JSON with base64 audio — fully reliable in RN/Hermes
     const json = await response.json();
     logger.log(`[TTS] fetchChunk: got base64 audio, size=${json.size}`);
 
@@ -272,7 +300,6 @@ async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
     logger.log(`[TTS] fetchChunk: decoded ${bytes.length} bytes`);
     return bytes;
   } catch (error) {
-    clearTimeout(timeout);
     logger.log(`[TTS] fetchChunk ERROR:`, error);
     throw error;
   }
@@ -306,9 +333,8 @@ async function downloadAudio(text: string, voiceId: string, cacheKey: string): P
 
   try {
     // Apply SSML narration — speed, volume, and break tags for expressive reading
-    // SSML disabled — may cause AVPlayer format errors via proxy
-    const ssmlText = text;
-    logger.log(`[TTS] SSML disabled — using plain text (${text.length} chars)`);
+    const ssmlText = addSSMLNarration(text);
+    logger.log(`[TTS] SSML narration applied — ${text.length} → ${ssmlText.length} chars`);
     const chunks = splitTextIntoChunks(ssmlText);
     logger.log(`[TTS] split into ${chunks.length} chunks (${chunks.map(c => c.length).join(', ')} chars)`);
 
@@ -390,7 +416,7 @@ export async function streamDevotionalAudio(
 
     // Return cached audio if it exists and has content
     if (cachedFile.exists && cachedFile.size > 0) {
-      logger.log(`[TTS] ✅ cache HIT — size=${cachedFile.size}, uri=${cachedFile.uri}`);
+      logger.log(`[TTS] cache HIT — size=${cachedFile.size}, uri=${cachedFile.uri}`);
       return {
         audioUrl: cachedFile.uri,
         wordTimestamps: [],
@@ -406,7 +432,6 @@ export async function streamDevotionalAudio(
       try {
         return await existing;
       } catch {
-        // Prior request failed — clean up and retry below
         inFlightRequests.delete(key);
         logger.log('[TTS] piggybacked request failed — retrying');
       }

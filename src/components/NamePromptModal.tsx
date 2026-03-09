@@ -106,14 +106,14 @@ export function NamePromptModal({ visible, onComplete }: NamePromptModalProps) {
           <Pressable
             onPress={handleSubmit}
             disabled={!name.trim() || isSubmitting}
-            style={({ pressed }) => ({
+            style={{
               backgroundColor: colors.accent,
               paddingVertical: 16,
               borderRadius: 14,
               alignItems: 'center',
-              opacity: !name.trim() || isSubmitting ? 0.5 : pressed ? 0.9 : 1,
+              opacity: !name.trim() || isSubmitting ? 0.5 : 1,
               marginTop: 8,
-            })}
+            }}
           >
             <Text style={{ color: colors.background, fontFamily: FontFamily.uiSemiBold, fontSize: 16 }}>
               {isSubmitting ? 'Saving...' : 'Continue'}

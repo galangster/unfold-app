@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text, Pressable, View } from 'react-native';
+import { Text, View, TouchableWithoutFeedback } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -41,58 +41,56 @@ export function CompanionTooltip({
     <Animated.View
       entering={FadeIn.duration(500)}
       exiting={FadeOut.duration(250)}
+      pointerEvents="box-none"
       style={{
         position: 'absolute',
-        top: -8,
-        right: 56,
-        maxWidth: 220,
-        zIndex: 50,
+        top: 95,
+        right: 80,
+        width: 220,
+        zIndex: 999,
       }}
     >
-      <Animated.View>
-        <Pressable
-          onPress={() => {
-            setVisible(false);
-            onTap();
+      <TouchableWithoutFeedback
+        onPress={() => {
+          setVisible(false);
+          onTap();
+        }}
+      >
+        <View
+          style={{
+            backgroundColor: accentColor + '18',
+            borderWidth: 1,
+            borderColor: accentColor + '30',
+            borderRadius: 14,
+            paddingVertical: 10,
+            paddingLeft: 14,
+            paddingRight: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
           }}
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.85 : 1,
-          })}
         >
-          <View
+          <Text
             style={{
-              backgroundColor: accentColor + '18',
-              borderWidth: 1,
-              borderColor: accentColor + '30',
-              borderRadius: 14,
-              paddingVertical: 10,
-              paddingLeft: 14,
-              paddingRight: 8,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
+              fontFamily: FontFamily.body,
+              fontSize: 13,
+              color: textColor,
+              lineHeight: 18,
+              flex: 1,
             }}
+            numberOfLines={2}
           >
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 13,
-                color: textColor,
-                lineHeight: 18,
-                flex: 1,
-              }}
-              numberOfLines={2}
-            >
-              {message}
-            </Text>
+            {message}
+          </Text>
 
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                setVisible(false);
-                onDismiss();
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          <TouchableWithoutFeedback
+            onPress={() => {
+              setVisible(false);
+              onDismiss();
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <View
               style={{
                 width: 20,
                 height: 20,
@@ -101,27 +99,27 @@ export function CompanionTooltip({
               }}
             >
               <XIcon size={12} color={textColor} weight="light" style={{ opacity: 0.5 }} />
-            </Pressable>
-          </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
 
-          {/* Triangle pointer toward the orb */}
-          <View
-            style={{
-              position: 'absolute',
-              right: -6,
-              top: 14,
-              width: 0,
-              height: 0,
-              borderTopWidth: 6,
-              borderBottomWidth: 6,
-              borderLeftWidth: 6,
-              borderTopColor: 'transparent',
-              borderBottomColor: 'transparent',
-              borderLeftColor: accentColor + '30',
-            }}
-          />
-        </Pressable>
-      </Animated.View>
+      {/* Triangle pointer toward the orb (points right) */}
+      <View
+        style={{
+          position: 'absolute',
+          right: -6,
+          top: 14,
+          width: 0,
+          height: 0,
+          borderTopWidth: 6,
+          borderBottomWidth: 6,
+          borderLeftWidth: 6,
+          borderTopColor: 'transparent',
+          borderBottomColor: 'transparent',
+          borderLeftColor: accentColor + '30',
+        }}
+      />
     </Animated.View>
   );
 }

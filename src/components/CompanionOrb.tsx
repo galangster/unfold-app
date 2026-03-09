@@ -16,6 +16,7 @@ import Animated, {
   withRepeat,
   withTiming,
   withSequence,
+  withSpring,
   Easing,
   interpolate,
 } from 'react-native-reanimated';
@@ -205,7 +206,7 @@ export function CompanionOrb({
   });
 
   const glowOpacity = useDerivedValue(() => {
-    return interpolate(breathe.value, [0, 1], [0.2, 0.5]);
+    return interpolate(breathe.value, [0, 1], [0.2, 0.4]);
   });
 
   const glowBlur = useDerivedValue(() => {
@@ -215,10 +216,10 @@ export function CompanionOrb({
   });
 
   const containerStyle = useAnimatedStyle(() => {
-    const scaleMin = isActive ? 0.95 : 0.97;
-    const scaleMax = isActive ? 1.05 : 1.02;
+    const scaleMin = isActive ? 0.97 : 0.98;
+    const scaleMax = isActive ? 1.03 : 1.01;
     const scale = interpolate(breathe.value, [0, 1], [scaleMin, scaleMax]);
-    const tapBoost = interpolate(tapPulse.value, [0, 1], [1, 1.12]);
+    const tapBoost = interpolate(tapPulse.value, [0, 1], [1, 1.15]);
     return {
       transform: [{ scale: scale * tapBoost }],
     };
@@ -227,8 +228,8 @@ export function CompanionOrb({
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     tapPulse.value = withSequence(
-      withTiming(1, { duration: 150, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 400, easing: Easing.inOut(Easing.ease) }),
+      withSpring(1, { damping: 12, stiffness: 500 }),
+      withSpring(0, { damping: 15, stiffness: 300 }),
     );
     onPress?.();
   };

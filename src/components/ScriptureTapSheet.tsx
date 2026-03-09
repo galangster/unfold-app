@@ -166,7 +166,7 @@ export function ScriptureTapSheet({
               <Pressable
                 onPress={onClose}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, padding: 4 })}
+                style={{ opacity: 1, padding: 4 }}
               >
                 <XIcon size={20} color={colors.textSubtle} weight="light" />
               </Pressable>
@@ -285,7 +285,7 @@ export function ScriptureTapSheet({
                   <View style={{ flexDirection: 'row', gap: 12 }}>
                     <Pressable
                       onPress={handleCopy}
-                      style={({ pressed }) => ({
+                      style={{
                         flex: 1,
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -296,8 +296,8 @@ export function ScriptureTapSheet({
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
                         borderColor: colors.border,
-                        opacity: pressed ? 0.7 : 1,
-                      })}
+                        opacity: 1,
+                      }}
                     >
                       {copied ? (
                         <CheckIcon size={16} color={colors.accent} weight="bold" />
@@ -318,7 +318,7 @@ export function ScriptureTapSheet({
                     {devotionalId && dayNumber && !alreadyBookmarked && (
                       <Pressable
                         onPress={handleBookmark}
-                        style={({ pressed }) => ({
+                        style={{
                           flex: 1,
                           flexDirection: 'row',
                           alignItems: 'center',
@@ -329,8 +329,8 @@ export function ScriptureTapSheet({
                           backgroundColor: saved ? colors.accent + '15' : colors.inputBackground,
                           borderWidth: 1,
                           borderColor: saved ? colors.accent : colors.border,
-                          opacity: pressed ? 0.7 : 1,
-                        })}
+                          opacity: 1,
+                        }}
                       >
                         <BookmarkSimpleIcon
                           size={16}

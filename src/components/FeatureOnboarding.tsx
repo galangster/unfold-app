@@ -120,7 +120,7 @@ export function FeatureOnboarding() {
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Skip feature tour"
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+            style={{ opacity: 1 }}
           >
             <Text
               style={{
@@ -205,10 +205,7 @@ export function FeatureOnboarding() {
           onPress={handleNext}
           accessibilityRole="button"
           accessibilityLabel={isLastSlide ? 'Get Started' : 'Next feature'}
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.85 : 1,
-            transform: [{ scale: pressed ? 0.97 : 1 }],
-          })}
+          style={{ opacity: 1 }}
         >
           <View
             style={[styles.button, { backgroundColor: colors.accent }]}

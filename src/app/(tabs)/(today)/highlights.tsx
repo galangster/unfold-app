@@ -139,13 +139,12 @@ export default function HighlightsScreen() {
                 <Pressable
                   key={highlight.id}
                   onPress={() => handleHighlightPress(highlight)}
-                  style={({ pressed }) => ({
+                  style={{
                     backgroundColor: colors.inputBackground,
                     borderRadius: 12,
                     padding: 16,
                     marginBottom: 12,
-                    opacity: pressed ? 0.7 : 1,
-                  })}
+                  }}
                 >
                   {/* Color indicator and day */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>

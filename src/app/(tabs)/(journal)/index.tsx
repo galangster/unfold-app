@@ -221,6 +221,13 @@ export default function JournalHubScreen() {
                   paddingHorizontal: 14,
                   paddingVertical: 10,
                   gap: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.04,
+                  shadowRadius: 4,
+                  elevation: 1,
                 }}
               >
                 <MagnifyingGlassIcon size={16} color={colors.textSubtle} weight="light" />
@@ -260,6 +267,14 @@ export default function JournalHubScreen() {
                     backgroundColor: colors.accent + '0D',
                     borderRadius: 20,
                     padding: 24,
+                    borderWidth: 1,
+                    borderColor: colors.accent + '12',
+                    // Elevated reflection card
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 3 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 12,
+                    elevation: 3,
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -371,6 +386,12 @@ export default function JournalHubScreen() {
                     paddingHorizontal: 16,
                     backgroundColor: colors.inputBackground,
                     borderRadius: 12,
+                    // Subtle lift
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.04,
+                    shadowRadius: 6,
+                    elevation: 1,
                   }}
                 >
                   <ArrowBendDownRightIcon size={14} color={colors.accent} weight="light" />
@@ -456,14 +477,21 @@ export default function JournalHubScreen() {
                   <View
                     style={{
                       width: '100%',
-                      backgroundColor: colors.inputBackground,
+                      backgroundColor: colors.backgroundElevated,
                       borderRadius: 14,
-                      padding: 16,
-                      opacity: 0.4,
+                      padding: 18,
+                      opacity: 0.5,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.04,
+                      shadowRadius: 8,
+                      elevation: 1,
                     }}
                   >
-                    <View style={{ height: 10, width: '70%', backgroundColor: colors.border, borderRadius: 5, marginBottom: 8 }} />
-                    <View style={{ height: 10, width: '90%', backgroundColor: colors.border, borderRadius: 5, marginBottom: 8 }} />
+                    <View style={{ height: 10, width: '70%', backgroundColor: colors.border, borderRadius: 5, marginBottom: 10 }} />
+                    <View style={{ height: 10, width: '90%', backgroundColor: colors.border, borderRadius: 5, marginBottom: 10 }} />
                     <View style={{ height: 10, width: '50%', backgroundColor: colors.border, borderRadius: 5 }} />
                   </View>
                 </View>
@@ -510,14 +538,16 @@ export default function JournalHubScreen() {
                     >
                       <View
                         style={{
-                          backgroundColor: colors.inputBackground,
+                          backgroundColor: colors.backgroundElevated,
                           borderRadius: 14,
                           padding: 16,
                           marginBottom: 10,
+                          borderWidth: 1,
+                          borderColor: colors.border,
                           shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 1 },
+                          shadowOffset: { width: 0, height: 2 },
                           shadowOpacity: 0.06,
-                          shadowRadius: 8,
+                          shadowRadius: 10,
                           elevation: 2,
                         }}
                       >

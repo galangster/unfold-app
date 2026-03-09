@@ -203,11 +203,9 @@ export function ThemeTypeSelector({
             >
               <Pressable
                 onPress={() => handleThemeSelect(theme.id)}
-                style={({ pressed }) => ({
+                style={{
                   backgroundColor: isSelected
                     ? colors.buttonBackgroundPressed
-                    : pressed
-                    ? 'rgba(255,255,255,0.03)'
                     : colors.inputBackground,
                   borderRadius: 14,
                   padding: 16,
@@ -216,7 +214,8 @@ export function ThemeTypeSelector({
                   borderColor: isSelected ? colors.borderFocused : colors.border,
                   flexDirection: 'row',
                   alignItems: 'center',
-                })}
+                  opacity: 1,
+                }}
               >
                 <View
                   style={{
@@ -347,11 +346,9 @@ export function ThemeTypeSelector({
             >
               <Pressable
                 onPress={() => handleTypeSelect(type.id)}
-                style={({ pressed }) => ({
+                style={{
                   backgroundColor: isSelected
                     ? colors.buttonBackgroundPressed
-                    : pressed
-                    ? 'rgba(255,255,255,0.03)'
                     : colors.inputBackground,
                   borderRadius: 14,
                   padding: 16,
@@ -360,7 +357,8 @@ export function ThemeTypeSelector({
                   borderColor: isSelected ? colors.borderFocused : colors.border,
                   flexDirection: 'row',
                   alignItems: 'center',
-                })}
+                  opacity: 1,
+                }}
               >
                 <View
                   style={{
@@ -465,18 +463,17 @@ export function ThemeTypeSelector({
             >
               <Pressable
                 onPress={() => handleSubjectSelect(subject.name)}
-                style={({ pressed }) => ({
+                style={{
                   backgroundColor: isSelected
                     ? colors.buttonBackgroundPressed
-                    : pressed
-                    ? 'rgba(255,255,255,0.03)'
                     : colors.inputBackground,
                   borderRadius: 14,
                   padding: 16,
                   marginBottom: 10,
                   borderWidth: 1,
                   borderColor: isSelected ? colors.borderFocused : colors.border,
-                })}
+                  opacity: 1,
+                }}
               >
                 <Text
                   style={{

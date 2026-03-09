@@ -11,6 +11,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  isButtonPressed: boolean;
 }
 
 /**
@@ -20,10 +21,10 @@ interface State {
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, isButtonPressed: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
@@ -65,9 +66,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
             <Pressable
               onPress={this.handleReset}
-              style={({ pressed }) => [
+              onPressIn={() => this.setState({ isButtonPressed: true })}
+              onPressOut={() => this.setState({ isButtonPressed: false })}
+              style={[
                 styles.button,
-                pressed && styles.buttonPressed,
+                this.state.isButtonPressed && styles.buttonPressed,
               ]}
             >
               <Text style={styles.buttonText}>Try Again</Text>

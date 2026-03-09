@@ -84,15 +84,35 @@ function getCachedBridge(cacheKey: string): string | null {
   return null;
 }
 
+/**
+ * Sanitize bridge text: remove em dashes, profanity, and other unwanted patterns.
+ * This runs as a safety net after model generation.
+ */
+function sanitizeBridgeText(text: string): string {
+  let cleaned = text;
+  // Replace em dashes with comma or period
+  cleaned = cleaned.replace(/\s*—\s*/g, ', ');
+  // Remove profanity / crude intensifiers
+  cleaned = cleaned.replace(/\bas hell\b/gi, '');
+  cleaned = cleaned.replace(/\bdamn\b/gi, '');
+  cleaned = cleaned.replace(/\bfreaking\b/gi, 'really');
+  cleaned = cleaned.replace(/\bhell of a\b/gi, 'a real');
+  // Clean up double spaces or awkward punctuation from replacements
+  cleaned = cleaned.replace(/,\s*,/g, ',');
+  cleaned = cleaned.replace(/\s{2,}/g, ' ');
+  cleaned = cleaned.replace(/,\s*\./g, '.');
+  return cleaned.trim();
+}
+
 function setCachedBridge(cacheKey: string, text: string): void {
   // Don't cache incomplete bridges (truncated responses, partial text)
   const trimmed = text.trim();
   if (trimmed.length < 20 || !/[.!?…"']$/.test(trimmed)) {
-    logger.warn(`${LOG_PREFIX} skipping cache — bridge looks incomplete: "${trimmed.slice(0, 50)}..."`);
+    logger.warn(`${LOG_PREFIX} skipping cache, bridge looks incomplete: "${trimmed.slice(0, 50)}..."`);
     return;
   }
   bridgeCache.set(cacheKey, text);
-  logger.log(`${LOG_PREFIX} cache SET — key=${cacheKey}, len=${text.length}`);
+  logger.log(`${LOG_PREFIX} cache SET, key=${cacheKey}, len=${text.length}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,16 +210,27 @@ async function postBridgeRequest(
 // Bridge prompt construction
 // ---------------------------------------------------------------------------
 
-const BRIDGE_INSTRUCTIONS = `TASK: Write a daily bridge — a 2-4 sentence (40-70 word) passage that transitions the reader from yesterday's reflection into today's devotional theme.
+const BRIDGE_INSTRUCTIONS = `TASK: Write a short text message (2-3 sentences, 30-50 words) introducing today's devotional topic to the reader.
 
-RULES:
-- Address the reader by name once, early and naturally.
-- If yesterday's check-in data is provided, acknowledge what they shared — their mood, their words. Make them feel heard before moving forward.
-- If no check-in data is available, write a lighter opening that connects their broader situation to today's theme.
-- End by naturally leading into today's scripture or theme — not by summarizing it, but by creating curiosity or resonance.
-- Keep it warm, grounded, and specific. No generic spiritual greeting cards.
+You are a warm presence, not a person. You know the reader and care about them, but you do NOT consume the content yourself. You introduce what today's reading is about and why it matters for THEM specifically.
 
-OUTPUT: Return ONLY the bridge text. No labels, no JSON, no preamble.`;
+EXAMPLES (match this exact tone and specificity):
+- "Hey Alex, I know work's been a lot lately. Today's reading is about actually resting, not just crashing on the couch. I think you'll really connect with this one."
+- "So you said you were feeling off yesterday. Makes sense with everything going on. Today we're looking at something that might help with that."
+- "Alex! Ok today's topic is honestly so relevant for you right now. It's about letting go of the stuff you can't control."
+
+CRITICAL RULES:
+- Be SPECIFIC about the topic. Say "it's about learning to actually stop and listen" not "it's about what the silence holds." Name the topic plainly.
+- Use their name once, casually.
+- Use contractions (you're, it's, don't). Use filler words naturally (like, honestly, ok so).
+- Short sentences. Fragments ok.
+- NEVER use em dashes. Use commas or periods.
+- NEVER use profanity (as hell, damn, etc). Clean but not stiff.
+- NEVER speak as if you've read or experienced the content yourself. No "this one hit me", "this one really got me", "I loved this one." You are introducing the topic, not reviewing it. Instead say things like "I think you'll connect with this", "this feels really relevant for you."
+- NEVER use poetic/vague phrasing. No "what X holds", "those quiet moments", "what if", rhetorical questions, metaphors.
+- NEVER mention scripture references.
+
+OUTPUT: Return ONLY the message. No labels, no JSON.`;
 
 function buildBridgeUserMessage(input: BridgeInput): string {
   const parts: string[] = [];
@@ -253,10 +284,10 @@ export async function generateBridge(
   const today = new Date().toISOString().slice(0, 10);
   const cacheKey = buildCacheKey(devotionalId, dayNumber, today);
 
-  // 1. Return cached bridge if available
+  // 1. Return cached bridge if available (sanitize in case old cache has bad text)
   const cached = getCachedBridge(cacheKey);
   if (cached) {
-    return cached;
+    return sanitizeBridgeText(cached);
   }
 
   // 2. Build the prompt and send as Anthropic-format payload to the backend
@@ -272,8 +303,9 @@ export async function generateBridge(
       messages: [{ role: 'user', content: userMessage }],
     });
 
-    setCachedBridge(cacheKey, result.bridgeText);
-    return result.bridgeText;
+    const cleanText = sanitizeBridgeText(result.bridgeText);
+    setCachedBridge(cacheKey, cleanText);
+    return cleanText;
   } catch (error) {
     logger.error(
       `${LOG_PREFIX} generation failed`,

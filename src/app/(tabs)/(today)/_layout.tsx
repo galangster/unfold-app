@@ -6,15 +6,19 @@ export default function TodayLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: 'transparent' },
-        animation: 'fade',
+        animation: 'ios_from_right',
+        animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="reading" />
-      <Stack.Screen name="journal" />
-      <Stack.Screen name="journal-detail" />
-      <Stack.Screen name="highlights" />
-      <Stack.Screen name="evening-wind-down" />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
+      <Stack.Screen name="reading" options={{ animation: 'fade' }} />
+      <Stack.Screen name="journal" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="journal-detail" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="highlights" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen
+        name="evening-wind-down"
+        options={{ animation: 'fade_from_bottom' }}
+      />
       <Stack.Screen
         name="wallpaper"
         options={{

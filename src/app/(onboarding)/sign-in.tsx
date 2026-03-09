@@ -390,11 +390,11 @@ export default function SignInScreen() {
               <Pressable
                 onPress={handleAppleSignIn}
                 disabled={isLoading}
-                style={({ pressed }) => [
+                style={[
                   styles.fallbackButton,
                   {
                     backgroundColor: colors.text,
-                    opacity: pressed || isLoading ? 0.8 : 1,
+                    opacity: isLoading ? 0.8 : 1,
                   },
                 ]}
               >
@@ -409,9 +409,9 @@ export default function SignInScreen() {
             <Pressable
               onPress={handleContinueAnonymous}
               disabled={isLoading}
-              style={({ pressed }) => [
+              style={[
                 styles.skipButton,
-                { opacity: pressed || isLoading ? 0.6 : 1 },
+                { opacity: isLoading ? 0.6 : 1 },
               ]}
             >
               <Text style={[styles.skipText, { color: colors.textSubtle, fontFamily: FontFamily.ui }]}>

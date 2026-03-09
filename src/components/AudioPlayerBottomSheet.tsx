@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withDelay,
+  withSpring,
   Easing,
   cancelAnimation,
   runOnJS,
@@ -33,7 +34,16 @@ import {
   SparkleIcon,
 } from 'phosphor-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight as _useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+
+// Safe wrapper — returns 0 if not inside a tab navigator
+function useBottomTabBarHeightSafe(): number {
+  try {
+    return _useBottomTabBarHeight();
+  } catch {
+    return 80; // reasonable default for iOS tab bar
+  }
+}
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -161,7 +171,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
     ref
   ) => {
     const { colors, isDark } = useTheme();
-    const tabBarHeight = useBottomTabBarHeight();
+    const tabBarHeight = useBottomTabBarHeightSafe();
 
     const [isLoading, setIsLoading] = useState(false);
     const [hasError, setHasError] = useState(false);
@@ -182,6 +192,20 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
     const scrubProgress = useSharedValue(0);
     const isScrubbing = useSharedValue(0); // 0 = false, 1 = true
     const barWidth = useSharedValue(300);
+
+    // Button press micro-interactions — spring scale
+    const playButtonScale = useSharedValue(1);
+    const skipBackScale = useSharedValue(1);
+    const skipForwardScale = useSharedValue(1);
+    const playButtonAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: playButtonScale.value }],
+    }));
+    const skipBackAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: skipBackScale.value }],
+    }));
+    const skipForwardAnimStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: skipForwardScale.value }],
+    }));
 
     // Sparkle icon subtle pulse animation
     const sparkleScale = useSharedValue(1);
@@ -398,15 +422,17 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
         console.log(`[AudioPlayer] calling streamDevotionalAudio — textLen=${fullText.length}, voiceId=${resolvedVoiceId}`);
         const result = await streamDevotionalAudio(fullText, resolvedVoiceId);
 
-        // Bail out if component unmounted during download
         if (!isMountedRef.current) return;
-        console.log(`[AudioPlayer] streamDevotionalAudio returned — audioUrl=${result.audioUrl}`);
 
         // Load the audio into the persistent player via replace()
         shouldAutoplayRef.current = true;
         setAudioUrl(result.audioUrl);
         audioUrlRef.current = result.audioUrl;
-        player.replace({ uri: result.audioUrl });
+        try {
+          player.replace({ uri: result.audioUrl });
+        } catch (replaceErr) {
+          logger.log(`[AudioPlayer] replace() error:`, replaceErr);
+        }
 
         // 15s timeout safety net — if audio never loads, show error with retry
         if (replaceTimeoutRef.current) clearTimeout(replaceTimeoutRef.current);
@@ -805,81 +831,108 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
 
                   {/* Transport controls */}
                   <View style={styles.transportControls}>
-                    <Pressable
-                      onPress={skipBack}
-                      style={styles.skipButton}
-                      disabled={isLoading || !isAudioReady}
-                    >
-                      <ArrowCounterClockwiseIcon
-                        size={20}
-                        color={
-                          isAudioReady ? colors.text : colors.textMuted
-                        }
-                        weight="light"
-                      />
-                      <Text
-                        style={[
-                          styles.skipLabel,
-                          {
-                            color: isAudioReady
-                              ? colors.text
-                              : colors.textMuted,
-                            fontFamily: FontFamily.uiSemiBold,
-                          },
-                        ]}
+                    <Animated.View style={skipBackAnimStyle}>
+                      <Pressable
+                        onPress={skipBack}
+                        onPressIn={() => {
+                          skipBackScale.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                        onPressOut={() => {
+                          skipBackScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                        }}
+                        style={styles.skipButton}
+                        disabled={isLoading || !isAudioReady}
                       >
-                        {SKIP_SECONDS}
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={togglePlayback}
-                      style={[
-                        styles.playButton,
-                        { backgroundColor: colors.accent },
-                      ]}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : isPlaying ? (
-                        <PauseIcon size={22} color="#fff" weight="fill" />
-                      ) : (
-                        <PlayIcon
-                          size={22}
-                          color="#fff"
-                          weight="fill"
-                          style={{ marginLeft: -2 }}
+                        <ArrowCounterClockwiseIcon
+                          size={20}
+                          color={
+                            isAudioReady ? colors.text : colors.textMuted
+                          }
+                          weight="light"
                         />
-                      )}
-                    </Pressable>
+                        <Text
+                          style={[
+                            styles.skipLabel,
+                            {
+                              color: isAudioReady
+                                ? colors.text
+                                : colors.textMuted,
+                              fontFamily: FontFamily.uiSemiBold,
+                            },
+                          ]}
+                        >
+                          {SKIP_SECONDS}
+                        </Text>
+                      </Pressable>
+                    </Animated.View>
 
-                    <Pressable
-                      onPress={skipForward}
-                      style={styles.skipButton}
-                      disabled={isLoading || !isAudioReady}
-                    >
-                      <ArrowClockwiseIcon
-                        size={20}
-                        color={
-                          isAudioReady ? colors.text : colors.textMuted
-                        }
-                        weight="light"
-                      />
-                      <Text
+                    <Animated.View style={playButtonAnimStyle}>
+                      <Pressable
+                        onPress={togglePlayback}
+                        onPressIn={() => {
+                          playButtonScale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        }}
+                        onPressOut={() => {
+                          playButtonScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                        }}
                         style={[
-                          styles.skipLabel,
-                          {
-                            color: isAudioReady
-                              ? colors.text
-                              : colors.textMuted,
-                            fontFamily: FontFamily.uiSemiBold,
-                          },
+                          styles.playButton,
+                          { backgroundColor: colors.accent },
                         ]}
+                        disabled={isLoading}
                       >
-                        {SKIP_SECONDS}
-                      </Text>
-                    </Pressable>
+                        {isLoading ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : isPlaying ? (
+                          <PauseIcon size={22} color="#fff" weight="fill" />
+                        ) : (
+                          <PlayIcon
+                            size={22}
+                            color="#fff"
+                            weight="fill"
+                            style={{ marginLeft: -2 }}
+                          />
+                        )}
+                      </Pressable>
+                    </Animated.View>
+
+                    <Animated.View style={skipForwardAnimStyle}>
+                      <Pressable
+                        onPress={skipForward}
+                        onPressIn={() => {
+                          skipForwardScale.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                        onPressOut={() => {
+                          skipForwardScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                        }}
+                        style={styles.skipButton}
+                        disabled={isLoading || !isAudioReady}
+                      >
+                        <ArrowClockwiseIcon
+                          size={20}
+                          color={
+                            isAudioReady ? colors.text : colors.textMuted
+                          }
+                          weight="light"
+                        />
+                        <Text
+                          style={[
+                            styles.skipLabel,
+                            {
+                              color: isAudioReady
+                                ? colors.text
+                                : colors.textMuted,
+                              fontFamily: FontFamily.uiSemiBold,
+                            },
+                          ]}
+                        >
+                          {SKIP_SECONDS}
+                        </Text>
+                      </Pressable>
+                    </Animated.View>
                   </View>
 
                 </>

@@ -156,8 +156,14 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             backgroundColor: colors.inputBackground,
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: streakCount > 0 ? colors.accent + '15' : colors.border,
             padding: 20,
+            // Warm glow for streak card — intensity scales with streak
+            shadowColor: streakCount > 0 ? colors.accent : '#000',
+            shadowOffset: { width: 0, height: streakCount > 0 ? 3 : 2 },
+            shadowOpacity: streakCount > 0 ? 0.12 : 0.05,
+            shadowRadius: streakCount > 0 ? 12 : 8,
+            elevation: streakCount > 0 ? 3 : 2,
           }}
         >
           {/* Header row - Current Streak label on left, streak count on right */}
@@ -186,9 +192,9 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
               <Text
                 style={{
                   fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 28,
-                  color: colors.text,
-                  letterSpacing: -0.5,
+                  fontSize: 32,
+                  color: streakCount > 0 ? colors.accent : colors.text,
+                  letterSpacing: -1,
                 }}
               >
                 {streakCount}

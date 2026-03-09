@@ -28,6 +28,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
+import { CompanionOrb } from '@/components/CompanionOrb';
 import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
@@ -38,6 +39,8 @@ import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
+import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -107,6 +110,9 @@ export default function ReadingScreen() {
 
   const isPremium = user?.isPremium ?? false;
 
+  // Premium nudge system (audio teaser on reading screen)
+  const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
+
   const currentDevotional = useMemo(
     () => devotionals.find((d) => d.id === currentDevotionalId),
     [devotionals, currentDevotionalId]
@@ -145,6 +151,12 @@ export default function ReadingScreen() {
   const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
   const bridgeOpacity = useSharedValue(0);
+
+  // Button press micro-interaction — spring scale for Complete Day button
+  const completeButtonScale = useSharedValue(1);
+  const completeButtonAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: completeButtonScale.value }],
+  }));
 
   const fontSize = user?.fontSize ?? 'medium';
 
@@ -500,6 +512,12 @@ export default function ReadingScreen() {
       const completingLastDay = viewingDay >= expectedTotal;
       setCelebrationType(completingLastDay ? 'series' : 'day');
       setShowCelebration(true);
+
+      // Set flag for premium nudge system when series completes
+      if (completingLastDay && currentDevotional?.title) {
+        useUnfoldStore.getState().justCompletedSeriesTitle = null; // clear first
+        useUnfoldStore.setState({ justCompletedSeriesTitle: currentDevotional.title });
+      }
 
       // Announce completion to screen reader
       const announcement = completingLastDay
@@ -938,7 +956,7 @@ export default function ReadingScreen() {
                 accessibilityLabel="Generate remaining days"
                 accessibilityHint={`Generate the remaining ${expectedDays - daysReady} days of your devotional`}
                 accessibilityState={{ disabled: isRetrying }}
-                style={({ pressed }) => ({
+                style={{
                   backgroundColor: retryCtaButtonBg,
                   paddingVertical: 18,
                   borderRadius: 14,
@@ -948,8 +966,8 @@ export default function ReadingScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 10,
-                  opacity: pressed ? 0.85 : 1,
-                })}
+                  opacity: 1,
+                }}
               >
                 <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
                 <Text
@@ -973,15 +991,15 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Go back to day ${daysReady}`}
                   accessibilityHint="Return to the last available day"
-                  style={({ pressed }) => ({
+                  style={{
                     backgroundColor: retryCtaButtonBg,
                     paddingVertical: 16,
                     borderRadius: 14,
                     borderWidth: 1,
                     borderColor: retryCtaButtonBorder,
                     alignItems: 'center',
-                    opacity: pressed ? 0.85 : 1,
-                  })}
+                    opacity: 1,
+                  }}
                 >
                   <Text
                     style={{
@@ -1014,20 +1032,22 @@ export default function ReadingScreen() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   paddingHorizontal: 16,
-                  paddingVertical: 12,
+                  paddingVertical: 10,
                 }}
               >
+              {/* Home button */}
               <Pressable
                 onPress={handleGoHome}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go home"
                 accessibilityHint="Returns to the home screen"
-                style={{ padding: 8 }}
+                style={{ padding: 8, opacity: 1 }}
               >
                 <HouseIcon size={22} color={colors.textMuted} weight="light" />
               </Pressable>
 
+              {/* Day indicator -- editorial serif typography */}
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1043,112 +1063,161 @@ export default function ReadingScreen() {
                 accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
                 accessibilityHint="Opens day selector menu"
                 accessibilityValue={{ min: 1, max: currentDevotional.totalDays, now: viewingDay, text: `Day ${viewingDay} of ${currentDevotional.totalDays}` }}
-                style={{ 
-                  padding: 8,
+                style={{
+                  paddingVertical: 6,
+                  paddingHorizontal: 4,
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 8,
+                  gap: 10,
                 }}
               >
-                {/* Left Chevron - show if not on day 1 */}
+                {/* Left Chevron */}
                 {viewingDay > 1 ? (
-                  <CaretLeftIcon size={16} color={colors.textMuted} weight="light" />
+                  <CaretLeftIcon size={14} color={colors.textSubtle} weight="bold" />
                 ) : (
-                  <View style={{ width: 16 }} />
+                  <View style={{ width: 14 }} />
                 )}
-                
-                <Text
-                  style={{
-                    fontFamily: FontFamily.mono,
-                    fontSize: 12,
-                    color: colors.textSubtle,
-                    letterSpacing: 1,
-                  }}
-                >
-                  DAY {viewingDay} OF {currentDevotional.totalDays}
-                </Text>
-                
-                {/* Right Chevron - show if more days available */}
+
+                <View style={{ alignItems: 'center' }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.display,
+                      fontSize: 18,
+                      color: colors.text,
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Day {viewingDay}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 10,
+                      color: colors.textHint,
+                      letterSpacing: 2,
+                      textTransform: 'uppercase',
+                      marginTop: -1,
+                    }}
+                  >
+                    of {currentDevotional.totalDays}
+                  </Text>
+                </View>
+
+                {/* Right Chevron */}
                 {viewingDay < availableDays ? (
-                  <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
+                  <CaretRightIcon size={14} color={colors.textSubtle} weight="bold" />
                 ) : (
-                  <View style={{ width: 16 }} />
+                  <View style={{ width: 14 }} />
                 )}
               </Pressable>
 
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push({
-                    pathname: '/(tabs)/(today)/journal',
-                    params: {
-                      devotionalId: currentDevotionalId,
-                      dayNumber: String(viewingDay),
-                    },
-                  });
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Open journal"
-                accessibilityHint="Write a reflection about today's reading"
-                style={({ pressed }) => ({
-                  padding: 8,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <BookOpenIcon
-                  size={22}
-                  color={colors.text}
-                  weight="light"
-                />
-              </Pressable>
-
-              {/* Audio Player Button */}
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  if (!isPremium) {
-                    setAudioToast({ visible: true, message: 'Audio is a premium feature' });
-                    setTimeout(() => {
-                      setAudioToast(null);
-                      setPremiumFeature('audio');
-                      setShowPremiumSheet(true);
-                    }, 1200);
-                    return;
-                  }
-                  if (!isAudioPlayerVisible) {
-                    setIsAudioPlayerVisible(true);
-                    // Start Live Activity for the reading/listening session
-                    startReadingSession({
-                      devotionalTitle: currentDevotional?.title ?? 'Unfold',
-                      dayTitle: currentDayData?.title ?? 'Reading',
-                      dayNumber: viewingDay,
-                      totalDays: totalDays,
-                      totalMinutes: user?.readingDuration ?? 5,
-                      isListening: true,
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                {/* Journal button */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({
+                      pathname: '/(tabs)/(today)/journal',
+                      params: {
+                        devotionalId: currentDevotionalId,
+                        dayNumber: String(viewingDay),
+                      },
                     });
-                    // Small delay to let component mount before expanding
-                    setTimeout(() => {
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open journal"
+                  accessibilityHint="Write a reflection about today's reading"
+                  style={{ padding: 8, opacity: 1 }}
+                >
+                  <BookOpenIcon
+                    size={22}
+                    color={colors.text}
+                    weight="light"
+                  />
+                </Pressable>
+
+                {/* Audio Player Button */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (!isPremium) {
+                      setAudioToast({ visible: true, message: 'Audio is a premium feature' });
+                      setTimeout(() => {
+                        setAudioToast(null);
+                        setPremiumFeature('audio');
+                        setShowPremiumSheet(true);
+                      }, 1200);
+                      return;
+                    }
+                    if (!isAudioPlayerVisible) {
+                      setIsAudioPlayerVisible(true);
+                      // Track that user has used audio (for premium nudge system)
+                      useUnfoldStore.getState().setHasUsedAudio();
+                      startReadingSession({
+                        devotionalTitle: currentDevotional?.title ?? 'Unfold',
+                        dayTitle: currentDayData?.title ?? 'Reading',
+                        dayNumber: viewingDay,
+                        totalDays: totalDays,
+                        totalMinutes: user?.readingDuration ?? 5,
+                        isListening: true,
+                      });
+                      setTimeout(() => {
+                        audioPlayerRef.current?.expand();
+                      }, 50);
+                    } else {
                       audioPlayerRef.current?.expand();
-                    }, 50);
-                  } else {
-                    audioPlayerRef.current?.expand();
-                  }
+                    }
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Listen to devotional"
+                  accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
+                  style={{ padding: 8, opacity: 1 }}
+                >
+                  <PlayIcon
+                    size={22}
+                    color={colors.text}
+                    weight="fill"
+                  />
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Progress bar -- thin line showing position in series */}
+            <View
+              style={{
+                height: 2,
+                backgroundColor: colors.border,
+                marginHorizontal: 24,
+                borderRadius: 1,
+                overflow: 'hidden',
+              }}
+            >
+              <Animated.View
+                style={{
+                  height: 2,
+                  borderRadius: 1,
+                  backgroundColor: colors.accent,
+                  width: `${(viewingDay / currentDevotional.totalDays) * 100}%`,
+                  opacity: 0.7,
                 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Listen to devotional"
-                accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
-                style={{ padding: 8 }}
-              >
-                <PlayIcon
-                  size={22}
-                  color={colors.text}
-                  weight="fill"
-                />
-              </Pressable>
+              />
             </View>
             </View>
+
+            {/* Premium nudge banner — audio teaser */}
+            {premiumNudge && (
+              <PremiumNudgeCard
+                type={premiumNudge.type}
+                message={premiumNudge.message}
+                cta={premiumNudge.cta}
+                premiumFeature={premiumNudge.premiumFeature}
+                onAction={nudgeAction}
+                onDismiss={nudgeDismiss}
+                variant="banner"
+              />
+            )}
 
             {/* Content - Scrollable with day-transition fade */}
             <Animated.ScrollView
@@ -1190,26 +1259,38 @@ export default function ReadingScreen() {
                   style={[
                     {
                       marginBottom: 24,
-                      paddingVertical: 16,
-                      paddingHorizontal: 18,
-                      borderRadius: 12,
-                      backgroundColor: colors.inputBackground,
-                      borderLeftWidth: 3,
-                      borderLeftColor: colors.accent,
+                      flexDirection: 'row',
+                      alignItems: 'flex-start',
+                      gap: 10,
                     },
                     bridgeAnimatedStyle,
                   ]}
                 >
-                  <Text
+                  <View style={{ marginTop: 10 }}>
+                    <CompanionOrb accentColor={colors.accent} size={24} />
+                  </View>
+                  <View
                     style={{
-                      fontFamily: FontFamily.displayItalic,
-                      fontSize: 15,
-                      lineHeight: 24,
-                      color: colors.textMuted,
+                      flex: 1,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 16,
+                      backgroundColor: colors.accent + '10',
+                      borderWidth: 1,
+                      borderColor: colors.accent + '20',
                     }}
                   >
-                    {bridgeText}
-                  </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.body,
+                        fontSize: 14,
+                        lineHeight: 22,
+                        color: colors.text,
+                      }}
+                    >
+                      {bridgeText}
+                    </Text>
+                  </View>
                 </Animated.View>
               )}
 
@@ -1241,8 +1322,29 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
 
+              {/* Section divider before complete button */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 48,
+                  marginBottom: 8,
+                  paddingHorizontal: 40,
+                }}
+              >
+                <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
+                <Text style={{ fontSize: 12, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: 16 }}>
+                  {'···'}
+                </Text>
+                <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
+              </View>
+
               {/* Complete button + Share button row */}
-              <View style={{ marginTop: 48, paddingHorizontal: 24 }}>
+              <Animated.View
+                entering={FadeIn.delay(200).duration(400)}
+                style={[{ marginTop: 32, paddingHorizontal: 24 }, completeButtonAnimStyle]}
+              >
                 <View
                   style={{
                     flexDirection: 'row',
@@ -1263,6 +1365,14 @@ export default function ReadingScreen() {
                   >
                     <Pressable
                       onPress={!isCompleted ? handleComplete : undefined}
+                      onPressIn={() => {
+                        if (!isCompleted) {
+                          completeButtonScale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
+                        }
+                      }}
+                      onPressOut={() => {
+                        completeButtonScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                      }}
                       accessibilityRole="button"
                       accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Journey' : 'Complete Day')}
                       style={{
@@ -1381,7 +1491,7 @@ export default function ReadingScreen() {
                         ) : isPremium ? (
                           <Pressable
                             onPress={handleGenerateMore}
-                            style={({ pressed }) => ({
+                            style={{
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: 16,
                               paddingHorizontal: 32,
@@ -1392,9 +1502,9 @@ export default function ReadingScreen() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: 10,
-                              opacity: pressed ? 0.85 : 1,
+                              opacity: 1,
                               minWidth: 240,
-                            })}
+                            }}
                           >
                             <ArrowsClockwiseIcon size={15} color={retryCtaButtonText} weight="light" />
                             <Text
@@ -1414,7 +1524,7 @@ export default function ReadingScreen() {
                               setPremiumFeature('series');
                               setShowPremiumSheet(true);
                             }}
-                            style={({ pressed }) => ({
+                            style={{
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: 16,
                               paddingHorizontal: 32,
@@ -1425,9 +1535,9 @@ export default function ReadingScreen() {
                               alignItems: 'center',
                               justifyContent: 'center',
                               gap: 10,
-                              opacity: pressed ? 0.85 : 1,
+                              opacity: 1,
                               minWidth: 240,
-                            })}
+                            }}
                           >
                             <Text
                               style={{
@@ -1496,7 +1606,7 @@ export default function ReadingScreen() {
                       </Text>
                     </Animated.View>
                   )}
-              </View>
+              </Animated.View>
             </Animated.ScrollView>
           </SafeAreaView>
         </Animated.View>

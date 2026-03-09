@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeInDown,
+  FadeInUp,
   FadeOut,
   useSharedValue,
   useAnimatedStyle,
@@ -12,6 +13,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSpring,
+  withSequence,
   interpolate,
   Easing,
   runOnJS,
@@ -22,7 +24,7 @@ import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore } from '@/lib/store';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
+import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon, CaretRightIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
@@ -35,9 +37,12 @@ import { CompanionOrb } from '@/components/CompanionOrb';
 import { CompanionCheckInSheet } from '@/components/CompanionCheckInSheet';
 import { CompanionTooltip } from '@/components/CompanionTooltip';
 import { AccentGlow } from '@/components/AccentGlow';
+import { GoldEmberField } from '@/components/GoldEmberField';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
+import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
 import { selectTooltipMessage } from '@/constants/companion-messages';
 
@@ -157,51 +162,7 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
   );
 }
 
-// Mini companion ring — lightweight visual reference to the companion orb
-function MiniCompanionRing({ accentColor }: { accentColor: string }) {
-  const pulse = useSharedValue(0);
-
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, [pulse]);
-
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.3, 0.8]),
-    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.15]) }],
-  }));
-
-  return (
-    <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            width: 28,
-            height: 28,
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: accentColor,
-          },
-          ringStyle,
-        ]}
-      />
-      <View
-        style={{
-          width: 14,
-          height: 14,
-          borderRadius: 7,
-          backgroundColor: accentColor + '30',
-          borderWidth: 1,
-          borderColor: accentColor + '60',
-        }}
-      />
-    </View>
-  );
-}
+// MiniCompanionRing removed — replaced by CompanionOrb (size=28) for visual consistency
 
 // Swipeable notification card — shared by midday check-in and evening wind-down
 function NotificationCard({
@@ -267,11 +228,17 @@ function NotificationCard({
                 paddingRight: 12,
                 flexDirection: 'row',
                 alignItems: 'center',
+                // Subtle lift for notification cards
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                elevation: 1,
               }}
             >
-              {/* Mini companion ring — signals this is from the companion */}
+              {/* Companion orb — uses the real morphing Skia ring */}
               <View style={{ marginRight: 12 }}>
-                <MiniCompanionRing accentColor={accentColor} />
+                <CompanionOrb accentColor={accentColor} size={28} />
               </View>
 
               {/* Message text */}
@@ -288,10 +255,8 @@ function NotificationCard({
                 </Text>
               </View>
 
-              {/* Icon */}
-              <View style={{ marginLeft: 8, marginRight: 4 }}>
-                {icon}
-              </View>
+              {/* Action chevron */}
+              <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={{ marginLeft: 8 }} />
 
               {/* Dismiss X */}
               <Pressable
@@ -300,7 +265,7 @@ function NotificationCard({
                   onDismiss();
                 }}
                 hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
-                style={{ padding: 4 }}
+                style={{ padding: 4, marginLeft: 4 }}
               >
                 <XIcon size={14} color={colors.textSubtle} weight="light" />
               </Pressable>
@@ -340,6 +305,11 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
           borderWidth: 1,
           borderColor: colors.border,
           padding: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+          elevation: 2,
         }}
       >
         <Animated.View style={shimmerStyle}>
@@ -367,31 +337,43 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
 }
 
 // Daily Bridge card — personalized transition from yesterday to today
+// Styled consistently with CompanionTooltip — clean bubble, regular font
 function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme }) {
   return (
     <Animated.View
       entering={FadeIn.duration(600)}
       style={{ paddingHorizontal: 24, marginTop: 16 }}
     >
-      <View
-        style={{
-          backgroundColor: colors.inputBackground,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: 18,
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: FontFamily.bodyItalic,
-            fontSize: 15,
-            color: colors.textMuted,
-            lineHeight: 24,
-          }}
-        >
-          {text}
-        </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+        {/* Mini companion orb */}
+        <View style={{ marginTop: 10 }}>
+          <CompanionOrb accentColor={colors.accent} size={24} />
+        </View>
+
+        {/* Message bubble — same style as CompanionTooltip */}
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              backgroundColor: colors.accent + '10',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.accent + '20',
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 14,
+                color: colors.text,
+                lineHeight: 22,
+              }}
+            >
+              {text}
+            </Text>
+          </View>
+        </View>
       </View>
     </Animated.View>
   );
@@ -447,7 +429,7 @@ export default function HomeScreen() {
   // Check premium status from RevenueCat
   const { data: premiumResult } = useQuery({
     queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('premium'),
+    queryFn: () => hasEntitlement('Unfold Premium'),
     enabled: isRevenueCatEnabled(),
     staleTime: 1000 * 60,
   });
@@ -460,10 +442,15 @@ export default function HomeScreen() {
     }
   }, [premiumResult, user?.isPremium, updateUser]);
 
+  // Premium nudge system
+  const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'home' });
+
   // Sync widget data whenever home screen mounts or re-focuses
+  // Also reset nudge session so one nudge can show per focus cycle
   useFocusEffect(
     useCallback(() => {
       syncWidgets();
+      useUnfoldStore.getState().resetNudgeSession();
     }, [])
   );
 
@@ -511,11 +498,12 @@ export default function HomeScreen() {
         condition = 'between_series';
       } else if (streakCurrent > 0 && streakCurrent % 7 === 0) {
         condition = 'streak_milestone';
-      } else if (hour < 12) {
+      } else if (hour >= 5 && hour < 12) {
         condition = 'first_open_morning';
-      } else if (hour < 17) {
+      } else if (hour >= 12 && hour < 17) {
         condition = 'first_open_afternoon';
       } else {
+        // Evening (17-22) and night (22-5)
         condition = 'first_open_evening';
       }
 
@@ -607,6 +595,12 @@ export default function HomeScreen() {
     }
     return 'Today';
   };
+
+  // Button press micro-interaction — spring scale
+  const journeyCardScale = useSharedValue(1);
+  const journeyCardAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: journeyCardScale.value }],
+  }));
 
   const handleContinueReading = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -809,30 +803,29 @@ export default function HomeScreen() {
                   onPress={handleCreateNew}
                   accessibilityRole="button"
                   accessibilityLabel="Begin your devotional journey"
+                  style={{ opacity: 1 }}
                 >
-                  {({ pressed }) => (
-                    <View
+                  <View
+                    style={{
+                      paddingVertical: 18,
+                      paddingHorizontal: 32,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: colors.accent,
+                      backgroundColor: 'transparent',
+                    }}
+                  >
+                    <Text
                       style={{
-                        paddingVertical: 18,
-                        paddingHorizontal: 32,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: colors.accent,
-                        backgroundColor: pressed ? colors.accent : 'transparent',
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.accent,
+                        letterSpacing: 0.5,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 15,
-                          color: pressed ? colors.background : colors.accent,
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        Begin Your Journey
-                      </Text>
-                    </View>
-                  )}
+                      Begin Your Journey
+                    </Text>
+                  </View>
                 </Pressable>
               </AccentGlow>
             </Animated.View>
@@ -863,13 +856,16 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Ambient campfire embers — visible only when today's reading is done */}
+        {hasReadToday && <GoldEmberField density="low" />}
+
         <ScrollView
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Header — greeting + orb */}
           <Animated.View
-            entering={FadeIn.duration(700)}
+            entering={FadeInDown.delay(0).duration(600)}
             style={{
               paddingHorizontal: 24,
               paddingTop: 20,
@@ -903,25 +899,14 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Companion Orb + Tooltip */}
-              <View style={{ position: 'relative', overflow: 'visible' }}>
-                {showTooltip && tooltipMessage && (
-                  <CompanionTooltip
-                    message={tooltipMessage}
-                    accentColor={colors.accent}
-                    textColor={colors.text}
-                    onTap={handleTooltipTap}
-                    onDismiss={handleTooltipDismiss}
-                  />
-                )}
-                <CompanionOrb
-                  accentColor={colors.accent}
-                  size={48}
-                  onPress={handleCompanionOpen}
-                  isActive={isCompanionActive}
-                  showBadge={showBadge}
-                />
-              </View>
+              {/* Companion Orb */}
+              <CompanionOrb
+                accentColor={colors.accent}
+                size={48}
+                onPress={handleCompanionOpen}
+                isActive={isCompanionActive}
+                showBadge={showBadge}
+              />
             </View>
           </Animated.View>
 
@@ -967,10 +952,7 @@ export default function HomeScreen() {
                 onPress={handleResume}
                 accessibilityRole="button"
                 accessibilityLabel={`Resume ${resumeDevotional.title} day ${resumeContext.dayNumber}`}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.75 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                style={{ opacity: 1 }}
               >
                 <View
                   style={{
@@ -979,6 +961,12 @@ export default function HomeScreen() {
                     borderWidth: 1,
                     borderColor: colors.border,
                     padding: 16,
+                    // Light elevation for resume card
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 8,
+                    elevation: 2,
                   }}
                 >
                   <Text
@@ -1021,28 +1009,39 @@ export default function HomeScreen() {
 
           {/* Main Journey Card */}
           <Animated.View
-            entering={FadeInDown.duration(700).delay(100)}
-            style={{ paddingHorizontal: 24, marginTop: 20 }}
+            entering={FadeInUp.delay(200).duration(600)}
+            style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
           >
             {isJourneyComplete ? (
               <Pressable
                 onPress={handleCreateNew}
+                onPressIn={() => {
+                  journeyCardScale.value = withTiming(0.98, { duration: 120 });
+                }}
+                onPressOut={() => {
+                  journeyCardScale.value = withTiming(1, { duration: 150 });
+                }}
                 accessibilityRole="button"
                 accessibilityLabel="Start a new journey"
-                style={({ pressed }) => ({
+                style={{
                   borderRadius: 20,
                   overflow: 'hidden',
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                }}
               >
                 <View
                   style={{
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: colors.accent + '18',
                     padding: 28,
                     alignItems: 'center',
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor: colors.backgroundElevated,
+                    // Hero card elevation
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 16,
+                    elevation: 4,
                   }}
                 >
                   <View
@@ -1105,21 +1104,32 @@ export default function HomeScreen() {
             ) : (
               <Pressable
                 onPress={handleContinueReading}
+                onPressIn={() => {
+                  journeyCardScale.value = withTiming(0.98, { duration: 120 });
+                }}
+                onPressOut={() => {
+                  journeyCardScale.value = withTiming(1, { duration: 150 });
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`Continue ${currentDevotional.title}, day ${currentDevotional.currentDay} of ${currentDevotional.totalDays}`}
-                style={({ pressed }) => ({
+                style={{
                   borderRadius: 20,
                   overflow: 'hidden',
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                }}
               >
                 <View
                   style={{
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: colors.accent + '18',
                     padding: 24,
-                    backgroundColor: colors.inputBackground,
+                    backgroundColor: colors.backgroundElevated,
+                    // Hero card — strongest elevation in the hierarchy
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 16,
+                    elevation: 4,
                   }}
                 >
                   {/* Series label + day pill */}
@@ -1255,10 +1265,10 @@ export default function HomeScreen() {
                     onPress={handleCreateNew}
                     accessibilityRole="button"
                     accessibilityLabel="Start a new journey"
-                    style={({ pressed }) => ({
+                    style={{
                       marginTop: 12,
-                      opacity: pressed ? 0.7 : 1,
-                    })}
+                      opacity: 1,
+                    }}
                   >
                     <View
                       style={{
@@ -1299,6 +1309,12 @@ export default function HomeScreen() {
                   borderWidth: 1,
                   borderColor: colors.border,
                   padding: 20,
+                  // Light elevation for secondary card
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  elevation: 2,
                 }}
               >
                 <Text
@@ -1389,7 +1405,7 @@ export default function HomeScreen() {
 
           {/* Streak Box */}
           <Animated.View
-            entering={FadeInDown.duration(600).delay(300)}
+            entering={FadeInUp.delay(350).duration(600)}
             style={{ paddingHorizontal: 24, marginTop: 24 }}
           >
             <StreakBox
@@ -1397,6 +1413,20 @@ export default function HomeScreen() {
               onPress={() => router.push('/(tabs)/(you)/streak-settings')}
             />
           </Animated.View>
+
+          {/* Premium Nudge Card — contextual, inline upsell */}
+          {premiumNudge && (
+            <View style={{ paddingHorizontal: 24, marginTop: 16 }}>
+              <PremiumNudgeCard
+                type={premiumNudge.type}
+                message={premiumNudge.message}
+                cta={premiumNudge.cta}
+                premiumFeature={premiumNudge.premiumFeature}
+                onAction={nudgeAction}
+                onDismiss={nudgeDismiss}
+              />
+            </View>
+          )}
         </ScrollView>
       </SafeAreaView>
 
@@ -1431,6 +1461,17 @@ export default function HomeScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature="series"
       />
+
+      {/* Companion tooltip — rendered as top-level overlay to avoid clipping */}
+      {showTooltip && tooltipMessage && (
+        <CompanionTooltip
+          message={tooltipMessage}
+          accentColor={colors.accent}
+          textColor={colors.text}
+          onTap={handleTooltipTap}
+          onDismiss={handleTooltipDismiss}
+        />
+      )}
     </View>
   );
 }

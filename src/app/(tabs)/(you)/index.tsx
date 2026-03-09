@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import {
   GearIcon,
@@ -13,6 +14,7 @@ import {
   ChartBarIcon,
   CaretRightIcon,
   CrownIcon,
+  SparkleIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -41,7 +43,7 @@ export default function YouScreen() {
 
   const { data: premiumResult } = useQuery({
     queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('premium'),
+    queryFn: () => hasEntitlement('Unfold Premium'),
     enabled: isRevenueCatEnabled(),
     staleTime: 1000 * 60,
   });
@@ -153,112 +155,144 @@ export default function YouScreen() {
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowPremiumSheet(true);
+                  router.push('/paywall');
                 }}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.85 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                })}
+                style={{ opacity: 1 }}
               >
                 <View
                   style={{
-                    backgroundColor: colors.accent,
-                    borderRadius: 16,
-                    padding: 20,
+                    borderRadius: 18,
+                    overflow: 'hidden',
+                    // Premium glow shadow
+                    shadowColor: colors.accent,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 16,
+                    elevation: 5,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <CrownIcon size={18} color={colors.background} weight="fill" />
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiSemiBold,
-                        fontSize: 16,
-                        color: colors.background,
-                      }}
-                    >
-                      Upgrade to Premium
-                    </Text>
-                  </View>
-                  <Text
+                  <LinearGradient
+                    colors={[colors.accent, colors.accent + 'CC']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 14,
-                      color: colors.background,
-                      opacity: 0.85,
+                      padding: 22,
+                      borderRadius: 18,
                     }}
                   >
-                    Unlock unlimited journeys, themes, and more
-                  </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <CrownIcon size={20} color={colors.background} weight="fill" />
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiSemiBold,
+                            fontSize: 17,
+                            color: colors.background,
+                            letterSpacing: -0.2,
+                          }}
+                        >
+                          Upgrade to Premium
+                        </Text>
+                      </View>
+                      <SparkleIcon size={16} color={colors.background + 'AA'} weight="fill" />
+                    </View>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.body,
+                        fontSize: 14,
+                        color: colors.background,
+                        opacity: 0.85,
+                        lineHeight: 20,
+                      }}
+                    >
+                      Unlock unlimited journeys, themes, and more
+                    </Text>
+                  </LinearGradient>
                 </View>
               </Pressable>
             </Animated.View>
           )}
 
-          {/* Menu Items */}
+          {/* Menu Items — grouped card */}
           <Animated.View
             entering={FadeInDown.duration(600).delay(100)}
             style={{ paddingHorizontal: 24 }}
           >
-            {menuItems.map((item, index) => (
-              <Pressable
-                key={item.label}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push(item.route as any);
-                }}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: 16,
-                    borderBottomWidth: index < menuItems.length - 1 ? 1 : 0,
-                    borderBottomColor: colors.border,
+            <View
+              style={{
+                backgroundColor: colors.backgroundElevated,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                // Subtle lift for menu group
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.06,
+                shadowRadius: 10,
+                elevation: 2,
+                overflow: 'hidden',
+              }}
+            >
+              {menuItems.map((item, index) => (
+                <Pressable
+                  key={item.label}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push(item.route as any);
                   }}
+                  style={{ opacity: 1 }}
                 >
                   <View
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 10,
-                      backgroundColor: colors.inputBackground,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 14,
+                      paddingVertical: 14,
+                      paddingHorizontal: 16,
+                      borderBottomWidth: index < menuItems.length - 1 ? 1 : 0,
+                      borderBottomColor: colors.border,
                     }}
                   >
-                    <item.icon size={18} color={colors.accent} weight="light" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
+                    <View
                       style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.text,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundColor: colors.accent + '10',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 14,
                       }}
                     >
-                      {item.label}
-                    </Text>
-                    {item.subtitle && (
+                      <item.icon size={18} color={colors.accent} weight="light" />
+                    </View>
+                    <View style={{ flex: 1 }}>
                       <Text
                         style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 13,
-                          color: colors.textSubtle,
-                          marginTop: 2,
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: 15,
+                          color: colors.text,
                         }}
                       >
-                        {item.subtitle}
+                        {item.label}
                       </Text>
-                    )}
+                      {item.subtitle && (
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.ui,
+                            fontSize: 13,
+                            color: colors.textSubtle,
+                            marginTop: 2,
+                          }}
+                        >
+                          {item.subtitle}
+                        </Text>
+                      )}
+                    </View>
+                    <CaretRightIcon size={16} color={colors.textSubtle} weight="light" />
                   </View>
-                  <CaretRightIcon size={16} color={colors.textSubtle} weight="light" />
-                </View>
-              </Pressable>
-            ))}
+                </Pressable>
+              ))}
+            </View>
           </Animated.View>
         </ScrollView>
       </SafeAreaView>

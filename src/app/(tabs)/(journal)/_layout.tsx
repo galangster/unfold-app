@@ -6,12 +6,13 @@ export default function JournalLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: 'transparent' },
-        animation: 'fade',
+        animation: 'ios_from_right',
+        animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="entry" />
-      <Stack.Screen name="my-responses" />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
+      <Stack.Screen name="entry" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="my-responses" options={{ animation: 'ios_from_right' }} />
     </Stack>
   );
 }
