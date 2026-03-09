@@ -34,7 +34,6 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
-import { SpeechToTextButton } from '@/components/SpeechToTextButton';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
@@ -202,6 +201,26 @@ const ALL_STEPS = [
 
 type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack';
 
+// Discovery chips — tappable quick-select options for the 3 discovery questions
+// Each chip is a feeling/situation that seeds context without requiring typing
+const DISCOVERY_CHIPS: Record<string, string[]> = {
+  currentSituation: [
+    'Anxious', 'Grateful', 'Searching', 'Tired', 'Hopeful',
+    'Overwhelmed', 'Growing', 'Waiting', 'Restless', 'At peace',
+    'In transition', 'Grieving',
+  ],
+  emotionalState: [
+    'Fear', 'Loneliness', 'Doubt', 'Grief', 'Anger',
+    'Shame', 'Restlessness', 'Yearning', 'Emptiness',
+    'Burnout', 'Confusion', 'Numbness',
+  ],
+  spiritualSeeking: [
+    'Peace', 'Clarity', 'Direction', 'Healing', 'Purpose',
+    'Forgiveness', 'Strength', 'Rest', 'Joy', 'Community',
+    'Patience', 'Hope',
+  ],
+};
+
 interface OnboardingData {
   name: string;
   bibleTranslation: BibleTranslation;
@@ -252,6 +271,13 @@ export default function OnboardingScreen() {
   const ripple2 = useSharedValue(0);
   const ripple3 = useSharedValue(0);
   
+  // Discovery chips — multi-select state per step
+  const [selectedChips, setSelectedChips] = useState<Record<string, string[]>>({
+    currentSituation: [],
+    emotionalState: [],
+    spiritualSeeking: [],
+  });
+
   // Track whether the user has already seen the paywall during onboarding
   const hasSeenPaywallRef = useRef(false);
   // Track the step to resume after paywall dismissal
@@ -431,6 +457,9 @@ export default function OnboardingScreen() {
     // For text/multiline inputs
     if (step.type === 'text' || step.type === 'multiline') {
       const value = data[step.id as keyof OnboardingData];
+      // Discovery steps can proceed with chips OR typed text
+      const chips = selectedChips[step.id] ?? [];
+      if (chips.length > 0) return true;
       if (typeof value === 'string') {
         return value.trim().length > 0;
       }
@@ -603,6 +632,21 @@ export default function OnboardingScreen() {
     // BUT: Never advance if we're in a themeType sub-mode (safety guard)
     if (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') {
       return;
+    }
+
+    // Merge discovery chips into the text value before advancing
+    const discoveryStepIds = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
+    if (discoveryStepIds.includes(currentStepId)) {
+      const chips = selectedChips[currentStepId] ?? [];
+      if (chips.length > 0) {
+        const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
+        const chipPrefix = chips.join(', ');
+        // Merge: "Anxious, Searching — I've been thinking about..."
+        const merged = currentText
+          ? `${chipPrefix} — ${currentText}`
+          : chipPrefix;
+        setData((prev) => ({ ...prev, [currentStepId]: merged }));
+      }
     }
 
     // Dismiss keyboard first to prevent layout shift during animation
@@ -810,12 +854,13 @@ export default function OnboardingScreen() {
                 }));
                 setThemeSelectionMode('theme');
               }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
+              {({ pressed }) => (
               <View style={{
                 paddingVertical: 28,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
+                opacity: pressed ? 0.6 : 1,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
@@ -836,6 +881,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+              )}
             </Pressable>
 
             {/* Study Type option */}
@@ -851,12 +897,13 @@ export default function OnboardingScreen() {
                 }));
                 setThemeSelectionMode('type');
               }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
+              {({ pressed }) => (
               <View style={{
                 paddingVertical: 28,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
+                opacity: pressed ? 0.6 : 1,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
@@ -877,6 +924,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+              )}
             </Pressable>
 
             {/* Just guide me option */}
@@ -893,9 +941,9 @@ export default function OnboardingScreen() {
                 setThemeSelectionMode('none');
                 startDiscoveryPreparation('guided');
               }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
-              <View style={{ paddingVertical: 28 }}>
+              {({ pressed }) => (
+              <View style={{ paddingVertical: 28, opacity: pressed ? 0.6 : 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: 16,
@@ -915,6 +963,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
+              )}
             </Pressable>
           </View>
         );
@@ -1218,40 +1267,89 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'multiline') {
+      const chips = DISCOVERY_CHIPS[step.id];
+      const isDiscoveryStep = !!chips;
+      const currentChips = selectedChips[step.id] ?? [];
+
       return (
         <View style={{ flex: 1 }}>
+          {/* Discovery chips — quick-select feelings/situations */}
+          {isDiscoveryStep && (
+            <View style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+              marginBottom: 16,
+            }}>
+              {chips.map((chip) => {
+                const isChipSelected = currentChips.includes(chip);
+                return (
+                  <Pressable
+                    key={chip}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedChips((prev) => {
+                        const current = prev[step.id] ?? [];
+                        const updated = current.includes(chip)
+                          ? current.filter((c) => c !== chip)
+                          : [...current, chip];
+                        return { ...prev, [step.id]: updated };
+                      });
+                    }}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: isChipSelected ? colors.accent + '18' : colors.inputBackground,
+                      borderWidth: 1,
+                      borderColor: isChipSelected ? colors.accent + '50' : colors.border,
+                    }}
+                  >
+                    {({ pressed }) => (
+                      <Text style={{
+                        fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
+                        fontSize: 14,
+                        color: isChipSelected ? colors.accent : colors.textMuted,
+                        opacity: pressed ? 0.7 : 1,
+                      }}>
+                        {chip}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Text input — primary for aboutMe, optional elaboration for discovery */}
           <View style={{
-            flex: 1,
+            flex: isDiscoveryStep ? undefined : 1,
             backgroundColor: colors.inputBackground,
             borderRadius: 20,
             borderWidth: 1,
             borderColor: colors.border,
             padding: 20,
-            minHeight: 200,
+            minHeight: isDiscoveryStep ? 100 : 200,
           }}>
             <TextInput
               value={data[step.id as keyof OnboardingData] as string}
               onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
-              placeholder={step.placeholder}
+              placeholder={isDiscoveryStep && currentChips.length > 0
+                ? 'Want to share more? (optional)'
+                : step.placeholder}
               placeholderTextColor={colors.textMuted}
               style={{
-                flex: 1,
+                flex: isDiscoveryStep ? undefined : 1,
                 fontFamily: FontFamily.body,
                 fontSize: 17,
                 color: colors.text,
                 lineHeight: 26,
                 textAlignVertical: 'top',
+                minHeight: isDiscoveryStep ? 60 : undefined,
               }}
               multiline
-              autoFocus
-              maxLength={step.id === 'aboutMe' ? INPUT_LIMITS.LONG_TEXT.max : INPUT_LIMITS.LONG_TEXT.max}
-            />
-          </View>
-          <View style={{ marginTop: 16 }}>
-            <SpeechToTextButton 
-              onTranscript={(text) => {
-                setData((prev) => ({ ...prev, [step.id]: text }));
-              }}
+              autoFocus={!isDiscoveryStep}
+              maxLength={INPUT_LIMITS.LONG_TEXT.max}
             />
           </View>
         </View>
@@ -1384,7 +1482,7 @@ export default function OnboardingScreen() {
                   fontSize: 16,
                   color: '#FFFFFF',
                 }}>
-                  I'm ready to show up for this
+                  Build my devotional
                 </Text>
               </View>
             )}

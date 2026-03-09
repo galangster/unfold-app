@@ -33,7 +33,16 @@ import {
   SparkleIcon,
 } from 'phosphor-react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight as _useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+
+// Safe wrapper — returns 0 if not inside a tab navigator
+function useBottomTabBarHeightSafe(): number {
+  try {
+    return _useBottomTabBarHeight();
+  } catch {
+    return 80; // reasonable default for iOS tab bar
+  }
+}
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -161,7 +170,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
     ref
   ) => {
     const { colors, isDark } = useTheme();
-    const tabBarHeight = useBottomTabBarHeight();
+    const tabBarHeight = useBottomTabBarHeightSafe();
 
     const [isLoading, setIsLoading] = useState(false);
     const [hasError, setHasError] = useState(false);
@@ -398,15 +407,17 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
         console.log(`[AudioPlayer] calling streamDevotionalAudio — textLen=${fullText.length}, voiceId=${resolvedVoiceId}`);
         const result = await streamDevotionalAudio(fullText, resolvedVoiceId);
 
-        // Bail out if component unmounted during download
         if (!isMountedRef.current) return;
-        console.log(`[AudioPlayer] streamDevotionalAudio returned — audioUrl=${result.audioUrl}`);
 
         // Load the audio into the persistent player via replace()
         shouldAutoplayRef.current = true;
         setAudioUrl(result.audioUrl);
         audioUrlRef.current = result.audioUrl;
-        player.replace({ uri: result.audioUrl });
+        try {
+          player.replace({ uri: result.audioUrl });
+        } catch (replaceErr) {
+          logger.log(`[AudioPlayer] replace() error:`, replaceErr);
+        }
 
         // 15s timeout safety net — if audio never loads, show error with retry
         if (replaceTimeoutRef.current) clearTimeout(replaceTimeoutRef.current);

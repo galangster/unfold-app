@@ -41,7 +41,7 @@ export default function YouScreen() {
 
   const { data: premiumResult } = useQuery({
     queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('premium'),
+    queryFn: () => hasEntitlement('Unfold Premium'),
     enabled: isRevenueCatEnabled(),
     staleTime: 1000 * 60,
   });

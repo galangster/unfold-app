@@ -79,6 +79,10 @@ function toFriendlyGenerationError(errorMessage: string): string {
     return 'We hit a temporary writing limit. Try again with the\u00A0same\u00A0answers.';
   }
 
+  if (normalized.includes('output_truncated') || normalized.includes('truncated')) {
+    return 'The devotional was too long to generate in one go. Tap retry\u00A0\u2014\u00A0we\u2019ll break it into\u00A0smaller\u00A0pieces.';
+  }
+
   return 'We couldn\u2019t finish creating this devotional right now. Please\u00A0try\u00A0again.';
 }
 
@@ -500,6 +504,7 @@ export default function GeneratingScreen() {
           devotionalId,
           phase: 'full-series-generation',
         });
+        setIsGenerating(false);
         setError(errorMessage);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } finally {

@@ -447,7 +447,7 @@ export default function HomeScreen() {
   // Check premium status from RevenueCat
   const { data: premiumResult } = useQuery({
     queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('premium'),
+    queryFn: () => hasEntitlement('Unfold Premium'),
     enabled: isRevenueCatEnabled(),
     staleTime: 1000 * 60,
   });

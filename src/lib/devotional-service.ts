@@ -1181,12 +1181,21 @@ async function generateBatch(
   const model = 'claude-sonnet-4-6';
   const timeoutMs = 180000; // 3 min timeout for all days
 
-  logger.log(`[Devotional] generateBatch days ${startDay}-${endDay}, retryLevel=${retryLevel}, model=${model}, systemPrompt=${systemPrompt.length}chars, userPrompt=${userPrompt.length}chars`);
+  // Scale max_tokens based on batch size and reading duration to prevent truncation
+  const daysInBatch = endDay - startDay + 1;
+  const tokensPerDay = context.readingDuration === 30 ? 5000
+    : context.readingDuration === 15 ? 3000
+    : 2000;
+  const estimatedTokens = daysInBatch * tokensPerDay + 2000; // +2000 for JSON overhead + series title
+  const maxTokens = Math.min(Math.max(estimatedTokens, 8000), 32000); // floor 8k, cap 32k
+
+  logger.log(`[Devotional] generateBatch days ${startDay}-${endDay}, retryLevel=${retryLevel}, model=${model}, maxTokens=${maxTokens}, systemPrompt=${systemPrompt.length}chars, userPrompt=${userPrompt.length}chars`);
   void logBugEvent('devotional-service', 'batch-request-started', {
     startDay,
     endDay,
     retryLevel,
     model,
+    maxTokens,
   });
 
   let response: Response;
@@ -1198,7 +1207,7 @@ async function generateBatch(
       '/api/generate/devotional',
       {
         model,
-        max_tokens: 16000, // Token limit for Sonnet
+        max_tokens: maxTokens,
         system: systemPrompt,
         messages: [
           {
@@ -1294,8 +1303,8 @@ async function generateBatch(
   // Check if the LLM output was truncated
   const stopReason = (data as Record<string, unknown>).stop_reason;
   if (stopReason === 'max_tokens') {
-    logger.warn('[Devotional] Output was truncated (stop_reason: max_tokens). Retrying...');
-    throw new Error('TRANSIENT_UPSTREAM_ERROR');
+    logger.warn(`[Devotional] Output was truncated (stop_reason: max_tokens, maxTokens=${maxTokens}, daysInBatch=${daysInBatch}). Will retry with adjustments...`);
+    throw new Error('OUTPUT_TRUNCATED');
   }
 
   const content = (data as { content?: { text?: string }[] }).content?.[0]?.text;
@@ -1325,8 +1334,16 @@ async function generateBatch(
     } catch (innerErr) {
       logger.error('[Devotional] Second JSON parse also failed. Cleaned JSON (last 200 chars):', cleanedJson.substring(cleanedJson.length - 200));
       logger.error('[Devotional] Cleaned JSON length:', cleanedJson.length, 'Original content length:', content.length);
-      throw new Error('Could not parse LLM output as JSON — output may be truncated');
+      // Treat unparseable JSON as truncation — triggers batch splitting on retry
+      throw new Error('OUTPUT_TRUNCATED');
     }
+  }
+
+  // Validate we got all expected days — missing days means output was likely truncated
+  const expectedDays = endDay - startDay + 1;
+  if (!parsed.days || parsed.days.length < expectedDays) {
+    logger.warn(`[Devotional] Expected ${expectedDays} days but got ${parsed.days?.length ?? 0}. Treating as truncated output.`);
+    throw new Error('OUTPUT_TRUNCATED');
   }
 
   // Ensure day numbers are correct
@@ -1372,11 +1389,12 @@ async function generateBatchWithRetry(
   resolvedPersona?: { primary: PersonaTrait; secondary: PersonaTrait; templateSeed: number }
 ): Promise<{ title: string; days: DevotionalDay[] }> {
   let lastError: Error | null = null;
+  const daysInBatch = endDay - startDay + 1;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       // On first attempt, pre-sanitize context to reasonable lengths
-      let contextToUse = {
+      const contextToUse = {
         ...context,
         aboutMe: sanitizeForGeneration(context.aboutMe, 300),
         currentSituation: sanitizeForGeneration(context.currentSituation, 300),
@@ -1401,19 +1419,53 @@ async function generateBatchWithRetry(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
+      // OUTPUT_TRUNCATED: batch is too large for the token budget.
+      // Split it into smaller sub-batches and generate each separately.
+      if (lastError.message === 'OUTPUT_TRUNCATED' && daysInBatch > 1) {
+        logger.log(`[Devotional] Output truncated for ${daysInBatch}-day batch (days ${startDay}-${endDay}). Splitting into sub-batches...`);
+        void logBugEvent('devotional-service', 'batch-split-on-truncation', {
+          startDay, endDay, daysInBatch, attempt,
+        }, 'warn');
+
+        const midDay = startDay + Math.floor(daysInBatch / 2);
+        const firstHalf = await generateBatchWithRetry(
+          context, startDay, midDay - 1, seriesTitle, previousDayTitles, maxRetries, resolvedPersona
+        );
+        // Use the series title from the first half for the second half
+        const updatedTitles = [...previousDayTitles, ...firstHalf.days.map(d => d.title)];
+        const secondHalf = await generateBatchWithRetry(
+          context, midDay, endDay, firstHalf.title, updatedTitles, maxRetries, resolvedPersona
+        );
+
+        return {
+          title: firstHalf.title,
+          days: [...firstHalf.days, ...secondHalf.days],
+        };
+      }
+
+      // For single-day truncation, retry is pointless with same params — bump retryLevel to simplify prompt
+      if (lastError.message === 'OUTPUT_TRUNCATED' && daysInBatch === 1) {
+        logger.log(`[Devotional] Single-day output truncated (day ${startDay}). Will retry with simplified prompt...`);
+        // Fall through to normal retry logic — retryLevel increase will strip craft directives
+      }
+
       if (attempt < maxRetries) {
         const isTransientUpstreamError = lastError.message === 'TRANSIENT_UPSTREAM_ERROR';
+        const isOutputTruncated = lastError.message === 'OUTPUT_TRUNCATED';
         const isRetryable =
           lastError.message === 'CONTENT_FILTER_ERROR' ||
           isNetworkError(lastError) ||
-          isTransientUpstreamError;
+          isTransientUpstreamError ||
+          isOutputTruncated;
 
         if (isRetryable) {
           const reason = lastError.message === 'CONTENT_FILTER_ERROR'
             ? 'content filter'
             : isTransientUpstreamError
               ? 'upstream service unavailable'
-              : 'network error';
+              : isOutputTruncated
+                ? 'output truncated (single day)'
+                : 'network error';
           logger.log(`[Devotional] ${reason} on attempt ${attempt + 1}, retrying (${attempt + 2}/${maxRetries + 1})...`);
           // Wait before retry — longer for upstream/network instability
           const delay = (isNetworkError(lastError) || isTransientUpstreamError)
