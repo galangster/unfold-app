@@ -18,8 +18,10 @@ import Animated, {
   withSequence,
   withRepeat,
   Easing,
+  FadeIn,
   runOnJS,
   cancelAnimation,
+  interpolate,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -35,8 +37,7 @@ import {
   TrendUpIcon,
   TrendDownIcon,
   EqualsIcon,
-  CalendarIcon,
-  TreeIcon,
+  DiamondIcon,
 } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -51,6 +52,24 @@ const GOLD = '#C8A55C';
 const GOLD_DIM = 'rgba(200, 165, 92, 0.15)';
 const GOLD_GLOW = 'rgba(200, 165, 92, 0.06)';
 const BG_DARK = '#08080A';
+const TEXT_PRIMARY = '#F5F0EB';
+const TEXT_MUTED = 'rgba(255,255,255,0.45)';
+const TEXT_DIM = 'rgba(255,255,255,0.35)';
+const TEXT_FAINT = 'rgba(255,255,255,0.25)';
+const SURFACE = 'rgba(255,255,255,0.03)';
+const SURFACE_LIGHT = 'rgba(255,255,255,0.06)';
+
+// Per-card gradient accent colors
+const CARD_GRADIENTS: [string, string][] = [
+  ['rgba(40, 32, 24, 0.6)', 'rgba(20, 16, 12, 0.2)'],           // 0 Hook: charcoal to warm brown
+  ['rgba(200, 165, 92, 0.08)', 'transparent'],                     // 1 Days: warm amber
+  ['rgba(200, 165, 92, 0.12)', 'transparent'],                     // 2 Archetype: richer gold
+  ['rgba(92, 160, 200, 0.06)', 'transparent'],                     // 3 Scripture: teal-blue
+  ['rgba(200, 120, 120, 0.06)', 'transparent'],                    // 4 Heart: rose
+  ['rgba(120, 180, 120, 0.06)', 'transparent'],                    // 5 Journal: green
+  ['rgba(220, 150, 60, 0.08)', 'transparent'],                     // 6 Streak: fire orange
+  ['rgba(200, 165, 92, 0.16)', 'transparent'],                     // 7 Closing: gold strongest
+];
 
 // ─── Animated Counter ─────────────────────────────────────────
 interface CountUpProps {
@@ -61,15 +80,27 @@ interface CountUpProps {
   suffix?: string;
   prefix?: string;
   decimals?: number;
+  onComplete?: () => void;
 }
 
-function CountUp({ to, duration = 1200, delay: startDelay = 300, style, suffix = '', prefix = '', decimals = 0 }: CountUpProps) {
+function CountUp({
+  to,
+  duration = 1200,
+  delay: startDelay = 300,
+  style,
+  suffix = '',
+  prefix = '',
+  decimals = 0,
+  onComplete,
+}: CountUpProps) {
   const [display, setDisplay] = useState(0);
+  const hasCompleted = useRef(false);
 
   useEffect(() => {
     let startTime: number | null = null;
     let rafId: number;
     let timeoutId: ReturnType<typeof setTimeout>;
+    hasCompleted.current = false;
 
     const animate = (timestamp: number) => {
       if (startTime === null) startTime = timestamp;
@@ -82,6 +113,10 @@ function CountUp({ to, duration = 1200, delay: startDelay = 300, style, suffix =
 
       if (progress < 1) {
         rafId = requestAnimationFrame(animate);
+      } else if (!hasCompleted.current) {
+        hasCompleted.current = true;
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onComplete?.();
       }
     };
 
@@ -93,14 +128,107 @@ function CountUp({ to, duration = 1200, delay: startDelay = 300, style, suffix =
       clearTimeout(timeoutId);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [to, duration, startDelay, decimals]);
+  }, [to, duration, startDelay, decimals, onComplete]);
 
   return (
     <Text style={style}>
-      {prefix}{decimals > 0 ? display.toFixed(decimals) : display}{suffix}
+      {prefix}{decimals > 0 ? display.toFixed(decimals) : display.toLocaleString()}{suffix}
     </Text>
   );
 }
+
+// ─── Sparkle Burst (finale card) ──────────────────────────────
+function SparkleBurst() {
+  const particles = useMemo(() => {
+    return Array.from({ length: 20 }, (_, i) => {
+      const angle = (i / 20) * Math.PI * 2 + (Math.random() * 0.4 - 0.2);
+      const distance = 60 + Math.random() * 120;
+      const targetX = Math.cos(angle) * distance;
+      const targetY = Math.sin(angle) * distance;
+      const size = 2 + Math.random() * 4;
+      const delay = Math.random() * 400;
+      return { targetX, targetY, size, delay, index: i };
+    });
+  }, []);
+
+  return (
+    <View style={sparkleStyles.container} pointerEvents="none">
+      {particles.map((p) => (
+        <SparkleParticle key={p.index} {...p} />
+      ))}
+    </View>
+  );
+}
+
+function SparkleParticle({
+  targetX,
+  targetY,
+  size,
+  delay,
+}: {
+  targetX: number;
+  targetY: number;
+  size: number;
+  delay: number;
+  index: number;
+}) {
+  const progress = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(
+      delay,
+      withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) }),
+    );
+    opacity.value = withDelay(
+      delay,
+      withSequence(
+        withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) }),
+        withDelay(200, withTiming(0, { duration: 400, easing: Easing.in(Easing.ease) })),
+      ),
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateX: progress.value * targetX },
+      { translateY: progress.value * targetY },
+      { scale: interpolate(progress.value, [0, 0.5, 1], [0, 1.2, 0.6]) },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: GOLD,
+          shadowColor: GOLD,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 1,
+          shadowRadius: size * 3,
+        },
+        animStyle,
+      ]}
+    />
+  );
+}
+
+const sparkleStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 0,
+    height: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
 
 // ─── Ember Particle for cinematic backgrounds ─────────────────
 interface FloatingEmberProps {
@@ -184,24 +312,37 @@ function FloatingEmber({ index, color }: FloatingEmberProps) {
   );
 }
 
-// ─── Progress Dots ────────────────────────────────────────────
+// ─── Animated Progress Dots ──────────────────────────────────
 function ProgressDots({ current, total }: { current: number; total: number }) {
   return (
     <View style={styles.dotsContainer}>
       {Array.from({ length: total }, (_, i) => (
-        <View
-          key={i}
-          style={[
-            styles.dot,
-            {
-              backgroundColor: i === current ? GOLD : 'rgba(255,255,255,0.15)',
-              width: i === current ? 24 : 6,
-            },
-          ]}
-        />
+        <AnimatedDot key={i} isActive={i === current} />
       ))}
     </View>
   );
+}
+
+function AnimatedDot({ isActive }: { isActive: boolean }) {
+  const width = useSharedValue(isActive ? 24 : 6);
+  const bgOpacity = useSharedValue(isActive ? 1 : 0.15);
+
+  useEffect(() => {
+    width.value = withTiming(isActive ? 24 : 6, {
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+    });
+    bgOpacity.value = withTiming(isActive ? 1 : 0.15, { duration: 300 });
+  }, [isActive]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    width: width.value,
+    backgroundColor: isActive
+      ? GOLD
+      : `rgba(255,255,255,${bgOpacity.value})`,
+  }));
+
+  return <Animated.View style={[styles.dot, animStyle]} />;
 }
 
 // ─── Card wrapper with entrance animation ─────────────────────
@@ -234,34 +375,82 @@ function CardContent({ children, visible }: { children: React.ReactNode; visible
   );
 }
 
-// ─── Individual Cards ─────────────────────────────────────────
+// ─── Staggered element wrapper ──────────────────────────────
+function StaggerIn({ delay, children }: { delay: number; children: React.ReactNode }) {
+  return (
+    <Animated.View entering={FadeIn.delay(delay).duration(500)}>
+      {children}
+    </Animated.View>
+  );
+}
 
-function HeroCard({ data, userName }: { data: RecapData; userName: string }) {
+// ─── Glassy Card Blob ─────────────────────────────────────────
+function GlassyBlob({ children, cardIndex }: { children: React.ReactNode; cardIndex: number }) {
+  const gradientColors = CARD_GRADIENTS[cardIndex] ?? CARD_GRADIENTS[0];
+
+  return (
+    <View style={styles.glassyBlobOuter}>
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 0.7, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.glassyBlobInner}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+// ─── Format helpers ───────────────────────────────────────────
+function formatDate(isoDate: string): string {
+  const d = new Date(isoDate);
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+// ─── CARD 1: THE HOOK ────────────────────────────────────────
+function HookCard({ data, userName }: { data: RecapData; userName: string }) {
   const titleOpacity = useSharedValue(0);
   const nameOpacity = useSharedValue(0);
-  const subtitleOpacity = useSharedValue(0);
+  const dateOpacity = useSharedValue(0);
+  const teaserOpacity = useSharedValue(0);
 
   useEffect(() => {
     titleOpacity.value = withDelay(200, withTiming(1, { duration: 800 }));
-    nameOpacity.value = withDelay(600, withTiming(1, { duration: 800 }));
-    subtitleOpacity.value = withDelay(1000, withTiming(1, { duration: 800 }));
+    nameOpacity.value = withDelay(700, withTiming(1, { duration: 800 }));
+    dateOpacity.value = withDelay(1200, withTiming(1, { duration: 800 }));
+    teaserOpacity.value = withDelay(1800, withTiming(1, { duration: 1000 }));
   }, []);
 
   const titleStyle = useAnimatedStyle(() => ({ opacity: titleOpacity.value }));
   const nameStyle = useAnimatedStyle(() => ({ opacity: nameOpacity.value }));
-  const subtitleStyle = useAnimatedStyle(() => ({ opacity: subtitleOpacity.value }));
+  const dateStyle = useAnimatedStyle(() => ({ opacity: dateOpacity.value }));
+  const teaserStyle = useAnimatedStyle(() => ({ opacity: teaserOpacity.value }));
 
   return (
     <View style={styles.heroContainer}>
       <Animated.View style={titleStyle}>
-        <Text style={styles.heroLabel}>Your story so far</Text>
+        <Text style={styles.heroLabel}>YOUR STORY SO FAR</Text>
       </Animated.View>
       <Animated.View style={nameStyle}>
         <Text style={styles.heroTitle}>Unfolded</Text>
       </Animated.View>
-      <Animated.View style={subtitleStyle}>
+      <Animated.View style={dateStyle}>
         <View style={styles.heroDivider} />
         <Text style={styles.heroName}>{userName}</Text>
+        {data.firstDevotionalDate && (
+          <Text style={styles.heroDateText}>
+            Your journey began{'\n'}
+            <Text style={{ color: GOLD }}>{formatDate(data.firstDevotionalDate)}</Text>
+          </Text>
+        )}
+      </Animated.View>
+      <Animated.View style={teaserStyle}>
         <Text style={styles.heroSubtitle}>
           {data.totalDaysRead} {data.totalDaysRead === 1 ? 'day' : 'days'} of showing up.{'\n'}
           Here is what unfolded.
@@ -271,335 +460,495 @@ function HeroCard({ data, userName }: { data: RecapData; userName: string }) {
   );
 }
 
+// ─── CARD 2: THE BIG NUMBER — Days With God ──────────────────
 function DaysCard({ data }: { data: RecapData }) {
   return (
-    <View style={styles.centeredCard}>
-      <SunIcon size={28} color={GOLD} weight="light" />
-      <Text style={styles.cardLabel}>Days with God</Text>
-      <CountUp
-        to={data.totalDaysRead}
-        style={styles.bigNumber}
-        duration={1500}
-        delay={400}
-      />
-      <Text style={styles.cardUnit}>days of devotion</Text>
-      <View style={styles.subStatsRow}>
-        <View style={styles.subStat}>
-          <Text style={styles.subStatValue}>{data.totalSeries}</Text>
-          <Text style={styles.subStatLabel}>{data.totalSeries === 1 ? 'journey' : 'journeys'} started</Text>
-        </View>
-        <View style={[styles.subStatDivider]} />
-        <View style={styles.subStat}>
-          <Text style={styles.subStatValue}>{data.completedSeries}</Text>
-          <Text style={styles.subStatLabel}>completed</Text>
-        </View>
-      </View>
-      {data.totalDaysRead >= 7 && (
-        <Text style={styles.cardInsight}>
-          That is {Math.round(data.totalDaysRead / 7)} {Math.round(data.totalDaysRead / 7) === 1 ? 'week' : 'weeks'} of intentional time with God.
-        </Text>
-      )}
-    </View>
-  );
-}
-
-function StreakCard({ data }: { data: RecapData }) {
-  const hasStreak = data.currentStreak > 0 || data.longestStreak > 0;
-  return (
-    <View style={styles.centeredCard}>
-      <FireIcon size={28} color={GOLD} weight="light" />
-      <Text style={styles.cardLabel}>Your Streak</Text>
-      {hasStreak ? (
-        <>
+    <GlassyBlob cardIndex={1}>
+      <View style={styles.centeredCard}>
+        <StaggerIn delay={0}>
+          <View style={styles.iconCenter}>
+            <SunIcon size={28} color={GOLD} weight="light" />
+          </View>
+        </StaggerIn>
+        <StaggerIn delay={150}>
+          <Text style={styles.cardLabel}>DAYS WITH GOD</Text>
+        </StaggerIn>
+        <StaggerIn delay={300}>
           <CountUp
-            to={data.longestStreak}
+            to={data.totalDaysRead}
             style={styles.bigNumber}
             duration={1500}
-            delay={400}
+            delay={0}
           />
-          <Text style={styles.cardUnit}>longest streak</Text>
-          {data.currentStreak > 0 && (
-            <View style={styles.streakBadge}>
-              <FireIcon size={14} color={GOLD} weight="fill" />
-              <Text style={styles.streakBadgeText}>
-                {data.currentStreak} day streak right now
+        </StaggerIn>
+        <StaggerIn delay={500}>
+          <Text style={styles.cardUnit}>
+            mornings you chose to show up
+          </Text>
+        </StaggerIn>
+        <StaggerIn delay={700}>
+          <View style={styles.subStatsRow}>
+            <View style={styles.subStat}>
+              <Text style={styles.subStatValue}>{data.totalSeries}</Text>
+              <Text style={styles.subStatLabel}>
+                {data.totalSeries === 1 ? 'journey' : 'journeys'} started
               </Text>
             </View>
-          )}
-          <Text style={styles.cardInsight}>
-            {data.longestStreak >= 14
-              ? 'Consistency is not about perfection. It is about returning.'
-              : data.longestStreak >= 7
-                ? 'A whole week of faithfulness. That matters more than you know.'
-                : 'Every streak starts with a single day.'}
-          </Text>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.bigNumber, { fontSize: FontSize['4xl'] }]}>New</Text>
-          <Text style={styles.cardUnit}>Your streak story is just beginning</Text>
-          <Text style={styles.cardInsight}>
-            Come back tomorrow and the count begins.
-          </Text>
-        </>
-      )}
-    </View>
+            <View style={styles.subStatDivider} />
+            <View style={styles.subStat}>
+              <Text style={styles.subStatValue}>{data.completedSeries}</Text>
+              <Text style={styles.subStatLabel}>completed</Text>
+            </View>
+          </View>
+        </StaggerIn>
+        {data.estimatedReadingMinutes > 0 && (
+          <StaggerIn delay={900}>
+            <Text style={styles.cardInsight}>
+              That is roughly {data.estimatedReadingMinutes} minutes spent in the Word.
+              {data.mostActiveWeekday
+                ? ` You read most often on ${data.mostActiveWeekday}s.`
+                : ''}
+            </Text>
+          </StaggerIn>
+        )}
+      </View>
+    </GlassyBlob>
   );
 }
 
+// ─── CARD 3: THE IDENTITY CARD — Archetype ──────────────────
+function ArchetypeCard({ data }: { data: RecapData }) {
+  const glowOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    glowOpacity.value = withDelay(
+      600,
+      withRepeat(
+        withSequence(
+          withTiming(0.6, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.2, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        true,
+      ),
+    );
+    return () => cancelAnimation(glowOpacity);
+  }, []);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  return (
+    <GlassyBlob cardIndex={2}>
+      <View style={styles.centeredCard}>
+        {/* Pulsing gold glow behind archetype */}
+        <Animated.View style={[styles.archetypeGlow, glowStyle]} />
+
+        <StaggerIn delay={0}>
+          <View style={styles.iconCenter}>
+            <DiamondIcon size={28} color={GOLD} weight="light" />
+          </View>
+        </StaggerIn>
+        <StaggerIn delay={150}>
+          <Text style={styles.cardLabel}>YOUR SPIRITUAL ARCHETYPE</Text>
+        </StaggerIn>
+        <StaggerIn delay={400}>
+          <Text style={styles.archetypeName}>{data.archetypeName}</Text>
+        </StaggerIn>
+        <StaggerIn delay={650}>
+          <Text style={styles.archetypeDescription}>
+            {data.archetypeDescription}
+          </Text>
+        </StaggerIn>
+        {data.transformationNarrative && (
+          <StaggerIn delay={900}>
+            <View style={styles.narrativeBadge}>
+              <Text style={styles.narrativeText}>
+                {data.transformationNarrative}
+              </Text>
+            </View>
+          </StaggerIn>
+        )}
+      </View>
+    </GlassyBlob>
+  );
+}
+
+// ─── CARD 4: THE SURPRISE — Scripture Map ────────────────────
 function ScriptureCard({ data }: { data: RecapData }) {
   const topBooks = data.bookBreakdown.slice(0, 4);
   return (
-    <View style={styles.centeredCard}>
-      <BookOpenIcon size={28} color={GOLD} weight="light" />
-      <Text style={styles.cardLabel}>Scripture Map</Text>
-      <CountUp
-        to={data.uniqueScriptures}
-        style={styles.bigNumber}
-        duration={1500}
-        delay={400}
-      />
-      <Text style={styles.cardUnit}>unique passages explored</Text>
-      {data.topBook && (
-        <View style={styles.topBookContainer}>
-          <Text style={styles.topBookLabel}>You kept returning to</Text>
-          <Text style={styles.topBookName}>{data.topBook}</Text>
-          <Text style={styles.topBookCount}>
-            {data.topBookCount} {data.topBookCount === 1 ? 'passage' : 'passages'}
-          </Text>
-        </View>
-      )}
-      {topBooks.length > 1 && (
-        <View style={styles.bookBarContainer}>
-          {topBooks.map((b, i) => {
-            const maxCount = topBooks[0].count;
-            const pct = maxCount > 0 ? (b.count / maxCount) * 100 : 0;
-            return (
-              <View key={b.book} style={styles.bookBarRow}>
-                <Text style={styles.bookBarLabel} numberOfLines={1}>{b.book}</Text>
-                <View style={styles.bookBarTrack}>
-                  <View
-                    style={[
-                      styles.bookBarFill,
-                      {
-                        width: `${Math.max(pct, 8)}%`,
-                        opacity: 1 - i * 0.2,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.bookBarCount}>{b.count}</Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </View>
-  );
-}
-
-function MoodCard({ data }: { data: RecapData }) {
-  const hasMoodData = data.totalCheckIns > 0;
-  const TrendIcon = data.moodTrend === 'rising' ? TrendUpIcon : data.moodTrend === 'falling' ? TrendDownIcon : EqualsIcon;
-  const trendLabel = data.moodTrend === 'rising' ? 'Trending upward' : data.moodTrend === 'falling' ? 'Trending downward' : 'Steady';
-  const moodEmoji = data.averageMood >= 4.5 ? 'Grateful' : data.averageMood >= 3.5 ? 'Good' : data.averageMood >= 2.5 ? 'Okay' : 'Growing';
-
-  return (
-    <View style={styles.centeredCard}>
-      <HeartIcon size={28} color={GOLD} weight="light" />
-      <Text style={styles.cardLabel}>Heart Check</Text>
-      {hasMoodData ? (
-        <>
-          <CountUp
-            to={data.averageMood}
-            style={styles.bigNumber}
-            duration={1200}
-            delay={400}
-            decimals={1}
-            suffix={` / 5`}
-          />
-          <Text style={styles.cardUnit}>{moodEmoji}</Text>
-
-          <View style={styles.trendRow}>
-            <TrendIcon size={16} color={GOLD} weight="light" />
-            <Text style={styles.trendText}>{trendLabel}</Text>
+    <GlassyBlob cardIndex={3}>
+      <View style={styles.centeredCard}>
+        <StaggerIn delay={0}>
+          <View style={styles.iconCenter}>
+            <BookOpenIcon size={28} color={GOLD} weight="light" />
           </View>
-
-          {data.moodByMonth.length > 0 && (
-            <View style={styles.moodBarContainer}>
-              {data.moodByMonth.slice(-5).map((m) => (
-                <View key={m.month} style={styles.moodBarCol}>
-                  <View style={styles.moodBarTrack}>
-                    <View
-                      style={[
-                        styles.moodBarFill,
-                        { height: `${(m.avg / 5) * 100}%` },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.moodBarLabel}>{m.month.slice(0, 3)}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <Text style={styles.cardInsight}>
-            {data.totalCheckIns} check-ins recorded. Your heart has a story too.
-          </Text>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.bigNumber, { fontSize: FontSize['4xl'] }]}>--</Text>
-          <Text style={styles.cardUnit}>No check-ins yet</Text>
-          <Text style={styles.cardInsight}>
-            Start checking in to track your heart's journey.
-          </Text>
-        </>
-      )}
-    </View>
-  );
-}
-
-function JournalCard({ data }: { data: RecapData }) {
-  return (
-    <View style={styles.centeredCard}>
-      <PencilLineIcon size={28} color={GOLD} weight="light" />
-      <Text style={styles.cardLabel}>Journal Depth</Text>
-      <CountUp
-        to={data.totalJournalEntries}
-        style={styles.bigNumber}
-        duration={1500}
-        delay={400}
-      />
-      <Text style={styles.cardUnit}>{data.totalJournalEntries === 1 ? 'reflection' : 'reflections'} written</Text>
-
-      {data.totalWordsWritten > 0 && (
-        <View style={styles.wordCountContainer}>
+        </StaggerIn>
+        <StaggerIn delay={150}>
+          <Text style={styles.cardLabel}>SCRIPTURE MAP</Text>
+        </StaggerIn>
+        <StaggerIn delay={300}>
           <CountUp
-            to={data.totalWordsWritten}
-            style={styles.wordCountNumber}
-            duration={1800}
-            delay={600}
+            to={data.uniqueScriptures}
+            style={styles.bigNumber}
+            duration={1500}
+            delay={0}
           />
-          <Text style={styles.wordCountLabel}>words poured out</Text>
-        </View>
-      )}
+        </StaggerIn>
+        <StaggerIn delay={500}>
+          <Text style={styles.cardUnit}>passages you sat with</Text>
+        </StaggerIn>
 
-      {data.mostReflectiveMonth && (
-        <View style={styles.reflectiveMonthContainer}>
-          <CalendarIcon size={14} color={GOLD} weight="light" />
-          <Text style={styles.reflectiveMonthText}>
-            Most reflective in{' '}
-            <Text style={{ color: GOLD }}>{data.mostReflectiveMonth}</Text>
-            {' '}({data.mostReflectiveMonthCount} {data.mostReflectiveMonthCount === 1 ? 'entry' : 'entries'})
-          </Text>
-        </View>
-      )}
+        {data.topBook && (
+          <StaggerIn delay={700}>
+            <View style={styles.topBookContainer}>
+              <Text style={styles.topBookLabel}>You kept returning to</Text>
+              <Text style={styles.topBookName}>{data.topBook}</Text>
+              <Text style={styles.topBookCount}>
+                {data.topBookCount} {data.topBookCount === 1 ? 'passage' : 'passages'}
+              </Text>
+            </View>
+          </StaggerIn>
+        )}
 
-      <Text style={styles.cardInsight}>
-        {data.totalJournalEntries >= 10
-          ? 'Writing is how the soul processes what the mind cannot hold alone.'
-          : data.totalJournalEntries > 0
-            ? 'Every word is a conversation with the One who already knows.'
-            : 'Your journal awaits the first page.'}
-      </Text>
-    </View>
+        {topBooks.length > 1 && (
+          <StaggerIn delay={900}>
+            <View style={styles.bookBarContainer}>
+              {topBooks.map((b, i) => {
+                const maxCount = topBooks[0].count;
+                const pct = maxCount > 0 ? (b.count / maxCount) * 100 : 0;
+                return (
+                  <View key={b.book} style={styles.bookBarRow}>
+                    <Text style={styles.bookBarLabel} numberOfLines={1}>{b.book}</Text>
+                    <View style={styles.bookBarTrack}>
+                      <View
+                        style={[
+                          styles.bookBarFill,
+                          {
+                            width: `${Math.max(pct, 8)}%`,
+                            opacity: 1 - i * 0.2,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.bookBarCount}>{b.count}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </StaggerIn>
+        )}
+      </View>
+    </GlassyBlob>
   );
 }
 
-function ThemeCard({ data }: { data: RecapData }) {
-  const topThemes = data.themeBreakdown.slice(0, 5);
-  return (
-    <View style={styles.centeredCard}>
-      <TreeIcon size={28} color={GOLD} weight="light" />
-      <Text style={styles.cardLabel}>Where Your Heart Went</Text>
-      {data.topThemeName ? (
-        <>
-          <Text style={styles.themeHighlight}>{data.topThemeName}</Text>
-          <Text style={styles.cardUnit}>
-            You gravitated toward {data.topThemeName.toLowerCase()}
-          </Text>
+// ─── CARD 5: THE JOURNEY — Heart Check ──────────────────────
+function HeartCard({ data }: { data: RecapData }) {
+  const hasMoodData = data.totalCheckIns > 0;
+  const TrendIcon = data.moodTrend === 'rising'
+    ? TrendUpIcon
+    : data.moodTrend === 'falling'
+      ? TrendDownIcon
+      : EqualsIcon;
+  const trendLabel = data.moodTrend === 'rising'
+    ? 'Trending upward'
+    : data.moodTrend === 'falling'
+      ? 'Trending downward'
+      : 'Steady';
 
-          {topThemes.length > 1 && (
-            <View style={styles.themeListContainer}>
-              {topThemes.map((t, i) => (
-                <View key={t.theme} style={styles.themeListRow}>
-                  <View
-                    style={[
-                      styles.themeListDot,
-                      { opacity: 1 - i * 0.18 },
-                    ]}
+  // Descriptive arc narrative
+  const getArcNarrative = (): string | null => {
+    if (data.moodByMonth.length < 2) return null;
+    const first = data.moodByMonth[0];
+    const last = data.moodByMonth[data.moodByMonth.length - 1];
+    const moodWord = (avg: number) => {
+      if (avg >= 4.5) return 'Grateful';
+      if (avg >= 3.5) return 'Good';
+      if (avg >= 2.5) return 'Okay';
+      return 'Struggling';
+    };
+    const firstWord = moodWord(first.avg);
+    const lastWord = moodWord(last.avg);
+    if (firstWord === lastWord) return null;
+    return `Your heart started at "${firstWord}" and climbed to "${lastWord}."`;
+  };
+
+  const arcNarrative = getArcNarrative();
+
+  return (
+    <GlassyBlob cardIndex={4}>
+      <View style={styles.centeredCard}>
+        <StaggerIn delay={0}>
+          <View style={styles.iconCenter}>
+            <HeartIcon size={28} color={GOLD} weight="light" />
+          </View>
+        </StaggerIn>
+        <StaggerIn delay={150}>
+          <Text style={styles.cardLabel}>HEART CHECK</Text>
+        </StaggerIn>
+        {hasMoodData ? (
+          <>
+            <StaggerIn delay={300}>
+              <CountUp
+                to={data.averageMood}
+                style={styles.bigNumber}
+                duration={1200}
+                delay={0}
+                decimals={1}
+                suffix=" / 5"
+              />
+            </StaggerIn>
+            <StaggerIn delay={500}>
+              <View style={styles.trendRow}>
+                <TrendIcon size={16} color={GOLD} weight="light" />
+                <Text style={styles.trendText}>{trendLabel}</Text>
+              </View>
+            </StaggerIn>
+
+            {data.moodByMonth.length > 0 && (
+              <StaggerIn delay={700}>
+                <View style={styles.moodBarContainer}>
+                  {data.moodByMonth.slice(-5).map((m) => (
+                    <View key={m.month} style={styles.moodBarCol}>
+                      <View style={styles.moodBarTrack}>
+                        <View
+                          style={[
+                            styles.moodBarFill,
+                            { height: `${(m.avg / 5) * 100}%` },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.moodBarLabel}>{m.month.slice(0, 3)}</Text>
+                    </View>
+                  ))}
+                </View>
+              </StaggerIn>
+            )}
+
+            <StaggerIn delay={900}>
+              <Text style={styles.cardInsight}>
+                {arcNarrative
+                  ? arcNarrative
+                  : `${data.totalCheckIns} check-ins recorded. Your heart has a story too.`}
+              </Text>
+            </StaggerIn>
+          </>
+        ) : (
+          <>
+            <StaggerIn delay={300}>
+              <Text style={[styles.bigNumber, { fontSize: FontSize['4xl'] }]}>--</Text>
+            </StaggerIn>
+            <StaggerIn delay={500}>
+              <Text style={styles.cardUnit}>Start checking in to trace your heart's path</Text>
+            </StaggerIn>
+          </>
+        )}
+      </View>
+    </GlassyBlob>
+  );
+}
+
+// ─── CARD 6: THE DEPTH — Journal ─────────────────────────────
+function JournalCard({ data }: { data: RecapData }) {
+  const hasEntries = data.totalJournalEntries > 0;
+  const pages = Math.max(1, Math.round(data.totalWordsWritten / 500));
+
+  return (
+    <GlassyBlob cardIndex={5}>
+      <View style={styles.centeredCard}>
+        <StaggerIn delay={0}>
+          <View style={styles.iconCenter}>
+            <PencilLineIcon size={28} color={GOLD} weight="light" />
+          </View>
+        </StaggerIn>
+        <StaggerIn delay={150}>
+          <Text style={styles.cardLabel}>JOURNAL DEPTH</Text>
+        </StaggerIn>
+
+        {hasEntries ? (
+          <>
+            <StaggerIn delay={300}>
+              <CountUp
+                to={data.totalJournalEntries}
+                style={styles.bigNumber}
+                duration={1500}
+                delay={0}
+              />
+            </StaggerIn>
+            <StaggerIn delay={500}>
+              <Text style={styles.cardUnit}>
+                {data.totalJournalEntries === 1 ? 'reflection' : 'reflections'} written
+              </Text>
+            </StaggerIn>
+
+            {data.totalWordsWritten > 0 && (
+              <StaggerIn delay={700}>
+                <View style={styles.wordCountContainer}>
+                  <CountUp
+                    to={data.totalWordsWritten}
+                    style={styles.wordCountNumber}
+                    duration={1800}
+                    delay={0}
                   />
-                  <Text style={styles.themeListName}>{t.name}</Text>
-                  <Text style={styles.themeListCount}>
-                    {t.count} {t.count === 1 ? 'journey' : 'journeys'}
+                  <Text style={styles.wordCountLabel}>
+                    words — enough to fill {pages} {pages === 1 ? 'page' : 'pages'} of a letter to God
                   </Text>
                 </View>
-              ))}
-            </View>
-          )}
+              </StaggerIn>
+            )}
 
-          <Text style={styles.cardInsight}>
-            {data.themesExplored} {data.themesExplored === 1 ? 'theme' : 'themes'} explored.{' '}
-            {data.themesExplored >= 5
-              ? 'A wide and curious heart.'
-              : 'Each theme is a different conversation with God.'}
-          </Text>
-        </>
-      ) : (
-        <>
-          <Text style={[styles.bigNumber, { fontSize: FontSize['4xl'] }]}>--</Text>
-          <Text style={styles.cardUnit}>Your themes will appear as you explore</Text>
-        </>
-      )}
-    </View>
+            <StaggerIn delay={900}>
+              <Text style={styles.cardInsight}>
+                {data.totalJournalEntries >= 10
+                  ? 'Writing is how the soul processes what the mind cannot hold alone.'
+                  : 'Every word is a conversation with the One who already knows.'}
+              </Text>
+            </StaggerIn>
+          </>
+        ) : (
+          <>
+            <StaggerIn delay={300}>
+              <Text style={[styles.bigNumber, { fontSize: FontSize['4xl'] }]}>--</Text>
+            </StaggerIn>
+            <StaggerIn delay={500}>
+              <Text style={styles.cardUnit}>Your journal awaits its first page</Text>
+            </StaggerIn>
+          </>
+        )}
+      </View>
+    </GlassyBlob>
   );
 }
 
+// ─── CARD 7: THE PERSISTENCE — Streak ────────────────────────
+function StreakCard({ data }: { data: RecapData }) {
+  const hasStreak = data.currentStreak > 0 || data.longestStreak > 0;
+
+  return (
+    <GlassyBlob cardIndex={6}>
+      <View style={styles.centeredCard}>
+        <StaggerIn delay={0}>
+          <View style={styles.iconCenter}>
+            <FireIcon size={28} color={GOLD} weight="light" />
+          </View>
+        </StaggerIn>
+        <StaggerIn delay={150}>
+          <Text style={styles.cardLabel}>YOUR STREAK</Text>
+        </StaggerIn>
+        {hasStreak ? (
+          <>
+            <StaggerIn delay={300}>
+              <CountUp
+                to={data.longestStreak}
+                style={styles.bigNumber}
+                duration={1500}
+                delay={0}
+              />
+            </StaggerIn>
+            <StaggerIn delay={500}>
+              <Text style={styles.cardUnit}>mornings without missing</Text>
+            </StaggerIn>
+            {data.currentStreak > 0 && (
+              <StaggerIn delay={700}>
+                <View style={styles.streakBadge}>
+                  <FireIcon size={14} color={GOLD} weight="fill" />
+                  <Text style={styles.streakBadgeText}>
+                    {data.currentStreak} day streak right now
+                  </Text>
+                </View>
+              </StaggerIn>
+            )}
+            <StaggerIn delay={900}>
+              <Text style={styles.cardInsight}>
+                Consistency is not perfection. It is returning.
+              </Text>
+            </StaggerIn>
+          </>
+        ) : (
+          <>
+            <StaggerIn delay={300}>
+              <Text style={[styles.bigNumber, { fontSize: FontSize['4xl'] }]}>New</Text>
+            </StaggerIn>
+            <StaggerIn delay={500}>
+              <Text style={styles.cardUnit}>Your streak story is just beginning</Text>
+            </StaggerIn>
+            <StaggerIn delay={700}>
+              <Text style={styles.cardInsight}>
+                Come back tomorrow and the count begins.
+              </Text>
+            </StaggerIn>
+          </>
+        )}
+      </View>
+    </GlassyBlob>
+  );
+}
+
+// ─── CARD 8: THE CLOSING ─────────────────────────────────────
 function ClosingCard({ data, userName }: { data: RecapData; userName: string }) {
+  const [showSparkleBurst, setShowSparkleBurst] = useState(false);
+
+  useEffect(() => {
+    // Trigger sparkle burst on entrance
+    setShowSparkleBurst(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
   const handleShare = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const shareText = [
-      `My journey with Unfold so far:`,
-      `${data.totalDaysRead} days of devotion`,
-      data.longestStreak > 0 ? `${data.longestStreak}-day longest streak` : null,
-      data.uniqueScriptures > 0 ? `${data.uniqueScriptures} scriptures explored` : null,
-      data.totalJournalEntries > 0 ? `${data.totalJournalEntries} journal reflections` : null,
-      data.topThemeName ? `Drawn to the theme of ${data.topThemeName}` : null,
-      '',
-      'Unfold — AI-powered daily devotionals',
-    ].filter(Boolean).join('\n');
+      `My journey with Unfold: ${data.totalDaysRead} days`,
+      data.totalJournalEntries > 0 ? `${data.totalJournalEntries} reflections` : null,
+      data.topThemeName ? `drawn to the theme of ${data.topThemeName}` : null,
+      '#Unfolded',
+    ].filter(Boolean).join(', ');
 
     try {
-      await Share.share({
-        message: shareText,
-      });
+      await Share.share({ message: shareText });
     } catch {
       // User cancelled
     }
   }, [data]);
 
+  const closingMessage = data.totalDaysRead >= 30
+    ? 'You have built something rare — a rhythm of returning. Whatever comes next, you have the roots for it.'
+    : data.totalDaysRead >= 7
+      ? 'A week of showing up changes more than you think. The seeds planted here are already taking root.'
+      : 'The journey has begun. The most important step is the next one.';
+
   return (
     <View style={styles.closingContainer}>
-      <SparkleIcon size={32} color={GOLD} weight="light" />
-      <Text style={styles.closingTitle}>Keep Unfolding</Text>
-      <Text style={styles.closingName}>{userName}</Text>
-      <View style={styles.closingDivider} />
-      <Text style={styles.closingMessage}>
-        {data.totalDaysRead >= 30
-          ? 'You have built something rare — a rhythm of returning. Whatever comes next, you have the roots for it.'
-          : data.totalDaysRead >= 7
-            ? 'A week of showing up changes more than you think. The seeds planted here are already taking root.'
-            : 'The journey has begun. The most important step is the next one.'}
-      </Text>
+      {showSparkleBurst && <SparkleBurst />}
 
-      <Pressable
-        onPress={handleShare}
-        style={styles.shareButton}
-      >
-        <ShareNetworkIcon size={18} color={BG_DARK} weight="bold" />
-        <Text style={styles.shareButtonText}>Share your story</Text>
-      </Pressable>
+      <StaggerIn delay={0}>
+        <View style={styles.iconCenter}>
+          <SparkleIcon size={32} color={GOLD} weight="light" />
+        </View>
+      </StaggerIn>
+      <StaggerIn delay={200}>
+        <Text style={styles.closingTitle}>Keep Unfolding</Text>
+      </StaggerIn>
+      <StaggerIn delay={400}>
+        <Text style={styles.closingName}>{userName}</Text>
+      </StaggerIn>
+      <StaggerIn delay={600}>
+        <View style={styles.closingDivider} />
+      </StaggerIn>
+      <StaggerIn delay={800}>
+        <Text style={styles.closingMessage}>{closingMessage}</Text>
+      </StaggerIn>
+      <StaggerIn delay={1000}>
+        <Pressable
+          onPress={handleShare}
+          style={styles.shareButton}
+        >
+          <ShareNetworkIcon size={18} color={BG_DARK} weight="bold" />
+          <Text style={styles.shareButtonText}>Share your story</Text>
+        </Pressable>
+      </StaggerIn>
     </View>
   );
 }
@@ -683,8 +1032,8 @@ export default function UnfoldedScreen() {
     switch (currentCard) {
       case 0:
         return (
-          <CardContent visible key="hero">
-            <HeroCard data={data} userName={userName} />
+          <CardContent visible key="hook">
+            <HookCard data={data} userName={userName} />
           </CardContent>
         );
       case 1:
@@ -695,8 +1044,8 @@ export default function UnfoldedScreen() {
         );
       case 2:
         return (
-          <CardContent visible key="streak">
-            <StreakCard data={data} />
+          <CardContent visible key="archetype">
+            <ArchetypeCard data={data} />
           </CardContent>
         );
       case 3:
@@ -707,8 +1056,8 @@ export default function UnfoldedScreen() {
         );
       case 4:
         return (
-          <CardContent visible key="mood">
-            <MoodCard data={data} />
+          <CardContent visible key="heart">
+            <HeartCard data={data} />
           </CardContent>
         );
       case 5:
@@ -719,8 +1068,8 @@ export default function UnfoldedScreen() {
         );
       case 6:
         return (
-          <CardContent visible key="theme">
-            <ThemeCard data={data} />
+          <CardContent visible key="streak">
+            <StreakCard data={data} />
           </CardContent>
         );
       case 7:
@@ -734,9 +1083,9 @@ export default function UnfoldedScreen() {
     }
   };
 
-  // Ember particles (only 10 for performance)
+  // Ember particles (only 12 for performance — slight increase for richness)
   const embers = useMemo(
-    () => Array.from({ length: 10 }, (_, i) => i),
+    () => Array.from({ length: 12 }, (_, i) => i),
     [],
   );
 
@@ -751,6 +1100,14 @@ export default function UnfoldedScreen() {
         colors={[BG_DARK, '#0C0A08', BG_DARK]}
         locations={[0, 0.5, 1]}
         style={StyleSheet.absoluteFill}
+      />
+
+      {/* Per-card ambient gradient overlay */}
+      <LinearGradient
+        colors={CARD_GRADIENTS[currentCard] ?? CARD_GRADIENTS[0]}
+        start={{ x: 0.5, y: 0.2 }}
+        end={{ x: 0.5, y: 0.8 }}
+        style={[StyleSheet.absoluteFill, { opacity: 0.5 }]}
       />
 
       {/* Subtle radial gold glow */}
@@ -877,6 +1234,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  // Glassy blob wrapper
+  glassyBlobOuter: {
+    width: '100%',
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.025)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+  glassyBlobInner: {
+    alignItems: 'center',
+  },
+
   // Bottom bar
   bottomBar: {
     flexDirection: 'row',
@@ -897,12 +1269,18 @@ const styles = StyleSheet.create({
   },
   cardCounter: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.25)',
+    fontSize: 10,
+    color: TEXT_FAINT,
     letterSpacing: 1,
   },
 
-  // Hero card
+  // Icon center
+  iconCenter: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+
+  // Hero/Hook card
   heroContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -910,16 +1288,16 @@ const styles = StyleSheet.create({
   },
   heroLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.35)',
-    letterSpacing: 3,
+    fontSize: 12,
+    color: TEXT_DIM,
+    letterSpacing: 4,
     textTransform: 'uppercase',
     marginBottom: 12,
   },
   heroTitle: {
     fontFamily: FontFamily.display,
     fontSize: 72,
-    color: '#F5F0EB',
+    color: TEXT_PRIMARY,
     letterSpacing: -3,
     marginBottom: 8,
   },
@@ -938,10 +1316,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
+  heroDateText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 16,
+  },
   heroSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 16,
-    color: 'rgba(255,255,255,0.45)',
+    color: TEXT_MUTED,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -951,30 +1337,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   cardLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.35)',
-    letterSpacing: 2.5,
+    fontSize: 11,
+    color: TEXT_DIM,
+    letterSpacing: 3,
     textTransform: 'uppercase',
-    marginTop: 16,
+    marginTop: 12,
     marginBottom: 8,
+    textAlign: 'center',
   },
   bigNumber: {
     fontFamily: FontFamily.display,
     fontSize: 80,
-    color: '#F5F0EB',
+    color: TEXT_PRIMARY,
     letterSpacing: -4,
     lineHeight: 88,
+    textAlign: 'center',
   },
   cardUnit: {
-    fontFamily: FontFamily.bodyMedium,
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.5)',
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    color: TEXT_MUTED,
     marginTop: 4,
     marginBottom: 16,
+    textAlign: 'center',
+    paddingHorizontal: 8,
   },
   cardInsight: {
     fontFamily: FontFamily.bodyItalic,
@@ -982,9 +1372,9 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.3)',
     textAlign: 'center',
     lineHeight: 22,
-    marginTop: 20,
-    paddingHorizontal: 16,
-    maxWidth: 320,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    maxWidth: 300,
   },
 
   // Sub-stats row
@@ -992,9 +1382,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 24,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: SURFACE,
     borderRadius: 16,
     marginTop: 4,
   },
@@ -1010,13 +1400,58 @@ const styles = StyleSheet.create({
   subStatLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 11,
-    color: 'rgba(255,255,255,0.35)',
+    color: TEXT_DIM,
     marginTop: 2,
   },
   subStatDivider: {
     width: 1,
     height: 32,
     backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+
+  // Archetype card
+  archetypeGlow: {
+    position: 'absolute',
+    top: '20%',
+    left: '15%',
+    width: '70%',
+    height: '60%',
+    borderRadius: 999,
+    backgroundColor: 'rgba(200, 165, 92, 0.08)',
+  },
+  archetypeName: {
+    fontFamily: FontFamily.display,
+    fontSize: 48,
+    color: GOLD,
+    letterSpacing: -2,
+    marginTop: 8,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  archetypeDescription: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: 17,
+    color: 'rgba(255,255,255,0.55)',
+    textAlign: 'center',
+    lineHeight: 26,
+    paddingHorizontal: 8,
+    maxWidth: 320,
+  },
+  narrativeBadge: {
+    marginTop: 24,
+    backgroundColor: SURFACE_LIGHT,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 165, 92, 0.12)',
+  },
+  narrativeText: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 
   // Streak badge
@@ -1039,12 +1474,12 @@ const styles = StyleSheet.create({
   // Scripture bars
   topBookContainer: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   topBookLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.35)',
+    color: TEXT_DIM,
     marginBottom: 4,
   },
   topBookName: {
@@ -1063,7 +1498,7 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 8,
     marginTop: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   bookBarRow: {
     flexDirection: 'row',
@@ -1073,7 +1508,7 @@ const styles = StyleSheet.create({
   bookBarLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.45)',
+    color: TEXT_MUTED,
     width: 70,
     textAlign: 'right',
   },
@@ -1106,7 +1541,7 @@ const styles = StyleSheet.create({
   trendText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.45)',
+    color: TEXT_MUTED,
   },
   moodBarContainer: {
     flexDirection: 'row',
@@ -1115,7 +1550,7 @@ const styles = StyleSheet.create({
     height: 100,
     marginTop: 8,
     marginBottom: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
   },
   moodBarCol: {
     flex: 1,
@@ -1147,11 +1582,11 @@ const styles = StyleSheet.create({
   // Journal card
   wordCountContainer: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    paddingVertical: 16,
-    paddingHorizontal: 28,
+    backgroundColor: SURFACE,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
     borderRadius: 16,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   wordCountNumber: {
     fontFamily: FontFamily.display,
@@ -1162,57 +1597,11 @@ const styles = StyleSheet.create({
   wordCountLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.35)',
-    marginTop: 2,
-  },
-  reflectiveMonthContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  reflectiveMonthText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.4)',
-  },
-
-  // Theme card
-  themeHighlight: {
-    fontFamily: FontFamily.display,
-    fontSize: 52,
-    color: GOLD,
-    letterSpacing: -2,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  themeListContainer: {
-    width: '100%',
-    gap: 10,
-    marginTop: 16,
-    paddingHorizontal: 20,
-  },
-  themeListRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  themeListDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: GOLD,
-  },
-  themeListName: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    flex: 1,
-  },
-  themeListCount: {
-    fontFamily: FontFamily.ui,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.3)',
+    color: TEXT_DIM,
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 8,
   },
 
   // Closing card
@@ -1224,16 +1613,18 @@ const styles = StyleSheet.create({
   closingTitle: {
     fontFamily: FontFamily.display,
     fontSize: 42,
-    color: '#F5F0EB',
+    color: TEXT_PRIMARY,
     letterSpacing: -1.5,
-    marginTop: 20,
+    marginTop: 16,
     marginBottom: 4,
+    textAlign: 'center',
   },
   closingName: {
     fontFamily: FontFamily.displayItalic,
     fontSize: 22,
     color: GOLD,
     marginBottom: 8,
+    textAlign: 'center',
   },
   closingDivider: {
     width: 40,
