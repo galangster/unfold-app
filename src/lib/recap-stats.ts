@@ -7,7 +7,12 @@ import type { Devotional, JournalEntry, CheckIn, UsedScripture } from './store';
 import type { ThemeCategory } from '../constants/devotional-types';
 import { THEME_CATEGORIES } from '../constants/devotional-types';
 
-export type SpiritualArchetype = 'seeker' | 'diver' | 'faithful' | 'writer' | 'explorer' | 'beginner';
+export type SpiritualArchetype =
+  | 'seeker' | 'diver' | 'faithful' | 'writer' | 'explorer' | 'beginner'
+  | 'marathoner' | 'morning-person' | 'night-owl' | 'completionist'
+  | 'listener' | 'returner' | 'quiet-one' | 'scholar'
+  | 'anchor' | 'wanderer' | 'steady-hand' | 'pilgrim'
+  | 'root-grower' | 'lamplighter';
 
 export interface RecapData {
   // Card 1: Hook
@@ -88,13 +93,57 @@ function computeArchetype(params: {
   longestStreak: number;
   totalJournalEntries: number;
   uniqueBooks: number;
+  totalDaysRead: number;
+  completedSeries: number;
+  totalSeries: number;
+  totalCheckIns: number;
+  totalWordsWritten: number;
+  mostActiveWeekdayIndex: number;
 }): { archetype: SpiritualArchetype; name: string; description: string } {
-  const { themesExplored, themeBreakdown, longestStreak, totalJournalEntries, uniqueBooks } = params;
+  const {
+    themesExplored, themeBreakdown, longestStreak, totalJournalEntries,
+    uniqueBooks, totalDaysRead, completedSeries, totalSeries,
+    totalCheckIns, totalWordsWritten, mostActiveWeekdayIndex,
+  } = params;
 
-  // Priority order: most distinctive behavior first
+  // Priority: most distinctive / impressive behavior first
+
+  // Marathoner: 30+ days read — they've gone the distance
+  if (totalDaysRead >= 30) {
+    return {
+      archetype: 'marathoner',
+      name: 'The Marathoner',
+      description: 'Thirty days and counting. This is not a phase — it is who you are.',
+    };
+  }
+
+  // Completionist: finished 3+ series — they see things through
+  if (completedSeries >= 3) {
+    return {
+      archetype: 'completionist',
+      name: 'The Completionist',
+      description: 'You finish what you start. Every series, every day, all the way through.',
+    };
+  }
+
+  // Scholar: 10+ journal entries AND 5+ unique books — serious student
+  if (totalJournalEntries >= 10 && uniqueBooks >= 5) {
+    return {
+      archetype: 'scholar',
+      name: 'The Scholar',
+      description: 'A mind that studies and a hand that writes — faith refined through understanding.',
+    };
+  }
 
   // Writer: 5+ journal entries — they process through words
   if (totalJournalEntries >= 5) {
+    if (totalWordsWritten >= 2000) {
+      return {
+        archetype: 'writer',
+        name: 'The Writer',
+        description: 'Thousands of words poured out. Your journal is becoming its own kind of scripture.',
+      };
+    }
     return {
       archetype: 'writer',
       name: 'The Writer',
@@ -102,7 +151,16 @@ function computeArchetype(params: {
     };
   }
 
-  // Faithful: longest streak >= 7 — consistency is their gift
+  // Lamplighter: 14+ day streak — burning bright consistently
+  if (longestStreak >= 14) {
+    return {
+      archetype: 'lamplighter',
+      name: 'The Lamplighter',
+      description: 'Two weeks straight. Your flame does not flicker — it lights the way for others.',
+    };
+  }
+
+  // Faithful: streak >= 7 — consistency is their gift
   if (longestStreak >= 7) {
     return {
       archetype: 'faithful',
@@ -111,7 +169,35 @@ function computeArchetype(params: {
     };
   }
 
-  // Explorer: 3+ Bible books explored — they roam Scripture widely
+  // Listener: 10+ check-ins — they pay attention to their heart
+  if (totalCheckIns >= 10) {
+    return {
+      archetype: 'listener',
+      name: 'The Listener',
+      description: 'You pay attention — to your heart, your moods, the quiet voice underneath.',
+    };
+  }
+
+  // Morning Person / Night Owl based on most active weekday pattern
+  // (Using weekday as a proxy — Sunday = contemplative, Sat = weekend warrior)
+  if (mostActiveWeekdayIndex === 0 && totalDaysRead >= 5) {
+    return {
+      archetype: 'anchor',
+      name: 'The Anchor',
+      description: 'Sunday is your sacred ground. You start each week rooted.',
+    };
+  }
+
+  // Explorer: 5+ Bible books — they roam Scripture widely
+  if (uniqueBooks >= 5) {
+    return {
+      archetype: 'wanderer',
+      name: 'The Wanderer',
+      description: 'Five books and counting. You roam Scripture like a traveler who knows every path leads home.',
+    };
+  }
+
+  // Explorer: 3+ Bible books
   if (uniqueBooks >= 3) {
     return {
       archetype: 'explorer',
@@ -120,12 +206,30 @@ function computeArchetype(params: {
     };
   }
 
-  // Seeker: explored 3+ themes — drawn to many conversations
-  if (themesExplored >= 3) {
+  // Seeker: explored 4+ themes — drawn to many conversations
+  if (themesExplored >= 4) {
     return {
       archetype: 'seeker',
       name: 'The Seeker',
       description: 'A wide and curious heart, drawn to many conversations with God.',
+    };
+  }
+
+  // Pilgrim: explored exactly 3 themes — intentional journey
+  if (themesExplored === 3) {
+    return {
+      archetype: 'pilgrim',
+      name: 'The Pilgrim',
+      description: 'Three paths explored with intention. Every step has been deliberate.',
+    };
+  }
+
+  // Returner: started 3+ series — keeps coming back
+  if (totalSeries >= 3) {
+    return {
+      archetype: 'returner',
+      name: 'The Returner',
+      description: 'You keep coming back. That says more than any streak number ever could.',
     };
   }
 
@@ -136,6 +240,33 @@ function computeArchetype(params: {
       archetype: 'diver',
       name: 'The Deep Diver',
       description: 'One who lingers, going deeper where others skim the surface.',
+    };
+  }
+
+  // Root Grower: 5-14 days, streak 3+ — building a habit
+  if (totalDaysRead >= 5 && longestStreak >= 3) {
+    return {
+      archetype: 'root-grower',
+      name: 'The Root Grower',
+      description: 'Roots take time. Yours are already deeper than you think.',
+    };
+  }
+
+  // Steady Hand: 3+ days, has check-ins — small but consistent
+  if (totalDaysRead >= 3 && totalCheckIns >= 2) {
+    return {
+      archetype: 'steady-hand',
+      name: 'The Steady Hand',
+      description: 'Quiet consistency. You show up, you reflect, you keep going.',
+    };
+  }
+
+  // Quiet One: has journal entries but few days — reflective even early on
+  if (totalJournalEntries >= 1 && totalDaysRead <= 5) {
+    return {
+      archetype: 'quiet-one',
+      name: 'The Quiet One',
+      description: 'Few days, but deep ones. Quality over quantity, always.',
     };
   }
 
@@ -184,45 +315,45 @@ export function computeRecapData(params: {
     streakLongest: longestStreak,
   } = params;
 
-  // --- Card 1: Hook — first devotional date ---
+  // --- Single pass through devotionals for Cards 1, 2, and weekday stats ---
   let firstDevotionalDate: string | null = null;
+  let firstDevotionalTime = Infinity;
+  let totalDaysRead = 0;
+  let completedSeries = 0;
+  const totalSeries = devotionals.length;
+  const weekdayCounts = new Array<number>(7).fill(0);
+
   for (const d of devotionals) {
+    let allRead = true;
     for (const day of d.days) {
+      if (day.isRead) totalDaysRead++;
+      else allRead = false;
       if (day.readAt) {
-        if (!firstDevotionalDate || new Date(day.readAt).getTime() < new Date(firstDevotionalDate).getTime()) {
+        const t = new Date(day.readAt).getTime();
+        if (t < firstDevotionalTime) {
+          firstDevotionalTime = t;
           firstDevotionalDate = day.readAt;
         }
-      }
-    }
-  }
-  // Fallback to devotional creation date if no readAt found
-  if (!firstDevotionalDate && devotionals.length > 0) {
-    const sorted = [...devotionals].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
-    firstDevotionalDate = sorted[0].createdAt;
-  }
-
-  // --- Card 2: Days with God ---
-  const totalDaysRead = devotionals.reduce(
-    (acc, d) => acc + d.days.filter((day) => day.isRead).length,
-    0,
-  );
-  const totalSeries = devotionals.length;
-  const completedSeries = devotionals.filter(
-    (d) => d.days.length === d.totalDays && d.days.every((day) => day.isRead),
-  ).length;
-  const estimatedReadingMinutes = totalDaysRead * 5;
-
-  // --- Most active weekday ---
-  const weekdayCounts = new Array<number>(7).fill(0);
-  for (const d of devotionals) {
-    for (const day of d.days) {
-      if (day.readAt) {
         weekdayCounts[getWeekday(day.readAt)] += 1;
       }
     }
+    if (allRead && d.days.length === d.totalDays) completedSeries++;
   }
+
+  // Fallback to devotional creation date if no readAt found
+  if (!firstDevotionalDate && devotionals.length > 0) {
+    let earliest = devotionals[0];
+    for (let i = 1; i < devotionals.length; i++) {
+      if (new Date(devotionals[i].createdAt).getTime() < new Date(earliest.createdAt).getTime()) {
+        earliest = devotionals[i];
+      }
+    }
+    firstDevotionalDate = earliest.createdAt;
+  }
+
+  const estimatedReadingMinutes = totalDaysRead * 5;
+
+  // Most active weekday
   let mostActiveWeekdayIndex = -1;
   let mostActiveWeekdayCount = 0;
   for (let i = 0; i < 7; i++) {
@@ -344,6 +475,12 @@ export function computeRecapData(params: {
     longestStreak,
     totalJournalEntries,
     uniqueBooks,
+    totalDaysRead,
+    completedSeries,
+    totalSeries,
+    totalCheckIns,
+    totalWordsWritten,
+    mostActiveWeekdayIndex,
   });
 
   // --- Transformation narrative ---
