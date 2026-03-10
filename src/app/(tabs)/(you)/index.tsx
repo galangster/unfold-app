@@ -213,6 +213,84 @@ export default function YouScreen() {
             </Animated.View>
           )}
 
+          {/* Unfolded — year-in-review recap */}
+          {devotionals.length > 0 && (
+            <Animated.View
+              entering={FadeInDown.duration(600).delay(75)}
+              style={{ paddingHorizontal: 24, marginBottom: 20 }}
+            >
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  router.push('/unfolded');
+                }}
+                style={{ opacity: 1 }}
+              >
+                <View
+                  style={{
+                    borderRadius: 18,
+                    overflow: 'hidden',
+                    borderWidth: 1,
+                    borderColor: 'rgba(200, 165, 92, 0.2)',
+                    backgroundColor: 'rgba(200, 165, 92, 0.06)',
+                    shadowColor: '#C8A55C',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.12,
+                    shadowRadius: 20,
+                    elevation: 3,
+                  }}
+                >
+                  <View
+                    style={{
+                      padding: 20,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <SparkleIcon size={14} color="#C8A55C" weight="fill" />
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.ui,
+                            fontSize: 11,
+                            color: '#C8A55C',
+                            letterSpacing: 1.5,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Your story so far
+                        </Text>
+                      </View>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 26,
+                          color: colors.text,
+                          letterSpacing: -0.5,
+                          marginBottom: 4,
+                        }}
+                      >
+                        Unfolded
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.body,
+                          fontSize: 13,
+                          color: colors.textSubtle,
+                          lineHeight: 18,
+                        }}
+                      >
+                        See your journey in a whole new way
+                      </Text>
+                    </View>
+                    <CaretRightIcon size={18} color="#C8A55C" weight="bold" />
+                  </View>
+                </View>
+              </Pressable>
+            </Animated.View>
+          )}
+
           {/* Menu Items — grouped card */}
           <Animated.View
             entering={FadeInDown.duration(600).delay(100)}

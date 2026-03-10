@@ -887,7 +887,7 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Ambient campfire embers — visible only when today's reading is done */}
-        {hasReadToday && <GoldEmberField density="low" />}
+        <GoldEmberField streakLevel={streakCurrent} />
 
         <ScrollView
           contentContainerStyle={{ paddingBottom: 100 }}

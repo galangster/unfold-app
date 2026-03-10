@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, CheckIcon, CrownIcon, ShieldCheckIcon, SparkleIcon, ClockIcon } from 'phosphor-react-native';
+import { XIcon, CrownIcon, ShieldCheckIcon, SparkleIcon, ClockIcon, PathIcon, HeartIcon, SunIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,26 +12,107 @@ import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, h
 import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
-
-const FEATURES = [
-  'Unlimited devotional journeys',
-  'AI voice narration with voice selection',
-  'AI-powered journal prompts',
-  'Custom themes & accent colors',
-  'Premium reading fonts',
-  'Premium Bible translations',
-  'Wallpaper share styles',
-  'Unlimited streak freezes',
-];
+import { getThemeById } from '@/constants/devotional-types';
+import type { ThemeCategory } from '@/constants/devotional-types';
 
 type PlanChoice = 'yearly' | 'monthly';
+
+/** Maps a theme category to an identity-oriented transformation phrase */
+function getThemeIdentityPhrase(theme: ThemeCategory): string {
+  const map: Record<ThemeCategory, string> = {
+    trust: 'someone who rests easy, even when life doesn\u2019t',
+    identity: 'someone grounded in who they actually are',
+    rest: 'someone who can finally exhale',
+    purpose: 'someone who sees meaning in the everyday',
+    healing: 'someone walking toward wholeness',
+    gratitude: 'someone who notices what\u2019s already good',
+    surrender: 'someone free from needing to control it all',
+    courage: 'someone who steps forward anyway',
+    hope: 'someone who keeps their eyes on the light',
+    presence: 'someone who notices God in the ordinary',
+    conviction: 'someone whose faith has real edges',
+    joy: 'someone whose joy survives the hard days',
+    lament: 'someone brave enough to grieve honestly',
+    justice: 'someone who acts on what they believe',
+    discipline: 'someone whose habits match their heart',
+    wonder: 'someone who hasn\u2019t stopped being amazed',
+  };
+  return map[theme] ?? 'the version of yourself that follows through';
+}
+
+/** Build identity statements from whatever user data we have */
+function buildIdentityStatements(
+  userName: string | undefined,
+  currentSituation: string | undefined,
+  emotionalState: string | undefined,
+  spiritualSeeking: string | undefined,
+  selectedTheme: ThemeCategory | undefined,
+): { icon: typeof PathIcon; text: string }[] {
+  const statements: { icon: typeof PathIcon; text: string }[] = [];
+  const name = userName?.split(' ')[0]; // First name only
+
+  // Statement 1: Anchor on their theme / seeking — who they're becoming
+  if (selectedTheme) {
+    const themeInfo = getThemeById(selectedTheme);
+    const identityPhrase = getThemeIdentityPhrase(selectedTheme);
+    if (name) {
+      statements.push({
+        icon: PathIcon,
+        text: `${name}, you chose ${themeInfo?.name.toLowerCase() ?? selectedTheme} for a reason. Premium helps you become ${identityPhrase}.`,
+      });
+    } else {
+      statements.push({
+        icon: PathIcon,
+        text: `You chose ${themeInfo?.name.toLowerCase() ?? selectedTheme} for a reason. Premium helps you become ${identityPhrase}.`,
+      });
+    }
+  } else if (spiritualSeeking) {
+    // Trim to keep it conversational
+    const seeking = spiritualSeeking.length > 80
+      ? spiritualSeeking.slice(0, 77).replace(/\s+\S*$/, '') + '...'
+      : spiritualSeeking;
+    statements.push({
+      icon: PathIcon,
+      text: name
+        ? `${name}, you said you\u2019re looking for "${seeking}" \u2014 Premium gives you the space to actually find it.`
+        : `You\u2019re looking for "${seeking}" \u2014 Premium gives you the space to actually find it.`,
+    });
+  } else {
+    statements.push({
+      icon: PathIcon,
+      text: name
+        ? `${name}, this is the version of you that follows through \u2014 the one that doesn\u2019t just start, but stays.`
+        : 'This is the version of you that follows through \u2014 the one that doesn\u2019t just start, but stays.',
+    });
+  }
+
+  // Statement 2: Emotional resonance — we see what you're carrying
+  if (emotionalState && emotionalState.length > 10) {
+    statements.push({
+      icon: HeartIcon,
+      text: 'You opened up about something real. Premium means your devotionals keep meeting you exactly where you are \u2014 not where an algorithm guesses.',
+    });
+  } else {
+    statements.push({
+      icon: HeartIcon,
+      text: 'Devotionals that know your story, a voice that reads to you, journaling that goes deeper \u2014 all without limits.',
+    });
+  }
+
+  // Statement 3: Forward-looking — the daily rhythm
+  statements.push({
+    icon: SunIcon,
+    text: 'Every morning, something waiting for you that actually matters. Not content. Conversation.',
+  });
+
+  return statements;
+}
 
 /** Determine if a package has a free trial intro offer */
 function packageHasFreeTrial(pkg: PurchasesPackage | undefined | null): boolean {
   if (!pkg) return false;
   const intro = pkg.product.introPrice;
   if (!intro) return false;
-  // A free trial has price === 0
   return intro.price === 0;
 }
 
@@ -44,7 +125,6 @@ function getTrialDuration(pkg: PurchasesPackage | undefined | null): string | nu
   const count = intro.periodNumberOfUnits;
   const unit = intro.periodUnit.toLowerCase();
 
-  // Normalize unit
   if (unit === 'day') return `${count}-day`;
   if (unit === 'week') return `${count * 7}-day`;
   if (unit === 'month') return `${count}-month`;
@@ -60,8 +140,23 @@ export default function PaywallScreen() {
   const queryClient = useQueryClient();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const [selectedPlan, setSelectedPlan] = useState<PlanChoice>('yearly'); // Default yearly for better conversion
+  const [selectedPlan, setSelectedPlan] = useState<PlanChoice>('yearly');
   const updateUser = useUnfoldStore((s) => s.updateUser);
+
+  // Pull user's onboarding data for personalization
+  const userName = useUnfoldStore((s) => s.user?.name);
+  const currentSituation = useUnfoldStore((s) => s.user?.currentSituation);
+  const emotionalState = useUnfoldStore((s) => s.user?.emotionalState);
+  const spiritualSeeking = useUnfoldStore((s) => s.user?.spiritualSeeking);
+  const selectedTheme = useUnfoldStore((s) => s.user?.selectedTheme);
+
+  const firstName = userName?.split(' ')[0];
+
+  // Build the personalized identity statements
+  const identityStatements = useMemo(
+    () => buildIdentityStatements(userName, currentSituation, emotionalState, spiritualSeeking, selectedTheme),
+    [userName, currentSituation, emotionalState, spiritualSeeking, selectedTheme],
+  );
 
   const { data: offeringsResult, isLoading } = useQuery({
     queryKey: ['revenuecat', 'offerings'],
@@ -97,27 +192,22 @@ export default function PaywallScreen() {
   });
 
   // Determine trial eligibility
-  // Primary: use SDK eligibility check. Fallback: check introPrice on product.
   const isTrialEligible = useMemo(() => {
     const selectedPkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
     if (!selectedPkg) return false;
 
-    // If we have eligibility data from the SDK, use it
     if (trialEligibility) {
       const eligibility = trialEligibility[selectedPkg.product.identifier];
       if (eligibility) {
-        // status 2 = ELIGIBLE, status 1 = INELIGIBLE
         if (eligibility.status === 2) return true;
         if (eligibility.status === 1) return false;
-        // status 0 = UNKNOWN, fall through to introPrice check
       }
     }
 
-    // Fallback: if the product has a free trial introPrice, show trial UI
     return packageHasFreeTrial(selectedPkg);
   }, [selectedPlan, yearlyPackage, monthlyPackage, trialEligibility]);
 
-  // Check if either plan has a trial (for the badge on plan cards)
+  // Check if either plan has a trial (for badge on plan cards)
   const yearlyHasTrial = useMemo(() => {
     if (trialEligibility && yearlyPackage) {
       const e = trialEligibility[yearlyPackage.product.identifier];
@@ -145,7 +235,6 @@ export default function PaywallScreen() {
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
     onSuccess: async (result) => {
       if (result.ok) {
-        // Immediately update the Zustand store
         const subscriptionResult = await hasActiveSubscription();
         if (subscriptionResult.ok) {
           updateUser({ isPremium: subscriptionResult.data });
@@ -168,7 +257,6 @@ export default function PaywallScreen() {
     mutationFn: restorePurchases,
     onSuccess: async (result) => {
       if (result.ok) {
-        // Immediately update the Zustand store
         const subscriptionResult = await hasActiveSubscription();
         if (subscriptionResult.ok) {
           updateUser({ isPremium: subscriptionResult.data });
@@ -188,12 +276,10 @@ export default function PaywallScreen() {
   });
 
   const handleClose = () => {
-    // Prevent double-tap
     if (isPurchasing) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isEarlyOnboarding) {
-      // Early onboarding paywall — just go back to resume onboarding
       router.back();
     } else if (isFromOnboarding) {
       router.replace('/generating');
@@ -203,7 +289,6 @@ export default function PaywallScreen() {
   };
 
   const handleSubscribe = () => {
-    // Prevent double-tap - already handled by disabled prop but extra safety
     if (isPurchasing) return;
 
     const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
@@ -254,9 +339,24 @@ export default function PaywallScreen() {
   const yearlyRaw = 49.99;
   const perMonthFromYearly = '$4.17';
 
+  // Personalized hero copy
+  const heroTitle = isFromOnboarding
+    ? firstName
+      ? `${firstName}, you\u2019re ready.`
+      : 'You\u2019re ready.'
+    : firstName
+      ? `${firstName}, keep going.`
+      : 'Keep going.';
+
+  const heroSubtitle = isFromOnboarding
+    ? 'You just told us what matters to you. Premium means your devotionals never stop growing with you.'
+    : isTrialEligible
+      ? 'You\u2019ve already started something real. See what it looks like without limits.'
+      : 'You\u2019ve already started something real. Go all the way in.';
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Close button -- pinned near top of modal sheet */}
+      {/* Close button */}
       <Pressable
         onPress={handleClose}
         disabled={isPurchasing}
@@ -281,9 +381,8 @@ export default function PaywallScreen() {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* Top section -- hero + features */}
+        {/* Hero section */}
         <View style={{ paddingTop: 20, paddingHorizontal: 28 }}>
-          {/* Hero */}
           <Animated.View entering={FadeIn.duration(600)}>
             {/* App Icon */}
             <View
@@ -299,7 +398,6 @@ export default function PaywallScreen() {
                 borderColor: colors.border,
               }}
             >
-              {/* Icon - switches based on theme */}
               <Image
                 source={isDark ? require('./icon-paywall.png') : require('./icon-paywall-light.png')}
                 style={{ width: 40, height: 40 }}
@@ -326,7 +424,7 @@ export default function PaywallScreen() {
                 lineHeight: 42,
               }}
             >
-              {isFromOnboarding ? 'Start with everything.' : 'Go deeper.'}
+              {heroTitle}
             </Text>
             <Text
               style={{
@@ -337,47 +435,59 @@ export default function PaywallScreen() {
                 lineHeight: 24,
               }}
             >
-              {isFromOnboarding
-                ? 'Your journey is ready. Try 7 days free — cancel anytime.'
-                : isTrialEligible
-                  ? 'Try the full Unfold experience, free.'
-                  : 'Unlock the full Unfold experience.'}
+              {heroSubtitle}
             </Text>
           </Animated.View>
 
-          {/* Feature list -- staggered entrance */}
-          <View style={{ marginTop: 16 }}>
-            {FEATURES.map((feature, index) => (
-              <Animated.View
-                key={feature}
-                entering={FadeInDown.duration(400).delay(100 + index * 60)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 4,
-                }}
-              >
-                <CheckIcon size={18} color={colors.accent} weight="bold" />
-                <Text
+          {/* Identity statements — replaces feature checklist */}
+          <View style={{ marginTop: 24, gap: 20 }}>
+            {identityStatements.map((statement, index) => {
+              const IconComponent = statement.icon;
+              return (
+                <Animated.View
+                  key={index}
+                  entering={FadeInDown.duration(500).delay(200 + index * 150)}
                   style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 14,
-                    color: colors.text,
-                    marginLeft: 12,
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
                   }}
                 >
-                  {feature}
-                </Text>
-              </Animated.View>
-            ))}
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      backgroundColor: `${colors.accent}14`,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginRight: 14,
+                      marginTop: 2,
+                    }}
+                  >
+                    <IconComponent size={18} color={colors.accent} weight="light" />
+                  </View>
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontFamily: FontFamily.body,
+                      fontSize: 15,
+                      color: colors.text,
+                      lineHeight: 23,
+                    }}
+                  >
+                    {statement.text}
+                  </Text>
+                </Animated.View>
+              );
+            })}
           </View>
 
-          {/* Trial timeline -- only show when eligible */}
+          {/* Trial timeline — only show when eligible */}
           {isTrialEligible && (
             <Animated.View
-              entering={FadeInDown.duration(500).delay(600)}
+              entering={FadeInDown.duration(500).delay(700)}
               style={{
-                marginTop: 20,
+                marginTop: 24,
                 padding: 16,
                 borderRadius: 12,
                 backgroundColor: `${colors.accent}0D`,
@@ -418,7 +528,7 @@ export default function PaywallScreen() {
                     color: colors.textMuted,
                     lineHeight: 18,
                   }}>
-                    Full access to every premium feature. No charge.
+                    Full access to everything. No charge. No strings.
                   </Text>
                 </View>
               </View>
@@ -693,8 +803,8 @@ export default function PaywallScreen() {
                   {isTrialEligible
                     ? `Start Your ${selectedTrialDuration} Free Trial`
                     : selectedPlan === 'yearly'
-                      ? `Subscribe — ${yearlyPrice}/year`
-                      : `Subscribe — ${monthlyPrice}/month`}
+                      ? `Subscribe \u2014 ${yearlyPrice}/year`
+                      : `Subscribe \u2014 ${monthlyPrice}/month`}
                 </Text>
               )}
             </Pressable>
@@ -729,19 +839,16 @@ export default function PaywallScreen() {
                 padding: 6,
               }}
             >
-              {({ pressed }) => (
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 13,
-                    color: colors.textSubtle,
-                    textAlign: 'center',
-                    opacity: pressed ? 0.5 : 1,
-                  }}
-                >
-                  Restore purchases
-                </Text>
-              )}
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 13,
+                  color: colors.textSubtle,
+                  textAlign: 'center',
+                }}
+              >
+                Restore purchases
+              </Text>
             </Pressable>
           </View>
 
@@ -754,19 +861,16 @@ export default function PaywallScreen() {
                 alignSelf: 'center',
               }}
             >
-              {({ pressed }) => (
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 14,
-                    color: colors.textSubtle,
-                    textAlign: 'center',
-                    opacity: pressed ? 0.5 : 1,
-                  }}
-                >
-                  Maybe later
-                </Text>
-              )}
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 14,
+                  color: colors.textSubtle,
+                  textAlign: 'center',
+                }}
+              >
+                Maybe later
+              </Text>
             </Pressable>
           )}
 

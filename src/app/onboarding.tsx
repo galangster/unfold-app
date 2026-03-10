@@ -30,7 +30,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, PenNibIcon } from 'phosphor-react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
 import { logger } from '@/lib/logger';
@@ -203,13 +203,15 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Reflect the user's answers back and ask for commitment
   { id: 'mirrorBack', question: "Here's what I\u00A0heard.", subtext: 'Before we build this, I want to make sure I got\u00A0it\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // FOUNDER NOTE: A personal letter from the founder
+  { id: 'founderNote', question: 'A note from our\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION INTRO: Introduce the companion orb
   { id: 'companionIntro', question: 'Meet your\u00A0companion.', subtext: 'Every day, it learns more about you. The longer you stay, the more personal\u00A0it\u00A0gets.', type: 'companionIntro' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SIGN-IN: Optional Apple Sign In before generating
   { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your journey safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'companionIntro' | 'signIn';
+type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'founderNote' | 'companionIntro' | 'signIn';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -496,8 +498,8 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back and companion intro always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'companionIntro') {
+    // Mirror-back, founder note, and companion intro always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'companionIntro') {
       return true;
     }
 
@@ -1599,6 +1601,103 @@ export default function OnboardingScreen() {
               </View>
             )}
           </Pressable>
+        </View>
+      );
+    }
+
+    // Founder's note step: a personal letter from Nick
+    if (step.type === 'founderNote') {
+      return (
+        <View style={{ alignItems: 'center', marginTop: 16, paddingHorizontal: 4 }}>
+          {/* Pen nib icon */}
+          <Animated.View
+            entering={FadeIn.delay(200).duration(600)}
+            style={{ marginBottom: 24 }}
+          >
+            <PenNibIcon size={32} color={colors.accent} weight="light" />
+          </Animated.View>
+
+          {/* Gold accent line */}
+          <Animated.View
+            entering={FadeIn.delay(400).duration(600)}
+            style={{
+              width: 40,
+              height: 1.5,
+              backgroundColor: colors.accent,
+              opacity: 0.4,
+              marginBottom: 28,
+              borderRadius: 1,
+            }}
+          />
+
+          {/* The note */}
+          <View style={{ gap: 20 }}>
+            <Animated.Text
+              entering={FadeIn.delay(600).duration(700)}
+              style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: 16,
+                color: colors.text,
+                lineHeight: 28,
+                textAlign: 'center',
+              }}
+            >
+              I built Unfold because I needed it. I was going through a season where I craved something deeper than a daily verse notification — something that actually knew where I was and met me there.
+            </Animated.Text>
+
+            <Animated.Text
+              entering={FadeIn.delay(900).duration(700)}
+              style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: 16,
+                color: colors.text,
+                lineHeight: 28,
+                textAlign: 'center',
+              }}
+            >
+              So this app is for me just as much as it is for you. I believe people everywhere deserve a space that takes their spiritual life seriously — not as a product, but as something sacred.
+            </Animated.Text>
+
+            <Animated.Text
+              entering={FadeIn.delay(1200).duration(700)}
+              style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: 16,
+                color: colors.textMuted,
+                lineHeight: 28,
+                textAlign: 'center',
+              }}
+            >
+              I'm dedicating myself to making this that space. Thank you for trusting me with yours.
+            </Animated.Text>
+          </View>
+
+          {/* Signature */}
+          <Animated.View
+            entering={FadeIn.delay(1600).duration(800)}
+            style={{ alignItems: 'center', marginTop: 32 }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.displayItalic,
+                fontSize: 26,
+                color: colors.text,
+              }}
+            >
+              Nick
+            </Text>
+            {/* Gold underline under signature */}
+            <View
+              style={{
+                width: 48,
+                height: 1.5,
+                backgroundColor: colors.accent,
+                opacity: 0.5,
+                marginTop: 6,
+                borderRadius: 1,
+              }}
+            />
+          </Animated.View>
         </View>
       );
     }
