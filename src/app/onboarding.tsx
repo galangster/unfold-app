@@ -215,6 +215,7 @@ type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituat
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
+// Default discovery chips — used as fallback when AI chips aren't available
 const DISCOVERY_CHIPS: Record<string, string[]> = {
   currentSituation: [
     'Anxious', 'Grateful', 'Searching', 'Tired', 'Hopeful',
@@ -232,6 +233,24 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
     'Patience', 'Hope',
   ],
 };
+
+/**
+ * Generate contextual chips that match the specific question/topic.
+ * These feel like natural quick-select answers to the adaptive question,
+ * not generic emotional states.
+ */
+function getContextualChips(stepId: string, topicName: string): string[] {
+  // For the opening question, chips should be ways the topic shows up in life
+  if (stepId === 'currentSituation') {
+    return [
+      'Something I need', 'Something I\'ve lost', 'A daily struggle',
+      'Just starting to explore', 'It comes and goes',
+      'I think about it constantly', 'I don\'t fully understand it',
+      'It feels far away', 'I\'m ready for it',
+    ];
+  }
+  return DISCOVERY_CHIPS[stepId] ?? [];
+}
 
 interface OnboardingData {
   name: string;
@@ -282,7 +301,7 @@ export default function OnboardingScreen() {
   const [preparingQuip, setPreparingQuip] = useState('Contemplating...');
   
   // Adaptive question states
-  const [adaptedSteps, setAdaptedSteps] = useState<Record<string, { question: string; subtext: string }>>({});
+  const [adaptedSteps, setAdaptedSteps] = useState<Record<string, { question: string; subtext: string; chips?: string[] }>>({});
   const [isLoadingAdaptive, setIsLoadingAdaptive] = useState(false);
   const ripple1 = useSharedValue(0);
   const ripple2 = useSharedValue(0);
@@ -400,6 +419,14 @@ export default function OnboardingScreen() {
       // Skip sign-in if user is already authenticated with Apple
       if (step.id === 'signIn' && existingUser?.authProvider === 'apple') {
         return false;
+      }
+
+      // Skip founder's note, companion intro, and sign-in for returning users
+      // These are first-time onboarding only — not shown when building new devotionals
+      if (existingUser?.hasCompletedOnboarding) {
+        if (step.id === 'founderNote' || step.id === 'companionIntro' || step.id === 'signIn') {
+          return false;
+        }
       }
 
       if (step.skipIfHasValue) {
@@ -612,13 +639,16 @@ export default function OnboardingScreen() {
         logger.error('[Onboarding] Apple Sign In failed', { error: result.error });
 
         let friendlyError = 'Unable to sign in. Please try again.';
-        if (result.error?.includes('network')) {
+        if (result.error?.includes('Firebase')) {
+          friendlyError = 'Sign in is temporarily unavailable. You can skip this step.';
+        } else if (result.error?.includes('network')) {
           friendlyError = 'Network error. Check your connection and try again.';
         } else if (result.error?.includes('credential') || result.error?.includes('already')) {
           friendlyError = 'This Apple account is already linked to another user.';
         } else if (result.error?.includes('unavailable') || result.error?.includes('digest')) {
           friendlyError = 'Apple Sign In requires a real device. Try skipping for now.';
         }
+        logger.error('[Onboarding] Apple Sign In error details', { rawError: result.error });
         setSignInError(friendlyError);
       }
     } catch (error) {
@@ -840,12 +870,19 @@ export default function OnboardingScreen() {
 
     try {
       // Pre-seed first discovery question based on selection type
-      const firstQuestion: { question: string; subtext: string } = selectionType === 'theme' ? {
-        question: `What does "${data.selectedThemes[0]}" look like in your life right now?`,
+      const themeName = data.selectedThemes.length > 0
+        ? getThemeById(data.selectedThemes[0])?.name ?? data.selectedThemes[0]
+        : '';
+      const typeName = data.selectedType?.replace(/_/g, ' ') ?? '';
+
+      const firstQuestion: { question: string; subtext: string; chips?: string[] } = selectionType === 'theme' ? {
+        question: `What does "${themeName}" look like in your life right now?`,
         subtext: "The honest, unfiltered reality of where you are.",
+        chips: getContextualChips('currentSituation', themeName),
       } : selectionType === 'type' ? {
-        question: `As you begin this ${data.selectedType?.replace('_', ' ')}, what's on your heart?`,
+        question: `As you begin this ${typeName}, what's on your heart?`,
         subtext: "The thing that's there when the noise quiets down.",
+        chips: getContextualChips('currentSituation', typeName),
       } : {
         question: "What's been on your heart lately?",
         subtext: "The thing that's there when the noise quiets down.",
@@ -912,7 +949,7 @@ export default function OnboardingScreen() {
       const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition);
       setAdaptedSteps((prev) => ({
         ...prev,
-        [nextStepId]: { question: result.question, subtext: result.subtext },
+        [nextStepId]: { question: result.question, subtext: result.subtext, chips: result.chips },
       }));
     } catch {
       // Falls back to default step question (adaptedSteps won't have an entry)
@@ -1381,13 +1418,15 @@ export default function OnboardingScreen() {
     }
 
     if (step.type === 'multiline') {
-      const chips = DISCOVERY_CHIPS[step.id];
+      // Use AI-generated chips when available, fall back to static defaults
+      const adapted = adaptedSteps[step.id];
+      const chips = adapted?.chips ?? DISCOVERY_CHIPS[step.id];
       const isDiscoveryStep = !!chips;
       const currentChips = selectedChips[step.id] ?? [];
 
       return (
         <View style={{ flex: 1 }}>
-          {/* Discovery chips — quick-select feelings/situations */}
+          {/* Discovery chips — quick-select contextual answers */}
           {isDiscoveryStep && (
             <View style={{
               flexDirection: 'row',
@@ -1419,19 +1458,42 @@ export default function OnboardingScreen() {
                       borderColor: isChipSelected ? colors.accent + '50' : colors.border,
                     }}
                   >
-                    {({ pressed }) => (
-                      <Text style={{
-                        fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
-                        fontSize: 14,
-                        color: isChipSelected ? colors.accent : colors.textMuted,
-                        opacity: pressed ? 0.7 : 1,
-                      }}>
-                        {chip}
-                      </Text>
-                    )}
+                    <Text style={{
+                      fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
+                      fontSize: 14,
+                      color: isChipSelected ? colors.accent : colors.textMuted,
+                    }}>
+                      {chip}
+                    </Text>
                   </Pressable>
                 );
               })}
+              {/* "Something else" chip — lets user skip chips and just type */}
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  // Clear all chips for this step so user writes freely
+                  setSelectedChips((prev) => ({ ...prev, [step.id]: [] }));
+                }}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  backgroundColor: 'transparent',
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderStyle: 'dashed',
+                }}
+              >
+                <Text style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 14,
+                  color: colors.textMuted,
+                  fontStyle: 'italic',
+                }}>
+                  Something else
+                </Text>
+              </Pressable>
             </View>
           )}
 
@@ -1464,8 +1526,21 @@ export default function OnboardingScreen() {
               multiline
               autoFocus={!isDiscoveryStep}
               maxLength={INPUT_LIMITS.LONG_TEXT.max}
+              scrollEnabled
             />
           </View>
+          {/* Encouragement to share more */}
+          {isDiscoveryStep && (
+            <Text style={{
+              fontFamily: FontFamily.body,
+              fontSize: 13,
+              color: colors.textMuted,
+              marginTop: 10,
+              opacity: 0.7,
+            }}>
+              The more you share, the more personal your devotional becomes.
+            </Text>
+          )}
         </View>
       );
     }
@@ -1534,6 +1609,7 @@ export default function OnboardingScreen() {
           ? getDevotionalTypeById(data.selectedType)?.name ?? ''
           : '';
 
+      // Extract first sentence, keeping it natural
       const emotionalSnippet = data.emotionalState
         ? data.emotionalState.split(/[.!?]/)[0].trim().toLowerCase()
         : data.currentSituation
@@ -1543,6 +1619,22 @@ export default function OnboardingScreen() {
       const seekingSnippet = data.spiritualSeeking
         ? data.spiritualSeeking.split(/[.!?]/)[0].trim().toLowerCase()
         : '';
+
+      // Build grammatically correct mirror-back text
+      let mirrorText = '';
+      if (emotionalSnippet && seekingSnippet) {
+        mirrorText = `You mentioned ${emotionalSnippet}.`;
+        if (themeName) mirrorText += ` You picked "${themeName}" — that's not random, that's where you actually are.`;
+        mirrorText += ` And what you're reaching for — ${seekingSnippet}. That tells me something about what you need right now.`;
+      } else if (emotionalSnippet) {
+        mirrorText = `You mentioned ${emotionalSnippet}.`;
+        if (themeName) mirrorText += ` "${themeName}" — that's not a random pick. That's where you are.`;
+        mirrorText += ' I hear you.';
+      } else {
+        mirrorText = themeName
+          ? `"${themeName}" — you chose this for a reason. Let's build something for exactly where you are.`
+          : "Let's build something for exactly where you are.";
+      }
 
       return (
         <View style={{ gap: 24, marginTop: 8 }}>
@@ -1556,20 +1648,15 @@ export default function OnboardingScreen() {
           }}>
             <Text style={{
               fontFamily: FontFamily.displayItalic,
-              fontSize: 17,
+              fontSize: 20,
               color: colors.text,
-              lineHeight: 28,
+              lineHeight: 32,
             }}>
-              {emotionalSnippet && seekingSnippet
-                ? `You said you're ${emotionalSnippet}. ${themeName ? `You picked "${themeName}" because that's where you actually are.` : ''} And what you're looking for — ${seekingSnippet}. That tells me something about what you need right now.`
-                : emotionalSnippet
-                  ? `You said you're ${emotionalSnippet}. ${themeName ? `"${themeName}" — that's not a random pick. That's where you are.` : ''} I hear you.`
-                  : `${themeName ? `"${themeName}" — ` : ''}you chose this for a reason. Let's build something for exactly where you are.`
-              }
+              {mirrorText}
             </Text>
           </View>
 
-          {/* Commitment button */}
+          {/* Commitment button with accent glow */}
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1581,25 +1668,28 @@ export default function OnboardingScreen() {
                 setTimeout(() => advanceToNextStep(), 50);
               }, 400);
             }}
+            style={{ opacity: 1 }}
           >
-            {({ pressed }) => (
-              <View style={{
-                backgroundColor: pressed ? colors.accent : colors.accent,
-                opacity: pressed ? 0.85 : 1,
-                paddingVertical: 18,
-                paddingHorizontal: 24,
-                borderRadius: 16,
-                alignItems: 'center',
+            <View style={{
+              backgroundColor: colors.accent,
+              paddingVertical: 18,
+              paddingHorizontal: 24,
+              borderRadius: 16,
+              alignItems: 'center',
+              shadowColor: colors.accent,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.5,
+              shadowRadius: 20,
+              elevation: 8,
+            }}>
+              <Text style={{
+                fontFamily: FontFamily.uiSemiBold,
+                fontSize: 16,
+                color: '#FFFFFF',
               }}>
-                <Text style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 16,
-                  color: '#FFFFFF',
-                }}>
-                  Build my devotional
-                </Text>
-              </View>
-            )}
+                Build my devotional
+              </Text>
+            </View>
           </Pressable>
         </View>
       );
@@ -1608,7 +1698,7 @@ export default function OnboardingScreen() {
     // Founder's note step: a personal letter from Nick
     if (step.type === 'founderNote') {
       return (
-        <View style={{ alignItems: 'center', marginTop: 16, paddingHorizontal: 4 }}>
+        <View style={{ marginTop: 16, paddingHorizontal: 4 }}>
           {/* Pen nib icon */}
           <Animated.View
             entering={FadeIn.delay(200).duration(600)}
@@ -1636,10 +1726,9 @@ export default function OnboardingScreen() {
               entering={FadeIn.delay(600).duration(700)}
               style={{
                 fontFamily: FontFamily.bodyItalic,
-                fontSize: 16,
+                fontSize: 17,
                 color: colors.text,
-                lineHeight: 28,
-                textAlign: 'center',
+                lineHeight: 30,
               }}
             >
               I built Unfold because I needed it. I was going through a season where I craved something deeper than a daily verse notification — something that actually knew where I was and met me there.
@@ -1649,10 +1738,9 @@ export default function OnboardingScreen() {
               entering={FadeIn.delay(900).duration(700)}
               style={{
                 fontFamily: FontFamily.bodyItalic,
-                fontSize: 16,
+                fontSize: 17,
                 color: colors.text,
-                lineHeight: 28,
-                textAlign: 'center',
+                lineHeight: 30,
               }}
             >
               So this app is for me just as much as it is for you. I believe people everywhere deserve a space that takes their spiritual life seriously — not as a product, but as something sacred.
@@ -1662,10 +1750,9 @@ export default function OnboardingScreen() {
               entering={FadeIn.delay(1200).duration(700)}
               style={{
                 fontFamily: FontFamily.bodyItalic,
-                fontSize: 16,
+                fontSize: 17,
                 color: colors.textMuted,
-                lineHeight: 28,
-                textAlign: 'center',
+                lineHeight: 30,
               }}
             >
               I'm dedicating myself to making this that space. Thank you for trusting me with yours.
@@ -1675,7 +1762,7 @@ export default function OnboardingScreen() {
           {/* Signature */}
           <Animated.View
             entering={FadeIn.delay(1600).duration(800)}
-            style={{ alignItems: 'center', marginTop: 32 }}
+            style={{ marginTop: 32 }}
           >
             <Text
               style={{
@@ -2014,7 +2101,7 @@ export default function OnboardingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'height' : 'height'}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
             {currentStepIndex > 0 ? (
               <Pressable
@@ -2040,8 +2127,8 @@ export default function OnboardingScreen() {
               </Pressable>
             )}
             
-            {/* Continue button - hide for choice/timeChoice steps (they auto-advance) */}
-            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' ? (
+            {/* Continue button - hide for choice/timeChoice steps (they auto-advance) and mirrorBack (has its own CTA) */}
+            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' ? (
               <Pressable
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

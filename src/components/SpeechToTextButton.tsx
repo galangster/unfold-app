@@ -94,13 +94,18 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
     transform: [{ scale: pulseScale.value }],
   }));
 
-  // Check permissions on mount
+  // Check permissions on mount, cleanup on unmount
   useEffect(() => {
     ExpoSpeechRecognitionModule.getPermissionsAsync().then(({ granted }) => {
       setHasPermission(granted);
+    }).catch(() => {
+      // Module may not be available
+      setHasPermission(false);
     });
     return () => {
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      // Stop any active recording when component unmounts
+      try { ExpoSpeechRecognitionModule.stop(); } catch {}
     };
   }, []);
 
@@ -109,10 +114,17 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
 
     // Request permissions if not yet granted
     if (!hasPermission) {
-      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      setHasPermission(granted);
-      if (!granted) {
-        setErrorMessage('Microphone permission required.');
+      try {
+        const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+        setHasPermission(granted);
+        if (!granted) {
+          setErrorMessage('Microphone permission required.');
+          if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+          errorTimerRef.current = setTimeout(() => setErrorMessage(''), 3000);
+          return;
+        }
+      } catch {
+        setErrorMessage('Could not request microphone permission.');
         if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
         errorTimerRef.current = setTimeout(() => setErrorMessage(''), 3000);
         return;
@@ -122,13 +134,37 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
     setErrorMessage('');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    ExpoSpeechRecognitionModule.start({
-      lang: 'en-US',
-      interimResults: true,
-      continuous: true,
-      addsPunctuation: true,
-    });
-  }, [isActive, hasPermission]);
+    try {
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        continuous: true,
+        addsPunctuation: true,
+      });
+
+      // Safety timeout — if 'start' event never fires within 5s, reset state
+      const safetyTimeout = setTimeout(() => {
+        if (!transcriptRef.current && isRecording) {
+          setIsRecording(false);
+          setErrorMessage('Voice input timed out. Try again.');
+          if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+          errorTimerRef.current = setTimeout(() => setErrorMessage(''), 3000);
+          try { ExpoSpeechRecognitionModule.stop(); } catch {}
+        }
+      }, 5000);
+
+      // Clear safety timeout if recording starts successfully
+      const clearSafety = () => clearTimeout(safetyTimeout);
+      // Store for cleanup
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = safetyTimeout;
+    } catch (err) {
+      setIsRecording(false);
+      setErrorMessage('Voice input unavailable on this device.');
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = setTimeout(() => setErrorMessage(''), 3000);
+    }
+  }, [isActive, hasPermission, isRecording]);
 
   const stopRecording = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

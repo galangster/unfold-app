@@ -69,6 +69,7 @@ function RootLayoutNav() {
           options={{
             presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            contentStyle: { backgroundColor: '#0a0a0a' },
           }}
         />
         </Stack>

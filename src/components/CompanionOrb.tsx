@@ -209,11 +209,8 @@ export function CompanionOrb({
     return interpolate(breathe.value, [0, 1], [0.2, 0.4]);
   });
 
-  const glowBlur = useDerivedValue(() => {
-    const minBlur = Math.max(4, size * 0.08);
-    const maxBlur = Math.max(8, size * 0.18);
-    return interpolate(breathe.value, [0, 1], [minBlur, maxBlur]);
-  });
+  // Use a fixed blur radius — animating BlurMask blur causes Skia rendering artifacts
+  const midGlowBlur = Math.max(6, size * 0.13);
 
   const containerStyle = useAnimatedStyle(() => {
     const scaleMin = isActive ? 0.97 : 0.98;
@@ -270,7 +267,7 @@ export function CompanionOrb({
               opacity={glowOpacity}
             >
               <Path path={midGlowPath} color={colors.midGlow}>
-                <BlurMask blur={glowBlur} style="normal" />
+                <BlurMask blur={midGlowBlur} style="normal" />
               </Path>
             </Group>
 

@@ -1800,7 +1800,7 @@ export async function generateAdaptiveQuestion(
   previousAnswers: { question: string; answer: string }[],
   nextQuestionBase: { question: string; subtext: string },
   stepPosition?: 'opening' | 'depth' | 'longing'
-): Promise<{ question: string; subtext: string; source: 'backend' | 'fallback'; backendUrl?: string }> {
+): Promise<{ question: string; subtext: string; chips?: string[]; source: 'backend' | 'fallback'; backendUrl?: string }> {
   if (previousAnswers.length === 0) {
     return { ...nextQuestionBase, source: 'fallback' };
   }
@@ -1919,7 +1919,9 @@ CRITICAL RULES:
 
 SUBTEXT: One short phrase that gives permission and makes it safe to be honest. Must be <= 85 characters.
 
-RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "..."}`;
+CHIPS: Generate 6-8 short quick-select response options (1-3 words each) that are NATURAL ANSWERS to your question. These are tappable chips the user can select instead of typing. They should feel like completions of the question — not generic emotions, but specific to what you asked.
+
+RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "...", "chips": ["...", "..."]}`;
 
     const adaptiveUserPrompt = `Here's what this person has shared so far:
 
@@ -1980,6 +1982,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
         subtext: typeof data?.subtext === 'string' && data.subtext.trim()
           ? clampSubtext(data.subtext)
           : nextQuestionBase.subtext,
+        chips: Array.isArray(data?.chips) ? data.chips.filter((c: unknown) => typeof c === 'string' && c.trim()).slice(0, 10) : undefined,
         source: 'backend',
         backendUrl: backendResult.backendUrl,
       };
@@ -2009,19 +2012,21 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       }
     }
 
-    const parsedResult = JSON.parse(jsonText) as { question?: string; subtext?: string };
-    
+    const parsedResult = JSON.parse(jsonText) as { question?: string; subtext?: string; chips?: string[] };
+
     logger.log('[Adaptive] Backend parsed result:', {
       question: parsedResult.question?.substring(0, 60),
-      subtext: parsedResult.subtext?.substring(0, 40)
+      subtext: parsedResult.subtext?.substring(0, 40),
+      chips: parsedResult.chips?.length,
     });
-    
+
     // Increment rate limit counter on success
     await incrementRateLimit('adaptive-question');
-    
+
     return {
       question: clampQuestion(parsedResult.question || nextQuestionBase.question),
       subtext: clampSubtext(parsedResult.subtext || nextQuestionBase.subtext),
+      chips: Array.isArray(parsedResult.chips) ? parsedResult.chips.filter(c => typeof c === 'string' && c.trim()).slice(0, 10) : undefined,
       source: 'backend',
       backendUrl: backendResult.backendUrl,
     };
