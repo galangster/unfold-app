@@ -6,7 +6,6 @@ import Animated, {
   withTiming,
   withDelay,
   Easing,
-  runOnJS,
   cancelAnimation,
   interpolateColor,
 } from 'react-native-reanimated';
@@ -90,8 +89,6 @@ export default function WelcomeScreen() {
   const subtitleOpacity = useSharedValue(0);
   const buttonOpacity = useSharedValue(0);
   const buttonTranslateY = useSharedValue(16);
-  const screenOpacity = useSharedValue(1);
-
   const titleChars = useMemo(() => 'Unfold'.split(''), []);
   const charOrder = useMemo(() => shuffleOrder(titleChars.length), [titleChars.length]);
 
@@ -107,20 +104,14 @@ export default function WelcomeScreen() {
     return Math.max(...charDelays) + 600 + 100; // max delay + fade duration + buffer
   }, [charDelays]);
 
-  const navigate = useCallback(() => {
+  const handleContinue = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (user?.hasCompletedOnboarding) {
       router.replace('/(tabs)/(today)');
     } else {
       router.replace('/how-it-works');
     }
   }, [user, router]);
-
-  const handleContinue = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    screenOpacity.value = withTiming(0, { duration: 500 }, () => {
-      runOnJS(navigate)();
-    });
-  }, [navigate, screenOpacity]);
 
   useEffect(() => {
     // Returning users skip the welcome animation
@@ -155,12 +146,8 @@ export default function WelcomeScreen() {
     transform: [{ translateY: buttonTranslateY.value }],
   }));
 
-  const screenStyle = useAnimatedStyle(() => ({
-    opacity: screenOpacity.value,
-  }));
-
   return (
-    <Animated.View style={[{ flex: 1, backgroundColor: BG }, screenStyle]}>
+    <View style={{ flex: 1, backgroundColor: BG }}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
         {/* Title — each character pre-rendered, fades in shuffled order */}
         <View style={{ flexDirection: 'row', marginBottom: 20 }}>
@@ -217,6 +204,6 @@ export default function WelcomeScreen() {
           </Animated.Text>
         </Pressable>
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
