@@ -288,11 +288,19 @@ export default function PaywallScreen() {
     }
   };
 
+  const [subscribeError, setSubscribeError] = useState('');
+
   const handleSubscribe = () => {
     if (isPurchasing) return;
+    setSubscribeError('');
 
     const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
-    if (!pkg) return;
+    if (!pkg) {
+      console.log('[Paywall] No package available for plan:', selectedPlan, 'offerings:', JSON.stringify(offerings?.current?.availablePackages?.map(p => p.identifier)));
+      setSubscribeError('Subscription not available yet. Try again in a moment.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     purchaseMutation.mutate(pkg);
   };
@@ -809,6 +817,22 @@ export default function PaywallScreen() {
               )}
             </Pressable>
           </Animated.View>
+
+          {/* Error message */}
+          {subscribeError ? (
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 13,
+                color: '#E85C5C',
+                textAlign: 'center',
+                marginTop: 8,
+                marginBottom: 4,
+              }}
+            >
+              {subscribeError}
+            </Text>
+          ) : null}
 
           {/* Cancel anytime reassurance */}
           {isTrialEligible && (

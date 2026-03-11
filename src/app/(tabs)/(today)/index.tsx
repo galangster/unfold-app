@@ -1469,7 +1469,6 @@ export default function HomeScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <HomeOnboardingTooltips />
       {!hasSeenFeatureOnboarding && <FeatureOnboarding />}
 
       {currentDevotional && (
