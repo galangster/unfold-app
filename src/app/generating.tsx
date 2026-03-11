@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -94,7 +94,13 @@ const MESSAGE_CYCLE_MS = 3800;
 
 export default function GeneratingScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors: themeColors } = useTheme();
+
+  // Prevent swipe-back during generation
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: false });
+  }, [navigation]);
   const colors = {
     ...themeColors,
     background: '#0A0A0A',

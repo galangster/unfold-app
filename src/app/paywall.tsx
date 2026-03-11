@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Linking, Image, ScrollView } from 'react-native';
+import { View, Text, ActivityIndicator, Linking, Image, ScrollView } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing } from 'react-native-reanimated';
@@ -341,11 +342,11 @@ export default function PaywallScreen() {
     transform: [{ scale: glowScale.value }],
   }));
 
-  // Hardcoded pricing (update in RevenueCat dashboard later)
-  const monthlyPrice = '$5.99';
-  const yearlyPrice = '$49.99';
-  const yearlyRaw = 49.99;
-  const perMonthFromYearly = '$4.17';
+  // Pull real prices from RevenueCat packages, fall back to hardcoded defaults
+  const monthlyPrice = monthlyPackage?.product.priceString ?? '$5.99';
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '$49.99';
+  const yearlyRaw = yearlyPackage?.product.price ?? 49.99;
+  const perMonthFromYearly = `$${(yearlyRaw / 12).toFixed(2)}`;
 
   // Personalized hero copy
   const heroTitle = isFromOnboarding
@@ -364,33 +365,31 @@ export default function PaywallScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Close button */}
-      <Pressable
-        onPress={handleClose}
-        disabled={isPurchasing}
-        accessibilityState={{ disabled: isPurchasing }}
-        accessibilityLabel="Close paywall"
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        style={{
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          zIndex: 10,
-          padding: 8,
-          opacity: isPurchasing ? 0.5 : 1,
-        }}
-      >
-        <XIcon size={22} color={colors.textSubtle} weight="light" />
-      </Pressable>
-
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
+        {/* Close button row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 8 }}>
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={handleClose}
+            disabled={isPurchasing}
+            accessibilityLabel="Close paywall"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{
+              padding: 8,
+              opacity: isPurchasing ? 0.5 : 1,
+            }}
+          >
+            <XIcon size={22} color={colors.textSubtle} weight="light" />
+          </TouchableOpacity>
+        </View>
+
         {/* Hero section */}
-        <View style={{ paddingTop: 20, paddingHorizontal: 28 }}>
+        <View style={{ paddingTop: 4, paddingHorizontal: 28 }}>
           <Animated.View entering={FadeIn.duration(600)}>
             {/* App Icon */}
             <View
@@ -587,7 +586,8 @@ export default function PaywallScreen() {
             style={{ gap: 8, marginBottom: 12 }}
           >
             {/* Yearly */}
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setSelectedPlan('yearly');
@@ -685,10 +685,11 @@ export default function PaywallScreen() {
                   </Text>
                 </View>
               </View>
-            </Pressable>
+            </TouchableOpacity>
 
             {/* Monthly */}
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setSelectedPlan('monthly');
@@ -766,23 +767,29 @@ export default function PaywallScreen() {
                   </Text>
                 </View>
               </View>
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
 
           {/* SUBSCRIBE BUTTON with glow */}
-          <Animated.View
-            style={[
-              {
-                marginTop: 8,
-                marginBottom: 4,
-                borderRadius: 28,
-                shadowColor: colors.accent,
-                shadowOffset: { width: 0, height: 4 },
-              },
-              glowStyle,
-            ]}
-          >
-            <Pressable
+          <View style={{ marginTop: 8, marginBottom: 4 }}>
+            <Animated.View
+              style={[
+                {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 28,
+                  backgroundColor: colors.accent,
+                  shadowColor: colors.accent,
+                  shadowOffset: { width: 0, height: 4 },
+                },
+                glowStyle,
+              ]}
+            />
+            <TouchableOpacity
+              activeOpacity={0.8}
               onPress={handleSubscribe}
               disabled={isPurchasing}
               accessibilityLabel={isTrialEligible ? `Start your ${selectedTrialDuration} free trial` : 'Subscribe now'}
@@ -815,8 +822,8 @@ export default function PaywallScreen() {
                       : `Subscribe \u2014 ${monthlyPrice}/month`}
                 </Text>
               )}
-            </Pressable>
-          </Animated.View>
+            </TouchableOpacity>
+          </View>
 
           {/* Error message */}
           {subscribeError ? (
@@ -855,7 +862,8 @@ export default function PaywallScreen() {
 
           {/* Restore + Legal at bottom */}
           <View style={{ alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.6}
               onPress={handleRestore}
               disabled={isPurchasing}
               accessibilityLabel="Restore purchases"
@@ -873,12 +881,13 @@ export default function PaywallScreen() {
               >
                 Restore purchases
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
 
           {/* Skip for onboarding flow */}
           {isFromOnboarding && (
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.6}
               onPress={handleClose}
               style={{
                 padding: 12,
@@ -895,7 +904,7 @@ export default function PaywallScreen() {
               >
                 Maybe later
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           )}
 
           {/* Legal links at bottom */}
@@ -907,7 +916,7 @@ export default function PaywallScreen() {
               gap: 16,
             }}
           >
-            <Pressable onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -918,8 +927,8 @@ export default function PaywallScreen() {
               >
                 Terms of Use
               </Text>
-            </Pressable>
-            <Pressable onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -930,7 +939,7 @@ export default function PaywallScreen() {
               >
                 Privacy Policy
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>

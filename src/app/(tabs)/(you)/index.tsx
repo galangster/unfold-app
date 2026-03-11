@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import {
@@ -148,16 +149,15 @@ export default function YouScreen() {
 
           {/* Upgrade card (non-premium only) */}
           {!isPremium && (
-            <Animated.View
-              entering={FadeInDown.duration(600).delay(50)}
+            <View
               style={{ paddingHorizontal: 24, marginBottom: 20 }}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
+                  console.log('[YOU] Premium banner tapped!');
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   router.push('/paywall');
                 }}
-                style={{ opacity: 1 }}
               >
                 <View
                   style={{
@@ -209,22 +209,21 @@ export default function YouScreen() {
                     </Text>
                   </LinearGradient>
                 </View>
-              </Pressable>
-            </Animated.View>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Unfolded — year-in-review recap */}
           {devotionals.length > 0 && (
-            <Animated.View
-              entering={FadeInDown.duration(600).delay(75)}
+            <View
               style={{ paddingHorizontal: 24, marginBottom: 20 }}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   router.push('/unfolded');
                 }}
-                style={{ opacity: 1 }}
+
               >
                 <View
                   style={{
@@ -287,13 +286,12 @@ export default function YouScreen() {
                     <CaretRightIcon size={18} color="#C8A55C" weight="bold" />
                   </View>
                 </View>
-              </Pressable>
-            </Animated.View>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Menu Items — grouped card */}
-          <Animated.View
-            entering={FadeInDown.duration(600).delay(100)}
+          <View
             style={{ paddingHorizontal: 24 }}
           >
             <View
@@ -312,13 +310,13 @@ export default function YouScreen() {
               }}
             >
               {menuItems.map((item, index) => (
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   key={item.label}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push(item.route as any);
                   }}
-                  style={{ opacity: 1 }}
+  
                 >
                   <View
                     style={{
@@ -368,10 +366,10 @@ export default function YouScreen() {
                     </View>
                     <CaretRightIcon size={16} color={colors.textSubtle} weight="light" />
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               ))}
             </View>
-          </Animated.View>
+          </View>
         </ScrollView>
       </SafeAreaView>
 

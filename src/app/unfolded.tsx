@@ -2,7 +2,6 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import {
   View,
   Text,
-  Pressable,
   Dimensions,
   StyleSheet,
 } from 'react-native';
@@ -22,7 +21,7 @@ import Animated, {
   cancelAnimation,
   interpolate,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, TouchableOpacity } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
   XIcon,
@@ -1198,15 +1197,16 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
       </Reveal>
 
       <Reveal delay={1300}>
-        <Pressable
+        <TouchableOpacity
           onPress={handleShare}
           style={s.shareButton}
+          activeOpacity={0.7}
         >
           <ShareNetworkIcon size={18} color={PALETTE.black} weight="bold" />
           <Text style={s.shareButtonText}>
             {isSharing ? 'Preparing...' : 'Share your story'}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </Reveal>
 
       {/* Off-screen share card — captured as image when sharing */}
@@ -1432,13 +1432,14 @@ export default function UnfoldedScreen() {
               duration={cardDuration}
               onSegmentComplete={handleSegmentComplete}
             />
-            <Pressable
+            <TouchableOpacity
               onPress={handleClose}
               hitSlop={CLOSE_HIT_SLOP}
               style={s.closeButton}
+              activeOpacity={0.6}
             >
               <XIcon size={18} color="rgba(255,255,255,0.6)" weight="bold" />
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
 

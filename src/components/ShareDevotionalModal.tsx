@@ -15,7 +15,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Card dimensions
 const CARD_ASPECT_RATIO = 9 / 16; // Instagram Stories
-const ACTIVE_CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.65, 580);
+const ACTIVE_CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.72, 640);
 const ACTIVE_CARD_WIDTH = ACTIVE_CARD_HEIGHT * CARD_ASPECT_RATIO;
 interface ShareQuote {
   text: string;
@@ -108,13 +108,13 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.92)' }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingTop: 4, paddingBottom: 4 }}>
             <Pressable
               onPress={onClose}
               hitSlop={12}
               style={{ padding: 8 }}
             >
-              <XIcon size={22} color="rgba(255,255,255,0.7)" weight="light" />
+              <XIcon size={20} color="rgba(255,255,255,0.7)" weight="light" />
             </Pressable>
           </View>
 
@@ -170,17 +170,29 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                     }}>
                     {seriesTitle} · Day {day.dayNumber}
                   </Text>
-                  <Image
-                    source={require('@/app/icon-paywall-light.png')}
-                    style={{
-                      width: 12,
-                      height: 12,
-                      marginTop: 14,
-                      tintColor: shareImageColors.subtle,
-                      opacity: 0.6,
-                    }}
-                    resizeMode="contain"
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 6 }}>
+                    <Image
+                      source={require('@/app/icon-paywall-light.png')}
+                      style={{
+                        width: 12,
+                        height: 12,
+                        tintColor: shareImageColors.subtle,
+                        opacity: 0.6,
+                      }}
+                      resizeMode="contain"
+                    />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 10,
+                        color: shareImageColors.subtle,
+                        opacity: 0.6,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      Unfold
+                    </Text>
+                  </View>
                 </View>
               </LinearGradient>
             </View>
