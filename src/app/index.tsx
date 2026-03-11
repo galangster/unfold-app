@@ -196,30 +196,25 @@ export default function WelcomeScreen() {
           buttonStyle,
         ]}
       >
-        <Pressable onPress={handleContinue}>
-          {({ pressed }) => (
-            <View
-              style={{
-                backgroundColor: GOLD,
-                paddingVertical: 18,
-                borderRadius: 28,
-                alignItems: 'center',
-                opacity: pressed ? 0.9 : 1,
-                transform: [{ scale: pressed ? 0.98 : 1 }],
-              }}
-            >
-              <Animated.Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 17,
-                  color: '#1C1710',
-                  letterSpacing: 0.3,
-                }}
-              >
-                Continue
-              </Animated.Text>
-            </View>
-          )}
+        <Pressable
+          onPress={handleContinue}
+          style={{
+            backgroundColor: GOLD,
+            paddingVertical: 18,
+            borderRadius: 28,
+            alignItems: 'center',
+          }}
+        >
+          <Animated.Text
+            style={{
+              fontFamily: FontFamily.uiMedium,
+              fontSize: 17,
+              color: '#1C1710',
+              letterSpacing: 0.3,
+            }}
+          >
+            Begin Your Journey
+          </Animated.Text>
         </Pressable>
       </Animated.View>
     </Animated.View>

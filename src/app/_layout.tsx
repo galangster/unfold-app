@@ -45,10 +45,10 @@ function RootLayoutNav() {
             animation: 'fade',
           }}
         >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="style-onboarding" options={{ animation: 'fade' }} />
-        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-        <Stack.Screen name="generating" options={{ animation: 'fade_from_bottom' }} />
+        <Stack.Screen name="index" options={{ contentStyle: { backgroundColor: '#0a0a0a' } }} />
+        <Stack.Screen name="style-onboarding" options={{ animation: 'fade', contentStyle: { backgroundColor: '#0a0a0a' } }} />
+        <Stack.Screen name="onboarding" options={{ animation: 'fade', contentStyle: { backgroundColor: '#0a0a0a' } }} />
+        <Stack.Screen name="generating" options={{ animation: 'fade_from_bottom', contentStyle: { backgroundColor: '#0a0a0a' } }} />
         <Stack.Screen
           name="(onboarding)/sign-in"
           options={{
