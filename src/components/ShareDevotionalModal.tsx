@@ -14,8 +14,8 @@ import { DevotionalDay } from '@/lib/store';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Card dimensions
-const CARD_ASPECT_RATIO = 9 / 19.5; // Instagram Stories
-const ACTIVE_CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.55, 480);
+const CARD_ASPECT_RATIO = 9 / 16; // Instagram Stories
+const ACTIVE_CARD_HEIGHT = Math.min(SCREEN_HEIGHT * 0.65, 580);
 const ACTIVE_CARD_WIDTH = ACTIVE_CARD_HEIGHT * CARD_ASPECT_RATIO;
 interface ShareQuote {
   text: string;
@@ -38,7 +38,9 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
     ? { gradient: ['#000000', '#1a1a1a', '#2d2d2d'] as const, text: '#ffffff', subtle: 'rgba(255,255,255,0.4)' }
     : { gradient: ['#FFFFFF', '#F5F5F5', '#E8E8E8'] as const, text: '#000000', subtle: 'rgba(0,0,0,0.45)' };
 
-  const quote = day.quotableLine || '';
+  // Prevent orphaned words by replacing the last space with a non-breaking space
+  const rawQuote = day.quotableLine || '';
+  const quote = rawQuote.replace(/\s+(\S+)$/, '\u00A0$1');
 
   useEffect(() => {
     if (visible) {
@@ -52,15 +54,26 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
+      // Wait for layout to stabilize
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       if (!cardRef.current) {
-        Alert.alert('Error', 'Could not capture the image. Please try again.');
-        setIsSharing(false);
-        return;
+        console.log('[Share] cardRef is null, retrying after delay...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (!cardRef.current) {
+          Alert.alert('Error', 'Could not capture the image. Please try again.');
+          setIsSharing(false);
+          return;
+        }
       }
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const uri = await captureRef(cardRef, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
 
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      console.log('[Share] Captured image:', uri);
 
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
@@ -72,11 +85,17 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
         dialogTitle: `${seriesTitle} · Day ${day.dayNumber}`,
+        UTI: 'public.png',
       });
 
       onClose();
-    } catch {
-      // User cancelled share
+    } catch (err) {
+      console.log('[Share] Error:', err instanceof Error ? err.message : String(err));
+      // Only alert on actual errors, not user cancellation
+      const msg = err instanceof Error ? err.message : '';
+      if (!msg.includes('cancel') && !msg.includes('dismiss')) {
+        Alert.alert('Error', 'Could not share the image. Please try again.');
+      }
     } finally {
       setIsSharing(false);
     }
@@ -89,9 +108,13 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.92)' }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
           {/* Header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingVertical: 16 }}>
-            <Pressable onPress={onClose} hitSlop={12}>
-              <XIcon size={24} color="#ffffff" weight="light" />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              style={{ padding: 8 }}
+            >
+              <XIcon size={22} color="rgba(255,255,255,0.7)" weight="light" />
             </Pressable>
           </View>
 
@@ -150,9 +173,9 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                   <Image
                     source={require('@/app/icon-paywall-light.png')}
                     style={{
-                      width: 14,
-                      height: 14,
-                      marginTop: 8,
+                      width: 12,
+                      height: 12,
+                      marginTop: 14,
                       tintColor: shareImageColors.subtle,
                       opacity: 0.6,
                     }}
@@ -168,39 +191,34 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
             <Pressable
               onPress={handleShare}
               disabled={isSharing}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                paddingVertical: 16,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.3)',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                opacity: isSharing ? 0.6 : 1,
+              }}
             >
-              {({ pressed }) => (
-                <View
-                  style={{
-                    backgroundColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.15)',
-                    paddingVertical: 16,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: pressed ? '#ffffff' : 'rgba(255, 255, 255, 0.3)',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    opacity: isSharing ? 0.6 : 1,
-                  }}
-                >
-                  {isSharing ? (
-                    <ActivityIndicator size="small" color={pressed ? '#000000' : '#ffffff'} />
-                  ) : (
-                    <>
-                      <UploadSimpleIcon size={18} color={pressed ? '#000000' : '#ffffff'} weight="light" />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 16,
-                          color: pressed ? '#000000' : '#ffffff',
-                        }}
-                      >
-                        Share
-                      </Text>
-                    </>
-                  )}
-                </View>
+              {isSharing ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <UploadSimpleIcon size={18} color="#ffffff" weight="light" />
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 16,
+                      color: '#ffffff',
+                    }}
+                  >
+                    Share
+                  </Text>
+                </>
               )}
             </Pressable>
           </View>
