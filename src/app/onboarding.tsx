@@ -284,7 +284,11 @@ export default function OnboardingScreen() {
   const existingUser = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  const setCompanionName = useUnfoldStore((s) => s.setCompanionName);
   
+  // Companion naming state (saved to store on continue)
+  const [companionNameInput, setCompanionNameInput] = useState('');
+
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
 
@@ -791,6 +795,12 @@ export default function OnboardingScreen() {
           : chipPrefix;
         setData((prev) => ({ ...prev, [currentStepId]: merged }));
       }
+    }
+
+    // Save companion name when leaving the companion intro step
+    if (currentStepId === 'companionIntro') {
+      const trimmed = companionNameInput.trim();
+      setCompanionName(trimmed.length > 0 ? trimmed : null);
     }
 
     // Dismiss keyboard first to prevent layout shift during animation
@@ -1830,9 +1840,44 @@ export default function OnboardingScreen() {
             </Animated.Text>
           </View>
 
-          {/* Feature hints */}
+          {/* Companion naming input */}
           <Animated.View
             entering={FadeIn.delay(1100).duration(600)}
+            style={{ width: '100%', paddingHorizontal: 4 }}
+          >
+            <Text style={{
+              fontFamily: FontFamily.bodyItalic,
+              fontSize: 15,
+              color: colors.textMuted,
+              textAlign: 'center',
+              marginBottom: 12,
+            }}>
+              What would you call me?
+            </Text>
+            <TextInput
+              value={companionNameInput}
+              onChangeText={setCompanionNameInput}
+              placeholder="A name, a word, whatever feels right"
+              placeholderTextColor={colors.textMuted}
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 18,
+                color: colors.text,
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+                backgroundColor: colors.inputBackground,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                textAlign: 'center',
+              }}
+              maxLength={30}
+            />
+          </Animated.View>
+
+          {/* Feature hints */}
+          <Animated.View
+            entering={FadeIn.delay(1400).duration(600)}
             style={{ gap: 12, width: '100%', paddingHorizontal: 4 }}
           >
             {[

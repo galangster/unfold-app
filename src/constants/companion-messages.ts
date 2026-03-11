@@ -129,41 +129,96 @@ export const COMPANION_SUGGESTIONS: Record<CompanionContext, string[]> = {
 export interface TooltipTrigger {
   condition: string;
   messages: string[];
+  /** Personalized messages when companion has a name */
+  namedMessages?: string[];
+  /** Personalized messages referencing current devotional theme */
+  themedMessages?: string[];
+  /** Messages with both name and theme */
+  namedThemedMessages?: string[];
 }
 
 export const TOOLTIP_TRIGGERS: TooltipTrigger[] = [
   {
     condition: 'first_open_morning',
     messages: ['Morning! How are you feeling?', 'Hey, how\'d you sleep?'],
+    namedMessages: ['{name} here. How\'d you sleep?', 'Morning! {name} checking in.'],
+    themedMessages: ['Morning! Still thinking about that {theme} series?', 'How\'d you sleep? That {theme} reading was something.'],
+    namedThemedMessages: ['{name} here. Still thinking about that {theme} series?'],
   },
   {
     condition: 'first_open_afternoon',
     messages: ['Hey! How\'s your day going?', 'What\'s on your mind today?'],
+    namedMessages: ['{name} here. How\'s today going?', 'Hey! What\'s on your mind?'],
+    themedMessages: ['How\'s your day? That {theme} passage was on my mind.', 'Afternoon check-in. Still sitting with that {theme} reading?'],
+    namedThemedMessages: ['{name} here. That {theme} reading was on my mind too.'],
   },
   {
     condition: 'first_open_evening',
     messages: ['Winding down? How was today?', 'Hey, how are you doing tonight?'],
+    namedMessages: ['{name} here. How was today?', 'Evening! {name} checking in.'],
+    themedMessages: ['Winding down? How are you sitting with that {theme} series?', 'Evening. That {theme} reading hit different today.'],
+    namedThemedMessages: ['{name} here. How are you sitting with that {theme} series?'],
   },
   {
     condition: 'after_reading',
     messages: ['What stood out to you in that one?', 'How are you feeling after that?'],
+    namedMessages: ['{name} here. What stood out to you?', 'How are you feeling after that one?'],
   },
   {
     condition: 'returning_after_gap',
-    messages: ['Hey! Good to see you back.', 'Welcome back — no pressure.'],
+    messages: ['Hey! Good to see you back.', 'Welcome back, no pressure.'],
+    namedMessages: ['{name} here. Good to see you back!', 'Welcome back! {name} missed you.'],
+    themedMessages: ['Welcome back. Ready to pick up that {theme} series?', 'Hey! That {theme} series is waiting for you.'],
+    namedThemedMessages: ['{name} here. Ready to pick up that {theme} series?'],
   },
   {
     condition: 'streak_milestone',
     messages: ['That streak is legit. Keep it up!'],
+    namedMessages: ['{name} here. That streak is legit!'],
   },
   {
     condition: 'between_series',
     messages: ['What\'s been on your mind lately?', 'Ready to start something new?'],
+    namedMessages: ['{name} here. What\'s been on your mind?', '{name} here. Ready to start something new?'],
   },
 ];
 
-export function selectTooltipMessage(condition: string): string | null {
+export interface TooltipParams {
+  companionName?: string | null;
+  currentTheme?: string | null;
+  userName?: string | null;
+}
+
+function fillTemplate(template: string, params: TooltipParams): string {
+  let result = template;
+  if (params.companionName) {
+    result = result.replace(/{name}/g, params.companionName);
+  }
+  if (params.currentTheme) {
+    result = result.replace(/{theme}/g, params.currentTheme);
+  }
+  return result;
+}
+
+export function selectTooltipMessage(condition: string, params?: TooltipParams): string | null {
   const trigger = TOOLTIP_TRIGGERS.find((t) => t.condition === condition);
   if (!trigger) return null;
-  return trigger.messages[Math.floor(Math.random() * trigger.messages.length)];
+
+  const hasName = params?.companionName;
+  const hasTheme = params?.currentTheme;
+
+  // Pick the most personalized message pool available
+  let pool: string[];
+  if (hasName && hasTheme && trigger.namedThemedMessages?.length) {
+    pool = trigger.namedThemedMessages;
+  } else if (hasTheme && trigger.themedMessages?.length) {
+    pool = trigger.themedMessages;
+  } else if (hasName && trigger.namedMessages?.length) {
+    pool = trigger.namedMessages;
+  } else {
+    pool = trigger.messages;
+  }
+
+  const message = pool[Math.floor(Math.random() * pool.length)];
+  return params ? fillTemplate(message, params) : message;
 }

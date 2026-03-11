@@ -445,6 +445,7 @@ export default function HomeScreen() {
   const setHasSeenCompanionIntro = useUnfoldStore((s) => s.setHasSeenCompanionIntro);
   const lastCompanionCheckInDate = useUnfoldStore((s) => s.lastCompanionCheckInDate);
   const setLastCompanionCheckInDate = useUnfoldStore((s) => s.setLastCompanionCheckInDate);
+  const companionName = useUnfoldStore((s) => s.companionName);
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -544,7 +545,15 @@ export default function HomeScreen() {
         condition = 'first_open_evening';
       }
 
-      const msg = selectTooltipMessage(condition);
+      // Build personalization params for tooltip
+      const activeDevotional = devotionals.find((d) => d.id === currentDevotionalId);
+      const tooltipParams = {
+        companionName: companionName ?? undefined,
+        currentTheme: activeDevotional?.title ?? undefined,
+        userName: user?.name ?? undefined,
+      };
+
+      const msg = selectTooltipMessage(condition, tooltipParams);
       if (msg && isCompanionActive) {
         // Small delay so the screen settles before tooltip appears
         const timer = setTimeout(() => {
@@ -553,7 +562,7 @@ export default function HomeScreen() {
         }, 1500);
         return () => clearTimeout(timer);
       }
-    }, [tooltipDismissed, companionSessionCheckedIn, showCompanionSheet, hasSeenCompanionIntro, daysSinceLastOpen, hasActiveSeries, streakCurrent, isCompanionActive])
+    }, [tooltipDismissed, companionSessionCheckedIn, showCompanionSheet, hasSeenCompanionIntro, daysSinceLastOpen, hasActiveSeries, streakCurrent, isCompanionActive, companionName, devotionals, currentDevotionalId, user])
   );
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);

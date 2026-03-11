@@ -357,6 +357,10 @@ interface UnfoldState {
   setHasSeenCompanionIntro: (seen: boolean) => void;
   lastCompanionCheckInDate: string | null;
   setLastCompanionCheckInDate: (date: string) => void;
+  companionName: string | null;
+  setCompanionName: (name: string | null) => void;
+  recentCompanionCheckIns: { mood: string; moodLabel: string; date: string; chipAnswer?: string }[];
+  addRecentCompanionCheckIn: (checkIn: { mood: string; moodLabel: string; chipAnswer?: string }) => void;
 
   // Home onboarding tooltips
   hasSeenHomeTooltips: boolean;
@@ -425,6 +429,8 @@ const initialState = {
   checkIns: [] as CheckIn[],
   hasSeenCompanionIntro: false,
   lastCompanionCheckInDate: null as string | null,
+  companionName: null as string | null,
+  recentCompanionCheckIns: [] as { mood: string; moodLabel: string; date: string; chipAnswer?: string }[],
   hasSeenHomeTooltips: false,
   hasSeenFeatureOnboarding: false,
   dismissedMiddayCardDate: null as string | null,
@@ -840,6 +846,14 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Companion orb state
       setHasSeenCompanionIntro: (seen) => set({ hasSeenCompanionIntro: seen }),
       setLastCompanionCheckInDate: (date) => set({ lastCompanionCheckInDate: date }),
+      setCompanionName: (name) => set({ companionName: name }),
+      addRecentCompanionCheckIn: (checkIn) =>
+        set((state) => ({
+          recentCompanionCheckIns: [
+            { ...checkIn, date: new Date().toISOString() },
+            ...state.recentCompanionCheckIns,
+          ].slice(0, 7),
+        })),
 
       // Home onboarding tooltips
       setHasSeenHomeTooltips: (seen) => set({ hasSeenHomeTooltips: seen }),
@@ -883,7 +897,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 14, // Increment when state structure changes
+      version: 15, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -999,6 +1013,15 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakJustReset: false,
             justCompletedSeriesTitle: null,
             hasUsedAudio: false,
+          } as UnfoldState;
+        }
+
+        // Migration from version 14 to 15: Add companion name and recent check-ins
+        if (version < 15) {
+          return {
+            ...state,
+            companionName: null,
+            recentCompanionCheckIns: [],
           } as UnfoldState;
         }
 
