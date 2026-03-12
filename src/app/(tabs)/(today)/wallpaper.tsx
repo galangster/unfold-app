@@ -7,6 +7,7 @@ import {
   FlatList,
   Alert,
 } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -238,13 +239,14 @@ export default function WallpaperScreen() {
             paddingVertical: 12,
           }}
         >
-          <Pressable
+          <TouchableOpacity
+            activeOpacity={0.6}
             onPress={handleClose}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{ padding: 12 }}
           >
             <XIcon size={22} color={colors.textMuted} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>
             Share Quote
           </Text>

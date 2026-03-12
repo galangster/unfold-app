@@ -12,6 +12,11 @@ import {
   padding,
   background,
   opacity,
+  lineLimit,
+  truncationMode,
+  lineSpacing,
+  kerning,
+  accessibilityLabel,
 } from '@expo/ui/swift-ui/modifiers';
 
 type TodayWidgetProps = {
@@ -45,19 +50,28 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
         padding({ all: 14 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
         background('#0A0A0A'),
+        accessibilityLabel(
+          `Today's reading: ${dayTitle}. ${scripture !== '' ? scripture + '.' : ''} ${streak} day streak. ${minutes} minute read.`
+        ),
       ]}
     >
       {/* Left column — streak + progress */}
-      <VStack modifiers={[frame({ width: 72 })]}>
+      <VStack
+        modifiers={[
+          frame({ width: 60, alignment: 'center' }),
+          padding({ trailing: 4 }),
+        ]}
+      >
         <Image
           systemName={hasRead ? 'flame.fill' : 'flame'}
-          size={20}
+          size={16}
           color="#C8A55C"
         />
         <Text
           modifiers={[
-            font({ size: 28, weight: 'bold', design: 'rounded' }),
+            font({ size: 30, weight: 'bold', design: 'rounded' }),
             foregroundStyle('#F5F0EB'),
+            kerning(-0.5),
           ]}
         >
           {streak}
@@ -65,7 +79,7 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
         <Text
           modifiers={[
             font({ size: 10, weight: 'medium' }),
-            foregroundStyle('rgba(245,240,235,0.5)'),
+            foregroundStyle(hasRead ? 'rgba(200,165,92,0.8)' : 'rgba(245,240,235,0.45)'),
           ]}
         >
           {hasRead ? 'streak' : 'read today'}
@@ -76,8 +90,8 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
         {total > 0 && (
           <Text
             modifiers={[
-              font({ size: 10, weight: 'regular' }),
-              foregroundStyle('rgba(245,240,235,0.35)'),
+              font({ size: 10, weight: 'medium' }),
+              foregroundStyle('rgba(245,240,235,0.3)'),
             ]}
           >
             {day}/{total}
@@ -85,15 +99,21 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
         )}
       </VStack>
 
-      {/* Subtle divider */}
-      <Divider modifiers={[opacity(0.15), padding({ top: 4, bottom: 4 })]} />
+      {/* Divider — subtle but visible */}
+      <Divider modifiers={[opacity(0.12), padding({ top: 2, bottom: 2 })]} />
 
       {/* Right column — today's reading */}
-      <VStack modifiers={[padding({ leading: 8 }), frame({ maxWidth: Infinity })]}>
+      <VStack
+        modifiers={[
+          padding({ leading: 10 }),
+          frame({ maxWidth: Infinity, alignment: 'leading' }),
+        ]}
+      >
         <Text
           modifiers={[
-            font({ size: 9, weight: 'semibold' }),
+            font({ size: 11, weight: 'semibold' }),
             foregroundStyle('#C8A55C'),
+            kerning(1.5),
           ]}
         >
           {seriesTitle.toUpperCase()}
@@ -101,18 +121,22 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
 
         <Text
           modifiers={[
-            font({ size: 14, weight: 'semibold' }),
+            font({ size: 15, weight: 'semibold' }),
             foregroundStyle('#F5F0EB'),
+            lineLimit(2),
+            truncationMode('tail'),
+            padding({ top: 1 }),
           ]}
         >
-          {dayTitle.length > 30 ? dayTitle.slice(0, 28) + '...' : dayTitle}
+          {dayTitle}
         </Text>
 
         {scripture !== '' && (
           <Text
             modifiers={[
               font({ size: 11, weight: 'regular', design: 'serif' }),
-              foregroundStyle('rgba(245,240,235,0.6)'),
+              foregroundStyle('rgba(245,240,235,0.55)'),
+              padding({ top: 2 }),
             ]}
           >
             {scripture}
@@ -124,15 +148,18 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
         {quote !== '' && (
           <Text
             modifiers={[
-              font({ size: 10, weight: 'regular', design: 'serif' }),
-              foregroundStyle('rgba(245,240,235,0.45)'),
+              font({ size: 11, weight: 'regular' }),
+              foregroundStyle('rgba(245,240,235,0.4)'),
+              lineLimit(2),
+              truncationMode('tail'),
+              lineSpacing(2),
             ]}
           >
-            "{quote.length > 60 ? quote.slice(0, 58) + '...' : quote}"
+            {'\u201C'}{quote}{'\u201D'}
           </Text>
         )}
 
-        <HStack>
+        <HStack modifiers={[padding({ top: 4 })]}>
           <Image
             systemName="clock"
             size={10}
@@ -140,11 +167,12 @@ const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
           />
           <Text
             modifiers={[
-              font({ size: 10, weight: 'regular' }),
+              font({ size: 10, weight: 'medium' }),
               foregroundStyle('rgba(245,240,235,0.35)'),
+              padding({ leading: 2 }),
             ]}
           >
-            {minutes} min read
+            {minutes} min
           </Text>
         </HStack>
       </VStack>

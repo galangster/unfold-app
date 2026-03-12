@@ -13,7 +13,12 @@ import {
   cornerRadius,
   background,
   opacity,
+  lineLimit,
+  truncationMode,
+  kerning,
+  accessibilityLabel,
 } from '@expo/ui/swift-ui/modifiers';
+import { shapes } from '@expo/ui/swift-ui/modifiers';
 
 type StreakWidgetProps = {
   streakCount: number;
@@ -35,18 +40,30 @@ const StreakWidget = (props: WidgetBase<StreakWidgetProps>) => {
   const total = props.totalDays ?? 0;
 
   if (props.family === 'accessoryCircular') {
-    // Lock screen circular — just flame + number
+    // Lock screen circular — use hierarchical styles for system tinting
     return (
-      <VStack modifiers={[frame({ width: 50, height: 50 })]}>
+      <ZStack
+        modifiers={[
+          accessibilityLabel(`${streak} day streak`),
+        ]}
+      >
         <Image
           systemName={hasRead ? 'flame.fill' : 'flame'}
-          size={16}
-          color="#C8A55C"
+          size={18}
+          modifiers={[
+            foregroundStyle({ type: 'hierarchical', style: 'primary' }),
+          ]}
         />
-        <Text modifiers={[font({ size: 14, weight: 'bold' })]}>
+        <Text
+          modifiers={[
+            font({ size: 9, weight: 'semibold' }),
+            foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+            padding({ top: 24 }),
+          ]}
+        >
           {streak}
         </Text>
-      </VStack>
+      </ZStack>
     );
   }
 
@@ -54,60 +71,70 @@ const StreakWidget = (props: WidgetBase<StreakWidgetProps>) => {
   return (
     <VStack
       modifiers={[
-        padding({ all: 16 }),
+        padding({ all: 14 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
         background('#0A0A0A'),
+        accessibilityLabel(
+          `${streak} day reading streak. ${hasRead ? 'Read today.' : 'Not yet read today.'}`
+        ),
       ]}
     >
-      {/* Flame + streak count */}
-      <HStack>
-        <Image
-          systemName={hasRead ? 'flame.fill' : 'flame'}
-          size={22}
-          color="#C8A55C"
-        />
+      {/* Streak number — hero element */}
+      <VStack modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
+        <HStack>
+          <Image
+            systemName={hasRead ? 'flame.fill' : 'flame'}
+            size={18}
+            color="#C8A55C"
+          />
+          <Text
+            modifiers={[
+              font({ size: 11, weight: 'medium' }),
+              foregroundStyle(hasRead ? '#C8A55C' : 'rgba(245,240,235,0.5)'),
+              padding({ leading: 2 }),
+            ]}
+          >
+            {hasRead ? 'day streak' : 'read today'}
+          </Text>
+        </HStack>
+
         <Text
           modifiers={[
-            font({ size: 36, weight: 'bold', design: 'rounded' }),
+            font({ size: 40, weight: 'bold', design: 'rounded' }),
             foregroundStyle('#F5F0EB'),
+            kerning(-1),
           ]}
         >
           {streak}
         </Text>
-      </HStack>
-
-      <Text
-        modifiers={[
-          font({ size: 12, weight: 'medium' }),
-          foregroundStyle(hasRead ? '#C8A55C' : 'rgba(245,240,235,0.6)'),
-        ]}
-      >
-        {hasRead ? 'day streak' : 'Read today!'}
-      </Text>
+      </VStack>
 
       <Spacer />
 
-      {/* Series progress */}
-      {total > 0 && (
+      {/* Series progress — bottom section */}
+      <VStack modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}>
+        {total > 0 && (
+          <Text
+            modifiers={[
+              font({ size: 12, weight: 'medium' }),
+              foregroundStyle('rgba(245,240,235,0.5)'),
+            ]}
+          >
+            Day {day} of {total}
+          </Text>
+        )}
+
         <Text
           modifiers={[
             font({ size: 11, weight: 'regular' }),
-            foregroundStyle('rgba(245,240,235,0.4)'),
+            foregroundStyle('rgba(245,240,235,0.35)'),
+            lineLimit(1),
+            truncationMode('tail'),
           ]}
         >
-          Day {day} of {total}
+          {title}
         </Text>
-      )}
-
-      {/* Truncated title */}
-      <Text
-        modifiers={[
-          font({ size: 11, weight: 'regular' }),
-          foregroundStyle('rgba(245,240,235,0.5)'),
-        ]}
-      >
-        {title.length > 24 ? title.slice(0, 22) + '...' : title}
-      </Text>
+      </VStack>
     </VStack>
   );
 };

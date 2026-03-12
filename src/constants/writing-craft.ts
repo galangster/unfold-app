@@ -56,6 +56,13 @@ STRUCTURAL SLOP (patterns that reveal the machine):
 - The "bookend" move: starting and ending with the same phrase/image. Do this rarely (1 in 7 days max), not as a default.
 - Empty intensifiers: "deeply," "profoundly," "truly," "really," "incredibly" — cut them. If the sentence needs an intensifier to work, the sentence is weak.
 - Hedge-then-declare: "It's not about X. It's about Y." Once per series is fine. Every day is a pattern.
+- The "Notice what X doesn't" move: "Notice what Paul doesn't say," "Notice what doesn't happen," "Notice what's missing." This negative-framing technique is a MASSIVE AI tell. Use it AT MOST once per entire series. Never in consecutive devotionals. If you used it yesterday, do NOT use it today. Find a different way to make the point — reframe as a positive observation, ask a question, or just state the insight directly.
+- Negative-framing bullet lists: NEVER list 3+ things using "He doesn't..." / "It's not..." / "This isn't..." as parallel structure. This pattern (listing what something ISN'T to set up what it IS) is one of the most recognizable AI tells in existence. If you need to contrast, use ONE brief contrast, not a bulleted list of negatives. "This isn't legalism; it's orientation" once is fine. Three "This isn't X" statements in a row is a dead giveaway.
+- The "contrast setup" formula: "This isn't X. It's Y." Use this move ONCE per devotional at most. It's fine as a single rhetorical turn but repeating it multiple times in one piece is a pattern readers will catch.
+
+CONSECUTIVE TECHNIQUE REPETITION (the #1 way readers detect AI):
+- If a rhetorical move appeared in the previous day's devotional, it MUST NOT appear in today's. This includes: negative-framing ("Notice what X doesn't..."), the pivot ("But what if..."), the reframe ("It's not X, it's Y"), the zoom-in ("Picture this specific moment..."), and the direct address turn ("And that's where you come in").
+- Readers consume devotionals sequentially. Two identical moves back-to-back instantly breaks the illusion of a human author. Vary your toolkit — you have dozens of techniques. Use different ones each day.
 
 TITLE SLOP (series titles that scream "AI devotional"):
 - "The [Weight/Burden/Thing] You [Carry/Hold/Bear]" — body/weight/carrying metaphors are overused
@@ -66,6 +73,18 @@ TITLE SLOP (series titles that scream "AI devotional"):
 - "When the [Ground/World/Silence] [Shifts/Breaks/Speaks]" — "When the X Y" is overdone
 - "The [Quiet/Hidden/Slow] [Work/Grace/Miracle]" — adjective + spiritual noun combos
 - Series titles should be surprising enough that a bookstore browser would pick them up. If the title could apply to any devotional, it's too generic.
+
+PERSON REFERENCES (mandatory context):
+When mentioning any person by name for the first time in a series (historical figure, author, theologian, etc.), you MUST provide brief context: who they are, when they lived, and why they matter to the point. Example: "Elisabeth Elliot, a missionary whose husband was killed by the tribe they went to serve, once wrote..." NOT just "Elisabeth Elliot once said..." Readers will not all know who these people are. After the first mention in a series, you can reference them by last name without re-explaining.
+
+NEGATIVE FRAMING BAN (this is the #1 AI tell in our devotionals — ZERO TOLERANCE):
+The following patterns are BANNED entirely. Do not use them even once:
+- "Not X. But Y." / "Not X. Y." as a rhetorical pair (e.g., "Not comfort that removes the difficulty. Presence that walks into it with you.")
+- "Not because X, because Y" (e.g., "Not because the river isn't real, because I am more real than the river")
+- Bullet lists of negatives: "He doesn't..." / "She doesn't..." / "It doesn't..." repeated 2+ times
+- "Notice what X doesn't say/do/promise"
+- "This isn't X; it's Y" used more than once per devotional
+These patterns are the single most recognizable AI signature in devotional writing. FIND ANOTHER WAY to make the point. State what something IS, not what it ISN'T. Use a question, a story, a direct statement. The positive framing is almost always stronger anyway.
 
 SOPHISTICATION TEST:
 Before finalizing, mentally ask: "Would a reader who has heard 100 AI-generated devotionals recognize this as one more?" If yes, rewrite the flagged sections. The goal is writing that sounds like it came from a specific human with a specific life — not from a language model.`;
@@ -160,16 +179,47 @@ STORY GUARDRAILS — When including a story or parable:
 - Stories must feel SPECIFIC (exact details: "a Tuesday morning," "the 6am train," "her grandmother's kitchen") not generic
 - The story should do WORK — it must advance the devotional's argument, not just decorate it
 - Vary the era: ancient, medieval, modern, futuristic thought experiments — don't default to "contemporary suburban"
-- If the story involves struggle, don't rush to resolution — sit in the tension`;
+- If the story involves struggle, don't rush to resolution — sit in the tension
+
+STORY SOURCES — Draw from the whole world, not just "Christian" examples:
+- Real historical figures and events (scientists, athletes, artists, leaders)
+- Movies and TV shows the reader has likely seen (The Shawshank Redemption, The Office, Lord of the Rings, etc.)
+- Cultural moments, viral stories, news events that illuminate spiritual truth
+- Psychology research, scientific discoveries, medical case studies
+- Personal anecdotes (first-person composite stories feel the most authentic)
+- Ancient history, mythology (as illustration, not theology), philosophy
+- The more unexpected the source, the more the reader pays attention. A Breaking Bad scene that illustrates grace is more memorable than another retelling of the Prodigal Son.`;
+
+// ==========================================
+// PATTERN BREAK SYSTEM
+// The writing equivalent of jump cuts in short-form video
+// Keeps readers engaged by shifting the texture every few paragraphs
+// ==========================================
+
+export const PATTERN_BREAK_DIRECTIVE = `
+PATTERN BREAKS (how to keep readers engaged through longer devotionals):
+Great books never sustain a single mode for too long. Every 2-3 paragraphs, shift the texture. These are your tools:
+
+1. VOICE SHIFT — Go from third-person observation to sudden direct address: "He sat in the dark for three hours. And maybe you have too."
+2. LENGTH SHOCK — After 3+ sentences of normal length, drop a 2-word sentence. "He waited." The rhythm break wakes the reader up.
+3. FORMAT SHIFT — Break from prose into a single-line question on its own. Or a one-sentence paragraph that forces a pause.
+4. REGISTER SHIFT — Move from elevated language to casual in one beat: "The theological term is sanctification. The real-world term is Monday morning."
+5. SENSORY INTERRUPT — Drop a physical detail into an abstract passage: "Grace is... well, it is the smell of coffee someone made for you before you woke up."
+6. TIME JUMP — "That was 2,000 years ago. This morning, you did the same thing."
+7. QUESTION GRENADE — Plant a question so specific it stops the reader mid-scroll: "When was the last time you prayed something you actually meant?"
+
+For 15-min devotionals: include 2-3 pattern breaks.
+For 30-min devotionals: include 4-6 pattern breaks. The reader should never feel settled for too long.
+Pattern breaks are NOT decoration — they re-engage attention at the exact moment it would naturally drift.`;
 
 /**
  * Deterministically select a story directive for a given day.
  * Returns null on "no story" days — stories are a spice, not a staple.
  *
- * Frequency targets (stories should NOT dominate):
+ * Frequency targets:
  *   5-min:  ~20% of days (brief analogy on ~1 in 5 days)
- *   15-min: ~35% of days (developed story on ~1 in 3 days)
- *   30-min: ~45% of days (substantial narrative on ~1 in 2 days)
+ *   15-min: ~60% of days (developed story on ~3 in 5 days — stories are the backbone)
+ *   30-min: ~80% of days (substantial narrative on ~4 in 5 days — books use stories constantly)
  *
  * Day 1 never gets a story — let the series establish its voice first.
  * Uses dayNumber for deterministic selection — same day always gets same config.
@@ -185,10 +235,10 @@ export function getStoryDirectiveForDay(
   // Deterministic hash: spreads evenly across 0-9, no clustering
   const hash = ((dayNumber * 7) + 3) % 10;
   // Thresholds (story if hash < threshold):
-  //   5min → 2/10 (~17% of days) — brief analogy, rare
-  //   15min → 3/10 (~27% of days) — developed scene, sometimes
-  //   30min → 4/10 (~37% of days) — substantial narrative, often but not default
-  const frequencyThreshold = readingDuration === '5min' ? 2 : readingDuration === '15min' ? 3 : 4;
+  //   5min → 2/10 (~20% of days) — brief analogy, rare
+  //   15min → 6/10 (~60% of days) — stories are how great writers make points land
+  //   30min → 8/10 (~80% of days) — books use real-life examples constantly
+  const frequencyThreshold = readingDuration === '5min' ? 2 : readingDuration === '15min' ? 6 : 8;
   if (hash >= frequencyThreshold) return null;
 
   // Filter story types by faith level

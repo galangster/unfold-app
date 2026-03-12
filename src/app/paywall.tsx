@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, CrownIcon, ShieldCheckIcon, SparkleIcon, ClockIcon, PathIcon, HeartIcon, SunIcon } from 'phosphor-react-native';
+import { XIcon, CrownIcon, ShieldCheckIcon, SparkleIcon, ClockIcon, PathIcon, HeartIcon, SunIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, FireIcon, CheckIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -488,6 +488,53 @@ export default function PaywallScreen() {
               );
             })}
           </View>
+
+          {/* What's included in Premium */}
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(600)}
+            style={{ marginTop: 28 }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 10.5,
+                color: colors.textSubtle,
+                letterSpacing: 2,
+                textTransform: 'uppercase',
+                marginBottom: 16,
+              }}
+            >
+              Everything in Premium
+            </Text>
+            {[
+              { icon: BookOpenTextIcon, label: 'Unlimited devotional series' },
+              { icon: SpeakerHighIcon, label: 'AI-narrated audio for every reading' },
+              { icon: PencilSimpleLineIcon, label: 'AI-powered journal reflections' },
+              { icon: PaletteIcon, label: 'Custom themes, fonts, and accent colors' },
+              { icon: FireIcon, label: 'Unlimited streak freezes' },
+            ].map((item, i) => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 14,
+                }}
+              >
+                <CheckIcon size={16} color={colors.accent} weight="bold" style={{ marginRight: 12 }} />
+                <Text
+                  style={{
+                    fontFamily: FontFamily.body,
+                    fontSize: 14,
+                    color: colors.text,
+                    flex: 1,
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </View>
+            ))}
+          </Animated.View>
 
           {/* Trial timeline — only show when eligible */}
           {isTrialEligible && (

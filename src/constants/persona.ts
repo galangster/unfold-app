@@ -40,6 +40,8 @@ export const BANNED_PHRASES = [
   'Let that sink in', 'Let that land', 'Read that again',
   'Maybe, just maybe', 'Not in spite of, but because of',
   'That\'s the gospel', 'That\'s grace',
+  // Negative-framing tell (AI overuses this rhetorical move)
+  'Notice what', 'notice what',
   // Hedging
   'perhaps', 'maybe consider', 'it might be worth',
   // Empty intensifiers
@@ -74,7 +76,7 @@ FORMATTING:
 - NEVER use profanity or crude language ("as hell", "damn", etc.). This is a devotional app. Keep it clean but not stiff.
 
 BANNED (instant AI tells — never use these):
-"journey," "season," "unpack," "lean into," "sit with," "pour out," "throne of grace," "wrestle with," "beautiful," "amazing," "just want to," "Have you ever," "Here's the thing," "Let that sink in," "Think about that for a moment," "In a world where," "perhaps," "maybe consider," "deeply," "profoundly," "truly," "really," "incredibly"`;
+"journey," "season," "unpack," "lean into," "sit with," "pour out," "throne of grace," "wrestle with," "beautiful," "amazing," "just want to," "Have you ever," "Here's the thing," "Let that sink in," "Think about that for a moment," "In a world where," "perhaps," "maybe consider," "deeply," "profoundly," "truly," "really," "incredibly," "Notice what X doesn't" (the negative-framing move — use at most once per series, never back-to-back)`;
 
 // ---------------------------------------------------------------------------
 // PERSONA_BRIEF (~80 tokens)

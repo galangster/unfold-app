@@ -465,60 +465,64 @@ function NoteStep({
   );
 }
 
+/** Single character in the magic text reveal */
+function MagicChar({ char, delay, colors }: { char: string; delay: number; colors: ReturnType<typeof useTheme>['colors'] }) {
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.6);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
+    scale.value = withDelay(delay, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+  }, [delay, opacity, scale]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.Text
+      style={[
+        {
+          fontFamily: FontFamily.bodyItalic,
+          fontSize: 20,
+          color: colors.text,
+          lineHeight: 30,
+        },
+        style,
+      ]}
+    >
+      {char}
+    </Animated.Text>
+  );
+}
+
 /** Gentle celebration shown within the sheet after completing check-in */
 function CheckInCelebration({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }) {
-  const circleScale = useSharedValue(0);
-  const circleOpacity = useSharedValue(0);
-  const textOpacity = useSharedValue(0);
-
   const message = useMemo(
     () => CHECKIN_CELEBRATION_MESSAGES[Math.floor(Math.random() * CHECKIN_CELEBRATION_MESSAGES.length)],
     []
   );
 
-  useEffect(() => {
-    circleScale.value = withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) });
-    circleOpacity.value = withTiming(0.12, { duration: 400 });
-    textOpacity.value = withDelay(300, withTiming(1, { duration: 500 }));
-  }, [circleScale, circleOpacity, textOpacity]);
-
-  const circleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: circleScale.value }],
-    opacity: circleOpacity.value,
-  }));
-
-  const textStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
-  }));
+  // Generate staggered delays with slight randomness for a sparkle feel
+  const charDelays = useMemo(() => {
+    const delays: number[] = [];
+    let cumulative = 400; // initial pause before text starts
+    for (let i = 0; i < message.length; i++) {
+      delays.push(cumulative);
+      // Base interval per character + small random jitter
+      cumulative += message[i] === ' ' ? 20 : 30 + Math.random() * 25;
+    }
+    return delays;
+  }, [message]);
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            width: 200,
-            height: 200,
-            borderRadius: 100,
-            backgroundColor: colors.accent,
-          },
-          circleStyle,
-        ]}
-      />
-      <Animated.View style={textStyle}>
-        <Text
-          style={{
-            fontFamily: FontFamily.bodyItalic,
-            fontSize: 17,
-            color: colors.text,
-            textAlign: 'center',
-            lineHeight: 26,
-            paddingHorizontal: 32,
-          }}
-        >
-          {message}
-        </Text>
-      </Animated.View>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+        {message.split('').map((char, i) => (
+          <MagicChar key={i} char={char} delay={charDelays[i]} colors={colors} />
+        ))}
+      </View>
     </View>
   );
 }

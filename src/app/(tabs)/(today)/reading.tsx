@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -176,7 +176,9 @@ export default function ReadingScreen() {
     return highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
   }, [highlights, currentDevotionalId, viewingDay]);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
-  const showIncompleteJourneyRetry = availableDays < expectedDays;
+  // Only show retry banner if this specific series has ungenerated days
+  // Compare against totalDays (the series plan), not expectedDays (user preference)
+  const showIncompleteJourneyRetry = availableDays < totalDays;
   const retryCtaButtonBg = colors.accent;
   const retryCtaButtonText = colors.background;
   const btnText = retryCtaButtonText;
@@ -1078,7 +1080,7 @@ export default function ReadingScreen() {
                   <View style={{ width: 14 }} />
                 )}
 
-                <View style={{ alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.display,
@@ -1091,12 +1093,9 @@ export default function ReadingScreen() {
                   </Text>
                   <Text
                     style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 10,
+                      fontFamily: FontFamily.ui,
+                      fontSize: 12,
                       color: colors.textHint,
-                      letterSpacing: 2,
-                      textTransform: 'uppercase',
-                      marginTop: -1,
                     }}
                   >
                     of {currentDevotional.totalDays}
@@ -1142,12 +1141,8 @@ export default function ReadingScreen() {
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     if (!isPremium) {
-                      setAudioToast({ visible: true, message: 'Audio is a premium feature' });
-                      setTimeout(() => {
-                        setAudioToast(null);
-                        setPremiumFeature('audio');
-                        setShowPremiumSheet(true);
-                      }, 1200);
+                      setPremiumFeature('audio');
+                      setShowPremiumSheet(true);
                       return;
                     }
                     if (!isAudioPlayerVisible) {
@@ -1303,6 +1298,29 @@ export default function ReadingScreen() {
                 onQuoteSelected={handleQuoteSelected}
                 existingHighlights={currentDayHighlights}
                 onScriptureTap={(ref) => setScriptureSheetRef(ref)}
+                devotionalId={currentDevotionalId ?? ''}
+                dayNumber={viewingDay}
+                onOpenJournal={(focusQuestion) => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (currentDevotionalId && currentDevotional) {
+                    setResumeContext({
+                      route: 'journal',
+                      devotionalId: currentDevotionalId,
+                      dayNumber: viewingDay,
+                      devotionalTitle: currentDevotional.title,
+                      dayTitle: currentDayData?.title,
+                      touchedAt: new Date().toISOString(),
+                    });
+                  }
+                  router.push({
+                    pathname: '/(tabs)/(today)/journal',
+                    params: {
+                      devotionalId: currentDevotionalId ?? '',
+                      dayNumber: viewingDay.toString(),
+                      ...(focusQuestion != null ? { focusQuestion: String(focusQuestion) } : {}),
+                    },
+                  });
+                }}
               />
 
               {/* Chevron at top of content area - invites scroll */}
@@ -1405,8 +1423,12 @@ export default function ReadingScreen() {
                     </Pressable>
                   </View>
 
-                  {/* Share — small icon circle, View wrapper for reliable styling */}
-                  <View
+                  {/* Share — small icon circle */}
+                  <TouchableOpacity
+                    activeOpacity={0.6}
+                    onPress={handleShare}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share devotional"
                     style={{
                       width: 56,
                       height: 56,
@@ -1418,20 +1440,8 @@ export default function ReadingScreen() {
                       justifyContent: 'center',
                     }}
                   >
-                    <Pressable
-                      onPress={handleShare}
-                      accessibilityRole="button"
-                      accessibilityLabel="Share devotional"
-                      style={{
-                        width: 56,
-                        height: 56,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
-                    </Pressable>
-                  </View>
+                    <UploadSimpleIcon size={20} color={colors.textMuted} weight="light" />
+                  </TouchableOpacity>
                 </View>
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}

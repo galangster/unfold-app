@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -189,12 +189,13 @@ export default function JournalHubScreen() {
               Journal
             </Text>
             {journalEntries.length > 0 && (
-              <Pressable
+              <TouchableOpacity
                 onPress={() => {
                   setShowSearch(!showSearch);
                   if (showSearch) setSearchQuery('');
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.6}
                 style={{ padding: 8 }}
               >
                 {showSearch ? (
@@ -202,7 +203,7 @@ export default function JournalHubScreen() {
                 ) : (
                   <MagnifyingGlassIcon size={20} color={colors.textMuted} weight="light" />
                 )}
-              </Pressable>
+              </TouchableOpacity>
             )}
           </Animated.View>
 
@@ -255,12 +256,12 @@ export default function JournalHubScreen() {
               entering={FadeInDown.duration(600).delay(100)}
               style={{ paddingHorizontal: 24, marginTop: 20 }}
             >
-              <Pressable
+              <TouchableOpacity
                 onPress={handleWriteToday}
+                activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel={hasExistingEntry ? 'Continue today\'s reflection' : 'Start today\'s reflection'}
                 accessibilityHint="Opens journal editor for today"
-                style={{ opacity: 1 }}
               >
                 <View
                   style={{
@@ -363,7 +364,7 @@ export default function JournalHubScreen() {
                     />
                   </View>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           )}
 
@@ -373,9 +374,9 @@ export default function JournalHubScreen() {
               entering={FadeInDown.duration(600).delay(150)}
               style={{ paddingHorizontal: 24, marginTop: 16 }}
             >
-              <Pressable
+              <TouchableOpacity
                 onPress={() => handleQuestionTap(firstUnansweredQuestion.index)}
-                style={{ opacity: 1 }}
+                activeOpacity={0.7}
               >
                 <View
                   style={{
@@ -417,7 +418,7 @@ export default function JournalHubScreen() {
                     </Text>
                   )}
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           )}
 
@@ -522,7 +523,7 @@ export default function JournalHubScreen() {
                     (qr) => qr.response.trim().length > 0
                   ).length ?? 0;
                   return (
-                    <Pressable
+                    <TouchableOpacity
                       key={entry.id}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -534,7 +535,7 @@ export default function JournalHubScreen() {
                           },
                         });
                       }}
-                      style={{ opacity: 1 }}
+                      activeOpacity={0.7}
                     >
                       <View
                         style={{
@@ -618,7 +619,7 @@ export default function JournalHubScreen() {
                           </View>
                         )}
                       </View>
-                    </Pressable>
+                    </TouchableOpacity>
                   );
                 })
               )}

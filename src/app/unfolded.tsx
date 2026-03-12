@@ -238,8 +238,13 @@ function ProgressFill({
       width.value = 100;
       return;
     }
-    if (!isActive || duration === 0) {
-      if (!isActive) width.value = withTiming(0, { duration: 200 });
+    if (!isActive) {
+      width.value = withTiming(0, { duration: 200 });
+      return;
+    }
+    if (duration === 0) {
+      // Last card (no auto-advance) — fill bar immediately
+      width.value = withTiming(100, { duration: 400, easing: Easing.out(Easing.cubic) });
       return;
     }
 
@@ -1149,10 +1154,15 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
         return;
       }
 
-      // Small delay for rendering
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for off-screen card to render fully
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      const uri = await captureRef(shareCardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(shareCardRef, {
+        format: 'png',
+        quality: 1,
+        result: 'tmpfile',
+      });
+
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
         setIsSharing(false);
@@ -1162,9 +1172,10 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
       await Sharing.shareAsync(uri, {
         mimeType: 'image/png',
         dialogTitle: 'Share your Unfolded story',
+        UTI: 'public.png',
       });
     } catch {
-      // User cancelled
+      // User cancelled or capture failed silently
     } finally {
       setIsSharing(false);
     }
@@ -1470,7 +1481,7 @@ const s = StyleSheet.create({
   // ─── Top bar ───
   topBar: {
     paddingHorizontal: 12,
-    paddingTop: 4,
+    paddingTop: 8,
     paddingBottom: 8,
   },
   progressAndClose: {
@@ -1906,8 +1917,9 @@ const s = StyleSheet.create({
   // ─── Off-screen share card (captured as image) ───
   shareCardOffscreen: {
     position: 'absolute',
-    top: -9999,
-    left: -9999,
+    top: 0,
+    left: 0,
+    opacity: 0,
   },
   shareCard: {
     width: 360,

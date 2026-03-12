@@ -31,6 +31,7 @@ import {
   CONVICTION_DIRECTIVE,
   PARABLE_ANTI_PATTERNS,
   DIALOGUE_ANTI_PATTERNS,
+  PATTERN_BREAK_DIRECTIVE,
   getCraftInfluencesForTraits,
   getDailyCraftDirective,
   getStoryDirectiveForDay,
@@ -1162,6 +1163,8 @@ async function generateBatch(
   const convictionDirective = retryLevel <= 1 ? CONVICTION_DIRECTIVE : '';
   const parableGuardrails = retryLevel <= 1 ? PARABLE_ANTI_PATTERNS : '';
   const dialogueGuardrails = retryLevel <= 1 ? DIALOGUE_ANTI_PATTERNS : '';
+  // Pattern breaks for 15+ min readings — keeps engagement high through longer content
+  const patternBreaks = retryLevel <= 1 && (context.readingDuration ?? 5) >= 15 ? PATTERN_BREAK_DIRECTIVE : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';
   const voiceAdaptation = retryLevel === 0
     ? buildVoiceAdaptationDirective(
@@ -1170,7 +1173,7 @@ async function generateBatch(
         context.writingStyle?.depth
       )
     : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + convictionDirective + parableGuardrails + dialogueGuardrails + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + convictionDirective + parableGuardrails + dialogueGuardrails + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
   // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)

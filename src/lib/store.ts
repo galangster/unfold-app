@@ -171,6 +171,23 @@ export interface Devotional {
   studySubject?: string; // e.g., "Philippians", "David", "Beatitudes"
 }
 
+export type JournalMode = 'freewrite' | 'soap' | 'guided';
+
+export interface SoapResponses {
+  scripture: string;
+  observation: string;
+  application: string;
+  prayer: string;
+}
+
+export interface PrayerRequest {
+  id: string;
+  text: string;
+  isAnswered: boolean;
+  answeredAt?: string;
+  createdAt: string;
+}
+
 export interface JournalEntry {
   id: string;
   devotionalId: string;
@@ -178,6 +195,9 @@ export interface JournalEntry {
   content: string;
   createdAt: string;
   updatedAt: string;
+  journalMode?: JournalMode;
+  soapResponses?: SoapResponses;
+  prayerRequests?: PrayerRequest[];
   // Phase 4: Per-question responses for Go Deeper
   questionResponses?: { question: string; response: string }[];
 }
@@ -288,6 +308,10 @@ interface UnfoldState {
   journalEntries: JournalEntry[];
   addJournalEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateJournalEntry: (id: string, content: string) => void;
+  updateJournalMode: (id: string, mode: JournalMode) => void;
+  updateSoapResponse: (id: string, field: keyof SoapResponses, value: string) => void;
+  addPrayerRequest: (entryId: string, text: string) => void;
+  togglePrayerAnswered: (entryId: string, prayerId: string) => void;
   updateQuestionResponse: (entryId: string, question: string, response: string) => void;
   getJournalEntry: (devotionalId: string, dayNumber: number) => JournalEntry | undefined;
 
@@ -557,6 +581,65 @@ export const useUnfoldStore = create<UnfoldState>()(
               ? { ...e, content, updatedAt: new Date().toISOString() }
               : e
           ),
+        })),
+
+      updateJournalMode: (id, mode) =>
+        set((state) => ({
+          journalEntries: state.journalEntries.map((e) =>
+            e.id === id
+              ? { ...e, journalMode: mode, updatedAt: new Date().toISOString() }
+              : e
+          ),
+        })),
+
+      updateSoapResponse: (id, field, value) =>
+        set((state) => ({
+          journalEntries: state.journalEntries.map((e) => {
+            if (e.id !== id) return e;
+            const soap = e.soapResponses ?? { scripture: '', observation: '', application: '', prayer: '' };
+            return {
+              ...e,
+              soapResponses: { ...soap, [field]: value },
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        })),
+
+      addPrayerRequest: (entryId, text) =>
+        set((state) => ({
+          journalEntries: state.journalEntries.map((e) => {
+            if (e.id !== entryId) return e;
+            const prayers = e.prayerRequests ?? [];
+            return {
+              ...e,
+              prayerRequests: [
+                ...prayers,
+                {
+                  id: `prayer-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  text,
+                  isAnswered: false,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        })),
+
+      togglePrayerAnswered: (entryId, prayerId) =>
+        set((state) => ({
+          journalEntries: state.journalEntries.map((e) => {
+            if (e.id !== entryId) return e;
+            return {
+              ...e,
+              prayerRequests: (e.prayerRequests ?? []).map((p) =>
+                p.id === prayerId
+                  ? { ...p, isAnswered: !p.isAnswered, answeredAt: !p.isAnswered ? new Date().toISOString() : undefined }
+                  : p
+              ),
+              updatedAt: new Date().toISOString(),
+            };
+          }),
         })),
 
       updateQuestionResponse: (entryId, question, response) =>

@@ -15,6 +15,7 @@ import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
 import { DevotionalWebView } from './DevotionalWebView';
+import { InlineReflectionJournal } from './InlineReflectionJournal';
 
 interface DevotionalContentProps {
   day: DevotionalDay;
@@ -25,6 +26,9 @@ interface DevotionalContentProps {
   onQuoteSelected?: (quote: { text: string; context: string }) => void;
   existingHighlights?: Highlight[];
   onScriptureTap?: (reference: string) => void;
+  devotionalId?: string;
+  dayNumber?: number;
+  onOpenJournal?: (focusQuestion?: number) => void;
 }
 
 /**
@@ -105,6 +109,9 @@ export function DevotionalContent({
   onQuoteSelected,
   existingHighlights,
   onScriptureTap,
+  devotionalId,
+  dayNumber,
+  onOpenJournal,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
@@ -264,12 +271,8 @@ export function DevotionalContent({
             <View
               key={index}
               style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: 14,
-                padding: 18,
-                marginBottom: 10,
-                borderLeftWidth: 2,
-                borderLeftColor: colors.accent,
+                marginBottom: 20,
+                paddingLeft: 4,
               }}
             >
               <Text
@@ -278,8 +281,8 @@ export function DevotionalContent({
                   fontSize: 10.5,
                   color: colors.accent,
                   letterSpacing: 1.2,
-                  marginBottom: 10,
-                  opacity: 0.8,
+                  marginBottom: 8,
+                  opacity: 0.7,
                 }}
               >
                 {ref.reference}
@@ -299,54 +302,60 @@ export function DevotionalContent({
         </View>
       )}
 
-      {/* Reflection Questions Section - NATIVE (structured) */}
+      {/* Reflection Questions Section — Interactive inline journal */}
       {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
-        <View style={{ marginTop: 48 }}>
+        <>
           {/* Section divider */}
-          <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
+          <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
 
-          {/* Ornamental header: --- FOR REFLECTION --- */}
-          <OrnamentalHeader label="For Reflection" accentColor={colors.accent} />
-
-          {day.reflectionQuestions.map((question, index) => (
-            <View
-              key={index}
-              style={{
-                marginBottom: 24,
-                paddingLeft: 20,
-                paddingRight: 8,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: fontSizes.body + 2,
-                    color: colors.accent,
-                    opacity: 0.5,
-                    marginRight: 12,
-                    marginTop: 1,
-                    minWidth: 16,
-                  }}
+          {devotionalId && dayNumber && onOpenJournal ? (
+            <InlineReflectionJournal
+              questions={day.reflectionQuestions}
+              devotionalId={devotionalId}
+              dayNumber={dayNumber}
+              onOpenFullJournal={onOpenJournal}
+            />
+          ) : (
+            /* Fallback: static display if no journal context */
+            <View style={{ marginTop: 0 }}>
+              <OrnamentalHeader label="For Reflection" accentColor={colors.accent} />
+              {day.reflectionQuestions.map((question, index) => (
+                <View
+                  key={index}
+                  style={{ marginBottom: 24, paddingLeft: 20, paddingRight: 8 }}
                 >
-                  {index + 1}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: readingFont.bodyItalic,
-                    fontSize: fontSizes.body,
-                    color: colors.text,
-                    lineHeight: fontSizes.body * 1.7,
-                    flex: 1,
-                    opacity: 0.9,
-                  }}
-                >
-                  {preventOrphan(question)}
-                </Text>
-              </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.display,
+                        fontSize: fontSizes.body + 2,
+                        color: colors.accent,
+                        opacity: 0.5,
+                        marginRight: 12,
+                        marginTop: 1,
+                        minWidth: 16,
+                      }}
+                    >
+                      {index + 1}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: readingFont.bodyItalic,
+                        fontSize: fontSizes.body,
+                        color: colors.text,
+                        lineHeight: fontSizes.body * 1.7,
+                        flex: 1,
+                        opacity: 0.9,
+                      }}
+                    >
+                      {preventOrphan(question)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          )}
+        </>
       )}
 
       {/* Closing Prayer Section - NATIVE (structured) */}
