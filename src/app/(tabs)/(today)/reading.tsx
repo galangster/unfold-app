@@ -1080,7 +1080,7 @@ export default function ReadingScreen() {
                   <View style={{ width: 14 }} />
                 )}
 
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.display,
@@ -1100,6 +1100,28 @@ export default function ReadingScreen() {
                   >
                     of {currentDevotional.totalDays}
                   </Text>
+                  {viewingDay === currentDevotional.currentDay && (
+                    <View
+                      style={{
+                        backgroundColor: colors.accent + '20',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 4,
+                        marginLeft: 2,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.mono,
+                          fontSize: 9,
+                          color: colors.accent,
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        TODAY
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Right Chevron */}

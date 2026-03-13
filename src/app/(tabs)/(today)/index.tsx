@@ -36,8 +36,6 @@ import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { FeatureOnboarding } from '@/components/FeatureOnboarding';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { CompanionOrb } from '@/components/CompanionOrb';
-import { CompanionCheckInSheet } from '@/components/CompanionCheckInSheet';
-import { CompanionTooltip } from '@/components/CompanionTooltip';
 import { AccentGlow } from '@/components/AccentGlow';
 import { GoldEmberField } from '@/components/GoldEmberField';
 import { syncWidgets } from '@/lib/widget-bridge';
@@ -46,7 +44,6 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
-import { selectTooltipMessage } from '@/constants/companion-messages';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -440,21 +437,10 @@ export default function HomeScreen() {
   const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
   const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
 
-  // Companion orb state
-  const hasSeenCompanionIntro = useUnfoldStore((s) => s.hasSeenCompanionIntro);
-  const setHasSeenCompanionIntro = useUnfoldStore((s) => s.setHasSeenCompanionIntro);
-  const lastCompanionCheckInDate = useUnfoldStore((s) => s.lastCompanionCheckInDate);
-  const setLastCompanionCheckInDate = useUnfoldStore((s) => s.setLastCompanionCheckInDate);
-  const companionName = useUnfoldStore((s) => s.companionName);
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
-  const [showCompanionSheet, setShowCompanionSheet] = useState(false);
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [tooltipMessage, setTooltipMessage] = useState('');
-  const [tooltipDismissed, setTooltipDismissed] = useState(false);
-  const [companionSessionCheckedIn, setCompanionSessionCheckedIn] = useState(false);
 
   // Update time of day every minute
   useEffect(() => {
@@ -492,8 +478,7 @@ export default function HomeScreen() {
     }, [])
   );
 
-  // Companion orb — compute context for check-in + tooltip
-  const hasActiveSeries = !!currentDevotionalId && devotionals.some((d) => d.id === currentDevotionalId);
+  // Check if today's reading has been completed — drives ember visibility
   const hasReadToday = useMemo(() => {
     if (!currentDevotionalId) return false;
     const dev = devotionals.find((d) => d.id === currentDevotionalId);
@@ -501,69 +486,6 @@ export default function HomeScreen() {
     const today = new Date().toDateString();
     return dev.days.some((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === today);
   }, [currentDevotionalId, devotionals]);
-
-  const daysSinceLastOpen = useMemo(() => {
-    if (!lastCompanionCheckInDate) return 999;
-    const diff = Date.now() - new Date(lastCompanionCheckInDate).getTime();
-    return Math.floor(diff / (1000 * 60 * 60 * 24));
-  }, [lastCompanionCheckInDate]);
-
-  const isCompanionActive = useMemo(() => {
-    if (!lastCompanionCheckInDate) return true;
-    const today = new Date().toDateString();
-    const lastDate = new Date(lastCompanionCheckInDate).toDateString();
-    if (lastDate === today) return false;
-    // Active if 2+ hours since last check-in
-    const hoursSince = (Date.now() - new Date(lastCompanionCheckInDate).getTime()) / (1000 * 60 * 60);
-    return hoursSince >= 2;
-  }, [lastCompanionCheckInDate]);
-
-  const showBadge = isCompanionActive && tooltipDismissed && !companionSessionCheckedIn;
-
-  // Tooltip trigger — once per screen focus, max 1 per session
-  useFocusEffect(
-    useCallback(() => {
-      if (tooltipDismissed || companionSessionCheckedIn || showCompanionSheet) return;
-
-      // Determine tooltip condition
-      let condition = 'first_open_morning';
-      const hour = new Date().getHours();
-      if (!hasSeenCompanionIntro) {
-        condition = 'first_open_morning';
-      } else if (daysSinceLastOpen >= 3) {
-        condition = 'returning_after_gap';
-      } else if (!hasActiveSeries) {
-        condition = 'between_series';
-      } else if (streakCurrent > 0 && streakCurrent % 7 === 0) {
-        condition = 'streak_milestone';
-      } else if (hour >= 5 && hour < 12) {
-        condition = 'first_open_morning';
-      } else if (hour >= 12 && hour < 17) {
-        condition = 'first_open_afternoon';
-      } else {
-        // Evening (17-22) and night (22-5)
-        condition = 'first_open_evening';
-      }
-
-      // Build personalization params for tooltip
-      const activeDevotional = devotionals.find((d) => d.id === currentDevotionalId);
-      const tooltipParams = {
-        companionName: companionName ?? undefined,
-        currentTheme: activeDevotional?.title ?? undefined,
-        userName: user?.name ?? undefined,
-      };
-
-      const msg = selectTooltipMessage(condition, tooltipParams);
-      if (msg && isCompanionActive) {
-        // Small delay so the screen settles before tooltip appears
-        const timer = setTimeout(() => {
-          setTooltipMessage(msg);
-          setShowTooltip(true);
-        }, 1500);
-        return () => clearTimeout(timer);
-      }
-    }, [tooltipDismissed, companionSessionCheckedIn, showCompanionSheet, hasSeenCompanionIntro, daysSinceLastOpen, hasActiveSeries, streakCurrent, isCompanionActive, companionName, devotionals, currentDevotionalId, user])
-  );
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
 
@@ -711,41 +633,6 @@ export default function HomeScreen() {
     setShowCheckInSheet(false);
   };
 
-  const handleCompanionOpen = () => {
-    setShowTooltip(false);
-    setTooltipDismissed(true);
-    setShowCompanionSheet(true);
-  };
-
-  const handleCompanionComplete = (data: { mood: number; moodLabel: string; chipAnswer?: string }) => {
-    const devotionalId = currentDevotional?.id || 'none';
-    const dayNumber = currentDevotional?.currentDay || 0;
-    addCheckIn({
-      devotionalId,
-      dayNumber,
-      mood: Math.min(5, data.mood) as 1 | 2 | 3 | 4 | 5,
-      moodLabel: data.moodLabel,
-      chipAnswer: data.chipAnswer,
-      timeOfDay: 'companion',
-    });
-    setLastCompanionCheckInDate(new Date().toISOString());
-    if (!hasSeenCompanionIntro) {
-      setHasSeenCompanionIntro(true);
-    }
-    setCompanionSessionCheckedIn(true);
-    setShowCompanionSheet(false);
-  };
-
-  const handleTooltipTap = () => {
-    setShowTooltip(false);
-    setTooltipDismissed(true);
-    setShowCompanionSheet(true);
-  };
-
-  const handleTooltipDismiss = () => {
-    setShowTooltip(false);
-    setTooltipDismissed(true);
-  };
 
   const handleEveningWindDown = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -812,7 +699,6 @@ export default function HomeScreen() {
   if (!currentDevotional) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <GoldEmberField density="medium" />
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
             {/* Character-by-character "Unfold" reveal */}
@@ -895,8 +781,8 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Ambient campfire embers — visible only when today's reading is done */}
-        <GoldEmberField streakLevel={streakCurrent} />
+        {/* Embers — reward for completing today's reading */}
+        {hasReadToday && <GoldEmberField streakLevel={streakCurrent} />}
 
         <ScrollView
           contentContainerStyle={{ paddingBottom: 100 }}
@@ -911,41 +797,30 @@ export default function HomeScreen() {
               paddingBottom: 12,
             }}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', overflow: 'visible' }}>
-              <View style={{ flex: 1 }}>
+            <View>
+              <Text
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 15,
+                  color: colors.textSubtle,
+                  marginBottom: 6,
+                }}
+              >
+                {getGreeting()}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Text
                   style={{
-                    fontFamily: FontFamily.bodyItalic,
-                    fontSize: 15,
-                    color: colors.textSubtle,
-                    marginBottom: 6,
+                    fontFamily: FontFamily.display,
+                    fontSize: 34,
+                    color: colors.text,
+                    letterSpacing: -0.5,
                   }}
                 >
-                  {getGreeting()}
+                  {user?.name}
                 </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.display,
-                      fontSize: 34,
-                      color: colors.text,
-                      letterSpacing: -0.5,
-                    }}
-                  >
-                    {user?.name}
-                  </Text>
-                  <StreakDisplay compact hideDayLabel />
-                </View>
+                <StreakDisplay compact hideDayLabel />
               </View>
-
-              {/* Companion Orb */}
-              <CompanionOrb
-                accentColor={colors.accent}
-                size={48}
-                onPress={handleCompanionOpen}
-                isActive={isCompanionActive}
-                showBadge={showBadge}
-              />
             </View>
           </Animated.View>
 
@@ -1483,16 +1358,7 @@ export default function HomeScreen() {
         />
       )}
 
-      <CompanionCheckInSheet
-        visible={showCompanionSheet}
-        onClose={() => setShowCompanionSheet(false)}
-        onComplete={handleCompanionComplete}
-        hasActiveSeries={hasActiveSeries}
-        hasReadToday={hasReadToday}
-        daysSinceLastOpen={daysSinceLastOpen}
-        streakCurrent={streakCurrent}
-        isFirstCompanionCheckIn={!hasSeenCompanionIntro}
-      />
+      {/* CompanionCheckInSheet removed — companion surfaces via contextual notification cards */}
 
       <PremiumFeatureSheet
         visible={showPremiumSheet}
@@ -1500,16 +1366,7 @@ export default function HomeScreen() {
         feature="series"
       />
 
-      {/* Companion tooltip — rendered as top-level overlay to avoid clipping */}
-      {showTooltip && tooltipMessage && (
-        <CompanionTooltip
-          message={tooltipMessage}
-          accentColor={colors.accent}
-          textColor={colors.text}
-          onTap={handleTooltipTap}
-          onDismiss={handleTooltipDismiss}
-        />
-      )}
+      {/* Companion tooltip removed — companion surfaces via notification cards instead */}
     </View>
   );
 }

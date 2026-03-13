@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Dimensions, StyleSheet } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -6,16 +6,51 @@ import Animated, {
   withTiming,
   withRepeat,
   withDelay,
-  withSequence,
   Easing,
   interpolate,
-  runOnJS,
-  cancelAnimation,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/lib/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// ---------------------------------------------------------------------------
+// Hex color helpers — derive lighter/darker variants from accent
+// ---------------------------------------------------------------------------
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.substring(0, 2), 16),
+    g: parseInt(h.substring(2, 4), 16),
+    b: parseInt(h.substring(4, 6), 16),
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  return '#' + [clamp(r), clamp(g), clamp(b)].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+/** Lighten a hex color by a factor (0-1) */
+function lighten(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(
+    r + (255 - r) * amount,
+    g + (255 - g) * amount,
+    b + (255 - b) * amount,
+  );
+}
+
+/** Darken a hex color by a factor (0-1) */
+function darken(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
+}
+
+// ---------------------------------------------------------------------------
+// Particle types
+// ---------------------------------------------------------------------------
 
 interface EmberParticle {
   id: number;
@@ -24,114 +59,86 @@ interface EmberParticle {
   size: number;
   duration: number;
   delay: number;
-  drift: number;
-  opacity: number;
-  riseHeight: number; // Pre-computed to avoid Math.random() in worklet
+  driftAmount: number;
+  maxOpacity: number;
+  colorIdx: number; // 0=primary, 1=secondary, 2=tertiary
 }
 
-interface EmberParticleProps {
+// ---------------------------------------------------------------------------
+// Single particle — self-looping, no JS callbacks, 2 shared values only
+// ---------------------------------------------------------------------------
+
+const EmberParticleComponent = React.memo(function EmberParticleComponent({
+  particle,
+  emberColors,
+}: {
   particle: EmberParticle;
-  onComplete: () => void;
-  colors: {
-    accent: string;
-    accentLight: string;
-  };
-}
-
-function EmberParticleComponent({ particle, onComplete, colors }: EmberParticleProps) {
+  emberColors: { primary: string; secondary: string; tertiary: string };
+}) {
   const progress = useSharedValue(0);
-  const opacityProgress = useSharedValue(0);
-  const driftOffset = useSharedValue(0);
+  const drift = useSharedValue(0);
 
   useEffect(() => {
-    // Initial delay before this particle spawns
-    const spawnDelay = particle.delay;
-    
-    // Animate the upward progress — linear rise like real embers drifting up
     progress.value = withDelay(
-      spawnDelay,
-      withTiming(1, {
-        duration: particle.duration,
-        easing: Easing.linear,
-      }, (finished) => {
-        if (finished) {
-          runOnJS(onComplete)();
-        }
-      })
-    );
-
-    // Fade in, hold, then slowly fade out over the last 30%
-    opacityProgress.value = withDelay(
-      spawnDelay,
-      withSequence(
-        withTiming(1, { duration: 800, easing: Easing.out(Easing.ease) }),
-        withTiming(1, { duration: particle.duration * 0.5 }),
-        withTiming(0, { duration: particle.duration * 0.3, easing: Easing.in(Easing.ease) })
-      )
-    );
-
-    // Wider, slower horizontal drift — like embers floating in warm air
-    driftOffset.value = withDelay(
-      spawnDelay,
+      particle.delay,
       withRepeat(
-        withSequence(
-          withTiming(25, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
-          withTiming(-25, { duration: 3000, easing: Easing.inOut(Easing.ease) })
-        ),
+        withTiming(1, {
+          duration: particle.duration,
+          easing: Easing.linear,
+        }),
         -1,
-        true
-      )
+        false,
+      ),
     );
 
-    return () => {
-      cancelAnimation(progress);
-      cancelAnimation(opacityProgress);
-      cancelAnimation(driftOffset);
-    };
+    drift.value = withDelay(
+      particle.delay,
+      withRepeat(
+        withTiming(1, {
+          duration: 2400 + (particle.id * 137) % 1200,
+          easing: Easing.inOut(Easing.sin),
+        }),
+        -1,
+        true,
+      ),
+    );
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const y = interpolate(progress.value, [0, 1], [particle.y, particle.y - particle.riseHeight]);
-    const x = particle.x + driftOffset.value * particle.drift;
-    const scale = interpolate(progress.value, [0, 0.1, 0.9, 1], [0, 1, 1, 0.5]);
+    const p = progress.value;
+    const translateY = interpolate(p, [0, 1], [0, -(SCREEN_HEIGHT + 80)]);
+    const translateX = interpolate(drift.value, [0, 1], [-particle.driftAmount, particle.driftAmount]);
+    const scale = interpolate(p, [0, 0.05, 0.12, 0.88, 1], [0.2, 0.7, 1, 1, 0.3]);
+    const opacity = interpolate(p, [0, 0.04, 0.12, 0.7, 0.9, 1], [0, 0.3, 1, 1, 0.4, 0]) * particle.maxOpacity;
 
     return {
-      transform: [
-        { translateX: x },
-        { translateY: y },
-        { scale },
-      ],
-      opacity: opacityProgress.value * particle.opacity,
+      transform: [{ translateX }, { translateY }, { scale }],
+      opacity,
     };
   });
 
-  // Alternate between gold and warm amber colors
-  const isGolden = particle.id % 3 === 0;
-  const backgroundColor = isGolden ? colors.accent : colors.accentLight;
-  
+  const colorKey = particle.colorIdx === 0 ? 'primary' : particle.colorIdx === 1 ? 'secondary' : 'tertiary';
+
   return (
     <Animated.View
       style={[
         styles.particle,
         {
+          left: particle.x,
+          top: particle.y,
           width: particle.size,
           height: particle.size,
           borderRadius: particle.size / 2,
-          backgroundColor,
-          shadowColor: backgroundColor,
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.8,
-          shadowRadius: particle.size,
+          backgroundColor: emberColors[colorKey],
         },
         animatedStyle,
       ]}
     />
   );
-}
+});
 
 // ---------------------------------------------------------------------------
-// Streak-based intensity tiers (Guitar Hero multiplier style)
-// Embers build up with streak, hitting a peak "don't lose this" state at 7+
+// Streak-based intensity tiers
 // ---------------------------------------------------------------------------
 
 interface EmberTier {
@@ -140,18 +147,16 @@ interface EmberTier {
   sizeMax: number;
   opacityMin: number;
   opacityMax: number;
-  glowOpacity: number;    // Bottom ambient gradient strength
-  glowHeight: number;     // How tall the gradient is
+  glowOpacity: number;
+  glowHeight: number;
 }
 
 function getEmberTier(streak: number): EmberTier {
-  if (streak <= 0) return { count: 8, sizeMin: 1.5, sizeMax: 3, opacityMin: 0.15, opacityMax: 0.35, glowOpacity: 0, glowHeight: 0 };
-  if (streak <= 2) return { count: 14, sizeMin: 2, sizeMax: 3.5, opacityMin: 0.2, opacityMax: 0.4, glowOpacity: 0.03, glowHeight: 160 };
-  if (streak <= 6) return { count: 22, sizeMin: 2, sizeMax: 4, opacityMin: 0.25, opacityMax: 0.5, glowOpacity: 0.06, glowHeight: 220 };
-  // 7+ days: peak state — the fire is roaring
-  if (streak <= 13) return { count: 32, sizeMin: 2, sizeMax: 5, opacityMin: 0.3, opacityMax: 0.6, glowOpacity: 0.09, glowHeight: 280 };
-  // 14+ days: max state — locked in, don't drop this
-  return { count: 40, sizeMin: 2.5, sizeMax: 5.5, opacityMin: 0.35, opacityMax: 0.65, glowOpacity: 0.12, glowHeight: 320 };
+  if (streak <= 0) return { count: 18, sizeMin: 2, sizeMax: 4, opacityMin: 0.3, opacityMax: 0.6, glowOpacity: 0.05, glowHeight: 180 };
+  if (streak <= 2) return { count: 28, sizeMin: 2.5, sizeMax: 5, opacityMin: 0.4, opacityMax: 0.7, glowOpacity: 0.1, glowHeight: 220 };
+  if (streak <= 6) return { count: 40, sizeMin: 2.5, sizeMax: 5.5, opacityMin: 0.45, opacityMax: 0.8, glowOpacity: 0.16, glowHeight: 280 };
+  if (streak <= 13) return { count: 55, sizeMin: 3, sizeMax: 6.5, opacityMin: 0.5, opacityMax: 0.85, glowOpacity: 0.22, glowHeight: 340 };
+  return { count: 70, sizeMin: 3, sizeMax: 7, opacityMin: 0.6, opacityMax: 0.95, glowOpacity: 0.28, glowHeight: 400 };
 }
 
 function densityToCount(density: 'low' | 'medium' | 'high'): number {
@@ -162,10 +167,12 @@ function densityToCount(density: 'low' | 'medium' | 'high'): number {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 interface GoldEmberFieldProps {
-  /** Legacy density prop — use streakLevel for dynamic intensity */
   density?: 'low' | 'medium' | 'high';
-  /** Streak day count — drives particle count, size, brightness, and ambient glow */
   streakLevel?: number;
   active?: boolean;
   style?: any;
@@ -175,11 +182,10 @@ export function GoldEmberField({
   density = 'medium',
   streakLevel,
   active = true,
-  style
+  style,
 }: GoldEmberFieldProps) {
   const { colors, isDark } = useTheme();
 
-  // Determine tier from streakLevel (if provided) or fall back to density
   const tier = useMemo<EmberTier | null>(() => {
     if (streakLevel !== undefined) return getEmberTier(streakLevel);
     return null;
@@ -189,57 +195,56 @@ export function GoldEmberField({
   const sizeMin = tier?.sizeMin ?? 2;
   const sizeMax = tier?.sizeMax ?? 3;
   const opacityMin = tier?.opacityMin ?? 0.3;
-  const opacityMax = tier?.opacityMax ?? 0.5;
+  const opacityMax = tier?.opacityMax ?? 0.6;
 
-  // Create pool of particles that recycle
-  const [particles, setParticles] = React.useState<EmberParticle[]>([]);
-  const particleIdRef = React.useRef(0);
+  // Derive 3 ember color variants from the current accent color.
+  // Optimize for contrast: dark bg needs bright particles, light bg needs saturated/dark particles.
+  const emberColors = useMemo(() => {
+    const accent = colors.accent;
+    if (isDark) {
+      // Dark background (#0A0A0A) — make particles brighter
+      return {
+        primary: lighten(accent, 0.15),    // brighten for visibility
+        secondary: lighten(accent, 0.35),  // bright highlight variant
+        tertiary: accent,                  // base as the darkest
+      };
+    } else {
+      // Light background (#FAF7F2 cream) — make particles darker/more saturated
+      return {
+        primary: darken(accent, 0.2),      // noticeably darker
+        secondary: darken(accent, 0.05),   // slightly darker than base
+        tertiary: darken(accent, 0.35),    // deep for strong contrast
+      };
+    }
+  }, [colors.accent, isDark]);
 
-  const createParticle = useCallback((id: number): EmberParticle => {
-    const sizeRange = sizeMax - sizeMin;
-    return {
-      id,
-      x: Math.random() * SCREEN_WIDTH,
-      y: SCREEN_HEIGHT + 20 + Math.random() * 60,
-      size: sizeMin + Math.random() * sizeRange,
-      duration: 6000 + Math.random() * 6000,
-      delay: Math.random() * 3000,
-      drift: 0.3 + Math.random() * 0.7,
-      opacity: opacityMin + Math.random() * (opacityMax - opacityMin),
-      riseHeight: SCREEN_HEIGHT + 60 + Math.random() * 100,
-    };
-  }, [sizeMin, sizeMax, opacityMin, opacityMax]);
+  // Generate particles once — they self-loop, no recycling needed
+  const particles = useMemo(() => {
+    if (!active) return [];
+    return Array.from({ length: particleCount }, (_, i): EmberParticle => {
+      const sizeRange = sizeMax - sizeMin;
+      return {
+        id: i,
+        x: Math.random() * SCREEN_WIDTH,
+        y: SCREEN_HEIGHT + 20 + Math.random() * 60,
+        size: sizeMin + Math.random() * sizeRange,
+        duration: 7000 + Math.random() * 5000,
+        delay: Math.random() * 4000,
+        driftAmount: 12 + Math.random() * 20,
+        maxOpacity: opacityMin + Math.random() * (opacityMax - opacityMin),
+        colorIdx: i % 3,
+      };
+    });
+  }, [active, particleCount, sizeMin, sizeMax, opacityMin, opacityMax]);
 
-  // Initialize particles
-  useEffect(() => {
-    if (!active) return;
-
-    const initialParticles = Array.from({ length: particleCount }, (_, i) =>
-      createParticle(i)
-    );
-    setParticles(initialParticles);
-    particleIdRef.current = particleCount;
-  }, [active, particleCount, createParticle]);
-
-  const handleParticleComplete = useCallback((particleId: number) => {
-    setParticles(prev =>
-      prev.map(p =>
-        p.id === particleId
-          ? createParticle(particleIdRef.current++)
-          : p
-      )
-    );
-  }, [createParticle]);
-
-  // Ember colors
-  const emberColors = useMemo(() => ({
-    accent: colors.accent,
-    accentLight: colors.accent + 'AA',
-  }), [colors.accent]);
-
-  // Ambient glow params
-  const glowOpacity = tier?.glowOpacity ?? (isDark ? 0.03 : 0.02);
+  // Ambient glow — uses accent color
+  const glowOpacity = tier?.glowOpacity ?? (isDark ? 0.05 : 0.08);
   const glowHeight = tier?.glowHeight ?? 200;
+
+  // For glow gradient, darken the accent on light mode for better contrast against cream
+  const glowHex = isDark ? colors.accent : darken(colors.accent, 0.15);
+  const { r, g, b } = useMemo(() => hexToRgb(glowHex), [glowHex]);
+  const glowBase = `rgba(${r}, ${g}, ${b},`;
 
   if (!active) return null;
 
@@ -249,19 +254,17 @@ export function GoldEmberField({
         <EmberParticleComponent
           key={particle.id}
           particle={particle}
-          onComplete={() => handleParticleComplete(particle.id)}
-          colors={emberColors}
+          emberColors={emberColors}
         />
       ))}
 
-      {/* Ambient warm glow — pooled light from below, like a fire just off-screen */}
+      {/* Ambient glow from below — accent-colored */}
       {glowOpacity > 0 && (
         <LinearGradient
-          colors={
-            isDark
-              ? [`rgba(200, 165, 92, ${glowOpacity})`, 'rgba(200, 165, 92, 0)']
-              : [`rgba(154, 123, 60, ${glowOpacity})`, 'rgba(154, 123, 60, 0)']
-          }
+          colors={[
+            `${glowBase} ${isDark ? glowOpacity : glowOpacity * 1.4})`,
+            `${glowBase} 0)`,
+          ]}
           start={{ x: 0.5, y: 1 }}
           end={{ x: 0.5, y: 0 }}
           style={[styles.glowGradient, { height: glowHeight }]}
