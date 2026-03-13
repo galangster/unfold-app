@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,6 +10,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
+import { DarkColors, createThemedColors } from '@/constants/colors';
+import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
 import { FontFamily } from '@/constants/fonts';
 import { WordRevealText } from '@/components/WordRevealText';
 
@@ -44,7 +46,17 @@ const DISSOLVE_IN = 400;
 
 export default function HowItWorksScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors: _themeColors } = useTheme();
+  const accentThemeId = useUnfoldStore((s) => s.user?.accentTheme ?? 'gold');
+
+  // IMPORTANT: This screen always has a dark (#0A0A0A) background via _layout.tsx
+  // contentStyle. Force dark-mode colors so text remains visible in light mode.
+  const colors = useMemo(() => {
+    const accentTheme = ACCENT_THEMES.find((t) => t.id === accentThemeId);
+    const accent = accentTheme ? accentTheme.dark : DarkColors.accent;
+    return createThemedColors(DarkColors, accent);
+  }, [accentThemeId]);
+
   const [currentSlide, setCurrentSlide] = useState(0);
   const isTransitioning = useRef(false);
 

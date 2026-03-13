@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { View, Text, Dimensions, ActivityIndicator, Alert, Modal, Image, TouchableOpacity } from 'react-native';
+import { View, Text, Dimensions, ActivityIndicator, Alert, Modal, Image, TouchableOpacity, Pressable } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -103,8 +103,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <TouchableOpacity
-          activeOpacity={1}
+        <Pressable
           onPress={onClose}
           style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.92)' }}
         >
@@ -121,8 +120,8 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
               </TouchableOpacity>
             </View>
 
-            {/* Share Card */}
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            {/* Share Card — Pressable wrapper prevents backdrop close when tapping card */}
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
               <View
                 ref={cardRef}
                 collapsable={false}
@@ -199,10 +198,10 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                   </View>
                 </LinearGradient>
               </View>
-            </View>
+            </Pressable>
 
             {/* Share Button */}
-            <View style={{ paddingBottom: 32, paddingHorizontal: 24 }}>
+            <Pressable onPress={(e) => e.stopPropagation()} style={{ paddingBottom: 32, paddingHorizontal: 24 }}>
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleShare}
@@ -237,9 +236,9 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                   </>
                 )}
               </TouchableOpacity>
-            </View>
+            </Pressable>
           </SafeAreaView>
-        </TouchableOpacity>
+        </Pressable>
       </GestureHandlerRootView>
     </Modal>
   );

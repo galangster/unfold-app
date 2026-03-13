@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -1315,9 +1316,10 @@ export default function ReadingScreen() {
               />
             )}
 
-            {/* Content - Scrollable with day-transition fade */}
-            <Animated.ScrollView
-              style={[{ flex: 1 }, scrollContentStyle]}
+            {/* Content - Scrollable with day-transition fade + keyboard-aware scrolling */}
+            <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
+            <KeyboardAwareScrollView
+              style={{ flex: 1 }}
               contentContainerStyle={{
                 paddingHorizontal: 24,
                 paddingTop: 40,
@@ -1327,7 +1329,8 @@ export default function ReadingScreen() {
               bounces={true}
               onScroll={handleScroll}
               scrollEventThrottle={150}
-              removeClippedSubviews={true}
+              bottomOffset={20}
+              extraKeyboardSpace={60}
             >
               {/* Bridge text — personalized transition for Day 2+ */}
               {viewingDay >= 2 && isBridgeLoading && (
@@ -1762,7 +1765,8 @@ export default function ReadingScreen() {
                     </Animated.View>
                   )}
               </Animated.View>
-            </Animated.ScrollView>
+            </KeyboardAwareScrollView>
+            </Animated.View>
           </SafeAreaView>
         </Animated.View>
       </GestureDetector>

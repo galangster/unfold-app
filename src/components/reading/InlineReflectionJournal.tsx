@@ -119,11 +119,12 @@ export function InlineReflectionJournal({
         Keyboard.dismiss();
         setExpandedIndex(null);
       } else {
-        // Expand and focus
+        // Expand and focus — 400ms delay lets the expand animation finish
+        // and layout settle so KeyboardAwareScrollView can measure properly
         setExpandedIndex(index);
         setTimeout(() => {
           inputRefs.current.get(index)?.focus();
-        }, 350);
+        }, 400);
       }
     },
     [expandedIndex]

@@ -36,12 +36,13 @@ import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
+import { DarkColors, createThemedColors } from '@/constants/colors';
 import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
-import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType } from '@/lib/store';
+import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -156,33 +157,33 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
 // Icon map for themes and types
 const iconMap: Record<string, React.ReactNode> = {
   // Themes
-  trust: <FingerprintIcon size={18} color="#9A7B3C" weight="regular" />,
-  courage: <FireIcon size={18} color="#9A7B3C" weight="regular" />,
-  joy: <SmileyIcon size={18} color="#9A7B3C" weight="regular" />,
-  lament: <CloudRainIcon size={18} color="#9A7B3C" weight="regular" />,
-  discipline: <CrosshairIcon size={18} color="#9A7B3C" weight="regular" />,
-  identity: <FingerprintIcon size={18} color="#9A7B3C" weight="regular" />,
-  purpose: <CompassIcon size={18} color="#9A7B3C" weight="regular" />,
-  healing: <HeartIcon size={18} color="#9A7B3C" weight="regular" />,
-  gratitude: <GiftIcon size={18} color="#9A7B3C" weight="regular" />,
-  hope: <SparkleIcon size={18} color="#9A7B3C" weight="regular" />,
-  rest: <MoonIcon size={18} color="#9A7B3C" weight="regular" />,
-  presence: <EyeIcon size={18} color="#9A7B3C" weight="regular" />,
-  conviction: <ScalesIcon size={18} color="#9A7B3C" weight="regular" />,
-  surrender: <HandIcon size={18} color="#9A7B3C" weight="regular" />,
-  justice: <ScalesIcon size={18} color="#9A7B3C" weight="regular" />,
-  wonder: <BinocularsIcon size={18} color="#9A7B3C" weight="regular" />,
+  trust: <FingerprintIcon size={18} color="#C8A55C" weight="regular" />,
+  courage: <FireIcon size={18} color="#C8A55C" weight="regular" />,
+  joy: <SmileyIcon size={18} color="#C8A55C" weight="regular" />,
+  lament: <CloudRainIcon size={18} color="#C8A55C" weight="regular" />,
+  discipline: <CrosshairIcon size={18} color="#C8A55C" weight="regular" />,
+  identity: <FingerprintIcon size={18} color="#C8A55C" weight="regular" />,
+  purpose: <CompassIcon size={18} color="#C8A55C" weight="regular" />,
+  healing: <HeartIcon size={18} color="#C8A55C" weight="regular" />,
+  gratitude: <GiftIcon size={18} color="#C8A55C" weight="regular" />,
+  hope: <SparkleIcon size={18} color="#C8A55C" weight="regular" />,
+  rest: <MoonIcon size={18} color="#C8A55C" weight="regular" />,
+  presence: <EyeIcon size={18} color="#C8A55C" weight="regular" />,
+  conviction: <ScalesIcon size={18} color="#C8A55C" weight="regular" />,
+  surrender: <HandIcon size={18} color="#C8A55C" weight="regular" />,
+  justice: <ScalesIcon size={18} color="#C8A55C" weight="regular" />,
+  wonder: <BinocularsIcon size={18} color="#C8A55C" weight="regular" />,
   // Study types
-  personal_journey: <CompassIcon size={20} color="#9A7B3C" weight="regular" />,
-  book_study: <BookOpenIcon size={20} color="#9A7B3C" weight="regular" />,
-  character_study: <UsersIcon size={20} color="#9A7B3C" weight="regular" />,
-  psalm_journey: <MusicNotesIcon size={20} color="#9A7B3C" weight="regular" />,
-  beatitudes: <CrownIcon size={20} color="#9A7B3C" weight="regular" />,
-  fruit_of_spirit: <LeafIcon size={20} color="#9A7B3C" weight="regular" />,
-  lords_prayer: <ChatCircleIcon size={20} color="#9A7B3C" weight="regular" />,
-  names_of_god: <FireIcon size={20} color="#9A7B3C" weight="regular" />,
-  seasons: <CalendarIcon size={20} color="#9A7B3C" weight="regular" />,
-  parables: <ChatCircleIcon size={20} color="#9A7B3C" weight="regular" />,
+  personal_journey: <CompassIcon size={20} color="#C8A55C" weight="regular" />,
+  book_study: <BookOpenIcon size={20} color="#C8A55C" weight="regular" />,
+  character_study: <UsersIcon size={20} color="#C8A55C" weight="regular" />,
+  psalm_journey: <MusicNotesIcon size={20} color="#C8A55C" weight="regular" />,
+  beatitudes: <CrownIcon size={20} color="#C8A55C" weight="regular" />,
+  fruit_of_spirit: <LeafIcon size={20} color="#C8A55C" weight="regular" />,
+  lords_prayer: <ChatCircleIcon size={20} color="#C8A55C" weight="regular" />,
+  names_of_god: <FireIcon size={20} color="#C8A55C" weight="regular" />,
+  seasons: <CalendarIcon size={20} color="#C8A55C" weight="regular" />,
+  parables: <ChatCircleIcon size={20} color="#C8A55C" weight="regular" />,
 };
 
 const ALL_STEPS = [
@@ -280,7 +281,19 @@ function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentSt
 
 export default function OnboardingScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors: _themeColors, isDark: _themeIsDark } = useTheme();
+  const accentThemeId = useUnfoldStore((s) => s.user?.accentTheme ?? 'gold');
+
+  // IMPORTANT: Onboarding always has a dark (#0A0A0A) background regardless of
+  // the user's light/dark mode setting. Force dark-mode colors so text and UI
+  // elements remain visible against the dark backdrop.
+  const colors = useMemo(() => {
+    const accentTheme = ACCENT_THEMES.find((t) => t.id === accentThemeId);
+    const accent = accentTheme ? accentTheme.dark : DarkColors.accent;
+    return createThemedColors(DarkColors, accent);
+  }, [accentThemeId]);
+  const isDark = true;
+
   const existingUser = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -2181,16 +2194,16 @@ export default function OnboardingScreen() {
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                 <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40 }}>
                   <View>
-                    <TypewriterText 
+                    <TypewriterText
                       text={
-                        baseStep?.type === 'themeType' && themeSelectionMode === 'theme' 
+                        baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
                           ? "What themes are on your heart?"
                           : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
                           ? "What would you like to study?"
                           : getStepQuestion()
-                      } 
-                      onComplete={handleTypewriterComplete} 
-                      style={{ fontSize: 28, lineHeight: 36 }} 
+                      }
+                      onComplete={handleTypewriterComplete}
+                      style={{ fontSize: 28, lineHeight: 36, color: colors.text }}
                     />
                   </View>
                   {showInput && (
@@ -2275,7 +2288,7 @@ export default function OnboardingScreen() {
                       <TypewriterText
                         text={getStepQuestion()}
                         onComplete={handleTypewriterComplete}
-                        style={{ fontSize: 28, lineHeight: 36 }}
+                        style={{ fontSize: 28, lineHeight: 36, color: colors.text }}
                       />
                     )}
                   </View>

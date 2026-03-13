@@ -670,6 +670,8 @@ ${context.studySubject ? `Subject: ${context.studySubject}` : ''}
 Use the reader's context to INFORM the devotional (don't narrate their story back to them).
 Use ${context.bibleTranslation} translation. Include the full scripture text.
 
+CRITICAL — NO FIRST PERSON: NEVER write in first person ("I", "I've", "I'm", "my", "me", "we", "our"). You have no personal experiences. Use second person ("you") for the reader, third person for all stories and examples. WRONG: "I drive past every spring." RIGHT: "A woman drives past every spring." or "You know that feeling when..."
+
 Respond with valid JSON only:
 {
   "title": "Day title (evocative, 3-7 words)",

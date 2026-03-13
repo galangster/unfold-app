@@ -150,7 +150,7 @@ export const STORY_TYPES: StoryType[] = [
   { id: 'everyday_moment', name: 'Everyday Moment', desc: 'A mundane situation that reveals spiritual truth', example: 'A barista remembering your name illustrating how God knows you', faithLevel: ['new', 'growing', 'mature'] },
   { id: 'historical_vignette', name: 'Historical Vignette', desc: 'A real moment from history that illuminates the point', example: 'Dietrich Bonhoeffer writing letters from prison on hope', faithLevel: ['growing', 'mature'] },
   { id: 'nature_parable', name: 'Nature Parable', desc: 'Natural world as spiritual metaphor', example: 'A forest fire that clears deadwood so new growth can begin', faithLevel: ['new', 'growing', 'mature'] },
-  { id: 'confession_story', name: 'Confession Story', desc: 'Vulnerable first-person admission that builds trust', example: 'Admitting you prayed for patience then lost it in traffic', faithLevel: ['growing', 'mature'] },
+  { id: 'confession_story', name: 'Confession Story', desc: 'A third-person vulnerable moment that builds trust and relatability', example: 'A man who prayed for patience, then lost it in traffic ten minutes later', faithLevel: ['growing', 'mature'] },
   { id: 'cultural_parable', name: 'Cultural Parable', desc: 'Modern culture/technology as spiritual lens', example: 'Phone notifications vs. God\'s still small voice', faithLevel: ['new', 'growing'] },
   { id: 'ancient_wisdom', name: 'Ancient Wisdom Tale', desc: 'Desert fathers, rabbinical stories, church history', example: 'A desert mother who carried two bags of sand to understand forgiveness', faithLevel: ['mature'] },
   { id: 'relationship_scene', name: 'Relationship Scene', desc: 'A specific interaction between people that carries the lesson', example: 'A father teaching his daughter to ride a bike — letting go as trust', faithLevel: ['new', 'growing', 'mature'] },
@@ -186,9 +186,15 @@ STORY SOURCES — Draw from the whole world, not just "Christian" examples:
 - Movies and TV shows the reader has likely seen (The Shawshank Redemption, The Office, Lord of the Rings, etc.)
 - Cultural moments, viral stories, news events that illuminate spiritual truth
 - Psychology research, scientific discoveries, medical case studies
-- Personal anecdotes (first-person composite stories feel the most authentic)
+- Third-person composite stories ("A woman once...", "There was a teacher who...") — these feel authentic without pretending to be personal experience
 - Ancient history, mythology (as illustration, not theology), philosophy
-- The more unexpected the source, the more the reader pays attention. A Breaking Bad scene that illustrates grace is more memorable than another retelling of the Prodigal Son.`;
+- The more unexpected the source, the more the reader pays attention. A Breaking Bad scene that illustrates grace is more memorable than another retelling of the Prodigal Son.
+
+CRITICAL — NO FIRST PERSON IN STORIES:
+- NEVER write stories in first person ("I drove past...", "I remember a Tuesday...", "I've watched it happen"). The writer is an AI and has no personal experiences.
+- ALL stories and parables MUST be third person: "A woman drove past every spring...", "There was a morning when...", "He watched it happen year after year."
+- Second person is acceptable for brief illustrative moments: "You know that feeling when the phone rings at 2 AM."
+- Real historical figures and biblical characters can be described in third person with confidence.`;
 
 // ==========================================
 // PATTERN BREAK SYSTEM
