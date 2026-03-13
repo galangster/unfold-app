@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -27,6 +27,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
+import { triggerNextDayGeneration, evaluateSeriesExtension, generateArcExtension } from '@/lib/progressive-generation';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { generateBridge } from '@/lib/bridge-service';
@@ -141,8 +142,16 @@ export default function ReadingScreen() {
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
+  const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
+  const [showContinuationPrompt, setShowContinuationPrompt] = useState(false);
+  const [continuationReason, setContinuationReason] = useState('');
+  const [continuationDays, setContinuationDays] = useState(0);
+  const [isExtendingArc, setIsExtendingArc] = useState(false);
+  const [extensionError, setExtensionError] = useState(false);
   const [bridgeText, setBridgeText] = useState<string | null>(null);
   const [isBridgeLoading, setIsBridgeLoading] = useState(false);
+  const mountedRef = useRef(true);
+  const continuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -178,7 +187,8 @@ export default function ReadingScreen() {
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   // Only show retry banner if this specific series has ungenerated days
   // Compare against totalDays (the series plan), not expectedDays (user preference)
-  const showIncompleteJourneyRetry = availableDays < totalDays;
+  // Progressive mode generates days one at a time — don't show batch retry banner
+  const showIncompleteJourneyRetry = availableDays < totalDays && currentDevotional?.generationMode !== 'progressive';
   const retryCtaButtonBg = colors.accent;
   const retryCtaButtonText = colors.background;
   const btnText = retryCtaButtonText;
@@ -202,6 +212,15 @@ export default function ReadingScreen() {
     const firstSentence = tomorrowDayData.bodyText.match(/^[^.!?]+[.!?]/);
     return firstSentence ? firstSentence[0].trim() : tomorrowDayData.bodyText.slice(0, 120).trim() + '...';
   }, [tomorrowDayData]);
+
+  // Cleanup mounted ref and continuation timer on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
+    };
+  }, []);
 
   // Bridge text — personalized transition passage for Day 2+
   useEffect(() => {
@@ -530,40 +549,100 @@ export default function ReadingScreen() {
       if (viewingDay < expectedTotal) {
         advanceDay(currentDevotionalId);
         refreshDailyReminder();
+
+        // Progressive mode: trigger next-day generation immediately
+        if (currentDevotional?.generationMode === 'progressive') {
+          setIsPreparingNextDay(true);
+          triggerNextDayGeneration(currentDevotionalId, viewingDay)
+            .finally(() => setIsPreparingNextDay(false));
+        }
+      }
+
+      // Phase 5: Evaluate series extension for progressive devotionals completing last day
+      const isProgressiveLastDay = completingLastDay && currentDevotional?.generationMode === 'progressive';
+      if (isProgressiveLastDay) {
+        // Run evaluation in background during celebration — result shows after dismissal
+        evaluateSeriesExtension(currentDevotionalId).then((result) => {
+          if (!mountedRef.current) return; // Guard against unmount
+          if (result.shouldExtend && result.suggestedDays > 0) {
+            setContinuationReason(result.reason);
+            setContinuationDays(result.suggestedDays);
+            // Don't show yet — wait for celebration dismiss
+          }
+        }).catch(() => {
+          // Silent fail — extension is optional
+        });
       }
 
       // Record streak read & sync widgets
       recordStreakRead();
       syncWidgets();
 
-      // Check for review prompt eligibility
-      const reviewManager = createReviewPromptManager({
-        reviewPromptLastDate,
-        reviewPromptCount,
-        hasReviewed,
-        reviewPromptDaysAtLast,
-      });
+      // Check for review prompt eligibility — skip when continuation prompt is pending
+      if (!isProgressiveLastDay) {
+        const reviewManager = createReviewPromptManager({
+          reviewPromptLastDate,
+          reviewPromptCount,
+          hasReviewed,
+          reviewPromptDaysAtLast,
+        });
 
-      // Calculate total days completed across all devotionals
-      const totalDaysCompleted = devotionals.reduce((sum, d) =>
-        sum + d.days.filter(day => day.isRead).length, 0
-      );
+        // Calculate total days completed across all devotionals
+        const totalDaysCompleted = devotionals.reduce((sum, d) =>
+          sum + d.days.filter(day => day.isRead).length, 0
+        );
 
-      if (reviewManager.shouldPrompt({
-        totalDaysCompleted,
-        journalEntryCount: journalEntries.length,
-        justCompletedDay: true,
-      })) {
-        // Small delay to let celebration show first
-        setTimeout(async () => {
-          const shown = await reviewManager.showPrompt();
-          if (shown) {
+        if (reviewManager.shouldPrompt({
+          totalDaysCompleted,
+          journalEntryCount: journalEntries.length,
+          justCompletedDay: true,
+        })) {
+          // Small delay to let celebration show first
+          setTimeout(async () => {
+            const shown = await reviewManager.showPrompt();
+            if (shown) {
             recordReviewPrompt(totalDaysCompleted);
           }
         }, 1500);
-      }
+        }
+      } // end if (!isProgressiveLastDay)
     }
   }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, devotionals, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+
+  // Phase 5: Handle "Keep Going" from continuation prompt
+  const handleContinueJourney = useCallback(async () => {
+    if (!currentDevotionalId || continuationDays <= 0) return;
+    setIsExtendingArc(true);
+    setExtensionError(false);
+    try {
+      const newHints = await generateArcExtension(currentDevotionalId, continuationDays);
+      if (!mountedRef.current) return;
+      useUnfoldStore.getState().extendSeriesArc(currentDevotionalId, newHints, continuationDays);
+      // Advance to next day and trigger generation
+      advanceDay(currentDevotionalId);
+      // Read the completed day from store (not the stale closure) so triggerNext generates the right day
+      const completedDay = useUnfoldStore.getState().devotionals.find(
+        (d) => d.id === currentDevotionalId
+      )?.currentDay ?? viewingDay;
+      setIsPreparingNextDay(true);
+      triggerNextDayGeneration(currentDevotionalId, completedDay - 1)
+        .finally(() => { if (mountedRef.current) setIsPreparingNextDay(false); });
+      setShowContinuationPrompt(false);
+      setContinuationDays(0);
+      setContinuationReason('');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      if (!mountedRef.current) return;
+      logBugError('progressive-gen', err instanceof Error ? err : new Error(String(err)), {
+        action: 'continue-journey',
+        devotionalId: currentDevotionalId,
+      });
+      // Show error state — user can retry or dismiss
+      setExtensionError(true);
+    } finally {
+      if (mountedRef.current) setIsExtendingArc(false);
+    }
+  }, [currentDevotionalId, continuationDays, viewingDay, advanceDay]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -1638,6 +1717,50 @@ export default function ReadingScreen() {
                       </Text>
                     </Animated.View>
                   )}
+
+                  {/* Preparing Tomorrow — progressive mode, next day being generated */}
+                  {isCompleted && !showCelebration && !tomorrowDayData && isPreparingNextDay && (
+                    <Animated.View
+                      entering={FadeIn.delay(300).duration(400)}
+                      style={{
+                        marginTop: 32,
+                        paddingVertical: 18,
+                        paddingHorizontal: 20,
+                        borderRadius: 14,
+                        backgroundColor: colors.inputBackground,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <SunHorizonIcon size={18} color={colors.accent} weight="light" />
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiMedium,
+                            fontSize: 12,
+                            color: colors.accent,
+                            letterSpacing: 1,
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          Tomorrow
+                        </Text>
+                      </View>
+                      <ActivityIndicator color={colors.accent} size="small" style={{ marginBottom: 10 }} />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.bodyItalic,
+                          fontSize: 14,
+                          color: colors.textMuted,
+                          textAlign: 'center',
+                          lineHeight: 21,
+                        }}
+                      >
+                        {'Preparing your next reading\u2026'}
+                      </Text>
+                    </Animated.View>
+                  )}
               </Animated.View>
             </Animated.ScrollView>
           </SafeAreaView>
@@ -1649,9 +1772,62 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
+          // Show continuation prompt if extension was evaluated during celebration
+          if (continuationDays > 0 && continuationReason) {
+            continuationTimerRef.current = setTimeout(() => {
+              if (mountedRef.current) setShowContinuationPrompt(true);
+            }, 400);
+          }
         }}
         type={celebrationType}
       />
+
+      {/* Phase 5: Continuation Prompt */}
+      <Modal visible={showContinuationPrompt} transparent animationType="fade" statusBarTranslucent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
+            <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: 12, letterSpacing: -0.5 }}>
+              Your journey{'\n'}could continue
+            </Text>
+            <View style={{ width: 32, height: 1.5, backgroundColor: colors.accent, marginBottom: 16, borderRadius: 1 }} />
+            <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
+              {continuationReason}
+            </Text>
+            {extensionError && (
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E55', textAlign: 'center', marginBottom: 12 }}>
+                Something went wrong. Try again?
+              </Text>
+            )}
+            <Pressable
+              onPress={handleContinueJourney}
+              style={{ backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12, opacity: isExtendingArc ? 0.7 : 1 }}
+              disabled={isExtendingArc}
+            >
+              {isExtendingArc ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#fff' }}>
+                  {extensionError ? 'Retry' : `Keep Going \u00B7 ${continuationDays} more days`}
+                </Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setShowContinuationPrompt(false);
+                setContinuationDays(0);
+                setContinuationReason('');
+                setExtensionError(false);
+              }}
+              style={{ paddingVertical: 10 }}
+              disabled={isExtendingArc}
+            >
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: colors.textSecondary }}>
+                I'm good for now
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       {/* Share Devotional Modal */}
       <ShareDevotionalModal

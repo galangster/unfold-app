@@ -19,7 +19,7 @@ import * as Haptics from 'expo-haptics';
 import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord } from '@/lib/store';
+import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord, type ProgressiveMemory } from '@/lib/store';
 import {
   generateDevotional,
   createDevotionalFromGenerated,
@@ -27,7 +27,10 @@ import {
   extractScripturesFromDevotional,
   markFullGenerationActive,
   markFullGenerationInactive,
+  resolvePersonaForGeneration,
+  type GenerationContext,
 } from '@/lib/devotional-service';
+import { generateSeriesArc, generateProgressiveDay } from '@/lib/progressive-generation';
 
 import {
   requestNotificationPermissions,
@@ -127,6 +130,8 @@ export default function GeneratingScreen() {
   const completeGenerationSession = useUnfoldStore((s) => s.completeGenerationSession);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
+  const setProgressiveGeneration = useUnfoldStore((s) => s.setProgressiveGeneration);
+  const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
@@ -147,6 +152,7 @@ export default function GeneratingScreen() {
   const [isGenerating, setIsGenerating] = useState(true);
   const partialDevotionalRef = useRef<Devotional | null>(null);
   const generationInFlightRef = useRef(false);
+  const [isProgressiveMode, setIsProgressiveMode] = useState(false);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Notification state
@@ -341,6 +347,20 @@ export default function GeneratingScreen() {
         devotionalId,
         existingDays: existingDevotional.days.length,
       });
+
+      // Progressive recovery: if Day 1 already exists, skip generation entirely
+      if (existingDevotional.generationMode === 'progressive' && existingDevotional.days.some(d => d.dayNumber === 1)) {
+        setIsProgressiveMode(true);
+        setDevotionalTitle(existingDevotional.title);
+        setCurrentSeriesTitle(existingDevotional.title);
+        setGeneratedDays(existingDevotional.days);
+        completeGenerationSession({ title: existingDevotional.title });
+        setIsGenerating(false);
+        setIsComplete(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        generationInFlightRef.current = false;
+        return;
+      }
     }
 
     if (!hasRecoverableSession) {
@@ -352,6 +372,144 @@ export default function GeneratingScreen() {
     }
 
     const generate = async () => {
+      // Determine generation mode: new devotionals use progressive, recovery continues existing mode
+      const useProgressive = existingDevotional
+        ? existingDevotional.generationMode === 'progressive'
+        : true;
+      setIsProgressiveMode(useProgressive);
+
+      if (useProgressive) {
+        // === PROGRESSIVE MODE: Generate arc + Day 1 only ===
+        try {
+          const recentScriptures = getRecentScriptures(200);
+          const previousSeriesTitles = devotionals
+            .map(d => d.title)
+            .filter((t): t is string => Boolean(t))
+            .slice(-10);
+
+          const context: GenerationContext = {
+            name: user.name,
+            aboutMe: user.aboutMe,
+            currentSituation: user.currentSituation,
+            emotionalState: user.emotionalState,
+            spiritualSeeking: user.spiritualSeeking,
+            readingDuration: user.readingDuration,
+            devotionalLength: user.devotionalLength,
+            bibleTranslation: user.bibleTranslation ?? 'WEB',
+            usedScriptureHistory: recentScriptures,
+            themeCategory: user.selectedTheme,
+            devotionalType: user.selectedType,
+            studySubject: user.selectedStudySubject,
+            writingStyle: user.writingStyle,
+            seriesPersonaHistory,
+            previousSeriesTitles,
+          };
+
+          // Step 1: Generate series arc (~2s via Grok)
+          void logBugEvent('generation', 'progressive-arc-start', { devotionalId });
+          const { arc, title: seriesTitle } = await generateSeriesArc(context, recentScriptures);
+          setCurrentSeriesTitle(seriesTitle);
+          updateGenerationSessionProgress({ title: seriesTitle });
+
+          // Step 2: Resolve persona for voice/style
+          const persona = resolvePersonaForGeneration(context);
+
+          // Step 3: Create devotional shell in store (no days yet)
+          const progressiveDevotional: Devotional = {
+            id: devotionalId,
+            title: seriesTitle,
+            totalDays: user.devotionalLength,
+            currentDay: 1,
+            days: [],
+            createdAt: new Date().toISOString(),
+            userContext: {
+              name: user.name,
+              aboutMe: user.aboutMe,
+              currentSituation: user.currentSituation,
+              emotionalState: user.emotionalState,
+            },
+            themeCategory: user.selectedTheme,
+            devotionalType: user.selectedType || 'personal',
+            studySubject: user.selectedStudySubject,
+            generationMode: 'progressive',
+            seriesArc: arc,
+            progressiveMemory: { fullDays: [], summaries: [], narrative: null },
+          };
+          addDevotional(progressiveDevotional);
+
+          // Step 4: Generate Day 1 (~10-15s via Claude Sonnet)
+          void logBugEvent('generation', 'progressive-day1-start', { devotionalId });
+          const emptyMemory: ProgressiveMemory = { fullDays: [], summaries: [], narrative: null };
+          const day1 = await generateProgressiveDay(
+            devotionalId, 1, arc, emptyMemory, context, recentScriptures, persona,
+          );
+
+          // Step 5: Store Day 1
+          addGeneratedDay(devotionalId, day1);
+          setGeneratedDays([day1]);
+
+          // Step 6: Track scripture usage
+          if (day1.scriptureReference) {
+            const book = day1.scriptureReference.split(/\s+\d/)[0].trim();
+            addUsedScriptures([{
+              reference: day1.scriptureReference,
+              book,
+              usedAt: new Date().toISOString(),
+              devotionalId,
+            }]);
+          }
+
+          // Step 7: Record persona for cross-series freshness
+          addSeriesPersonaRecord({
+            devotionalId,
+            primaryTrait: persona.primary,
+            secondaryTrait: persona.secondary,
+            templateSeed: persona.templateSeed,
+            createdAt: new Date().toISOString(),
+          });
+
+          // Step 8: Update progressive generation state
+          setProgressiveGeneration({
+            devotionalId,
+            isArcGenerated: true,
+            currentDayGeneration: {
+              dayNumber: 1,
+              status: 'ready',
+              completedAt: new Date().toISOString(),
+              retryCount: 0,
+            },
+          });
+
+          setDevotionalTitle(seriesTitle);
+          completeGenerationSession({ title: seriesTitle });
+          setPendingNotification({ title: seriesTitle });
+          setIsGenerating(false);
+          setIsComplete(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+          void logBugEvent('generation', 'progressive-generation-complete', {
+            devotionalId,
+            title: seriesTitle,
+            dayTitle: day1.title,
+          });
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          console.error('Progressive generation failed:', errorMessage);
+          failGenerationSession(errorMessage);
+          void logBugError('generation', err, {
+            devotionalId,
+            phase: 'progressive-generation',
+          });
+          setIsGenerating(false);
+          setError(errorMessage);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } finally {
+          generationInFlightRef.current = false;
+        }
+        return;
+      }
+
+      // === BATCH MODE (legacy / recovery) ===
       markFullGenerationActive(devotionalId);
       try {
         const recentScriptures = getRecentScriptures(200);
@@ -400,6 +558,7 @@ export default function GeneratingScreen() {
               themeCategory: user.selectedTheme,
               devotionalType: user.selectedType || 'personal',
               studySubject: user.selectedStudySubject,
+              generationMode: 'batch',
             };
             addDevotional(partialDevotional);
             partialDevotionalRef.current = partialDevotional;
@@ -473,6 +632,7 @@ export default function GeneratingScreen() {
             currentSituation: user.currentSituation,
             emotionalState: user.emotionalState,
           },
+          generationMode: 'batch',
         };
         const newScriptures = extractScripturesFromDevotional(finalDevotional);
         addUsedScriptures(newScriptures);
@@ -856,8 +1016,8 @@ export default function GeneratingScreen() {
             </View>
           )}
 
-          {/* Series title reveal when Day 1 is ready */}
-          {canStartReading && currentSeriesTitle && (
+          {/* Series title reveal — in progressive mode shows when arc completes, in batch when Day 1 ready */}
+          {currentSeriesTitle && (canStartReading || isProgressiveMode) && (
             <Animated.View
               entering={FadeIn.duration(800)}
               style={{ alignItems: 'center', marginBottom: 12 }}
@@ -876,8 +1036,8 @@ export default function GeneratingScreen() {
             </Animated.View>
           )}
 
-          {/* Day progress dots */}
-          {generatedDays.length > 0 && (
+          {/* Day progress dots — batch mode only (progressive generates 1 day) */}
+          {generatedDays.length > 0 && !isProgressiveMode && (
             <Animated.View
               entering={FadeIn.duration(400)}
               style={{
@@ -904,8 +1064,8 @@ export default function GeneratingScreen() {
             </Animated.View>
           )}
 
-          {/* Start reading early — appears when Day 1 is ready */}
-          {canStartReading && isGenerating && (
+          {/* Start reading early — batch mode only (progressive goes straight to complete) */}
+          {canStartReading && isGenerating && !isProgressiveMode && (
             <View style={{ width: '100%', alignItems: 'center', marginTop: 48 }}>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleStartReadingEarly}

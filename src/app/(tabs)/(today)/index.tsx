@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -40,6 +40,8 @@ import { AccentGlow } from '@/components/AccentGlow';
 import { GoldEmberField } from '@/components/GoldEmberField';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
+import { triggerNextDayGeneration } from '@/lib/progressive-generation';
+import { logBugEvent } from '@/lib/bug-logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
@@ -487,6 +489,35 @@ export default function HomeScreen() {
   }, [currentDevotionalId, devotionals]);
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
+
+  // Progressive generation: detect missing current day and trigger generation on app open
+  const [isPreparingCurrentDay, setIsPreparingCurrentDay] = useState(false);
+  const progressiveGenTriggeredRef = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return;
+    const currentDay = currentDevotional.currentDay;
+    const dayExists = currentDevotional.days.some(d => d.dayNumber === currentDay);
+    if (dayExists) {
+      setIsPreparingCurrentDay(false);
+      return;
+    }
+
+    // Avoid duplicate triggers for the same day
+    const triggerKey = `${currentDevotional.id}::${currentDay}`;
+    if (progressiveGenTriggeredRef.current === triggerKey) return;
+    progressiveGenTriggeredRef.current = triggerKey;
+
+    // Current day is missing — trigger generation
+    setIsPreparingCurrentDay(true);
+    void logBugEvent('progressive-gen', 'app-open-trigger', {
+      devotionalId: currentDevotional.id,
+      missingDay: currentDay,
+    });
+
+    triggerNextDayGeneration(currentDevotional.id, currentDay - 1)
+      .finally(() => setIsPreparingCurrentDay(false));
+  }, [currentDevotional]);
 
   const middayMessage = useMemo(() => getMessageForToday(MIDDAY_MESSAGES), []);
   const eveningMessage = useMemo(() => getMessageForToday(EVENING_MESSAGES), []);
@@ -1014,18 +1045,23 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity activeOpacity={0.7}
-                onPress={handleContinueReading}
+                onPress={isPreparingCurrentDay ? undefined : handleContinueReading}
+                disabled={isPreparingCurrentDay}
                 onPressIn={() => {
-                  journeyCardScale.value = withTiming(0.98, { duration: 120 });
+                  if (!isPreparingCurrentDay) journeyCardScale.value = withTiming(0.98, { duration: 120 });
                 }}
                 onPressOut={() => {
                   journeyCardScale.value = withTiming(1, { duration: 150 });
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={`Continue ${currentDevotional.title}, day ${currentDevotional.currentDay} of ${currentDevotional.totalDays}`}
+                accessibilityLabel={isPreparingCurrentDay
+                  ? 'Preparing your reading, please wait'
+                  : `Continue ${currentDevotional.title}, day ${currentDevotional.currentDay} of ${currentDevotional.totalDays}`
+                }
                 style={{
                   borderRadius: 20,
                   overflow: 'hidden',
+                  opacity: isPreparingCurrentDay ? 0.85 : 1,
                 }}
               >
                 <View
@@ -1081,7 +1117,7 @@ export default function HomeScreen() {
                     </View>
                   </View>
 
-                  {currentDayData && (
+                  {currentDayData ? (
                     <>
                       <Text
                         sharedTransitionTag={`devotional-title-${currentDevotional.id}-${currentDevotional.currentDay}`}
@@ -1115,7 +1151,22 @@ export default function HomeScreen() {
                         </Text>
                       )}
                     </>
-                  )}
+                  ) : isPreparingCurrentDay ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 12, marginBottom: 20 }}>
+                      <ActivityIndicator color={colors.accent} size="small" style={{ marginBottom: 10 }} />
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.bodyItalic,
+                          fontSize: 15,
+                          color: colors.textMuted,
+                          textAlign: 'center',
+                          lineHeight: 22,
+                        }}
+                      >
+                        {'Preparing today\u2019s reading\u2026'}
+                      </Text>
+                    </View>
+                  ) : null}
 
                   {/* Progress section */}
                   <View style={{ marginBottom: 24 }}>

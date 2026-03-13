@@ -149,6 +149,9 @@ export interface DevotionalDay {
   checkInChips?: string[];
   // Phase 5: Evening scripture reference for wind-down
   eveningScriptureRef?: string;
+  // Progressive generation metadata
+  generatedAt?: string;
+  contextSignals?: string[];
 }
 
 export interface Devotional {
@@ -164,11 +167,14 @@ export interface Devotional {
     currentSituation: string;
     emotionalState: string;
   };
-  // New: Theme and type categorization
+  // Theme and type categorization
   themeCategory?: ThemeCategory;
   devotionalType?: DevotionalType;
-  // For book/character studies, track the specific subject
-  studySubject?: string; // e.g., "Philippians", "David", "Beatitudes"
+  studySubject?: string;
+  // Progressive generation fields
+  seriesArc?: SeriesArc;
+  progressiveMemory?: ProgressiveMemory;
+  generationMode: 'batch' | 'progressive';
 }
 
 export type JournalMode = 'freewrite' | 'soap' | 'guided';
@@ -255,6 +261,92 @@ export interface Highlight {
   contextAfter?: string;
   createdAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Progressive Generation Types
+// ---------------------------------------------------------------------------
+
+/** Lightweight per-day hint generated as part of the series arc */
+export interface SeriesArcDay {
+  dayNumber: number;
+  themeHint: string;
+  scriptureRegion: string;
+  narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution';
+}
+
+/** High-level series plan generated at onboarding (not the content itself) */
+export interface SeriesArc {
+  totalDaysPlanned: number;
+  overarchingTheme: string;
+  narrativeShape: string;
+  dayHints: SeriesArcDay[];
+  isOpenEnded: boolean;
+  createdAt: string;
+  lastExtendedAt?: string;
+}
+
+/** Full context snapshot for a recently completed day (Layer 1) */
+export interface MemoryLayerFull {
+  dayNumber: number;
+  devotionalTitle: string;
+  scriptureReference: string;
+  journalContent?: string;
+  soapResponses?: SoapResponses;
+  questionResponses?: { question: string; response: string }[];
+  prayerRequests?: PrayerRequest[];
+  checkInMood?: MoodLevel;
+  checkInMoodLabel?: string;
+  checkInChipAnswer?: string;
+  readAt?: string;
+  readingDurationMs?: number;
+}
+
+/** Compressed summary of a range of days (Layer 2) */
+export interface MemoryLayerSummary {
+  dayRange: string;
+  startDay: number;
+  endDay: number;
+  summary: string;
+  dominantMoods: string[];
+  keyPrayerThemes: string[];
+  spiritualMovement: string;
+  createdAt: string;
+}
+
+/** Narrative of the entire journey so far (Layer 3) */
+export interface MemoryLayerNarrative {
+  narrative: string;
+  totalDaysCovered: number;
+  lastUpdatedAt: string;
+  version: number;
+}
+
+/** Three-layer memory system for progressive generation */
+export interface ProgressiveMemory {
+  fullDays: MemoryLayerFull[];
+  summaries: MemoryLayerSummary[];
+  narrative: MemoryLayerNarrative | null;
+}
+
+export type DayGenerationStatus = 'pending' | 'generating' | 'ready' | 'failed';
+
+export interface DayGenerationState {
+  dayNumber: number;
+  status: DayGenerationStatus;
+  startedAt?: string;
+  completedAt?: string;
+  error?: string;
+  retryCount: number;
+}
+
+export interface ProgressiveGenerationState {
+  devotionalId: string | null;
+  currentDayGeneration: DayGenerationState | null;
+  lastGenerationTriggeredAt?: string;
+  isArcGenerated: boolean;
+}
+
+// ---------------------------------------------------------------------------
 
 // Cross-series persona tracking for content freshness
 export interface SeriesPersonaRecord {
@@ -417,6 +509,23 @@ interface UnfoldState {
   hasUsedAudio: boolean;
   setHasUsedAudio: () => void;
 
+  // Progressive generation state
+  progressiveGeneration: ProgressiveGenerationState;
+  setProgressiveGeneration: (state: Partial<ProgressiveGenerationState>) => void;
+  clearProgressiveGeneration: () => void;
+
+  // Series arc management
+  setSeriesArc: (devotionalId: string, arc: SeriesArc) => void;
+  extendSeriesArc: (devotionalId: string, newDayHints: SeriesArcDay[], additionalDays: number) => void;
+
+  // Progressive memory management
+  pushFullDayMemory: (devotionalId: string, dayMemory: MemoryLayerFull) => void;
+  addMemorySummary: (devotionalId: string, summary: MemoryLayerSummary) => void;
+  setNarrativeMemory: (devotionalId: string, narrative: MemoryLayerNarrative) => void;
+
+  // Single-day addition (appends to devotional.days)
+  addGeneratedDay: (devotionalId: string, day: DevotionalDay) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -459,6 +568,12 @@ const initialState = {
   hasSeenFeatureOnboarding: false,
   dismissedMiddayCardDate: null as string | null,
   dismissedEveningCardDate: null as string | null,
+  // Progressive generation
+  progressiveGeneration: {
+    devotionalId: null,
+    currentDayGeneration: null,
+    isArcGenerated: false,
+  } as ProgressiveGenerationState,
   // Premium nudge system
   ...NUDGE_INITIAL_STATE,
   streakJustReset: false,
@@ -969,6 +1084,92 @@ export const useUnfoldStore = create<UnfoldState>()(
       clearJustCompletedSeriesTitle: () => set({ justCompletedSeriesTitle: null }),
       setHasUsedAudio: () => set({ hasUsedAudio: true }),
 
+      // Progressive generation state
+      setProgressiveGeneration: (updates) =>
+        set((state) => ({
+          progressiveGeneration: { ...state.progressiveGeneration, ...updates },
+        })),
+      clearProgressiveGeneration: () =>
+        set({
+          progressiveGeneration: {
+            devotionalId: null,
+            currentDayGeneration: null,
+            isArcGenerated: false,
+          },
+        }),
+
+      // Series arc management
+      setSeriesArc: (devotionalId, arc) =>
+        set((state) => ({
+          devotionals: state.devotionals.map((d) =>
+            d.id === devotionalId ? { ...d, seriesArc: arc, title: arc.overarchingTheme ? d.title : d.title } : d
+          ),
+        })),
+
+      extendSeriesArc: (devotionalId, newDayHints, _additionalDays) =>
+        set((state) => ({
+          devotionals: state.devotionals.map((d) => {
+            if (d.id !== devotionalId || !d.seriesArc) return d;
+            // Use actual hint count, not the requested count — LLM may return fewer/more
+            const actualAdded = newDayHints.length;
+            return {
+              ...d,
+              totalDays: d.totalDays + actualAdded,
+              seriesArc: {
+                ...d.seriesArc,
+                totalDaysPlanned: d.seriesArc.totalDaysPlanned + actualAdded,
+                dayHints: [...d.seriesArc.dayHints, ...newDayHints],
+                isOpenEnded: true,
+                lastExtendedAt: new Date().toISOString(),
+              },
+            };
+          }),
+        })),
+
+      // Progressive memory management
+      pushFullDayMemory: (devotionalId, dayMemory) =>
+        set((state) => ({
+          devotionals: state.devotionals.map((d) => {
+            if (d.id !== devotionalId) return d;
+            const memory = d.progressiveMemory ?? { fullDays: [], summaries: [], narrative: null };
+            // FIFO: keep only last 3 full-day records
+            const updatedFull = [dayMemory, ...memory.fullDays].slice(0, 3);
+            return { ...d, progressiveMemory: { ...memory, fullDays: updatedFull } };
+          }),
+        })),
+
+      addMemorySummary: (devotionalId, summary) =>
+        set((state) => ({
+          devotionals: state.devotionals.map((d) => {
+            if (d.id !== devotionalId) return d;
+            const memory = d.progressiveMemory ?? { fullDays: [], summaries: [], narrative: null };
+            // Cap at 10 summaries (~30 days of coverage)
+            const updatedSummaries = [summary, ...memory.summaries].slice(0, 10);
+            return { ...d, progressiveMemory: { ...memory, summaries: updatedSummaries } };
+          }),
+        })),
+
+      setNarrativeMemory: (devotionalId, narrative) =>
+        set((state) => ({
+          devotionals: state.devotionals.map((d) => {
+            if (d.id !== devotionalId) return d;
+            const memory = d.progressiveMemory ?? { fullDays: [], summaries: [], narrative: null };
+            return { ...d, progressiveMemory: { ...memory, narrative } };
+          }),
+        })),
+
+      // Single-day addition for progressive generation
+      addGeneratedDay: (devotionalId, day) =>
+        set((state) => ({
+          devotionals: state.devotionals.map((d) => {
+            if (d.id !== devotionalId) return d;
+            // Don't duplicate if day already exists
+            if (d.days.some((existing) => existing.dayNumber === day.dayNumber)) return d;
+            const updatedDays = [...d.days, day].sort((a, b) => a.dayNumber - b.dayNumber);
+            return { ...d, days: updatedDays };
+          }),
+        })),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -980,7 +1181,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 15, // Increment when state structure changes
+      version: 16, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1105,6 +1306,23 @@ export const useUnfoldStore = create<UnfoldState>()(
             ...state,
             companionName: null,
             recentCompanionCheckIns: [],
+          } as UnfoldState;
+        }
+
+        // Migration from version 15 to 16: Add progressive generation
+        if (version < 16) {
+          const devos = (state as any).devotionals ?? [];
+          for (const d of devos) {
+            if (!d.generationMode) d.generationMode = 'batch';
+          }
+          return {
+            ...state,
+            devotionals: devos,
+            progressiveGeneration: {
+              devotionalId: null,
+              currentDayGeneration: null,
+              isArcGenerated: false,
+            },
           } as UnfoldState;
         }
 

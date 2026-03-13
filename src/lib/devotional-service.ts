@@ -71,7 +71,7 @@ interface BackendPostResult {
   attempts: number;
 }
 
-async function postJsonWithBackendFallback(
+export async function postJsonWithBackendFallback(
   path: string,
   payload: Record<string, unknown>,
   options: BackendPostOptions = {}
@@ -340,7 +340,7 @@ export function extractScripturesFromDevotional(devotional: Devotional): UsedScr
   return scriptures;
 }
 
-interface GenerationContext {
+export interface GenerationContext {
   name: string;
   aboutMe: string;
   currentSituation: string;
@@ -522,7 +522,7 @@ function buildVarietySchedule(
 }
 
 // Build a lightweight v2 voice overlay for the system prompt
-function buildV2VoiceOverlay(
+export function buildV2VoiceOverlay(
   primary: PersonaTrait,
   secondary: PersonaTrait
 ): string {
@@ -632,7 +632,7 @@ STYLE:
 IMPORTANT: Respond with valid JSON only. No markdown, no code blocks.`;
 
 // Get system prompt based on retry level
-function getSystemPrompt(retryLevel: number): string {
+export function getSystemPrompt(retryLevel: number): string {
   if (retryLevel === 0) return SYSTEM_PROMPT_FULL;
   if (retryLevel === 1) return SYSTEM_PROMPT_SOFT;
   return SYSTEM_PROMPT_MINIMAL;
@@ -668,7 +668,7 @@ ${persona.systemPrompt}`;
 }
 
 // Add Peter Enns-inspired conversational depth to all voices
-const PETER_ENNS_ADDITION = `
+export const PETER_ENNS_ADDITION = `
 
 CONVERSATIONAL DEPTH (Peter Enns-inspired):
 - Write like you're talking to a friend who can handle complexity
@@ -679,7 +679,7 @@ CONVERSATIONAL DEPTH (Peter Enns-inspired):
 - Example sticky sentences: "God isn't looking for believers. He's looking for partners." / "The Bible isn't a book of answers. It's a record of people asking better questions."`;
 
 // Sticky sentence instruction for shareable moments - use when the devotional calls for it
-const STICKY_SENTENCE_INSTRUCTION = `
+export const STICKY_SENTENCE_INSTRUCTION = `
 
 STICKY SENTENCES (Use When Natural):
 When a devotional naturally calls for a hard-hitting, memorable truth, include ONE standalone sentence as its own paragraph. This should feel earned, not forced.
@@ -1132,7 +1132,7 @@ IMPORTANT: The "days" array should contain exactly ${daysToGenerate} days, numbe
 }
 
 // Resolve persona traits for the generation — combines user prefs + freshness engine
-function resolvePersonaForGeneration(context: GenerationContext): {
+export function resolvePersonaForGeneration(context: GenerationContext): {
   primary: PersonaTrait;
   secondary: PersonaTrait;
   templateSeed: number;
@@ -1795,6 +1795,7 @@ export function createDevotionalFromGenerated(
     themeCategory: context.themeCategory,
     devotionalType: context.devotionalType || 'personal',
     studySubject: context.studySubject,
+    generationMode: 'batch',
   };
 }
 
