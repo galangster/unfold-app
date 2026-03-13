@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -149,15 +149,15 @@ export default function HowItWorksScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={goToPrevious} disabled={currentSlide === 0} style={{ opacity: currentSlide === 0 ? 0 : 1 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={goToPrevious} disabled={currentSlide === 0} style={{ opacity: currentSlide === 0 ? 0 : 1 }}>
             <Text style={[styles.backText, { color: colors.textMuted }]}>
               Back
             </Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable onPress={handleSkip}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleSkip}>
             <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip</Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {/* Content — wraps in animated dissolve layer */}
@@ -199,15 +199,12 @@ export default function HowItWorksScreen() {
           </View>
 
           {/* Continue button */}
-          <Pressable onPress={goToNext} style={styles.continueButton}>
-            {({ pressed }) => (
+          <TouchableOpacity activeOpacity={0.7} onPress={goToNext} style={styles.continueButton}>
               <View
                 style={[
                   styles.buttonInner,
                   {
                     backgroundColor: colors.accent,
-                    opacity: pressed ? 0.9 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
                   },
                 ]}
               >
@@ -215,8 +212,7 @@ export default function HowItWorksScreen() {
                   {isLastSlide ? 'Get Started' : 'Continue'}
                 </Text>
               </View>
-            )}
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </View>

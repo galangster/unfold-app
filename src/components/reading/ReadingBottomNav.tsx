@@ -1,4 +1,4 @@
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { CaretLeftIcon, CaretRightIcon, CaretDownIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -86,7 +86,7 @@ export function ReadingBottomNav({
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Previous */}
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={onPrevious}
             disabled={!canGoBack}
             style={{
@@ -95,12 +95,12 @@ export function ReadingBottomNav({
             }}
           >
             <CaretLeftIcon size={28} color={colors.text} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
 
           {/* Center actions */}
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {/* Share button */}
-            <Pressable onPress={onShare} style={{ marginRight: 8 }}>
+            <TouchableOpacity activeOpacity={0.7} onPress={onShare} style={{ marginRight: 8 }}>
               <View
                 style={{
                   backgroundColor: colors.buttonBackground,
@@ -121,10 +121,10 @@ export function ReadingBottomNav({
                   Share
                 </Text>
               </View>
-            </Pressable>
+            </TouchableOpacity>
 
             {/* Journal button */}
-            <Pressable onPress={onJournal} style={{ marginLeft: 8 }}>
+            <TouchableOpacity activeOpacity={0.7} onPress={onJournal} style={{ marginLeft: 8 }}>
               <View
                 style={{
                   backgroundColor: colors.buttonBackground,
@@ -145,11 +145,11 @@ export function ReadingBottomNav({
                   Journal
                 </Text>
               </View>
-            </Pressable>
+            </TouchableOpacity>
           </View>
 
           {/* Next */}
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={onNext}
             disabled={!canGoForward}
             style={{
@@ -158,7 +158,7 @@ export function ReadingBottomNav({
             }}
           >
             <CaretRightIcon size={28} color={colors.text} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </View>

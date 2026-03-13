@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -387,7 +387,7 @@ export default function SignInScreen() {
                 onPress={handleAppleSignIn}
               />
             ) : (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleAppleSignIn}
                 disabled={isLoading}
                 style={[
@@ -401,12 +401,12 @@ export default function SignInScreen() {
                 <Text style={[styles.fallbackButtonText, { color: colors.background, fontFamily: FontFamily.uiSemiBold }]}>
                   {isLoading ? 'Signing in...' : 'Sign in with Apple'}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             )}
           </Animated.View>
 
           <Animated.View style={skipStyle}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleContinueAnonymous}
               disabled={isLoading}
               style={[
@@ -417,7 +417,7 @@ export default function SignInScreen() {
               <Text style={[styles.skipText, { color: colors.textSubtle, fontFamily: FontFamily.ui }]}>
                 Continue without signing in
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
         </View>
 

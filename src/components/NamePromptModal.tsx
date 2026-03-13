@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   TextInput,
   Modal,
   StyleSheet,
@@ -103,7 +103,7 @@ export function NamePromptModal({ visible, onComplete }: NamePromptModalProps) {
             ]}
           />
 
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleSubmit}
             disabled={!name.trim() || isSubmitting}
             style={{
@@ -118,13 +118,13 @@ export function NamePromptModal({ visible, onComplete }: NamePromptModalProps) {
             <Text style={{ color: colors.background, fontFamily: FontFamily.uiSemiBold, fontSize: 16 }}>
               {isSubmitting ? 'Saving...' : 'Continue'}
             </Text>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable onPress={handleSkip} style={{ marginTop: 16, padding: 8 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleSkip} style={{ marginTop: 16, padding: 8 }}>
             <Text style={{ color: colors.textSubtle, fontFamily: FontFamily.ui, fontSize: 14 }}>
               Skip for now
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
       </View>
     </Modal>

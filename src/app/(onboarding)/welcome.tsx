@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, Pressable, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -242,7 +242,7 @@ export default function WelcomeScreen() {
 
           {/* CTA Button */}
           <Animated.View style={buttonStyle}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleGetStarted}
               style={{
                 backgroundColor: colors.accent,
@@ -265,9 +265,9 @@ export default function WelcomeScreen() {
               >
                 Get Started
               </Text>
-            </Pressable>
+            </TouchableOpacity>
 
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => router.push('/(tabs)/(today)')}
               style={{ marginTop: 20, padding: 8 }}
             >
@@ -280,7 +280,7 @@ export default function WelcomeScreen() {
               >
                 I already have an account
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       </SafeAreaView>

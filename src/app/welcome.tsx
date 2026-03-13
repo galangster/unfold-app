@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
   Animated,
   Dimensions,
@@ -158,7 +158,7 @@ export default function WelcomeScreen() {
                   { transform: [{ scale: buttonScale1 }] },
                 ]}
               >
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   style={styles.quickStartButton}
                   onPress={handleQuickStart}
 
@@ -190,7 +190,7 @@ export default function WelcomeScreen() {
                       Begin in 30 seconds
                     </Text>
                   </LinearGradient>
-                </Pressable>
+                </TouchableOpacity>
               </Animated.View>
 
               {/* Personalize - Secondary */}
@@ -200,7 +200,7 @@ export default function WelcomeScreen() {
                   { transform: [{ scale: buttonScale2 }] },
                 ]}
               >
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   style={[
                     styles.personalizeButton,
                     {
@@ -233,7 +233,7 @@ export default function WelcomeScreen() {
                   <Text style={[styles.personalizeSubtitle, { color: colors.textSubtle, fontFamily: FontFamily.body }]}>
                     2 minutes for a tailored experience
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </Animated.View>
             </View>
 
@@ -242,11 +242,11 @@ export default function WelcomeScreen() {
               <Text style={[styles.footerText, { color: colors.textMuted, fontFamily: FontFamily.body }]}>
                 Already have an account?
               </Text>
-              <Pressable onPress={handleSignIn}>
+              <TouchableOpacity activeOpacity={0.7} onPress={handleSignIn}>
                 <Text style={[styles.signInText, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
                   Sign In
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </Animated.View>
         </SafeAreaView>

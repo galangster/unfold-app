@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Pressable, View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import {
   Canvas,
   Path,
@@ -233,7 +233,7 @@ export function CompanionOrb({
 
   return (
     <View style={{ width: size, height: size, overflow: 'visible' }}>
-      <Pressable
+      <TouchableOpacity activeOpacity={0.7}
         onPress={handlePress}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         accessibilityRole="button"
@@ -299,7 +299,7 @@ export function CompanionOrb({
             </Group>
           </Canvas>
         </Animated.View>
-      </Pressable>
+      </TouchableOpacity>
 
       {/* Badge dot */}
       {showBadge && (

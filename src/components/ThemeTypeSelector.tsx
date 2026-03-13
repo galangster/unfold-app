@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInUp,
@@ -201,7 +201,7 @@ export function ThemeTypeSelector({
               key={theme.id}
               entering={FadeInUp.duration(300).delay(index * 40)}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => handleThemeSelect(theme.id)}
                 style={{
                   backgroundColor: isSelected
@@ -268,12 +268,12 @@ export function ThemeTypeSelector({
                     }}
                   />
                 )}
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           );
         })}
 
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleSkipTheme}
           style={{
             paddingVertical: 16,
@@ -290,7 +290,7 @@ export function ThemeTypeSelector({
           >
             Skip – let us choose based on your story
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </ScrollView>
     );
   }
@@ -303,7 +303,7 @@ export function ThemeTypeSelector({
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {selectedTheme && (
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleBack}
             style={{
               flexDirection: 'row',
@@ -320,7 +320,7 @@ export function ThemeTypeSelector({
             >
               ← Back to themes
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         )}
 
         <Text
@@ -344,7 +344,7 @@ export function ThemeTypeSelector({
               key={type.id}
               entering={FadeInUp.duration(300).delay(index * 40)}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => handleTypeSelect(type.id)}
                 style={{
                   backgroundColor: isSelected
@@ -405,7 +405,7 @@ export function ThemeTypeSelector({
                   color={isSelected ? colors.text : colors.textSubtle}
                   weight="regular"
                 />
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           );
         })}
@@ -420,7 +420,7 @@ export function ThemeTypeSelector({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleBack}
           style={{
             flexDirection: 'row',
@@ -437,7 +437,7 @@ export function ThemeTypeSelector({
           >
             ← Back to types
           </Text>
-        </Pressable>
+        </TouchableOpacity>
 
         <Text
           style={{
@@ -461,7 +461,7 @@ export function ThemeTypeSelector({
               key={subject.name}
               entering={FadeInUp.duration(300).delay(index * 30)}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => handleSubjectSelect(subject.name)}
                 style={{
                   backgroundColor: isSelected
@@ -495,7 +495,7 @@ export function ThemeTypeSelector({
                 >
                   {subject.description}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           );
         })}

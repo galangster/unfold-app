@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -65,9 +65,9 @@ export default function MyContentScreen() {
           paddingVertical: 12,
         }}
       >
-        <Pressable onPress={handleBack} style={{ padding: 8 }}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }}>
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
-        </Pressable>
+        </TouchableOpacity>
         <View style={{ marginLeft: 12 }}>
           <Text
             style={{
@@ -94,7 +94,7 @@ export default function MyContentScreen() {
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               key={tab.id}
               onPress={() => handleTabPress(tab.id)}
               style={{
@@ -145,7 +145,7 @@ export default function MyContentScreen() {
                   </Text>
                 </View>
               </View>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -194,7 +194,7 @@ export default function MyContentScreen() {
                 </Text>
                 
                 {/* Start Your First Entry CTA */}
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     // Navigate to the current reading day to open journal
@@ -231,13 +231,13 @@ export default function MyContentScreen() {
                   >
                     Start your first entry
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
             ) : (
               journalEntries.map((entry, index) => {
                 const devotional = devotionals.find(d => d.id === entry.devotionalId);
                 return (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     key={entry.id}
                     onPress={() => router.push({
                       pathname: '/(tabs)/(today)/journal-detail',
@@ -271,7 +271,7 @@ export default function MyContentScreen() {
                     >
                       {entry.content}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -290,7 +290,7 @@ export default function MyContentScreen() {
               highlights.map((highlight) => {
                 const devotional = devotionals.find(d => d.id === highlight.devotionalId);
                 return (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     key={highlight.id}
                     onPress={() => router.push({
                       pathname: '/(tabs)/(today)/reading',
@@ -333,7 +333,7 @@ export default function MyContentScreen() {
                         {devotional?.title} · Day {highlight.dayNumber}
                       </Text>
                     </View>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -353,7 +353,7 @@ export default function MyContentScreen() {
                 const devotional = devotionals.find(d => d.id === bookmark.devotionalId);
                 const day = devotional?.days.find(d => d.dayNumber === bookmark.dayNumber);
                 return (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     key={bookmark.id}
                     onPress={() => router.push({
                       pathname: '/(tabs)/(today)/reading',
@@ -401,7 +401,7 @@ export default function MyContentScreen() {
                     >
                       "{day?.scriptureText}"
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })
             )}

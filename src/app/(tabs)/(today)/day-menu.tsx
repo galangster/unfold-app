@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -87,7 +87,7 @@ export default function DayMenuScreen() {
               key={day.dayNumber}
               entering={FadeInDown.duration(350).delay(Math.min(index * 40, 400))}
             >
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleSelectDay(day.dayNumber)}
               onPressIn={() => setPressedDay(day.dayNumber)}
               onPressOut={() => setPressedDay(null)}
@@ -169,7 +169,7 @@ export default function DayMenuScreen() {
                   }}
                 />
               )}
-            </Pressable>
+            </TouchableOpacity>
             </Animated.View>
           );
         })}

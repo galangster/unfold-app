@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -95,24 +95,20 @@ export default function WelcomeCelebrationScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.duration(500).delay(600)} style={{ width: '100%', marginTop: 32 }}>
-            <Pressable onPress={handleContinue}>
-              {({ pressed }) => (
+            <TouchableOpacity activeOpacity={0.7} onPress={handleContinue}>
                 <View
                   style={{
                     backgroundColor: colors.accent,
                     paddingVertical: 18,
                     borderRadius: 12,
                     alignItems: 'center',
-                    opacity: pressed ? 0.9 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
                   }}
                 >
                   <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#FFFFFF' }}>
                     Begin Your Journey
                   </Text>
                 </View>
-              )}
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       </SafeAreaView>

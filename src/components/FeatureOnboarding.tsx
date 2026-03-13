@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, FadeInUp } from 'react-native-reanimated';
@@ -115,12 +115,11 @@ export function FeatureOnboarding() {
       {/* Skip button — top right, hidden on last slide */}
       {!isLastSlide && (
         <View style={styles.skipContainer}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={dismiss}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Skip feature tour"
-            style={{ opacity: 1 }}
           >
             <Text
               style={{
@@ -131,7 +130,7 @@ export function FeatureOnboarding() {
             >
               Skip
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -201,11 +200,10 @@ export function FeatureOnboarding() {
         </View>
 
         {/* Action button */}
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleNext}
           accessibilityRole="button"
           accessibilityLabel={isLastSlide ? 'Get Started' : 'Next feature'}
-          style={{ opacity: 1 }}
         >
           <View
             style={[styles.button, { backgroundColor: colors.accent }]}
@@ -221,7 +219,7 @@ export function FeatureOnboarding() {
               {isLastSlide ? 'Get Started' : 'Next'}
             </Text>
           </View>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );

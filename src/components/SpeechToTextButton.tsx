@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -229,7 +229,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
           />
         )}
 
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           disabled={!isActive}
@@ -248,7 +248,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
               weight="light"
             />
           </View>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </View>
   );

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, useWindowDimensions, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -120,7 +120,7 @@ export function HomeOnboardingTooltips() {
       pointerEvents="box-none"
     >
       {/* Semi-transparent backdrop -- tap to dismiss */}
-      <Pressable
+      <TouchableOpacity activeOpacity={0.7}
         style={styles.backdrop}
         onPress={handleOverlayPress}
         accessibilityRole="button"
@@ -223,7 +223,7 @@ export function HomeOnboardingTooltips() {
         </View>
 
         {/* Action button */}
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleNext}
           accessibilityRole="button"
           accessibilityLabel={isLastStep ? 'Got it' : 'Next tooltip'}
@@ -253,11 +253,11 @@ export function HomeOnboardingTooltips() {
               {isLastStep ? 'Got it' : 'Next'}
             </Text>
           </View>
-        </Pressable>
+        </TouchableOpacity>
 
         {/* Skip hint */}
         {!isLastStep && (
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={dismiss}
             accessibilityRole="button"
             accessibilityLabel="Skip all tooltips"
@@ -272,7 +272,7 @@ export function HomeOnboardingTooltips() {
             >
               Skip
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         )}
       </Animated.View>
 

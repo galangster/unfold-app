@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, forwardRef, useMemo } 
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
@@ -98,7 +98,7 @@ function SpeedPicker({
   return (
     <>
       {/* Backdrop to dismiss */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onClose} />
       <Animated.View
         entering={FadeIn.duration(150)}
         exiting={FadeOut.duration(100)}
@@ -117,7 +117,7 @@ function SpeedPicker({
         {PLAYBACK_SPEEDS.map((speed) => {
           const isActive = speed === currentSpeed;
           return (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               key={speed}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -146,7 +146,7 @@ function SpeedPicker({
               {isActive && (
                 <CheckIcon size={14} color={colors.accent} weight="bold" />
               )}
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </Animated.View>
@@ -673,7 +673,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                     {errorMessage}
                   </Text>
                   {isPremium && (
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={handleRetry}
                       style={[styles.retryButton, { backgroundColor: colors.accent }]}
                     >
@@ -686,7 +686,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       >
                         Try again
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   )}
                 </View>
               ) : (
@@ -720,7 +720,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       </Text>
                     </View>
                     {/* Listen Along sparkle — animated pulse */}
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setShowKaraoke(true);
@@ -730,9 +730,9 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       <Animated.View style={sparkleAnimStyle}>
                         <SparkleIcon size={20} color={colors.accent} weight="fill" />
                       </Animated.View>
-                    </Pressable>
+                    </TouchableOpacity>
                     {/* Speed button — opens picker */}
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={() => setShowSpeedPicker((v) => !v)}
                       style={[
                         styles.speedButton,
@@ -754,7 +754,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       >
                         {currentSpeed === 1 ? '1x' : `${currentSpeed}x`}
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Progress bar — draggable */}
@@ -832,7 +832,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                   {/* Transport controls */}
                   <View style={styles.transportControls}>
                     <Animated.View style={skipBackAnimStyle}>
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         onPress={skipBack}
                         onPressIn={() => {
                           skipBackScale.value = withSpring(0.85, { damping: 15, stiffness: 400 });
@@ -864,11 +864,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                         >
                           {SKIP_SECONDS}
                         </Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     </Animated.View>
 
                     <Animated.View style={playButtonAnimStyle}>
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         onPress={togglePlayback}
                         onPressIn={() => {
                           playButtonScale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
@@ -895,11 +895,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                             style={{ marginLeft: -2 }}
                           />
                         )}
-                      </Pressable>
+                      </TouchableOpacity>
                     </Animated.View>
 
                     <Animated.View style={skipForwardAnimStyle}>
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         onPress={skipForward}
                         onPressIn={() => {
                           skipForwardScale.value = withSpring(0.85, { damping: 15, stiffness: 400 });
@@ -931,7 +931,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                         >
                           {SKIP_SECONDS}
                         </Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     </Animated.View>
                   </View>
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
@@ -67,7 +67,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
 
   if (streak === 0) {
     return (
-      <Pressable onPress={handlePress}>
+      <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
         <Animated.View
           entering={FadeIn}
           style={{
@@ -91,12 +91,12 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             Start streak
           </Text>
         </Animated.View>
-      </Pressable>
+      </TouchableOpacity>
     );
   }
 
   return (
-    <Pressable onPress={handlePress}>
+    <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
       <Animated.View
         entering={FadeInUp}
         style={{
@@ -170,6 +170,6 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
         </View>
       )}
       </Animated.View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }

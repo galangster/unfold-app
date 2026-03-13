@@ -4,7 +4,7 @@
  * Then open: http://localhost:8081/showcase
  */
 import React, { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -72,7 +72,7 @@ function ShowcaseContent() {
         {/* Sparkle Burst */}
         {renderSection('Sparkle Burst Animation', (
           <View style={styles.centerContent}>
-            <Pressable 
+            <TouchableOpacity activeOpacity={0.7} 
               style={[styles.triggerButton, { backgroundColor: colors.accent }]}
               onPress={() => setSparkleTrigger(Date.now())}
 
@@ -80,7 +80,7 @@ function ShowcaseContent() {
               <Text style={[styles.triggerText, { fontFamily: FontFamily.uiSemiBold }]}>
                 ✨ Trigger Sparkle
               </Text>
-            </Pressable>
+            </TouchableOpacity>
             <View style={styles.sparkleContainer}>
               <SparkleBurst trigger={sparkleTrigger > 0} />
             </View>
@@ -90,7 +90,7 @@ function ShowcaseContent() {
         {/* Audio Waveform */}
         {renderSection('Audio Waveform', (
           <View style={styles.centerContent}>
-            <Pressable 
+            <TouchableOpacity activeOpacity={0.7} 
               style={[styles.triggerButton, { 
                 backgroundColor: isPlaying ? colors.error : colors.success 
               }]}
@@ -103,7 +103,7 @@ function ShowcaseContent() {
               <Text style={[styles.triggerText, { fontFamily: FontFamily.uiSemiBold }]}>
                 {isPlaying ? '⏹ Stop' : '▶ Play'} Waveform
               </Text>
-            </Pressable>
+            </TouchableOpacity>
             <View style={{ height: 24 }} />
             <AudioWaveform 
               isPlaying={isPlaying}

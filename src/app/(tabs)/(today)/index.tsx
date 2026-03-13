@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -249,9 +249,8 @@ function NotificationCard({
     >
       <GestureDetector gesture={swipeGesture}>
         <Animated.View style={cardAnimStyle}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={onPress}
-            style={{ opacity: 1 }}
           >
             <View
               style={{
@@ -293,7 +292,7 @@ function NotificationCard({
               <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={{ marginLeft: 8 }} />
 
               {/* Dismiss X */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   onDismiss();
@@ -302,9 +301,9 @@ function NotificationCard({
                 style={{ padding: 4, marginLeft: 4 }}
               >
                 <XIcon size={14} color={colors.textSubtle} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
       </GestureDetector>
     </Animated.View>
@@ -723,11 +722,10 @@ export default function HomeScreen() {
             </Animated.Text>
 
             <Animated.View entering={FadeIn.duration(600).delay(titleEndTime + 400)}>
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleCreateNew}
                 accessibilityRole="button"
                 accessibilityLabel="Begin your devotional journey"
-                style={{ opacity: 1 }}
               >
                 <View
                   style={{
@@ -752,7 +750,7 @@ export default function HomeScreen() {
                     Begin Your Journey
                   </Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           </View>
         </SafeAreaView>
@@ -862,11 +860,10 @@ export default function HomeScreen() {
               entering={FadeInDown.duration(520).delay(80)}
               style={{ paddingHorizontal: 24, marginTop: 16 }}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleResume}
                 accessibilityRole="button"
                 accessibilityLabel={`Resume ${resumeDevotional.title} day ${resumeContext.dayNumber}`}
-                style={{ opacity: 1 }}
               >
                 <View
                   style={{
@@ -917,7 +914,7 @@ export default function HomeScreen() {
                     {formatResumeRelativeTime(resumeContext.touchedAt)}
                   </Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           )}
 
@@ -927,7 +924,7 @@ export default function HomeScreen() {
             style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
           >
             {isJourneyComplete ? (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleCreateNew}
                 onPressIn={() => {
                   journeyCardScale.value = withTiming(0.98, { duration: 120 });
@@ -1014,9 +1011,9 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             ) : (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleContinueReading}
                 onPressIn={() => {
                   journeyCardScale.value = withTiming(0.98, { duration: 120 });
@@ -1175,7 +1172,7 @@ export default function HomeScreen() {
                   </AccentGlow>
 
                   {/* New Journey - Secondary Action */}
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={handleCreateNew}
                     accessibilityRole="button"
                     accessibilityLabel="Start a new journey"
@@ -1204,9 +1201,9 @@ export default function HomeScreen() {
                         New Journey
                       </Text>
                     </View>
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             )}
           </Animated.View>
 
@@ -1253,7 +1250,7 @@ export default function HomeScreen() {
                 </Text>
 
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('love')}
                     style={{
                       flex: 1,
@@ -1271,9 +1268,9 @@ export default function HomeScreen() {
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                       Love it
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
 
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('okay')}
                     style={{
                       flex: 1,
@@ -1291,9 +1288,9 @@ export default function HomeScreen() {
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                       It's okay
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
 
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('not-for-me')}
                     style={{
                       flex: 1,
@@ -1311,7 +1308,7 @@ export default function HomeScreen() {
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                       Not for me
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
               </View>
             </Animated.View>

@@ -2,12 +2,11 @@ import { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   Dimensions,
   FlatList,
   Alert,
 } from 'react-native';
-import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -336,7 +335,7 @@ export default function WallpaperScreen() {
                 const isLocked = style.premium && !isPremium;
                 const isActive = selectedStyle === style.id;
                 return (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleSelectStyle(style)}
                     style={{ alignItems: 'center', marginRight: 12 }}
                   >
@@ -384,7 +383,7 @@ export default function WallpaperScreen() {
                     >
                       {style.name}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               }}
               keyExtractor={(item) => item.id}
@@ -442,7 +441,7 @@ export default function WallpaperScreen() {
             >
               Unlock all {wallpaperStyles.filter((s) => s.premium).length} premium styles
             </Text>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowPremiumSheet(true);
@@ -467,7 +466,7 @@ export default function WallpaperScreen() {
               >
                 Upgrade to Premium
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
         )}
 
@@ -482,7 +481,7 @@ export default function WallpaperScreen() {
             gap: 16,
           }}
         >
-          <Pressable onPress={handleSave} disabled={saving} style={{ opacity: saving && !saved ? 0.5 : 1 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleSave} disabled={saving} style={{ opacity: saving && !saved ? 0.5 : 1 }}>
             <View
               style={{
                 backgroundColor: saved ? colors.text : colors.buttonBackground,
@@ -503,9 +502,9 @@ export default function WallpaperScreen() {
                 {saved ? 'Saved!' : 'Save'}
               </Text>
             </View>
-          </Pressable>
+          </TouchableOpacity>
 
-          <Pressable onPress={handleShare} disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleShare} disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
             <View
               style={{
                 backgroundColor: colors.buttonBackground,
@@ -526,7 +525,7 @@ export default function WallpaperScreen() {
                 Share
               </Text>
             </View>
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
 

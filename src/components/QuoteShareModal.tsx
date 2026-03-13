@@ -3,7 +3,7 @@ import {
   View,
   Text,
   Modal,
-  Pressable,
+  TouchableOpacity,
   Dimensions,
   ActivityIndicator,
   Alert,
@@ -114,7 +114,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
         }}
       >
         {/* Close button */}
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={onClose}
           style={{
             position: 'absolute',
@@ -124,7 +124,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
           }}
         >
           <XIcon size={28} color="#FFFFFF" weight="light" />
-        </Pressable>
+        </TouchableOpacity>
         
         {/* Wallpaper Preview */}
         <ViewShot
@@ -208,7 +208,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
             marginTop: 32,
           }}
         >
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleSave}
             disabled={isGenerating}
             style={{
@@ -238,9 +238,9 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
                 </Text>
               </>
             )}
-          </Pressable>
+          </TouchableOpacity>
           
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleShare}
             disabled={isGenerating}
             style={{
@@ -265,7 +265,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
             >
               Share
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

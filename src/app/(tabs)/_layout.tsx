@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
-import { StyleSheet, Platform, View, Pressable, Text } from 'react-native';
+import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
 import { HouseIcon, BookOpenIcon, UserIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
@@ -188,7 +188,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           };
 
           return (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               key={route.key}
               onPress={onPress}
               onLongPress={onLongPress}
@@ -220,7 +220,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               >
                 {label}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>

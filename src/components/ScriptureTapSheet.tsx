@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import Animated, { FadeIn, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -109,7 +109,7 @@ export function ScriptureTapSheet({
       onRequestClose={onClose}
     >
       {/* Backdrop */}
-      <Pressable
+      <TouchableOpacity activeOpacity={0.7}
         onPress={onClose}
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
       >
@@ -129,7 +129,7 @@ export function ScriptureTapSheet({
             paddingBottom: 100,
           }}
         >
-          <Pressable onPress={(e) => e.stopPropagation()}>
+          <TouchableOpacity activeOpacity={0.7} onPress={(e) => e.stopPropagation()}>
             {/* Grab handle */}
             <View style={{ alignItems: 'center', paddingVertical: 12 }}>
               <View
@@ -163,13 +163,13 @@ export function ScriptureTapSheet({
                 {reference}
               </Text>
 
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={onClose}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={{ opacity: 1, padding: 4 }}
+                style={{ padding: 4 }}
               >
                 <XIcon size={20} color={colors.textSubtle} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             {/* Content */}
@@ -283,7 +283,7 @@ export function ScriptureTapSheet({
 
                   {/* Action buttons */}
                   <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={handleCopy}
                       style={{
                         flex: 1,
@@ -313,10 +313,10 @@ export function ScriptureTapSheet({
                       >
                         {copied ? 'Copied' : 'Copy'}
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
 
                     {devotionalId && dayNumber && !alreadyBookmarked && (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         onPress={handleBookmark}
                         style={{
                           flex: 1,
@@ -346,7 +346,7 @@ export function ScriptureTapSheet({
                         >
                           {saved ? 'Saved' : 'Bookmark'}
                         </Text>
-                      </Pressable>
+                      </TouchableOpacity>
                     )}
                   </View>
                 </>
@@ -364,9 +364,9 @@ export function ScriptureTapSheet({
                 </Text>
               )}
             </ScrollView>
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
-      </Pressable>
+      </TouchableOpacity>
     </Modal>
   );
 }

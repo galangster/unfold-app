@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -43,7 +43,7 @@ export default function MyResponsesScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -52,7 +52,7 @@ export default function MyResponsesScreen() {
             style={{ padding: 8 }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
 
           <Text
             style={{
@@ -113,7 +113,7 @@ export default function MyResponsesScreen() {
                     key={entry.id}
                     entering={FadeInDown.duration(400).delay(index * 100)}
                   >
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={() => handleEntryPress(entry.id)}
                     >
                       <View
@@ -206,7 +206,7 @@ export default function MyResponsesScreen() {
                           </View>
                         )}
                       </View>
-                    </Pressable>
+                    </TouchableOpacity>
                   </Animated.View>
                 );
               })

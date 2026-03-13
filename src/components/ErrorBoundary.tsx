@@ -1,5 +1,5 @@
 import React, { Component, ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { logBugError } from '@/lib/bug-logger';
 import { Colors } from '@/constants/colors';
 import { FontFamily } from '@/constants/fonts';
@@ -64,7 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </Text>
             )}
 
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={this.handleReset}
               onPressIn={() => this.setState({ isButtonPressed: true })}
               onPressOut={() => this.setState({ isButtonPressed: false })}
@@ -74,7 +74,7 @@ export class ErrorBoundary extends Component<Props, State> {
               ]}
             >
               <Text style={styles.buttonText}>Try Again</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       );

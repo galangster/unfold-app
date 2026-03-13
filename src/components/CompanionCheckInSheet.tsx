@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   Modal,
   StyleSheet,
   Dimensions,
@@ -259,7 +259,7 @@ export function CompanionCheckInSheet({
     >
       <View style={styles.modalContainer}>
         {/* Backdrop */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
+        <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={handleClose}>
           <Animated.View
             style={[
               StyleSheet.absoluteFill,
@@ -267,7 +267,7 @@ export function CompanionCheckInSheet({
               backdropStyle,
             ]}
           />
-        </Pressable>
+        </TouchableOpacity>
 
         {/* Sheet */}
         {visible && (
@@ -293,14 +293,14 @@ export function CompanionCheckInSheet({
             {/* Close button */}
             <View style={styles.headerRow}>
               <View style={{ flex: 1 }} />
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleClose}
                 style={styles.closeButton}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
               >
                 <XIcon size={20} color={colors.textMuted} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             {/* Orb at top center */}
@@ -421,7 +421,7 @@ function MoodPill({
   const [isPressed, setIsPressed] = useState(false);
 
   return (
-    <Pressable
+    <TouchableOpacity activeOpacity={0.7}
       onPress={onPress}
       onPressIn={() => setIsPressed(true)}
       onPressOut={() => setIsPressed(false)}
@@ -439,7 +439,6 @@ function MoodPill({
           ? 'rgba(255,255,255,0.22)'
           : 'rgba(0,0,0,0.12)',
       }}
-      android_ripple={{ color: accentColor + '30' }}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
@@ -452,11 +451,11 @@ function MoodPill({
       >
         {label}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
-/** Suggestion pill with static style (avoids Pressable children render function bug) */
+/** Suggestion pill with static style (avoids TouchableOpacity children render function bug) */
 function SuggestionPill({
   label,
   onPress,
@@ -471,7 +470,7 @@ function SuggestionPill({
   const [isPressed, setIsPressed] = useState(false);
 
   return (
-    <Pressable
+    <TouchableOpacity activeOpacity={0.7}
       onPress={onPress}
       onPressIn={() => setIsPressed(true)}
       onPressOut={() => setIsPressed(false)}
@@ -483,7 +482,6 @@ function SuggestionPill({
         backgroundColor: accentColor + '25',
         borderColor: accentColor + '50',
       }}
-      android_ripple={{ color: accentColor + '30' }}
     >
       <Text
         style={{
@@ -494,7 +492,7 @@ function SuggestionPill({
       >
         {label}
       </Text>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 

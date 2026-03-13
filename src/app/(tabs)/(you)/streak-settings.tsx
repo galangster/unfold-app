@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
@@ -169,9 +169,9 @@ export default function StreakSettingsScreen() {
           paddingVertical: 12,
         }}
       >
-        <Pressable onPress={handleBack} style={{ padding: 8 }}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }}>
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
-        </Pressable>
+        </TouchableOpacity>
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
@@ -412,7 +412,7 @@ export default function StreakSettingsScreen() {
         >
           {/* Best Streak */}
           <View style={{ flex: 1 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleStatTap('best')}
               style={{
                 backgroundColor: colors.inputBackground,
@@ -443,7 +443,7 @@ export default function StreakSettingsScreen() {
               >
                 Best Streak
               </Text>
-            </Pressable>
+            </TouchableOpacity>
             {activeTooltip === 'best' && (
               <Animated.View
                 entering={FadeIn.duration(200)}
@@ -473,7 +473,7 @@ export default function StreakSettingsScreen() {
 
           {/* Freezes */}
           <View style={{ flex: 1 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleStatTap('freezes')}
               style={{
                 backgroundColor: colors.inputBackground,
@@ -504,7 +504,7 @@ export default function StreakSettingsScreen() {
               >
                 Freezes
               </Text>
-            </Pressable>
+            </TouchableOpacity>
             {activeTooltip === 'freezes' && (
               <Animated.View
                 entering={FadeIn.duration(200)}
@@ -534,7 +534,7 @@ export default function StreakSettingsScreen() {
 
           {/* Days to Freeze */}
           <View style={{ flex: 1 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleStatTap('toFreeze')}
               style={{
                 backgroundColor: colors.inputBackground,
@@ -565,7 +565,7 @@ export default function StreakSettingsScreen() {
               >
                 Till Freeze
               </Text>
-            </Pressable>
+            </TouchableOpacity>
             {activeTooltip === 'toFreeze' && (
               <Animated.View
                 entering={FadeIn.duration(200)}

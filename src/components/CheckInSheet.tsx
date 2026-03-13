@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   Modal,
   StyleSheet,
   Dimensions,
@@ -134,7 +134,7 @@ function MoodStep({
         {MOOD_OPTIONS.map(({ value, label, Icon }) => {
           const isHovered = hoveredMood === value;
           return (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               key={value}
               onPressIn={() => setHoveredMood(value)}
               onPressOut={() => setHoveredMood(null)}
@@ -171,7 +171,7 @@ function MoodStep({
               >
                 {label}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -236,7 +236,7 @@ function QuestionStep({
         {chips.map((chip) => {
           const isSelected = selectedChip === chip;
           return (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               key={chip}
               onPress={() => handleChipPress(chip)}
               style={[
@@ -269,7 +269,7 @@ function QuestionStep({
               >
                 {chip}
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -296,7 +296,7 @@ function QuestionStep({
             maxLength={200}
             autoCorrect
           />
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleSubmitTyped}
             disabled={typedAnswer.trim().length === 0}
             style={[
@@ -323,10 +323,10 @@ function QuestionStep({
             >
               Done
             </Text>
-          </Pressable>
+          </TouchableOpacity>
         </Animated.View>
       ) : (
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleTypeOwn}
           style={styles.typeOwnButton}
           accessibilityRole="button"
@@ -341,7 +341,7 @@ function QuestionStep({
           >
             Type my own
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       )}
     </Animated.View>
   );
@@ -416,7 +416,7 @@ function NoteStep({
       />
 
       <View style={styles.noteActions}>
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleSkip}
           style={styles.skipButton}
           accessibilityRole="button"
@@ -430,9 +430,9 @@ function NoteStep({
           >
             Skip
           </Text>
-        </Pressable>
+        </TouchableOpacity>
 
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleSubmit}
           disabled={noteText.trim().length === 0}
           style={[
@@ -459,7 +459,7 @@ function NoteStep({
           >
             Done
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </Animated.View>
   );
@@ -656,7 +656,7 @@ export function CheckInSheet({
         style={styles.modalContainer}
       >
         {/* Backdrop */}
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose}>
+        <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={handleClose}>
           <Animated.View
             style={[
               StyleSheet.absoluteFill,
@@ -664,7 +664,7 @@ export function CheckInSheet({
               backdropStyle,
             ]}
           />
-        </Pressable>
+        </TouchableOpacity>
 
         {/* Sheet */}
         {visible && (
@@ -702,14 +702,14 @@ export function CheckInSheet({
                   isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'
                 }
               />
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleClose}
                 style={styles.closeButton}
                 accessibilityRole="button"
                 accessibilityLabel="Close check-in"
               >
                 <XIcon size={20} color={colors.textMuted} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             {/* Step content */}

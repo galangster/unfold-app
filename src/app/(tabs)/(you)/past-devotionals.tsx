@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -106,7 +106,7 @@ export default function PastDevotionalsScreen() {
             {createdDate}
           </Text>
 
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => handleExportPDF(item)}
             disabled={exportingId !== null}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -127,13 +127,12 @@ export default function PastDevotionalsScreen() {
             ) : (
               <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
             )}
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {/* Tappable content area */}
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={() => handleSelectDevotional(item.id)}
-          style={{ opacity: 1 }}
         >
           <Text
             style={{
@@ -174,7 +173,7 @@ export default function PastDevotionalsScreen() {
           >
             Day {item.currentDay} of {item.totalDays}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     );
   }, [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, user?.isPremium]);
@@ -184,7 +183,7 @@ export default function PastDevotionalsScreen() {
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.back();
@@ -193,7 +192,7 @@ export default function PastDevotionalsScreen() {
               style={{ padding: 8 }}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </Pressable>
+            </TouchableOpacity>
 
             <Text
               style={{
@@ -233,7 +232,7 @@ export default function PastDevotionalsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -242,7 +241,7 @@ export default function PastDevotionalsScreen() {
             style={{ padding: 8 }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
 
           <Text
             style={{

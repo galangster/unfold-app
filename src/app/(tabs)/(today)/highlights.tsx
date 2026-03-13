@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -75,9 +75,9 @@ export default function HighlightsScreen() {
           paddingVertical: 12,
         }}
       >
-        <Pressable onPress={handleBack} style={{ padding: 8 }}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }}>
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
-        </Pressable>
+        </TouchableOpacity>
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
@@ -136,7 +136,7 @@ export default function HighlightsScreen() {
 
               {/* Highlights List */}
               {devHighlights.map((highlight) => (
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   key={highlight.id}
                   onPress={() => handleHighlightPress(highlight)}
                   style={{
@@ -192,7 +192,7 @@ export default function HighlightsScreen() {
                       "{highlight.highlightedText}"
                     </Text>
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               ))}
             </Animated.View>
           ))}

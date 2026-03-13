@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
+  TouchableOpacity,
   ActivityIndicator,
   Keyboard,
   LayoutAnimation,
@@ -150,7 +150,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
 
           {/* Submit button */}
           <View style={{ marginTop: 24, alignItems: 'flex-end' }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleSubmit}
               disabled={!answer.trim() || isLoading}
               style={{
@@ -177,7 +177,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
                   </Text>
                 </>
               )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </Animated.View>
       )}

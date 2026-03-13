@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -277,7 +277,7 @@ export default function EveningWindDownScreen() {
             paddingVertical: 12,
           }}
         >
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -286,7 +286,7 @@ export default function EveningWindDownScreen() {
             style={{ padding: 8 }}
           >
             <CaretLeftIcon size={22} color={colors.text} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
           <View style={{ flex: 1 }} />
         </View>
 
@@ -369,7 +369,7 @@ export default function EveningWindDownScreen() {
                 >
                   Couldn't prepare your prayer right now.{'\n'}Check your connection and try again.
                 </Text>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setError(false);
@@ -399,7 +399,7 @@ export default function EveningWindDownScreen() {
                   >
                     Try Again
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </Animated.View>
             ) : examen ? (
               <>
@@ -524,7 +524,7 @@ export default function EveningWindDownScreen() {
             {/* === DONE BUTTON === */}
             {(examen || scriptureText) && (
               <Animated.View entering={FadeIn.duration(400).delay(1200)} style={{ marginTop: 16, marginBottom: 8 }}>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={handleShowCelebration}
                 >
                   <View
@@ -545,7 +545,7 @@ export default function EveningWindDownScreen() {
                       Goodnight
                     </Text>
                   </View>
-                </Pressable>
+                </TouchableOpacity>
               </Animated.View>
             )}
           </View>

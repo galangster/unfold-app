@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -19,7 +19,7 @@ export default function SavedPassagesScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -28,7 +28,7 @@ export default function SavedPassagesScreen() {
             style={{ padding: 8 }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
@@ -92,7 +92,7 @@ export default function SavedPassagesScreen() {
                         {bookmark.scriptureReference}
                       </Text>
                     </View>
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         removeBookmark(bookmark.id);
@@ -101,7 +101,7 @@ export default function SavedPassagesScreen() {
                       style={{ padding: 4 }}
                     >
                       <TrashIcon size={16} color={colors.textHint} weight="light" />
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Scripture text */}

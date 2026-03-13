@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import Animated, {
   FadeInDown,
@@ -150,7 +150,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
 
   return (
     <Animated.View entering={FadeInDown.duration(600).delay(400)}>
-      <Pressable onPress={onPress}>
+      <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
         <View
           style={{
             backgroundColor: colors.inputBackground,
@@ -280,7 +280,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             </Animated.View>
           )}
         </View>
-      </Pressable>
+      </TouchableOpacity>
     </Animated.View>
   );
 }

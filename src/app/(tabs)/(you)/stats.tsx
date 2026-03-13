@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -176,7 +176,7 @@ export default function StatsScreen() {
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.back();
@@ -185,7 +185,7 @@ export default function StatsScreen() {
               style={{ padding: 8 }}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </Pressable>
+            </TouchableOpacity>
             <Text
               style={{
                 fontFamily: FontFamily.uiMedium,
@@ -199,7 +199,7 @@ export default function StatsScreen() {
           </View>
 
           {selectedThemeId && (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.replace('/(tabs)/(you)/stats');
@@ -223,7 +223,7 @@ export default function StatsScreen() {
               >
                 All themes
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           )}
         </View>
 

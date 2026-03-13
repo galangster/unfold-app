@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
+  TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -103,7 +103,7 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
   const [isPressed, setIsPressed] = useState(false);
 
   return (
-    <Pressable
+    <TouchableOpacity activeOpacity={0.7}
       onPress={onPress}
       onPressIn={() => setIsPressed(true)}
       onPressOut={() => setIsPressed(false)}
@@ -149,7 +149,7 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
           </View>
         )}
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 }
 
@@ -1003,7 +1003,7 @@ export default function OnboardingScreen() {
         return (
           <View style={{ gap: 0 }}>
             {/* Theme/Topic option */}
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({
@@ -1016,12 +1016,10 @@ export default function OnboardingScreen() {
                 setThemeSelectionMode('theme');
               }}
             >
-              {({ pressed }) => (
               <View style={{
                 paddingVertical: 28,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
-                opacity: pressed ? 0.6 : 1,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
@@ -1042,11 +1040,10 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
-              )}
-            </Pressable>
+            </TouchableOpacity>
 
             {/* Study Type option */}
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({
@@ -1059,12 +1056,10 @@ export default function OnboardingScreen() {
                 setThemeSelectionMode('type');
               }}
             >
-              {({ pressed }) => (
               <View style={{
                 paddingVertical: 28,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
-                opacity: pressed ? 0.6 : 1,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
@@ -1085,11 +1080,10 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
-              )}
-            </Pressable>
+            </TouchableOpacity>
 
             {/* Just guide me option */}
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({
@@ -1103,8 +1097,7 @@ export default function OnboardingScreen() {
                 startDiscoveryPreparation('guided');
               }}
             >
-              {({ pressed }) => (
-              <View style={{ paddingVertical: 28, opacity: pressed ? 0.6 : 1 }}>
+              <View style={{ paddingVertical: 28 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: 16,
@@ -1124,8 +1117,7 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
-              )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
         );
       }
@@ -1271,7 +1263,7 @@ export default function OnboardingScreen() {
                   const needsSubject = TYPES_WITH_SUBJECT_SELECTION.includes(type.id);
                   
                   return (
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       key={type.id}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1283,11 +1275,8 @@ export default function OnboardingScreen() {
                         }));
                       }}
                     >
-                      {({ pressed }) => {
-                        const showPressed = isSelected || pressed;
-                        return (
                           <View style={{
-                            backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+                            backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                             paddingHorizontal: 18,
                             paddingVertical: 16,
                             borderRadius: 12,
@@ -1305,9 +1294,7 @@ export default function OnboardingScreen() {
                               <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2, lineHeight: 18 }}>{type.description}</Text>
                             </View>
                           </View>
-                        );
-                      }}
-                    </Pressable>
+                    </TouchableOpacity>
                   );
                 })}
 
@@ -1365,7 +1352,7 @@ export default function OnboardingScreen() {
               {subjects.map((subject) => {
                 const isSelected = data.selectedStudySubject === subject.id;
                 return (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     key={subject.id}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1375,11 +1362,8 @@ export default function OnboardingScreen() {
                       }));
                     }}
                   >
-                    {({ pressed }) => {
-                      const showPressed = isSelected || pressed;
-                      return (
                         <View style={{
-                          backgroundColor: showPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                           paddingHorizontal: 18,
                           paddingVertical: 14,
                           borderRadius: 12,
@@ -1389,9 +1373,7 @@ export default function OnboardingScreen() {
                           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{subject.name}</Text>
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 3, lineHeight: 18 }}>{subject.description}</Text>
                         </View>
-                      );
-                    }}
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -1447,7 +1429,7 @@ export default function OnboardingScreen() {
               {chips.map((chip) => {
                 const isChipSelected = currentChips.includes(chip);
                 return (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     key={chip}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1475,11 +1457,11 @@ export default function OnboardingScreen() {
                     }}>
                       {chip}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 );
               })}
               {/* "Something else" chip — lets user skip chips and just type */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   // Clear all chips for this step so user writes freely
@@ -1503,7 +1485,7 @@ export default function OnboardingScreen() {
                 }}>
                   Something else
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1567,7 +1549,7 @@ export default function OnboardingScreen() {
           {options.map((option) => {
             const isSelected = data[step.id as keyof OnboardingData] === option.value;
             return (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 key={option.value}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1581,10 +1563,8 @@ export default function OnboardingScreen() {
                   }, 300);
                 }}
               >
-                {({ pressed }) => {
-                  return (
                     <View style={{
-                      backgroundColor: pressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      backgroundColor: colors.inputBackground,
                       paddingHorizontal: 20,
                       paddingVertical: 18,
                       borderRadius: 16,
@@ -1601,9 +1581,7 @@ export default function OnboardingScreen() {
                         )}
                       </View>
                     </View>
-                  );
-                }}
-              </Pressable>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -1667,7 +1645,7 @@ export default function OnboardingScreen() {
           </View>
 
           {/* Commitment button with accent glow */}
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
@@ -1678,7 +1656,6 @@ export default function OnboardingScreen() {
                 setTimeout(() => advanceToNextStep(), 50);
               }, 400);
             }}
-            style={{ opacity: 1 }}
           >
             <View style={{
               backgroundColor: colors.accent,
@@ -1700,7 +1677,7 @@ export default function OnboardingScreen() {
                 Build my devotional
               </Text>
             </View>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -2022,7 +1999,7 @@ export default function OnboardingScreen() {
                 onPress={handleOnboardingAppleSignIn}
               />
             ) : (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleOnboardingAppleSignIn}
                 disabled={isSigningIn}
                 style={{
@@ -2042,13 +2019,13 @@ export default function OnboardingScreen() {
                 }}>
                   {isSigningIn ? 'Signing in...' : 'Sign in with Apple'}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             )}
           </Animated.View>
 
           {/* Skip option */}
           <Animated.View entering={FadeIn.delay(800).duration(400)}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleSkipSignIn}
               disabled={isSigningIn}
               style={{
@@ -2065,7 +2042,7 @@ export default function OnboardingScreen() {
               }}>
                 Continue without signing in
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
 
           {/* Privacy note */}
@@ -2149,15 +2126,15 @@ export default function OnboardingScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
             {currentStepIndex > 0 ? (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
               >
                 <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
             ) : (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.back();
@@ -2169,12 +2146,12 @@ export default function OnboardingScreen() {
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
               >
                 <XIcon size={22} color={colors.textMuted} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
             )}
             
             {/* Continue button - hide for choice/timeChoice steps (they auto-advance) and mirrorBack (has its own CTA) */}
             {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' ? (
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ height: 40, justifyContent: 'center', paddingHorizontal: 8 }}
@@ -2186,7 +2163,7 @@ export default function OnboardingScreen() {
                 }}>
                   {isLastStep ? 'Create' : 'Continue'}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             ) : (
               <View style={{ width: 40, height: 40 }} />
             )}

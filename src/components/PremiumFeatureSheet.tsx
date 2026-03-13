@@ -13,7 +13,7 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -237,7 +237,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         </Animated.View>
 
         {/* CTA button */}
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleStartTrial}
           style={{
             backgroundColor: colors.accent,
@@ -257,7 +257,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
           >
             {config.cta}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
 
         {/* Trial reassurance */}
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
@@ -274,7 +274,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         </View>
 
         {/* Maybe later */}
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleMaybeLater}
           style={{ alignItems: 'center', marginTop: 12, paddingVertical: 8 }}
         >
@@ -287,7 +287,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
           >
             Maybe later
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </BottomSheet>
   );

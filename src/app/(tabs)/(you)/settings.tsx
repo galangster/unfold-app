@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, Pressable, ScrollView, Linking, Platform, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Linking, Platform, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -409,7 +409,7 @@ export default function SettingsScreen() {
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
@@ -421,7 +421,7 @@ export default function SettingsScreen() {
             style={{ padding: 8 }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
 
           <Text
             style={{
@@ -442,7 +442,7 @@ export default function SettingsScreen() {
           {/* Premium section */}
           {!user?.isPremium && (
             <Animated.View entering={FadeInDown.duration(400)}>
-              <Pressable 
+              <TouchableOpacity activeOpacity={0.7} 
                 onPress={handleUpgrade} 
                 accessibilityRole="button"
                 accessibilityLabel="Upgrade to Premium"
@@ -494,7 +494,7 @@ export default function SettingsScreen() {
                     </Text>
                   </View>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           )}
 
@@ -512,7 +512,7 @@ export default function SettingsScreen() {
                 Profile
               </Text>
               {!isEditingProfile ? (
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setEditName(user?.name ?? '');
@@ -525,10 +525,10 @@ export default function SettingsScreen() {
                   accessibilityHint="Edit your name and about information"
                 >
                   <PencilSimpleIcon size={14} color={colors.textSubtle} weight="light" />
-                </Pressable>
+                </TouchableOpacity>
               ) : (
                 <View style={{ flexDirection: 'row', gap: 16 }}>
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={handleCancelEditProfile}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityRole="button"
@@ -536,8 +536,8 @@ export default function SettingsScreen() {
                     accessibilityHint="Discard changes and exit edit mode"
                   >
                     <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textSubtle }}>Cancel</Text>
-                  </Pressable>
-                  <Pressable
+                  </TouchableOpacity>
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={handleSaveProfile}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityRole="button"
@@ -545,7 +545,7 @@ export default function SettingsScreen() {
                     accessibilityHint="Save your profile changes"
                   >
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent }}>Save</Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -731,7 +731,7 @@ export default function SettingsScreen() {
                 </Text>
                 <View style={{ flexDirection: 'row' }}>
                   {FONT_SIZES.map((size, index) => (
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       key={size.value}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -768,7 +768,7 @@ export default function SettingsScreen() {
                           {size.label}
                         </Text>
                       </View>
-                    </Pressable>
+                    </TouchableOpacity>
                   ))}
                 </View>
               </View>
@@ -820,7 +820,7 @@ export default function SettingsScreen() {
                     const Icon = option.icon;
                     const isSelected = (user?.themeMode ?? 'dark') === option.value;
                     return (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -864,7 +864,7 @@ export default function SettingsScreen() {
                             {option.label}
                           </Text>
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -924,7 +924,7 @@ export default function SettingsScreen() {
             >
               {/* Accent Color subsection - Collapsible */}
               <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setExpandedPremium(expandedPremium === 'colors' ? null : 'colors');
@@ -956,7 +956,7 @@ export default function SettingsScreen() {
                       transform: [{ rotate: expandedPremium === 'colors' ? '180deg' : '0deg' }],
                     }}
                   />
-                </Pressable>
+                </TouchableOpacity>
 
                 {expandedPremium === 'colors' && (
                   <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
@@ -965,7 +965,7 @@ export default function SettingsScreen() {
                         const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
                         const swatchColor = isDark ? theme.dark : theme.light;
                         return (
-                          <Pressable
+                          <TouchableOpacity activeOpacity={0.7}
                             key={theme.id}
                             onPress={() => {
                               if (!user?.isPremium) {
@@ -1007,7 +1007,7 @@ export default function SettingsScreen() {
                             >
                               {theme.name}
                             </Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         );
                       })}
                     </View>
@@ -1017,7 +1017,7 @@ export default function SettingsScreen() {
 
               {/* Reading Font subsection - Collapsible */}
               <View>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setExpandedPremium(expandedPremium === 'fonts' ? null : 'fonts');
@@ -1062,14 +1062,14 @@ export default function SettingsScreen() {
                       }}
                     />
                   </View>
-                </Pressable>
+                </TouchableOpacity>
 
                 {expandedPremium === 'fonts' && (
                   <Animated.View entering={FadeIn.duration(200)}>
                     {READING_FONTS.map((font, index) => {
                       const isSelected = (user?.readingFont ?? 'source-serif') === font.id;
                       return (
-                        <Pressable
+                        <TouchableOpacity activeOpacity={0.7}
                           key={font.id}
                           onPress={() => {
                             if (!user?.isPremium) {
@@ -1114,7 +1114,7 @@ export default function SettingsScreen() {
                           {isSelected && (
                             <CheckIcon size={18} color={colors.accent} weight="bold" />
                           )}
-                        </Pressable>
+                        </TouchableOpacity>
                       );
                     })}
                   </Animated.View>
@@ -1134,7 +1134,7 @@ export default function SettingsScreen() {
                     Reminders
                   </Text>
                 </View>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => handleToggleNotifications(!notificationsEnabled)}
                   accessibilityRole="button"
                   accessibilityLabel="Daily reminders"
@@ -1168,10 +1168,10 @@ export default function SettingsScreen() {
                   >
                     {(user?.isPremium ? notificationsEnabled : false) ? 'On' : 'Off'}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
 
                 {notificationsEnabled && user?.isPremium && (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     onPress={() => setShowTimeSelector(!showTimeSelector)}
                     accessibilityRole="button"
                     accessibilityLabel="Reminder time"
@@ -1202,12 +1202,12 @@ export default function SettingsScreen() {
                     >
                       {user?.reminderTime ?? '8:00 AM'}
                     </Text>
-                  </Pressable>
+                  </TouchableOpacity>
                 )}
               </View>
               {/* Voice subsection - Moved into Premium */}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setExpandedPremium(expandedPremium === 'voice' ? null : 'voice');
@@ -1259,7 +1259,7 @@ export default function SettingsScreen() {
                       transform: [{ rotate: expandedPremium === 'voice' ? '180deg' : '0deg' }],
                     }}
                   />
-                </Pressable>
+                </TouchableOpacity>
 
                 {/* Voice options */}
                 {expandedPremium === 'voice' && (
@@ -1268,7 +1268,7 @@ export default function SettingsScreen() {
                       const isSelected = (user?.preferredVoice ?? '694f9389-aac1-45b6-b726-9d9369183238') === option.id;
                       const isLocked = option.premium && !user?.isPremium;
                       return (
-                        <Pressable
+                        <TouchableOpacity activeOpacity={0.7}
                           key={option.id}
                           onPress={() => {
                             if (isLocked) {
@@ -1319,7 +1319,7 @@ export default function SettingsScreen() {
                           
                           {/* Voice preview button */}
                           {!isLocked && (
-                            <Pressable
+                            <TouchableOpacity activeOpacity={0.7}
                               onPress={(e) => {
                                 e.stopPropagation();
                                 handleVoicePreview(option.id);
@@ -1342,7 +1342,7 @@ export default function SettingsScreen() {
                               ) : (
                                 <SpeakerHighIcon size={14} color={previewingVoiceId === option.id ? colors.background : colors.textMuted} weight="light" />
                               )}
-                            </Pressable>
+                            </TouchableOpacity>
                           )}
                           {isLocked && <View style={{ width: 10 }} />}
                           <View
@@ -1368,7 +1368,7 @@ export default function SettingsScreen() {
                               />
                             )}
                           </View>
-                        </Pressable>
+                        </TouchableOpacity>
                       );
                     })}
                   </Animated.View>
@@ -1380,7 +1380,7 @@ export default function SettingsScreen() {
             {showTimeSelector && (
               <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: -16, marginBottom: 24 }}>
                 {REMINDER_TIMES.map((time) => (
-                  <Pressable
+                  <TouchableOpacity activeOpacity={0.7}
                     key={time.value}
                     onPress={() => handleSelectTime(time.value)}
                   >
@@ -1417,7 +1417,7 @@ export default function SettingsScreen() {
                         {time.value}
                       </Text>
                     </View>
-                  </Pressable>
+                  </TouchableOpacity>
                 ))}
               </Animated.View>
             )}
@@ -1446,7 +1446,7 @@ export default function SettingsScreen() {
                 marginBottom: 24,
               }}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setExpandedPreference(expandedPreference === 'translation' ? null : 'translation');
@@ -1498,7 +1498,7 @@ export default function SettingsScreen() {
                     transform: [{ rotate: expandedPreference === 'translation' ? '180deg' : '0deg' }],
                   }}
                 />
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Translation options */}
               {expandedPreference === 'translation' && (
@@ -1521,7 +1521,7 @@ export default function SettingsScreen() {
                     const isSelected = (user?.bibleTranslation ?? 'WEB') === option.value;
                     const isLocked = option.premium && !user?.isPremium;
                     return (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
                           if (isLocked) {
@@ -1592,7 +1592,7 @@ export default function SettingsScreen() {
                             />
                           )}
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     );
                   })}
                 </Animated.View>
@@ -1624,7 +1624,7 @@ export default function SettingsScreen() {
               }}
             >
           {/* Tone preference */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setExpandedPreference(expandedPreference === 'tone' ? null : 'tone');
@@ -1678,7 +1678,7 @@ export default function SettingsScreen() {
                     transform: [{ rotate: expandedPreference === 'tone' ? '180deg' : '0deg' }],
                   }}
                 />
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Tone options */}
               {expandedPreference === 'tone' && (
@@ -1686,7 +1686,7 @@ export default function SettingsScreen() {
                   {TONE_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.tone === option.value;
                     return (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1753,14 +1753,14 @@ export default function SettingsScreen() {
                             />
                           )}
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     );
                   })}
                 </Animated.View>
               )}
 
               {/* Depth preference */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setExpandedPreference(expandedPreference === 'depth' ? null : 'depth');
@@ -1814,7 +1814,7 @@ export default function SettingsScreen() {
                     transform: [{ rotate: expandedPreference === 'depth' ? '180deg' : '0deg' }],
                   }}
                 />
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Depth options */}
               {expandedPreference === 'depth' && (
@@ -1822,7 +1822,7 @@ export default function SettingsScreen() {
                   {DEPTH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.depth === option.value;
                     return (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1889,14 +1889,14 @@ export default function SettingsScreen() {
                             />
                           )}
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     );
                   })}
                 </Animated.View>
               )}
 
               {/* Faith background preference */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setExpandedPreference(expandedPreference === 'faith' ? null : 'faith');
@@ -1948,7 +1948,7 @@ export default function SettingsScreen() {
                     transform: [{ rotate: expandedPreference === 'faith' ? '180deg' : '0deg' }],
                   }}
                 />
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Faith options */}
               {expandedPreference === 'faith' && (
@@ -1956,7 +1956,7 @@ export default function SettingsScreen() {
                   {FAITH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.faithBackground === option.value;
                     return (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -2023,14 +2023,14 @@ export default function SettingsScreen() {
                             />
                           )}
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     );
                   })}
                 </Animated.View>
               )}
 
               {/* Life stage preference */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setExpandedPreference(expandedPreference === 'lifeStage' ? null : 'lifeStage');
@@ -2082,7 +2082,7 @@ export default function SettingsScreen() {
                     transform: [{ rotate: expandedPreference === 'lifeStage' ? '180deg' : '0deg' }],
                   }}
                 />
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Life stage options */}
               {expandedPreference === 'lifeStage' && (
@@ -2090,7 +2090,7 @@ export default function SettingsScreen() {
                   {LIFE_STAGE_OPTIONS.map((option) => {
                     const isSelected = (user?.writingStyle?.lifeStage ?? 'building') === option.value;
                     return (
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -2158,7 +2158,7 @@ export default function SettingsScreen() {
                             />
                           )}
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     );
                   })}
                 </Animated.View>
@@ -2256,7 +2256,7 @@ export default function SettingsScreen() {
                 marginBottom: 24,
               }}
             >
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleReportBug}
                 disabled={isExportingData}
                 accessibilityState={{ disabled: isExportingData }}
@@ -2306,9 +2306,9 @@ export default function SettingsScreen() {
                     {isExportingData ? 'Please wait...' : 'Send diagnostics report'}
                   </Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleRateApp}
                 style={{
                   flexDirection: 'row',
@@ -2351,9 +2351,9 @@ export default function SettingsScreen() {
                     Leave a review
                   </Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
                 style={{
                   flexDirection: 'row',
@@ -2386,9 +2386,9 @@ export default function SettingsScreen() {
                     Privacy Policy
                   </Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
 
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => Linking.openURL('https://unfoldapp.co/terms')}
                 style={{
                   flexDirection: 'row',
@@ -2419,7 +2419,7 @@ export default function SettingsScreen() {
                     Terms of Use
                   </Text>
                 </View>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </Animated.View>
 
@@ -2437,7 +2437,7 @@ export default function SettingsScreen() {
               Data
             </Text>
 
-            <Pressable onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
+            <TouchableOpacity activeOpacity={0.7} onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
               <View
                 style={{
                   borderRadius: 12,
@@ -2464,7 +2464,7 @@ export default function SettingsScreen() {
                   {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
                 </Text>
               </View>
-            </Pressable>
+            </TouchableOpacity>
           </Animated.View>
 
           {/* App info */}

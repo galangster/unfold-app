@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -230,13 +230,13 @@ export default function StyleOnboardingScreen() {
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
           {currentStep > 0 ? (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleBack}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 8 }}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </Pressable>
+            </TouchableOpacity>
           ) : (
             <View style={{ width: 40 }} />
           )}
@@ -258,7 +258,7 @@ export default function StyleOnboardingScreen() {
 
           {/* Continue / Next button — top right */}
           {showOptions ? (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleNext}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 8 }}
@@ -272,7 +272,7 @@ export default function StyleOnboardingScreen() {
               >
                 Continue
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           ) : (
             <View style={{ width: 40 }} />
           )}
@@ -327,7 +327,7 @@ export default function StyleOnboardingScreen() {
                       key={option.value}
                       entering={FadeIn.duration(300).delay(index * 100)}
                     >
-                      <Pressable
+                      <TouchableOpacity activeOpacity={0.7}
                         onPress={() => handleSelect(option.value)}
                         style={{
                           backgroundColor: isSelected
@@ -403,7 +403,7 @@ export default function StyleOnboardingScreen() {
                             )}
                           </View>
                         </View>
-                      </Pressable>
+                      </TouchableOpacity>
                     </Animated.View>
                   );
                 })}

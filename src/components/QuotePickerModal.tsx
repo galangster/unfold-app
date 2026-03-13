@@ -3,7 +3,7 @@ import {
   View,
   Text,
   Modal,
-  Pressable,
+  TouchableOpacity,
   Dimensions,
   ActivityIndicator,
   Alert,
@@ -80,9 +80,9 @@ export function QuotePickerModal({ visible, onClose, quotes, dayTitle, isLoading
           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#FFFFFF' }}>
             Choose a Quote
           </Text>
-          <Pressable onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
             <XIcon size={24} color="#FFFFFF" weight="light" />
-          </Pressable>
+          </TouchableOpacity>
         </View>
         
         {isLoading ? (
@@ -148,31 +148,31 @@ export function QuotePickerModal({ visible, onClose, quotes, dayTitle, isLoading
               
               {/* Pagination */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24, gap: 16 }}>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={handlePrev}
                   disabled={selectedIndex === 0}
                   style={{ opacity: selectedIndex === 0 ? 0.3 : 1 }}
                 >
                   <CaretLeftIcon size={24} color="#FFFFFF" weight="light" />
-                </Pressable>
+                </TouchableOpacity>
                 
                 <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: '#999999' }}>
                   {selectedIndex + 1} of {quotes.length}
                 </Text>
                 
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={handleNext}
                   disabled={selectedIndex === quotes.length - 1}
                   style={{ opacity: selectedIndex === quotes.length - 1 ? 0.3 : 1 }}
                 >
                   <CaretRightIcon size={24} color="#FFFFFF" weight="light" />
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </View>
             
             {/* Select Button */}
             <View style={{ position: 'absolute', bottom: 60, left: 24, right: 24 }}>
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleSelect}
                 style={{
                   backgroundColor: colors.accent,
@@ -184,7 +184,7 @@ export function QuotePickerModal({ visible, onClose, quotes, dayTitle, isLoading
                 <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 17, color: '#FFFFFF' }}>
                   Use This Quote
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -266,13 +266,13 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
         {/* Header */}
         <View style={{ position: 'absolute', top: 60, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 }}>
-          <Pressable onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <CaretLeftIcon size={20} color="#FFFFFF" weight="light" />
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: '#FFFFFF' }}>Back</Text>
-          </Pressable>
-          <Pressable onPress={onClose}>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
             <XIcon size={24} color="#FFFFFF" weight="light" />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {/* Wallpaper Preview */}
@@ -328,7 +328,7 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
         
         {/* Action Buttons */}
         <View style={{ position: 'absolute', bottom: 60, left: 24, right: 24, flexDirection: 'row', gap: 12 }}>
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleSave}
             disabled={isGenerating}
             style={{
@@ -348,9 +348,9 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
                 <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>Save</Text>
               </>
             )}
-          </Pressable>
+          </TouchableOpacity>
           
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleShare}
             disabled={isGenerating}
             style={{
@@ -367,7 +367,7 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
               <ShareNetworkIcon size={18} color="#FFFFFF" weight="light" style={{ marginBottom: 4 }} />
               <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>Share</Text>
             </>
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>

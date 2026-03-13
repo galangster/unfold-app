@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
@@ -76,9 +76,9 @@ export default function SampleDevotionalScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, height: 60 }}>
-          <Pressable onPress={handleBack} style={{ padding: 8, marginLeft: -8 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8, marginLeft: -8 }}>
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </Pressable>
+          </TouchableOpacity>
         </View>
 
         {showContent && (
@@ -166,8 +166,7 @@ export default function SampleDevotionalScreen() {
                 Every devotional is written just for you, based on what you share.
               </Text>
 
-              <Pressable onPress={handleContinue}>
-                {({ pressed }) => (
+              <TouchableOpacity activeOpacity={0.7} onPress={handleContinue}>
                   <View
                     style={{
                       backgroundColor: colors.accent,
@@ -177,7 +176,6 @@ export default function SampleDevotionalScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 8,
-                      opacity: pressed ? 0.9 : 1,
                     }}
                   >
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.background }}>
@@ -185,8 +183,7 @@ export default function SampleDevotionalScreen() {
                     </Text>
                     <ArrowRightIcon size={18} color={colors.background} weight="light" />
                   </View>
-                )}
-              </Pressable>
+              </TouchableOpacity>
             </Animated.View>
           </>
         )}

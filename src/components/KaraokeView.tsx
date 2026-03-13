@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  Pressable,
+  TouchableOpacity,
   StyleSheet,
   ScrollView,
   Dimensions,
@@ -173,7 +173,7 @@ export function KaraokeView({
             {title}
           </Text>
         </View>
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onClose();
@@ -184,7 +184,7 @@ export function KaraokeView({
           ]}
         >
           <XIcon size={18} color={colors.textMuted} weight="bold" />
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       {/* Scrolling text */}
@@ -264,7 +264,7 @@ export function KaraokeView({
           {formatTime(currentTime)}
         </Text>
 
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onTogglePlayback();
@@ -276,7 +276,7 @@ export function KaraokeView({
           ) : (
             <PlayIcon size={20} color="#fff" weight="fill" style={{ marginLeft: -1 }} />
           )}
-        </Pressable>
+        </TouchableOpacity>
 
         <Text
           style={[

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -625,7 +625,7 @@ export default function GeneratingScreen() {
             {displayError}
           </Text>
 
-          <Pressable
+          <TouchableOpacity activeOpacity={0.7}
             onPress={handleRetry}
             disabled={isGenerating}
             accessibilityState={{ disabled: isGenerating }}
@@ -646,10 +646,10 @@ export default function GeneratingScreen() {
             >
               Try again
             </Text>
-          </Pressable>
+          </TouchableOpacity>
 
           {!isConnectionError && (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleRetryFromOnboarding}
               disabled={isGenerating}
               accessibilityState={{ disabled: isGenerating }}
@@ -664,7 +664,7 @@ export default function GeneratingScreen() {
               >
                 Start over with new answers
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           )}
         </SafeAreaView>
       </View>
@@ -735,7 +735,7 @@ export default function GeneratingScreen() {
           </View>
 
           <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleBeginReading}
               disabled={isNavigating}
               accessibilityState={{ disabled: isNavigating }}
@@ -756,7 +756,7 @@ export default function GeneratingScreen() {
               >
                 Begin Day 1
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
       </View>
@@ -907,7 +907,7 @@ export default function GeneratingScreen() {
           {/* Start reading early — appears when Day 1 is ready */}
           {canStartReading && isGenerating && (
             <View style={{ width: '100%', alignItems: 'center', marginTop: 48 }}>
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleStartReadingEarly}
                 style={{
                   backgroundColor: colors.accent,
@@ -926,7 +926,7 @@ export default function GeneratingScreen() {
                 >
                   Start Reading Now
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
 
               <Text
                 style={{
@@ -1004,7 +1004,7 @@ export default function GeneratingScreen() {
               </View>
 
               <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={handleRequestNotifications}
                   style={{
                     backgroundColor: colors.buttonBackground,
@@ -1022,9 +1022,9 @@ export default function GeneratingScreen() {
                   >
                     Notify me
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
 
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={handleDismissNotificationPrompt}
                   style={{
                     paddingVertical: 12,
@@ -1044,7 +1044,7 @@ export default function GeneratingScreen() {
                   >
                     I'll wait
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </Animated.View>
           )}

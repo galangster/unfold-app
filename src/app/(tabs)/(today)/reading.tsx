@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, ScrollView, Pressable, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -854,7 +854,7 @@ export default function ReadingScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
           {/* Back header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push('/(tabs)/(today)');
@@ -866,7 +866,7 @@ export default function ReadingScreen() {
               style={{ padding: 8 }}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-            </Pressable>
+            </TouchableOpacity>
           </View>
 
           {/* Center content */}
@@ -952,7 +952,7 @@ export default function ReadingScreen() {
           {!isRetrying && (
             <View style={{ paddingHorizontal: 28, paddingBottom: 20, gap: 12 }}>
               {/* Generate button - primary CTA, hardcoded colors */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleRetryGeneration}
                 accessibilityRole="button"
                 accessibilityLabel="Generate remaining days"
@@ -981,11 +981,11 @@ export default function ReadingScreen() {
                 >
                   Generate Remaining Days
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Go back to last available day - same solid button style */}
               {daysReady > 0 && (
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setViewingDay(daysReady);
@@ -1012,7 +1012,7 @@ export default function ReadingScreen() {
                   >
                     Go back to Day {daysReady}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               )}
             </View>
           )}
@@ -1038,19 +1038,19 @@ export default function ReadingScreen() {
                 }}
               >
               {/* Home button */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleGoHome}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Go home"
                 accessibilityHint="Returns to the home screen"
-                style={{ padding: 8, opacity: 1 }}
+                style={{ padding: 8 }}
               >
                 <HouseIcon size={22} color={colors.textMuted} weight="light" />
-              </Pressable>
+              </TouchableOpacity>
 
               {/* Day indicator -- editorial serif typography */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
@@ -1130,11 +1130,11 @@ export default function ReadingScreen() {
                 ) : (
                   <View style={{ width: 14 }} />
                 )}
-              </Pressable>
+              </TouchableOpacity>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                 {/* Journal button */}
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push({
@@ -1149,17 +1149,17 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open journal"
                   accessibilityHint="Write a reflection about today's reading"
-                  style={{ padding: 8, opacity: 1 }}
+                  style={{ padding: 8 }}
                 >
                   <BookOpenIcon
                     size={22}
                     color={colors.text}
                     weight="light"
                   />
-                </Pressable>
+                </TouchableOpacity>
 
                 {/* Audio Player Button */}
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     if (!isPremium) {
@@ -1190,14 +1190,14 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Listen to devotional"
                   accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
-                  style={{ padding: 8, opacity: 1 }}
+                  style={{ padding: 8 }}
                 >
                   <PlayIcon
                     size={22}
                     color={colors.text}
                     weight="fill"
                   />
-                </Pressable>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -1403,7 +1403,7 @@ export default function ReadingScreen() {
                       overflow: 'hidden',
                     }}
                   >
-                    <Pressable
+                    <TouchableOpacity activeOpacity={0.7}
                       onPress={!isCompleted ? handleComplete : undefined}
                       onPressIn={() => {
                         if (!isCompleted) {
@@ -1442,7 +1442,7 @@ export default function ReadingScreen() {
                             ? 'Complete Journey'
                             : 'Complete Day'}
                       </Text>
-                    </Pressable>
+                    </TouchableOpacity>
                   </View>
 
                   {/* Share — small icon circle */}
@@ -1521,7 +1521,7 @@ export default function ReadingScreen() {
                             </Text>
                           </View>
                         ) : isPremium ? (
-                          <Pressable
+                          <TouchableOpacity activeOpacity={0.7}
                             onPress={handleGenerateMore}
                             style={{
                               backgroundColor: retryCtaButtonBg,
@@ -1548,9 +1548,9 @@ export default function ReadingScreen() {
                             >
                               Generate Remaining Days
                             </Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         ) : (
-                          <Pressable
+                          <TouchableOpacity activeOpacity={0.7}
                             onPress={() => {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                               setPremiumFeature('series');
@@ -1580,7 +1580,7 @@ export default function ReadingScreen() {
                             >
                               Subscribe to Continue
                             </Text>
-                          </Pressable>
+                          </TouchableOpacity>
                         )}
                       </View>
                   )}

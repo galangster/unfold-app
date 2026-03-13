@@ -1,4 +1,4 @@
-import { View, Pressable } from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -183,7 +183,7 @@ export default function WelcomeScreen() {
           buttonStyle,
         ]}
       >
-        <Pressable
+        <TouchableOpacity activeOpacity={0.7}
           onPress={handleContinue}
           style={{
             backgroundColor: GOLD,
@@ -202,7 +202,7 @@ export default function WelcomeScreen() {
           >
             Begin Your Journey
           </Animated.Text>
-        </Pressable>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );

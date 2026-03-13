@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
   useSharedValue,
@@ -28,7 +28,7 @@ interface GlassMenuProps {
 }
 
 const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 
 export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
   const { colors } = useTheme();
@@ -95,7 +95,8 @@ export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={visible ? 'auto' : 'none'}>
       {/* Backdrop */}
-      <AnimatedPressable
+      <AnimatedTouchableOpacity
+        activeOpacity={1}
         style={[
           StyleSheet.absoluteFill,
           { backgroundColor: 'rgba(0, 0, 0, 0.6)' },
@@ -150,7 +151,7 @@ export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
 
               {/* Menu items */}
               {items.map((item, index) => (
-                <Pressable
+                <TouchableOpacity activeOpacity={0.7}
                   key={index}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -181,7 +182,7 @@ export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
                   >
                     {item.label}
                   </Text>
-                </Pressable>
+                </TouchableOpacity>
               ))}
             </BlurView>
           </View>

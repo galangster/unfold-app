@@ -16,7 +16,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -152,7 +152,7 @@ export function PremiumNudgeCard({
               </Text>
 
               {/* CTA link */}
-              <Pressable
+              <TouchableOpacity activeOpacity={0.7}
                 onPress={handleAction}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
@@ -160,38 +160,34 @@ export function PremiumNudgeCard({
                 accessibilityHint="Opens premium feature details"
                 style={styles.ctaPressable}
               >
-                {({ pressed }) => (
                   <Text
                     style={[
                       styles.ctaText,
                       {
-                        color: pressed ? `${colors.accent}CC` : colors.accent,
+                        color: colors.accent,
                         fontFamily: FontFamily.uiSemiBold,
                       },
                     ]}
                   >
                     {cta}
                   </Text>
-                )}
-              </Pressable>
+              </TouchableOpacity>
             </View>
 
             {/* Dismiss button */}
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleDismiss}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               accessibilityRole="button"
               accessibilityLabel="Dismiss suggestion"
               style={styles.dismissButton}
             >
-              {({ pressed }) => (
                 <XIcon
                   size={16}
-                  color={pressed ? colors.textMuted : colors.textSubtle}
+                  color={colors.textSubtle}
                   weight="light"
                 />
-              )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </Animated.View>

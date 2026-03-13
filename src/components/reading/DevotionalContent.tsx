@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { BookOpenIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
@@ -200,7 +200,7 @@ export function DevotionalContent({
           </Text>
 
           {onToggleBookmark && (
-            <Pressable
+            <TouchableOpacity activeOpacity={0.7}
               onPress={handleBookmarkPress}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
@@ -212,7 +212,7 @@ export function DevotionalContent({
                 color={isBookmarked ? colors.accent : colors.textSubtle}
                 weight={isBookmarked ? "fill" : "regular"}
               />
-            </Pressable>
+            </TouchableOpacity>
           )}
         </View>
 
