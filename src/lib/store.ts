@@ -272,6 +272,8 @@ export interface SeriesArcDay {
   themeHint: string;
   scriptureRegion: string;
   narrativeRole: 'foundation' | 'deepening' | 'tension' | 'turning' | 'resolution';
+  /** Bible study method ID assigned by arc generator (e.g., 'word_study', 'lectio_divina') */
+  studyMethod?: string;
 }
 
 /** High-level series plan generated at onboarding (not the content itself) */

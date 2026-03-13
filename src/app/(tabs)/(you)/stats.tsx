@@ -95,6 +95,8 @@ export default function StatsScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const usedScriptures = useUnfoldStore((s) => s.usedScriptures);
+  const storeStreakCurrent = useUnfoldStore((s) => s.streakCurrent);
+  const storeStreakLongest = useUnfoldStore((s) => s.streakLongest);
 
   const selectedThemeParam = Array.isArray(params.theme) ? params.theme[0] : params.theme;
   const selectedThemeId = useMemo<ThemeCategory | null>(() => {
@@ -155,7 +157,10 @@ export default function StatsScreen() {
     const types = new Set(scopedDevotionals.map((d) => d.devotionalType).filter(Boolean));
     const typesExplored = types.size;
 
-    const { currentStreak, longestStreak } = calculateStreak(scopedDevotionals);
+    // Use store's authoritative streak for unfiltered view; recalculate only when theme-filtered
+    const { currentStreak, longestStreak } = selectedThemeId
+      ? calculateStreak(scopedDevotionals)
+      : { currentStreak: storeStreakCurrent, longestStreak: storeStreakLongest };
 
     return {
       currentStreak,
@@ -168,7 +173,7 @@ export default function StatsScreen() {
       themesExplored,
       typesExplored,
     };
-  }, [scopedDevotionals, scopedJournalEntries, scopedUsedScriptures]);
+  }, [scopedDevotionals, scopedJournalEntries, scopedUsedScriptures, selectedThemeId, storeStreakCurrent, storeStreakLongest]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

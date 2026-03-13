@@ -30,6 +30,14 @@ import {
   DIALOGUE_ANTI_PATTERNS,
   PATTERN_BREAK_DIRECTIVE,
 } from '../constants/writing-craft';
+import {
+  BIBLE_STUDY_METHODS,
+  buildMethodAssignmentPrompt,
+  regionToGenre,
+  roleToDifficulty,
+  pickMethod,
+  type BibleStudyMethodCard,
+} from '../constants/bible-study-methods';
 import type { PersonaTrait } from '../constants/devotional-personas-v2';
 import { useUnfoldStore } from './store';
 import type {
@@ -85,6 +93,11 @@ export async function generateSeriesArc(
   const scriptureAnalysis = analyzeScriptureVariety(usedScriptures);
   const totalDays = context.devotionalLength;
 
+  const methodPrompt = buildMethodAssignmentPrompt(
+    context.writingStyle?.faithBackground,
+    context.writingStyle?.depth,
+  );
+
   const userPrompt = `Create a ${totalDays}-day devotional series arc.
 
 READER CONTEXT:
@@ -94,6 +107,7 @@ Walking through: ${context.currentSituation}
 Feeling: ${context.emotionalState}
 Seeking: ${context.spiritualSeeking}
 Faith background: ${context.writingStyle?.faithBackground ?? 'growing'}
+Depth preference: ${context.writingStyle?.depth ?? 'balanced'}
 ${context.themeCategory ? `Theme focus: ${context.themeCategory}` : ''}
 ${context.devotionalType ? `Devotional type: ${context.devotionalType}` : ''}
 ${context.studySubject ? `Study subject: ${context.studySubject}` : ''}
@@ -101,6 +115,8 @@ ${context.studySubject ? `Study subject: ${context.studySubject}` : ''}
 SCRIPTURE VARIETY:
 ${scriptureAnalysis.overusedBooks.length > 0 ? `Avoid heavy use of: ${scriptureAnalysis.overusedBooks.join(', ')}` : ''}
 ${scriptureAnalysis.underexploredRegions.length > 0 ? `Explore: ${scriptureAnalysis.underexploredRegions.join(', ')}` : ''}
+
+${methodPrompt}
 
 JSON SCHEMA:
 {
@@ -112,7 +128,8 @@ JSON SCHEMA:
       "dayNumber": 1,
       "themeHint": "Brief theme for this day (1 sentence)",
       "scriptureRegion": "Bible region (e.g. Gospels & Acts, Wisdom & Poetry)",
-      "narrativeRole": "foundation|deepening|tension|turning|resolution"
+      "narrativeRole": "foundation|deepening|tension|turning|resolution",
+      "studyMethod": "method_id from the list above"
     }
   ]
 }`;
@@ -123,7 +140,7 @@ JSON SCHEMA:
     '/api/generate/devotional',
     {
       model: 'grok-4-1-fast-non-reasoning',
-      max_tokens: 1500,
+      max_tokens: 2000,
       system: SERIES_ARC_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
     },
@@ -323,11 +340,19 @@ export async function generateArcExtension(
 
   const existingHints = arc.dayHints
     .slice(-3)
-    .map((h) => `Day ${h.dayNumber}: ${h.themeHint} (${h.narrativeRole})`)
+    .map((h) => `Day ${h.dayNumber}: ${h.themeHint} (${h.narrativeRole}${h.studyMethod ? `, method: ${h.studyMethod}` : ''})`)
     .join('\n');
 
   const recentScriptures = useUnfoldStore.getState().getRecentScriptures(100);
   const scriptureAnalysis = analyzeScriptureVariety(recentScriptures);
+
+  // Get user settings for method assignment
+  const user = store.user;
+  const recentMethods = arc.dayHints.slice(-3).map((h) => h.studyMethod).filter(Boolean).join(', ');
+  const extensionMethodPrompt = buildMethodAssignmentPrompt(
+    user?.writingStyle?.faithBackground,
+    user?.writingStyle?.depth,
+  );
 
   const prompt = `Extend this devotional series arc with ${additionalDays} more days.
 
@@ -338,6 +363,7 @@ Current total: ${currentTotal} days (extending to ${currentTotal + additionalDay
 
 RECENT ARC DAYS:
 ${existingHints}
+${recentMethods ? `Recently used methods (avoid repeating): ${recentMethods}` : ''}
 
 JOURNEY NARRATIVE:
 ${narrative || '(Reader has been engaged throughout)'}
@@ -348,11 +374,14 @@ ${scriptureAnalysis.overusedBooks.length > 0 ? scriptureAnalysis.overusedBooks.j
 FRESH REGIONS TO EXPLORE:
 ${scriptureAnalysis.underexploredRegions.length > 0 ? scriptureAnalysis.underexploredRegions.join(', ') : 'Any'}
 
+${extensionMethodPrompt}
+
 Generate ${additionalDays} new day hints that:
 1. Continue naturally from the existing arc
 2. Address any unresolved threads from the journey narrative
 3. Build toward a satisfying new resolution point
 4. The LAST new day should have narrativeRole "resolution"
+5. Each day gets a unique studyMethod from the list above
 
 JSON array only:
 [
@@ -360,7 +389,8 @@ JSON array only:
     "dayNumber": ${currentTotal + 1},
     "themeHint": "...",
     "scriptureRegion": "...",
-    "narrativeRole": "deepening|tension|turning|resolution"
+    "narrativeRole": "deepening|tension|turning|resolution",
+    "studyMethod": "method_id"
   }
 ]`;
 
@@ -555,6 +585,47 @@ async function _generateProgressiveDayInternal(
 }
 
 // ---------------------------------------------------------------------------
+// Study Method Resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves which Bible study method card to use for a given day.
+ * 1. If the arc assigned a studyMethod, look it up directly.
+ * 2. Otherwise (legacy series or missing assignment), auto-pick based on
+ *    genre, difficulty, and recent methods to avoid repetition.
+ */
+function resolveMethodForDay(
+  dayHint: SeriesArcDay | undefined,
+  arc: SeriesArc,
+  context: GenerationContext,
+): BibleStudyMethodCard | null {
+  if (!dayHint) return null;
+
+  // Path 1: Arc assigned a method — look it up
+  if (dayHint.studyMethod && BIBLE_STUDY_METHODS[dayHint.studyMethod]) {
+    return BIBLE_STUDY_METHODS[dayHint.studyMethod];
+  }
+
+  // Path 2: Fallback — auto-pick based on genre + difficulty + recency
+  const genre = regionToGenre(dayHint.scriptureRegion);
+  const difficulty = roleToDifficulty(
+    dayHint.narrativeRole,
+    context.writingStyle?.faithBackground,
+  );
+
+  // Gather recent method IDs from the arc's day hints to avoid repetition
+  const currentIndex = arc.dayHints.findIndex(
+    (h) => h.dayNumber === dayHint.dayNumber,
+  );
+  const recentMethodIds = arc.dayHints
+    .slice(Math.max(0, currentIndex - 3), currentIndex)
+    .map((h) => h.studyMethod)
+    .filter((id): id is string => Boolean(id));
+
+  return pickMethod(genre, difficulty, recentMethodIds);
+}
+
+// ---------------------------------------------------------------------------
 // Prompt Building
 // ---------------------------------------------------------------------------
 
@@ -641,6 +712,14 @@ This is Day ${dayNumber} of ${arc.totalDaysPlanned}.${dayHint ? `
 Narrative role: ${dayHint.narrativeRole}
 Theme hint: ${dayHint.themeHint}
 Scripture region: ${dayHint.scriptureRegion}` : ''}`);
+
+  // Section 5.5: Bible study method for this day
+  const methodCard = resolveMethodForDay(dayHint, arc, context);
+  if (methodCard) {
+    sections.push(`=== STUDY METHOD FOR TODAY ===
+Method: ${methodCard.name}
+${methodCard.promptModifier}`);
+  }
 
   // Section 6: Scripture variety
   if (scriptureAnalysis.overusedBooks.length > 0 || scriptureAnalysis.underexploredRegions.length > 0) {
