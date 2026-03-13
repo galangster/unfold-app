@@ -4,8 +4,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon, CompassIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -97,6 +98,7 @@ export default function StatsScreen() {
   const usedScriptures = useUnfoldStore((s) => s.usedScriptures);
   const storeStreakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const storeStreakLongest = useUnfoldStore((s) => s.streakLongest);
+  const methodUsageHistory = useUnfoldStore((s) => s.methodUsageHistory);
 
   const selectedThemeParam = Array.isArray(params.theme) ? params.theme[0] : params.theme;
   const selectedThemeId = useMemo<ThemeCategory | null>(() => {
@@ -157,6 +159,29 @@ export default function StatsScreen() {
     const types = new Set(scopedDevotionals.map((d) => d.devotionalType).filter(Boolean));
     const typesExplored = types.size;
 
+    // Method usage stats (scoped by theme if filtered)
+    const scopedMethodUsage = selectedThemeId
+      ? methodUsageHistory.filter((r) => scopedDevotionalIds.has(r.devotionalId))
+      : methodUsageHistory;
+    const uniqueMethodsUsed = new Set(scopedMethodUsage.map((r) => r.methodId)).size;
+
+    // Most-used method
+    const methodCounts = new Map<string, number>();
+    for (const r of scopedMethodUsage) {
+      methodCounts.set(r.methodId, (methodCounts.get(r.methodId) ?? 0) + 1);
+    }
+    let favoriteMethodId: string | null = null;
+    let favoriteMethodCount = 0;
+    for (const [id, count] of methodCounts) {
+      if (count > favoriteMethodCount) {
+        favoriteMethodId = id;
+        favoriteMethodCount = count;
+      }
+    }
+    const favoriteMethodName = favoriteMethodId
+      ? BIBLE_STUDY_METHODS[favoriteMethodId]?.name ?? null
+      : null;
+
     // Use store's authoritative streak for unfiltered view; recalculate only when theme-filtered
     const { currentStreak, longestStreak } = selectedThemeId
       ? calculateStreak(scopedDevotionals)
@@ -172,8 +197,10 @@ export default function StatsScreen() {
       uniqueScriptures,
       themesExplored,
       typesExplored,
+      uniqueMethodsUsed,
+      favoriteMethodName,
     };
-  }, [scopedDevotionals, scopedJournalEntries, scopedUsedScriptures, selectedThemeId, storeStreakCurrent, storeStreakLongest]);
+  }, [scopedDevotionals, scopedJournalEntries, scopedUsedScriptures, scopedDevotionalIds, selectedThemeId, storeStreakCurrent, storeStreakLongest, methodUsageHistory]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -352,7 +379,7 @@ export default function StatsScreen() {
             </Animated.View>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
             <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ flex: 1 }}>
               <StatCard
                 icon={<TrophyIcon size={18} color={colors.accent} weight="light" />}
@@ -370,6 +397,61 @@ export default function StatsScreen() {
               />
             </Animated.View>
           </View>
+
+          {/* Method variety row */}
+          {stats.uniqueMethodsUsed > 0 && (
+            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+              <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ flex: 1 }}>
+                <StatCard
+                  icon={<CompassIcon size={18} color={colors.accent} weight="light" />}
+                  value={stats.uniqueMethodsUsed}
+                  label={stats.uniqueMethodsUsed === 1 ? 'Study method' : 'Study methods'}
+                  colors={colors}
+                />
+              </Animated.View>
+              <Animated.View entering={FadeInDown.duration(500).delay(450)} style={{ flex: 1 }}>
+                {stats.favoriteMethodName ? (
+                  <View
+                    style={{
+                      backgroundColor: colors.inputBackground,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      padding: 18,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <CompassIcon size={18} color={colors.accent} weight="light" />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 14,
+                        color: colors.text,
+                        marginTop: 10,
+                      }}
+                      numberOfLines={2}
+                    >
+                      {stats.favoriteMethodName}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 12,
+                        color: colors.textMuted,
+                        marginTop: 2,
+                      }}
+                    >
+                      Most used
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ flex: 1 }} />
+                )}
+              </Animated.View>
+            </View>
+          )}
+
+          <View style={{ height: 12 }} />
 
           {/* Encouraging message */}
           <Animated.View entering={FadeIn.duration(600).delay(500)}>

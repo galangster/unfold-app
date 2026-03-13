@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
+import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
@@ -163,12 +164,35 @@ export function DevotionalContent({
           {
             height: 1.5,
             backgroundColor: colors.accent,
-            marginBottom: 28,
+            marginBottom: day.studyMethod ? 16 : 28,
             borderRadius: 1,
           },
           accentLineStyle,
         ]}
       />
+
+      {/* Study method badge -- subtle pill showing today's approach */}
+      {day.studyMethod && BIBLE_STUDY_METHODS[day.studyMethod] && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 20,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.mono,
+              fontSize: 10,
+              color: colors.textSubtle,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+            }}
+          >
+            {BIBLE_STUDY_METHODS[day.studyMethod].name}
+          </Text>
+        </View>
+      )}
 
       {/* Scripture block -- accent border + subtle background tint */}
       <View

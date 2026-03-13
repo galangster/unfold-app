@@ -149,6 +149,8 @@ export interface DevotionalDay {
   checkInChips?: string[];
   // Phase 5: Evening scripture reference for wind-down
   eveningScriptureRef?: string;
+  // Study method used for this day
+  studyMethod?: string;
   // Progressive generation metadata
   generatedAt?: string;
   contextSignals?: string[];
@@ -359,6 +361,14 @@ export interface SeriesPersonaRecord {
   createdAt: string;
 }
 
+// Cross-series method usage tracking
+export interface MethodUsageRecord {
+  methodId: string;
+  devotionalId: string;
+  dayNumber: number;
+  usedAt: string;
+}
+
 export type GenerationSessionStatus = 'idle' | 'running' | 'error' | 'complete';
 
 export interface GenerationSession {
@@ -464,6 +474,10 @@ interface UnfoldState {
   seriesPersonaHistory: SeriesPersonaRecord[];
   addSeriesPersonaRecord: (record: SeriesPersonaRecord) => void;
 
+  // Cross-series method usage tracking
+  methodUsageHistory: MethodUsageRecord[];
+  recordMethodUsage: (methodId: string, devotionalId: string, dayNumber: number) => void;
+
   // Check-ins (Phase 2)
   checkIns: CheckIn[];
   addCheckIn: (checkIn: Omit<CheckIn, 'id' | 'createdAt'>) => void;
@@ -561,6 +575,7 @@ const initialState = {
   streakWeekendAmnesty: true,
   streakFreezes: 0,
   seriesPersonaHistory: [] as SeriesPersonaRecord[],
+  methodUsageHistory: [] as MethodUsageRecord[],
   checkIns: [] as CheckIn[],
   hasSeenCompanionIntro: false,
   lastCompanionCheckInDate: null as string | null,
@@ -1024,6 +1039,24 @@ export const useUnfoldStore = create<UnfoldState>()(
           const MAX_HISTORY = 10;
           const updated = [record, ...state.seriesPersonaHistory].slice(0, MAX_HISTORY);
           return { seriesPersonaHistory: updated };
+        }),
+
+      // Cross-series method usage tracking
+      methodUsageHistory: [],
+      recordMethodUsage: (methodId, devotionalId, dayNumber) =>
+        set((state) => {
+          // Avoid duplicate entries for the same day
+          const exists = state.methodUsageHistory.some(
+            (r) => r.devotionalId === devotionalId && r.dayNumber === dayNumber,
+          );
+          if (exists) return state;
+          const MAX_HISTORY = 200;
+          return {
+            methodUsageHistory: [
+              { methodId, devotionalId, dayNumber, usedAt: new Date().toISOString() },
+              ...state.methodUsageHistory,
+            ].slice(0, MAX_HISTORY),
+          };
         }),
 
       // Check-ins (Phase 2)

@@ -153,6 +153,16 @@ export default function JournalScreen() {
   const currentDevotional = devotionals.find((d) => d.id === devotionalId);
   const currentDay = currentDevotional?.days.find((d) => d.dayNumber === dayNumber);
 
+  // Auto-suggest journal mode based on study method (only for new entries)
+  useEffect(() => {
+    if (existingEntry) return; // Don't override existing entry's mode
+    const method = currentDay?.studyMethod;
+    if (method === 'soap_journal') {
+      setActiveMode('soap');
+    }
+    // guided mode already the default for reflection questions flow
+  }, [currentDay?.studyMethod, existingEntry]);
+
   // Initialize question responses from existing entry
   useEffect(() => {
     if (existingEntry?.questionResponses) {

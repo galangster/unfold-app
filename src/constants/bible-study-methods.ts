@@ -1,6 +1,6 @@
 // ==========================================
 // BIBLE STUDY METHODS ENGINE
-// 25 methods spanning analytical, contemplative, creative, genre-specific, and modern approaches
+// 32 methods spanning analytical, contemplative, creative, genre-specific, and modern approaches
 // Used by arc generator to assign methods per day, and by day generator to shape output
 // Zero latency impact — all static prompt text, ~50-100 tokens per method card
 // ==========================================
@@ -650,20 +650,15 @@ export function pickMethod(
 // ==========================================
 
 const REGION_TO_GENRE: Record<string, string> = {
+  // Category-level regions (from arc generation)
   'gospels': 'gospel',
   'gospels & acts': 'gospel',
   'gospel': 'gospel',
-  'acts': 'narrative',
   'epistles': 'epistle',
   'pauline epistles': 'epistle',
   'general epistles': 'epistle',
-  'psalms': 'psalm',
   'wisdom & poetry': 'poetry',
   'wisdom': 'wisdom',
-  'proverbs': 'proverb',
-  'ecclesiastes': 'ecclesiastes',
-  'job': 'job',
-  'song of songs': 'poetry',
   'pentateuch': 'law',
   'law': 'law',
   'torah': 'law',
@@ -672,10 +667,92 @@ const REGION_TO_GENRE: Record<string, string> = {
   'prophets': 'prophecy',
   'major prophets': 'prophecy',
   'minor prophets': 'prophecy',
-  'revelation': 'apocalyptic',
   'apocalyptic': 'apocalyptic',
+
+  // Individual Gospels + Acts
+  'matthew': 'gospel',
+  'mark': 'gospel',
+  'luke': 'gospel',
+  'john': 'gospel',
+  'acts': 'narrative',
+
+  // Pentateuch
   'genesis': 'ot_narrative',
   'exodus': 'ot_narrative',
+  'leviticus': 'law',
+  'numbers': 'ot_narrative',
+  'deuteronomy': 'law',
+
+  // Historical books
+  'joshua': 'ot_narrative',
+  'judges': 'ot_narrative',
+  'ruth': 'ot_narrative',
+  '1 samuel': 'ot_narrative',
+  '2 samuel': 'ot_narrative',
+  '1 kings': 'ot_narrative',
+  '2 kings': 'ot_narrative',
+  '1 chronicles': 'ot_narrative',
+  '2 chronicles': 'ot_narrative',
+  'ezra': 'ot_narrative',
+  'nehemiah': 'ot_narrative',
+  'esther': 'ot_narrative',
+
+  // Wisdom & Poetry
+  'job': 'wisdom',
+  'psalms': 'psalm',
+  'proverbs': 'wisdom',
+  'ecclesiastes': 'wisdom',
+  'song of solomon': 'poetry',
+  'song of songs': 'poetry',
+
+  // Major Prophets
+  'isaiah': 'prophecy',
+  'jeremiah': 'prophecy',
+  'lamentations': 'poetry',
+  'ezekiel': 'prophecy',
+  'daniel': 'apocalyptic',
+
+  // Minor Prophets
+  'hosea': 'prophecy',
+  'joel': 'prophecy',
+  'amos': 'prophecy',
+  'obadiah': 'prophecy',
+  'jonah': 'ot_narrative',
+  'micah': 'prophecy',
+  'nahum': 'prophecy',
+  'habakkuk': 'prophecy',
+  'zephaniah': 'prophecy',
+  'haggai': 'prophecy',
+  'zechariah': 'prophecy',
+  'malachi': 'prophecy',
+
+  // Pauline Epistles
+  'romans': 'epistle',
+  '1 corinthians': 'epistle',
+  '2 corinthians': 'epistle',
+  'galatians': 'epistle',
+  'ephesians': 'epistle',
+  'philippians': 'epistle',
+  'colossians': 'epistle',
+  '1 thessalonians': 'epistle',
+  '2 thessalonians': 'epistle',
+  '1 timothy': 'epistle',
+  '2 timothy': 'epistle',
+  'titus': 'epistle',
+  'philemon': 'epistle',
+
+  // General Epistles
+  'hebrews': 'epistle',
+  'james': 'epistle',
+  '1 peter': 'epistle',
+  '2 peter': 'epistle',
+  '1 john': 'epistle',
+  '2 john': 'epistle',
+  '3 john': 'epistle',
+  'jude': 'epistle',
+
+  // Apocalyptic
+  'revelation': 'apocalyptic',
 };
 
 /** Map a scriptureRegion string to a genre tag for method selection */
@@ -769,5 +846,7 @@ RULES:
 - Match method to scripture genre (don't apply epistle analysis to a psalm)
 - Map narrative role to difficulty: foundation→accessible, deepening→intermediate, tension→intermediate, turning→advanced, resolution→accessible
 - Include the assigned method ID in each day's arc hint as "studyMethod"
+- IMPORTANT: Use EXACT method IDs from the lists above (e.g. "lectio_divina", not "lectio-divina" or "Lectio Divina")
+- If unsure which method fits, use "expository" as a safe default
 `;
 }

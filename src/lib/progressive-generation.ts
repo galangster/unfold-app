@@ -32,6 +32,7 @@ import {
 } from '../constants/writing-craft';
 import {
   BIBLE_STUDY_METHODS,
+  ALL_METHOD_IDS,
   buildMethodAssignmentPrompt,
   regionToGenre,
   roleToDifficulty,
@@ -170,11 +171,32 @@ JSON SCHEMA:
     throw new Error(`Arc generation: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
   }
 
+  // Sanitize method IDs — LLMs can hallucinate invalid IDs
+  const validMethodIds = new Set(ALL_METHOD_IDS);
+  for (const hint of parsed.dayHints) {
+    if (hint.studyMethod && !validMethodIds.has(hint.studyMethod)) {
+      logger.log(`Arc parse: invalid method ID "${hint.studyMethod}" on day ${hint.dayNumber}, clearing`);
+      hint.studyMethod = undefined;
+    }
+  }
+
+  // Ensure dayHints count matches totalDays — pad missing hints
+  while (parsed.dayHints.length < totalDays) {
+    const nextDay = parsed.dayHints.length + 1;
+    logger.log(`Arc parse: padding missing day hint for day ${nextDay}`);
+    parsed.dayHints.push({
+      dayNumber: nextDay,
+      themeHint: 'Continued exploration',
+      scriptureRegion: 'any',
+      narrativeRole: nextDay === totalDays ? 'resolution' : 'deepening',
+    });
+  }
+
   const arc: SeriesArc = {
     totalDaysPlanned: totalDays,
     overarchingTheme: parsed.overarchingTheme,
     narrativeShape: parsed.narrativeShape,
-    dayHints: parsed.dayHints,
+    dayHints: parsed.dayHints.slice(0, totalDays),
     isOpenEnded: false,
     createdAt: new Date().toISOString(),
   };
@@ -338,8 +360,8 @@ export async function generateArcExtension(
   const currentTotal = devotional.totalDays;
   const narrative = devotional.progressiveMemory?.narrative?.narrative ?? '';
 
+  // Pass full arc method history for better variety awareness
   const existingHints = arc.dayHints
-    .slice(-3)
     .map((h) => `Day ${h.dayNumber}: ${h.themeHint} (${h.narrativeRole}${h.studyMethod ? `, method: ${h.studyMethod}` : ''})`)
     .join('\n');
 
@@ -348,7 +370,7 @@ export async function generateArcExtension(
 
   // Get user settings for method assignment
   const user = store.user;
-  const recentMethods = arc.dayHints.slice(-3).map((h) => h.studyMethod).filter(Boolean).join(', ');
+  const recentMethods = arc.dayHints.map((h) => h.studyMethod).filter(Boolean).join(', ');
   const extensionMethodPrompt = buildMethodAssignmentPrompt(
     user?.writingStyle?.faithBackground,
     user?.writingStyle?.depth,
@@ -424,6 +446,15 @@ JSON array only:
   }
   // Validate each hint has required fields
   newHints = newHints.filter((h) => h.dayNumber && h.themeHint && h.narrativeRole);
+
+  // Sanitize method IDs in extension hints
+  const validIds = new Set(ALL_METHOD_IDS);
+  for (const hint of newHints) {
+    if (hint.studyMethod && !validIds.has(hint.studyMethod)) {
+      logger.log(`Arc extension: invalid method ID "${hint.studyMethod}" on day ${hint.dayNumber}, clearing`);
+      hint.studyMethod = undefined;
+    }
+  }
 
   logger.log(`Arc extended with ${newHints.length} new days`);
   void logBugEvent('progressive-gen', 'arc-extended', {
@@ -551,6 +582,10 @@ async function _generateProgressiveDayInternal(
   // Handle both single-day and wrapped responses
   const dayData = parsed.days?.[0] ?? parsed;
 
+  // Resolve the study method used for this day (matches what was injected into the prompt)
+  const dayHintForStorage = arc.dayHints.find((h) => h.dayNumber === dayNumber);
+  const resolvedMethod = resolveMethodForDay(dayHintForStorage, arc, context);
+
   const day: DevotionalDay = {
     dayNumber,
     title: dayData.title ?? `Day ${dayNumber}`,
@@ -568,6 +603,7 @@ async function _generateProgressiveDayInternal(
     checkInQuestion: dayData.checkInQuestion,
     checkInChips: dayData.checkInChips,
     eveningScriptureRef: dayData.eveningScriptureRef,
+    studyMethod: resolvedMethod?.id,
     generatedAt: new Date().toISOString(),
     contextSignals: buildContextSignalList(memory, dayNumber),
   };
@@ -579,7 +615,13 @@ async function _generateProgressiveDayInternal(
     title: day.title,
     scriptureReference: day.scriptureReference,
     contextSignals: day.contextSignals?.length ?? 0,
+    studyMethod: resolvedMethod?.id ?? 'none',
   });
+
+  // Record method usage for cross-series tracking
+  if (resolvedMethod?.id) {
+    useUnfoldStore.getState().recordMethodUsage(resolvedMethod.id, devotionalId, dayNumber);
+  }
 
   return day;
 }
@@ -599,10 +641,14 @@ function resolveMethodForDay(
   arc: SeriesArc,
   context: GenerationContext,
 ): BibleStudyMethodCard | null {
-  if (!dayHint) return null;
+  if (!dayHint) {
+    logger.log(`Method resolution: no dayHint — skipping`);
+    return null;
+  }
 
-  // Path 1: Arc assigned a method — look it up
+  // Path 1: Arc assigned a valid method — look it up
   if (dayHint.studyMethod && BIBLE_STUDY_METHODS[dayHint.studyMethod]) {
+    logger.log(`Method resolution day ${dayHint.dayNumber}: arc-assigned → ${dayHint.studyMethod}`);
     return BIBLE_STUDY_METHODS[dayHint.studyMethod];
   }
 
@@ -622,7 +668,9 @@ function resolveMethodForDay(
     .map((h) => h.studyMethod)
     .filter((id): id is string => Boolean(id));
 
-  return pickMethod(genre, difficulty, recentMethodIds);
+  const picked = pickMethod(genre, difficulty, recentMethodIds);
+  logger.log(`Method resolution day ${dayHint.dayNumber}: fallback-pick → ${picked?.id ?? 'null'} (genre=${genre}, difficulty=${difficulty})`);
+  return picked;
 }
 
 // ---------------------------------------------------------------------------
@@ -718,7 +766,10 @@ Scripture region: ${dayHint.scriptureRegion}` : ''}`);
   if (methodCard) {
     sections.push(`=== STUDY METHOD FOR TODAY ===
 Method: ${methodCard.name}
-${methodCard.promptModifier}`);
+${methodCard.promptModifier}
+
+REFLECTION QUESTIONS — shape these to match the study method:
+${methodCard.id === 'soap_journal' ? '- Frame questions around Scripture/Observation/Application/Prayer structure' : ''}${methodCard.id === 'lectio_divina' ? '- Frame questions around reading, meditating, praying, contemplating' : ''}${methodCard.id === 'ignatian_contemplation' ? '- Invite the reader to place themselves in the scene — "What do you see? What does Jesus say to you?"' : ''}${methodCard.id === 'verse_mapping' ? '- Ask about cross-references, original language insights, and connections to other passages' : ''}${methodCard.id === 'character_study' ? '- Focus questions on character motivations, choices, and parallels to the reader\'s life' : ''}${!['soap_journal', 'lectio_divina', 'ignatian_contemplation', 'verse_mapping', 'character_study'].includes(methodCard.id) ? `- Align questions with the ${methodCard.name} approach — ask what this method uniquely reveals` : ''}`);
   }
 
   // Section 6: Scripture variety

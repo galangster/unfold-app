@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
+import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore } from '@/lib/store';
@@ -1141,7 +1142,7 @@ export default function HomeScreen() {
                             fontSize: 14,
                             color: colors.textMuted,
                             lineHeight: 22,
-                            marginBottom: 20,
+                            marginBottom: currentDayData.studyMethod ? 12 : 20,
                             opacity: 0.8,
                           }}
                           numberOfLines={2}
@@ -1149,6 +1150,32 @@ export default function HomeScreen() {
                           {currentDayData.scriptureReference}
                           {currentDayData.scriptureText ? ` — "${currentDayData.scriptureText.slice(0, 80).trim()}..."` : ''}
                         </Text>
+                      )}
+
+                      {/* Today's approach — subtle method hint */}
+                      {currentDayData.studyMethod && BIBLE_STUDY_METHODS[currentDayData.studyMethod] && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                          <View
+                            style={{
+                              backgroundColor: colors.accent + '12',
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.mono,
+                                fontSize: 10,
+                                color: colors.accent,
+                                letterSpacing: 0.8,
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {BIBLE_STUDY_METHODS[currentDayData.studyMethod].name}
+                            </Text>
+                          </View>
+                        </View>
                       )}
                     </>
                   ) : isPreparingCurrentDay ? (
