@@ -136,17 +136,22 @@ JSON SCHEMA:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text.match(/\{[\s\S]*?\}/);
   if (!jsonMatch) {
     throw new Error('Arc generation returned no valid JSON');
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as {
-    title: string;
-    overarchingTheme: string;
-    narrativeShape: string;
-    dayHints: SeriesArcDay[];
-  };
+  let parsed: { title: string; overarchingTheme: string; narrativeShape: string; dayHints: SeriesArcDay[] };
+  try {
+    parsed = JSON.parse(jsonMatch[0]) as {
+      title: string;
+      overarchingTheme: string;
+      narrativeShape: string;
+      dayHints: SeriesArcDay[];
+    };
+  } catch (parseErr) {
+    throw new Error(`Arc generation: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+  }
 
   const arc: SeriesArc = {
     totalDaysPlanned: totalDays,
@@ -381,7 +386,14 @@ JSON array only:
   const jsonMatch = text.match(/\[[\s\S]*?\]/);
   if (!jsonMatch) throw new Error('No JSON array in arc extension response');
 
-  const newHints = JSON.parse(jsonMatch[0]) as SeriesArcDay[];
+  let newHints: SeriesArcDay[];
+  try {
+    newHints = JSON.parse(jsonMatch[0]) as SeriesArcDay[];
+  } catch (parseErr) {
+    throw new Error(`Arc extension: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+  }
+  // Validate each hint has required fields
+  newHints = newHints.filter((h) => h.dayNumber && h.themeHint && h.narrativeRole);
 
   logger.log(`Arc extended with ${newHints.length} new days`);
   void logBugEvent('progressive-gen', 'arc-extended', {
@@ -494,12 +506,18 @@ async function _generateProgressiveDayInternal(
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text.match(/\{[\s\S]*?\}/);
   if (!jsonMatch) {
     throw new Error(`Day ${dayNumber}: no valid JSON in response`);
   }
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (parseErr) {
+    throw new Error(`Day ${dayNumber}: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+  }
   // Handle both single-day and wrapped responses
   const dayData = parsed.days?.[0] ?? parsed;
 
@@ -854,10 +872,16 @@ Respond with JSON:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text.match(/\{[\s\S]*?\}/);
   if (!jsonMatch) throw new Error('Summary: no valid JSON');
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (parseErr) {
+    throw new Error(`Summary: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+  }
 
   return {
     dayRange: `Days ${startDay}-${endDay}`,
@@ -927,10 +951,16 @@ Write in third person ("The reader..."). Be warm but precise. Respond with JSON:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text.match(/\{[\s\S]*?\}/);
   if (!jsonMatch) throw new Error('Narrative: no valid JSON');
 
-  const parsed = JSON.parse(jsonMatch[0]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonMatch[0]);
+  } catch (parseErr) {
+    throw new Error(`Narrative: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+  }
   const existingVersion = memory?.narrative?.version ?? 0;
 
   return {

@@ -607,7 +607,7 @@ export default function ReadingScreen() {
         }
       } // end if (!isProgressiveLastDay)
     }
-  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, devotionals, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, devotionals, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   // Phase 5: Handle "Keep Going" from continuation prompt
   const handleContinueJourney = useCallback(async () => {
@@ -1785,12 +1785,12 @@ export default function ReadingScreen() {
       {/* Phase 5: Continuation Prompt */}
       <Modal visible={showContinuationPrompt} transparent animationType="fade" statusBarTranslucent>
         <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-          <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
+          <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: 20, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
             <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: 12, letterSpacing: -0.5 }}>
               Your journey{'\n'}could continue
             </Text>
             <View style={{ width: 32, height: 1.5, backgroundColor: colors.accent, marginBottom: 16, borderRadius: 1 }} />
-            <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
+            <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
               {continuationReason}
             </Text>
             {extensionError && (
@@ -1813,6 +1813,7 @@ export default function ReadingScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
+                if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
                 setShowContinuationPrompt(false);
                 setContinuationDays(0);
                 setContinuationReason('');
@@ -1821,7 +1822,7 @@ export default function ReadingScreen() {
               style={{ paddingVertical: 10 }}
               disabled={isExtendingArc}
             >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: colors.textSecondary }}>
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: colors.textMuted }}>
                 I'm good for now
               </Text>
             </Pressable>
