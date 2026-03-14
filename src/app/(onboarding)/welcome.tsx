@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +19,7 @@ import { useTheme } from '@/lib/theme';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Ember particle component
-function EmberParticle({
+const EmberParticle = React.memo(function EmberParticle({
   delay,
   startX,
   size,
@@ -114,7 +114,7 @@ function EmberParticle({
       ]}
     />
   );
-}
+});
 
 export default function WelcomeScreen() {
   const router = useRouter();

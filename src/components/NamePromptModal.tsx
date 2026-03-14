@@ -106,6 +106,9 @@ export function NamePromptModal({ visible, onComplete }: NamePromptModalProps) {
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleSubmit}
             disabled={!name.trim() || isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel={isSubmitting ? 'Saving name' : 'Continue'}
+            accessibilityState={{ disabled: !name.trim() || isSubmitting }}
             style={{
               backgroundColor: colors.accent,
               paddingVertical: 16,

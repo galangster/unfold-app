@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BookOpenIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
@@ -38,31 +38,12 @@ interface DevotionalContentProps {
  */
 function SectionDivider({ color, style }: { color: string; style?: object }) {
   return (
-    <View
-      style={[
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginVertical: 40,
-          paddingHorizontal: 40,
-        },
-        style,
-      ]}
-    >
-      <View style={{ flex: 1, height: 0.5, backgroundColor: color, opacity: 0.2 }} />
-      <Text
-        style={{
-          fontSize: 12,
-          color,
-          opacity: 0.35,
-          letterSpacing: 6,
-          marginHorizontal: 16,
-        }}
-      >
+    <View style={[dcStyles.dividerContainer, style]}>
+      <View style={[dcStyles.dividerLine, { backgroundColor: color }]} />
+      <Text style={[dcStyles.dividerDots, { color }]}>
         {'···'}
       </Text>
-      <View style={{ flex: 1, height: 0.5, backgroundColor: color, opacity: 0.2 }} />
+      <View style={[dcStyles.dividerLine, { backgroundColor: color }]} />
     </View>
   );
 }
@@ -73,30 +54,12 @@ function SectionDivider({ color, style }: { color: string; style?: object }) {
  */
 function OrnamentalHeader({ label, accentColor }: { label: string; accentColor: string }) {
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 28,
-      }}
-    >
-      <View style={{ width: 32, height: 0.5, backgroundColor: accentColor, opacity: 0.4 }} />
-      <Text
-        style={{
-          fontFamily: FontFamily.uiMedium,
-          fontSize: 10,
-          color: accentColor,
-          letterSpacing: 2.5,
-          textTransform: 'uppercase',
-          textAlign: 'center',
-          marginHorizontal: 14,
-          opacity: 0.75,
-        }}
-      >
+    <View style={dcStyles.ornamentalRow}>
+      <View style={[dcStyles.ornamentalLine, { backgroundColor: accentColor }]} />
+      <Text style={[dcStyles.ornamentalLabel, { color: accentColor }]}>
         {label}
       </Text>
-      <View style={{ width: 32, height: 0.5, backgroundColor: accentColor, opacity: 0.4 }} />
+      <View style={[dcStyles.ornamentalLine, { backgroundColor: accentColor }]} />
     </View>
   );
 }
@@ -143,17 +106,17 @@ export function DevotionalContent({
 
   return (
     <>
-      {/* Day title */}
+      {/* Day title — fontSize is dynamic so keep inline */}
       <Text
         {...(titleSharedTransitionTag ? { sharedTransitionTag: titleSharedTransitionTag } : {})}
-        style={{
-          fontFamily: FontFamily.display,
-          fontSize: fontSizes.title,
-          color: colors.text,
-          lineHeight: fontSizes.title * 1.2,
-          marginBottom: 20,
-          letterSpacing: -0.5,
-        }}
+        style={[
+          dcStyles.dayTitle,
+          {
+            fontSize: fontSizes.title,
+            color: colors.text,
+            lineHeight: fontSizes.title * 1.2,
+          },
+        ]}
       >
         {day.title}
       </Text>
@@ -161,65 +124,37 @@ export function DevotionalContent({
       {/* Accent line -- grows in from zero */}
       <Animated.View
         style={[
+          dcStyles.accentLine,
           {
-            height: 1.5,
             backgroundColor: colors.accent,
             marginBottom: day.studyMethod ? 16 : 28,
-            borderRadius: 1,
           },
           accentLineStyle,
         ]}
       />
 
-      {/* Study method badge -- subtle pill showing today's approach */}
+      {/* Study method badge */}
       {day.studyMethod && BIBLE_STUDY_METHODS[day.studyMethod] && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 20,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.mono,
-              fontSize: 10,
-              color: colors.textSubtle,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-            }}
-          >
+        <View style={dcStyles.studyMethodBadge}>
+          <Text style={[dcStyles.studyMethodText, { color: colors.textSubtle }]}>
             {BIBLE_STUDY_METHODS[day.studyMethod].name}
           </Text>
         </View>
       )}
 
-      {/* Scripture block -- accent border + subtle background tint */}
+      {/* Scripture block */}
       <View
-        style={{
-          borderLeftWidth: 2.5,
-          borderLeftColor: colors.accent,
-          paddingLeft: 18,
-          paddingRight: 14,
-          paddingVertical: 16,
-          marginBottom: 8,
-          backgroundColor: scriptureBgColor,
-          borderRadius: 4,
-          borderTopLeftRadius: 0,
-          borderBottomLeftRadius: 0,
-        }}
+        style={[
+          dcStyles.scriptureBlock,
+          {
+            borderLeftColor: colors.accent,
+            backgroundColor: scriptureBgColor,
+          },
+        ]}
       >
-        {/* Reference + bookmark -- refined small-caps style */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 10 }}>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: 10.5,
-              color: colors.accent,
-              letterSpacing: 2,
-              textTransform: 'uppercase',
-            }}
-          >
+        {/* Reference + bookmark */}
+        <View style={dcStyles.scriptureRefRow}>
+          <Text style={[dcStyles.scriptureRef, { color: colors.accent }]}>
             {day.scriptureReference}
           </Text>
 
@@ -229,7 +164,7 @@ export function DevotionalContent({
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-              style={{ padding: 4 }}
+              style={dcStyles.bookmarkButton}
             >
               <BookmarkSimpleIcon
                 size={15}
@@ -240,7 +175,7 @@ export function DevotionalContent({
           )}
         </View>
 
-        {/* Scripture text -- generous line-height for readability */}
+        {/* Scripture text — fontSize is dynamic */}
         <Text
           style={{
             fontFamily: readingFont.bodyItalic,
@@ -258,7 +193,6 @@ export function DevotionalContent({
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
 
-      {/* Body text, quotes, and related content - WEBVIEW (selectable for quotes) */}
       <DevotionalWebView
         day={day}
         fontSize={fontSize}
@@ -267,48 +201,18 @@ export function DevotionalContent({
         onScriptureTap={onScriptureTap}
       />
 
-      {/* Cross References Section - NATIVE (structured) */}
+      {/* Cross References Section */}
       {day.crossReferences && day.crossReferences.length > 0 && (
-        <View style={{ marginTop: 44 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 16,
-            }}
-          >
+        <View style={dcStyles.crossRefSection}>
+          <View style={dcStyles.crossRefHeader}>
             <BookOpenIcon size={15} color={colors.accent} weight="light" />
-            <Text
-              style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 10.5,
-                color: colors.accent,
-                letterSpacing: 1.8,
-                textTransform: 'uppercase',
-                marginLeft: 10,
-              }}
-            >
+            <Text style={[dcStyles.crossRefLabel, { color: colors.accent }]}>
               Related Scripture
             </Text>
           </View>
-          {day.crossReferences.map((ref, index) => (
-            <View
-              key={index}
-              style={{
-                marginBottom: 20,
-                paddingLeft: 4,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 10.5,
-                  color: colors.accent,
-                  letterSpacing: 1.2,
-                  marginBottom: 8,
-                  opacity: 0.7,
-                }}
-              >
+          {day.crossReferences.map((ref) => (
+            <View key={ref.reference} style={dcStyles.crossRefItem}>
+              <Text style={[dcStyles.crossRefReference, { color: colors.accent }]}>
                 {ref.reference}
               </Text>
               <Text
@@ -326,10 +230,9 @@ export function DevotionalContent({
         </View>
       )}
 
-      {/* Reflection Questions Section — Interactive inline journal */}
+      {/* Reflection Questions Section */}
       {day.reflectionQuestions && day.reflectionQuestions.length > 0 && (
         <>
-          {/* Section divider */}
           <SectionDivider color={colors.textMuted} style={{ marginTop: 48, marginBottom: 32 }} />
 
           {devotionalId && dayNumber && onOpenJournal ? (
@@ -340,25 +243,19 @@ export function DevotionalContent({
               onOpenFullJournal={onOpenJournal}
             />
           ) : (
-            /* Fallback: static display if no journal context */
-            <View style={{ marginTop: 0 }}>
+            <View>
               <OrnamentalHeader label="For Reflection" accentColor={colors.accent} />
               {day.reflectionQuestions.map((question, index) => (
-                <View
-                  key={index}
-                  style={{ marginBottom: 24, paddingLeft: 20, paddingRight: 8 }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <View key={question} style={dcStyles.reflectionItem}>
+                  <View style={dcStyles.reflectionRow}>
                     <Text
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: fontSizes.body + 2,
-                        color: colors.accent,
-                        opacity: 0.5,
-                        marginRight: 12,
-                        marginTop: 1,
-                        minWidth: 16,
-                      }}
+                      style={[
+                        dcStyles.reflectionNumber,
+                        {
+                          fontSize: fontSizes.body + 2,
+                          color: colors.accent,
+                        },
+                      ]}
                     >
                       {index + 1}
                     </Text>
@@ -382,15 +279,11 @@ export function DevotionalContent({
         </>
       )}
 
-      {/* Closing Prayer Section - NATIVE (structured) */}
+      {/* Closing Prayer Section */}
       {day.closingPrayer && (
-        <View style={{ marginTop: 48 }}>
-          {/* Section divider */}
+        <View style={dcStyles.prayerSection}>
           <SectionDivider color={colors.textMuted} style={{ marginTop: 0, marginBottom: 32 }} />
-
-          {/* Ornamental header: --- A PRAYER --- */}
           <OrnamentalHeader label="A Prayer" accentColor={colors.accent} />
-
           <Text
             style={{
               fontFamily: readingFont.bodyItalic,
@@ -409,3 +302,134 @@ export function DevotionalContent({
     </>
   );
 }
+
+const dcStyles = StyleSheet.create({
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 40,
+    paddingHorizontal: 40,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 0.5,
+    opacity: 0.2,
+  },
+  dividerDots: {
+    fontSize: 12,
+    opacity: 0.35,
+    letterSpacing: 6,
+    marginHorizontal: 16,
+  },
+  ornamentalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  ornamentalLine: {
+    width: 32,
+    height: 0.5,
+    opacity: 0.4,
+  },
+  ornamentalLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10,
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginHorizontal: 14,
+    opacity: 0.75,
+  },
+  dayTitle: {
+    fontFamily: FontFamily.display,
+    marginBottom: 20,
+    letterSpacing: -0.5,
+  },
+  accentLine: {
+    height: 1.5,
+    borderRadius: 1,
+  },
+  studyMethodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  studyMethodText: {
+    fontFamily: FontFamily.mono,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  scriptureBlock: {
+    borderLeftWidth: 2.5,
+    paddingLeft: 18,
+    paddingRight: 14,
+    paddingVertical: 16,
+    marginBottom: 8,
+    borderRadius: 4,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+  },
+  scriptureRefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
+  },
+  scriptureRef: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10.5,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  bookmarkButton: {
+    padding: 4,
+  },
+  crossRefSection: {
+    marginTop: 44,
+  },
+  crossRefHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  crossRefLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10.5,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    marginLeft: 10,
+  },
+  crossRefItem: {
+    marginBottom: 20,
+    paddingLeft: 4,
+  },
+  crossRefReference: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    opacity: 0.7,
+  },
+  reflectionItem: {
+    marginBottom: 24,
+    paddingLeft: 20,
+    paddingRight: 8,
+  },
+  reflectionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  reflectionNumber: {
+    fontFamily: FontFamily.display,
+    opacity: 0.5,
+    marginRight: 12,
+    marginTop: 1,
+    minWidth: 16,
+  },
+  prayerSection: {
+    marginTop: 48,
+  },
+});

@@ -231,7 +231,7 @@ function setCachedCommentary(reference: string, todayTitle: string, text: string
 
 /**
  * Generate a short AI commentary connecting a scripture passage to today's
- * devotional theme. Uses the Railway backend with Gemini for fast, cheap generation.
+ * devotional theme. Uses the Railway backend with Grok for fast, cheap generation.
  *
  * Returns 2-3 sentences (~40-60 words) or null on failure.
  * Results are cached in MMKV per reference+day.

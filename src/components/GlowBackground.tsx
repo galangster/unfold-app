@@ -115,7 +115,7 @@ function makeEmbers(count: number): EmberConfig[] {
 // Pre-generate default set (stable across renders at module level)
 const DEFAULT_EMBERS = makeEmbers(18);
 
-function Ember({ config, color, intensity }: { config: EmberConfig; color: string; intensity: number }) {
+const Ember = React.memo(function Ember({ config, color, intensity }: { config: EmberConfig; color: string; intensity: number }) {
   const ty = useSharedValue(0);
   const tx = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -176,7 +176,7 @@ function Ember({ config, color, intensity }: { config: EmberConfig; color: strin
       ]}
     />
   );
-}
+});
 
 // --- Exported component ---
 

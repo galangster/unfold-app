@@ -7,7 +7,7 @@
  * will still work -- it simply treats the user as unauthenticated
  * and the app operates in local-only mode.
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { useUnfoldStore } from '@/lib/store';
 import { isRevenueCatEnabled, setUserId, logoutUser } from '@/lib/revenuecatClient';
@@ -44,6 +44,10 @@ export function useAuth() {
     isLoading: true,
     authProvider: null,
   });
+
+  const isMountedRef = useRef(true);
+  // Track the latest RevenueCat link call to prevent stale completions
+  const revenueCatCallIdRef = useRef(0);
 
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const currentUserProfile = useUnfoldStore((s) => s.user);
@@ -86,32 +90,37 @@ export function useAuth() {
     });
   }, [updateUser]);
 
-  // Link RevenueCat user
+  // Link RevenueCat user — uses call ID to discard stale completions
   const linkRevenueCatUser = useCallback(async (userId: string | null) => {
     if (!isRevenueCatEnabled()) {
       return;
     }
 
+    // Increment call ID so any previous in-flight call becomes stale
+    const callId = ++revenueCatCallIdRef.current;
+
     try {
       if (userId) {
-        // Log in the user to RevenueCat with their Firebase UID
         const result = await setUserId(userId);
+        // Check if this call is still the latest and component is still mounted
+        if (callId !== revenueCatCallIdRef.current || !isMountedRef.current) return;
         if (result.ok) {
           logger.log('[useAuth] RevenueCat user linked', { userId });
         } else {
-          logger.warn('[useAuth] Failed to link RevenueCat user', { 
-            userId, 
-            reason: result.reason 
+          logger.warn('[useAuth] Failed to link RevenueCat user', {
+            userId,
+            reason: result.reason
           });
         }
       } else {
-        // User signed out, log out from RevenueCat
         const result = await logoutUser();
+        if (callId !== revenueCatCallIdRef.current || !isMountedRef.current) return;
         if (result.ok) {
           logger.log('[useAuth] RevenueCat user logged out');
         }
       }
     } catch (error) {
+      if (callId !== revenueCatCallIdRef.current || !isMountedRef.current) return;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('[useAuth] RevenueCat link error', { error: errorMessage });
     }
@@ -119,43 +128,37 @@ export function useAuth() {
 
   // Initialize auth on mount
   useEffect(() => {
-    let isMounted = true;
-
     const init = async () => {
       try {
         const user = await initializeAuth();
-        if (isMounted) {
-          setAuthState({
-            user,
-            isAuthenticated: !!user,
-            isAnonymous: user?.isAnonymous ?? true,
-            isLoading: false,
-            authProvider: user?.isAnonymous ? 'anonymous' : 
-                         user?.providerData[0]?.providerId === 'apple.com' ? 'apple' : null,
-          });
-          
-          // Sync to store
-          syncAuthToStore(user);
-          
-          // Link to RevenueCat
-          if (user) {
-            await linkRevenueCatUser(user.uid);
-          }
+        if (!isMountedRef.current) return;
+
+        setAuthState({
+          user,
+          isAuthenticated: !!user,
+          isAnonymous: user?.isAnonymous ?? true,
+          isLoading: false,
+          authProvider: user?.isAnonymous ? 'anonymous' :
+                       user?.providerData[0]?.providerId === 'apple.com' ? 'apple' : null,
+        });
+
+        // Sync to store
+        syncAuthToStore(user);
+
+        // Link to RevenueCat
+        if (user) {
+          await linkRevenueCatUser(user.uid);
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('[useAuth] Init error', { error: errorMessage });
-        if (isMounted) {
+        if (isMountedRef.current) {
           setAuthState(prev => ({ ...prev, isLoading: false }));
         }
       }
     };
 
     init();
-
-    return () => {
-      isMounted = false;
-    };
   }, [syncAuthToStore, linkRevenueCatUser]);
 
   // Subscribe to auth state changes (only if Firebase is available)
@@ -169,6 +172,9 @@ export function useAuth() {
     let unsubscribe: (() => void) | undefined;
     try {
       unsubscribe = authInstance.onAuthStateChanged(async (user) => {
+        // Guard against updates after unmount
+        if (!isMountedRef.current) return;
+
         logger.log('[useAuth] Auth state changed', {
           hasUser: !!user,
           isAnonymous: user?.isAnonymous,
@@ -191,7 +197,8 @@ export function useAuth() {
         // Sync to store
         syncAuthToStore(user);
 
-        // Link/unlink RevenueCat user
+        // Link/unlink RevenueCat user (the callback itself checks isMountedRef
+        // and uses call ID to discard stale completions from rapid auth changes)
         await linkRevenueCatUser(user?.uid ?? null);
       });
     } catch (error) {
@@ -204,6 +211,13 @@ export function useAuth() {
       unsubscribe?.();
     };
   }, [syncAuthToStore, linkRevenueCatUser]);
+
+  // Clean up mounted ref on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Get current user's display name
   const getDisplayName = useCallback((): string | null => {

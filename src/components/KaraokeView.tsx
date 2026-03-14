@@ -213,7 +213,7 @@ export function KaraokeView({
 
           return (
             <View
-              key={i}
+              key={`${sentence.text.slice(0, 30)}-${i}`}
               onLayout={(e) => handleSentenceLayout(i, e.nativeEvent.layout.y)}
             >
               {/* Add divider between scripture and body */}

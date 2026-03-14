@@ -4,7 +4,7 @@
  * Generates a personalized 5-movement Ignatian Examen prayer based on
  * the user's day, devotional theme, midday check-in data, and situation.
  *
- * Calls the Railway backend which uses Gemini 2.5 Flash for
+ * Calls the Railway backend which uses Grok for
  * cost-effective generation (~$0.0007/prayer).
  *
  * The five movements:
@@ -247,7 +247,7 @@ const EXPECTED_TITLES = ['Gratitude', 'Presence', 'Honesty', 'Turning', 'Hope'];
  *   1. { content: [{ text: "..." }] }               — standard proxy wrapper
  *   2. { content: "..." }                            — string variant
  *   3. { text: "..." }                               — flat text field
- *   4. { candidates: [{ content: { parts: [{ text }] } }] } — raw Gemini SDK
+ *   4. { candidates: [{ content: { parts: [{ text }] } }] } — raw API SDK
  *   5. { movements: [...] }                          — already-parsed JSON
  *   6. plain string                                  — raw text
  */
@@ -313,7 +313,7 @@ function extractTextFromBackendResponse(rawData: unknown): string | Record<strin
 /**
  * Parse a JSON string that may be wrapped in markdown code fences.
  *
- * Gemini frequently returns ```json\n{...}\n``` even when instructed not to.
+ * LLMs frequently return ```json\n{...}\n``` even when instructed not to.
  * This function strips code fences first, then falls back to regex extraction.
  */
 function parseJsonFromText(text: string): unknown {
@@ -449,7 +449,7 @@ function parseExamenResponse(data: unknown): ExamenPrayer {
  *
  * Checks MMKV cache first (keyed by devotionalId + dayNumber + date).
  * Falls back to the backend with a 30-second timeout and URL fallback chain.
- * Backend uses Gemini 2.5 Flash for cost-effective generation.
+ * Backend uses Grok for cost-effective generation.
  *
  * @returns The examen prayer, or null if generation failed.
  */
@@ -467,7 +467,7 @@ export async function generateExamen(
   const cached = getCachedExamen(cacheKey);
   if (cached) return cached;
 
-  // 2. Call backend with retry on parse failure (backend routes to Gemini 2.5 Flash)
+  // 2. Call backend with retry on parse failure (backend routes to Grok)
   const MAX_ATTEMPTS = 2;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {

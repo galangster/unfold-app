@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -203,29 +203,22 @@ export default function StatsScreen() {
   }, [scopedDevotionals, scopedJournalEntries, scopedUsedScriptures, scopedDevotionalIds, selectedThemeId, storeStreakCurrent, storeStreakLongest, methodUsageHistory]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <View style={[statStyles.flex1, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={statStyles.flex1} edges={['top']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <View style={statStyles.header}>
+          <View style={statStyles.headerLeft}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.back();
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ padding: 8 }}
+              style={statStyles.backButton}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
-            <Text
-              style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 16,
-                color: colors.text,
-                marginLeft: 8,
-              }}
-            >
+            <Text style={[statStyles.headerTitle, { color: colors.text }]}>
               {selectedThemeName ? `${selectedThemeName} Journey` : 'Your Journey'}
             </Text>
           </View>
@@ -236,23 +229,9 @@ export default function StatsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.replace('/(tabs)/(you)/stats');
               }}
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.inputBackground,
-                opacity: 1,
-              }}
+              style={[statStyles.allThemesButton, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
             >
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textSubtle,
-                }}
-              >
+              <Text style={[statStyles.allThemesText, { color: colors.textSubtle }]}>
                 All themes
               </Text>
             </TouchableOpacity>
@@ -260,29 +239,13 @@ export default function StatsScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 }}
+          contentContainerStyle={statStyles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {selectedThemeName && (
             <Animated.View entering={FadeInDown.duration(420)}>
-              <View
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  paddingHorizontal: 14,
-                  paddingVertical: 10,
-                  marginBottom: 14,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textSubtle,
-                  }}
-                >
+              <View style={[statStyles.focusedBanner, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                <Text style={[statStyles.focusedBannerText, { color: colors.textSubtle }]}>
                   Focused view · {selectedThemeName}
                 </Text>
               </View>
@@ -291,49 +254,16 @@ export default function StatsScreen() {
 
           {/* Streak Hero */}
           <Animated.View entering={FadeInDown.duration(500)}>
-            <View
-              style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: colors.border,
-                padding: 28,
-                alignItems: 'center',
-                marginBottom: 24,
-              }}
-            >
+            <View style={[statStyles.streakHero, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
               <SunIcon size={32} color={colors.accent} weight="light" />
-              <Text
-                style={{
-                  fontFamily: FontFamily.display,
-                  fontSize: 56,
-                  color: colors.text,
-                  marginTop: 8,
-                  letterSpacing: -2,
-                }}
-              >
+              <Text style={[statStyles.streakNumber, { color: colors.text }]}>
                 {stats.currentStreak}
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 14,
-                  color: colors.textMuted,
-                  marginTop: -4,
-                }}
-              >
+              <Text style={[statStyles.streakLabel, { color: colors.textMuted }]}>
                 day streak
               </Text>
               {stats.longestStreak > stats.currentStreak && (
-                <Text
-                  style={{
-                    fontFamily: FontFamily.mono,
-                    fontSize: 11,
-                    color: colors.textSubtle,
-                    marginTop: 12,
-                    letterSpacing: 0.5,
-                  }}
-                >
+                <Text style={[statStyles.bestStreak, { color: colors.textSubtle }]}>
                   Best: {stats.longestStreak} days
                 </Text>
               )}
@@ -341,8 +271,8 @@ export default function StatsScreen() {
           </Animated.View>
 
           {/* Stats Grid */}
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-            <Animated.View entering={FadeInDown.duration(500).delay(100)} style={{ flex: 1 }}>
+          <View style={statStyles.gridRow}>
+            <Animated.View entering={FadeInDown.duration(500).delay(100)} style={statStyles.flex1}>
               <StatCard
                 icon={<CalendarIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalDaysCompleted}
@@ -350,7 +280,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={FadeInDown.duration(500).delay(150)} style={{ flex: 1 }}>
+            <Animated.View entering={FadeInDown.duration(500).delay(150)} style={statStyles.flex1}>
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.uniqueScriptures}
@@ -360,8 +290,8 @@ export default function StatsScreen() {
             </Animated.View>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-            <Animated.View entering={FadeInDown.duration(500).delay(200)} style={{ flex: 1 }}>
+          <View style={statStyles.gridRow}>
+            <Animated.View entering={FadeInDown.duration(500).delay(200)} style={statStyles.flex1}>
               <StatCard
                 icon={<CrosshairIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.completedJourneys}
@@ -369,7 +299,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={FadeInDown.duration(500).delay(250)} style={{ flex: 1 }}>
+            <Animated.View entering={FadeInDown.duration(500).delay(250)} style={statStyles.flex1}>
               <StatCard
                 icon={<SparkleIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.themesExplored}
@@ -379,8 +309,8 @@ export default function StatsScreen() {
             </Animated.View>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-            <Animated.View entering={FadeInDown.duration(500).delay(300)} style={{ flex: 1 }}>
+          <View style={statStyles.gridRow}>
+            <Animated.View entering={FadeInDown.duration(500).delay(300)} style={statStyles.flex1}>
               <StatCard
                 icon={<TrophyIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJournalEntries}
@@ -388,7 +318,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={FadeInDown.duration(500).delay(350)} style={{ flex: 1 }}>
+            <Animated.View entering={FadeInDown.duration(500).delay(350)} style={statStyles.flex1}>
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJourneys}
@@ -400,8 +330,8 @@ export default function StatsScreen() {
 
           {/* Method variety row */}
           {stats.uniqueMethodsUsed > 0 && (
-            <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
-              <Animated.View entering={FadeInDown.duration(500).delay(400)} style={{ flex: 1 }}>
+            <View style={statStyles.gridRow}>
+              <Animated.View entering={FadeInDown.duration(500).delay(400)} style={statStyles.flex1}>
                 <StatCard
                   icon={<CompassIcon size={18} color={colors.accent} weight="light" />}
                   value={stats.uniqueMethodsUsed}
@@ -409,68 +339,30 @@ export default function StatsScreen() {
                   colors={colors}
                 />
               </Animated.View>
-              <Animated.View entering={FadeInDown.duration(500).delay(450)} style={{ flex: 1 }}>
+              <Animated.View entering={FadeInDown.duration(500).delay(450)} style={statStyles.flex1}>
                 {stats.favoriteMethodName ? (
-                  <View
-                    style={{
-                      backgroundColor: colors.inputBackground,
-                      borderRadius: 16,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      padding: 18,
-                      justifyContent: 'center',
-                    }}
-                  >
+                  <View style={[statStyles.favoriteMethodCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                     <CompassIcon size={18} color={colors.accent} weight="light" />
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 14,
-                        color: colors.text,
-                        marginTop: 10,
-                      }}
-                      numberOfLines={2}
-                    >
+                    <Text style={[statStyles.favoriteMethodName, { color: colors.text }]} numberOfLines={2}>
                       {stats.favoriteMethodName}
                     </Text>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: 12,
-                        color: colors.textMuted,
-                        marginTop: 2,
-                      }}
-                    >
+                    <Text style={[statStyles.favoriteMethodLabel, { color: colors.textMuted }]}>
                       Most used
                     </Text>
                   </View>
                 ) : (
-                  <View style={{ flex: 1 }} />
+                  <View style={statStyles.flex1} />
                 )}
               </Animated.View>
             </View>
           )}
 
-          <View style={{ height: 12 }} />
+          <View style={statStyles.spacer} />
 
           {/* Encouraging message */}
           <Animated.View entering={FadeIn.duration(600).delay(500)}>
-            <View
-              style={{
-                paddingVertical: 20,
-                paddingHorizontal: 20,
-                borderLeftWidth: 2,
-                borderLeftColor: colors.accent,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.bodyItalic,
-                  fontSize: 15,
-                  color: colors.textMuted,
-                  lineHeight: 24,
-                }}
-              >
+            <View style={[statStyles.quoteBlock, { borderLeftColor: colors.accent }]}>
+              <Text style={[statStyles.quoteText, { color: colors.textMuted }]}>
                 {stats.totalDaysCompleted === 0
                   ? '"The journey of a thousand miles begins with a single step."'
                   : stats.currentStreak >= 7
@@ -497,37 +389,140 @@ function StatCard({
   colors: { inputBackground: string; border: string; text: string; textMuted: string };
 }) {
   return (
-    <View
-      style={{
-        backgroundColor: colors.inputBackground,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 18,
-      }}
-    >
+    <View style={[statStyles.statCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
       {icon}
-      <Text
-        style={{
-          fontFamily: FontFamily.display,
-          fontSize: 28,
-          color: colors.text,
-          marginTop: 10,
-          letterSpacing: -1,
-        }}
-      >
+      <Text style={[statStyles.statCardValue, { color: colors.text }]}>
         {value}
       </Text>
-      <Text
-        style={{
-          fontFamily: FontFamily.ui,
-          fontSize: 12,
-          color: colors.textMuted,
-          marginTop: 2,
-        }}
-      >
+      <Text style={[statStyles.statCardLabel, { color: colors.textMuted }]}>
         {label}
       </Text>
     </View>
   );
 }
+
+const statStyles = StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  allThemesButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  allThemesText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 100,
+  },
+  focusedBanner: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  focusedBannerText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  streakHero: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 28,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  streakNumber: {
+    fontFamily: FontFamily.display,
+    fontSize: 56,
+    marginTop: 8,
+    letterSpacing: -2,
+  },
+  streakLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
+    marginTop: -4,
+  },
+  bestStreak: {
+    fontFamily: FontFamily.mono,
+    fontSize: 11,
+    marginTop: 12,
+    letterSpacing: 0.5,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  favoriteMethodCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+    justifyContent: 'center',
+  },
+  favoriteMethodName: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+    marginTop: 10,
+  },
+  favoriteMethodLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  spacer: {
+    height: 12,
+  },
+  quoteBlock: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderLeftWidth: 2,
+  },
+  quoteText: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: 15,
+    lineHeight: 24,
+  },
+  statCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+  },
+  statCardValue: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    marginTop: 10,
+    letterSpacing: -1,
+  },
+  statCardLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    marginTop: 2,
+  },
+});

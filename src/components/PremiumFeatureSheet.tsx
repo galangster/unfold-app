@@ -13,7 +13,7 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -143,11 +143,20 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
     [onClose]
   );
 
+  const paywallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (paywallTimerRef.current) clearTimeout(paywallTimerRef.current);
+    };
+  }, []);
+
   const handleStartTrial = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onClose();
     // Small delay so the sheet closes before paywall opens
-    setTimeout(() => {
+    if (paywallTimerRef.current) clearTimeout(paywallTimerRef.current);
+    paywallTimerRef.current = setTimeout(() => {
       router.push('/paywall');
     }, 200);
   };
@@ -191,47 +200,18 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         width: 36,
       }}
     >
-      <View style={{ flex: 1, paddingHorizontal: 28, paddingTop: 8 }}>
+      <View style={pfStyles.content}>
         {/* Icon + headline */}
-        <Animated.View entering={FadeIn.duration(400)} style={{ alignItems: 'center' }}>
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              backgroundColor: `${colors.accent}14`,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: 16,
-            }}
-          >
+        <Animated.View entering={FadeIn.duration(400)} style={pfStyles.centerContent}>
+          <View style={[pfStyles.iconContainer, { backgroundColor: `${colors.accent}14` }]}>
             <IconComponent size={28} color={colors.accent} weight="light" />
           </View>
 
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 24,
-              color: colors.text,
-              textAlign: 'center',
-              letterSpacing: -0.5,
-              marginBottom: 8,
-            }}
-          >
+          <Text style={[pfStyles.headline, { color: colors.text }]}>
             {config.headline}
           </Text>
 
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: 15,
-              color: colors.textMuted,
-              textAlign: 'center',
-              lineHeight: 22,
-              marginBottom: 24,
-              paddingHorizontal: 8,
-            }}
-          >
+          <Text style={[pfStyles.description, { color: colors.textMuted }]}>
             {config.description}
           </Text>
         </Animated.View>
@@ -239,36 +219,17 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         {/* CTA button */}
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleStartTrial}
-          style={{
-            backgroundColor: colors.accent,
-            paddingVertical: 16,
-            borderRadius: 14,
-            alignItems: 'center',
-            opacity: 1,
-          }}
+          style={[pfStyles.ctaButton, { backgroundColor: colors.accent }]}
         >
-          <Text
-            style={{
-              fontFamily: FontFamily.uiSemiBold,
-              fontSize: 16,
-              color: colors.background,
-              letterSpacing: 0.2,
-            }}
-          >
+          <Text style={[pfStyles.ctaText, { color: colors.background }]}>
             {config.cta}
           </Text>
         </TouchableOpacity>
 
         {/* Trial reassurance */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
-          <ShieldCheckIcon size={13} color={colors.textSubtle} weight="light" style={{ marginRight: 5 }} />
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 12,
-              color: colors.textSubtle,
-            }}
-          >
+        <View style={pfStyles.reassuranceRow}>
+          <ShieldCheckIcon size={13} color={colors.textSubtle} weight="light" style={pfStyles.shieldIcon} />
+          <Text style={[pfStyles.reassuranceText, { color: colors.textSubtle }]}>
             Cancel anytime. No commitment.
           </Text>
         </View>
@@ -276,15 +237,9 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         {/* Maybe later */}
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleMaybeLater}
-          style={{ alignItems: 'center', marginTop: 12, paddingVertical: 8 }}
+          style={pfStyles.maybeLaterButton}
         >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 13,
-              color: colors.textHint ?? colors.textSubtle,
-            }}
-          >
+          <Text style={[pfStyles.maybeLaterText, { color: colors.textHint ?? colors.textSubtle }]}>
             Maybe later
           </Text>
         </TouchableOpacity>
@@ -292,3 +247,69 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
     </BottomSheet>
   );
 }
+
+const pfStyles = StyleSheet.create({
+  content: {
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 8,
+  },
+  centerContent: {
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headline: {
+    fontFamily: FontFamily.display,
+    fontSize: 24,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  description: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  ctaButton: {
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  ctaText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 16,
+    letterSpacing: 0.2,
+  },
+  reassuranceRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  shieldIcon: {
+    marginRight: 5,
+  },
+  reassuranceText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  maybeLaterButton: {
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  maybeLaterText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+  },
+});

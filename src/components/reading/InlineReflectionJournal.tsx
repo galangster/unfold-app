@@ -51,6 +51,7 @@ export function InlineReflectionJournal({
   // Local response state (before debounced save)
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
   // Load existing responses from store
@@ -122,7 +123,8 @@ export function InlineReflectionJournal({
         // Expand and focus — 400ms delay lets the expand animation finish
         // and layout settle so KeyboardAwareScrollView can measure properly
         setExpandedIndex(index);
-        setTimeout(() => {
+        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = setTimeout(() => {
           inputRefs.current.get(index)?.focus();
         }, 400);
       }
@@ -133,6 +135,7 @@ export function InlineReflectionJournal({
   // Save any pending responses on unmount
   useEffect(() => {
     return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         // Flush pending saves
@@ -226,7 +229,7 @@ export function InlineReflectionJournal({
 
         return (
           <ReflectionQuestionCard
-            key={index}
+            key={question}
             index={index}
             question={question}
             isExpanded={isExpanded}

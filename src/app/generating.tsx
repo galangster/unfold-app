@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView, StyleSheet } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -741,47 +741,17 @@ export default function GeneratingScreen() {
     const displayError = toFriendlyGenerationError(error);
     const isConnectionError = displayError.toLowerCase().includes('connection');
     return (
-      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+      <View style={genStyles.transparentFlex}>
+        <SafeAreaView style={genStyles.errorSafeArea}>
           {/* Error icon */}
-          <View
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              backgroundColor: 'rgba(200, 165, 92, 0.08)',
-              borderWidth: 1,
-              borderColor: 'rgba(200, 165, 92, 0.15)',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: 28,
-            }}
-          >
-            <Text style={{ fontSize: 28 }}>{'  '}</Text>
+          <View style={genStyles.errorIcon}>
+            <Text style={genStyles.errorIconText}>{'  '}</Text>
           </View>
 
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 28,
-              color: colors.text,
-              textAlign: 'center',
-              marginBottom: 12,
-            }}
-          >
+          <Text style={[genStyles.errorTitle, { color: colors.text }]}>
             {isConnectionError ? 'Lost\u00A0connection' : 'Something went\u00A0wrong'}
           </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.body,
-              fontSize: 16,
-              color: colors.textMuted,
-              textAlign: 'center',
-              marginBottom: 40,
-              lineHeight: 24,
-              paddingHorizontal: 8,
-            }}
-          >
+          <Text style={[genStyles.errorMessage, { color: colors.textMuted }]}>
             {displayError}
           </Text>
 
@@ -789,21 +759,9 @@ export default function GeneratingScreen() {
             onPress={handleRetry}
             disabled={isGenerating}
             accessibilityState={{ disabled: isGenerating }}
-            style={{
-              backgroundColor: colors.buttonBackground,
-              paddingVertical: 18,
-              paddingHorizontal: 48,
-              borderRadius: 999,
-              opacity: isGenerating ? 0.6 : 1,
-            }}
+            style={[genStyles.retryButton, { backgroundColor: colors.buttonBackground, opacity: isGenerating ? 0.6 : 1 }]}
           >
-            <Text
-              style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 16,
-                color: colors.background,
-              }}
-            >
+            <Text style={[genStyles.retryButtonText, { color: colors.background }]}>
               Try again
             </Text>
           </TouchableOpacity>
@@ -813,15 +771,9 @@ export default function GeneratingScreen() {
               onPress={handleRetryFromOnboarding}
               disabled={isGenerating}
               accessibilityState={{ disabled: isGenerating }}
-              style={{ paddingVertical: 16, marginTop: 8, opacity: isGenerating ? 0.6 : 1 }}
+              style={[genStyles.startOverButton, { opacity: isGenerating ? 0.6 : 1 }]}
             >
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 14,
-                  color: colors.textSubtle,
-                }}
-              >
+              <Text style={[genStyles.startOverText, { color: colors.textSubtle }]}>
                 Start over with new answers
               </Text>
             </TouchableOpacity>
@@ -940,60 +892,18 @@ export default function GeneratingScreen() {
         >
 
           {/* Water ripple — rings expanding from center */}
-          <View style={{ width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 48 }}>
-            {/* Ripple ring 0 */}
+          <View style={genStyles.rippleContainer}>
             <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  width: 180,
-                  height: 180,
-                  borderRadius: 90,
-                  borderWidth: 1.5,
-                  borderColor: colors.accent,
-                },
-                rippleStyle0,
-              ]}
+              style={[genStyles.rippleRing, { borderWidth: 1.5, borderColor: colors.accent }, rippleStyle0]}
             />
-            {/* Ripple ring 1 */}
             <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  width: 180,
-                  height: 180,
-                  borderRadius: 90,
-                  borderWidth: 1,
-                  borderColor: colors.accent,
-                },
-                rippleStyle1,
-              ]}
+              style={[genStyles.rippleRing, { borderWidth: 1, borderColor: colors.accent }, rippleStyle1]}
             />
-            {/* Ripple ring 2 */}
             <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  width: 180,
-                  height: 180,
-                  borderRadius: 90,
-                  borderWidth: 0.5,
-                  borderColor: colors.accent,
-                },
-                rippleStyle2,
-              ]}
+              style={[genStyles.rippleRing, { borderWidth: 0.5, borderColor: colors.accent }, rippleStyle2]}
             />
-            {/* Core dot */}
             <Animated.View
-              style={[
-                {
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: colors.accent,
-                },
-                coreStyle,
-              ]}
+              style={[genStyles.coreDot, { backgroundColor: colors.accent }, coreStyle]}
             />
           </View>
 
@@ -1040,24 +950,17 @@ export default function GeneratingScreen() {
           {generatedDays.length > 0 && !isProgressiveMode && (
             <Animated.View
               entering={FadeIn.duration(400)}
-              style={{
-                flexDirection: 'row',
-                gap: 6,
-                marginTop: 20,
-                alignItems: 'center',
-              }}
+              style={genStyles.progressDotsRow}
             >
               {Array.from({ length: devotionalLength }).map((_, i) => {
                 const isReady = i < generatedDays.length;
                 return (
                   <View
                     key={i}
-                    style={{
-                      width: isReady ? 8 : 6,
-                      height: isReady ? 8 : 6,
-                      borderRadius: 4,
-                      backgroundColor: isReady ? colors.accent : colors.border,
-                    }}
+                    style={[
+                      isReady ? genStyles.progressDotReady : genStyles.progressDotPending,
+                      { backgroundColor: isReady ? colors.accent : colors.border },
+                    ]}
                   />
                 );
               })}
@@ -1346,7 +1249,7 @@ export default function GeneratingScreen() {
                 {/* Devotional paragraphs */}
                 {SAMPLE_PREVIEW.paragraphs.map((paragraph, index) => (
                   <Text
-                    key={index}
+                    key={`${paragraph.slice(0, 20)}-${index}`}
                     style={{
                       fontFamily: FontFamily.body,
                       fontSize: 15,
@@ -1417,3 +1320,95 @@ export default function GeneratingScreen() {
     </View>
   );
 }
+
+const genStyles = StyleSheet.create({
+  transparentFlex: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  errorSafeArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(200, 165, 92, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 165, 92, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  errorIconText: {
+    fontSize: 28,
+  },
+  errorTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  errorMessage: {
+    fontFamily: FontFamily.body,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 24,
+    paddingHorizontal: 8,
+  },
+  retryButton: {
+    paddingVertical: 18,
+    paddingHorizontal: 48,
+    borderRadius: 999,
+  },
+  retryButtonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 16,
+  },
+  startOverButton: {
+    paddingVertical: 16,
+    marginTop: 8,
+  },
+  startOverText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
+  },
+  rippleContainer: {
+    width: 200,
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 48,
+  },
+  rippleRing: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+  },
+  coreDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  progressDotsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  progressDotReady: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  progressDotPending: {
+    width: 6,
+    height: 6,
+    borderRadius: 4,
+  },
+});

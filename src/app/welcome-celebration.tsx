@@ -76,8 +76,8 @@ export default function WelcomeCelebrationScreen() {
               'Your first devotional is being uniquely crafted', 
               'Every morning, fresh words for exactly where you are', 
               'Build a transformative habit, one day at a time', 
-            ].map((text, index) => (
-              <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            ].map((text) => (
+              <View key={text} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                 <View
                   style={{
                     width: 6,

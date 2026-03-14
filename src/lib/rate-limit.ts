@@ -57,8 +57,13 @@ export async function checkRateLimit(
     let state: RateLimitState;
     
     if (stored) {
-      state = JSON.parse(stored);
-      
+      try {
+        state = JSON.parse(stored);
+      } catch {
+        if (__DEV__) console.warn('[RateLimit] Corrupt stored state, resetting');
+        state = { count: 0, windowStart: now };
+      }
+
       // Check if window has expired
       if (now - state.windowStart > config.windowMs) {
         // Reset window
@@ -102,8 +107,13 @@ export async function incrementRateLimit(endpoint: string): Promise<void> {
     const now = Date.now();
     
     if (stored) {
-      state = JSON.parse(stored);
-      
+      try {
+        state = JSON.parse(stored);
+      } catch {
+        if (__DEV__) console.warn('[RateLimit] Corrupt stored state, resetting');
+        state = { count: 0, windowStart: now };
+      }
+
       // Check if window has expired
       if (now - state.windowStart > config.windowMs) {
         state = { count: 0, windowStart: now };

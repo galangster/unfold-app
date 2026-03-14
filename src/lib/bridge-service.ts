@@ -6,7 +6,7 @@
  * Results are cached in MMKV so generation happens at most once per day
  * per devotional day.
  *
- * Calls the Railway backend which uses Gemini 2.5 Flash for
+ * Calls the Railway backend which uses Grok for
  * cost-effective generation (~$0.0005/bridge).
  */
 

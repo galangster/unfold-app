@@ -197,13 +197,23 @@ function QuestionStep({
   const [isTyping, setIsTyping] = useState(false);
   const [typedAnswer, setTypedAnswer] = useState('');
   const inputRef = useRef<TextInput>(null);
+  const chipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (chipTimerRef.current) clearTimeout(chipTimerRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    };
+  }, []);
 
   const handleChipPress = useCallback(
     (chip: string) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setSelectedChip(chip);
       // Short delay so the user sees the selection before advancing
-      setTimeout(() => onSelectChip(chip), 300);
+      if (chipTimerRef.current) clearTimeout(chipTimerRef.current);
+      chipTimerRef.current = setTimeout(() => onSelectChip(chip), 300);
     },
     [onSelectChip]
   );
@@ -211,7 +221,8 @@ function QuestionStep({
   const handleTypeOwn = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsTyping(true);
-    setTimeout(() => inputRef.current?.focus(), 100);
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
   const handleSubmitTyped = useCallback(() => {
@@ -306,10 +317,12 @@ function QuestionStep({
                   typedAnswer.trim().length > 0
                     ? colors.accent
                     : colors.buttonBackground,
+                opacity: typedAnswer.trim().length > 0 ? 1 : 0.5,
               },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Submit answer"
+            accessibilityState={{ disabled: typedAnswer.trim().length === 0 }}
           >
             <Text
               style={[
@@ -442,10 +455,12 @@ function NoteStep({
                 noteText.trim().length > 0
                   ? colors.accent
                   : colors.buttonBackground,
+              opacity: noteText.trim().length > 0 ? 1 : 0.5,
             },
           ]}
           accessibilityRole="button"
           accessibilityLabel="Submit note"
+          accessibilityState={{ disabled: noteText.trim().length === 0 }}
         >
           <Text
             style={[
@@ -520,7 +535,7 @@ function CheckInCelebration({ colors }: { colors: ReturnType<typeof useTheme>['c
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
         {message.split('').map((char, i) => (
-          <MagicChar key={i} char={char} delay={charDelays[i]} colors={colors} />
+          <MagicChar key={`${char}-${i}`} char={char} delay={charDelays[i]} colors={colors} />
         ))}
       </View>
     </View>

@@ -137,6 +137,7 @@ export default function WallpaperScreen() {
   const [selectedStyle, setSelectedStyle] = useState<string>('default');
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const wallpaperRef = useRef<View>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeStyle = wallpaperStyles.find((s) => s.id === selectedStyle) ?? wallpaperStyles[0];
 
@@ -171,7 +172,8 @@ export default function WallpaperScreen() {
       await MediaLibrary.createAssetAsync(uri);
       setSaved(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => setSaved(false), 2000);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error('Failed to save wallpaper:', error);
       Alert.alert('Save Failed', 'Failed to save. Please try again.');
@@ -243,6 +245,8 @@ export default function WallpaperScreen() {
             onPress={handleClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             style={{ padding: 12 }}
+            accessibilityLabel="Close wallpaper"
+            accessibilityRole="button"
           >
             <XIcon size={22} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -481,7 +485,7 @@ export default function WallpaperScreen() {
             gap: 16,
           }}
         >
-          <TouchableOpacity activeOpacity={0.7} onPress={handleSave} disabled={saving} style={{ opacity: saving && !saved ? 0.5 : 1 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleSave} disabled={saving} style={{ opacity: saving && !saved ? 0.5 : 1 }} accessibilityLabel={saved ? 'Saved' : 'Save wallpaper'} accessibilityRole="button" accessibilityState={{ disabled: saving }}>
             <View
               style={{
                 backgroundColor: saved ? colors.text : colors.buttonBackground,
@@ -504,7 +508,7 @@ export default function WallpaperScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity activeOpacity={0.7} onPress={handleShare} disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleShare} disabled={saving} style={{ opacity: saving ? 0.5 : 1 }} accessibilityLabel="Share wallpaper" accessibilityRole="button" accessibilityState={{ disabled: saving }}>
             <View
               style={{
                 backgroundColor: colors.buttonBackground,

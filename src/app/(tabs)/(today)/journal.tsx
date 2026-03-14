@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   AccessibilityInfo,
+  StyleSheet,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -122,6 +123,8 @@ export default function JournalScreen() {
   );
   const soapInputRefs = useRef<Map<string, TextInput | null>>(new Map());
   const soapSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
@@ -190,7 +193,9 @@ export default function JournalScreen() {
       if (deeperPrompts.length === 0 && currentDay.reflectionQuestions.length > 0) {
         setDeeperPrompts(currentDay.reflectionQuestions);
       }
-      setTimeout(() => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = setTimeout(() => {
+        if (!isMountedRef.current) return;
         const ref = questionInputRefs.current.get(focusQuestionIndex);
         if (ref) {
           ref.focus();
@@ -214,7 +219,10 @@ export default function JournalScreen() {
 
   useEffect(() => {
     if (focusQuestionIndex == null && activeMode === 'freewrite') {
-      setTimeout(() => inputRef.current?.focus(), 300);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) inputRef.current?.focus();
+      }, 300);
     }
   }, [focusQuestionIndex, activeMode]);
 
@@ -254,6 +262,9 @@ export default function JournalScreen() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
       if (hasChangesRef.current && contentRef.current.trim()) {
         saveEntry(contentRef.current);
       }
@@ -273,7 +284,8 @@ export default function JournalScreen() {
         setIsSaving(false);
         setHasChanges(false);
         setJustSaved(true);
-        setTimeout(() => {
+        if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
+        justSavedTimerRef.current = setTimeout(() => {
           if (isMountedRef.current) setJustSaved(false);
         }, 2000);
       }
@@ -317,7 +329,10 @@ export default function JournalScreen() {
       setExpandedSoapSection('scripture');
     }
     if (mode === 'freewrite') {
-      setTimeout(() => inputRef.current?.focus(), 300);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) inputRef.current?.focus();
+      }, 300);
     }
   }, [activeMode, ensureEntry, updateJournalMode, expandedSoapSection]);
 
@@ -341,8 +356,9 @@ export default function JournalScreen() {
       setExpandedSoapSection(null);
     } else {
       setExpandedSoapSection(field);
-      setTimeout(() => {
-        soapInputRefs.current.get(field)?.focus();
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) soapInputRefs.current.get(field)?.focus();
       }, 350);
     }
   }, [expandedSoapSection]);
@@ -409,7 +425,9 @@ export default function JournalScreen() {
         setExpandedQuestionIndex(null);
       } else {
         setExpandedQuestionIndex(index);
-        setTimeout(() => {
+        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = setTimeout(() => {
+          if (!isMountedRef.current) return;
           const ref = questionInputRefs.current.get(index);
           if (ref) {
             ref.focus();
@@ -542,8 +560,16 @@ Their journal entry:
           parsed = JSON.parse(text);
         } catch {
           const match = text.match(/\[[\s\S]*\]/);
-          if (match) parsed = JSON.parse(match[0]);
-          else throw new Error('Could not parse response');
+          if (match) {
+            try {
+              parsed = JSON.parse(match[0]);
+            } catch (innerErr) {
+              if (__DEV__) console.warn('[Go Deeper] Fallback JSON parse failed:', innerErr);
+              throw new Error('Could not parse response (fallback failed)');
+            }
+          } else {
+            throw new Error('Could not parse response');
+          }
         }
       }
 
@@ -568,33 +594,26 @@ Their journal entry:
   const prayerRequests = existingEntry?.prayerRequests ?? [];
 
   return (
-    <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: colors.background }} onPress={Keyboard.dismiss}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <TouchableOpacity activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
+      <SafeAreaView style={jStyles.flex1} edges={['top']}>
         <KeyboardAvoidingView
-          style={{ flex: 1 }}
+          style={jStyles.flex1}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           {/* Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={jStyles.headerRow}>
             <TouchableOpacity
               onPress={handleSkip}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               activeOpacity={0.6}
               accessibilityRole="button"
               accessibilityLabel="Close journal"
-              style={{ padding: 8 }}
+              style={jStyles.headerButton}
             >
               <XIcon size={22} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
 
-            <Text
-              style={{
-                fontFamily: FontFamily.mono,
-                fontSize: 12,
-                color: colors.textSubtle,
-                letterSpacing: 1,
-              }}
-            >
+            <Text style={[jStyles.dayLabel, { color: colors.textSubtle }]}>
               DAY {dayNumber}
             </Text>
 
@@ -604,14 +623,14 @@ Their journal entry:
               activeOpacity={0.6}
               accessibilityRole="button"
               accessibilityLabel="Save journal entry"
-              style={{ padding: 8 }}
+              style={jStyles.headerButton}
             >
               <CheckIcon size={22} color={content.trim() || soapCompletedCount > 0 ? colors.text : colors.textHint} weight="bold" />
             </TouchableOpacity>
           </View>
 
           {/* Mode Selector */}
-          <View style={{ flexDirection: 'row', paddingHorizontal: 24, marginBottom: 8, gap: 0 }}>
+          <View style={jStyles.modeSelector}>
             {([
               { mode: 'freewrite' as JournalMode, label: 'Free Write' },
               { mode: 'soap' as JournalMode, label: 'SOAP' },
@@ -620,20 +639,16 @@ Their journal entry:
                 key={mode}
                 onPress={() => handleModeSwitch(mode)}
                 activeOpacity={0.7}
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 16,
-                  borderBottomWidth: 2,
-                  borderBottomColor: activeMode === mode ? colors.accent : 'transparent',
-                }}
+                style={[jStyles.modeTab, { borderBottomColor: activeMode === mode ? colors.accent : 'transparent' }]}
               >
                 <Text
-                  style={{
-                    fontFamily: activeMode === mode ? FontFamily.uiMedium : FontFamily.ui,
-                    fontSize: 13,
-                    color: activeMode === mode ? colors.text : colors.textSubtle,
-                    letterSpacing: 0.3,
-                  }}
+                  style={[
+                    jStyles.modeTabText,
+                    {
+                      fontFamily: activeMode === mode ? FontFamily.uiMedium : FontFamily.ui,
+                      color: activeMode === mode ? colors.text : colors.textSubtle,
+                    },
+                  ]}
                 >
                   {label}
                 </Text>
@@ -644,30 +659,15 @@ Their journal entry:
           {/* Content */}
           <ScrollView
             ref={scrollViewRef}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 120 }}
+            style={jStyles.flex1}
+            contentContainerStyle={jStyles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
             {/* Scripture anchor — connects the blank page to today's content */}
             {currentDay && (
               <Animated.View entering={FadeIn.duration(400)}>
-                <View
-                  style={{
-                    marginBottom: 24,
-                    paddingLeft: 12,
-                    borderLeftWidth: 2,
-                    borderLeftColor: colors.accent + '40',
-                    borderRadius: 1,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.bodyItalic,
-                      fontSize: 14,
-                      color: colors.textMuted,
-                      lineHeight: 20,
-                    }}
-                  >
+                <View style={[jStyles.scriptureAnchor, { borderLeftColor: colors.accent + '40' }]}>
+                  <Text style={[jStyles.scriptureAnchorText, { color: colors.textMuted }]}>
                     {currentDay.title}
                     {currentDay.scriptureReference ? ` — ${currentDay.scriptureReference}` : ''}
                   </Text>
@@ -679,24 +679,10 @@ Their journal entry:
             {activeMode === 'freewrite' && (
               <>
                 <Animated.View entering={FadeIn.duration(400)}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.display,
-                      fontSize: 28,
-                      color: colors.text,
-                      marginBottom: 8,
-                    }}
-                  >
+                  <Text style={[jStyles.freewriteTitle, { color: colors.text }]}>
                     What's stirring?
                   </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 15,
-                      color: colors.textMuted,
-                      marginBottom: 32,
-                    }}
-                  >
+                  <Text style={[jStyles.freewriteSubtitle, { color: colors.textMuted }]}>
                     Take a moment to reflect. This is just for you.
                   </Text>
                 </Animated.View>
@@ -711,51 +697,25 @@ Their journal entry:
                     multiline
                     textAlignVertical="top"
                     accessibilityLabel="Journal entry"
-                    style={{
-                      minHeight: 160,
-                      fontFamily: FontFamily.mono,
-                      fontSize: 16,
-                      color: colors.text,
-                      lineHeight: 26,
-                      paddingTop: 0,
-                    }}
+                    style={[jStyles.freewriteInput, { color: colors.text }]}
                   />
                 </Animated.View>
 
                 {/* Go Deeper button */}
                 {showDeeperButton && (
-                  <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 24 }}>
+                  <Animated.View entering={FadeIn.duration(300)} style={jStyles.deeperButtonWrapper}>
                     <TouchableOpacity
                       onPress={handleGoDeeper}
                       disabled={loadingDeeper}
                       activeOpacity={0.6}
                       accessibilityRole="button"
                       accessibilityLabel={isPremium ? "Go deeper" : "Go deeper, premium feature"}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        paddingVertical: 14,
-                        paddingHorizontal: 24,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: colors.accent,
-                        backgroundColor: 'transparent',
-                        alignSelf: 'center',
-                        opacity: loadingDeeper ? 0.6 : 0.9,
-                      }}
+                      style={[jStyles.deeperButton, { borderColor: colors.accent, opacity: loadingDeeper ? 0.6 : 0.9 }]}
                     >
                       {loadingDeeper ? (
                         <>
                           <ActivityIndicator size="small" color={colors.accent} />
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 14,
-                              color: colors.accent,
-                            }}
-                          >
+                          <Text style={[jStyles.deeperButtonText, { color: colors.accent }]}>
                             Reflecting...
                           </Text>
                         </>
@@ -767,11 +727,7 @@ Their journal entry:
                             <LockIcon size={14} color={colors.accent} weight="light" />
                           )}
                           <Text
-                            style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 14,
-                              color: colors.accent,
-                            }}
+                            style={[jStyles.deeperButtonText, { color: colors.accent }]}
                           >
                             Go Deeper
                           </Text>
@@ -783,16 +739,9 @@ Their journal entry:
 
                 {/* Error state */}
                 {deeperError && (
-                  <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 24, alignItems: 'center' }}>
+                  <Animated.View entering={FadeIn.duration(300)} style={jStyles.errorWrapper}>
                     <TouchableOpacity onPress={handleGoDeeper} activeOpacity={0.6}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 13,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                        }}
-                      >
+                      <Text style={[jStyles.errorText, { color: colors.textMuted }]}>
                         Couldn't generate prompts. Tap to try again.
                       </Text>
                     </TouchableOpacity>
@@ -801,37 +750,14 @@ Their journal entry:
 
                 {/* Deeper prompts */}
                 {allQuestions.length > 0 && (
-                  <Animated.View entering={FadeInDown.duration(500)} style={{ marginTop: 32, marginBottom: 32 }}>
-                    <View
-                      style={{
-                        width: 24,
-                        height: 1.5,
-                        backgroundColor: colors.accent,
-                        marginBottom: 20,
-                        borderRadius: 1,
-                      }}
-                    />
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.mono,
-                          fontSize: 11,
-                          color: colors.accent,
-                          letterSpacing: 1,
-                          textTransform: 'uppercase',
-                          opacity: 0.8,
-                        }}
-                      >
+                  <Animated.View entering={FadeInDown.duration(500)} style={jStyles.deeperPromptsSection}>
+                    <View style={[jStyles.deeperAccentLine, { backgroundColor: colors.accent }]} />
+                    <View style={jStyles.deeperHeaderRow}>
+                      <Text style={[jStyles.deeperLabel, { color: colors.accent }]}>
                         Go Deeper
                       </Text>
                       {allQuestions.length > 0 && (
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.ui,
-                            fontSize: 12,
-                            color: answeredCount === allQuestions.length ? colors.accent : colors.textSubtle,
-                          }}
-                        >
+                        <Text style={[jStyles.deeperProgress, { color: answeredCount === allQuestions.length ? colors.accent : colors.textSubtle }]}>
                           {answeredCount} of {allQuestions.length} complete
                         </Text>
                       )}
@@ -846,7 +772,7 @@ Their journal entry:
                         <Animated.View
                           key={`q-${index}`}
                           entering={FadeInDown.duration(400).delay(index * 100)}
-                          style={{ marginBottom: 14 }}
+                          style={jStyles.questionItem}
                         >
                           <TouchableOpacity
                             onPress={() => handleToggleQuestion(index)}
@@ -854,16 +780,9 @@ Their journal entry:
                             accessibilityRole="button"
                             accessibilityLabel={`Reflection prompt ${index + 1}: ${prompt}`}
                             accessibilityState={{ expanded: isExpanded }}
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'flex-start',
-                              paddingLeft: 14,
-                              borderLeftWidth: 2,
-                              borderLeftColor: isAnswered ? colors.accent : colors.border,
-                              gap: 10,
-                            }}
+                            style={[jStyles.questionRow, { borderLeftColor: isAnswered ? colors.accent : colors.border }]}
                           >
-                            <View style={{ marginTop: 3 }}>
+                            <View style={jStyles.questionIconWrapper}>
                               {isAnswered ? (
                                 <CheckCircleIcon size={16} color={colors.accent} weight="fill" />
                               ) : isExpanded ? (
@@ -872,15 +791,7 @@ Their journal entry:
                                 <CaretDownIcon size={14} color={colors.textSubtle} weight="light" />
                               )}
                             </View>
-                            <Text
-                              style={{
-                                flex: 1,
-                                fontFamily: FontFamily.bodyItalic,
-                                fontSize: 15,
-                                color: colors.text,
-                                lineHeight: 24,
-                              }}
-                            >
+                            <Text style={[jStyles.questionText, { color: colors.text }]}>
                               {prompt}
                             </Text>
                           </TouchableOpacity>
@@ -888,23 +799,9 @@ Their journal entry:
                           {isExpanded && (
                             <Animated.View
                               entering={FadeInDown.duration(250)}
-                              style={{
-                                marginLeft: 14,
-                                marginTop: 10,
-                                paddingLeft: 14,
-                                borderLeftWidth: 2,
-                                borderLeftColor: 'transparent',
-                              }}
+                              style={jStyles.questionInputWrapper}
                             >
-                              <View
-                                style={{
-                                  backgroundColor: colors.inputBackground,
-                                  borderRadius: 12,
-                                  borderWidth: 1,
-                                  borderColor: colors.borderFocused,
-                                  padding: 14,
-                                }}
-                              >
+                              <View style={[jStyles.questionInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}>
                                 <TextInput
                                   ref={(ref) => {
                                     questionInputRefs.current.set(index, ref);
@@ -915,14 +812,7 @@ Their journal entry:
                                   placeholderTextColor={colors.textHint}
                                   multiline
                                   textAlignVertical="top"
-                                  style={{
-                                    minHeight: 80,
-                                    fontFamily: FontFamily.body,
-                                    fontSize: 15,
-                                    color: colors.text,
-                                    lineHeight: 24,
-                                    padding: 0,
-                                  }}
+                                  style={[jStyles.questionTextInput, { color: colors.text }]}
                                 />
                               </View>
                             </Animated.View>
@@ -931,17 +821,9 @@ Their journal entry:
                           {!isExpanded && isAnswered && (
                             <Animated.View
                               entering={FadeIn.duration(200)}
-                              style={{ marginLeft: 40, marginTop: 6 }}
+                              style={jStyles.questionPreview}
                             >
-                              <Text
-                                style={{
-                                  fontFamily: FontFamily.body,
-                                  fontSize: 13,
-                                  color: colors.textMuted,
-                                  lineHeight: 20,
-                                }}
-                                numberOfLines={2}
-                              >
+                              <Text style={[jStyles.questionPreviewText, { color: colors.textMuted }]} numberOfLines={2}>
                                 {responseText}
                               </Text>
                             </Animated.View>
@@ -957,40 +839,19 @@ Their journal entry:
             {/* ===== SOAP MODE ===== */}
             {activeMode === 'soap' && (
               <Animated.View entering={FadeIn.duration(400)}>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: 28,
-                    color: colors.text,
-                    marginBottom: 4,
-                  }}
-                >
+                <Text style={[jStyles.soapTitle, { color: colors.text }]}>
                   SOAP Journal
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: 14,
-                    color: colors.textMuted,
-                    marginBottom: 8,
-                  }}
-                >
+                <Text style={[jStyles.soapSubtitle, { color: colors.textMuted }]}>
                   Scripture, Observation, Application, Prayer
                 </Text>
 
                 {/* SOAP progress */}
-                <View style={{ flexDirection: 'row', gap: 4, marginBottom: 28 }}>
+                <View style={jStyles.soapProgressRow}>
                   {SOAP_SECTIONS.map((section) => (
                     <View
                       key={section.key}
-                      style={{
-                        flex: 1,
-                        height: 3,
-                        borderRadius: 1.5,
-                        backgroundColor: soapValues[section.key].trim()
-                          ? colors.accent
-                          : colors.border,
-                      }}
+                      style={[jStyles.soapProgressBar, { backgroundColor: soapValues[section.key].trim() ? colors.accent : colors.border }]}
                     />
                   ))}
                 </View>
@@ -1012,59 +873,32 @@ Their journal entry:
                         accessibilityRole="button"
                         accessibilityLabel={`${section.label} section`}
                         accessibilityState={{ expanded: isExpanded }}
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderRadius: 12,
-                          backgroundColor: isExpanded
-                            ? colors.accent + '0A'
-                            : hasContent
-                            ? colors.accent + '06'
-                            : 'transparent',
-                          borderWidth: 1,
-                          borderColor: isExpanded
-                            ? colors.accent + '30'
-                            : hasContent
-                            ? colors.accent + '15'
-                            : colors.border + '60',
-                        }}
+                        style={[
+                          jStyles.soapSectionButton,
+                          {
+                            backgroundColor: isExpanded
+                              ? colors.accent + '0A'
+                              : hasContent
+                              ? colors.accent + '06'
+                              : 'transparent',
+                            borderColor: isExpanded
+                              ? colors.accent + '30'
+                              : hasContent
+                              ? colors.accent + '15'
+                              : colors.border + '60',
+                          },
+                        ]}
                       >
                         {/* Letter badge */}
-                        <View
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 8,
-                            backgroundColor: hasContent ? colors.accent : colors.border + '80',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginRight: 12,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 14,
-                              color: hasContent ? '#fff' : colors.textSubtle,
-                            }}
-                          >
+                        <View style={[jStyles.soapLetterBadge, { backgroundColor: hasContent ? colors.accent : colors.border + '80' }]}>
+                          <Text style={[jStyles.soapLetterText, { color: hasContent ? '#fff' : colors.textSubtle }]}>
                             {section.letter}
                           </Text>
                         </View>
 
                         <SoapIcon name={section.icon} size={16} color={hasContent ? colors.accent : colors.textSubtle} />
 
-                        <Text
-                          style={{
-                            flex: 1,
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: 15,
-                            color: colors.text,
-                            marginLeft: 10,
-                          }}
-                        >
+                        <Text style={[jStyles.soapSectionLabel, { color: colors.text }]}>
                           {section.label}
                         </Text>
 
@@ -1077,17 +911,9 @@ Their journal entry:
                       {isExpanded && (
                         <Animated.View
                           entering={FadeInDown.duration(250)}
-                          style={{ marginTop: 10, paddingHorizontal: 4 }}
+                          style={jStyles.soapExpandedWrapper}
                         >
-                          <View
-                            style={{
-                              backgroundColor: colors.inputBackground,
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: colors.accent + '30',
-                              padding: 14,
-                            }}
-                          >
+                          <View style={[jStyles.soapInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.accent + '30' }]}>
                             <TextInput
                               ref={(ref) => { soapInputRefs.current.set(section.key, ref); }}
                               value={soapValues[section.key]}
@@ -1097,25 +923,10 @@ Their journal entry:
                               multiline
                               textAlignVertical="top"
                               accessibilityLabel={`${section.label} journal entry`}
-                              style={{
-                                minHeight: 100,
-                                fontFamily: FontFamily.body,
-                                fontSize: 15,
-                                color: colors.text,
-                                lineHeight: 24,
-                                padding: 0,
-                              }}
+                              style={[jStyles.soapTextInput, { color: colors.text }]}
                             />
                           </View>
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.ui,
-                              fontSize: 11,
-                              color: colors.textHint,
-                              marginTop: 6,
-                              textAlign: 'right',
-                            }}
-                          >
+                          <Text style={[jStyles.autoSavedLabel, { color: colors.textHint }]}>
                             Auto-saved
                           </Text>
                         </Animated.View>
@@ -1123,18 +934,7 @@ Their journal entry:
 
                       {/* Collapsed preview */}
                       {!isExpanded && hasContent && (
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.body,
-                            fontSize: 13,
-                            color: colors.textMuted,
-                            lineHeight: 19,
-                            marginTop: 6,
-                            marginLeft: 54,
-                            marginRight: 8,
-                          }}
-                          numberOfLines={2}
-                        >
+                        <Text style={[jStyles.soapPreview, { color: colors.textMuted }]} numberOfLines={2}>
                           {soapValues[section.key]}
                         </Text>
                       )}
@@ -1144,17 +944,8 @@ Their journal entry:
 
                 {/* SOAP completion message */}
                 {soapCompletedCount === 4 && (
-                  <Animated.View
-                    entering={FadeIn.duration(400)}
-                    style={{ alignItems: 'center', marginTop: 16 }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: 13,
-                        color: colors.accent,
-                      }}
-                    >
+                  <Animated.View entering={FadeIn.duration(400)} style={jStyles.soapCompleteWrapper}>
+                    <Text style={[jStyles.soapCompleteText, { color: colors.accent }]}>
                       Beautiful reflection. All sections complete.
                     </Text>
                   </Animated.View>
@@ -1168,29 +959,13 @@ Their journal entry:
               style={{ marginTop: activeMode === 'soap' ? 32 : allQuestions.length > 0 ? 0 : 40 }}
             >
               {/* Divider */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 20,
-                }}
-              >
-                <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
-                <HandsPrayingIcon size={14} color={colors.accent} weight="light" style={{ marginHorizontal: 12 }} />
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 10,
-                    color: colors.accent,
-                    letterSpacing: 2,
-                    textTransform: 'uppercase',
-                    opacity: 0.75,
-                  }}
-                >
+              <View style={jStyles.prayerDivider}>
+                <View style={[jStyles.prayerDividerLine, { backgroundColor: colors.textMuted }]} />
+                <HandsPrayingIcon size={14} color={colors.accent} weight="light" style={jStyles.prayerDividerIcon} />
+                <Text style={[jStyles.prayerDividerLabel, { color: colors.accent }]}>
                   Prayer Requests
                 </Text>
-                <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15, marginLeft: 12 }} />
+                <View style={[jStyles.prayerDividerLineRight, { backgroundColor: colors.textMuted }]} />
               </View>
 
               {/* Existing prayer requests */}
@@ -1198,60 +973,39 @@ Their journal entry:
                 <Animated.View
                   key={prayer.id}
                   entering={FadeIn.duration(300)}
-                  style={{ marginBottom: 10 }}
+                  style={jStyles.prayerItemWrapper}
                 >
                   <TouchableOpacity
                     onPress={() => handleTogglePrayer(prayer.id)}
                     activeOpacity={0.7}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'flex-start',
-                      gap: 10,
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderRadius: 10,
-                      backgroundColor: prayer.isAnswered ? colors.accent + '08' : 'transparent',
-                      borderWidth: 1,
-                      borderColor: prayer.isAnswered ? colors.accent + '20' : colors.border + '40',
-                    }}
+                    style={[
+                      jStyles.prayerItemButton,
+                      {
+                        backgroundColor: prayer.isAnswered ? colors.accent + '08' : 'transparent',
+                        borderColor: prayer.isAnswered ? colors.accent + '20' : colors.border + '40',
+                      },
+                    ]}
                   >
-                    <View style={{ marginTop: 2 }}>
+                    <View style={jStyles.prayerCheckWrapper}>
                       {prayer.isAnswered ? (
                         <CheckCircleFillIcon size={18} color={colors.accent} weight="fill" />
                       ) : (
-                        <View
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 9,
-                            borderWidth: 1.5,
-                            borderColor: colors.textHint,
-                          }}
-                        />
+                        <View style={[jStyles.prayerEmptyCircle, { borderColor: colors.textHint }]} />
                       )}
                     </View>
                     <Text
-                      style={{
-                        flex: 1,
-                        fontFamily: FontFamily.body,
-                        fontSize: 14,
-                        color: prayer.isAnswered ? colors.textMuted : colors.text,
-                        lineHeight: 21,
-                        textDecorationLine: prayer.isAnswered ? 'line-through' : 'none',
-                      }}
+                      style={[
+                        jStyles.prayerText,
+                        {
+                          color: prayer.isAnswered ? colors.textMuted : colors.text,
+                          textDecorationLine: prayer.isAnswered ? 'line-through' : 'none',
+                        },
+                      ]}
                     >
                       {prayer.text}
                     </Text>
                     {prayer.isAnswered && (
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 10,
-                          color: colors.accent,
-                          letterSpacing: 0.5,
-                          marginTop: 3,
-                        }}
-                      >
+                      <Text style={[jStyles.prayerAnsweredLabel, { color: colors.accent }]}>
                         Answered
                       </Text>
                     )}
@@ -1261,19 +1015,8 @@ Their journal entry:
 
               {/* Add prayer input */}
               {showPrayerInput ? (
-                <Animated.View entering={FadeInDown.duration(250)} style={{ marginTop: 4 }}>
-                  <View
-                    style={{
-                      backgroundColor: colors.inputBackground,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: colors.accent + '30',
-                      padding: 12,
-                      flexDirection: 'row',
-                      alignItems: 'flex-end',
-                      gap: 10,
-                    }}
-                  >
+                <Animated.View entering={FadeInDown.duration(250)} style={jStyles.prayerInputMargin}>
+                  <View style={[jStyles.prayerInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.accent + '30' }]}>
                     <TextInput
                       ref={prayerInputRef}
                       value={newPrayerText}
@@ -1283,28 +1026,16 @@ Their journal entry:
                       multiline
                       textAlignVertical="top"
                       autoFocus
-                      style={{
-                        flex: 1,
-                        minHeight: 44,
-                        fontFamily: FontFamily.body,
-                        fontSize: 14,
-                        color: colors.text,
-                        lineHeight: 21,
-                        padding: 0,
-                      }}
+                      style={[jStyles.prayerTextInput, { color: colors.text }]}
                     />
                     <TouchableOpacity
                       onPress={handleAddPrayer}
                       activeOpacity={0.6}
                       disabled={!newPrayerText.trim()}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: newPrayerText.trim() ? colors.accent : colors.border,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
+                      style={[jStyles.prayerSubmitButton, { backgroundColor: newPrayerText.trim() ? colors.accent : colors.border, opacity: newPrayerText.trim() ? 1 : 0.5 }]}
+                      accessibilityLabel="Add prayer"
+                      accessibilityRole="button"
+                      accessibilityState={{ disabled: !newPrayerText.trim() }}
                     >
                       <CheckIcon size={16} color={newPrayerText.trim() ? '#fff' : colors.textHint} weight="bold" />
                     </TouchableOpacity>
@@ -1312,15 +1043,9 @@ Their journal entry:
                   <TouchableOpacity
                     onPress={() => { setShowPrayerInput(false); setNewPrayerText(''); }}
                     activeOpacity={0.6}
-                    style={{ alignSelf: 'center', marginTop: 8 }}
+                    style={jStyles.prayerCancelButton}
                   >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: 12,
-                        color: colors.textSubtle,
-                      }}
-                    >
+                    <Text style={[jStyles.prayerCancelText, { color: colors.textSubtle }]}>
                       Cancel
                     </Text>
                   </TouchableOpacity>
@@ -1332,23 +1057,10 @@ Their journal entry:
                     setShowPrayerInput(true);
                   }}
                   activeOpacity={0.6}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    paddingVertical: 12,
-                    marginTop: 4,
-                  }}
+                  style={jStyles.addPrayerButton}
                 >
                   <PlusIcon size={14} color={colors.textSubtle} weight="light" />
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 13,
-                      color: colors.textSubtle,
-                    }}
-                  >
+                  <Text style={[jStyles.addPrayerText, { color: colors.textSubtle }]}>
                     Add a prayer request
                   </Text>
                 </TouchableOpacity>
@@ -1359,22 +1071,13 @@ Their journal entry:
           {/* Bottom hint — crossfade between states */}
           <Animated.View
             entering={FadeIn.duration(400).delay(400)}
-            style={{
-              paddingHorizontal: 24,
-              paddingBottom: 24,
-              alignItems: 'center',
-            }}
+            style={jStyles.bottomHint}
           >
             <Animated.Text
               key={hasChanges ? 'saving' : justSaved ? 'saved' : 'idle'}
               entering={FadeIn.duration(300)}
               exiting={FadeOut.duration(200)}
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 13,
-                color: justSaved ? colors.accent : colors.textHint,
-                textAlign: 'center',
-              }}
+              style={[jStyles.bottomHintText, { color: justSaved ? colors.accent : colors.textHint }]}
             >
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}
             </Animated.Text>
@@ -1390,3 +1093,375 @@ Their journal entry:
     </TouchableOpacity>
   );
 }
+
+const jStyles = StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerButton: {
+    padding: 8,
+  },
+  dayLabel: {
+    fontFamily: FontFamily.mono,
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    marginBottom: 8,
+    gap: 0,
+  },
+  modeTab: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 2,
+  },
+  modeTabText: {
+    fontSize: 13,
+    letterSpacing: 0.3,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 120,
+  },
+  scriptureAnchor: {
+    marginBottom: 24,
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+    borderRadius: 1,
+  },
+  scriptureAnchorText: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  freewriteTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  freewriteSubtitle: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    marginBottom: 32,
+  },
+  freewriteInput: {
+    minHeight: 160,
+    fontFamily: FontFamily.mono,
+    fontSize: 16,
+    lineHeight: 26,
+    paddingTop: 0,
+  },
+  deeperButtonWrapper: {
+    marginTop: 24,
+  },
+  deeperButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+    alignSelf: 'center',
+  },
+  deeperButtonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+  },
+  errorWrapper: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  deeperPromptsSection: {
+    marginTop: 32,
+    marginBottom: 32,
+  },
+  deeperAccentLine: {
+    width: 24,
+    height: 1.5,
+    marginBottom: 20,
+    borderRadius: 1,
+  },
+  deeperHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  deeperLabel: {
+    fontFamily: FontFamily.mono,
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    opacity: 0.8,
+  },
+  deeperProgress: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  questionItem: {
+    marginBottom: 14,
+  },
+  questionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingLeft: 14,
+    borderLeftWidth: 2,
+    gap: 10,
+  },
+  questionIconWrapper: {
+    marginTop: 3,
+  },
+  questionText: {
+    flex: 1,
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: 15,
+    lineHeight: 24,
+  },
+  questionInputWrapper: {
+    marginLeft: 14,
+    marginTop: 10,
+    paddingLeft: 14,
+    borderLeftWidth: 2,
+    borderLeftColor: 'transparent',
+  },
+  questionInputCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+  },
+  questionTextInput: {
+    minHeight: 80,
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 24,
+    padding: 0,
+  },
+  questionPreview: {
+    marginLeft: 40,
+    marginTop: 6,
+  },
+  questionPreviewText: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  soapTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  soapSubtitle: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  soapProgressRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 28,
+  },
+  soapProgressBar: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+  },
+  soapSectionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  soapLetterBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  soapLetterText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+  },
+  soapSectionLabel: {
+    flex: 1,
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 15,
+    marginLeft: 10,
+  },
+  soapExpandedWrapper: {
+    marginTop: 10,
+    paddingHorizontal: 4,
+  },
+  soapInputCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+  },
+  soapTextInput: {
+    minHeight: 100,
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 24,
+    padding: 0,
+  },
+  autoSavedLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  soapPreview: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
+    marginLeft: 54,
+    marginRight: 8,
+  },
+  soapCompleteWrapper: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  soapCompleteText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+  },
+  prayerDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  prayerDividerLine: {
+    flex: 1,
+    height: 0.5,
+    opacity: 0.15,
+  },
+  prayerDividerLineRight: {
+    flex: 1,
+    height: 0.5,
+    opacity: 0.15,
+    marginLeft: 12,
+  },
+  prayerDividerIcon: {
+    marginHorizontal: 12,
+  },
+  prayerDividerLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    opacity: 0.75,
+  },
+  prayerItemWrapper: {
+    marginBottom: 10,
+  },
+  prayerItemButton: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  prayerCheckWrapper: {
+    marginTop: 2,
+  },
+  prayerEmptyCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+  },
+  prayerText: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  prayerAnsweredLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    marginTop: 3,
+  },
+  prayerInputMargin: {
+    marginTop: 4,
+  },
+  prayerInputCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  prayerTextInput: {
+    flex: 1,
+    minHeight: 44,
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 21,
+    padding: 0,
+  },
+  prayerSubmitButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prayerCancelButton: {
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  prayerCancelText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  addPrayerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  addPrayerText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+  },
+  bottomHint: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    alignItems: 'center',
+  },
+  bottomHintText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+});

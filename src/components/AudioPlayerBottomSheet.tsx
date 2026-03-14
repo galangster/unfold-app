@@ -726,6 +726,8 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                         setShowKaraoke(true);
                       }}
                       style={styles.listenAlongIcon}
+                      accessibilityLabel="Listen along mode"
+                      accessibilityRole="button"
                     >
                       <Animated.View style={sparkleAnimStyle}>
                         <SparkleIcon size={20} color={colors.accent} weight="fill" />
@@ -742,6 +744,9 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                             : 'rgba(0,0,0,0.06)',
                         },
                       ]}
+                      accessibilityLabel={`Playback speed ${currentSpeed === 1 ? '1x' : `${currentSpeed}x`}`}
+                      accessibilityRole="button"
+                      accessibilityHint="Opens speed selector"
                     >
                       <Text
                         style={[
@@ -843,6 +848,9 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                         }}
                         style={styles.skipButton}
                         disabled={isLoading || !isAudioReady}
+                        accessibilityLabel={`Skip back ${SKIP_SECONDS} seconds`}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: isLoading || !isAudioReady }}
                       >
                         <ArrowCounterClockwiseIcon
                           size={20}
@@ -882,6 +890,9 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                           { backgroundColor: colors.accent },
                         ]}
                         disabled={isLoading}
+                        accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: isLoading }}
                       >
                         {isLoading ? (
                           <ActivityIndicator color="#fff" size="small" />
@@ -910,6 +921,9 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                         }}
                         style={styles.skipButton}
                         disabled={isLoading || !isAudioReady}
+                        accessibilityLabel={`Skip forward ${SKIP_SECONDS} seconds`}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: isLoading || !isAudioReady }}
                       >
                         <ArrowClockwiseIcon
                           size={20}

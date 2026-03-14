@@ -318,7 +318,7 @@ function SparkleBurst({ count = 30 }: { count?: number }) {
   );
 }
 
-function SparkleParticle({
+const SparkleParticle = React.memo(function SparkleParticle({
   targetX,
   targetY,
   size,
@@ -378,7 +378,7 @@ function SparkleParticle({
       ]}
     />
   );
-}
+});
 
 const sparkleS = StyleSheet.create({
   container: {
@@ -393,7 +393,7 @@ const sparkleS = StyleSheet.create({
 });
 
 // ─── Floating Ember Particles ─────────────────────────────────
-function FloatingEmber({ index, color }: { index: number; color: string }) {
+const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { index: number; color: string }) {
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -467,7 +467,7 @@ function FloatingEmber({ index, color }: { index: number; color: string }) {
       ]}
     />
   );
-}
+});
 
 // ─── Pulsing Ring (for archetype card) ────────────────────────
 function PulsingRing({ delay, size, color }: { delay: number; size: number; color: string }) {
@@ -1301,6 +1301,13 @@ export default function UnfoldedScreen() {
   // Navigation
   const translateX = useSharedValue(0);
   const isAnimating = useRef(false);
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+    };
+  }, []);
 
   const goTo = useCallback(
     (index: number) => {
@@ -1309,7 +1316,8 @@ export default function UnfoldedScreen() {
       isAnimating.current = true;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setCurrentCard(index);
-      setTimeout(() => {
+      if (animTimerRef.current) clearTimeout(animTimerRef.current);
+      animTimerRef.current = setTimeout(() => {
         isAnimating.current = false;
       }, 350);
     },
@@ -1449,6 +1457,8 @@ export default function UnfoldedScreen() {
               hitSlop={CLOSE_HIT_SLOP}
               style={s.closeButton}
               activeOpacity={0.6}
+              accessibilityLabel="Close stories"
+              accessibilityRole="button"
             >
               <XIcon size={18} color="rgba(255,255,255,0.6)" weight="bold" />
             </TouchableOpacity>

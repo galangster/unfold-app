@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import Animated, {
   FadeIn,
@@ -46,7 +46,7 @@ function getMilestoneScale(streak: number): number {
 }
 
 /** Sparkle particle positioned around the center */
-function SparkleParticle({
+const SparkleParticle = React.memo(function SparkleParticle({
   angle,
   distance,
   delay,
@@ -116,7 +116,7 @@ function SparkleParticle({
       <SparkleIcon size={size} color={color} weight="fill" />
     </Animated.View>
   );
-}
+});
 
 export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps) {
   const { colors } = useTheme();

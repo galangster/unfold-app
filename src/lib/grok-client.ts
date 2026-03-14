@@ -9,7 +9,7 @@
  * - Input:  $0.20/1M tokens
  * - Output: $0.50/1M tokens
  * - Creative Writing v3 Elo: 1708.6 (#3), EQ-Bench3: 1585 (#2)
- * - Cheaper and better creative writing than Gemini 2.5 Flash
+ * - Cheaper and better creative writing than alternatives
  *
  * Used for:
  * - Bridge generation (/api/generate-bridge)

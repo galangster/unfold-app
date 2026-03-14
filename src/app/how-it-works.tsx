@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Dimensions,
   TouchableOpacity,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
+  StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,8 +17,11 @@ import Animated, {
   withSequence,
   Easing,
   FadeIn,
+  FadeOut,
   interpolate,
+  runOnJS,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { DarkColors, createThemedColors } from '@/constants/colors';
@@ -70,7 +71,7 @@ const PAGES: Page[] = [
   {
     type: 'feature',
     card: {
-      headline: 'Build\na rhythm',
+      headline: 'Build a rhythm',
       body: 'Streaks that matter. A gentle push to show up, even when it\u2019s hard.',
       animation: 'pulse',
     },
@@ -94,7 +95,7 @@ const PAGES: Page[] = [
   {
     type: 'feature',
     card: {
-      headline: 'Fresh every\nmorning',
+      headline: 'Fresh every morning',
       body: 'Never the same devotional twice. New content generated daily, just for you.',
       animation: 'glow',
     },
@@ -102,7 +103,7 @@ const PAGES: Page[] = [
   {
     type: 'feature',
     card: {
-      headline: 'Day 30 \u2260\nDay 1',
+      headline: 'Day 30 \u2260 Day 1',
       body: 'The longer you stay, the more personal it gets.',
       animation: 'rings',
     },
@@ -404,8 +405,6 @@ export default function HowItWorksScreen() {
   }, [accentThemeId]);
 
   const [currentPage, setCurrentPage] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
-  const lastHapticPage = useRef(0);
 
   const isLastPage = currentPage === PAGES.length - 1;
 
@@ -422,25 +421,6 @@ export default function HowItWorksScreen() {
     return () => clearTimeout(timer);
   }, [isLastPage, navigateToOnboarding]);
 
-  // Track page from scroll position (smooth dot updates)
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const x = e.nativeEvent.contentOffset.x;
-    const page = Math.round(x / SCREEN_WIDTH);
-    if (page >= 0 && page < PAGES.length) {
-      setCurrentPage(page);
-    }
-  }, []);
-
-  // Haptic feedback when settling on a new page
-  const handleMomentumEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const x = e.nativeEvent.contentOffset.x;
-    const page = Math.round(x / SCREEN_WIDTH);
-    if (page !== lastHapticPage.current) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      lastHapticPage.current = page;
-    }
-  }, []);
-
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace('/onboarding');
@@ -451,9 +431,33 @@ export default function HowItWorksScreen() {
     if (isLastPage) {
       navigateToOnboarding();
     } else {
-      scrollRef.current?.scrollTo({ x: (currentPage + 1) * SCREEN_WIDTH, animated: true });
+      setCurrentPage((p) => p + 1);
     }
-  }, [isLastPage, currentPage, navigateToOnboarding]);
+  }, [isLastPage, navigateToOnboarding]);
+
+  // Swipe left/right to navigate pages (gesture handler — no scroll API needed)
+  const handleSwipeLeft = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentPage((p) => Math.min(p + 1, PAGES.length - 1));
+  }, []);
+
+  const handleSwipeRight = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentPage((p) => Math.max(p - 1, 0));
+  }, []);
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-30, 30])
+    .onEnd((e) => {
+      'worklet';
+      if (e.translationX < -50) {
+        runOnJS(handleSwipeLeft)();
+      } else if (e.translationX > 50) {
+        runOnJS(handleSwipeRight)();
+      }
+    });
+
+  const page = PAGES[currentPage];
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
@@ -467,97 +471,82 @@ export default function HowItWorksScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Swipeable pages */}
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          onScroll={handleScroll}
-          onMomentumScrollEnd={handleMomentumEnd}
-          scrollEventThrottle={16}
-          style={{ flex: 1 }}
-        >
-          {PAGES.map((page, index) => (
-            <View
-              key={index}
-              style={{
-                width: SCREEN_WIDTH,
-                justifyContent: 'center',
-                alignItems: 'center',
-                paddingHorizontal: 40,
-              }}
+        {/* Swipeable pages — state-driven (no scroll API, guaranteed to work) */}
+        <GestureDetector gesture={swipeGesture}>
+          <View style={{ flex: 1 }}>
+            <Animated.View
+              key={currentPage}
+              entering={FadeIn.duration(250)}
+              exiting={FadeOut.duration(150)}
+              style={StyleSheet.absoluteFill}
             >
-              {page.type === 'companion' ? (
-                <View style={{ alignItems: 'center', gap: 36 }}>
-                  <Animated.View entering={FadeIn.delay(300).duration(800)}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 }}>
+                {page.type === 'companion' ? (
+                  <View style={{ alignItems: 'center', gap: 36 }}>
                     <CompanionOrb accentColor={colors.accent} size={120} isActive />
-                  </Animated.View>
 
-                  <View style={{ gap: 14 }}>
-                    <Animated.Text
-                      entering={FadeIn.delay(700).duration(600)}
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 32,
-                        color: colors.text,
-                        textAlign: 'center',
-                        letterSpacing: -0.5,
-                      }}
-                    >
-                      Something stays{'\n'}with you.
-                    </Animated.Text>
+                    <View style={{ gap: 14 }}>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 32,
+                          color: colors.text,
+                          textAlign: 'center',
+                          letterSpacing: -0.5,
+                        }}
+                      >
+                        Something stays{'\n'}with you.
+                      </Text>
 
-                    <Animated.Text
-                      entering={FadeIn.delay(1000).duration(600)}
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: 16,
-                        color: colors.textMuted,
-                        textAlign: 'center',
-                        lineHeight: 24,
-                      }}
-                    >
-                      Your companion shows up daily. Learns what matters to you. Makes each devotional feel more like yours.
-                    </Animated.Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.body,
+                          fontSize: 16,
+                          color: colors.textMuted,
+                          textAlign: 'center',
+                          lineHeight: 24,
+                        }}
+                      >
+                        Your companion shows up daily. Learns what matters to you. Makes each devotional feel more like yours.
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ) : (
-                <View style={{ alignItems: 'center', gap: 36 }}>
-                  <CardAnimation type={page.card.animation} accent={colors.accent} />
+                ) : (
+                  <View style={{ alignItems: 'center', gap: 36 }}>
+                    <CardAnimation type={page.card.animation} accent={colors.accent} />
 
-                  <View style={{ gap: 12 }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 32,
-                        color: colors.text,
-                        textAlign: 'center',
-                        letterSpacing: -0.5,
-                        lineHeight: 40,
-                      }}
-                    >
-                      {page.card.headline}
-                    </Text>
+                    <View style={{ gap: 12 }}>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.display,
+                          fontSize: 32,
+                          color: colors.text,
+                          textAlign: 'center',
+                          letterSpacing: -0.5,
+                          lineHeight: 40,
+                        }}
+                      >
+                        {page.card.headline}
+                      </Text>
 
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: 16,
-                        color: colors.textMuted,
-                        textAlign: 'center',
-                        lineHeight: 24,
-                      }}
-                    >
-                      {page.card.body}
-                    </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.body,
+                          fontSize: 16,
+                          color: colors.textMuted,
+                          textAlign: 'center',
+                          lineHeight: 24,
+                        }}
+                      >
+                        {page.card.body}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+                )}
+              </View>
+            </Animated.View>
+          </View>
+        </GestureDetector>
 
         {/* Bottom: page dots + continue button */}
         <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>

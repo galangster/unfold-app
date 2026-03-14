@@ -180,9 +180,9 @@ export function FeatureOnboarding() {
       <View style={styles.bottomSection}>
         {/* Dot indicators */}
         <View style={styles.dotsRow}>
-          {FEATURE_SLIDES.map((_, index) => (
+          {FEATURE_SLIDES.map((slide, index) => (
             <View
-              key={index}
+              key={slide.id}
               style={[
                 styles.dot,
                 {

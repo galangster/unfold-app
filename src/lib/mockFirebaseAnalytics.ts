@@ -4,22 +4,22 @@
 const analytics = () => {
   return {
     logEvent: async (name: string, params?: any) => {
-      console.log('[Mock Analytics]', name, params);
+      if (__DEV__) console.log('[Mock Analytics]', name, params);
     },
     logScreenView: async (params: any) => {
-      console.log('[Mock Analytics] Screen:', params?.screen_name);
+      if (__DEV__) console.log('[Mock Analytics] Screen:', params?.screen_name);
     },
     setUserId: async (id: string | null) => {
-      console.log('[Mock Analytics] User ID:', id);
+      if (__DEV__) console.log('[Mock Analytics] User ID:', id);
     },
     setUserProperty: async (name: string, value: string | null) => {
-      console.log('[Mock Analytics] Property:', name, value);
+      if (__DEV__) console.log('[Mock Analytics] Property:', name, value);
     },
     getAppInstanceId: async () => {
       return 'mock-instance-id';
     },
     setAnalyticsCollectionEnabled: async (enabled: boolean) => {
-      console.log('[Mock Analytics] Collection enabled:', enabled);
+      if (__DEV__) console.log('[Mock Analytics] Collection enabled:', enabled);
     },
   };
 };

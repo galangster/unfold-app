@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
@@ -159,58 +159,27 @@ export default function StreakSettingsScreen() {
   const tierColor = colors.accent;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+    <SafeAreaView style={[ssStyles.flex1, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-        }}
-      >
-        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }}>
+      <View style={ssStyles.header}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={ssStyles.backButton} accessibilityLabel="Go back" accessibilityRole="button">
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </TouchableOpacity>
-        <Text
-          style={{
-            fontFamily: FontFamily.uiSemiBold,
-            fontSize: 17,
-            color: colors.text,
-            marginLeft: 12,
-          }}
-        >
+        <Text style={[ssStyles.headerTitle, { color: colors.text }]}>
           Streak Settings
         </Text>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 100 }}>
+      <ScrollView style={ssStyles.flex1} contentContainerStyle={ssStyles.scrollContent}>
         {/* Streak Society Tier Card */}
         <Animated.View
           entering={FadeInDown.duration(500)}
-          style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: isDark ? `${colors.accent}30` : `${colors.accent}20`,
-            padding: 24,
-            marginBottom: 24,
-            overflow: 'hidden',
-          }}
+          style={[ssStyles.tierCard, { backgroundColor: colors.inputBackground, borderColor: isDark ? `${colors.accent}30` : `${colors.accent}20` }]}
         >
           {/* Top section: tier icon + name + streak count */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: isDark ? `${colors.accent}1A` : `${colors.accent}15`,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
+          <View style={ssStyles.tierTopRow}>
+            <View style={ssStyles.tierLeftGroup}>
+              <View style={[ssStyles.tierIconCircle, { backgroundColor: isDark ? `${colors.accent}1A` : `${colors.accent}15` }]}>
                 <TierIcon
                   tier={currentTier}
                   size={26}
@@ -219,50 +188,21 @@ export default function StreakSettingsScreen() {
                 />
               </View>
               <View>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 11,
-                    color: colors.textSubtle,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                  }}
-                >
+                <Text style={[ssStyles.tierSocietyLabel, { color: colors.textSubtle }]}>
                   Streak Society
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: 24,
-                    color: tierColor,
-                    marginTop: 1,
-                  }}
-                >
+                <Text style={[ssStyles.tierName, { color: tierColor }]}>
                   {currentTier.name}
                 </Text>
               </View>
             </View>
 
             {/* Streak count */}
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 32,
-                  color: colors.text,
-                  letterSpacing: -1,
-                }}
-              >
+            <View style={ssStyles.streakCountRight}>
+              <Text style={[ssStyles.streakCountNumber, { color: colors.text }]}>
                 {streak}
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textMuted,
-                  marginTop: -2,
-                }}
-              >
+              <Text style={[ssStyles.streakCountUnit, { color: colors.textMuted }]}>
                 {streak === 1 ? 'day' : 'days'}
               </Text>
             </View>
@@ -270,70 +210,31 @@ export default function StreakSettingsScreen() {
 
           {/* Progress bar to next tier */}
           {nextTier ? (
-            <View style={{ marginTop: 20 }}>
-              <View
-                style={{
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)',
-                  overflow: 'hidden',
-                }}
-              >
+            <View style={ssStyles.progressSection}>
+              <View style={[ssStyles.progressTrack, { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)' }]}>
                 <View
-                  style={{
-                    height: '100%',
-                    width: `${Math.max(tierProgress * 100, 2)}%`,
-                    borderRadius: 2,
-                    backgroundColor: tierColor,
-                  }}
+                  style={[ssStyles.progressFill, { width: `${Math.max(tierProgress * 100, 2)}%`, backgroundColor: tierColor }]}
                 />
               </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 11,
-                    color: colors.textSubtle,
-                  }}
-                >
+              <View style={ssStyles.progressLabelsRow}>
+                <Text style={[ssStyles.progressLabel, { color: colors.textSubtle }]}>
                   {nextTier.minDays - streak} days to {nextTier.name}
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 11,
-                    color: colors.textSubtle,
-                  }}
-                >
+                <Text style={[ssStyles.progressLabel, { color: colors.textSubtle }]}>
                   {nextTier.minDays} days
                 </Text>
               </View>
             </View>
           ) : (
-            <View style={{ marginTop: 16 }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 13,
-                  color: tierColor,
-                  textAlign: 'center',
-                }}
-              >
+            <View style={ssStyles.legendarySection}>
+              <Text style={[ssStyles.legendaryText, { color: tierColor }]}>
                 Legendary status achieved
               </Text>
             </View>
           )}
 
           {/* Last read info */}
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 12,
-              color: colors.textHint,
-              marginTop: 12,
-              textAlign: 'center',
-            }}
-          >
+          <Text style={[ssStyles.lastReadText, { color: colors.textHint }]}>
             {lastReadDate
               ? `Last devotional: ${new Date(lastReadDate).toLocaleDateString()}`
               : 'Start your streak by completing a devotional'}
@@ -341,14 +242,7 @@ export default function StreakSettingsScreen() {
         </Animated.View>
 
         {/* Tier roadmap - all 4 tiers shown as a row */}
-        <Animated.View
-          entering={FadeInDown.duration(500).delay(100)}
-          style={{
-            flexDirection: 'row',
-            gap: 8,
-            marginBottom: 24,
-          }}
-        >
+        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={ssStyles.tierRoadmapRow}>
           {STREAK_TIERS.map((tier) => {
             const isActive = tier.id === currentTier.id;
             const isPast = tier.minDays < currentTier.minDays;
@@ -357,19 +251,18 @@ export default function StreakSettingsScreen() {
             return (
               <View
                 key={tier.id}
-                style={{
-                  flex: 1,
-                  alignItems: 'center',
-                  backgroundColor: isActive
-                    ? (isDark ? `${colors.accent}10` : `${colors.accent}08`)
-                    : 'transparent',
-                  borderRadius: 10,
-                  paddingVertical: 10,
-                  borderWidth: isActive ? 1 : 0,
-                  borderColor: isActive
-                    ? (isDark ? `${colors.accent}30` : `${colors.accent}20`)
-                    : 'transparent',
-                }}
+                style={[
+                  ssStyles.tierRoadmapItem,
+                  {
+                    backgroundColor: isActive
+                      ? (isDark ? `${colors.accent}10` : `${colors.accent}08`)
+                      : 'transparent',
+                    borderWidth: isActive ? 1 : 0,
+                    borderColor: isActive
+                      ? (isDark ? `${colors.accent}30` : `${colors.accent}20`)
+                      : 'transparent',
+                  },
+                ]}
               >
                 <TierIcon
                   tier={tier}
@@ -378,23 +271,17 @@ export default function StreakSettingsScreen() {
                   weight={isActive || isPast ? 'fill' : 'light'}
                 />
                 <Text
-                  style={{
-                    fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
-                    fontSize: 10,
-                    color: isActive ? colors.text : isPast ? colors.textMuted : colors.textHint,
-                    marginTop: 4,
-                  }}
+                  style={[
+                    ssStyles.tierRoadmapName,
+                    {
+                      fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
+                      color: isActive ? colors.text : isPast ? colors.textMuted : colors.textHint,
+                    },
+                  ]}
                 >
                   {tier.name}
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 9,
-                    color: colors.textHint,
-                    marginTop: 1,
-                  }}
-                >
+                <Text style={[ssStyles.tierRoadmapRange, { color: colors.textHint }]}>
                   {tier.maxDays === Infinity ? `${tier.minDays}+` : `${tier.minDays}-${tier.maxDays - 1}`}
                 </Text>
               </View>
@@ -403,44 +290,25 @@ export default function StreakSettingsScreen() {
         </Animated.View>
 
         {/* Stats Grid */}
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: 12,
-            marginBottom: 24,
-          }}
-        >
+        <View style={ssStyles.statsGrid}>
           {/* Best Streak */}
-          <View style={{ flex: 1 }}>
+          <View style={ssStyles.flex1}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleStatTap('best')}
-              style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: 12,
-                padding: 16,
-                alignItems: 'center',
-                borderWidth: activeTooltip === 'best' ? 1 : 0,
-                borderColor: activeTooltip === 'best' ? colors.border : 'transparent',
-              }}
+              style={[
+                ssStyles.statButton,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderWidth: activeTooltip === 'best' ? 1 : 0,
+                  borderColor: activeTooltip === 'best' ? colors.border : 'transparent',
+                },
+              ]}
             >
               <SunIcon size={24} color={colors.accent} weight="light" />
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 24,
-                  color: colors.text,
-                  marginTop: 8,
-                }}
-              >
+              <Text style={[ssStyles.statValue, { color: colors.text }]}>
                 {longestStreak}
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textMuted,
-                }}
-              >
+              <Text style={[ssStyles.statLabel, { color: colors.textMuted }]}>
                 Best Streak
               </Text>
             </TouchableOpacity>
@@ -448,23 +316,9 @@ export default function StreakSettingsScreen() {
               <Animated.View
                 entering={FadeIn.duration(200)}
                 exiting={FadeOut.duration(150)}
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 8,
-                }}
+                style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textMuted,
-                    lineHeight: 17,
-                  }}
-                >
+                <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
                   Your longest consecutive streak of daily devotionals
                 </Text>
               </Animated.View>
@@ -472,36 +326,23 @@ export default function StreakSettingsScreen() {
           </View>
 
           {/* Freezes */}
-          <View style={{ flex: 1 }}>
+          <View style={ssStyles.flex1}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleStatTap('freezes')}
-              style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: 12,
-                padding: 16,
-                alignItems: 'center',
-                borderWidth: activeTooltip === 'freezes' ? 1 : 0,
-                borderColor: activeTooltip === 'freezes' ? colors.border : 'transparent',
-              }}
+              style={[
+                ssStyles.statButton,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderWidth: activeTooltip === 'freezes' ? 1 : 0,
+                  borderColor: activeTooltip === 'freezes' ? colors.border : 'transparent',
+                },
+              ]}
             >
               <SnowflakeIcon size={24} color={colors.textSubtle} weight="light" />
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 24,
-                  color: colors.text,
-                  marginTop: 8,
-                }}
-              >
+              <Text style={[ssStyles.statValue, { color: colors.text }]}>
                 {freezes}
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textMuted,
-                }}
-              >
+              <Text style={[ssStyles.statLabel, { color: colors.textMuted }]}>
                 Freezes
               </Text>
             </TouchableOpacity>
@@ -509,23 +350,9 @@ export default function StreakSettingsScreen() {
               <Animated.View
                 entering={FadeIn.duration(200)}
                 exiting={FadeOut.duration(150)}
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 8,
-                }}
+                style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textMuted,
-                    lineHeight: 17,
-                  }}
-                >
+                <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
                   Freezes protect your streak if you miss a day. They're used automatically.
                 </Text>
               </Animated.View>
@@ -533,36 +360,23 @@ export default function StreakSettingsScreen() {
           </View>
 
           {/* Days to Freeze */}
-          <View style={{ flex: 1 }}>
+          <View style={ssStyles.flex1}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => handleStatTap('toFreeze')}
-              style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: 12,
-                padding: 16,
-                alignItems: 'center',
-                borderWidth: activeTooltip === 'toFreeze' ? 1 : 0,
-                borderColor: activeTooltip === 'toFreeze' ? colors.border : 'transparent',
-              }}
+              style={[
+                ssStyles.statButton,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderWidth: activeTooltip === 'toFreeze' ? 1 : 0,
+                  borderColor: activeTooltip === 'toFreeze' ? colors.border : 'transparent',
+                },
+              ]}
             >
               <CalendarIcon size={24} color={colors.textSubtle} weight="light" />
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 24,
-                  color: colors.text,
-                  marginTop: 8,
-                }}
-              >
+              <Text style={[ssStyles.statValue, { color: colors.text }]}>
                 {adjustedDaysUntilFreeze}
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 12,
-                  color: colors.textMuted,
-                }}
-              >
+              <Text style={[ssStyles.statLabel, { color: colors.textMuted }]}>
                 Till Freeze
               </Text>
             </TouchableOpacity>
@@ -570,23 +384,9 @@ export default function StreakSettingsScreen() {
               <Animated.View
                 entering={FadeIn.duration(200)}
                 exiting={FadeOut.duration(150)}
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: 10,
-                  padding: 12,
-                  marginTop: 8,
-                }}
+                style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textMuted,
-                    lineHeight: 17,
-                  }}
-                >
+                <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
                   Complete {adjustedDaysUntilFreeze} more {adjustedDaysUntilFreeze === 1 ? 'day' : 'days'} to earn your next streak freeze
                 </Text>
               </Animated.View>
@@ -595,39 +395,13 @@ export default function StreakSettingsScreen() {
         </View>
 
         {/* Weekend Amnesty Toggle */}
-        <View
-          style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: 16,
-            padding: 20,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 16,
-                  color: colors.text,
-                }}
-              >
+        <View style={[ssStyles.amnestyCard, { backgroundColor: colors.inputBackground }]}>
+          <View style={ssStyles.amnestyRow}>
+            <View style={ssStyles.flex1}>
+              <Text style={[ssStyles.amnestyTitle, { color: colors.text }]}>
                 Weekend Amnesty
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 13,
-                  color: colors.textMuted,
-                  marginTop: 4,
-                  lineHeight: 18,
-                }}
-              >
+              <Text style={[ssStyles.amnestyDescription, { color: colors.textMuted }]}>
                 Saturdays and Sundays won't break your streak
               </Text>
             </View>
@@ -636,31 +410,18 @@ export default function StreakSettingsScreen() {
               onValueChange={handleToggleAmnesty}
               trackColor={{ false: colors.border, true: colors.accent }}
               thumbColor="#fff"
+              accessibilityRole="switch"
+              accessibilityLabel="Weekend amnesty"
+              accessibilityState={{ checked: weekendAmnesty }}
             />
           </View>
         </View>
 
         {/* Info Section */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'flex-start',
-            marginTop: 24,
-            padding: 16,
-            backgroundColor: colors.inputBackground,
-            borderRadius: 12,
-          }}
-        >
-          <InfoIcon size={18} color={colors.textMuted} weight="light" style={{ marginRight: 12, marginTop: 2 }} />
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 13,
-                color: colors.textMuted,
-                lineHeight: 18,
-              }}
-            >
+        <View style={[ssStyles.infoCard, { backgroundColor: colors.inputBackground }]}>
+          <InfoIcon size={18} color={colors.textMuted} weight="light" style={ssStyles.infoIcon} />
+          <View style={ssStyles.flex1}>
+            <Text style={[ssStyles.infoText, { color: colors.textMuted }]}>
               Complete a 7-day streak to earn a freeze. Freezes automatically protect your streak if you miss a day.
             </Text>
           </View>
@@ -669,3 +430,195 @@ export default function StreakSettingsScreen() {
     </SafeAreaView>
   );
 }
+
+const ssStyles = StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 17,
+    marginLeft: 12,
+  },
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 100,
+  },
+  tierCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    marginBottom: 24,
+    overflow: 'hidden',
+  },
+  tierTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tierLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tierIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tierSocietyLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  tierName: {
+    fontFamily: FontFamily.display,
+    fontSize: 24,
+    marginTop: 1,
+  },
+  streakCountRight: {
+    alignItems: 'flex-end',
+  },
+  streakCountNumber: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 32,
+    letterSpacing: -1,
+  },
+  streakCountUnit: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    marginTop: -2,
+  },
+  progressSection: {
+    marginTop: 20,
+  },
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  progressLabelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  progressLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 11,
+  },
+  legendarySection: {
+    marginTop: 16,
+  },
+  legendaryText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  lastReadText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  tierRoadmapRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 24,
+  },
+  tierRoadmapItem: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  tierRoadmapName: {
+    fontSize: 10,
+    marginTop: 4,
+  },
+  tierRoadmapRange: {
+    fontFamily: FontFamily.ui,
+    fontSize: 9,
+    marginTop: 1,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  statButton: {
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 24,
+    marginTop: 8,
+  },
+  statLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  tooltipBubble: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+  },
+  tooltipText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  amnestyCard: {
+    borderRadius: 16,
+    padding: 20,
+  },
+  amnestyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  amnestyTitle: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 16,
+  },
+  amnestyDescription: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 24,
+    padding: 16,
+    borderRadius: 12,
+  },
+  infoIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  infoText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+});

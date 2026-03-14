@@ -272,9 +272,9 @@ export default function JournalDetailScreen() {
 
                 {entry.questionResponses
                   .filter((qr) => qr.response.trim().length > 0)
-                  .map((qr, idx) => (
+                  .map((qr) => (
                     <View
-                      key={idx}
+                      key={qr.question}
                       style={{
                         marginBottom: 24,
                         paddingLeft: 16,

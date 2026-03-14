@@ -76,7 +76,7 @@ export default function SampleDevotionalScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, height: 60 }}>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8, marginLeft: -8 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8, marginLeft: -8 }} accessibilityLabel="Go back" accessibilityRole="button">
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
         </View>

@@ -125,6 +125,7 @@ export function TypewriterText({
     setVisibleCount(0);
     let count = 0;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let completionTimerId: ReturnType<typeof setTimeout> | null = null;
 
     const delayId = setTimeout(() => {
       intervalId = setInterval(() => {
@@ -133,7 +134,7 @@ export function TypewriterText({
         if (count >= totalChars) {
           if (intervalId) clearInterval(intervalId);
           // Brief pause before signalling completion
-          setTimeout(() => onCompleteRef.current?.(), 400);
+          completionTimerId = setTimeout(() => onCompleteRef.current?.(), 400);
         }
       }, charDelay);
     }, delay);
@@ -141,6 +142,7 @@ export function TypewriterText({
     return () => {
       clearTimeout(delayId);
       if (intervalId) clearInterval(intervalId);
+      if (completionTimerId) clearTimeout(completionTimerId);
     };
   }, [normalizedText, delay, charDelay, totalChars]);
 

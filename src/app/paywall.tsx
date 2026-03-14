@@ -378,6 +378,8 @@ export default function PaywallScreen() {
             onPress={handleClose}
             disabled={isPurchasing}
             accessibilityLabel="Close paywall"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isPurchasing }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{
               padding: 8,
@@ -452,7 +454,7 @@ export default function PaywallScreen() {
               const IconComponent = statement.icon;
               return (
                 <Animated.View
-                  key={index}
+                  key={statement.text.slice(0, 40)}
                   entering={FadeInDown.duration(500).delay(200 + index * 150)}
                   style={{
                     flexDirection: 'row',
@@ -512,9 +514,9 @@ export default function PaywallScreen() {
               { icon: PencilSimpleLineIcon, label: 'AI-powered journal reflections' },
               { icon: PaletteIcon, label: 'Custom themes, fonts, and accent colors' },
               { icon: FireIcon, label: 'Unlimited streak freezes' },
-            ].map((item, i) => (
+            ].map((item) => (
               <View
-                key={i}
+                key={item.label}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -841,6 +843,7 @@ export default function PaywallScreen() {
               disabled={isPurchasing}
               accessibilityLabel={isTrialEligible ? `Start your ${selectedTrialDuration} free trial` : 'Subscribe now'}
               accessibilityRole="button"
+              accessibilityState={{ disabled: isPurchasing }}
               style={{
                 backgroundColor: colors.accent,
                 paddingVertical: 18,
@@ -848,6 +851,7 @@ export default function PaywallScreen() {
                 borderRadius: 28,
                 alignItems: 'center',
                 justifyContent: 'center',
+                opacity: isPurchasing ? 0.7 : 1,
               }}
             >
               {isPurchasing ? (
@@ -914,8 +918,11 @@ export default function PaywallScreen() {
               onPress={handleRestore}
               disabled={isPurchasing}
               accessibilityLabel="Restore purchases"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isPurchasing }}
               style={{
                 padding: 6,
+                opacity: isPurchasing ? 0.5 : 1,
               }}
             >
               <Text
@@ -963,7 +970,7 @@ export default function PaywallScreen() {
               gap: 16,
             }}
           >
-            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} accessibilityRole="link" accessibilityLabel="Terms of Use">
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -975,7 +982,7 @@ export default function PaywallScreen() {
                 Terms of Use
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}>
+            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://unfoldapp.co/privacy')} accessibilityRole="link" accessibilityLabel="Privacy Policy">
               <Text
                 style={{
                   fontFamily: FontFamily.ui,

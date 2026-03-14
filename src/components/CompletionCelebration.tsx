@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, Pressable, Dimensions, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, StyleSheet, Modal } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -332,7 +332,7 @@ export function CompletionCelebration({
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss}>
+      <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onDismiss}>
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
           {/* Expanding circle that fills the screen */}
@@ -446,7 +446,7 @@ export function CompletionCelebration({
             </Text>
           </Animated.View>
         </Animated.View>
-      </Pressable>
+      </TouchableOpacity>
     </Modal>
   );
 }

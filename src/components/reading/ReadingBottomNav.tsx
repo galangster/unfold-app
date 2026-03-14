@@ -93,6 +93,9 @@ export function ReadingBottomNav({
               opacity: canGoBack ? 1 : 0.3,
               padding: 12,
             }}
+            accessibilityLabel="Previous day"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canGoBack }}
           >
             <CaretLeftIcon size={28} color={colors.text} weight="light" />
           </TouchableOpacity>
@@ -156,6 +159,9 @@ export function ReadingBottomNav({
               opacity: canGoForward ? 1 : 0.3,
               padding: 12,
             }}
+            accessibilityLabel="Next day"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canGoForward }}
           >
             <CaretRightIcon size={28} color={colors.text} weight="light" />
           </TouchableOpacity>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +23,13 @@ export default function PastDevotionalsScreen() {
 
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportSuccessId, setExportSuccessId] = useState<string | null>(null);
+  const exportSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
+    };
+  }, []);
 
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -70,7 +77,8 @@ export default function PastDevotionalsScreen() {
         checkIns: devCheckIns,
       });
       setExportSuccessId(devotional.id);
-      setTimeout(() => setExportSuccessId(null), 2000);
+      if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
+      exportSuccessTimerRef.current = setTimeout(() => setExportSuccessId(null), 2000);
     } finally {
       setExportingId(null);
     }
@@ -119,6 +127,9 @@ export default function PastDevotionalsScreen() {
               alignItems: 'center',
               opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
             }}
+            accessibilityLabel="Export as PDF"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: exportingId !== null }}
           >
             {exportingId === item.id ? (
               <ActivityIndicator size={18} color={colors.accent} />
@@ -190,6 +201,8 @@ export default function PastDevotionalsScreen() {
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 8 }}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
@@ -239,6 +252,8 @@ export default function PastDevotionalsScreen() {
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>

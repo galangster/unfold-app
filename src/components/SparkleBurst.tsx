@@ -1,3 +1,4 @@
+import React from 'react';
 import { View } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -34,7 +35,7 @@ interface SparkleParticleProps {
 // Maximum number of particles supported
 const MAX_PARTICLES = 32;
 
-function SparkleParticle({ particle, color, trigger }: SparkleParticleProps) {
+const SparkleParticle = React.memo(function SparkleParticle({ particle, color, trigger }: SparkleParticleProps) {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const translateX = useSharedValue(0);
@@ -167,7 +168,7 @@ function SparkleParticle({ particle, color, trigger }: SparkleParticleProps) {
       />
     </Animated.View>
   );
-}
+});
 
 export function SparkleBurst({
   trigger,

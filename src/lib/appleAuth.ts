@@ -82,9 +82,9 @@ export interface AppleAuthResult {
 export async function signInWithApple(): Promise<AppleAuthResult> {
   try {
     // Step 1: Check availability
-    console.log('[AppleAuth] Step 1: Checking availability...');
+    logger.log('[AppleAuth] Step 1: Checking availability...');
     const isAvailable = await AppleAuthentication.isAvailableAsync();
-    console.log('[AppleAuth] Step 1 result: isAvailable =', isAvailable);
+    logger.log('[AppleAuth] Step 1 result: isAvailable =', isAvailable);
     if (!isAvailable) {
       logger.warn('[AppleAuth] Apple Sign In not available on this device');
       return {
@@ -95,13 +95,13 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
     }
 
     // Step 2: Generate nonce
-    console.log('[AppleAuth] Step 2: Generating nonce...');
+    logger.log('[AppleAuth] Step 2: Generating nonce...');
     const nonce = await generateNonce();
     const hashedNonce = await sha256(nonce);
-    console.log('[AppleAuth] Step 2 done: nonce generated, hash length =', hashedNonce.length);
+    logger.log('[AppleAuth] Step 2 done: nonce generated');
 
     // Step 3: Request Apple Sign In
-    console.log('[AppleAuth] Step 3: Requesting Apple Sign In...');
+    logger.log('[AppleAuth] Step 3: Requesting Apple Sign In...');
     const credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -109,7 +109,7 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
       ],
       nonce: hashedNonce,
     });
-    console.log('[AppleAuth] Step 3 done: got credential, hasToken =', !!credential.identityToken, 'hasEmail =', !!credential.email);
+    logger.log('[AppleAuth] Step 3 done: got credential');
 
     // Check if user cancelled
     if (!credential.identityToken) {
@@ -121,11 +121,11 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
     }
 
     // Step 4: Load Firebase modules
-    console.log('[AppleAuth] Step 4: Loading Firebase auth module...');
+    logger.log('[AppleAuth] Step 4: Loading Firebase auth module...');
     const authModule = getAuthModule();
-    console.log('[AppleAuth] Step 4a: authModule loaded =', !!authModule);
+    logger.log('[AppleAuth] Step 4a: authModule loaded =', !!authModule);
     const authInstance = getAuthInstance();
-    console.log('[AppleAuth] Step 4b: authInstance loaded =', !!authInstance);
+    logger.log('[AppleAuth] Step 4b: authInstance loaded =', !!authInstance);
 
     if (!authModule || !authInstance) {
       logger.warn('[AppleAuth] Firebase not available, cannot complete Apple Sign In');
@@ -137,17 +137,17 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
     }
 
     // Step 5: Create Firebase credential from Apple token
-    console.log('[AppleAuth] Step 5: Creating Firebase credential from Apple token...');
+    logger.log('[AppleAuth] Step 5: Creating Firebase credential...');
     const appleCredential = authModule.AppleAuthProvider.credential(
       credential.identityToken,
       nonce
     );
-    console.log('[AppleAuth] Step 5 done: Firebase credential created');
+    logger.log('[AppleAuth] Step 5 done: Firebase credential created');
 
     // Step 6: Sign in to Firebase
-    console.log('[AppleAuth] Step 6: Signing in to Firebase with credential...');
+    logger.log('[AppleAuth] Step 6: Signing in to Firebase...');
     const userCredential = await authInstance.signInWithCredential(appleCredential);
-    console.log('[AppleAuth] Step 6 done: Firebase sign in successful, uid =', userCredential.user.uid);
+    logger.log('[AppleAuth] Step 6 done: Firebase sign in successful');
 
     // Update user profile if display name is available (only on first sign-in)
     if (credential.fullName) {
@@ -159,7 +159,7 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
         .join(' ');
 
       if (displayName && !userCredential.user.displayName) {
-        console.log('[AppleAuth] Updating display name:', displayName);
+        logger.log('[AppleAuth] Updating display name');
         await userCredential.user.updateProfile({
           displayName,
         });
@@ -179,9 +179,9 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
     const errorCode = (error as any)?.code;
     const fullError = error instanceof Error ? error.stack : String(error);
 
-    console.log('[AppleAuth] ERROR caught:', errorMessage);
-    console.log('[AppleAuth] ERROR code:', errorCode);
-    console.log('[AppleAuth] ERROR stack:', fullError);
+    logger.log('[AppleAuth] ERROR caught:', errorMessage);
+    logger.log('[AppleAuth] ERROR code:', errorCode);
+    logger.log('[AppleAuth] ERROR stack:', fullError);
 
     // Check if user cancelled
     if (errorMessage.includes('canceled') || errorMessage.includes('cancelled') ||
@@ -197,7 +197,7 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
 
     // Firebase-specific error codes
     if (errorCode) {
-      console.log('[AppleAuth] Firebase error code detected:', errorCode);
+      logger.log('[AppleAuth] Firebase error code detected:', errorCode);
       if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/operation-not-allowed') {
         logger.error('[AppleAuth] Firebase auth provider not enabled', { code: errorCode });
         return {
@@ -373,19 +373,7 @@ export async function deleteAccount(): Promise<{ success: boolean; error?: strin
  */
 export async function initializeAuth(): Promise<FirebaseAuthTypes.User | null> {
   try {
-    // Diagnostic: test Firebase module loading
-    console.log('[AppleAuth] initializeAuth: testing Firebase module loading...');
-    try {
-      const rawModule = require('@react-native-firebase/auth');
-      console.log('[AppleAuth] initializeAuth: raw module type =', typeof rawModule);
-      console.log('[AppleAuth] initializeAuth: .default type =', typeof rawModule.default);
-      console.log('[AppleAuth] initializeAuth: has AppleAuthProvider =', !!rawModule.default?.AppleAuthProvider);
-      const instance = rawModule.default();
-      console.log('[AppleAuth] initializeAuth: auth() succeeded, app name =', instance?.app?.name);
-      console.log('[AppleAuth] initializeAuth: currentUser =', instance?.currentUser?.uid ?? 'none');
-    } catch (diagErr) {
-      console.log('[AppleAuth] initializeAuth: DIAGNOSTIC FAILED:', diagErr instanceof Error ? diagErr.message : String(diagErr));
-    }
+    logger.log('[AppleAuth] initializeAuth: starting...');
 
     const authInstance = getAuthInstance();
     if (!authInstance) {

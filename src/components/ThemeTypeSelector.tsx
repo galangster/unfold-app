@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInUp,
@@ -130,6 +130,13 @@ export function ThemeTypeSelector({
 
   const subjects = getSubjects();
   const needsSubject = selectedType === 'book_study' || selectedType === 'character_study';
+  const stepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+    };
+  }, []);
 
   const handleThemeSelect = (theme: ThemeCategory) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -138,7 +145,8 @@ export function ThemeTypeSelector({
     } else {
       onThemeSelect(theme);
       // Auto-advance to type selection
-      setTimeout(() => setStep('type'), 300);
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = setTimeout(() => setStep('type'), 300);
     }
   };
 
@@ -147,7 +155,8 @@ export function ThemeTypeSelector({
     onTypeSelect(type);
     // If type needs a subject, advance to subject selection
     if (type === 'book_study' || type === 'character_study') {
-      setTimeout(() => setStep('subject'), 300);
+      if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
+      stepTimerRef.current = setTimeout(() => setStep('subject'), 300);
     }
   };
 
@@ -178,17 +187,9 @@ export function ThemeTypeSelector({
     return (
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={tsStyles.scrollContent}
       >
-        <Text
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 14,
-            color: colors.textMuted,
-            marginBottom: 20,
-            lineHeight: 20,
-          }}
-        >
+        <Text style={[tsStyles.sectionDescription, { color: colors.textMuted }]}>
           Choose a theme to focus your journey, or skip to let us choose based on what you shared.
         </Text>
 
@@ -203,70 +204,34 @@ export function ThemeTypeSelector({
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => handleThemeSelect(theme.id)}
-                style={{
-                  backgroundColor: isSelected
-                    ? colors.buttonBackgroundPressed
-                    : colors.inputBackground,
-                  borderRadius: 14,
-                  padding: 16,
-                  marginBottom: 10,
-                  borderWidth: 1,
-                  borderColor: isSelected ? colors.borderFocused : colors.border,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  opacity: 1,
-                }}
+                style={[
+                  tsStyles.listItem,
+                  {
+                    backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                  },
+                ]}
               >
                 <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: isSelected ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 14,
-                  }}
+                  style={[
+                    tsStyles.iconCircle,
+                    { backgroundColor: isSelected ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)' },
+                  ]}
                 >
                   {IconComponent && (
-                    <IconComponent
-                      size={20}
-                      color={isSelected ? colors.text : colors.textMuted}
-                    />
+                    <IconComponent size={20} color={isSelected ? colors.text : colors.textMuted} />
                   )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 16,
-                      color: colors.text,
-                      marginBottom: 2,
-                    }}
-                  >
+                <View style={tsStyles.flex1}>
+                  <Text style={[tsStyles.itemTitle, { color: colors.text }]}>
                     {theme.name}
                   </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 13,
-                      color: colors.textMuted,
-                      lineHeight: 18,
-                    }}
-                  >
+                  <Text style={[tsStyles.itemDescription, { color: colors.textMuted }]}>
                     {theme.description}
                   </Text>
                 </View>
                 {isSelected && (
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      backgroundColor: colors.text,
-                      marginLeft: 8,
-                    }}
-                  />
+                  <View style={[tsStyles.selectedDot, { backgroundColor: colors.text }]} />
                 )}
               </TouchableOpacity>
             </Animated.View>
@@ -275,19 +240,9 @@ export function ThemeTypeSelector({
 
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleSkipTheme}
-          style={{
-            paddingVertical: 16,
-            alignItems: 'center',
-            marginTop: 8,
-          }}
+          style={tsStyles.skipButton}
         >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 14,
-              color: colors.textSubtle,
-            }}
-          >
+          <Text style={[tsStyles.skipText, { color: colors.textSubtle }]}>
             Skip – let us choose based on your story
           </Text>
         </TouchableOpacity>
@@ -300,38 +255,20 @@ export function ThemeTypeSelector({
     return (
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={tsStyles.scrollContent}
       >
         {selectedTheme && (
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleBack}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 16,
-            }}
+            style={tsStyles.backButton}
           >
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 14,
-                color: colors.textSubtle,
-              }}
-            >
+            <Text style={[tsStyles.backText, { color: colors.textSubtle }]}>
               ← Back to themes
             </Text>
           </TouchableOpacity>
         )}
 
-        <Text
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 14,
-            color: colors.textMuted,
-            marginBottom: 20,
-            lineHeight: 20,
-          }}
-        >
+        <Text style={[tsStyles.sectionDescription, { color: colors.textMuted }]}>
           How would you like this devotional structured?
         </Text>
 
@@ -346,57 +283,29 @@ export function ThemeTypeSelector({
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => handleTypeSelect(type.id)}
-                style={{
-                  backgroundColor: isSelected
-                    ? colors.buttonBackgroundPressed
-                    : colors.inputBackground,
-                  borderRadius: 14,
-                  padding: 16,
-                  marginBottom: 10,
-                  borderWidth: 1,
-                  borderColor: isSelected ? colors.borderFocused : colors.border,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  opacity: 1,
-                }}
+                style={[
+                  tsStyles.listItem,
+                  {
+                    backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                  },
+                ]}
               >
                 <View
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    backgroundColor: isSelected ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 14,
-                  }}
+                  style={[
+                    tsStyles.iconCircle,
+                    { backgroundColor: isSelected ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)' },
+                  ]}
                 >
                   {IconComponent && (
-                    <IconComponent
-                      size={20}
-                      color={isSelected ? colors.text : colors.textMuted}
-                    />
+                    <IconComponent size={20} color={isSelected ? colors.text : colors.textMuted} />
                   )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 16,
-                      color: colors.text,
-                      marginBottom: 2,
-                    }}
-                  >
+                <View style={tsStyles.flex1}>
+                  <Text style={[tsStyles.itemTitle, { color: colors.text }]}>
                     {type.name}
                   </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 13,
-                      color: colors.textMuted,
-                      lineHeight: 18,
-                    }}
-                  >
+                  <Text style={[tsStyles.itemDescription, { color: colors.textMuted }]}>
                     {type.description}
                   </Text>
                 </View>
@@ -418,36 +327,18 @@ export function ThemeTypeSelector({
     return (
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={tsStyles.scrollContent}
       >
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleBack}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 16,
-          }}
+          style={tsStyles.backButton}
         >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 14,
-              color: colors.textSubtle,
-            }}
-          >
+          <Text style={[tsStyles.backText, { color: colors.textSubtle }]}>
             ← Back to types
           </Text>
         </TouchableOpacity>
 
-        <Text
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 14,
-            color: colors.textMuted,
-            marginBottom: 20,
-            lineHeight: 20,
-          }}
-        >
+        <Text style={[tsStyles.sectionDescription, { color: colors.textMuted }]}>
           {selectedType === 'book_study'
             ? 'Which book would you like to study?'
             : 'Whose story would you like to explore?'}
@@ -463,36 +354,18 @@ export function ThemeTypeSelector({
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => handleSubjectSelect(subject.name)}
-                style={{
-                  backgroundColor: isSelected
-                    ? colors.buttonBackgroundPressed
-                    : colors.inputBackground,
-                  borderRadius: 14,
-                  padding: 16,
-                  marginBottom: 10,
-                  borderWidth: 1,
-                  borderColor: isSelected ? colors.borderFocused : colors.border,
-                  opacity: 1,
-                }}
+                style={[
+                  tsStyles.subjectItem,
+                  {
+                    backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                  },
+                ]}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 16,
-                    color: colors.text,
-                    marginBottom: 4,
-                  }}
-                >
+                <Text style={[tsStyles.subjectTitle, { color: colors.text }]}>
                   {subject.name}
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: 13,
-                    color: colors.textMuted,
-                    lineHeight: 18,
-                  }}
-                >
+                <Text style={[tsStyles.itemDescription, { color: colors.textMuted }]}>
                   {subject.description}
                 </Text>
               </TouchableOpacity>
@@ -505,3 +378,79 @@ export function ThemeTypeSelector({
 
   return null;
 }
+
+const tsStyles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  sectionDescription: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  listItem: {
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  flex1: {
+    flex: 1,
+  },
+  itemTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  itemDescription: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  selectedDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  skipButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  skipText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  backText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
+  },
+  subjectItem: {
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+  },
+  subjectTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 16,
+    marginBottom: 4,
+  },
+});

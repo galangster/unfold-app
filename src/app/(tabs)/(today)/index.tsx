@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -128,37 +128,11 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
   });
 
   return (
-    <View
-      style={{
-        height: 3,
-        backgroundColor: colors.border,
-        borderRadius: 1.5,
-      }}
-    >
+    <View style={[homeStyles.progressTrack, { backgroundColor: colors.border }]}>
       <Animated.View
-        style={[
-          {
-            height: '100%',
-            backgroundColor: colors.accent,
-            borderRadius: 1.5,
-            overflow: 'hidden',
-          },
-          barStyle,
-        ]}
+        style={[homeStyles.progressFill, { backgroundColor: colors.accent }, barStyle]}
       >
-        <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              top: -1,
-              width: 40,
-              height: 5,
-              borderRadius: 3,
-              backgroundColor: 'rgba(255, 255, 255, 0.5)',
-            },
-            shimmerStyle,
-          ]}
-        />
+        <Animated.View style={[homeStyles.progressShimmer, shimmerStyle]} />
       </Animated.View>
     </View>
   );
@@ -256,43 +230,22 @@ function NotificationCard({
             onPress={onPress}
           >
             <View
-              style={{
-                backgroundColor: accentColor + '0D',
-                borderRadius: 14,
-                paddingVertical: 16,
-                paddingHorizontal: 16,
-                paddingRight: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                // Subtle lift for notification cards
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.04,
-                shadowRadius: 6,
-                elevation: 1,
-              }}
+              style={[homeStyles.notificationCard, { backgroundColor: accentColor + '0D' }]}
             >
-              {/* Companion orb — uses the real morphing Skia ring */}
-              <View style={{ marginRight: 12 }}>
+              {/* Companion orb */}
+              <View style={homeStyles.notificationOrb}>
                 <CompanionOrb accentColor={accentColor} size={28} />
               </View>
 
               {/* Message text */}
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: 14,
-                    color: colors.text,
-                    lineHeight: 20,
-                  }}
-                >
+              <View style={homeStyles.flex1}>
+                <Text style={[homeStyles.notificationMessage, { color: colors.text }]}>
                   {message}
                 </Text>
               </View>
 
               {/* Action chevron */}
-              <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={{ marginLeft: 8 }} />
+              <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={homeStyles.notificationChevron} />
 
               {/* Dismiss X */}
               <TouchableOpacity activeOpacity={0.7}
@@ -301,7 +254,7 @@ function NotificationCard({
                   onDismiss();
                 }}
                 hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
-                style={{ padding: 4, marginLeft: 4 }}
+                style={homeStyles.notificationDismiss}
               >
                 <XIcon size={14} color={colors.textSubtle} weight="light" />
               </TouchableOpacity>
@@ -332,40 +285,14 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
   return (
     <Animated.View
       entering={FadeIn.duration(300)}
-      style={{ paddingHorizontal: 24, marginTop: 16 }}
+      style={homeStyles.shimmerWrapper}
     >
       <View
-        style={{
-          backgroundColor: colors.inputBackground,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: 18,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
-          elevation: 2,
-        }}
+        style={[homeStyles.shimmerCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
       >
         <Animated.View style={shimmerStyle}>
-          <View
-            style={{
-              height: 10,
-              width: '85%',
-              backgroundColor: colors.border,
-              borderRadius: 5,
-              marginBottom: 10,
-            }}
-          />
-          <View
-            style={{
-              height: 10,
-              width: '65%',
-              backgroundColor: colors.border,
-              borderRadius: 5,
-            }}
-          />
+          <View style={[homeStyles.shimmerLine1, { backgroundColor: colors.border }]} />
+          <View style={[homeStyles.shimmerLine2, { backgroundColor: colors.border }]} />
         </Animated.View>
       </View>
     </Animated.View>
@@ -378,34 +305,23 @@ function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme })
   return (
     <Animated.View
       entering={FadeIn.duration(600)}
-      style={{ paddingHorizontal: 24, marginTop: 16 }}
+      style={homeStyles.bridgeWrapper}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+      <View style={homeStyles.bridgeRow}>
         {/* Mini companion orb */}
-        <View style={{ marginTop: 10 }}>
+        <View style={homeStyles.bridgeOrbContainer}>
           <CompanionOrb accentColor={colors.accent} size={24} />
         </View>
 
-        {/* Message bubble — same style as CompanionTooltip */}
-        <View style={{ flex: 1 }}>
+        {/* Message bubble */}
+        <View style={homeStyles.flex1}>
           <View
-            style={{
-              backgroundColor: colors.accent + '10',
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: colors.accent + '20',
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-            }}
+            style={[
+              homeStyles.bridgeBubble,
+              { backgroundColor: colors.accent + '10', borderColor: colors.accent + '20' },
+            ]}
           >
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 14,
-                color: colors.text,
-                lineHeight: 22,
-              }}
-            >
+            <Text style={[homeStyles.bridgeText, { color: colors.text }]}>
               {text}
             </Text>
           </View>
@@ -1445,3 +1361,102 @@ export default function HomeScreen() {
     </View>
   );
 }
+
+const homeStyles = StyleSheet.create({
+  progressTrack: {
+    height: 3,
+    borderRadius: 1.5,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 1.5,
+    overflow: 'hidden',
+  },
+  progressShimmer: {
+    position: 'absolute',
+    top: -1,
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  flex1: {
+    flex: 1,
+  },
+  notificationCard: {
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingRight: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  notificationOrb: {
+    marginRight: 12,
+  },
+  notificationMessage: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  notificationChevron: {
+    marginLeft: 8,
+  },
+  notificationDismiss: {
+    padding: 4,
+    marginLeft: 4,
+  },
+  shimmerWrapper: {
+    paddingHorizontal: 24,
+    marginTop: 16,
+  },
+  shimmerCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  shimmerLine1: {
+    height: 10,
+    width: '85%',
+    borderRadius: 5,
+    marginBottom: 10,
+  },
+  shimmerLine2: {
+    height: 10,
+    width: '65%',
+    borderRadius: 5,
+  },
+  bridgeWrapper: {
+    paddingHorizontal: 24,
+    marginTop: 16,
+  },
+  bridgeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  bridgeOrbContainer: {
+    marginTop: 10,
+  },
+  bridgeBubble: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  bridgeText: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+});

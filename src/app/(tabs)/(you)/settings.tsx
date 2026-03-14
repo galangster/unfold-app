@@ -2355,6 +2355,8 @@ export default function SettingsScreen() {
 
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
+                accessibilityRole="link"
+                accessibilityLabel="Privacy Policy"
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -2390,6 +2392,8 @@ export default function SettingsScreen() {
 
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => Linking.openURL('https://unfoldapp.co/terms')}
+                accessibilityRole="link"
+                accessibilityLabel="Terms of Use"
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',

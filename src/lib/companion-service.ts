@@ -180,15 +180,19 @@ Generate a short, personal companion response and 2 suggestion pills.`;
         // Try to parse as JSON
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.response && Array.isArray(parsed.suggestions)) {
-            return {
-              response: String(parsed.response).trim(),
-              suggestions: parsed.suggestions
-                .filter((s: unknown) => typeof s === 'string' && s.trim())
-                .slice(0, 2)
-                .map((s: string) => s.trim()),
-            };
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.response && Array.isArray(parsed.suggestions)) {
+              return {
+                response: String(parsed.response).trim(),
+                suggestions: parsed.suggestions
+                  .filter((s: unknown) => typeof s === 'string' && s.trim())
+                  .slice(0, 2)
+                  .map((s: string) => s.trim()),
+              };
+            }
+          } catch {
+            if (__DEV__) console.warn('[Companion] JSON parse failed for matched object');
           }
         }
 

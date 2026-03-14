@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  StyleSheet,
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
@@ -74,114 +75,91 @@ export function QuotePickerModal({ visible, onClose, quotes, dayTitle, isLoading
   
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center' }}>
+      <View style={qpStyles.backdrop}>
         {/* Header */}
-        <View style={{ position: 'absolute', top: 60, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 }}>
-          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#FFFFFF' }}>
+        <View style={qpStyles.modalHeader}>
+          <Text style={qpStyles.modalHeaderTitle}>
             Choose a Quote
           </Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onClose} accessibilityLabel="Close quote picker" accessibilityRole="button">
             <XIcon size={24} color="#FFFFFF" weight="light" />
           </TouchableOpacity>
         </View>
-        
+
         {isLoading ? (
-          <View style={{ alignItems: 'center' }}>
+          <View style={qpStyles.centerContent}>
             <ActivityIndicator size="large" color={colors.accent} />
-            <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: '#999999', marginTop: 16 }}>
+            <Text style={qpStyles.loadingText}>
               Finding the best lines...
             </Text>
           </View>
         ) : quotes.length === 0 ? (
-          <View style={{ alignItems: 'center', paddingHorizontal: 40 }}>
-            <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: '#999999', textAlign: 'center' }}>
+          <View style={qpStyles.emptyContent}>
+            <Text style={qpStyles.emptyText}>
               No quotable lines found in this devotional.
             </Text>
           </View>
         ) : (
           <>
             {/* Quote Card */}
-            <View style={{ paddingHorizontal: 24, marginTop: 40 }}>
-              <View
-                style={{
-                  backgroundColor: colors.background,
-                  borderRadius: 20,
-                  padding: 32,
-                  minHeight: 300,
-                  justifyContent: 'center',
-                }}
-              >
-                <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <View style={qpStyles.cardContainer}>
+              <View style={[qpStyles.card, { backgroundColor: colors.background }]}>
+                <View style={qpStyles.quoteIconRow}>
                   <QuotesIcon size={32} color={colors.accent} weight="light" />
                 </View>
-                
+
                 {selectedQuote && (
                   <>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.display,
-                        fontSize: 24,
-                        lineHeight: 36,
-                        color: colors.text,
-                        textAlign: 'center',
-                      }}
-                    >
+                    <Text style={[qpStyles.quoteText, { color: colors.text }]}>
                       "{selectedQuote.text}"
                     </Text>
-                    
+
                     {dayTitle && (
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: 14,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          marginTop: 16,
-                        }}
-                      >
+                      <Text style={[qpStyles.quoteDayTitle, { color: colors.textMuted }]}>
                         {dayTitle}
                       </Text>
                     )}
                   </>
                 )}
               </View>
-              
+
               {/* Pagination */}
-              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 24, gap: 16 }}>
+              <View style={qpStyles.pagination}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handlePrev}
                   disabled={selectedIndex === 0}
                   style={{ opacity: selectedIndex === 0 ? 0.3 : 1 }}
+                  accessibilityLabel="Previous quote"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: selectedIndex === 0 }}
                 >
                   <CaretLeftIcon size={24} color="#FFFFFF" weight="light" />
                 </TouchableOpacity>
-                
-                <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: '#999999' }}>
+
+                <Text style={qpStyles.paginationText}>
                   {selectedIndex + 1} of {quotes.length}
                 </Text>
-                
+
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleNext}
                   disabled={selectedIndex === quotes.length - 1}
                   style={{ opacity: selectedIndex === quotes.length - 1 ? 0.3 : 1 }}
+                  accessibilityLabel="Next quote"
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: selectedIndex === quotes.length - 1 }}
                 >
                   <CaretRightIcon size={24} color="#FFFFFF" weight="light" />
                 </TouchableOpacity>
               </View>
             </View>
-            
+
             {/* Select Button */}
-            <View style={{ position: 'absolute', bottom: 60, left: 24, right: 24 }}>
+            <View style={qpStyles.selectButtonContainer}>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleSelect}
-                style={{
-                  backgroundColor: colors.accent,
-                  paddingVertical: 18,
-                  borderRadius: 28,
-                  alignItems: 'center',
-                }}
+                style={[qpStyles.selectButton, { backgroundColor: colors.accent }]}
               >
-                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 17, color: '#FFFFFF' }}>
+                <Text style={qpStyles.selectButtonText}>
                   Use This Quote
                 </Text>
               </TouchableOpacity>
@@ -207,12 +185,12 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
   const viewShotRef = useRef<ViewShot>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
-  
+
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const isDarkMode = colors.background === '#000000' || colors.background === '#0A0A0A';
   const bgColor = isDarkMode ? '#000000' : '#FAFAFA';
   const textColor = isDarkMode ? '#FFFFFF' : '#1A1A1A';
-  
+
   const captureWallpaper = useCallback(async () => {
     if (!viewShotRef.current) return null;
     try {
@@ -224,7 +202,7 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
       return null;
     }
   }, []);
-  
+
   const handleSave = useCallback(async () => {
     setIsGenerating(true);
     try {
@@ -244,7 +222,7 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
       setIsGenerating(false);
     }
   }, [capturedUri, captureWallpaper]);
-  
+
   const handleShare = useCallback(async () => {
     setIsGenerating(true);
     try {
@@ -260,22 +238,22 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
       setIsGenerating(false);
     }
   }, [capturedUri, captureWallpaper]);
-  
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+      <View style={qpStyles.wallpaperBackdrop}>
         {/* Header */}
-        <View style={{ position: 'absolute', top: 60, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 10 }}>
-          <TouchableOpacity activeOpacity={0.7} onPress={onBack} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={qpStyles.modalHeader}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onBack} style={qpStyles.backButton} accessibilityLabel="Go back" accessibilityRole="button">
             <CaretLeftIcon size={20} color="#FFFFFF" weight="light" />
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: '#FFFFFF' }}>Back</Text>
+            <Text style={qpStyles.backButtonText}>Back</Text>
           </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onClose} accessibilityLabel="Close" accessibilityRole="button">
             <XIcon size={24} color="#FFFFFF" weight="light" />
           </TouchableOpacity>
         </View>
 
-        {/* Wallpaper Preview */}
+        {/* Wallpaper Preview — ViewShot needs inline style for computed dimensions */}
         <ViewShot
           ref={viewShotRef}
           options={{ format: 'png', quality: 1, result: 'tmpfile' }}
@@ -289,83 +267,57 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
             padding: 32,
           }}
         >
-          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <View style={qpStyles.quoteIconRow}>
             <QuotesIcon size={40} color={colors.accent} weight="light" />
           </View>
-          
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 28,
-              lineHeight: 40,
-              color: textColor,
-              textAlign: 'center',
-            }}
-          >
+
+          <Text style={[qpStyles.wallpaperQuoteText, { color: textColor }]}>
             "{quote.text}"
           </Text>
-          
+
           {dayTitle && (
             <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 14,
-                color: isDarkMode ? '#999999' : '#666666',
-                textAlign: 'center',
-                marginTop: 16,
-              }}
+              style={[
+                qpStyles.wallpaperDayTitle,
+                { color: isDarkMode ? '#999999' : '#666666' },
+              ]}
             >
               {dayTitle}
             </Text>
           )}
-          
-          <View style={{ position: 'absolute', bottom: 40, alignItems: 'center' }}>
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.accent, letterSpacing: 3 }}>
+
+          <View style={qpStyles.brandWatermark}>
+            <Text style={[qpStyles.brandText, { color: colors.accent }]}>
               U N F O L D
             </Text>
           </View>
         </ViewShot>
-        
+
         {/* Action Buttons */}
-        <View style={{ position: 'absolute', bottom: 60, left: 24, right: 24, flexDirection: 'row', gap: 12 }}>
+        <View style={qpStyles.wallpaperActions}>
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleSave}
             disabled={isGenerating}
-            style={{
-              flex: 1,
-              backgroundColor: colors.accent,
-              paddingVertical: 18,
-              borderRadius: 28,
-              alignItems: 'center',
-              opacity: isGenerating ? 0.7 : 1,
-            }}
+            style={[qpStyles.saveButton, { backgroundColor: colors.accent, opacity: isGenerating ? 0.7 : 1 }]}
           >
             {isGenerating ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <>
-                <DownloadSimpleIcon size={18} color="#FFFFFF" weight="light" style={{ marginBottom: 4 }} />
-                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>Save</Text>
+                <DownloadSimpleIcon size={18} color="#FFFFFF" weight="light" style={qpStyles.actionIcon} />
+                <Text style={qpStyles.actionButtonLabel}>Save</Text>
               </>
             )}
           </TouchableOpacity>
-          
+
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleShare}
             disabled={isGenerating}
-            style={{
-              flex: 1,
-              backgroundColor: 'transparent',
-              paddingVertical: 18,
-              borderRadius: 28,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: '#FFFFFF',
-            }}
+            style={qpStyles.shareButton}
           >
             <>
-              <ShareNetworkIcon size={18} color="#FFFFFF" weight="light" style={{ marginBottom: 4 }} />
-              <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>Share</Text>
+              <ShareNetworkIcon size={18} color="#FFFFFF" weight="light" style={qpStyles.actionIcon} />
+              <Text style={qpStyles.actionButtonLabel}>Share</Text>
             </>
           </TouchableOpacity>
         </View>
@@ -373,3 +325,167 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
     </Modal>
   );
 }
+
+const qpStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+  },
+  wallpaperBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalHeader: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  modalHeaderTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 17,
+    color: '#FFFFFF',
+  },
+  centerContent: {
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: FontFamily.body,
+    fontSize: 16,
+    color: '#999999',
+    marginTop: 16,
+  },
+  emptyContent: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontFamily: FontFamily.body,
+    fontSize: 16,
+    color: '#999999',
+    textAlign: 'center',
+  },
+  cardContainer: {
+    paddingHorizontal: 24,
+    marginTop: 40,
+  },
+  card: {
+    borderRadius: 20,
+    padding: 32,
+    minHeight: 300,
+    justifyContent: 'center',
+  },
+  quoteIconRow: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  quoteText: {
+    fontFamily: FontFamily.display,
+    fontSize: 24,
+    lineHeight: 36,
+    textAlign: 'center',
+  },
+  quoteDayTitle: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 16,
+  },
+  paginationText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
+    color: '#999999',
+  },
+  selectButtonContainer: {
+    position: 'absolute',
+    bottom: 60,
+    left: 24,
+    right: 24,
+  },
+  selectButton: {
+    paddingVertical: 18,
+    borderRadius: 28,
+    alignItems: 'center',
+  },
+  selectButtonText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 17,
+    color: '#FFFFFF',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  backButtonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  wallpaperQuoteText: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    lineHeight: 40,
+    textAlign: 'center',
+  },
+  wallpaperDayTitle: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  brandWatermark: {
+    position: 'absolute',
+    bottom: 40,
+    alignItems: 'center',
+  },
+  brandText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 12,
+    letterSpacing: 3,
+  },
+  wallpaperActions: {
+    position: 'absolute',
+    bottom: 60,
+    left: 24,
+    right: 24,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  saveButton: {
+    flex: 1,
+    paddingVertical: 18,
+    borderRadius: 28,
+    alignItems: 'center',
+  },
+  shareButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    paddingVertical: 18,
+    borderRadius: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  actionIcon: {
+    marginBottom: 4,
+  },
+  actionButtonLabel: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+});

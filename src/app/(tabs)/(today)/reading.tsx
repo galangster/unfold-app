@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal, Pressable } from 'react-native';
+import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -153,6 +153,8 @@ export default function ReadingScreen() {
   const [isBridgeLoading, setIsBridgeLoading] = useState(false);
   const mountedRef = useRef(true);
   const continuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -220,6 +222,8 @@ export default function ReadingScreen() {
     return () => {
       mountedRef.current = false;
       if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
+      if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+      if (audioExpandTimerRef.current) clearTimeout(audioExpandTimerRef.current);
     };
   }, []);
 
@@ -599,7 +603,9 @@ export default function ReadingScreen() {
           justCompletedDay: true,
         })) {
           // Small delay to let celebration show first
-          setTimeout(async () => {
+          if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
+          reviewTimerRef.current = setTimeout(async () => {
+            if (!mountedRef.current) return;
             const shown = await reviewManager.showPrompt();
             if (shown) {
             recordReviewPrompt(totalDaysCompleted);
@@ -1259,8 +1265,9 @@ export default function ReadingScreen() {
                         totalMinutes: user?.readingDuration ?? 5,
                         isListening: true,
                       });
-                      setTimeout(() => {
-                        audioPlayerRef.current?.expand();
+                      if (audioExpandTimerRef.current) clearTimeout(audioExpandTimerRef.current);
+                      audioExpandTimerRef.current = setTimeout(() => {
+                        if (mountedRef.current) audioPlayerRef.current?.expand();
                       }, 50);
                     } else {
                       audioPlayerRef.current?.expand();
@@ -1802,10 +1809,14 @@ export default function ReadingScreen() {
                 Something went wrong. Try again?
               </Text>
             )}
-            <Pressable
+            <TouchableOpacity
+              activeOpacity={0.7}
               onPress={handleContinueJourney}
               style={{ backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12, opacity: isExtendingArc ? 0.7 : 1 }}
               disabled={isExtendingArc}
+              accessibilityRole="button"
+              accessibilityLabel="Continue your journey"
+              accessibilityState={{ disabled: isExtendingArc }}
             >
               {isExtendingArc ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -1814,8 +1825,9 @@ export default function ReadingScreen() {
                   {extensionError ? 'Retry' : `Keep Going \u00B7 ${continuationDays} more days`}
                 </Text>
               )}
-            </Pressable>
-            <Pressable
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.6}
               onPress={() => {
                 if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
                 setShowContinuationPrompt(false);
@@ -1823,13 +1835,16 @@ export default function ReadingScreen() {
                 setContinuationReason('');
                 setExtensionError(false);
               }}
-              style={{ paddingVertical: 10 }}
+              style={{ paddingVertical: 10, opacity: isExtendingArc ? 0.5 : 1 }}
               disabled={isExtendingArc}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss continuation prompt"
+              accessibilityState={{ disabled: isExtendingArc }}
             >
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: colors.textMuted }}>
                 I'm good for now
               </Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

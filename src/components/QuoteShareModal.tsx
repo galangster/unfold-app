@@ -122,6 +122,8 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
             right: 20,
             zIndex: 10,
           }}
+          accessibilityLabel="Close share modal"
+          accessibilityRole="button"
         >
           <XIcon size={28} color="#FFFFFF" weight="light" />
         </TouchableOpacity>
@@ -211,6 +213,9 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleSave}
             disabled={isGenerating}
+            accessibilityLabel="Save quote image"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isGenerating }}
             style={{
               backgroundColor: colors.accent,
               paddingHorizontal: 24,
@@ -243,6 +248,9 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
           <TouchableOpacity activeOpacity={0.7}
             onPress={handleShare}
             disabled={isGenerating}
+            accessibilityLabel="Share quote"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isGenerating }}
             style={{
               backgroundColor: 'transparent',
               paddingHorizontal: 24,
@@ -253,6 +261,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
               gap: 8,
               borderWidth: 1,
               borderColor: '#FFFFFF',
+              opacity: isGenerating ? 0.7 : 1,
             }}
           >
             <ShareNetworkIcon size={20} color="#FFFFFF" weight="light" />

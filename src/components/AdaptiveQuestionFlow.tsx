@@ -153,6 +153,9 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleSubmit}
               disabled={!answer.trim() || isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Submit answer"
+              accessibilityState={{ disabled: !answer.trim() || isLoading }}
               style={{
                 backgroundColor: answer.trim() ? colors.accent : colors.inputBackground,
                 paddingHorizontal: 24,

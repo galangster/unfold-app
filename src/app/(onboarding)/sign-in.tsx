@@ -390,6 +390,9 @@ export default function SignInScreen() {
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleAppleSignIn}
                 disabled={isLoading}
+                accessibilityRole="button"
+                accessibilityLabel={isLoading ? 'Signing in' : 'Sign in with Apple'}
+                accessibilityState={{ disabled: isLoading }}
                 style={[
                   styles.fallbackButton,
                   {
@@ -409,6 +412,9 @@ export default function SignInScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleContinueAnonymous}
               disabled={isLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Continue without signing in"
+              accessibilityState={{ disabled: isLoading }}
               style={[
                 styles.skipButton,
                 { opacity: isLoading ? 0.6 : 1 },

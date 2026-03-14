@@ -32,8 +32,8 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 function MoonRipples({ color }: { color: string }) {
   return (
     <>
-      {[0, 600, 1200].map((delay, i) => (
-        <RippleRingEvening key={i} delay={delay} color={color} />
+      {[0, 600, 1200].map((delay) => (
+        <RippleRingEvening key={delay} delay={delay} color={color} />
       ))}
     </>
   );
@@ -284,6 +284,8 @@ export default function EveningWindDownScreen() {
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={{ padding: 8 }}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
           >
             <CaretLeftIcon size={22} color={colors.text} weight="light" />
           </TouchableOpacity>
@@ -417,7 +419,7 @@ export default function EveningWindDownScreen() {
                 />
                 {examen.movements.map((movement, index) => (
                   <MovementCard
-                    key={index}
+                    key={movement.title}
                     movement={movement}
                     index={index}
                     accentColor={colors.accent}

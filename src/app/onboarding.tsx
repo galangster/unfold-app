@@ -13,6 +13,7 @@ import {
   Keyboard,
   ActivityIndicator,
   Dimensions,
+  StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -110,41 +111,21 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
       onPressOut={() => setIsPressed(false)}
     >
       <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingVertical: 10,
-          paddingHorizontal: 16,
-          borderRadius: 20,
-          backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-          borderWidth: 1.5,
-          borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
-          gap: 8,
-        }}
+        style={[
+          obStyles.themePillContainer,
+          {
+            backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
+            borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
+          },
+        ]}
       >
         {theme.icon}
-        <Text
-          style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: 14,
-            color: isSelected ? colors.text : colors.textMuted,
-          }}
-        >
+        <Text style={[obStyles.themePillText, { color: isSelected ? colors.text : colors.textMuted }]}>
           {theme.name}
         </Text>
         {selectionOrder !== undefined && (
-          <View
-            style={{
-              width: 18,
-              height: 18,
-              borderRadius: 9,
-              backgroundColor: colors.accent,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginLeft: 4,
-            }}
-          >
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.background }}>
+          <View style={[obStyles.selectionOrderBadge, { backgroundColor: colors.accent }]}>
+            <Text style={[obStyles.selectionOrderText, { color: colors.background }]}>
               {selectionOrder}
             </Text>
           </View>
@@ -2216,6 +2197,9 @@ export default function OnboardingScreen() {
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleOnboardingAppleSignIn}
                 disabled={isSigningIn}
+                accessibilityRole="button"
+                accessibilityLabel={isSigningIn ? 'Signing in' : 'Sign in with Apple'}
+                accessibilityState={{ disabled: isSigningIn }}
                 style={{
                   width: screenWidth - 48,
                   height: 54,
@@ -2242,6 +2226,9 @@ export default function OnboardingScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleSkipSignIn}
               disabled={isSigningIn}
+              accessibilityRole="button"
+              accessibilityLabel="Continue without signing in"
+              accessibilityState={{ disabled: isSigningIn }}
               style={{
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -2344,6 +2331,8 @@ export default function OnboardingScreen() {
                 onPress={handleBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+                accessibilityLabel="Go back"
+                accessibilityRole="button"
               >
                 <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
               </TouchableOpacity>
@@ -2496,3 +2485,31 @@ export default function OnboardingScreen() {
     </View>
   );
 }
+
+const obStyles = StyleSheet.create({
+  themePillContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    gap: 8,
+  },
+  themePillText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+  },
+  selectionOrderBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  selectionOrderText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+  },
+});

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import Animated, {
   FadeInDown,
@@ -99,48 +99,28 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
     const isToday = day.isToday;
 
     return (
-      <View key={index} style={{ alignItems: 'center' }}>
+      <View key={`${day.day}-${index}`} style={styles.dayColumn}>
         <View
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: isCompleted ? colors.accent : 'transparent',
-            borderWidth: isCompleted ? 0 : 1.5,
-            borderColor: isToday ? colors.accent : colors.border,
-          }}
+          style={[
+            styles.dayCircle,
+            {
+              backgroundColor: isCompleted ? colors.accent : 'transparent',
+              borderWidth: isCompleted ? 0 : 1.5,
+              borderColor: isToday ? colors.accent : colors.border,
+            },
+          ]}
         >
           {isCompleted && (
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: 10,
-                color: colors.background,
-              }}
-            >
+            <Text style={[styles.dayCircleText, { color: colors.background }]}>
               {day.day}
             </Text>
           )}
           {!isCompleted && isToday && (
-            <View
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: colors.accent,
-              }}
-            />
+            <View style={[styles.todayDot, { backgroundColor: colors.accent }]} />
           )}
         </View>
         <Text
-          style={{
-            fontFamily: FontFamily.ui,
-            fontSize: 10,
-            color: isToday ? colors.text : colors.textMuted,
-            marginTop: 4,
-          }}
+          style={[styles.dayLabel, { color: isToday ? colors.text : colors.textMuted }]}
         >
           {day.day}
         </Text>
@@ -152,23 +132,22 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
     <Animated.View entering={FadeInDown.duration(600).delay(400)}>
       <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
         <View
-          style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: streakCount > 0 ? colors.accent + '15' : colors.border,
-            padding: 20,
-            // Warm glow for streak card — intensity scales with streak
-            shadowColor: streakCount > 0 ? colors.accent : '#000',
-            shadowOffset: { width: 0, height: streakCount > 0 ? 3 : 2 },
-            shadowOpacity: streakCount > 0 ? 0.12 : 0.05,
-            shadowRadius: streakCount > 0 ? 12 : 8,
-            elevation: streakCount > 0 ? 3 : 2,
-          }}
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.inputBackground,
+              borderColor: streakCount > 0 ? colors.accent + '15' : colors.border,
+              shadowColor: streakCount > 0 ? colors.accent : '#000',
+              shadowOffset: { width: 0, height: streakCount > 0 ? 3 : 2 },
+              shadowOpacity: streakCount > 0 ? 0.12 : 0.05,
+              shadowRadius: streakCount > 0 ? 12 : 8,
+              elevation: streakCount > 0 ? 3 : 2,
+            },
+          ]}
         >
           {/* Header row - Current Streak label on left, streak count on right */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
               <Animated.View style={flamePulseStyle}>
                 <SunIcon
                   size={32}
@@ -176,65 +155,36 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
                   weight={streakCount >= 7 ? "fill" : "light"}
                 />
               </Animated.View>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiMedium,
-                  fontSize: 14,
-                  color: colors.textMuted,
-                }}
-              >
+              <Text style={[styles.streakLabel, { color: colors.textMuted }]}>
                 Current Streak
               </Text>
             </View>
 
             {/* Streak count - number and label horizontally aligned with consistent font */}
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <View style={styles.streakCountRow}>
               <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 32,
-                  color: streakCount > 0 ? colors.accent : colors.text,
-                  letterSpacing: -1,
-                }}
+                style={[
+                  styles.streakNumber,
+                  { color: streakCount > 0 ? colors.accent : colors.text },
+                ]}
               >
                 {streakCount}
               </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 14,
-                  color: colors.textMuted,
-                  marginLeft: 4,
-                }}
-              >
+              <Text style={[styles.streakUnit, { color: colors.textMuted }]}>
                 {streakLabel}
               </Text>
             </View>
           </View>
 
           {/* 7-day mini calendar strip */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              paddingTop: 8,
-              borderTopWidth: 1,
-              borderTopColor: colors.border,
-            }}
-          >
+          <View style={[styles.calendarStrip, { borderTopColor: colors.border }]}>
             {weekDays}
           </View>
 
           {/* Motivational micro-copy */}
           <Animated.Text
             entering={FadeIn.delay(600).duration(400)}
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 13,
-              color: colors.textMuted,
-              textAlign: 'center',
-              marginTop: 14,
-            }}
+            style={[styles.motivationText, { color: colors.textMuted }]}
           >
             {motivation}
           </Animated.Text>
@@ -243,38 +193,21 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           {streakCount > 0 && (
             <Animated.View
               entering={FadeIn.delay(700).duration(400)}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 10,
-                gap: 6,
-              }}
+              style={styles.freezeRow}
             >
               <SnowflakeIcon size={12} color={colors.textSubtle} weight="light" />
-              <View style={{ flexDirection: 'row', gap: 4 }}>
+              <View style={styles.freezeDotsRow}>
                 {Array.from({ length: 7 }).map((_, i) => (
                   <View
                     key={i}
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: i < freezeDots
-                        ? colors.accent
-                        : colors.border,
-                    }}
+                    style={[
+                      styles.freezeDot,
+                      { backgroundColor: i < freezeDots ? colors.accent : colors.border },
+                    ]}
                   />
                 ))}
               </View>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 10,
-                  color: colors.textSubtle,
-                  marginLeft: 2,
-                }}
-              >
+              <Text style={[styles.freezeLabel, { color: colors.textSubtle }]}>
                 {freezeDots === 7 ? 'Freeze earned!' : `${freezeDots}/7`}
               </Text>
             </Animated.View>
@@ -284,3 +217,97 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  dayColumn: {
+    alignItems: 'center',
+  },
+  dayCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dayCircleText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 10,
+  },
+  todayDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  dayLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 10,
+    marginTop: 4,
+  },
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  streakLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+  },
+  streakCountRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  streakNumber: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 32,
+    letterSpacing: -1,
+  },
+  streakUnit: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 14,
+    marginLeft: 4,
+  },
+  calendarStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  motivationText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 14,
+  },
+  freezeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    gap: 6,
+  },
+  freezeDotsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  freezeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  freezeLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 10,
+    marginLeft: 2,
+  },
+});

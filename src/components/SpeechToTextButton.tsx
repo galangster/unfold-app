@@ -233,11 +233,15 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           disabled={!isActive}
+          accessibilityLabel="Hold to speak"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !isActive }}
           style={[
             styles.button,
             {
               backgroundColor: buttonColors.background,
               borderColor: buttonColors.border,
+              opacity: isActive ? 1 : 0.5,
             },
           ]}
         >

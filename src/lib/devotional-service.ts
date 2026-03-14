@@ -2028,7 +2028,13 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
       }
     }
 
-    const parsedResult = JSON.parse(jsonText) as { question?: string; subtext?: string; chips?: string[] };
+    let parsedResult: { question?: string; subtext?: string; chips?: string[] };
+    try {
+      parsedResult = JSON.parse(jsonText) as typeof parsedResult;
+    } catch (parseErr) {
+      if (__DEV__) console.warn('[Adaptive] JSON parse failed:', parseErr, 'Input:', jsonText.substring(0, 200));
+      throw new Error(`Adaptive question JSON parse failed: ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+    }
 
     logger.log('[Adaptive] Backend parsed result:', {
       question: parsedResult.question?.substring(0, 60),
@@ -2131,11 +2137,17 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
       return [];
     }
 
-    const parsedResult = JSON.parse(content) as { quotes: { text: string; score: number }[] };
-    
+    let parsedResult: { quotes: { text: string; score: number }[] };
+    try {
+      parsedResult = JSON.parse(content) as typeof parsedResult;
+    } catch (parseErr) {
+      if (__DEV__) console.warn('[Quote Extraction] JSON parse failed:', parseErr);
+      return [];
+    }
+
     // Increment rate limit counter on success
     await incrementRateLimit('extract-quotes');
-    
+
     return parsedResult.quotes?.slice(0, count) || [];
   } catch (err) {
     logger.log('[Quote Extraction] Error:', err);

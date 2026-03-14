@@ -60,7 +60,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 const logger = {
-  log: (...args: unknown[]) => console.log('[ProgressiveGen]', ...args),
+  log: (...args: unknown[]) => { if (__DEV__) console.log('[ProgressiveGen]', ...args); },
   warn: (...args: unknown[]) => console.warn('[ProgressiveGen]', ...args),
   error: (...args: unknown[]) => console.error('[ProgressiveGen]', ...args),
 };
@@ -311,11 +311,17 @@ Bias toward extending (3-5 extra days) unless the arc clearly reached resolution
     const jsonMatch = text.match(/\{[\s\S]*?\}/);
     if (!jsonMatch) throw new Error('No JSON in extension eval response');
 
-    const result = JSON.parse(jsonMatch[0]) as {
+    let result: {
       shouldExtend: boolean;
       reason: string;
       suggestedDays: number;
     };
+    try {
+      result = JSON.parse(jsonMatch[0]) as typeof result;
+    } catch (parseErr) {
+      if (__DEV__) console.warn('[Progressive] Extension eval JSON parse failed:', parseErr);
+      throw new Error(`Extension eval: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
+    }
 
     logger.log(`Extension eval: shouldExtend=${result.shouldExtend}, reason="${result.reason}"`);
     void logBugEvent('progressive-gen', 'extension-evaluated', {

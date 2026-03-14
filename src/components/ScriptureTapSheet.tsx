@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
 import Animated, { FadeIn, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -42,6 +42,7 @@ export function ScriptureTapSheet({
   const [saved, setSaved] = useState(false);
   const [commentary, setCommentary] = useState<string | null>(null);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const alreadyBookmarked = devotionalId && dayNumber
     ? isBookmarked(devotionalId, dayNumber)
@@ -82,7 +83,8 @@ export function ScriptureTapSheet({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(`${verse.text}\n— ${verse.reference} (${verse.translation.toUpperCase()})`);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const handleBookmark = () => {
@@ -111,107 +113,53 @@ export function ScriptureTapSheet({
       {/* Backdrop */}
       <TouchableOpacity activeOpacity={0.7}
         onPress={onClose}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
+        style={stStyles.backdrop}
       >
         {/* Sheet */}
         <Animated.View
           entering={SlideInDown.duration(300)}
           exiting={SlideOutDown.duration(200)}
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: colors.background,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            maxHeight: '55%',
-            paddingBottom: 100,
-          }}
+          style={[stStyles.sheet, { backgroundColor: colors.background }]}
         >
           <TouchableOpacity activeOpacity={0.7} onPress={(e) => e.stopPropagation()}>
             {/* Grab handle */}
-            <View style={{ alignItems: 'center', paddingVertical: 12 }}>
-              <View
-                style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: colors.border,
-                }}
-              />
+            <View style={stStyles.handleContainer}>
+              <View style={[stStyles.handle, { backgroundColor: colors.border }]} />
             </View>
 
             {/* Header */}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingHorizontal: 24,
-                paddingBottom: 16,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 17,
-                  color: colors.text,
-                  flex: 1,
-                }}
-              >
+            <View style={stStyles.header}>
+              <Text style={[stStyles.headerTitle, { color: colors.text }]}>
                 {reference}
               </Text>
 
               <TouchableOpacity activeOpacity={0.7}
                 onPress={onClose}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={{ padding: 4 }}
+                style={stStyles.closeButton}
+                accessibilityLabel="Close scripture view"
+                accessibilityRole="button"
               >
                 <XIcon size={20} color={colors.textSubtle} weight="light" />
               </TouchableOpacity>
             </View>
 
             {/* Content */}
-            <ScrollView style={{ paddingHorizontal: 24 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={stStyles.scrollContent} showsVerticalScrollIndicator={false}>
               {loading ? (
-                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <View style={stStyles.loadingContainer}>
                   <ActivityIndicator size="small" color={colors.accent} />
                 </View>
               ) : verse ? (
                 <>
                   {/* Verse text */}
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 17,
-                      color: colors.text,
-                      lineHeight: 28,
-                      marginBottom: 12,
-                    }}
-                  >
+                  <Text style={[stStyles.verseText, { color: colors.text }]}>
                     {verse.text}
                   </Text>
 
                   {/* Translation badge */}
-                  <View
-                    style={{
-                      alignSelf: 'flex-start',
-                      backgroundColor: colors.inputBackground,
-                      paddingHorizontal: 8,
-                      paddingVertical: 3,
-                      borderRadius: 6,
-                      marginBottom: 16,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 11,
-                        color: colors.textSubtle,
-                        letterSpacing: 0.5,
-                      }}
-                    >
+                  <View style={[stStyles.translationBadge, { backgroundColor: colors.inputBackground }]}>
+                    <Text style={[stStyles.translationText, { color: colors.textSubtle }]}>
                       {verse.translation.toUpperCase()}
                     </Text>
                   </View>
@@ -220,24 +168,10 @@ export function ScriptureTapSheet({
                   {commentaryLoading && (
                     <Animated.View
                       entering={FadeIn.duration(200)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: 14,
-                        backgroundColor: colors.inputBackground,
-                        borderRadius: 12,
-                        marginBottom: 16,
-                      }}
+                      style={[stStyles.commentaryLoading, { backgroundColor: colors.inputBackground }]}
                     >
                       <ActivityIndicator size={12} color={colors.accent} />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 12,
-                          color: colors.textSubtle,
-                        }}
-                      >
+                      <Text style={[stStyles.commentaryLoadingText, { color: colors.textSubtle }]}>
                         Connecting to today's theme...
                       </Text>
                     </Animated.View>
@@ -245,72 +179,32 @@ export function ScriptureTapSheet({
                   {commentary && !commentaryLoading && (
                     <Animated.View
                       entering={FadeIn.duration(400)}
-                      style={{
-                        padding: 14,
-                        backgroundColor: colors.inputBackground,
-                        borderRadius: 12,
-                        borderLeftWidth: 2,
-                        borderLeftColor: colors.accent,
-                        marginBottom: 16,
-                      }}
+                      style={[stStyles.commentaryCard, { backgroundColor: colors.inputBackground, borderLeftColor: colors.accent }]}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <View style={stStyles.commentaryHeader}>
                         <SparkleIcon size={12} color={colors.accent} weight="fill" />
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: 10,
-                            color: colors.accent,
-                            letterSpacing: 0.5,
-                            textTransform: 'uppercase',
-                          }}
-                        >
+                        <Text style={[stStyles.commentaryLabel, { color: colors.accent }]}>
                           Today's Connection
                         </Text>
                       </View>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: 14,
-                          color: colors.textMuted,
-                          lineHeight: 22,
-                        }}
-                      >
+                      <Text style={[stStyles.commentaryText, { color: colors.textMuted }]}>
                         {commentary}
                       </Text>
                     </Animated.View>
                   )}
 
                   {/* Action buttons */}
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={stStyles.actionsRow}>
                     <TouchableOpacity activeOpacity={0.7}
                       onPress={handleCopy}
-                      style={{
-                        flex: 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                        paddingVertical: 12,
-                        borderRadius: 12,
-                        backgroundColor: colors.inputBackground,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        opacity: 1,
-                      }}
+                      style={[stStyles.actionButton, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                     >
                       {copied ? (
                         <CheckIcon size={16} color={colors.accent} weight="bold" />
                       ) : (
                         <CopyIcon size={16} color={colors.textMuted} weight="light" />
                       )}
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 14,
-                          color: copied ? colors.accent : colors.text,
-                        }}
-                      >
+                      <Text style={[stStyles.actionButtonText, { color: copied ? colors.accent : colors.text }]}>
                         {copied ? 'Copied' : 'Copy'}
                       </Text>
                     </TouchableOpacity>
@@ -318,32 +212,20 @@ export function ScriptureTapSheet({
                     {devotionalId && dayNumber && !alreadyBookmarked && (
                       <TouchableOpacity activeOpacity={0.7}
                         onPress={handleBookmark}
-                        style={{
-                          flex: 1,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 8,
-                          paddingVertical: 12,
-                          borderRadius: 12,
-                          backgroundColor: saved ? colors.accent + '15' : colors.inputBackground,
-                          borderWidth: 1,
-                          borderColor: saved ? colors.accent : colors.border,
-                          opacity: 1,
-                        }}
+                        style={[
+                          stStyles.actionButton,
+                          {
+                            backgroundColor: saved ? colors.accent + '15' : colors.inputBackground,
+                            borderColor: saved ? colors.accent : colors.border,
+                          },
+                        ]}
                       >
                         <BookmarkSimpleIcon
                           size={16}
                           color={saved ? colors.accent : colors.textMuted}
                           weight={saved ? 'fill' : 'light'}
                         />
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: 14,
-                            color: saved ? colors.accent : colors.text,
-                          }}
-                        >
+                        <Text style={[stStyles.actionButtonText, { color: saved ? colors.accent : colors.text }]}>
                           {saved ? 'Saved' : 'Bookmark'}
                         </Text>
                       </TouchableOpacity>
@@ -351,15 +233,7 @@ export function ScriptureTapSheet({
                   </View>
                 </>
               ) : (
-                <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: 15,
-                    color: colors.textMuted,
-                    textAlign: 'center',
-                    paddingVertical: 30,
-                  }}
-                >
+                <Text style={[stStyles.errorText, { color: colors.textMuted }]}>
                   Couldn't load this passage. Try again later.
                 </Text>
               )}
@@ -370,3 +244,128 @@ export function ScriptureTapSheet({
     </Modal>
   );
 }
+
+const stStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '55%',
+    paddingBottom: 100,
+  },
+  handleContainer: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 17,
+    flex: 1,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  verseText: {
+    fontFamily: FontFamily.body,
+    fontSize: 17,
+    lineHeight: 28,
+    marginBottom: 12,
+  },
+  translationBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 16,
+  },
+  translationText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  commentaryLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  commentaryLoadingText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+  },
+  commentaryCard: {
+    padding: 14,
+    borderRadius: 12,
+    borderLeftWidth: 2,
+    marginBottom: 16,
+  },
+  commentaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  commentaryLabel: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  commentaryText: {
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  actionButtonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+  },
+  errorText: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    textAlign: 'center',
+    paddingVertical: 30,
+  },
+});

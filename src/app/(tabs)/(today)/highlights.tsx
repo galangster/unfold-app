@@ -75,7 +75,7 @@ export default function HighlightsScreen() {
           paddingVertical: 12,
         }}
       >
-        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }}>
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }} accessibilityLabel="Go back" accessibilityRole="button">
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </TouchableOpacity>
         <Text

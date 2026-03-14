@@ -152,7 +152,7 @@ export function GlassMenu({ visible, onClose, items }: GlassMenuProps) {
               {/* Menu items */}
               {items.map((item, index) => (
                 <TouchableOpacity activeOpacity={0.7}
-                  key={index}
+                  key={item.label}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     item.onPress();
