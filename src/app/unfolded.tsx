@@ -6,7 +6,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import Animated, {
@@ -1272,6 +1272,7 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
 // ═══════════════════════════════════════════════════════════════
 export default function UnfoldedScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [currentCard, setCurrentCard] = useState(0);
   const [paused, setPaused] = useState(false);
 
@@ -1432,7 +1433,7 @@ export default function UnfoldedScreen() {
         ))}
       </View>
 
-      <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
+      <View style={[s.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {/* Top: Stories-style progress + close */}
         <View style={s.topBar}>
           <View style={s.progressAndClose}>
@@ -1460,7 +1461,7 @@ export default function UnfoldedScreen() {
             {renderCard()}
           </Animated.View>
         </GestureDetector>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }

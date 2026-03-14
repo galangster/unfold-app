@@ -54,16 +54,21 @@ function shiftedRgba(
 
 function buildRingColors(accent: string) {
   return {
+    // More stops with gentler shifts for smooth gradient rotation
     sweepColors: [
       hexToRgba(accent, 1.0),
-      shiftedRgba(accent, 50, 40, 20, 0.95),
-      shiftedRgba(accent, -20, -30, -50, 0.85),
-      shiftedRgba(accent, -40, -50, -70, 0.9),
+      shiftedRgba(accent, 15, 12, 6, 0.97),
+      shiftedRgba(accent, 25, 20, 10, 0.95),
+      shiftedRgba(accent, 15, 10, 0, 0.93),
+      shiftedRgba(accent, -5, -8, -15, 0.92),
+      shiftedRgba(accent, -12, -16, -25, 0.93),
+      shiftedRgba(accent, -5, -8, -15, 0.95),
+      shiftedRgba(accent, 10, 8, 4, 0.97),
       hexToRgba(accent, 1.0),
     ],
     outerGlow: hexToRgba(accent, 1.0),
     midGlow: hexToRgba(accent, 1.0),
-    innerGlow: shiftedRgba(accent, 50, 40, 20, 1.0),
+    innerGlow: shiftedRgba(accent, 20, 16, 8, 1.0),
   };
 }
 

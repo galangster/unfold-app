@@ -30,7 +30,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, PenNibIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, PenNibIcon } from 'phosphor-react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
 import { logger } from '@/lib/logger';
@@ -42,7 +42,7 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
-import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES } from '@/lib/store';
+import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -188,7 +188,11 @@ const iconMap: Record<string, React.ReactNode> = {
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 we never train AI on your\u00A0private\u00A0writing.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  // STYLE PREFERENCES: Faith background + life stage
+  { id: 'stylePreferences1', question: "Where are you in your faith?", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // STYLE PREFERENCES: Tone + depth
+  { id: 'stylePreferences2', question: "How should this feel?", subtext: 'The tone and depth that serves you best.', type: 'stylePreferences2' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -199,20 +203,22 @@ const ALL_STEPS = [
   { id: 'emotionalState', question: "And what's underneath\u00A0that?", subtext: "There's usually something deeper. Take\u00A0your\u00A0time.", type: 'multiline' as const, placeholder: "When I sit with it, I realize...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   // DISCOVERY STEP 3: The longing - What would breakthrough look like? (contextual based on study type)
   { id: 'spiritualSeeking', question: "What would feel like a breath of fresh air\u00A0right\u00A0now?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
-  { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "We'll craft each day to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
+  { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "Each day is crafted to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long would you like this journey\u00A0to\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
-  { id: 'reminderTime', question: 'When should we\u00A0remind\u00A0you?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
+  { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Reflect the user's answers back and ask for commitment
-  { id: 'mirrorBack', question: "Here's what I\u00A0heard.", subtext: 'Before we build this, I want to make sure I got\u00A0it\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'mirrorBack', question: "Here's what was\u00A0shared.", subtext: 'Before building this, a quick check to make sure it\u00A0landed\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // COMPANION NAMING: Name the companion (intro now lives in how-it-works.tsx)
+  { id: 'companionNaming', question: "Name your companion.", subtext: 'A name, a word, whatever feels right. This is yours.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
-  { id: 'founderNote', question: 'A note from our\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // COMPANION INTRO: Introduce the companion orb
-  { id: 'companionIntro', question: 'Meet your\u00A0companion.', subtext: 'Every day, it learns more about you. The longer you stay, the more personal\u00A0it\u00A0gets.', type: 'companionIntro' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SIGN-IN: Optional Apple Sign In before generating
   { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your journey safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // PREMIUM SHOWCASE: Final premium pitch before generating
+  { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'founderNote' | 'companionIntro' | 'signIn';
+type StepId = 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'companionNaming' | 'founderNote' | 'signIn' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -257,6 +263,10 @@ interface OnboardingData {
   name: string;
   bibleTranslation: BibleTranslation;
   aboutMe: string;
+  faithBackground: FaithBackground;
+  lifeStage: LifeStage;
+  tone: WritingTone;
+  depth: ContentDepth;
   selectedMainOption?: 'theme' | 'type' | 'guided';
   selectedThemes: ThemeCategory[];
   selectedType?: DevotionalType;
@@ -333,8 +343,6 @@ export default function OnboardingScreen() {
 
   // Track whether the user has already seen the paywall during onboarding
   const hasSeenPaywallRef = useRef(false);
-  // Track the step to resume after paywall dismissal
-  const postPaywallStepRef = useRef<StepId | null>(null);
 
   // Transition state for animations
   const isTransitioningRef = useRef(false);
@@ -344,6 +352,10 @@ export default function OnboardingScreen() {
     name: existingUser?.name || '',
     bibleTranslation: existingUser?.bibleTranslation || 'WEB',
     aboutMe: existingUser?.aboutMe || '',
+    faithBackground: 'growing',
+    lifeStage: 'building',
+    tone: 'warm',
+    depth: 'balanced',
     selectedMainOption: undefined,
     selectedThemes: [],
     selectedType: undefined,
@@ -438,10 +450,10 @@ export default function OnboardingScreen() {
         return false;
       }
 
-      // Skip founder's note, companion intro, and sign-in for returning users
+      // Skip first-time-only steps for returning users
       // These are first-time onboarding only — not shown when building new devotionals
       if (existingUser?.hasCompletedOnboarding) {
-        if (step.id === 'founderNote' || step.id === 'companionIntro' || step.id === 'signIn') {
+        if (step.id === 'founderNote' || step.id === 'companionNaming' || step.id === 'signIn' || step.id === 'premiumShowcase' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
           return false;
         }
       }
@@ -542,8 +554,8 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back, founder note, and companion intro always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'companionIntro') {
+    // Mirror-back, founder note, companion naming, style preferences, and premium showcase always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase') {
       return true;
     }
 
@@ -577,6 +589,7 @@ export default function OnboardingScreen() {
       reminderTime: data.reminderTime,
       bibleTranslation: data.bibleTranslation as BibleTranslation,
       hasCompletedOnboarding: true,
+      writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
       ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
       ...(data.selectedType ? { selectedType: data.selectedType } : {}),
       ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
@@ -599,7 +612,7 @@ export default function OnboardingScreen() {
         hasCompletedStyleOnboarding: false,
         isPremium: false,
         fontSize: 'medium',
-        writingStyle: { tone: 'warm', depth: 'balanced', faithBackground: 'growing' },
+        writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
         bibleTranslation: data.bibleTranslation as BibleTranslation,
         themeMode: 'dark',
         accentTheme: 'gold',
@@ -611,9 +624,32 @@ export default function OnboardingScreen() {
       });
     }
 
-    // Paywall was shown early (after name step) — go straight to generating
     router.replace('/generating');
   }, [router, data, existingUser, updateUser, setUser]);
+
+  // Advance to next step
+  const advanceToNextStep = useCallback(() => {
+    const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
+    if (currentIdx >= STEPS.length - 1) {
+      // Last step — complete onboarding
+      completeOnboarding();
+      return;
+    }
+
+    const nextStepId = STEPS[currentIdx + 1].id as StepId;
+
+    LayoutAnimation.configureNext({
+      duration: 200,
+      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+    });
+
+    setCurrentStepId(nextStepId);
+    setShowInput(false);
+    setShowListScrollHint(true);
+    inputOpacity.value = 0;
+  }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
   // Handle Apple Sign In during onboarding
   const handleOnboardingAppleSignIn = useCallback(async () => {
@@ -643,8 +679,8 @@ export default function OnboardingScreen() {
         logger.log('[Onboarding] Successfully signed in with Apple', { userId: result.user.uid });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        // Proceed to complete onboarding
-        completeOnboarding();
+        // Advance to next step (premiumShowcase)
+        advanceToNextStep();
       } else if (result.isCancelled) {
         logger.log('[Onboarding] User cancelled Apple Sign In');
         // Stay on step, user can retry or skip
@@ -680,7 +716,7 @@ export default function OnboardingScreen() {
     } finally {
       setIsSigningIn(false);
     }
-  }, [isSigningIn, updateUser, completeOnboarding]);
+  }, [isSigningIn, updateUser, advanceToNextStep]);
 
   // Handle skipping sign-in during onboarding
   const handleSkipSignIn = useCallback(async () => {
@@ -696,41 +732,9 @@ export default function OnboardingScreen() {
 
     logger.log('[Onboarding] User skipped sign-in during onboarding');
 
-    // Proceed to complete onboarding
-    completeOnboarding();
-  }, [isSigningIn, updateUser, existingUser?.signInPromptCount, completeOnboarding]);
-
-  // Advance to next step
-  const advanceToNextStep = useCallback(() => {
-    const currentIdx = STEPS.findIndex((s) => s.id === currentStepId);
-    if (currentIdx >= STEPS.length - 1) {
-      // Last step — complete onboarding
-      completeOnboarding();
-      return;
-    }
-
-    // Show paywall early — after the name step, before anything else
-    if (currentStepId === 'name' && !hasSeenPaywallRef.current) {
-      hasSeenPaywallRef.current = true;
-      postPaywallStepRef.current = STEPS[currentIdx + 1].id as StepId;
-      router.push({ pathname: '/paywall', params: { source: 'onboarding_early' } });
-      return;
-    }
-
-    const nextStepId = STEPS[currentIdx + 1].id as StepId;
-
-    LayoutAnimation.configureNext({
-      duration: 200,
-      create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-      delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-    });
-
-    setCurrentStepId(nextStepId);
-    setShowInput(false);
-    setShowListScrollHint(true);
-    inputOpacity.value = 0;
-  }, [STEPS, currentStepId, inputOpacity, completeOnboarding, router]);
+    // Advance to next step (premiumShowcase)
+    advanceToNextStep();
+  }, [isSigningIn, updateUser, existingUser?.signInPromptCount, advanceToNextStep]);
 
   // Handle next button press
   const handleNext = () => {
@@ -810,8 +814,8 @@ export default function OnboardingScreen() {
       }
     }
 
-    // Save companion name when leaving the companion intro step
-    if (currentStepId === 'companionIntro') {
+    // Save companion name when leaving the companion naming step
+    if (currentStepId === 'companionNaming') {
       const trimmed = companionNameInput.trim();
       setCompanionName(trimmed.length > 0 ? trimmed : null);
     }
@@ -1789,61 +1793,211 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Companion intro step: introduce the companion orb
-    if (step.type === 'companionIntro') {
+    // Style preferences 1: Faith background + Life stage
+    if (step.type === 'stylePreferences1') {
+      const faithOptions: { value: FaithBackground; label: string; description: string }[] = [
+        { value: 'new', label: "Exploring", description: "New to faith or rediscovering it" },
+        { value: 'growing', label: "Growing", description: "Familiar, deepening understanding" },
+        { value: 'mature', label: "Grounded", description: "Well-versed, seeking deeper study" },
+      ];
+      const lifeOptions: { value: LifeStage; label: string; description: string }[] = [
+        { value: 'student', label: "Student", description: "Figuring things out" },
+        { value: 'building', label: "Building", description: "Career, relationships, big decisions" },
+        { value: 'midlife', label: "In the thick of it", description: "Family, work, responsibilities" },
+        { value: 'reflective', label: "Reflective", description: "Looking back, finding meaning" },
+      ];
       return (
-        <View style={{ alignItems: 'center', gap: 32, marginTop: 24 }}>
-          {/* Large companion orb — the star of the show */}
+        <View style={{ gap: 32 }}>
+          {/* Faith Background */}
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+              Faith
+            </Text>
+            <View style={{ gap: 8 }}>
+              {faithOptions.map((opt) => {
+                const isSelected = data.faithBackground === opt.value;
+                return (
+                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setData((prev) => ({ ...prev, faithBackground: opt.value }));
+                    }}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
+                    </View>
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                      borderColor: isSelected ? colors.accent : colors.border,
+                      backgroundColor: isSelected ? colors.accent : 'transparent',
+                      justifyContent: 'center', alignItems: 'center',
+                    }}>
+                      {isSelected && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.background }} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+          {/* Life Stage */}
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+              Season of life
+            </Text>
+            <View style={{ gap: 8 }}>
+              {lifeOptions.map((opt) => {
+                const isSelected = data.lifeStage === opt.value;
+                return (
+                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setData((prev) => ({ ...prev, lifeStage: opt.value }));
+                    }}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
+                    </View>
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                      borderColor: isSelected ? colors.accent : colors.border,
+                      backgroundColor: isSelected ? colors.accent : 'transparent',
+                      justifyContent: 'center', alignItems: 'center',
+                    }}>
+                      {isSelected && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.background }} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    // Style preferences 2: Tone + Depth
+    if (step.type === 'stylePreferences2') {
+      const toneOptions: { value: WritingTone; label: string; description: string; example: string }[] = [
+        { value: 'warm', label: "Like a friend", description: "Gentle, encouraging, personal", example: '"You\'re not alone in this..."' },
+        { value: 'direct', label: "Straight to the point", description: "Clear, practical, actionable", example: '"Here\'s what this means for today..."' },
+        { value: 'poetic', label: "With beauty", description: "Lyrical, contemplative, evocative", example: '"In the quiet spaces between breaths..."' },
+      ];
+      const depthOptions: { value: ContentDepth; label: string; description: string }[] = [
+        { value: 'simple', label: "Keep it simple", description: "One key idea to carry with you" },
+        { value: 'balanced', label: "A good balance", description: "Context and application woven together" },
+        { value: 'theological', label: "Take me deeper", description: "Word origins, cross-references, scholarly insight" },
+      ];
+      return (
+        <View style={{ gap: 32 }}>
+          {/* Tone */}
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+              Voice
+            </Text>
+            <View style={{ gap: 8 }}>
+              {toneOptions.map((opt) => {
+                const isSelected = data.tone === opt.value;
+                return (
+                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setData((prev) => ({ ...prev, tone: opt.value }));
+                    }}
+                    style={{
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                        <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
+                        <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 12, color: colors.textSubtle, marginTop: 6 }}>{opt.example}</Text>
+                      </View>
+                      <View style={{
+                        width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                        borderColor: isSelected ? colors.accent : colors.border,
+                        backgroundColor: isSelected ? colors.accent : 'transparent',
+                        justifyContent: 'center', alignItems: 'center',
+                      }}>
+                        {isSelected && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.background }} />}
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+          {/* Depth */}
+          <View style={{ gap: 12 }}>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
+              Depth
+            </Text>
+            <View style={{ gap: 8 }}>
+              {depthOptions.map((opt) => {
+                const isSelected = data.depth === opt.value;
+                return (
+                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setData((prev) => ({ ...prev, depth: opt.value }));
+                    }}
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
+                    </View>
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+                      borderColor: isSelected ? colors.accent : colors.border,
+                      backgroundColor: isSelected ? colors.accent : 'transparent',
+                      justifyContent: 'center', alignItems: 'center',
+                    }}>
+                      {isSelected && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.background }} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    // Companion naming step: simplified — just the name input with orb
+    if (step.type === 'companionNaming') {
+      return (
+        <View style={{ alignItems: 'center', gap: 24, marginTop: 16 }}>
           <Animated.View
-            entering={FadeIn.delay(200).duration(800)}
+            entering={FadeIn.delay(200).duration(600)}
             style={{ marginBottom: 8 }}
           >
-            <CompanionOrb accentColor={colors.accent} size={96} isActive showBadge={false} />
+            <CompanionOrb accentColor={colors.accent} size={80} isActive showBadge={false} />
           </Animated.View>
-
-          {/* Description */}
-          <View style={{ gap: 16, paddingHorizontal: 8 }}>
-            <Animated.Text
-              entering={FadeIn.delay(500).duration(600)}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 16,
-                color: colors.text,
-                lineHeight: 26,
-                textAlign: 'center',
-              }}
-            >
-              This is your companion. It checks in with you, remembers what you share, and shapes each day around where you are.
-            </Animated.Text>
-
-            <Animated.Text
-              entering={FadeIn.delay(800).duration(600)}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 16,
-                color: colors.textMuted,
-                lineHeight: 26,
-                textAlign: 'center',
-              }}
-            >
-              The more you use Unfold, the more it understands you. Day 30 feels completely different from Day 1.
-            </Animated.Text>
-          </View>
-
-          {/* Companion naming input */}
           <Animated.View
-            entering={FadeIn.delay(1100).duration(600)}
+            entering={FadeIn.delay(400).duration(500)}
             style={{ width: '100%', paddingHorizontal: 4 }}
           >
-            <Text style={{
-              fontFamily: FontFamily.bodyItalic,
-              fontSize: 15,
-              color: colors.textMuted,
-              textAlign: 'center',
-              marginBottom: 12,
-            }}>
-              What would you call me?
-            </Text>
             <TextInput
               value={companionNameInput}
               onChangeText={setCompanionNameInput}
@@ -1864,45 +2018,92 @@ export default function OnboardingScreen() {
               maxLength={30}
             />
           </Animated.View>
-
-          {/* Feature hints */}
-          <Animated.View
-            entering={FadeIn.delay(1400).duration(600)}
-            style={{ gap: 12, width: '100%', paddingHorizontal: 4 }}
+          <Animated.Text
+            entering={FadeIn.delay(600).duration(500)}
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 14,
+              color: colors.textSubtle,
+              textAlign: 'center',
+              paddingHorizontal: 20,
+            }}
           >
-            {[
-              { text: 'Greets you based on your mood and time of day' },
-              { text: 'Learns what resonates with you over time' },
-              { text: 'Bridges yesterday into today, just for you' },
-            ].map((item, i) => (
-              <View
-                key={i}
+            Your companion was introduced earlier. Give it a name — or leave it blank and move on.
+          </Animated.Text>
+        </View>
+      );
+    }
+
+    // Premium showcase step: final premium pitch before generating
+    if (step.type === 'premiumShowcase') {
+      const features = [
+        { title: 'Unlimited devotionals', description: 'Create as many series as you want' },
+        { title: 'Premium voices', description: 'Listen in studio-quality narration' },
+        { title: 'Advanced study methods', description: '32 ways to engage with scripture' },
+        { title: 'Deeper personalization', description: 'Your companion learns faster' },
+      ];
+      return (
+        <View style={{ gap: 28, marginTop: 8 }}>
+          <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: 16 }}>
+            {features.map((feature, index) => (
+              <Animated.View
+                key={feature.title}
+                entering={FadeIn.delay(300 + index * 120).duration(500)}
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  paddingVertical: 10,
-                  paddingHorizontal: 14,
-                  backgroundColor: colors.accent + '08',
-                  borderRadius: 12,
+                  flexDirection: 'row', alignItems: 'center', gap: 14,
+                  paddingVertical: 14, paddingHorizontal: 16,
+                  backgroundColor: colors.accent + '0A',
+                  borderRadius: 14,
                 }}
               >
                 <View style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 3,
+                  width: 6, height: 6, borderRadius: 3,
                   backgroundColor: colors.accent,
                 }} />
-                <Text style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 14,
-                  color: colors.text,
-                  flex: 1,
-                }}>
-                  {item.text}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>{feature.title}</Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{feature.description}</Text>
+                </View>
+              </Animated.View>
+            ))}
+          </Animated.View>
+
+          {/* CTA: Start free trial */}
+          <Animated.View entering={FadeIn.delay(800).duration(400)}>
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                hasSeenPaywallRef.current = true;
+                router.push({ pathname: '/paywall', params: { source: 'onboarding_showcase' } });
+              }}
+            >
+              <View style={{
+                backgroundColor: colors.accent,
+                paddingVertical: 18, paddingHorizontal: 24, borderRadius: 16,
+                alignItems: 'center',
+                shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5, shadowRadius: 20, elevation: 8,
+              }}>
+                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>
+                  Start 7-day free trial
                 </Text>
               </View>
-            ))}
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Skip option */}
+          <Animated.View entering={FadeIn.delay(950).duration(400)}>
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                completeOnboarding();
+              }}
+              style={{ alignItems: 'center', paddingVertical: 12 }}
+            >
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>
+                Maybe later
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       );
@@ -2147,23 +2348,11 @@ export default function OnboardingScreen() {
                 <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.back();
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                accessibilityHint="Go back to the home screen"
-                style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
-              >
-                <XIcon size={22} color={colors.textMuted} weight="light" />
-              </TouchableOpacity>
+              <View style={{ width: 40, height: 40 }} />
             )}
             
             {/* Continue button - hide for choice/timeChoice steps (they auto-advance) and mirrorBack (has its own CTA) */}
-            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' ? (
+            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'premiumShowcase' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
