@@ -31,7 +31,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, PenNibIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, PenNibIcon } from 'phosphor-react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
 import { logger } from '@/lib/logger';
@@ -189,6 +189,8 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Reflect the user's answers back and ask for commitment
   { id: 'mirrorBack', question: "Here's what was\u00A0shared.", subtext: 'Before building this, a quick check to make sure it\u00A0landed\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i))
+  { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION NAMING: Name the companion (intro now lives in how-it-works.tsx)
   { id: 'companionNaming', question: "Name your companion.", subtext: 'A name, a word, whatever feels right. This is yours.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
@@ -199,7 +201,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'companionNaming' | 'founderNote' | 'signIn' | 'premiumShowcase';
+type StepId = 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'signIn' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -289,6 +291,8 @@ export default function OnboardingScreen() {
   const setUser = useUnfoldStore((s) => s.setUser);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const setCompanionName = useUnfoldStore((s) => s.setCompanionName);
+  const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
+  const setHasConsentedToAI = useUnfoldStore((s) => s.setHasConsentedToAI);
   
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
@@ -431,6 +435,11 @@ export default function OnboardingScreen() {
         return false;
       }
 
+      // Skip AI consent if already consented
+      if (step.id === 'aiConsent' && hasConsentedToAI) {
+        return false;
+      }
+
       // Skip first-time-only steps for returning users
       // These are first-time onboarding only — not shown when building new devotionals
       if (existingUser?.hasCompletedOnboarding) {
@@ -449,7 +458,7 @@ export default function OnboardingScreen() {
     });
     
     return filtered;
-  }, [existingUser, data.selectedMainOption, data.selectedType]);
+  }, [existingUser, data.selectedMainOption, data.selectedType, hasConsentedToAI]);
   
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
@@ -535,8 +544,8 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back, founder note, companion naming, style preferences, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase') {
+    // Mirror-back, AI consent, founder note, companion naming, style preferences, and premium showcase always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'aiConsent' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase') {
       return true;
     }
 
@@ -1676,6 +1685,127 @@ export default function OnboardingScreen() {
               </Text>
             </View>
           </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // AI Consent step: disclose AI providers and get consent (App Store 5.1.2(i))
+    if (step.type === 'aiConsent') {
+      const disclosures = [
+        {
+          icon: <SparkleIcon size={22} color={colors.accent} weight="light" />,
+          title: 'AI-Generated Content',
+          description: 'Your devotionals, reflections, and adaptive questions are generated by Grok, an AI service by xAI. Your story and preferences are sent to create personalized content.',
+        },
+        {
+          icon: <SpeakerHighIcon size={22} color={colors.accent} weight="light" />,
+          title: 'Voice Narration',
+          description: 'Audio narration is provided by Cartesia, an AI voice service. Scripture text is sent for speech synthesis.',
+        },
+        {
+          icon: <LockIcon size={22} color={colors.accent} weight="light" />,
+          title: 'Your Privacy',
+          description: 'Your journal entries stay on your device. We never use your private writing to train AI models.',
+        },
+      ];
+
+      return (
+        <View style={{ gap: 20, marginTop: 8 }}>
+          {/* Shield icon header */}
+          <Animated.View
+            entering={FadeIn.delay(200).duration(600)}
+            style={{ alignItems: 'center', marginBottom: 4 }}
+          >
+            <ShieldCheckIcon size={40} color={colors.accent} weight="light" />
+          </Animated.View>
+
+          {/* Disclosure cards */}
+          {disclosures.map((item, index) => (
+            <Animated.View
+              key={item.title}
+              entering={FadeIn.delay(400 + index * 150).duration(500)}
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: 16,
+                padding: 18,
+                borderWidth: 1,
+                borderColor: colors.border,
+                flexDirection: 'row',
+                gap: 14,
+              }}
+            >
+              <View style={{ marginTop: 2 }}>
+                {item.icon}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 15,
+                  color: colors.text,
+                  marginBottom: 4,
+                }}>
+                  {item.title}
+                </Text>
+                <Text style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 13,
+                  color: colors.textMuted,
+                  lineHeight: 19,
+                }}>
+                  {item.description}
+                </Text>
+              </View>
+            </Animated.View>
+          ))}
+
+          {/* Bottom consent text */}
+          <Animated.Text
+            entering={FadeIn.delay(900).duration(500)}
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 13,
+              color: colors.textSubtle,
+              textAlign: 'center',
+              lineHeight: 19,
+              marginTop: 4,
+              paddingHorizontal: 8,
+            }}
+          >
+            By continuing, you consent to your responses being processed by these AI services.
+          </Animated.Text>
+
+          {/* CTA button */}
+          <Animated.View entering={FadeIn.delay(1100).duration(500)}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setHasConsentedToAI(true);
+                setTimeout(() => advanceToNextStep(), 50);
+              }}
+            >
+              <View style={{
+                backgroundColor: colors.accent,
+                paddingVertical: 18,
+                paddingHorizontal: 24,
+                borderRadius: 16,
+                alignItems: 'center',
+                shadowColor: colors.accent,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 20,
+                elevation: 8,
+              }}>
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 16,
+                  color: '#FFFFFF',
+                }}>
+                  I understand, let's continue
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       );
     }

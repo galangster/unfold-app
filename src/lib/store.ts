@@ -25,9 +25,9 @@ export const ACCENT_THEMES: AccentTheme[] = [
   { id: 'ocean', name: 'Ocean', dark: '#5B9BD5', light: '#3A6FA0' },
   { id: 'rose', name: 'Rose', dark: '#D4828F', light: '#A8596A' },
   { id: 'forest', name: 'Forest', dark: '#6DAF7B', light: '#4A8A5A' },
-  { id: 'lavender', name: 'Lavender', dark: '#9B8EC4', light: '#7568A6' },
+  { id: 'lavender', name: 'Lavender', dark: '#9B8EC4', light: '#6A5C9E' },
   { id: 'ember', name: 'Ember', dark: '#D4895C', light: '#A86840' },
-  { id: 'slate', name: 'Slate', dark: '#8A9BAE', light: '#5E7185' },
+  { id: 'slate', name: 'Slate', dark: '#8A9BAE', light: '#4D6175' },
 ];
 
 // Reading font options (premium feature)
@@ -62,11 +62,12 @@ export const FONT_SIZE_VALUES: Record<FontSize, { body: number; scripture: numbe
 };
 
 // Bible translation preferences
-export type BibleTranslation = 'WEB' | 'NIV' | 'ESV' | 'KJV' | 'NLT';
+export type BibleTranslation = 'BSB' | 'KJV' | 'WEB' | 'NIV' | 'ESV' | 'NLT';
 
 export const BIBLE_TRANSLATIONS: { value: BibleTranslation; label: string; description: string; premium?: boolean }[] = [
-  { value: 'WEB', label: 'WEB', description: 'World English Bible - clear, modern, and free' },
+  { value: 'BSB', label: 'BSB', description: 'Berean Standard Bible - modern, clear, and free' },
   { value: 'KJV', label: 'KJV', description: 'King James Version - classic and traditional' },
+  { value: 'WEB', label: 'WEB', description: 'World English Bible - clear, modern, and free' },
   { value: 'NIV', label: 'NIV', description: 'New International Version - balanced and readable', premium: true },
   { value: 'ESV', label: 'ESV', description: 'English Standard Version - literal and precise', premium: true },
   { value: 'NLT', label: 'NLT', description: 'New Living Translation - easy to understand', premium: true },
@@ -83,6 +84,39 @@ export interface WritingStylePreferences {
   depth: ContentDepth;
   faithBackground: FaithBackground;
   lifeStage?: LifeStage;
+}
+
+// ---- Bible Reader Types ----
+export type BibleHighlightColor = 'yellow' | 'green' | 'blue' | 'purple' | 'red';
+
+export interface BibleHighlight {
+  id: string;
+  bookId: number;
+  bookName: string;
+  chapter: number;
+  verseStart: number;
+  verseEnd: number;
+  text: string;
+  color: BibleHighlightColor;
+  note?: string;
+  translation: string;
+  createdAt: string;
+}
+
+export interface BibleReadingPosition {
+  bookId: number;
+  bookName: string;
+  chapter: number;
+  translation: string;
+  lastReadAt: string;
+}
+
+export interface BibleReaderSettings {
+  fontSize: number;
+  lineHeightMultiplier: number;
+  showVerseNumbers: boolean;
+  paragraphMode: boolean;
+  translation: 'BSB' | 'KJV';
 }
 
 export interface UserProfile {
@@ -542,6 +576,24 @@ interface UnfoldState {
   // Single-day addition (appends to devotional.days)
   addGeneratedDay: (devotionalId: string, day: DevotionalDay) => void;
 
+  // Bible Reader
+  bibleHighlights: BibleHighlight[];
+  bibleReadingHistory: BibleReadingPosition[];
+  bibleReaderSettings: BibleReaderSettings;
+
+  // Bible Reader Actions
+  addBibleHighlight: (highlight: Omit<BibleHighlight, 'id' | 'createdAt'>) => void;
+  removeBibleHighlight: (id: string) => void;
+  updateBibleHighlightNote: (id: string, note: string) => void;
+  getBibleHighlightsForChapter: (bookId: number, chapter: number) => BibleHighlight[];
+  recordBibleReading: (position: Omit<BibleReadingPosition, 'lastReadAt'>) => void;
+  getLastBiblePosition: () => BibleReadingPosition | null;
+  updateBibleReaderSettings: (updates: Partial<BibleReaderSettings>) => void;
+
+  // AI data consent (App Store Guideline 5.1.2(i))
+  hasConsentedToAI: boolean;
+  setHasConsentedToAI: (consented: boolean) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -596,6 +648,18 @@ const initialState = {
   streakJustReset: false,
   justCompletedSeriesTitle: null as string | null,
   hasUsedAudio: false,
+  // AI data consent
+  hasConsentedToAI: false,
+  // Bible Reader
+  bibleHighlights: [] as BibleHighlight[],
+  bibleReadingHistory: [] as BibleReadingPosition[],
+  bibleReaderSettings: {
+    fontSize: 20,
+    lineHeightMultiplier: 1.8,
+    showVerseNumbers: true,
+    paragraphMode: false,
+    translation: 'BSB' as const,
+  } as BibleReaderSettings,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -1119,6 +1183,9 @@ export const useUnfoldStore = create<UnfoldState>()(
       clearJustCompletedSeriesTitle: () => set({ justCompletedSeriesTitle: null }),
       setHasUsedAudio: () => set({ hasUsedAudio: true }),
 
+      // AI data consent
+      setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
+
       // Progressive generation state
       setProgressiveGeneration: (updates) =>
         set((state) => ({
@@ -1205,6 +1272,63 @@ export const useUnfoldStore = create<UnfoldState>()(
           }),
         })),
 
+      // Bible Reader actions
+      addBibleHighlight: (highlight) =>
+        set((state) => ({
+          bibleHighlights: [
+            ...state.bibleHighlights,
+            {
+              ...highlight,
+              id: `bh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        })),
+
+      removeBibleHighlight: (id) =>
+        set((state) => ({
+          bibleHighlights: state.bibleHighlights.filter((h) => h.id !== id),
+        })),
+
+      updateBibleHighlightNote: (id, note) =>
+        set((state) => ({
+          bibleHighlights: state.bibleHighlights.map((h) =>
+            h.id === id ? { ...h, note } : h,
+          ),
+        })),
+
+      getBibleHighlightsForChapter: (bookId, chapter) => {
+        return get().bibleHighlights.filter(
+          (h) => h.bookId === bookId && h.chapter === chapter,
+        );
+      },
+
+      recordBibleReading: (position) =>
+        set((state) => {
+          const newEntry: BibleReadingPosition = {
+            ...position,
+            lastReadAt: new Date().toISOString(),
+          };
+          // Keep last 100 entries, most recent first
+          const history = [
+            newEntry,
+            ...state.bibleReadingHistory.filter(
+              (h) => !(h.bookId === position.bookId && h.chapter === position.chapter),
+            ),
+          ].slice(0, 100);
+          return { bibleReadingHistory: history };
+        }),
+
+      getLastBiblePosition: () => {
+        const history = get().bibleReadingHistory;
+        return history.length > 0 ? history[0] : null;
+      },
+
+      updateBibleReaderSettings: (updates) =>
+        set((state) => ({
+          bibleReaderSettings: { ...state.bibleReaderSettings, ...updates },
+        })),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -1216,7 +1340,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 16, // Increment when state structure changes
+      version: 19, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1358,6 +1482,43 @@ export const useUnfoldStore = create<UnfoldState>()(
               currentDayGeneration: null,
               isArcGenerated: false,
             },
+          } as UnfoldState;
+        }
+
+        // Migration from version 16 to 17: Add Bible Reader state
+        if (version < 17) {
+          return {
+            ...state,
+            bibleHighlights: [],
+            bibleReadingHistory: [],
+            bibleReaderSettings: {
+              fontSize: 20,
+              lineHeightMultiplier: 1.8,
+              showVerseNumbers: true,
+              paragraphMode: false,
+              translation: 'BSB',
+            },
+          } as UnfoldState;
+        }
+
+        // Migration from version 17 to 18: Improve Bible Reader defaults
+        if (version < 18) {
+          const settings = (state as any).bibleReaderSettings ?? {};
+          return {
+            ...state,
+            bibleReaderSettings: {
+              ...settings,
+              fontSize: 20,
+              lineHeightMultiplier: 1.8,
+            },
+          } as UnfoldState;
+        }
+
+        // Migration from version 18 to 19: Add AI data consent flag
+        if (version < 19) {
+          return {
+            ...state,
+            hasConsentedToAI: false,
           } as UnfoldState;
         }
 

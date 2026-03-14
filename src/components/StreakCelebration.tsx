@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { View } from 'react-native';
+import { View, Text } from 'react-native';
 import Animated, {
   FadeIn,
   useSharedValue,
@@ -16,6 +16,7 @@ import { SunIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { AccentGlow } from './AccentGlow';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 interface StreakCelebrationProps {
   streak: number;
@@ -120,6 +121,7 @@ const SparkleParticle = React.memo(function SparkleParticle({
 
 export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps) {
   const { colors } = useTheme();
+  const { reducedMotion, entering } = useAccessibleAnimation();
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
 
@@ -131,6 +133,20 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
   const holdDuration = isMilestone ? 2200 : 1700;
 
   useEffect(() => {
+    if (reducedMotion) {
+      // Show immediately, then dismiss after hold
+      opacity.value = 1;
+      scale.value = milestoneScale;
+      opacity.value = withDelay(
+        holdDuration,
+        withTiming(0, { duration: 300 }, (finished) => {
+          if (finished && onComplete) {
+            runOnJS(onComplete)();
+          }
+        }),
+      );
+      return;
+    }
     // Fade in
     opacity.value = withTiming(1, { duration: 200 });
     // Spring scale in with milestone-aware target
@@ -154,9 +170,9 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
     transform: [{ scale: scale.value }],
   }));
 
-  // Generate sparkle particles for milestones
+  // Generate sparkle particles for milestones (skip if reduced motion)
   const sparkleParticles = useMemo(() => {
-    if (!isMilestone) return null;
+    if (!isMilestone || reducedMotion) return null;
 
     // More particles for bigger milestones
     let particleCount: number;
@@ -188,7 +204,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
       );
     }
     return particles;
-  }, [isMilestone, streak, colors.accent]);
+  }, [isMilestone, streak, colors.accent, reducedMotion]);
 
   // Fire icon size scales with milestone significance
   const fireSize = isMilestone ? 60 + (milestoneScale - 1) * 60 : 50;
@@ -229,7 +245,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
             </View>
             <AccentGlow color={colors.accent} intensity="strong" active={isMilestone}>
               <Animated.Text
-                entering={FadeIn.delay(200)}
+                entering={entering(FadeIn.delay(200))}
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: 32 + (milestoneScale - 1) * 20,
@@ -242,7 +258,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
               </Animated.Text>
             </AccentGlow>
             <Animated.Text
-              entering={FadeIn.delay(400)}
+              entering={entering(FadeIn.delay(400))}
               style={{
                 fontFamily: FontFamily.uiMedium,
                 fontSize: 14,
@@ -257,7 +273,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
           <View style={{ alignItems: 'center' }}>
             <SunIcon size={50} color={colors.accent} weight="fill" />
             <Animated.Text
-              entering={FadeIn.delay(200)}
+              entering={entering(FadeIn.delay(200))}
               style={{
                 fontFamily: FontFamily.display,
                 fontSize: 28,

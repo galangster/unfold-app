@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/lib/theme';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -185,6 +186,10 @@ export function GoldEmberField({
   style,
 }: GoldEmberFieldProps) {
   const { colors, isDark } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
+
+  // Hide looping ember particles entirely when reduced motion is on
+  if (reducedMotion) return null;
 
   const tier = useMemo<EmberTier | null>(() => {
     if (streakLevel !== undefined) return getEmberTier(streakLevel);

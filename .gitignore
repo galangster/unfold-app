@@ -86,3 +86,7 @@ expo-env.d.ts
 *.bak
 .revyl/
 AUDIO_PLUGIN_NEEDED.md
+
+# Bible DB build artifacts
+.bible-cache/
+unfold-bible-v1.db

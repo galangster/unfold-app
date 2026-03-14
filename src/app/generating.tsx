@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -17,6 +17,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord, type ProgressiveMemory } from '@/lib/store';
@@ -99,6 +100,7 @@ export default function GeneratingScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { colors: themeColors } = useTheme();
+  const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
   // Prevent swipe-back during generation
   useEffect(() => {
@@ -116,6 +118,7 @@ export default function GeneratingScreen() {
     buttonBackground: themeColors.accent,
     buttonBackgroundPressed: themeColors.accent,
   };
+  const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
@@ -132,6 +135,13 @@ export default function GeneratingScreen() {
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   const setProgressiveGeneration = useUnfoldStore((s) => s.setProgressiveGeneration);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
+
+  // Safety guard: redirect if AI consent is missing
+  useEffect(() => {
+    if (!hasConsentedToAI) {
+      router.replace('/onboarding');
+    }
+  }, [hasConsentedToAI, router]);
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
@@ -240,8 +250,10 @@ export default function GeneratingScreen() {
     }
   }, [canStartReading, currentSeriesTitle]);
 
-  // Ripple animations — staggered rings expanding outward
+  // Ripple animations — staggered rings expanding outward (skip if reduced motion)
   useEffect(() => {
+    if (reducedMotion) return;
+
     const startRipple = (sv: typeof ripple0, delay: number) => {
       sv.value = withDelay(
         delay,
@@ -262,7 +274,7 @@ export default function GeneratingScreen() {
       cancelAnimation(ripple1);
       cancelAnimation(ripple2);
     };
-  }, []);
+  }, [reducedMotion]);
 
   // Each ripple: starts small at center, expands outward, fades as it grows
   const rippleStyle0 = useAnimatedStyle(() => ({
@@ -790,7 +802,7 @@ export default function GeneratingScreen() {
       <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
-            <Animated.View entering={FadeIn.duration(600).delay(100)} style={{ marginBottom: 28 }}>
+            <Animated.View entering={entering(FadeIn.duration(600).delay(100))} style={{ marginBottom: 28 }}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -805,7 +817,7 @@ export default function GeneratingScreen() {
               </Text>
             </Animated.View>
 
-            <Animated.View entering={FadeIn.duration(1000).delay(400)}>
+            <Animated.View entering={entering(FadeIn.duration(1000).delay(400))}>
               <Text
                 style={{
                   fontFamily: FontFamily.display,
@@ -821,7 +833,7 @@ export default function GeneratingScreen() {
 
             {/* Decorative accent line */}
             <Animated.View
-              entering={FadeIn.duration(600).delay(800)}
+              entering={entering(FadeIn.duration(600).delay(800))}
               style={{
                 width: 40,
                 height: 2,
@@ -833,7 +845,7 @@ export default function GeneratingScreen() {
             />
 
             <Animated.Text
-              entering={FadeIn.duration(600).delay(1000)}
+              entering={entering(FadeIn.duration(600).delay(1000))}
               style={{
                 fontFamily: FontFamily.bodyItalic,
                 fontSize: 16,
@@ -891,29 +903,35 @@ export default function GeneratingScreen() {
           showsVerticalScrollIndicator={false}
         >
 
-          {/* Water ripple — rings expanding from center */}
-          <View style={genStyles.rippleContainer}>
-            <Animated.View
-              style={[genStyles.rippleRing, { borderWidth: 1.5, borderColor: colors.accent }, rippleStyle0]}
-            />
-            <Animated.View
-              style={[genStyles.rippleRing, { borderWidth: 1, borderColor: colors.accent }, rippleStyle1]}
-            />
-            <Animated.View
-              style={[genStyles.rippleRing, { borderWidth: 0.5, borderColor: colors.accent }, rippleStyle2]}
-            />
-            <Animated.View
-              style={[genStyles.coreDot, { backgroundColor: colors.accent }, coreStyle]}
-            />
-          </View>
+          {/* Water ripple — rings expanding from center (or simple spinner if reduced motion) */}
+          {reducedMotion ? (
+            <View style={genStyles.rippleContainer}>
+              <ActivityIndicator size="large" color={colors.accent} />
+            </View>
+          ) : (
+            <View style={genStyles.rippleContainer}>
+              <Animated.View
+                style={[genStyles.rippleRing, { borderWidth: 1.5, borderColor: colors.accent }, rippleStyle0]}
+              />
+              <Animated.View
+                style={[genStyles.rippleRing, { borderWidth: 1, borderColor: colors.accent }, rippleStyle1]}
+              />
+              <Animated.View
+                style={[genStyles.rippleRing, { borderWidth: 0.5, borderColor: colors.accent }, rippleStyle2]}
+              />
+              <Animated.View
+                style={[genStyles.coreDot, { backgroundColor: colors.accent }, coreStyle]}
+              />
+            </View>
+          )}
 
           {/* Rotating contemplative message */}
           {!canStartReading && (
             <View style={{ height: 28, justifyContent: 'center', marginBottom: 12 }}>
               <Animated.Text
                 key={messageIndex}
-                entering={FadeIn.duration(600)}
-                exiting={FadeOut.duration(300)}
+                entering={entering(FadeIn.duration(600))}
+                exiting={exiting(FadeOut.duration(300))}
                 style={{
                   fontFamily: FontFamily.bodyItalic,
                   fontSize: 17,
@@ -929,7 +947,7 @@ export default function GeneratingScreen() {
           {/* Series title reveal — in progressive mode shows when arc completes, in batch when Day 1 ready */}
           {currentSeriesTitle && (canStartReading || isProgressiveMode) && (
             <Animated.View
-              entering={FadeIn.duration(800)}
+              entering={entering(FadeIn.duration(800))}
               style={{ alignItems: 'center', marginBottom: 12 }}
             >
               <Text
@@ -949,7 +967,7 @@ export default function GeneratingScreen() {
           {/* Day progress dots — batch mode only (progressive generates 1 day) */}
           {generatedDays.length > 0 && !isProgressiveMode && (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={entering(FadeIn.duration(400))}
               style={genStyles.progressDotsRow}
             >
               {Array.from({ length: devotionalLength }).map((_, i) => {
@@ -1009,7 +1027,7 @@ export default function GeneratingScreen() {
           {/* Notification prompt — appears after a delay */}
           {showNotificationPrompt && notificationPermission !== 'granted' && !hasAskedPermission && !canStartReading && (
             <Animated.View
-              entering={FadeInUp.duration(500)}
+              entering={entering(FadeInUp.duration(500))}
               style={{
                 marginTop: 56,
                 width: '100%',
@@ -1115,7 +1133,7 @@ export default function GeneratingScreen() {
           {/* After enabling notifications */}
           {notificationPermission === 'granted' && hasAskedPermission && (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={entering(FadeIn.duration(400))}
               style={{
                 marginTop: 40,
                 flexDirection: 'row',
@@ -1145,7 +1163,7 @@ export default function GeneratingScreen() {
           {/* Already had notifications — gentle note */}
           {notificationPermission === 'granted' && !hasAskedPermission && !canStartReading && (
             <Animated.View
-              entering={FadeIn.duration(600).delay(4000)}
+              entering={entering(FadeIn.duration(600).delay(4000))}
               style={{ marginTop: 40 }}
             >
               <Text
@@ -1166,7 +1184,7 @@ export default function GeneratingScreen() {
           {/* Shows after a delay to give users a taste of the devotional format */}
           {showSamplePreview && !canStartReading && isGenerating && (
             <Animated.View
-              entering={FadeIn.duration(800)}
+              entering={entering(FadeIn.duration(800))}
               style={{
                 marginTop: 48,
                 width: '100%',
@@ -1300,7 +1318,7 @@ export default function GeneratingScreen() {
 
               {/* Reassurance note below card */}
               <Animated.Text
-                entering={FadeIn.duration(600).delay(400)}
+                entering={entering(FadeIn.duration(600).delay(400))}
                 style={{
                   fontFamily: FontFamily.bodyItalic,
                   fontSize: 13,

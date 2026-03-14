@@ -47,6 +47,7 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -81,11 +82,17 @@ function formatResumeRelativeTime(iso?: string): string {
 
 // Animated progress bar component with shimmer glow
 function AnimatedProgressBar({ progress, colors }: { progress: number; colors: ColorTheme }) {
+  const { reducedMotion } = useAccessibleAnimation();
   const animatedProgress = useSharedValue(0);
   const shimmer = useSharedValue(0);
 
   useFocusEffect(
     useCallback(() => {
+      if (reducedMotion) {
+        // Show progress immediately, skip shimmer
+        animatedProgress.value = progress;
+        return;
+      }
       const timer = setTimeout(() => {
         animatedProgress.value = withTiming(progress, {
           duration: 900,
@@ -103,7 +110,7 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
       }, 400);
 
       return () => clearTimeout(timer);
-    }, [progress, animatedProgress, shimmer])
+    }, [progress, animatedProgress, shimmer, reducedMotion])
   );
 
   const barStyle = useAnimatedStyle(() => ({
@@ -193,6 +200,7 @@ function NotificationCard({
   accentColor: string;
   delay?: number;
 }) {
+  const { entering, exiting } = useAccessibleAnimation();
   const translateX = useSharedValue(0);
   const dismissed = useSharedValue(false);
 
@@ -220,8 +228,8 @@ function NotificationCard({
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(500).delay(delay)}
-      exiting={FadeOut.duration(300)}
+      entering={entering(FadeInDown.duration(500).delay(delay))}
+      exiting={exiting(FadeOut.duration(300))}
       style={{ paddingHorizontal: 24, marginTop: 12 }}
     >
       <GestureDetector gesture={swipeGesture}>
@@ -268,15 +276,17 @@ function NotificationCard({
 
 // Skeleton shimmer for loading bridge
 function BridgeShimmer({ colors }: { colors: ColorTheme }) {
+  const { reducedMotion, entering } = useAccessibleAnimation();
   const shimmer = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) return;
     shimmer.value = withRepeat(
       withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
       -1,
       true
     );
-  }, [shimmer]);
+  }, [shimmer, reducedMotion]);
 
   const shimmerStyle = useAnimatedStyle(() => ({
     opacity: interpolate(shimmer.value, [0, 0.5, 1], [0.3, 0.6, 0.3]),
@@ -284,7 +294,7 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
+      entering={entering(FadeIn.duration(300))}
       style={homeStyles.shimmerWrapper}
     >
       <View
@@ -302,9 +312,10 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
 // Daily Bridge card — personalized transition from yesterday to today
 // Styled consistently with CompanionTooltip — clean bubble, regular font
 function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme }) {
+  const { entering } = useAccessibleAnimation();
   return (
     <Animated.View
-      entering={FadeIn.duration(600)}
+      entering={entering(FadeIn.duration(600))}
       style={homeStyles.bridgeWrapper}
     >
       <View style={homeStyles.bridgeRow}>
@@ -336,6 +347,7 @@ function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme })
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { entering, exiting } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -656,7 +668,7 @@ export default function HomeScreen() {
             </View>
 
             <Animated.Text
-              entering={FadeIn.duration(800).delay(titleEndTime)}
+              entering={entering(FadeIn.duration(800).delay(titleEndTime))}
               style={{
                 fontFamily: FontFamily.bodyItalic,
                 fontSize: 18,
@@ -669,7 +681,7 @@ export default function HomeScreen() {
               The world's most personal{'\n'}Bible studies.
             </Animated.Text>
 
-            <Animated.View entering={FadeIn.duration(600).delay(titleEndTime + 400)}>
+            <Animated.View entering={entering(FadeIn.duration(600).delay(titleEndTime + 400))}>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleCreateNew}
                 accessibilityRole="button"
@@ -736,7 +748,7 @@ export default function HomeScreen() {
         >
           {/* Header — greeting + orb */}
           <Animated.View
-            entering={FadeInDown.delay(0).duration(600)}
+            entering={entering(FadeInDown.delay(0).duration(600))}
             style={{
               paddingHorizontal: 24,
               paddingTop: 20,
@@ -805,7 +817,7 @@ export default function HomeScreen() {
           {/* Resume card */}
           {shouldShowResumeCard && resumeContext && resumeDevotional && (
             <Animated.View
-              entering={FadeInDown.duration(520).delay(80)}
+              entering={entering(FadeInDown.duration(520).delay(80))}
               style={{ paddingHorizontal: 24, marginTop: 16 }}
             >
               <TouchableOpacity activeOpacity={0.7}
@@ -868,7 +880,7 @@ export default function HomeScreen() {
 
           {/* Main Journey Card */}
           <Animated.View
-            entering={FadeInUp.delay(200).duration(600)}
+            entering={entering(FadeInUp.delay(200).duration(600))}
             style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
           >
             {isJourneyComplete ? (
@@ -1204,7 +1216,7 @@ export default function HomeScreen() {
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
             <Animated.View
-              entering={FadeInDown.duration(600).delay(400)}
+              entering={entering(FadeInDown.duration(600).delay(400))}
               style={{ paddingHorizontal: 24, marginTop: 20 }}
             >
               <View
@@ -1310,7 +1322,7 @@ export default function HomeScreen() {
 
           {/* Streak Box */}
           <Animated.View
-            entering={FadeInUp.delay(350).duration(600)}
+            entering={entering(FadeInUp.delay(350).duration(600))}
             style={{ paddingHorizontal: 24, marginTop: 24 }}
           >
             <StreakBox
@@ -1410,6 +1422,10 @@ const homeStyles = StyleSheet.create({
   notificationDismiss: {
     padding: 4,
     marginLeft: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shimmerWrapper: {
     paddingHorizontal: 24,

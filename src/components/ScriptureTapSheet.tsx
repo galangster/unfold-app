@@ -7,7 +7,7 @@ import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon } from 'pho
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import { fetchVerse, fetchCommentary, type VerseResult } from '@/lib/bible-api';
+import { fetchVerse, fetchVerseLocal, fetchCommentary, type VerseResult } from '@/lib/bible-api';
 
 interface ScriptureTapSheetProps {
   visible: boolean;
@@ -55,10 +55,14 @@ export function ScriptureTapSheet({
       setSaved(false);
       setCommentary(null);
       setCommentaryLoading(false);
-      const translation = user?.bibleTranslation?.toLowerCase() ?? 'web';
-      // Only free translations for bible-api.com
-      const apiTranslation = ['web', 'kjv'].includes(translation) ? translation : 'web';
-      fetchVerse(reference, apiTranslation)
+      const translation = user?.bibleTranslation ?? 'BSB';
+      // Prefer local SQLite DB for BSB/KJV (offline, correct translation)
+      // Fall back to bible-api.com for other translations
+      const fetchFn = ['BSB', 'KJV'].includes(translation.toUpperCase())
+        ? () => fetchVerseLocal(reference, translation.toUpperCase() as 'BSB' | 'KJV')
+            .then((local) => local ?? fetchVerse(reference, 'web'))
+        : () => fetchVerse(reference, ['web', 'kjv'].includes(translation.toLowerCase()) ? translation.toLowerCase() : 'web');
+      fetchFn()
         .then((result) => {
           setVerse(result);
           // Start loading AI commentary after verse loads

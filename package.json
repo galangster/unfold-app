@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "trustedDependencies": [
-    "@shopify/react-native-skia"
+    "@shopify/react-native-skia",
+    "better-sqlite3"
   ],
   "scripts": {
     "start": "expo start",
@@ -17,7 +18,8 @@
     "verify:smoke": "node scripts/verify-smoke.mjs",
     "verify:device": "node scripts/verify-device-flow.mjs",
     "verify:release": "node scripts/verify-release.mjs",
-    "verify:report": "node scripts/verify-report.mjs"
+    "verify:report": "node scripts/verify-report.mjs",
+    "prepare:bible-db": "node scripts/prepare-bible-db.mjs"
   },
   "dependencies": {
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
@@ -168,6 +170,7 @@
     "@typescript-eslint/parser": "^8.29.1",
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-plugin-react-compiler": "^1.0.0",
+    "better-sqlite3": "^12.8.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~55.0.0",
     "eslint-config-prettier": "^9.1.0",

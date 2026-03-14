@@ -10,6 +10,8 @@
 
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
+import { referenceToRoute, BIBLE_BOOKS } from '@/lib/bible-constants';
+import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 
 // ---------- Types ----------
 
@@ -202,6 +204,58 @@ export async function fetchVerse(
 
     return null;
   }
+}
+
+// ---------- Local DB Fetch ----------
+
+/**
+ * Fetch verse text from the local SQLite Bible database.
+ * Supports BSB and KJV — the translations stored locally.
+ * Falls back to null if the DB isn't ready or the reference can't be parsed.
+ */
+export async function fetchVerseLocal(
+  reference: string,
+  translation: BibleTranslation = 'BSB',
+): Promise<VerseResult | null> {
+  // Check if the local DB is available
+  const status = getBibleDbStatus();
+  if (status.status !== 'ready') return null;
+
+  // Parse the reference string into bookId, chapter, verse(s)
+  const parsed = referenceToRoute(reference);
+  if (!parsed) {
+    logger.warn('[BibleAPI] Could not parse reference for local DB:', reference);
+    return null;
+  }
+
+  const verses = await getVerseByReference(
+    parsed.bookId,
+    parsed.chapter,
+    parsed.verse ?? 1,
+    parsed.verseEnd,
+    translation,
+  );
+
+  if (verses.length === 0) return null;
+
+  const text = verses.map((v) => v.text).join(' ');
+  const book = BIBLE_BOOKS.find((b) => b.id === parsed.bookId);
+  const bookName = book?.name ?? '';
+
+  // Build canonical reference string
+  let refStr = `${bookName} ${parsed.chapter}`;
+  if (parsed.verse) {
+    refStr += `:${parsed.verse}`;
+    if (parsed.verseEnd && parsed.verseEnd !== parsed.verse) {
+      refStr += `-${parsed.verseEnd}`;
+    }
+  }
+
+  return {
+    reference: refStr,
+    text,
+    translation,
+  };
 }
 
 // ---------- AI Commentary ----------

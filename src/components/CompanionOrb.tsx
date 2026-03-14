@@ -21,6 +21,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 interface CompanionOrbProps {
   accentColor: string;
@@ -136,12 +137,16 @@ export function CompanionOrb({
   isActive = false,
   showBadge = false,
 }: CompanionOrbProps) {
+  const { reducedMotion } = useAccessibleAnimation();
   const morphTime = useSharedValue(0);
   const breathe = useSharedValue(0);
   const tapPulse = useSharedValue(0);
   const gradientRotation = useSharedValue(0);
 
   useEffect(() => {
+    // Skip all looping animations when reduced motion is on
+    if (reducedMotion) return;
+
     // Morph animation — continuous, slow cycle
     morphTime.value = withRepeat(
       withTiming(Math.PI * 20, { duration: 30000, easing: Easing.linear }),
@@ -160,7 +165,7 @@ export function CompanionOrb({
       -1,
       true,
     );
-  }, []);
+  }, [reducedMotion]);
 
   // Canvas padding so glow doesn't clip
   const padding = Math.ceil(size * 0.45);

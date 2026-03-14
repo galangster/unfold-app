@@ -15,6 +15,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CENTER_X = SCREEN_WIDTH / 2;
@@ -239,6 +240,7 @@ export function CompletionCelebration({
   message,
 }: CompletionCelebrationProps) {
   const { colors } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
 
   // Pick a random message on each render when visible
   const subtitle = useMemo(() => {
@@ -276,6 +278,18 @@ export function CompletionCelebration({
     if (visible) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      if (reducedMotion) {
+        // Show everything immediately — no staggered animations
+        overlayOpacity.value = 1;
+        lineWidth.value = 48;
+        titleOpacity.value = 1;
+        titleTranslateY.value = 0;
+        subtitleOpacity.value = 1;
+        subtitleTranslateY.value = 0;
+        hintOpacity.value = 1;
+        return;
+      }
+
       // Background overlay fade in
       overlayOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
 
@@ -301,7 +315,7 @@ export function CompletionCelebration({
       titleTranslateY.value = 18;
       subtitleTranslateY.value = 14;
     }
-  }, [visible, overlayOpacity, titleOpacity, titleTranslateY, subtitleOpacity, subtitleTranslateY, lineWidth, hintOpacity]);
+  }, [visible, overlayOpacity, titleOpacity, titleTranslateY, subtitleOpacity, subtitleTranslateY, lineWidth, hintOpacity, reducedMotion]);
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
@@ -335,15 +349,19 @@ export function CompletionCelebration({
       <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onDismiss}>
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
-          {/* Expanding circle that fills the screen */}
-          <ExpandingCircle accentColor={colors.accent} />
+          {/* Expanding circle that fills the screen (skip if reduced motion) */}
+          {!reducedMotion && <ExpandingCircle accentColor={colors.accent} />}
 
-          {/* Expanding ripple rings */}
-          <RippleRing delay={200} maxRadius={SCREEN_WIDTH * 0.4} accentColor={colors.accent} />
-          <RippleRing delay={450} maxRadius={SCREEN_WIDTH * 0.65} accentColor={colors.accent} />
+          {/* Expanding ripple rings (skip if reduced motion) */}
+          {!reducedMotion && (
+            <>
+              <RippleRing delay={200} maxRadius={SCREEN_WIDTH * 0.4} accentColor={colors.accent} />
+              <RippleRing delay={450} maxRadius={SCREEN_WIDTH * 0.65} accentColor={colors.accent} />
+            </>
+          )}
 
-          {/* Luminous motes drifting upward */}
-          {motes.map((m) => (
+          {/* Luminous motes drifting upward (skip if reduced motion) */}
+          {!reducedMotion && motes.map((m) => (
             <LuminousMote
               key={m.id}
               startX={m.startX}

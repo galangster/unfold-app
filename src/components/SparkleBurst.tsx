@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useEffect, useMemo } from 'react';
 import { useTheme } from '@/lib/theme';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 interface SparkleBurstProps {
   trigger: boolean;
@@ -176,8 +177,12 @@ export function SparkleBurst({
   particleCount = 16,
 }: SparkleBurstProps) {
   const { colors } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
   const color = propColor ?? colors.accent;
   const count = Math.min(particleCount, MAX_PARTICLES);
+
+  // Skip particle burst entirely when reduced motion is on
+  if (reducedMotion) return null;
 
   const particles = useMemo(() => {
     return Array.from({ length: count }, (_, i) => {

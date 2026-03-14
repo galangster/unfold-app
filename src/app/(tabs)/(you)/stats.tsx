@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon, CompassIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
@@ -93,6 +94,7 @@ export default function StatsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ theme?: string | string[] }>();
   const { colors } = useTheme();
+  const { entering } = useAccessibleAnimation();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const usedScriptures = useUnfoldStore((s) => s.usedScriptures);
@@ -213,7 +215,7 @@ export default function StatsScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.back();
               }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={statStyles.backButton}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
@@ -243,7 +245,7 @@ export default function StatsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {selectedThemeName && (
-            <Animated.View entering={FadeInDown.duration(420)}>
+            <Animated.View entering={entering(FadeInDown.duration(420))}>
               <View style={[statStyles.focusedBanner, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                 <Text style={[statStyles.focusedBannerText, { color: colors.textSubtle }]}>
                   Focused view · {selectedThemeName}
@@ -253,7 +255,7 @@ export default function StatsScreen() {
           )}
 
           {/* Streak Hero */}
-          <Animated.View entering={FadeInDown.duration(500)}>
+          <Animated.View entering={entering(FadeInDown.duration(500))}>
             <View style={[statStyles.streakHero, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
               <SunIcon size={32} color={colors.accent} weight="light" />
               <Text style={[statStyles.streakNumber, { color: colors.text }]}>
@@ -272,7 +274,7 @@ export default function StatsScreen() {
 
           {/* Stats Grid */}
           <View style={statStyles.gridRow}>
-            <Animated.View entering={FadeInDown.duration(500).delay(100)} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(500).delay(100))} style={statStyles.flex1}>
               <StatCard
                 icon={<CalendarIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalDaysCompleted}
@@ -280,7 +282,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={FadeInDown.duration(500).delay(150)} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(500).delay(150))} style={statStyles.flex1}>
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.uniqueScriptures}
@@ -291,7 +293,7 @@ export default function StatsScreen() {
           </View>
 
           <View style={statStyles.gridRow}>
-            <Animated.View entering={FadeInDown.duration(500).delay(200)} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(500).delay(200))} style={statStyles.flex1}>
               <StatCard
                 icon={<CrosshairIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.completedJourneys}
@@ -299,7 +301,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={FadeInDown.duration(500).delay(250)} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(500).delay(250))} style={statStyles.flex1}>
               <StatCard
                 icon={<SparkleIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.themesExplored}
@@ -310,7 +312,7 @@ export default function StatsScreen() {
           </View>
 
           <View style={statStyles.gridRow}>
-            <Animated.View entering={FadeInDown.duration(500).delay(300)} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(500).delay(300))} style={statStyles.flex1}>
               <StatCard
                 icon={<TrophyIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJournalEntries}
@@ -318,7 +320,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={FadeInDown.duration(500).delay(350)} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(500).delay(350))} style={statStyles.flex1}>
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJourneys}
@@ -331,7 +333,7 @@ export default function StatsScreen() {
           {/* Method variety row */}
           {stats.uniqueMethodsUsed > 0 && (
             <View style={statStyles.gridRow}>
-              <Animated.View entering={FadeInDown.duration(500).delay(400)} style={statStyles.flex1}>
+              <Animated.View entering={entering(FadeInDown.duration(500).delay(400))} style={statStyles.flex1}>
                 <StatCard
                   icon={<CompassIcon size={18} color={colors.accent} weight="light" />}
                   value={stats.uniqueMethodsUsed}
@@ -339,7 +341,7 @@ export default function StatsScreen() {
                   colors={colors}
                 />
               </Animated.View>
-              <Animated.View entering={FadeInDown.duration(500).delay(450)} style={statStyles.flex1}>
+              <Animated.View entering={entering(FadeInDown.duration(500).delay(450))} style={statStyles.flex1}>
                 {stats.favoriteMethodName ? (
                   <View style={[statStyles.favoriteMethodCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                     <CompassIcon size={18} color={colors.accent} weight="light" />
@@ -360,7 +362,7 @@ export default function StatsScreen() {
           <View style={statStyles.spacer} />
 
           {/* Encouraging message */}
-          <Animated.View entering={FadeIn.duration(600).delay(500)}>
+          <Animated.View entering={entering(FadeIn.duration(600).delay(500))}>
             <View style={[statStyles.quoteBlock, { borderLeftColor: colors.accent }]}>
               <Text style={[statStyles.quoteText, { color: colors.textMuted }]}>
                 {stats.totalDaysCompleted === 0
@@ -419,6 +421,10 @@ const statStyles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontFamily: FontFamily.uiMedium,

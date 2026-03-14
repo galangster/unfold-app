@@ -20,6 +20,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 const DEFAULT_GOLD = '#C8A55C';
@@ -190,11 +191,43 @@ interface GlowBackgroundProps {
 }
 
 export function GlowBackground({ color = DEFAULT_GOLD, intensity = 1, emberCount = 18 }: GlowBackgroundProps) {
+  const { reducedMotion } = useAccessibleAnimation();
+
   // Use default embers if standard count, otherwise generate custom set
   const embers = useMemo(
     () => (emberCount === 18 ? DEFAULT_EMBERS : makeEmbers(emberCount)),
     [emberCount],
   );
+
+  // Reduced motion: show static orbs without animation, skip embers
+  if (reducedMotion) {
+    return (
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {ORBS.map((orb, i) => {
+          const id = `orb${i}`;
+          const { size, x, y, opacity } = orb;
+          const scaledOpacity = opacity * intensity;
+          return (
+            <View
+              key={i}
+              style={{ position: 'absolute', left: x - size / 2, top: y - size / 2, width: size, height: size }}
+            >
+              <Svg width={size} height={size}>
+                <Defs>
+                  <RadialGradient id={id} cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0%" stopColor={color} stopOpacity={String(scaledOpacity)} />
+                    <Stop offset="60%" stopColor={color} stopOpacity={String(scaledOpacity * 0.35)} />
+                    <Stop offset="100%" stopColor={color} stopOpacity="0" />
+                  </RadialGradient>
+                </Defs>
+                <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={`url(#${id})`} />
+              </Svg>
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
