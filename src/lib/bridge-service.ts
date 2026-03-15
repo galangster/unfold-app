@@ -13,23 +13,7 @@
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { buildPromptWithPersona } from '@/constants/persona';
-
-// ---------------------------------------------------------------------------
-// Backend URL (mirrors devotional-service.ts)
-// ---------------------------------------------------------------------------
-
-const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-
-const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
-
-function getBackendCandidates(): string[] {
-  const candidates = [PRIMARY_BACKEND_URL];
-  if (!candidates.includes(RAILWAY_BACKEND_URL)) {
-    candidates.push(RAILWAY_BACKEND_URL);
-  }
-  return candidates;
-}
+import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
 // ---------------------------------------------------------------------------
 // MMKV cache (dedicated instance — not the Zustand store)
@@ -141,7 +125,7 @@ async function postBridgeRequest(
 
       const response = await fetch(`${backendUrl}/api/generate-bridge`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -235,20 +219,20 @@ OUTPUT: Return ONLY the message. No labels, no JSON.`;
 function buildBridgeUserMessage(input: BridgeInput): string {
   const parts: string[] = [];
 
-  parts.push(`Reader's name: ${input.userName}`);
+  parts.push(`Reader's name: ${sanitizeForPrompt(input.userName, 50)}`);
 
   if (input.yesterdayCheckIn) {
     const ci = input.yesterdayCheckIn;
     parts.push(`\nYesterday's check-in:`);
-    parts.push(`- Mood: ${ci.moodLabel} (${ci.mood}/5)`);
-    if (ci.chipAnswer) parts.push(`- Quick response: "${ci.chipAnswer}"`);
-    if (ci.freeText) parts.push(`- In their own words: "${ci.freeText}"`);
+    parts.push(`- Mood: ${sanitizeForPrompt(ci.moodLabel, 50)} (${ci.mood}/5)`);
+    if (ci.chipAnswer) parts.push(`- Quick response: "${sanitizeForPrompt(ci.chipAnswer, 200)}"`);
+    if (ci.freeText) parts.push(`- In their own words: "${sanitizeForPrompt(ci.freeText, 500)}"`);
   } else {
     parts.push(`\nNo check-in data from yesterday.`);
   }
 
   if (input.currentSituation) {
-    parts.push(`\nTheir current situation: ${input.currentSituation}`);
+    parts.push(`\nTheir current situation: ${sanitizeForPrompt(input.currentSituation, 500)}`);
   }
 
   parts.push(`\nToday's devotional theme: ${input.todayTheme}`);

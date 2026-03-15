@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, Dimensions, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -507,6 +508,10 @@ export default function GeneratingScreen() {
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
           console.error('Progressive generation failed:', errorMessage);
+          Sentry.captureException(err, {
+            tags: { phase: 'progressive-generation' },
+            extra: { devotionalId, devotionalLength: user.devotionalLength },
+          });
           failGenerationSession(errorMessage);
           void logBugError('generation', err, {
             devotionalId,

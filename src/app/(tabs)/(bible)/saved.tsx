@@ -137,7 +137,6 @@ export default function SavedVersesScreen() {
         <FlashList
           data={filteredHighlights}
           renderItem={renderHighlight}
-          estimatedItemSize={100}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ paddingBottom: 100 }}
         />

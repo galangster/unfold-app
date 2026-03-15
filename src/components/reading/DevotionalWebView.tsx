@@ -675,7 +675,7 @@ export function DevotionalWebView({
         scrollEnabled={false}
         showsVerticalScrollIndicator={false}
         onMessage={handleMessage}
-        originWhitelist={['*']}
+        originWhitelist={['about:blank', 'data:']}
         injectedJavaScript={injectedJavaScript}
         androidLayerType="hardware"
         cacheEnabled={true}

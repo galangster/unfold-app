@@ -64,8 +64,7 @@ export interface BibleDbMeta {
 
 const DB_FILENAME = 'unfold-bible-v1.db';
 const DB_VERSION = 'v1';
-const BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-const DB_DOWNLOAD_URL = `${BACKEND_URL}/public/${DB_FILENAME}`;
+const DB_DOWNLOAD_URL = `https://unfold-backend-production.up.railway.app/public/${DB_FILENAME}`;
 
 /** Directory where expo-sqlite expects databases to live */
 const SQLITE_DIR = `${documentDirectory}SQLite/`;

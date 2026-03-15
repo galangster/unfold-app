@@ -1,12 +1,10 @@
 /* Adaptive backend healthcheck for onboarding Q4 generation */
 
-const DEFAULT_REMOTE_BACKEND = 'https://oversight-cloning.vibecode.run';
+const DEFAULT_REMOTE_BACKEND = 'https://unfold-backend-production.up.railway.app';
 
 function backendCandidates() {
-  const primary = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_URL?.trim() || DEFAULT_REMOTE_BACKEND;
-  const explicitFallback = process.env.EXPO_PUBLIC_VIBECODE_BACKEND_FALLBACK_URL?.trim();
+  const primary = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || DEFAULT_REMOTE_BACKEND;
   const candidates = [primary];
-  if (explicitFallback && !candidates.includes(explicitFallback)) candidates.push(explicitFallback);
   if (!candidates.includes(DEFAULT_REMOTE_BACKEND)) candidates.push(DEFAULT_REMOTE_BACKEND);
   return candidates;
 }

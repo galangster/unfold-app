@@ -18,7 +18,7 @@ async function testBackend() {
   console.log('Sending answers:', TEST_ANSWERS);
   console.log('');
 
-  const backendUrl = 'https://oversight-cloning.vibecode.run';
+  const backendUrl = 'https://unfold-backend-production.up.railway.app';
   
   const contextStr = TEST_ANSWERS
     .map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`)

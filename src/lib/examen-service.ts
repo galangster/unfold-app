@@ -18,22 +18,7 @@
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { PERSONA_FULL } from '@/constants/persona';
-
-// ---------------------------------------------------------------------------
-// Backend URL — mirrors devotional-service.ts pattern
-// ---------------------------------------------------------------------------
-const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-
-const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
-
-function getBackendCandidates(): string[] {
-  const candidates = [PRIMARY_BACKEND_URL];
-  if (!candidates.includes(RAILWAY_BACKEND_URL)) {
-    candidates.push(RAILWAY_BACKEND_URL);
-  }
-  return candidates;
-}
+import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
 // ---------------------------------------------------------------------------
 // MMKV cache instance
@@ -145,14 +130,14 @@ RESPOND WITH ONLY valid JSON, no markdown, no code blocks:
 {"movements": [{"title": "Gratitude", "prayer": "..."}, {"title": "Presence", "prayer": "..."}, {"title": "Honesty", "prayer": "..."}, {"title": "Turning", "prayer": "..."}, {"title": "Hope", "prayer": "..."}]}`;
 
 function buildExamenUserMessage(input: ExamenInput): string {
-  let msg = `Name: ${input.userName}\nToday's theme: "${input.todayTheme}"\nScripture: ${input.todayScripture}`;
+  let msg = `Name: ${sanitizeForPrompt(input.userName, 50)}\nToday's theme: "${sanitizeForPrompt(input.todayTheme, 200)}"\nScripture: ${sanitizeForPrompt(input.todayScripture, 200)}`;
   if (input.middayCheckIn) {
-    msg += `\nMidday mood: ${input.middayCheckIn.moodLabel} (${input.middayCheckIn.mood}/5)`;
-    if (input.middayCheckIn.chipAnswer) msg += `\nThey said: "${input.middayCheckIn.chipAnswer}"`;
-    if (input.middayCheckIn.freeText) msg += `\nTheir note: "${input.middayCheckIn.freeText}"`;
+    msg += `\nMidday mood: ${sanitizeForPrompt(input.middayCheckIn.moodLabel, 50)} (${input.middayCheckIn.mood}/5)`;
+    if (input.middayCheckIn.chipAnswer) msg += `\nThey said: "${sanitizeForPrompt(input.middayCheckIn.chipAnswer, 200)}"`;
+    if (input.middayCheckIn.freeText) msg += `\nTheir note: "${sanitizeForPrompt(input.middayCheckIn.freeText, 500)}"`;
   }
   if (input.currentSituation) {
-    msg += `\nTheir situation: ${input.currentSituation}`;
+    msg += `\nTheir situation: ${sanitizeForPrompt(input.currentSituation, 500)}`;
   }
   return msg;
 }
@@ -186,7 +171,7 @@ async function postToBackend(
 
       const response = await fetch(`${backendUrl}/api/generate/go-deeper`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });

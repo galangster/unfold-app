@@ -23,7 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { PencilSimpleIcon, HeartIcon, CheckIcon } from 'phosphor-react-native';
+import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
@@ -36,7 +36,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface FeatureCard {
   headline: string;
   body: string;
-  animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'stack' | 'lines' | 'glow' | 'rings' | 'pencil' | 'heartbeat' | 'weekCircles';
+  animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'stack' | 'lines' | 'glow' | 'rings' | 'pencil' | 'heartbeat' | 'weekCircles' | 'network' | 'openBook' | 'pulseLine';
 }
 
 type Page =
@@ -80,33 +80,25 @@ const PAGES: Page[] = [
   {
     type: 'feature',
     card: {
-      headline: '32 ways to go deeper',
-      body: 'Character studies. Psalms. Parables. The Beatitudes. Pick what calls to you.',
-      animation: 'stack',
+      headline: '32 Bible study methods',
+      body: 'Lectio Divina. SOAP. Ignatian reflection. Character studies. Parables. Pick the approach that fits how you learn.',
+      animation: 'network',
     },
   },
   {
     type: 'feature',
     card: {
-      headline: 'Your Bible. Your way.',
-      body: 'BSB and KJV built in. Read in the translation that speaks to you.',
-      animation: 'lines',
+      headline: 'A full Bible reader',
+      body: 'Read any book, chapter, and verse right inside the app. No switching between apps.',
+      animation: 'openBook',
     },
   },
   {
     type: 'feature',
     card: {
-      headline: 'Fresh every morning',
-      body: 'Never the same devotional twice. New content generated daily, just for you.',
-      animation: 'glow',
-    },
-  },
-  {
-    type: 'feature',
-    card: {
-      headline: 'Day 30 \u2260 Day 1',
-      body: 'The longer you stay, the more personal it gets.',
-      animation: 'rings',
+      headline: 'Reflect and journal',
+      body: 'Guided prompts after each reading. Write what stirred your heart. Watch your growth over time.',
+      animation: 'pulseLine',
     },
   },
 ];
@@ -327,6 +319,294 @@ function WeekCircles({ accent }: { accent: string }) {
           </View>
         ))}
       </View>
+    </View>
+  );
+}
+
+function OpenBook({ accent }: { accent: string }) {
+  const open = useSharedValue(0);
+
+  useEffect(() => {
+    open.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1400, easing: Easing.out(Easing.back(1.2)) }),
+        withTiming(1, { duration: 1800 }), // hold open
+        withTiming(0, { duration: 900, easing: Easing.in(Easing.quad) }),
+        withTiming(0, { duration: 600 }), // hold closed
+      ),
+      -1,
+      false,
+    );
+  }, []);
+
+  const COVER_W = 50;
+  const COVER_H = 70;
+  const SPINE_W = 6;
+
+  // Left cover hinges from its right edge
+  const leftCover = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 600 },
+      { rotateY: `${interpolate(open.value, [0, 1], [0, -55])}deg` },
+    ],
+  }));
+  // Right cover hinges from its left edge
+  const rightCover = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 600 },
+      { rotateY: `${interpolate(open.value, [0, 1], [0, 55])}deg` },
+    ],
+  }));
+  // Pages visible when open
+  const pagesOpacity = useAnimatedStyle(() => ({
+    opacity: interpolate(open.value, [0, 0.3, 1], [0, 0.3, 0.6]),
+  }));
+  // Text lines on pages
+  const linesOpacity = useAnimatedStyle(() => ({
+    opacity: interpolate(open.value, [0, 0.5, 1], [0, 0, 0.5]),
+  }));
+  // Subtle glow when fully open
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(open.value, [0, 0.7, 1], [0, 0, 0.15]),
+    transform: [{ scale: interpolate(open.value, [0, 1], [0.5, 1.2]) }],
+  }));
+
+  return (
+    <View style={{ width: 180, height: 180, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Subtle glow */}
+      <Animated.View style={[{
+        position: 'absolute', width: 80, height: 80, borderRadius: 40, backgroundColor: accent,
+      }, glowStyle]} />
+
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Left cover */}
+        <Animated.View style={[{
+          width: COVER_W, height: COVER_H,
+          backgroundColor: accent, opacity: 0.2,
+          borderTopLeftRadius: 4, borderBottomLeftRadius: 4,
+          borderWidth: 1.5, borderColor: accent,
+          transformOrigin: 'right center',
+        }, leftCover]}>
+          {/* Page inside left cover */}
+          <Animated.View style={[{
+            position: 'absolute', right: 3, top: 6, bottom: 6, left: 6,
+            backgroundColor: accent, borderRadius: 2,
+          }, pagesOpacity]}>
+            {/* Text lines */}
+            <Animated.View style={linesOpacity}>
+              <View style={{ marginTop: 8, marginHorizontal: 4, gap: 5 }}>
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '90%', borderRadius: 1 }} />
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '70%', borderRadius: 1 }} />
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '80%', borderRadius: 1 }} />
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '50%', borderRadius: 1 }} />
+              </View>
+            </Animated.View>
+          </Animated.View>
+        </Animated.View>
+
+        {/* Spine */}
+        <View style={{
+          width: SPINE_W, height: COVER_H,
+          backgroundColor: accent, opacity: 0.4,
+        }} />
+
+        {/* Right cover */}
+        <Animated.View style={[{
+          width: COVER_W, height: COVER_H,
+          backgroundColor: accent, opacity: 0.2,
+          borderTopRightRadius: 4, borderBottomRightRadius: 4,
+          borderWidth: 1.5, borderColor: accent,
+          transformOrigin: 'left center',
+        }, rightCover]}>
+          {/* Page inside right cover */}
+          <Animated.View style={[{
+            position: 'absolute', left: 3, top: 6, bottom: 6, right: 6,
+            backgroundColor: accent, borderRadius: 2,
+          }, pagesOpacity]}>
+            <Animated.View style={linesOpacity}>
+              <View style={{ marginTop: 8, marginHorizontal: 4, gap: 5 }}>
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '85%', borderRadius: 1 }} />
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '95%', borderRadius: 1 }} />
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '60%', borderRadius: 1 }} />
+                <View style={{ height: 1.5, backgroundColor: accent, opacity: 0.6, width: '75%', borderRadius: 1 }} />
+              </View>
+            </Animated.View>
+          </Animated.View>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+function PulseLine({ accent }: { accent: string }) {
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withTiming(1, { duration: 2500, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, []);
+
+  // Create a traveling pulse dot along a sine wave
+  const WAVE_WIDTH = 200;
+  const WAVE_HEIGHT = 60;
+  const NUM_POINTS = 30;
+
+  return (
+    <View style={{ width: WAVE_WIDTH, height: 180, alignItems: 'center', justifyContent: 'center' }}>
+      {Array.from({ length: NUM_POINTS }).map((_, i) => (
+        <PulsePoint key={i} index={i} total={NUM_POINTS} accent={accent} pulse={pulse} width={WAVE_WIDTH} height={WAVE_HEIGHT} />
+      ))}
+    </View>
+  );
+}
+
+function PulsePoint({ index, total, accent, pulse, width, height }: {
+  index: number; total: number; accent: string;
+  pulse: { value: number }; width: number; height: number;
+}) {
+  const x = (index / (total - 1)) * width;
+  // Sine wave shape
+  const baseY = Math.sin((index / (total - 1)) * Math.PI * 3) * (height / 2);
+
+  const style = useAnimatedStyle(() => {
+    // Traveling glow: pulse.value goes 0→1, light up points near the pulse position
+    const pulseX = pulse.value * width;
+    const dist = Math.abs(x - pulseX);
+    const glow = interpolate(dist, [0, 30, 60], [1, 0.4, 0.1], 'clamp');
+    return {
+      opacity: glow,
+      transform: [{ scale: interpolate(glow, [0.1, 0.4, 1], [0.6, 0.8, 1.2]) }],
+    };
+  });
+
+  return (
+    <Animated.View style={[{
+      position: 'absolute',
+      left: x - 2.5,
+      top: 90 + baseY - 2.5,
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: accent,
+    }, style]} />
+  );
+}
+
+// 10 nodes in a network that connect and glow sequentially
+const NETWORK_NODES = [
+  { x: 90, y: 20 },
+  { x: 155, y: 35 },
+  { x: 35, y: 55 },
+  { x: 120, y: 65 },
+  { x: 60, y: 100 },
+  { x: 170, y: 90 },
+  { x: 20, y: 140 },
+  { x: 100, y: 135 },
+  { x: 155, y: 145 },
+  { x: 75, y: 170 },
+];
+
+// Pre-computed edges (pairs of node indices that connect)
+const NETWORK_EDGES: [number, number][] = [
+  [0, 1], [0, 3], [2, 0], [2, 4], [3, 1], [3, 5],
+  [4, 3], [4, 7], [5, 8], [6, 4], [6, 7], [7, 8], [7, 9], [9, 6],
+];
+
+function NetworkNode({ accent, x, y, delay }: { accent: string; x: number; y: number; delay: number }) {
+  const glow = useSharedValue(0);
+
+  useEffect(() => {
+    glow.value = withDelay(delay, withRepeat(
+      withSequence(
+        withTiming(1, { duration: 600, easing: Easing.out(Easing.quad) }),
+        withTiming(0.3, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    ));
+  }, []);
+
+  const nodeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(glow.value, [0, 0.3, 1], [0.2, 0.4, 1]),
+    transform: [{ scale: interpolate(glow.value, [0, 0.3, 1], [0.8, 1, 1.3]) }],
+  }));
+
+  const glowBgStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(glow.value, [0, 0.3, 1], [0, 0, 0.3]),
+    transform: [{ scale: interpolate(glow.value, [0, 1], [1, 2.5]) }],
+  }));
+
+  return (
+    <>
+      <Animated.View style={[{
+        position: 'absolute', left: x - 10, top: y - 10,
+        width: 20, height: 20, borderRadius: 10, backgroundColor: accent,
+      }, glowBgStyle]} />
+      <Animated.View style={[{
+        position: 'absolute', left: x - 4, top: y - 4,
+        width: 8, height: 8, borderRadius: 4, backgroundColor: accent,
+      }, nodeStyle]} />
+    </>
+  );
+}
+
+function NetworkEdge({ accent, x1, y1, x2, y2, delay }: { accent: string; x1: number; y1: number; x2: number; y2: number; delay: number }) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withDelay(delay, withRepeat(
+      withSequence(
+        withTiming(1, { duration: 500, easing: Easing.out(Easing.quad) }),
+        withTiming(0.2, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
+    ));
+  }, []);
+
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  const lineStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.2, 1], [0, 0.1, 0.35]),
+  }));
+
+  return (
+    <Animated.View style={[{
+      position: 'absolute',
+      left: x1,
+      top: y1 - 0.5,
+      width: length,
+      height: 1,
+      backgroundColor: accent,
+      transformOrigin: 'left center',
+      transform: [{ rotate: `${angle}deg` }],
+    }, lineStyle]} />
+  );
+}
+
+function NetworkNodes({ accent }: { accent: string }) {
+  return (
+    <View style={{ width: 200, height: 200 }}>
+      {NETWORK_EDGES.map(([a, b], i) => (
+        <NetworkEdge
+          key={`e${i}`}
+          accent={accent}
+          x1={NETWORK_NODES[a].x}
+          y1={NETWORK_NODES[a].y}
+          x2={NETWORK_NODES[b].x}
+          y2={NETWORK_NODES[b].y}
+          delay={Math.min(a, b) * 300}
+        />
+      ))}
+      {NETWORK_NODES.map((n, i) => (
+        <NetworkNode key={`n${i}`} accent={accent} x={n.x} y={n.y} delay={i * 300} />
+      ))}
     </View>
   );
 }
@@ -692,6 +972,9 @@ function CardAnimation({ type, accent }: { type: string; accent: string }) {
     case 'pencil': return <PencilWriting accent={accent} />;
     case 'heartbeat': return <BeatingHeart accent={accent} />;
     case 'weekCircles': return <WeekCircles accent={accent} />;
+    case 'network': return <NetworkNodes accent={accent} />;
+    case 'openBook': return <OpenBook accent={accent} />;
+    case 'pulseLine': return <PulseLine accent={accent} />;
     case 'orb': return <CompanionOrb accentColor={accent} size={96} isActive />;
     case 'waveform': return <WaveformBars accent={accent} />;
     case 'pulse': return <PulseCircle accent={accent} />;
@@ -724,13 +1007,7 @@ export default function HowItWorksScreen() {
     router.replace('/onboarding');
   }, [router]);
 
-  // Auto-advance 1.5s after reaching the last page
-  useEffect(() => {
-    if (!isLastPage) return;
-
-    const timer = setTimeout(navigateToOnboarding, 1500);
-    return () => clearTimeout(timer);
-  }, [isLastPage, navigateToOnboarding]);
+  // Last page uses the Continue button like all other pages (no auto-advance)
 
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -768,7 +1045,8 @@ export default function HowItWorksScreen() {
       }
     });
 
-  const page = PAGES[currentPage];
+  const safePage = Math.min(currentPage, PAGES.length - 1);
+  const page = PAGES[safePage];
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>

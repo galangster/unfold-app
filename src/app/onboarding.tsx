@@ -185,14 +185,14 @@ const ALL_STEPS = [
   // DISCOVERY STEP 3: The longing - What would breakthrough look like? (contextual based on study type)
   { id: 'spiritualSeeking', question: "What would feel like a breath of fresh air\u00A0right\u00A0now?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "Each day is crafted to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
-  { id: 'devotionalLength', question: 'How long would you like this journey\u00A0to\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
+  { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
-  // MIRROR-BACK: Reflect the user's answers back and ask for commitment
-  { id: 'mirrorBack', question: "Here's what was\u00A0shared.", subtext: 'Before building this, a quick check to make sure it\u00A0landed\u00A0right.', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // MIRROR-BACK: Poetic reflection before building — like a book introduction
+  { id: 'mirrorBack', question: "Before we\u00A0begin.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i))
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION NAMING: Name the companion (intro now lives in how-it-works.tsx)
-  { id: 'companionNaming', question: "Name your companion.", subtext: 'A name, a word, whatever feels right. This is yours.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'companionNaming', question: "Name your companion.", subtext: 'Remembers your story. Shows up every\u00A0morning.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
   { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SIGN-IN: Optional Apple Sign In before generating
@@ -297,6 +297,54 @@ export default function OnboardingScreen() {
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
 
+  // Mirror-back text — memoized so it doesn't change on re-render
+  const mirrorBackText = useMemo(() => {
+    const themeName = (data?.selectedThemes?.length ?? 0) > 0
+      ? getThemeById(data.selectedThemes[0])?.name ?? ''
+      : data?.selectedType
+        ? getDevotionalTypeById(data.selectedType)?.name ?? ''
+        : '';
+    const emotionalSnippet = data?.emotionalState
+      ? data.emotionalState.split(/[.!?]/)[0].trim().toLowerCase()
+      : data?.currentSituation
+        ? data.currentSituation.split(/[.!?]/)[0].trim().toLowerCase()
+        : '';
+    const seekingSnippet = data?.spiritualSeeking
+      ? data.spiritualSeeking.split(/[.!?]/)[0].trim().toLowerCase()
+      : '';
+    const daysText = data?.devotionalLength ? `${data.devotionalLength} days` : 'the days ahead';
+
+    const pickRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+    if (emotionalSnippet && seekingSnippet) {
+      return pickRandom(themeName ? [
+        `You said "${themeName}" — and underneath that, ${emotionalSnippet}. You're reaching for ${seekingSnippet}. That's exactly where your next ${daysText} will\u00A0begin.`,
+        `${emotionalSnippet.charAt(0).toUpperCase() + emotionalSnippet.slice(1)}, and a longing for ${seekingSnippet}. "${themeName}" is the lens — but your story is the\u00A0material.`,
+        `Between ${emotionalSnippet} and wanting ${seekingSnippet}, there's a thread worth following. Over the next ${daysText}, we'll pull\u00A0on\u00A0it.`,
+      ] : [
+        `You named it: ${emotionalSnippet}. And what you're reaching for — ${seekingSnippet}. Over the next ${daysText}, each devotional will meet you right\u00A0there.`,
+        `${emotionalSnippet.charAt(0).toUpperCase() + emotionalSnippet.slice(1)}, and a desire for ${seekingSnippet}. That honesty is the foundation your devotionals will be built\u00A0on.`,
+        `Between ${emotionalSnippet} and ${seekingSnippet}, something real is taking shape. The next ${daysText} are designed around exactly\u00A0that.`,
+      ]);
+    } else if (emotionalSnippet) {
+      return pickRandom(themeName ? [
+        `"${themeName}" and ${emotionalSnippet} — you named what most people scroll past. Your devotionals will speak directly to\u00A0that.`,
+        `You chose "${themeName}" because of ${emotionalSnippet}. Each day will meet that honesty with\u00A0scripture.`,
+      ] : [
+        `${emotionalSnippet.charAt(0).toUpperCase() + emotionalSnippet.slice(1)}. Most people don't pause long enough to name it. Your devotionals will start right\u00A0here.`,
+        `You put words to something real: ${emotionalSnippet}. That's the seed your ${daysText} of devotionals will grow\u00A0from.`,
+      ]);
+    } else {
+      return pickRandom(themeName ? [
+        `"${themeName}" — you picked this for a reason only you know. Your devotionals will be shaped around that\u00A0reason.`,
+        `You chose "${themeName}." No two people come to it the same way. Your series will reflect your\u00A0way\u00A0in.`,
+      ] : [
+        `Something drew you here today. You might not have all the words yet — and that's okay. The next few days will help you find\u00A0them.`,
+        `You showed up. That's the start. Each devotional will be written for where you are right\u00A0now.`,
+      ]);
+    }
+  }, [data?.selectedThemes, data?.selectedType, data?.emotionalState, data?.currentSituation, data?.spiritualSeeking, data?.devotionalLength]);
+
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
 
@@ -328,6 +376,7 @@ export default function OnboardingScreen() {
 
   // Track whether the user has already seen the paywall during onboarding
   const hasSeenPaywallRef = useRef(false);
+  const isPremium = existingUser?.isPremium ?? false;
 
   // Transition state for animations
   const isTransitioningRef = useRef(false);
@@ -616,6 +665,13 @@ export default function OnboardingScreen() {
 
     router.replace('/generating');
   }, [router, data, existingUser, updateUser, setUser]);
+
+  // Auto-advance after successful paywall subscription
+  useEffect(() => {
+    if (isPremium && hasSeenPaywallRef.current && currentStepId === 'premiumShowcase') {
+      completeOnboarding();
+    }
+  }, [isPremium, currentStepId, completeOnboarding]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -1597,40 +1653,6 @@ export default function OnboardingScreen() {
 
     // Mirror-back step: reflect user's answers and commitment button
     if (step.type === 'mirrorBack') {
-      // Build the mirror-back text from user data
-      const themeName = data.selectedThemes.length > 0
-        ? getThemeById(data.selectedThemes[0])?.name ?? ''
-        : data.selectedType
-          ? getDevotionalTypeById(data.selectedType)?.name ?? ''
-          : '';
-
-      // Extract first sentence, keeping it natural
-      const emotionalSnippet = data.emotionalState
-        ? data.emotionalState.split(/[.!?]/)[0].trim().toLowerCase()
-        : data.currentSituation
-          ? data.currentSituation.split(/[.!?]/)[0].trim().toLowerCase()
-          : '';
-
-      const seekingSnippet = data.spiritualSeeking
-        ? data.spiritualSeeking.split(/[.!?]/)[0].trim().toLowerCase()
-        : '';
-
-      // Build grammatically correct mirror-back text
-      let mirrorText = '';
-      if (emotionalSnippet && seekingSnippet) {
-        mirrorText = `You mentioned ${emotionalSnippet}.`;
-        if (themeName) mirrorText += ` You picked "${themeName}" — that's not random, that's where you actually are.`;
-        mirrorText += ` And what you're reaching for — ${seekingSnippet}. That tells me something about what you need right now.`;
-      } else if (emotionalSnippet) {
-        mirrorText = `You mentioned ${emotionalSnippet}.`;
-        if (themeName) mirrorText += ` "${themeName}" — that's not a random pick. That's where you are.`;
-        mirrorText += ' I hear you.';
-      } else {
-        mirrorText = themeName
-          ? `"${themeName}" — you chose this for a reason. Let's build something for exactly where you are.`
-          : "Let's build something for exactly where you are.";
-      }
-
       return (
         <View style={{ gap: 24, marginTop: 8 }}>
           {/* Mirror-back reflection */}
@@ -1647,7 +1669,7 @@ export default function OnboardingScreen() {
               color: colors.text,
               lineHeight: 32,
             }}>
-              {mirrorText}
+              {mirrorBackText}
             </Text>
           </View>
 
@@ -1681,7 +1703,7 @@ export default function OnboardingScreen() {
                 fontSize: 16,
                 color: '#FFFFFF',
               }}>
-                Build my devotional
+                Let's get started
               </Text>
             </View>
           </TouchableOpacity>
@@ -1695,17 +1717,17 @@ export default function OnboardingScreen() {
         {
           icon: <SparkleIcon size={22} color={colors.accent} weight="light" />,
           title: 'AI-Generated Content',
-          description: 'Your devotionals, reflections, and adaptive questions are generated by Grok, an AI service by xAI. Your story and preferences are sent to create personalized content.',
+          description: 'Behind every reading: 32 study methods, rich theological frameworks, and 7 carefully crafted writing personas. AI weaves it all together with your story to create devotionals no one else will ever read.',
         },
         {
           icon: <SpeakerHighIcon size={22} color={colors.accent} weight="light" />,
           title: 'Voice Narration',
-          description: 'Audio narration is provided by Cartesia, an AI voice service. Scripture text is sent for speech synthesis.',
+          description: 'Audio narration is generated by an AI voice service. Scripture text is sent for speech synthesis.',
         },
         {
           icon: <LockIcon size={22} color={colors.accent} weight="light" />,
           title: 'Your Privacy',
-          description: 'Your journal entries stay on your device. We never use your private writing to train AI models.',
+          description: 'Your journal entries stay on your device. Your private writing is never used to train AI models.',
         },
       ];
 
@@ -2112,19 +2134,18 @@ export default function OnboardingScreen() {
             <TextInput
               value={companionNameInput}
               onChangeText={setCompanionNameInput}
-              placeholder="A name, a word, whatever feels right"
+              placeholder="e.g. Grace, Selah, Guide"
               placeholderTextColor={colors.textMuted}
               style={{
                 fontFamily: FontFamily.body,
                 fontSize: 18,
                 color: colors.text,
-                paddingVertical: 16,
+                height: 54,
                 paddingHorizontal: 20,
                 backgroundColor: colors.inputBackground,
                 borderRadius: 16,
                 borderWidth: 1,
                 borderColor: colors.border,
-                textAlign: 'center',
               }}
               maxLength={30}
             />
@@ -2139,7 +2160,7 @@ export default function OnboardingScreen() {
               paddingHorizontal: 20,
             }}
           >
-            Your companion was introduced earlier. Give it a name — or leave it blank and move on.
+            You can always change this later.
           </Animated.Text>
         </View>
       );
@@ -2151,6 +2172,9 @@ export default function OnboardingScreen() {
         { title: 'Unlimited devotionals', description: 'Create as many series as you want' },
         { title: 'Premium voices', description: 'Listen in studio-quality narration' },
         { title: 'Advanced study methods', description: '32 ways to engage with scripture' },
+        { title: 'Bookmarks & highlights', description: 'Save passages that speak to you' },
+        { title: 'Custom themes', description: 'Choose from 7 accent color palettes' },
+        { title: 'Reading fonts', description: 'Pick the typeface that fits your reading style' },
         { title: 'Deeper personalization', description: 'Your companion learns faster' },
       ];
       return (
@@ -2471,7 +2495,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for choice/timeChoice steps (they auto-advance) and mirrorBack (has its own CTA) */}
-            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'premiumShowcase' ? (
+            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}

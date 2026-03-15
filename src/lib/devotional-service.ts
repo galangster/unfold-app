@@ -43,22 +43,8 @@ import { buildVoiceAdaptationDirective } from '../constants/voice-adaptation';
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
-// Backend URL for proxied API calls (keeps API keys server-side)
-const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-
-const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
-
-function getBackendCandidates(): string[] {
-  const candidates = [PRIMARY_BACKEND_URL];
-
-  // Always keep Railway as a safety net fallback
-  if (!candidates.includes(RAILWAY_BACKEND_URL)) {
-    candidates.push(RAILWAY_BACKEND_URL);
-  }
-
-  return candidates;
-}
+// Centralized backend config + auth headers
+import { getBackendCandidates, getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 
 interface BackendPostOptions {
   timeoutMs?: number;
@@ -91,9 +77,7 @@ export async function postJsonWithBackendFallback(
     try {
       const response = await fetch(`${backendUrl}${path}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });

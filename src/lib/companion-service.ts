@@ -1,19 +1,6 @@
 import { logger } from '@/lib/logger';
 import { PERSONA_BRIEF } from '../constants/persona';
-
-// Backend URL for proxied API calls (keeps API keys server-side)
-const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-
-const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
-
-function getBackendCandidates(): string[] {
-  const candidates = [PRIMARY_BACKEND_URL];
-  if (!candidates.includes(RAILWAY_BACKEND_URL)) {
-    candidates.push(RAILWAY_BACKEND_URL);
-  }
-  return candidates;
-}
+import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
 export type CompanionMood = 'Grateful' | 'Peaceful' | 'Hopeful' | 'Restless' | 'Heavy' | 'Confused';
 export type CompanionResponseContext =
@@ -76,15 +63,15 @@ export async function generateCompanionResponse(
   }
 
   const nameInstruction = userName
-    ? `Their name is ${userName}. You can use it once, naturally, if it fits.`
+    ? `Their name is ${sanitizeForPrompt(userName, 50)}. You can use it once, naturally, if it fits.`
     : 'You do not know their name.';
 
   const companionNameInstruction = companionName
-    ? `They named you "${companionName}". You can reference this subtly if natural, but don't force it.`
+    ? `They named you "${sanitizeForPrompt(companionName, 50)}". You can reference this subtly if natural, but don't force it.`
     : '';
 
   const themeInstruction = currentSeriesTheme
-    ? `They're currently reading a devotional series about "${currentSeriesTheme}". You can reference this if it connects to how they're feeling.`
+    ? `They're currently reading a devotional series about "${sanitizeForPrompt(currentSeriesTheme, 200)}". You can reference this if it connects to how they're feeling.`
     : 'They are not currently in an active devotional series.';
 
   const contextMap: Record<CompanionResponseContext, string> = {
@@ -136,7 +123,7 @@ Generate a short, personal companion response and 2 suggestion pills.`;
       try {
         const response = await fetch(`${backendUrl}/api/generate/adaptive-question`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await getAuthHeaders(),
           body: JSON.stringify({
             model: 'grok-4-1-fast-non-reasoning',
             max_tokens: 150,

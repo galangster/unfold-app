@@ -5,17 +5,16 @@
  * missing configuration. The app will work fine whether or not RevenueCat is configured.
  *
  * Environment Variables:
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
- * - EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
- * These are automatically injected into the workspace by the Vibecode service once the user sets up RevenueCat in the Payments tab.
+ * - EXPO_PUBLIC_REVENUECAT_TEST_KEY: Used in development/test builds (both platforms)
+ * - EXPO_PUBLIC_REVENUECAT_APPLE_KEY: Used in production builds (iOS)
+ * - EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY: Used in production builds (Android)
  *
  * Platform Support:
  * - iOS/Android: Fully supported via app stores
  * - Web: Disabled (RevenueCat only supports native app stores)
  *
  * The module automatically selects the correct key based on __DEV__ mode.
- * 
+ *
  * This module is used to get the current customer info, offerings, and purchase packages.
  * These exported functions are found at the bottom of the file.
  */
@@ -31,10 +30,10 @@ import Purchases, {
 // Check if running on web
 const isWeb = Platform.OS === "web";
 
-// Check for environment keys
-const testKey = process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY;
-const appleKey = process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY;
-const googleKey = process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY;
+// Check for environment keys (support both old VIBECODE_ prefix and new names)
+const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY || process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY;
+const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY || process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY;
+const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY;
 
 // Use __DEV__ and Platform to determine which key to use
 const getApiKey = (): string | undefined => {

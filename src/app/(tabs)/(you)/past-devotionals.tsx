@@ -40,12 +40,11 @@ export default function PastDevotionalsScreen() {
   const handleExportPDF = useCallback(async (devotional: Devotional) => {
     if (exportingId) return;
 
-    // TODO: re-enable premium gate after testing
-    // if (!user?.isPremium) {
-    //   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    //   router.push('/paywall');
-    //   return;
-    // }
+    if (!user?.isPremium) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      router.push('/paywall');
+      return;
+    }
 
     if (!isPDFExportSupported()) {
       return;

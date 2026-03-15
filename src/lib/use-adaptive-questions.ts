@@ -12,6 +12,7 @@ import {
 } from './adaptive-questions';
 import { logBugEvent } from './bug-logger';
 import { PERSONA_BRIEF } from '@/constants/persona';
+import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
 interface UseAdaptiveQuestionsOptions {
   studyContext: StudyContext;
@@ -114,14 +115,19 @@ export function useAdaptiveQuestions({
       const prompt = buildAdaptivePrompt(qa, pool, studyContext, confidence);
 
       // Call backend API (Grok 4.1 Fast for speed + cost + creative quality)
-      const response = await fetch('/api/generate/adaptive-question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'grok-4-1-fast-non-reasoning',
-          max_tokens: 300,
-          temperature: 0.8,
-          system: `${PERSONA_BRIEF}
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30_000);
+      let response: Response;
+      try {
+        response = await fetch(`${PRIMARY_BACKEND_URL}/api/generate/adaptive-question`, {
+          method: 'POST',
+          headers: await getAuthHeaders(),
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: 'grok-4-1-fast-non-reasoning',
+            max_tokens: 300,
+            temperature: 0.8,
+            system: `${PERSONA_BRIEF}
 
 WHAT YOU'RE DOING: Generating ONE deeply personal follow-up question that emerges naturally from what this specific person shared.
 
@@ -137,9 +143,12 @@ RULES:
 SUBTEXT: One short warm phrase (<=85 chars) that gives permission to be honest.
 
 RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "..."}`,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);

@@ -12,6 +12,7 @@ import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { referenceToRoute, BIBLE_BOOKS } from '@/lib/bible-constants';
 import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
+import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
 // ---------- Types ----------
 
@@ -60,8 +61,6 @@ const DEFAULT_TRANSLATION = 'web';
 const FETCH_TIMEOUT_MS = 10_000;
 const CACHE_KEY_PREFIX = 'verse';
 const COMMENTARY_CACHE_PREFIX = 'commentary';
-const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-
 // ---------- Cache ----------
 
 /**
@@ -299,21 +298,18 @@ export async function fetchCommentary(input: CommentaryInput): Promise<string | 
 
   logger.log('[BibleAPI] Generating commentary for:', input.reference);
 
-  const backendUrl =
-    process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${backendUrl}/api/generate-commentary`, {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}/api/generate-commentary`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
-        reference: input.reference,
-        verseText: input.verseText,
-        todayTheme: input.todayTheme,
-        todayTitle: input.todayTitle,
+        reference: sanitizeForPrompt(input.reference, 100),
+        verseText: sanitizeForPrompt(input.verseText, 1000),
+        todayTheme: sanitizeForPrompt(input.todayTheme, 200),
+        todayTitle: sanitizeForPrompt(input.todayTitle, 200),
       }),
       signal: controller.signal,
     });

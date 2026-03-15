@@ -3,7 +3,7 @@
  * Opening → Depth → Longing
  */
 
-const BACKEND_URL = 'https://oversight-cloning.vibecode.run';
+const BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
 
 const USER_ANSWERS = [
   { question: "What's your name?", answer: "Sarah" },

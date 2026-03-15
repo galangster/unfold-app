@@ -94,7 +94,6 @@ export default function BibleSearchScreen() {
         <FlashList
           data={results}
           renderItem={renderResult}
-          estimatedItemSize={80}
           keyExtractor={(item) => `${item.bookId}-${item.chapter}-${item.verse}`}
           contentContainerStyle={{ paddingBottom: 100 }}
         />

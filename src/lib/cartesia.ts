@@ -5,6 +5,7 @@
 
 import { File, Paths } from 'expo-file-system';
 import { logger } from '@/lib/logger';
+import { getAuthHeaders } from '@/lib/api-config';
 
 const TTS_PROXY_URL = 'https://tts-proxy-five.vercel.app/api/tts';
 
@@ -278,7 +279,7 @@ async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
     logger.log(`[TTS] fetchChunk: starting fetch (${text.length} chars)...`);
     const response = await fetch(TTS_PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ text, voiceId, format: 'base64' }),
     });
 

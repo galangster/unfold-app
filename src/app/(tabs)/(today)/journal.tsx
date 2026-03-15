@@ -38,8 +38,7 @@ import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://unfold-backend-production.up.railway.app';
+import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -519,16 +518,16 @@ RULES:
 
 RESPOND WITH ONLY A JSON ARRAY OF EXACTLY 3 STRINGS. No other text, no markdown wrapping.`;
 
-      const userMessage = `Devotional: "${currentDevotional?.title ?? 'Devotional'}"
-Day: "${currentDay?.title ?? `Day ${dayNumber}`}"
-Scripture: ${currentDay?.scriptureReference ?? 'N/A'}
+      const userMessage = `Devotional: "${sanitizeForPrompt(currentDevotional?.title ?? 'Devotional', 200)}"
+Day: "${sanitizeForPrompt(currentDay?.title ?? `Day ${dayNumber}`, 200)}"
+Scripture: ${sanitizeForPrompt(currentDay?.scriptureReference ?? 'N/A', 200)}
 
 Their journal entry:
-"${content}"`;
+"${sanitizeForPrompt(content, 2000)}"`;
 
-      const response = await fetch(`${BACKEND_URL}/api/generate/go-deeper`, {
+      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/generate/go-deeper`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           model: 'grok-4-1-fast-non-reasoning',
           max_tokens: 400,

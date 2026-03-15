@@ -154,7 +154,7 @@ JSON SCHEMA:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*?\}/);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('Arc generation returned no valid JSON');
   }
@@ -308,7 +308,7 @@ Bias toward extending (3-5 extra days) unless the arc clearly reached resolution
 
     const data = await response.json();
     const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-    const jsonMatch = text.match(/\{[\s\S]*?\}/);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in extension eval response');
 
     let result: {
@@ -441,7 +441,7 @@ JSON array only:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\[[\s\S]*?\]/);
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error('No JSON array in arc extension response');
 
   let newHints: SeriesArcDay[];
@@ -573,7 +573,7 @@ async function _generateProgressiveDayInternal(
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*?\}/);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error(`Day ${dayNumber}: no valid JSON in response`);
   }
@@ -1010,7 +1010,7 @@ Respond with JSON:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*?\}/);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Summary: no valid JSON');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1089,7 +1089,7 @@ Write in third person ("The reader..."). Be warm but precise. Respond with JSON:
 
   const data = await response.json();
   const text = data?.content?.[0]?.text ?? data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*?\}/);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Narrative: no valid JSON');
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
