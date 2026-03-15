@@ -35,7 +35,7 @@ const VOICE_SAMPLES: Record<string, any> = {
   'a924b0e6-9253-4711-8fc3-5cb8e0188c94': require('@/assets/audio/voice-samples/michael.mp3'),
 };
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://unfold-backend-production.up.railway.app';
+import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 
 const REMINDER_TIMES = [
   { value: '6:00 AM', label: 'Early morning' },
@@ -273,11 +273,9 @@ export default function SettingsScreen() {
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/bug-report/email`, {
+      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/bug-report/email`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });

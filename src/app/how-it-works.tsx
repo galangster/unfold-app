@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import { PencilSimpleIcon, HeartIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
@@ -35,7 +36,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface FeatureCard {
   headline: string;
   body: string;
-  animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'stack' | 'lines' | 'glow' | 'rings';
+  animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'stack' | 'lines' | 'glow' | 'rings' | 'pencil' | 'heartbeat' | 'weekCircles';
 }
 
 type Page =
@@ -47,23 +48,23 @@ const PAGES: Page[] = [
   {
     type: 'feature',
     card: {
-      headline: 'Written\nfor you',
-      body: 'Every word shaped by your story, your struggles, where you are right now.',
-      animation: 'dots',
+      headline: 'Written for you',
+      body: 'Every word shaped by your story, your struggles, where you are right now. No one in the world will have the same devotionals as you.',
+      animation: 'pencil',
     },
   },
   {
     type: 'feature',
     card: {
-      headline: 'A companion\nthat remembers',
-      body: 'It checks in each day. Notices what resonates. Shapes tomorrow based on today.',
-      animation: 'orb',
+      headline: 'Personal daily check-ins',
+      body: "Your answers today help give shape to tomorrow's Word.",
+      animation: 'heartbeat',
     },
   },
   {
     type: 'feature',
     card: {
-      headline: "Listen, don't\njust read",
+      headline: "Listen, don't just read",
       body: 'Full audio narration in voices that feel like someone sitting across from you.',
       animation: 'waveform',
     },
@@ -73,13 +74,13 @@ const PAGES: Page[] = [
     card: {
       headline: 'Build a rhythm',
       body: 'Streaks that matter. A gentle push to show up, even when it\u2019s hard.',
-      animation: 'pulse',
+      animation: 'weekCircles',
     },
   },
   {
     type: 'feature',
     card: {
-      headline: '32 ways to\ngo deeper',
+      headline: '32 ways to go deeper',
       body: 'Character studies. Psalms. Parables. The Beatitudes. Pick what calls to you.',
       animation: 'stack',
     },
@@ -87,8 +88,8 @@ const PAGES: Page[] = [
   {
     type: 'feature',
     card: {
-      headline: 'Your Bible.\nYour way.',
-      body: 'ESV, NIV, NLT, KJV, and more. Read in the version that feels like home.',
+      headline: 'Your Bible. Your way.',
+      body: 'BSB and KJV built in. Read in the translation that speaks to you.',
       animation: 'lines',
     },
   },
@@ -158,6 +159,228 @@ function FloatingDots({ accent }: { accent: string }) {
       <Animated.View style={[{ position: 'absolute', width: 18, height: 18, borderRadius: 9, backgroundColor: accent, left: 70, top: 105 }, s3]} />
       <Animated.View style={[{ position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: accent, left: 135, top: 70 }, s4]} />
       <Animated.View style={[{ position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: accent, left: 45, top: 135 }, s5]} />
+    </View>
+  );
+}
+
+function PencilWriting({ accent }: { accent: string }) {
+  // Single progress drives everything: 0→1 line1, 1→1.15 pause, 1.15→2.15 line2, 2.15→2.3 pause, 2.3→3.3 line3, 3.3→3.8 pause/reset
+  const progress = useSharedValue(0);
+  const fadeIn = useSharedValue(0);
+
+  const LINE_LEFT = 25;
+  const LINE_TOP_1 = 65;
+  const LINE_GAP = 18;
+  const LINE_W1 = 130;
+  const LINE_W2 = 110;
+  const LINE_W3 = 80;
+  const ICON_SIZE = 32;
+  // Pencil tip offset: the icon's bottom-left corner is roughly where the tip is
+  const TIP_OFFSET_X = -2;
+  const TIP_OFFSET_Y = ICON_SIZE - 6;
+
+  useEffect(() => {
+    fadeIn.value = withTiming(1, { duration: 500 });
+    progress.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }),      // write line 1
+        withTiming(1.15, { duration: 250 }),                                       // hop down
+        withTiming(2.15, { duration: 1400, easing: Easing.out(Easing.quad) }),    // write line 2
+        withTiming(2.3, { duration: 250 }),                                        // hop down
+        withTiming(3.3, { duration: 1000, easing: Easing.out(Easing.quad) }),     // write line 3
+        withTiming(3.8, { duration: 800 }),                                        // pause before restart
+      ),
+      -1,
+      false,
+    );
+  }, []);
+
+  const line1Style = useAnimatedStyle(() => {
+    const w = interpolate(progress.value, [0, 1], [0, LINE_W1], 'clamp');
+    return {
+      width: w,
+      opacity: w > 0 ? 0.5 : 0,
+    };
+  });
+  const line2Style = useAnimatedStyle(() => {
+    const w = interpolate(progress.value, [1.15, 2.15], [0, LINE_W2], 'clamp');
+    return {
+      width: w,
+      opacity: w > 0 ? 0.5 : 0,
+    };
+  });
+  const line3Style = useAnimatedStyle(() => {
+    const w = interpolate(progress.value, [2.3, 3.3], [0, LINE_W3], 'clamp');
+    return {
+      width: w,
+      opacity: w > 0 ? 0.5 : 0,
+    };
+  });
+
+  const pencilStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    let x: number;
+    let y: number;
+
+    if (p <= 1) {
+      // Writing line 1
+      x = LINE_LEFT + interpolate(p, [0, 1], [0, LINE_W1]);
+      y = LINE_TOP_1;
+    } else if (p <= 1.15) {
+      // Hopping to line 2
+      x = LINE_LEFT + interpolate(p, [1, 1.15], [LINE_W1, 0]);
+      y = LINE_TOP_1 + interpolate(p, [1, 1.15], [0, LINE_GAP]);
+    } else if (p <= 2.15) {
+      // Writing line 2
+      x = LINE_LEFT + interpolate(p, [1.15, 2.15], [0, LINE_W2]);
+      y = LINE_TOP_1 + LINE_GAP;
+    } else if (p <= 2.3) {
+      // Hopping to line 3
+      x = LINE_LEFT + interpolate(p, [2.15, 2.3], [LINE_W2, 0]);
+      y = LINE_TOP_1 + LINE_GAP + interpolate(p, [2.15, 2.3], [0, LINE_GAP]);
+    } else if (p <= 3.3) {
+      // Writing line 3
+      x = LINE_LEFT + interpolate(p, [2.3, 3.3], [0, LINE_W3]);
+      y = LINE_TOP_1 + LINE_GAP * 2;
+    } else {
+      // Pause / fade
+      x = LINE_LEFT + LINE_W3;
+      y = LINE_TOP_1 + LINE_GAP * 2;
+    }
+
+    return {
+      opacity: fadeIn.value * (p <= 3.3 ? 1 : interpolate(p, [3.3, 3.8], [1, 0.3])),
+      transform: [
+        { translateX: x + TIP_OFFSET_X - ICON_SIZE / 2 },
+        { translateY: y - TIP_OFFSET_Y },
+      ],
+    };
+  });
+
+  return (
+    <View style={{ width: 180, height: 180 }}>
+      {/* Written lines */}
+      <Animated.View style={[{ position: 'absolute', left: LINE_LEFT, top: LINE_TOP_1, height: 3, borderRadius: 1.5, backgroundColor: accent }, line1Style]} />
+      <Animated.View style={[{ position: 'absolute', left: LINE_LEFT, top: LINE_TOP_1 + LINE_GAP, height: 3, borderRadius: 1.5, backgroundColor: accent }, line2Style]} />
+      <Animated.View style={[{ position: 'absolute', left: LINE_LEFT, top: LINE_TOP_1 + LINE_GAP * 2, height: 3, borderRadius: 1.5, backgroundColor: accent }, line3Style]} />
+      {/* Pencil icon — tip tracks end of current line */}
+      <Animated.View style={[{ position: 'absolute' }, pencilStyle]}>
+        <PencilSimpleIcon size={ICON_SIZE} color={accent} weight="light" />
+      </Animated.View>
+    </View>
+  );
+}
+
+function WeekCircleDay({ accent, delay, resetKey }: { accent: string; delay: number; resetKey: number }) {
+  const fill = useSharedValue(0);
+  const checkScale = useSharedValue(0);
+
+  useEffect(() => {
+    fill.value = 0;
+    checkScale.value = 0;
+    fill.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.quad) }));
+    checkScale.value = withDelay(delay + 250, withSequence(
+      withTiming(1.3, { duration: 180, easing: Easing.out(Easing.back(2)) }),
+      withTiming(1, { duration: 120 }),
+    ));
+  }, [resetKey]);
+
+  const bgStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(fill.value, [0, 1], [0.4, 1]),
+    transform: [{ scale: interpolate(fill.value, [0, 0.5, 1], [1, 1.08, 1]) }],
+  }));
+
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: checkScale.value > 0 ? 1 : 0,
+    transform: [{ scale: checkScale.value }],
+  }));
+
+  return (
+    <Animated.View style={[{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: accent }, bgStyle]}>
+      <Animated.View style={checkStyle}>
+        <CheckIcon size={16} color={accent} weight="bold" />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+function WeekCircles({ accent }: { accent: string }) {
+  const [resetKey, setResetKey] = useState(0);
+
+  useEffect(() => {
+    // Total animation: 7 circles * 400ms stagger + 1500ms hold + 500ms gap = ~5800ms
+    const interval = setInterval(() => {
+      setResetKey((k) => k + 1);
+    }, 5800);
+    return () => clearInterval(interval);
+  }, []);
+
+  const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  return (
+    <View style={{ width: 280, height: 100, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        {DAYS.map((day, i) => (
+          <View key={i} style={{ alignItems: 'center', gap: 6 }}>
+            <WeekCircleDay accent={accent} delay={i * 400} resetKey={resetKey} />
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: accent, opacity: 0.5 }}>{day}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function BeatingHeart({ accent }: { accent: string }) {
+  const beat = useSharedValue(0);
+
+  useEffect(() => {
+    // Realistic heartbeat: quick double-pump, then rest
+    beat.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 150, easing: Easing.out(Easing.quad) }),
+        withTiming(0.3, { duration: 120, easing: Easing.in(Easing.quad) }),
+        withTiming(0.8, { duration: 130, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 300, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 600 }), // rest
+      ),
+      -1,
+      false,
+    );
+  }, []);
+
+  const heartStyle = useAnimatedStyle(() => {
+    const scale = interpolate(beat.value, [0, 0.3, 0.8, 1], [1, 1.02, 1.12, 1.18]);
+    return {
+      transform: [{ scale }],
+    };
+  });
+
+  const glowStyle = useAnimatedStyle(() => {
+    const scale = interpolate(beat.value, [0, 0.3, 0.8, 1], [1, 1.1, 1.35, 1.5]);
+    const opacity = interpolate(beat.value, [0, 0.3, 0.8, 1], [0.05, 0.1, 0.2, 0.3]);
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  return (
+    <View style={{ width: 180, height: 180, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Glow behind heart */}
+      <Animated.View
+        style={[{
+          position: 'absolute',
+          width: 120,
+          height: 120,
+          borderRadius: 60,
+          backgroundColor: accent,
+        }, glowStyle]}
+      />
+      {/* Heart icon */}
+      <Animated.View style={heartStyle}>
+        <HeartIcon size={64} color={accent} weight="fill" />
+      </Animated.View>
     </View>
   );
 }
@@ -378,9 +601,97 @@ function ExpandingRings({ accent }: { accent: string }) {
   );
 }
 
+// ─── Animated text reveal ─────────────────────────────────────────
+
+const EASE_TEXT = Easing.bezier(0.25, 0.1, 0.25, 1);
+
+function RevealWord({ word, delay, color, style }: { word: string; delay: number; color: string; style: any }) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(14);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(1, { duration: 450, easing: EASE_TEXT }));
+    translateY.value = withDelay(delay, withTiming(0, { duration: 450, easing: EASE_TEXT }));
+  }, [delay]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.Text style={[style, { color }, animStyle]}>
+      {word}{' '}
+    </Animated.Text>
+  );
+}
+
+const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
+  const words = useMemo(() => text.split(' '), [text]);
+
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+      {words.map((word, i) => (
+        <RevealWord
+          key={`${pageKey}-${i}`}
+          word={word}
+          delay={300 + i * 120}
+          color={color}
+          style={{
+            fontFamily: FontFamily.display,
+            fontSize: 28,
+            letterSpacing: -0.5,
+            lineHeight: 36,
+          }}
+        />
+      ))}
+    </View>
+  );
+});
+
+function AnimatedBody({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(10);
+  const wordCount = text.split(' ').length;
+  // Body fades in after all headline words have revealed
+  const bodyDelay = 300 + wordCount * 120 + 200;
+
+  useEffect(() => {
+    opacity.value = 0;
+    translateY.value = 10;
+    opacity.value = withDelay(bodyDelay, withTiming(1, { duration: 500, easing: EASE_TEXT }));
+    translateY.value = withDelay(bodyDelay, withTiming(0, { duration: 500, easing: EASE_TEXT }));
+  }, [pageKey, bodyDelay]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.Text
+      style={[
+        {
+          fontFamily: FontFamily.body,
+          fontSize: 16,
+          color,
+          textAlign: 'center',
+          lineHeight: 24,
+        },
+        animStyle,
+      ]}
+    >
+      {text}
+    </Animated.Text>
+  );
+}
+
 function CardAnimation({ type, accent }: { type: string; accent: string }) {
   switch (type) {
     case 'dots': return <FloatingDots accent={accent} />;
+    case 'pencil': return <PencilWriting accent={accent} />;
+    case 'heartbeat': return <BeatingHeart accent={accent} />;
+    case 'weekCircles': return <WeekCircles accent={accent} />;
     case 'orb': return <CompanionOrb accentColor={accent} size={96} isActive />;
     case 'waveform': return <WaveformBars accent={accent} />;
     case 'pulse': return <PulseCircle accent={accent} />;
@@ -486,29 +797,17 @@ export default function HowItWorksScreen() {
                     <CompanionOrb accentColor={colors.accent} size={120} isActive />
 
                     <View style={{ gap: 14 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 32,
-                          color: colors.text,
-                          textAlign: 'center',
-                          letterSpacing: -0.5,
-                        }}
-                      >
-                        Something stays{'\n'}with you.
-                      </Text>
+                      <AnimatedHeadline
+                        text="The only app that grows with you."
+                        color={colors.text}
+                        pageKey={currentPage}
+                      />
 
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: 16,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          lineHeight: 24,
-                        }}
-                      >
-                        Your companion shows up daily. Learns what matters to you. Makes each devotional feel more like yours.
-                      </Text>
+                      <AnimatedBody
+                        text="Your companion shows up daily. Learns what matters to you. Makes each devotional feel more like yours."
+                        color={colors.textMuted}
+                        pageKey={currentPage}
+                      />
                     </View>
                   </View>
                 ) : (
@@ -516,30 +815,17 @@ export default function HowItWorksScreen() {
                     <CardAnimation type={page.card.animation} accent={colors.accent} />
 
                     <View style={{ gap: 12 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: 32,
-                          color: colors.text,
-                          textAlign: 'center',
-                          letterSpacing: -0.5,
-                          lineHeight: 40,
-                        }}
-                      >
-                        {page.card.headline}
-                      </Text>
+                      <AnimatedHeadline
+                        text={page.card.headline}
+                        color={colors.text}
+                        pageKey={currentPage}
+                      />
 
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: 16,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          lineHeight: 24,
-                        }}
-                      >
-                        {page.card.body}
-                      </Text>
+                      <AnimatedBody
+                        text={page.card.body}
+                        color={colors.textMuted}
+                        pageKey={currentPage}
+                      />
                     </View>
                   </View>
                 )}

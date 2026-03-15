@@ -17,6 +17,7 @@
       "bundleIdentifier": "com.vibecode.unfold.x9fj08t",
       "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -96,21 +97,36 @@
               "name": "UnfoldStreak",
               "displayName": "Streak",
               "description": "Your daily reading streak at a glance",
-              "supportedFamilies": ["systemSmall", "accessoryCircular"]
+              "supportedFamilies": [
+                "systemSmall",
+                "accessoryCircular"
+              ]
             },
             {
               "name": "UnfoldToday",
               "displayName": "Today's Reading",
               "description": "Today's devotional with scripture preview",
-              "supportedFamilies": ["systemMedium"]
+              "supportedFamilies": [
+                "systemMedium"
+              ]
             },
             {
               "name": "UnfoldDashboard",
               "displayName": "Devotional",
               "description": "Your devotional journey at a glance",
-              "supportedFamilies": ["systemLarge"]
+              "supportedFamilies": [
+                "systemLarge"
+              ]
             }
           ]
+        }
+      ],
+      [
+        "@sentry/react-native",
+        {
+          "url": "https://sentry.io/",
+          "project": "unfold-react-native",
+          "organization": "the-creative-company"
         }
       ]
     ],
