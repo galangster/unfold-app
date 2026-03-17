@@ -23,6 +23,7 @@
     "prepare:bible-db": "node scripts/prepare-bible-db.mjs"
   },
   "dependencies": {
+    "@10play/tentap-editor": "^1.0.1",
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
     "@bottom-tabs/react-navigation": "^0.12.2",
     "@codeherence/react-native-header": "^1.0.0",

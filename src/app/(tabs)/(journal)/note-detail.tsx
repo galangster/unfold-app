@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -20,6 +21,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
+import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
 
 const CATEGORY_CONFIG: Record<NoteCategory, { Icon: typeof NoteIcon; label: string }> = {
   sermon: { Icon: MicrophoneStageIcon, label: 'Sermon' },
@@ -220,6 +222,114 @@ function renderInlineFormatting(
 
   return parts;
 }
+
+/* ─────────────────────────────────────────────────────────
+ * HTML content renderer (for notes created with TipTap editor)
+ * Uses a transparent WebView that auto-resizes to content height.
+ * ───────────────────────────────────────────────────────── */
+interface HtmlContentViewProps {
+  html: string;
+  textColor: string;
+  accentColor: string;
+  mutedColor: string;
+  backgroundColor: string;
+}
+
+function HtmlContentView({ html, textColor, accentColor, mutedColor, backgroundColor }: HtmlContentViewProps) {
+  const [webHeight, setWebHeight] = useState(200);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const bg = backgroundColor;
+
+  const styledHtml = `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-size: 17px;
+    line-height: 1.65;
+    color: ${textColor};
+    background-color: ${bg};
+    overflow: hidden;
+    -webkit-text-size-adjust: none;
+  }
+  p { margin: 0 0 6px 0; }
+  h1 { font-size: 22px; font-weight: 700; margin: 14px 0 6px; }
+  h2 { font-size: 19px; font-weight: 600; margin: 10px 0 4px; }
+  h3 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
+  ul, ol { padding-left: 22px; margin: 4px 0; }
+  li { margin: 2px 0; }
+  ul[data-type="taskList"] { padding-left: 0; list-style: none; }
+  ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; }
+  ul[data-type="taskList"] li label { margin-top: 4px; flex-shrink: 0; }
+  ul[data-type="taskList"] li label input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: ${accentColor};
+    pointer-events: none;
+  }
+  ul[data-type="taskList"] li[data-checked="true"] > div {
+    text-decoration: line-through; opacity: 0.45;
+  }
+  blockquote {
+    border-left: 3px solid ${accentColor};
+    padding-left: 14px; margin: 8px 0;
+    color: ${mutedColor}; font-style: italic;
+  }
+  strong { font-weight: 700; }
+  em { font-style: italic; }
+</style>
+</head>
+<body>${html}</body>
+<script>
+  window.onload = function() {
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'height',value:document.body.scrollHeight}));
+  };
+</script>
+</html>`;
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <WebView
+        source={{ html: styledHtml }}
+        style={[detailHtmlStyles.webview, { height: webHeight }]}
+        scrollEnabled={false}
+        showsVerticalScrollIndicator={false}
+        onMessage={(e) => {
+          try {
+            const msg = JSON.parse(e.nativeEvent.data);
+            if (msg.type === 'height' && typeof msg.value === 'number') {
+              setWebHeight(msg.value + 16);
+              setIsLoaded(true);
+            }
+          } catch {}
+        }}
+        onLoad={() => setIsLoaded(true)}
+        originWhitelist={['*']}
+        backgroundColor={backgroundColor}
+        javaScriptEnabled
+      />
+      {!isLoaded && (
+        <View
+          style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor, minHeight: webHeight },
+          ]}
+          pointerEvents="none"
+        />
+      )}
+    </View>
+  );
+}
+
+const detailHtmlStyles = StyleSheet.create({
+  webview: {
+    width: '100%',
+    opacity: 0.99, // iOS GPU compositing fix for transparent WebViews
+  },
+});
 
 export default function NoteDetailScreen() {
   const router = useRouter();
@@ -550,9 +660,19 @@ export default function NoteDetailScreen() {
             </Animated.View>
           )}
 
-          {/* Body content */}
+          {/* Body content — HTML (new notes) or legacy markdown */}
           <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-            {renderFormattedContent(note.content, colors)}
+            {isHtmlContent(note.content) ? (
+              <HtmlContentView
+                html={note.content}
+                textColor={colors.text}
+                accentColor={colors.accent}
+                mutedColor={colors.textMuted}
+                backgroundColor={colors.background}
+              />
+            ) : (
+              renderFormattedContent(note.content, colors)
+            )}
           </Animated.View>
 
           {/* Tags section */}

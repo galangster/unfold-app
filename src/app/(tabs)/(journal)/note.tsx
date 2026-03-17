@@ -130,7 +130,8 @@ export default function NoteEditorScreen() {
   const handleAutoSave = useCallback(
     (data: { title: string; content: string }) => {
       latestContentRef.current = data;
-      if (!data.title.trim() && !data.content.trim()) return;
+      const isEmptyHtml = data.content === '<p></p>' || data.content === '';
+      if (!data.title.trim() && isEmptyHtml) return;
 
       if (noteId) {
         updateNote(noteId, {
@@ -332,7 +333,7 @@ export default function NoteEditorScreen() {
               >
                 <TrashIcon
                   size={16}
-                  color={deleteConfirm ? colors.error : colors.error}
+                  color={colors.error}
                   weight="light"
                 />
                 <Text

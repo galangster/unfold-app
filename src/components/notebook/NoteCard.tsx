@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { ScriptureRefPill } from './ScriptureRefPill';
+import { stripHtml, isHtmlContent } from './NoteEditor';
 
 import { Note, NoteCategory } from '@/lib/store';
 
@@ -45,15 +46,18 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const categoryConfig = CATEGORY_CONFIG[note.category];
   const CategoryIcon = categoryConfig.Icon;
 
+  // Strip HTML tags for plain-text derivation (handles both HTML and legacy markdown)
+  const plainContent = isHtmlContent(note.content) ? stripHtml(note.content) : note.content;
+
   // Derive display title: explicit title, or first line of content, or fallback
   const displayTitle = note.title.trim()
-    || note.content.split('\n')[0]?.slice(0, 60)
+    || plainContent.split('\n')[0]?.slice(0, 60)
     || 'Untitled';
 
   // Preview: skip first line if it was used as title, show up to 2 lines
   const previewText = note.title.trim()
-    ? note.content.trim()
-    : note.content.split('\n').slice(1).join('\n').trim();
+    ? plainContent.trim()
+    : plainContent.split('\n').slice(1).join('\n').trim();
 
   const handlePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

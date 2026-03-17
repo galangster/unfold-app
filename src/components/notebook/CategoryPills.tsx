@@ -69,26 +69,15 @@ function CategoryPill({ categoryKey, label, isActive, onPress, colors }: Categor
     onPress(categoryKey);
   }, [categoryKey, onPress]);
 
-  // "All" active: inverted solid style
-  const isAllActive = categoryKey === 'all' && isActive;
+  const pillBg = isActive
+    ? colors.accent + '18'
+    : colors.buttonBackground;
 
-  const pillBg = isAllActive
-    ? colors.text
-    : isActive
-      ? colors.accent + '15'   // 8% opacity
-      : colors.buttonBackground;
+  const pillBorder = isActive
+    ? colors.accent + '40'
+    : colors.border;
 
-  const pillBorder = isAllActive
-    ? colors.text
-    : isActive
-      ? colors.accent + '33'   // 20% opacity
-      : colors.border;
-
-  const pillTextColor = isAllActive
-    ? colors.background
-    : isActive
-      ? colors.accent
-      : colors.textMuted;
+  const pillTextColor = isActive ? colors.accent : colors.textMuted;
 
   const pillFontFamily = isActive ? FontFamily.uiMedium : FontFamily.ui;
 
