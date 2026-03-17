@@ -1275,7 +1275,7 @@ async function generateBatch(
       throw new Error('TRANSIENT_UPSTREAM_ERROR');
     }
 
-    console.error('API Error Response:', response.status, errorText);
+    logger.error('API Error Response:', response.status, errorText);
 
     if (response.status === 401) {
       throw new Error('API key is invalid or expired. Please contact support.');
@@ -1620,7 +1620,7 @@ export async function generateDevotional(
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('Generation error:', errorMessage);
+      logger.error('Generation error:', errorMessage);
       void logBugError('devotional-service', error, {
         phase: 'full-generation',
       });
@@ -2016,7 +2016,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     try {
       parsedResult = JSON.parse(jsonText) as typeof parsedResult;
     } catch (parseErr) {
-      if (__DEV__) console.warn('[Adaptive] JSON parse failed:', parseErr, 'Input:', jsonText.substring(0, 200));
+      logger.warn('[Adaptive] JSON parse failed:', parseErr, 'Input:', jsonText.substring(0, 200));
       throw new Error(`Adaptive question JSON parse failed: ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
     }
 
@@ -2125,7 +2125,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     try {
       parsedResult = JSON.parse(content) as typeof parsedResult;
     } catch (parseErr) {
-      if (__DEV__) console.warn('[Quote Extraction] JSON parse failed:', parseErr);
+      logger.warn('[Quote Extraction] JSON parse failed:', parseErr);
       return [];
     }
 

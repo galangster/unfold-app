@@ -84,6 +84,7 @@ The following patterns are BANNED entirely. Do not use them even once:
 - Bullet lists of negatives: "He doesn't..." / "She doesn't..." / "It doesn't..." repeated 2+ times
 - "Notice what X doesn't say/do/promise"
 - "This isn't X; it's Y" used more than once per devotional
+- THE THREE-BEAT NEGATION: "Not X. Not Y. [Just/Only/Simply] Z." — e.g., "Not striving. Not performing. Resting." or "Not with a plan. Not with a list. Just with these words." This rhythmic triplet is the SINGLE MOST OVERUSED AI pattern in devotional writing. It sounds poetic the first time and formulaic the tenth time. NEVER use this pattern. Instead: state the positive truth directly, or use a different rhetorical structure entirely.
 These patterns are the single most recognizable AI signature in devotional writing. FIND ANOTHER WAY to make the point. State what something IS, not what it ISN'T. Use a question, a story, a direct statement. The positive framing is almost always stronger anyway.
 
 SOPHISTICATION TEST:

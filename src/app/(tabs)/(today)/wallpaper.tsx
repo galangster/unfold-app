@@ -18,6 +18,7 @@ import { captureRef } from 'react-native-view-shot';
 import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { logger } from '@/lib/logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -147,7 +148,7 @@ export default function WallpaperScreen() {
       await new Promise(resolve => setTimeout(resolve, 100));
       return await captureRef(wallpaperRef.current, { format: 'png', quality: 1 });
     } catch (error) {
-      console.error('Capture error:', error);
+      logger.error('Capture error:', error);
       return null;
     }
   }, []);
@@ -175,7 +176,7 @@ export default function WallpaperScreen() {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } catch (error) {
-      console.error('Failed to save wallpaper:', error);
+      logger.error('Failed to save wallpaper:', error);
       Alert.alert('Save Failed', 'Failed to save. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
@@ -202,7 +203,7 @@ export default function WallpaperScreen() {
       }
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share your Unfold quote' });
     } catch (error) {
-      console.error('Failed to share wallpaper:', error);
+      logger.error('Failed to share wallpaper:', error);
     } finally {
       setSaving(false);
     }

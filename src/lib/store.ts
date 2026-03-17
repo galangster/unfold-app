@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
 import { logBugError } from './bug-logger';
+import { logger } from './logger';
 import { mmkvStorage } from './mmkv-storage';
 import type { NudgeType, NudgeImpression, NudgeState } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
@@ -150,6 +151,8 @@ export interface UserProfile {
   selectedTheme?: ThemeCategory;
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
+  // Profile picture (local file URI)
+  profilePicture?: string | null;
 }
 
 export interface Quote {
@@ -403,6 +406,38 @@ export interface MethodUsageRecord {
   usedAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Notebook Types
+// ---------------------------------------------------------------------------
+
+export interface ScriptureRef {
+  reference: string;       // "John 3:16" (display string)
+  bookId: number;          // For navigation
+  chapter: number;
+  verse?: number;
+  verseEnd?: number;
+}
+
+export type NoteCategory = 'sermon' | 'quiet-time' | 'study' | 'prayer' | 'general';
+
+export interface Note {
+  id: string;                    // UUID
+  title: string;                 // User-set or auto-generated from first line
+  content: string;               // Plain text content
+  createdAt: string;             // ISO timestamp
+  updatedAt: string;             // ISO timestamp
+  category: NoteCategory;        // Default: 'general'
+  tags: string[];                // Free-form tags
+  isFavorite: boolean;           // Star/pin
+  scriptureRefs: ScriptureRef[]; // Linked verses
+  devotionalId?: string;         // If linked to a devotional
+  dayNumber?: number;            // If linked to a devotional day
+  bibleBookId?: number;          // If created from Bible reader
+  bibleChapter?: number;         // If created from Bible reader
+}
+
+// ---------------------------------------------------------------------------
+
 export type GenerationSessionStatus = 'idle' | 'running' | 'error' | 'complete';
 
 export interface GenerationSession {
@@ -590,6 +625,14 @@ interface UnfoldState {
   getLastBiblePosition: () => BibleReadingPosition | null;
   updateBibleReaderSettings: (updates: Partial<BibleReaderSettings>) => void;
 
+  // Notebook
+  notes: Note[];
+  addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'category' | 'tags' | 'isFavorite' | 'scriptureRefs'>>) => void;
+  deleteNote: (id: string) => void;
+  getNotesForScripture: (bookId: number, chapter: number) => Note[];
+  getNotesForDevotional: (devotionalId: string, dayNumber?: number) => Note[];
+
   // AI data consent (App Store Guideline 5.1.2(i))
   hasConsentedToAI: boolean;
   setHasConsentedToAI: (consented: boolean) => void;
@@ -650,6 +693,8 @@ const initialState = {
   hasUsedAudio: false,
   // AI data consent
   hasConsentedToAI: false,
+  // Notebook
+  notes: [] as Note[],
   // Bible Reader
   bibleHighlights: [] as BibleHighlight[],
   bibleReadingHistory: [] as BibleReadingPosition[],
@@ -1329,6 +1374,49 @@ export const useUnfoldStore = create<UnfoldState>()(
           bibleReaderSettings: { ...state.bibleReaderSettings, ...updates },
         })),
 
+      // Notebook actions
+      addNote: (note) => {
+        const id = `note_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const now = new Date().toISOString();
+        set((state) => ({
+          notes: [
+            { ...note, id, createdAt: now, updatedAt: now },
+            ...state.notes,
+          ],
+        }));
+        return id;
+      },
+
+      updateNote: (id, updates) =>
+        set((state) => ({
+          notes: state.notes.map((n) =>
+            n.id === id
+              ? { ...n, ...updates, updatedAt: new Date().toISOString() }
+              : n,
+          ),
+        })),
+
+      deleteNote: (id) =>
+        set((state) => ({
+          notes: state.notes.filter((n) => n.id !== id),
+        })),
+
+      getNotesForScripture: (bookId, chapter) => {
+        return get().notes.filter(
+          (n) =>
+            (n.bibleBookId === bookId && n.bibleChapter === chapter) ||
+            n.scriptureRefs.some((ref) => ref.bookId === bookId && ref.chapter === chapter),
+        );
+      },
+
+      getNotesForDevotional: (devotionalId, dayNumber) => {
+        return get().notes.filter(
+          (n) =>
+            n.devotionalId === devotionalId &&
+            (dayNumber === undefined || n.dayNumber === dayNumber),
+        );
+      },
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -1340,7 +1428,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 19, // Increment when state structure changes
+      version: 20, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1522,13 +1610,21 @@ export const useUnfoldStore = create<UnfoldState>()(
           } as UnfoldState;
         }
 
+        // Migration from version 19 to 20: Add notebook notes
+        if (version < 20) {
+          return {
+            ...state,
+            notes: [],
+          } as UnfoldState;
+        }
+
         return state as UnfoldState;
       },
       // Validate state on rehydration
       onRehydrateStorage: () => {
         return (state, error) => {
           if (error) {
-            console.error('[store] Rehydration error:', error);
+            logger.error('[store] Rehydration error:', error);
             // Log to bug tracking
             void logBugError('store-rehydration', error, {
               timestamp: new Date().toISOString(),
@@ -1546,7 +1642,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               typeof state.generationSession === 'object';
 
             if (!isValid) {
-              console.warn('[store] Invalid state detected, resetting to initial state');
+              logger.warn('[store] Invalid state detected, resetting to initial state');
               void logBugError('store-validation', new Error('Invalid persisted state'), {
                 stateKeys: Object.keys(state),
               });

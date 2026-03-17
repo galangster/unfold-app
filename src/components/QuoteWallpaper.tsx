@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle }
 import { View, Text, Dimensions, Appearance } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { logger } from '@/lib/logger';
 import ViewShot from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -51,7 +52,7 @@ export const QuoteWallpaper = forwardRef<QuoteWallpaperRef, QuoteWallpaperProps>
         const uri = await viewShotRef.current.capture?.();
         return uri || null;
       } catch (err) {
-        console.error('[QuoteWallpaper] Capture failed:', err);
+        logger.error('[QuoteWallpaper] Capture failed:', err);
         return null;
       } finally {
         setIsCapturing(false);
@@ -68,7 +69,7 @@ export const QuoteWallpaper = forwardRef<QuoteWallpaperRef, QuoteWallpaperProps>
           await MediaLibrary.saveToLibraryAsync(uri);
         }
       } catch (err) {
-        console.error('[QuoteWallpaper] Save failed:', err);
+        logger.error('[QuoteWallpaper] Save failed:', err);
       }
     }, [captureWallpaper]);
     
@@ -82,7 +83,7 @@ export const QuoteWallpaper = forwardRef<QuoteWallpaperRef, QuoteWallpaperProps>
           dialogTitle: 'Share Quote',
         });
       } catch (err) {
-        console.error('[QuoteWallpaper] Share failed:', err);
+        logger.error('[QuoteWallpaper] Share failed:', err);
       }
     }, [captureWallpaper]);
     

@@ -1,23 +1,16 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Dimensions,
   StyleSheet,
   Keyboard,
   ActivityIndicator,
 } from 'react-native';
-import Animated, {
-  SlideInDown,
-  SlideOutDown,
-  SlideInLeft,
-  SlideOutLeft,
-  SlideInRight,
-  SlideOutRight,
-} from 'react-native-reanimated';
+// reanimated no longer needed — all animations removed for instant transitions
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
   MagnifyingGlassIcon,
@@ -36,30 +29,81 @@ import {
   type BibleBookInfo,
 } from '@/lib/bible-constants';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
+import { getChapterVerseCount } from '@/lib/bible-db';
 import type { BibleTranslation } from '@/lib/bible-db';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type NavigatorMode = 'books' | 'chapters' | 'search';
+type NavigatorMode = 'books' | 'chapters' | 'verses';
 
 interface BookChapterNavigatorProps {
   visible: boolean;
   currentBookId: number;
   currentChapter: number;
   translation: string;
-  onSelect: (bookId: number, chapter: number) => void;
+  onSelect: (bookId: number, chapter: number, verse?: number) => void;
   onClose: () => void;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const WINDOW_HEIGHT = Dimensions.get('window').height;
-const SHEET_MAX_HEIGHT = WINDOW_HEIGHT * 0.7;
-
-/** Books with only 1 chapter — tap goes directly to the chapter */
+/** Books with only 1 chapter — tap skips straight to chapter selection */
 const SINGLE_CHAPTER_BOOK_IDS = new Set([31, 57, 63, 64, 65]);
 
-// ─── Component ──────────────────────────────────────────────────────────────
+const TAB_LABELS = ['Book', 'Chapter', 'Verse'] as const;
+const TAB_GAP = 4;
+const TAB_PADDING = 3;
+
+// No animations — navigator appears instantly, content swaps instantly
+
+// ─── Animated Tab Indicator ─────────────────────────────────────────────────
+
+const StepTabs = React.memo(({
+  activeIndex,
+  onTabPress,
+  colors,
+  isDark,
+}: {
+  activeIndex: number;
+  onTabPress: (index: number) => void;
+  colors: any;
+  isDark: boolean;
+}) => {
+  const trackBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  const pillBg = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)';
+
+  return (
+    <View style={[styles.tabBar, { backgroundColor: trackBg, padding: TAB_PADDING }]}>
+      {TAB_LABELS.map((label, i) => {
+        const isActive = i === activeIndex;
+        return (
+          <TouchableOpacity
+            key={label}
+            onPress={() => onTabPress(i)}
+            activeOpacity={0.7}
+            style={[
+              styles.tabItem,
+              isActive && { backgroundColor: pillBg, borderRadius: 8 },
+            ]}
+            accessibilityLabel={`${label} tab`}
+          >
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: isActive ? colors.text : colors.textHint },
+                isActive && { fontFamily: FontFamily.uiMedium },
+              ]}
+            >
+              {label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+});
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 
 export function BookChapterNavigator({
   visible,
@@ -70,27 +114,49 @@ export function BookChapterNavigator({
   onClose,
 }: BookChapterNavigatorProps) {
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [mode, setMode] = useState<NavigatorMode>('books');
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<number>(0);
+  const [verseCount, setVerseCount] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const prevVisibleRef = useRef(false);
 
-  // ── Reset state when sheet opens ────────────────────────────────────────
+  // ── Reset to books mode when navigator closes, so next open is clean ────
+  // Using a ref to detect close → avoids stale state on the first frame of next open
   useEffect(() => {
-    if (visible) {
+    if (visible && !prevVisibleRef.current) {
+      // Just opened — set selected book/chapter context (mode is already 'books' from close reset)
+      const currentBook = BIBLE_BOOKS.find((b) => b.id === currentBookId) ?? null;
+      setSelectedBook(currentBook);
+      setSelectedChapter(currentChapter);
+    } else if (!visible && prevVisibleRef.current) {
+      // Just closed — reset everything so next open starts clean (no stale frame)
       setMode('books');
       setSelectedBook(null);
+      setSelectedChapter(0);
+      setVerseCount(0);
       setSearchQuery('');
     }
-  }, [visible]);
+    prevVisibleRef.current = visible;
+  }, [visible, currentBookId, currentChapter]);
 
-  // ── Search: reference parsing ───────────────────────────────────────────
+  // ── Load verse count when entering verse mode ─────────────────────────
+  useEffect(() => {
+    if (mode === 'verses' && selectedBook && selectedChapter > 0) {
+      getChapterVerseCount(selectedBook.id, selectedChapter, translation as BibleTranslation)
+        .then((count) => setVerseCount(count));
+    }
+  }, [mode, selectedBook, selectedChapter, translation]);
+
+  // ── Search: reference parsing ─────────────────────────────────────────
   const parsedRef = useMemo(() => {
     if (!searchQuery.trim()) return null;
     return referenceToRoute(searchQuery.trim());
   }, [searchQuery]);
 
-  // ── Search: book name autocomplete ──────────────────────────────────────
+  // ── Search: book name autocomplete ────────────────────────────────────
   const bookMatches = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
@@ -101,7 +167,7 @@ export function BookChapterNavigator({
     ).slice(0, 5);
   }, [searchQuery]);
 
-  // ── Search: FTS5 full-text search ───────────────────────────────────────
+  // ── Search: FTS5 full-text search ─────────────────────────────────────
   const shouldSearch =
     searchQuery.trim().length >= 2 && !parsedRef && bookMatches.length === 0;
   const { results: searchResults, isSearching } = useBibleSearch(
@@ -110,77 +176,115 @@ export function BookChapterNavigator({
     20,
   );
 
-  // ── Handlers ────────────────────────────────────────────────────────────
+  // ── Tab index ─────────────────────────────────────────────────────────
+  const tabIndex = mode === 'books' ? 0 : mode === 'chapters' ? 1 : 2;
+
+  // ── Header title removed — step tabs indicate context ──────────────────
+
+  // ── Handlers ──────────────────────────────────────────────────────────
 
   const handleBookSelect = useCallback(
-    (book: BibleBookInfo) => {
+    async (book: BibleBookInfo) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Keyboard.dismiss();
 
       if (SINGLE_CHAPTER_BOOK_IDS.has(book.id)) {
-        onSelect(book.id, 1);
+        // Single-chapter books → skip to verses, pre-fetch count
+        const count = await getChapterVerseCount(book.id, 1, translation as BibleTranslation);
+        setSelectedBook(book);
+        setSelectedChapter(1);
+        setVerseCount(count);
+        setMode('verses');
         return;
       }
 
       setSelectedBook(book);
       setMode('chapters');
     },
-    [onSelect],
+    [translation],
   );
 
   const handleChapterSelect = useCallback(
-    (chapter: number) => {
+    async (chapter: number) => {
       if (!selectedBook) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Keyboard.dismiss();
-      onSelect(selectedBook.id, chapter);
+      // Pre-fetch verse count before switching mode to avoid loading flash
+      const count = await getChapterVerseCount(selectedBook.id, chapter, translation as BibleTranslation);
+      setSelectedChapter(chapter);
+      setVerseCount(count);
+      setMode('verses');
     },
-    [selectedBook, onSelect],
+    [selectedBook, translation],
   );
 
-  const handleBackToBooks = useCallback(() => {
-    setMode('books');
-    setSelectedBook(null);
-    setSearchQuery('');
-  }, []);
+  const handleVerseSelect = useCallback(
+    (verse: number) => {
+      if (!selectedBook || selectedChapter === 0) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Keyboard.dismiss();
+      onSelect(selectedBook.id, selectedChapter, verse);
+    },
+    [selectedBook, selectedChapter, onSelect],
+  );
+
+  const handleBack = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (mode === 'verses') {
+      setMode('chapters');
+      setVerseCount(0);
+    } else if (mode === 'chapters') {
+      setMode('books');
+      setSelectedBook(null);
+      setSearchQuery('');
+    }
+  }, [mode]);
 
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
   }, []);
 
-  // ── Early return ────────────────────────────────────────────────────────
+  const handleTabPress = useCallback((index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (index === 0) {
+      // Always go back to books
+      setMode('books');
+    } else if (index === 1) {
+      // Chapter tab — only if a book is selected
+      if (selectedBook) {
+        setMode('chapters');
+        setVerseCount(0);
+      }
+    } else if (index === 2) {
+      // Verse tab — only if both book and chapter are selected
+      if (selectedBook && selectedChapter > 0) {
+        setMode('verses');
+      }
+    }
+  }, [selectedBook, selectedChapter]);
+
+  // ── No content animation — instant swap, tab highlight provides feedback ──
+
+  // ── Early return ──────────────────────────────────────────────────────
   if (!visible) return null;
 
-  // ── Derived values ──────────────────────────────────────────────────────
+  // ── Derived values ────────────────────────────────────────────────────
   const hasSuggestions = parsedRef !== null || bookMatches.length > 0;
   const hasSearchResults = shouldSearch && searchResults.length > 0;
   const showSearchLoading = shouldSearch && isSearching;
 
-  const otChipBg = isDark
-    ? 'rgba(200, 165, 92, 0.06)'
-    : 'rgba(180, 120, 60, 0.04)';
-  const ntChipBg = isDark
-    ? 'rgba(100, 140, 200, 0.06)'
-    : 'rgba(60, 100, 180, 0.04)';
+  const chipBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
 
-  // ── Render helpers ──────────────────────────────────────────────────────
+  // ── Render: Search bar ────────────────────────────────────────────────
 
   const renderSearchBar = () => (
     <View
       style={[
         styles.searchBarContainer,
-        {
-          backgroundColor: isDark
-            ? 'rgba(255,255,255,0.06)'
-            : 'rgba(0,0,0,0.04)',
-        },
+        { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
       ]}
     >
-      <MagnifyingGlassIcon
-        size={16}
-        color={colors.textSubtle}
-        weight="light"
-      />
+      <MagnifyingGlassIcon size={16} color={colors.textSubtle} weight="light" />
       <TextInput
         style={[styles.searchInput, { color: colors.text }]}
         placeholder="Search books or verses..."
@@ -193,94 +297,51 @@ export function BookChapterNavigator({
         accessibilityLabel="Search Bible books or verses"
       />
       {searchQuery.length > 0 && (
-        <TouchableOpacity
-          onPress={handleClearSearch}
-          hitSlop={8}
-          accessibilityLabel="Clear search"
-          accessibilityRole="button"
-        >
-          <XCircleIcon
-            size={16}
-            color={colors.textSubtle}
-            weight="light"
-          />
+        <TouchableOpacity onPress={handleClearSearch} hitSlop={8} accessibilityLabel="Clear search">
+          <XCircleIcon size={16} color={colors.textSubtle} weight="light" />
         </TouchableOpacity>
       )}
     </View>
   );
+
+  // ── Render: Search suggestions ────────────────────────────────────────
 
   const renderSuggestions = () => {
     if (!hasSuggestions && !hasSearchResults && !showSearchLoading) return null;
 
     return (
       <View style={styles.suggestionsContainer}>
-        {/* Parsed reference suggestion */}
         {parsedRef && (
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               Keyboard.dismiss();
-              onSelect(parsedRef.bookId, parsedRef.chapter);
+              onSelect(parsedRef.bookId, parsedRef.chapter, parsedRef.verse);
             }}
-            style={[
-              styles.suggestionRow,
-              {
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.04)'
-                  : 'rgba(0,0,0,0.02)',
-              },
-            ]}
+            style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}
             accessibilityLabel={`Go to ${BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name} ${parsedRef.chapter}`}
-            accessibilityRole="button"
           >
-            <BookBookmarkIcon
-              size={18}
-              color={colors.accent}
-              weight="light"
-              style={styles.suggestionIcon}
-            />
+            <BookBookmarkIcon size={18} color={colors.accent} weight="light" style={styles.suggestionIcon} />
             <Text style={[styles.suggestionText, { color: colors.text }]}>
-              Go to{' '}
-              {BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name}{' '}
-              {parsedRef.chapter}
+              Go to {BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name} {parsedRef.chapter}
               {parsedRef.verse ? `:${parsedRef.verse}` : ''}
             </Text>
           </TouchableOpacity>
         )}
 
-        {/* Book autocomplete suggestions */}
         {!parsedRef &&
           bookMatches.map((book) => (
             <TouchableOpacity
               key={book.id}
-              onPress={() => {
-                handleBookSelect(book);
-                setSearchQuery('');
-              }}
-              style={[
-                styles.suggestionRow,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.04)'
-                    : 'rgba(0,0,0,0.02)',
-                },
-              ]}
+              onPress={() => { handleBookSelect(book); setSearchQuery(''); }}
+              style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}
               accessibilityLabel={`Navigate to ${book.name}`}
-              accessibilityRole="button"
             >
-              <BookBookmarkIcon
-                size={18}
-                color={colors.textSubtle}
-                weight="light"
-                style={styles.suggestionIcon}
-              />
-              <Text style={[styles.suggestionText, { color: colors.text }]}>
-                {book.name}
-              </Text>
+              <BookBookmarkIcon size={18} color={colors.textSubtle} weight="light" style={styles.suggestionIcon} />
+              <Text style={[styles.suggestionText, { color: colors.text }]}>{book.name}</Text>
             </TouchableOpacity>
           ))}
 
-        {/* FTS5 search results */}
         {hasSearchResults &&
           searchResults.map((result) => (
             <TouchableOpacity
@@ -290,30 +351,16 @@ export function BookChapterNavigator({
                 Keyboard.dismiss();
                 onSelect(result.bookId, result.chapter);
               }}
-              style={[
-                styles.searchResultRow,
-                {
-                  borderBottomColor: isDark
-                    ? 'rgba(255,255,255,0.04)'
-                    : 'rgba(0,0,0,0.04)',
-                },
-              ]}
+              style={[styles.searchResultRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }]}
               accessibilityLabel={`${result.reference}: ${result.text}`}
-              accessibilityRole="button"
             >
-              <Text style={[styles.searchRef, { color: colors.accent }]}>
-                {result.reference}
-              </Text>
-              <Text
-                style={[styles.searchSnippet, { color: colors.text }]}
-                numberOfLines={2}
-              >
+              <Text style={[styles.searchRef, { color: colors.accent }]}>{result.reference}</Text>
+              <Text style={[styles.searchSnippet, { color: colors.text }]} numberOfLines={2}>
                 {result.text}
               </Text>
             </TouchableOpacity>
           ))}
 
-        {/* Loading indicator */}
         {showSearchLoading && (
           <View style={styles.searchLoadingRow}>
             <ActivityIndicator size="small" color={colors.textSubtle} />
@@ -323,15 +370,11 @@ export function BookChapterNavigator({
     );
   };
 
-  const renderBookChips = (
-    books: BibleBookInfo[],
-    sectionLabel: string,
-    chipBg: string,
-  ) => (
+  // ── Render: Book grid ─────────────────────────────────────────────────
+
+  const renderBookChips = (books: BibleBookInfo[], sectionLabel: string) => (
     <View style={styles.bookSection}>
-      <Text style={[styles.sectionLabel, { color: colors.textSubtle }]}>
-        {sectionLabel}
-      </Text>
+      <Text style={[styles.sectionLabel, { color: colors.textSubtle }]}>{sectionLabel}</Text>
       <View style={styles.chipGrid}>
         {books.map((book) => {
           const isCurrentBook = book.id === currentBookId;
@@ -342,13 +385,9 @@ export function BookChapterNavigator({
               style={[
                 styles.bookChip,
                 { backgroundColor: chipBg },
-                isCurrentBook && {
-                  borderWidth: 1.5,
-                  borderColor: colors.accent,
-                },
+                isCurrentBook && { borderWidth: 1.5, borderColor: colors.accent },
               ]}
               accessibilityLabel={`${book.name}${isCurrentBook ? ', current book' : ''}`}
-              accessibilityRole="button"
             >
               <Text
                 style={[
@@ -367,190 +406,202 @@ export function BookChapterNavigator({
     </View>
   );
 
-  const renderBooksMode = () => (
-    <Animated.View
-      entering={SlideInLeft.duration(250)}
-      exiting={SlideOutLeft.duration(200)}
-      style={styles.modeContainer}
+  // ── Render: Books mode ────────────────────────────────────────────────
+
+  const renderBooksContent = () => (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={styles.scrollContent}
     >
+      {renderSuggestions()}
+      {renderBookChips(OT_BOOKS, 'Old Testament')}
+      {renderBookChips(NT_BOOKS, 'New Testament')}
+    </ScrollView>
+  );
+
+  // ── Render: Chapters mode ─────────────────────────────────────────────
+
+  const renderChaptersContent = () => {
+    if (!selectedBook) return null;
+    return (
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
       >
-        {renderSuggestions()}
-        {renderBookChips(OT_BOOKS, 'Old Testament', otChipBg)}
-        {renderBookChips(NT_BOOKS, 'New Testament', ntChipBg)}
-      </ScrollView>
-    </Animated.View>
-  );
-
-  const renderChaptersMode = () => {
-    if (!selectedBook) return null;
-
-    return (
-      <Animated.View
-        entering={SlideInRight.duration(250)}
-        exiting={SlideOutRight.duration(200)}
-        style={styles.modeContainer}
-      >
-        {/* Breadcrumb */}
-        <View style={styles.breadcrumb}>
-          <TouchableOpacity
-            onPress={handleBackToBooks}
-            hitSlop={12}
-            accessibilityLabel="Back to book list"
-            accessibilityRole="button"
-            style={styles.breadcrumbBack}
-          >
-            <CaretLeftIcon
-              size={16}
-              color={colors.textSubtle}
-              weight="light"
-            />
-          </TouchableOpacity>
-          <Text style={[styles.breadcrumbText, { color: colors.text }]}>
-            {selectedBook.name}
-          </Text>
-        </View>
-
-        {/* Chapter grid */}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.chapterGrid}>
-            {Array.from(
-              { length: selectedBook.chapterCount },
-              (_, i) => i + 1,
-            ).map((ch) => {
-              const isCurrentChapter =
-                currentBookId === selectedBook.id &&
-                currentChapter === ch;
-
-              return (
-                <TouchableOpacity
-                  key={ch}
-                  onPress={() => handleChapterSelect(ch)}
+        <View style={styles.chipGrid}>
+          {Array.from({ length: selectedBook.chapterCount }, (_, i) => i + 1).map((ch) => {
+            const isCurrent = currentBookId === selectedBook.id && currentChapter === ch;
+            return (
+              <TouchableOpacity
+                key={ch}
+                onPress={() => handleChapterSelect(ch)}
+                style={[
+                  styles.numberChip,
+                  { backgroundColor: chipBg },
+                  isCurrent && { borderWidth: 1.5, borderColor: colors.accent },
+                ]}
+                accessibilityLabel={`Chapter ${ch}${isCurrent ? ', current chapter' : ''}`}
+              >
+                <Text
                   style={[
-                    styles.chapterCell,
-                    {
-                      backgroundColor: isDark
-                        ? 'rgba(255,255,255,0.06)'
-                        : 'rgba(0,0,0,0.04)',
-                    },
-                    isCurrentChapter && {
-                      borderWidth: 1.5,
-                      borderColor: colors.accent,
-                    },
+                    styles.numberText,
+                    { color: colors.text },
+                    isCurrent && { fontFamily: FontFamily.uiMedium },
                   ]}
-                  accessibilityLabel={`Chapter ${ch}${isCurrentChapter ? ', current chapter' : ''}`}
-                  accessibilityRole="button"
                 >
-                  <Text
-                    style={[
-                      styles.chapterNumber,
-                      { color: colors.text },
-                      isCurrentChapter && {
-                        fontFamily: FontFamily.uiMedium,
-                      },
-                    ]}
-                  >
-                    {ch}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </Animated.View>
+                  {ch}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
     );
   };
 
-  // ── Main render ─────────────────────────────────────────────────────────
+  // ── Render: Verses mode ───────────────────────────────────────────────
+
+  const renderVersesContent = () => {
+    if (!selectedBook || verseCount === 0) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.textSubtle} />
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.chipGrid}>
+          {Array.from({ length: verseCount }, (_, i) => i + 1).map((v) => (
+            <TouchableOpacity
+              key={v}
+              onPress={() => handleVerseSelect(v)}
+              style={[styles.numberChip, { backgroundColor: chipBg }]}
+              accessibilityLabel={`Verse ${v}`}
+            >
+              <Text style={[styles.numberText, { color: colors.text }]}>{v}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  };
+
+  // ── Main render ───────────────────────────────────────────────────────
 
   return (
-    <>
-      {/* Dark overlay */}
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-        accessibilityLabel="Close navigator"
-        accessibilityRole="button"
-      />
-
-      {/* Bottom sheet */}
-      <Animated.View
-        entering={SlideInDown.springify().damping(20).stiffness(200)}
-        exiting={SlideOutDown.duration(180)}
-        style={[
-          styles.container,
-          {
-            backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-            shadowColor: '#000',
-            maxHeight: SHEET_MAX_HEIGHT,
-          },
-        ]}
-      >
-        {/* Drag handle */}
-        <View style={styles.handleRow}>
-          <View
-            style={[
-              styles.handle,
-              {
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.15)'
-                  : 'rgba(0,0,0,0.12)',
-              },
-            ]}
-          />
+    <View
+      style={[
+        styles.container,
+        {
+          backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+          paddingTop: insets.top + 4,
+          paddingBottom: insets.bottom,
+        },
+      ]}
+    >
+      {/* Header — no title text, just back/close buttons */}
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeft}>
+          {mode !== 'books' && (
+            <TouchableOpacity
+              onPress={handleBack}
+              accessibilityLabel="Back"
+              hitSlop={8}
+              style={styles.backButton}
+            >
+              <CaretLeftIcon size={20} color={colors.text} weight="light" />
+            </TouchableOpacity>
+          )}
         </View>
+        <TouchableOpacity
+          onPress={onClose}
+          accessibilityLabel="Close navigator"
+          style={[styles.closeButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+          hitSlop={8}
+        >
+          <XIcon size={16} color={colors.textSubtle} weight="bold" />
+        </TouchableOpacity>
+      </View>
 
-        {/* Search bar */}
-        {renderSearchBar()}
+      {/* Search bar (always visible) */}
+      {renderSearchBar()}
 
-        {/* Content area */}
-        {mode === 'books' && renderBooksMode()}
-        {mode === 'chapters' && renderChaptersMode()}
-      </Animated.View>
-    </>
+      {/* Step tabs (below search) */}
+      <StepTabs activeIndex={tabIndex} onTabPress={handleTabPress} colors={colors} isDark={isDark} />
+
+      {/* Content — instant swap */}
+      <View style={styles.contentArea}>
+        {mode === 'books' && renderBooksContent()}
+        {mode === 'chapters' && renderChaptersContent()}
+        {mode === 'verses' && renderVersesContent()}
+      </View>
+    </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    zIndex: 99,
-  },
   container: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     zIndex: 100,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     paddingHorizontal: 16,
-    paddingBottom: 20,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 12,
   },
-  handleRow: {
+
+  // Header
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 18,
+  },
+  backButton: {
+    padding: 4,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Step tabs
+  tabBar: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    marginBottom: 12,
+    position: 'relative',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    zIndex: 1,
+  },
+  tabLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
 
   // Search bar
@@ -571,9 +622,7 @@ const styles = StyleSheet.create({
   },
 
   // Suggestions
-  suggestionsContainer: {
-    marginBottom: 12,
-  },
+  suggestionsContainer: { marginBottom: 12 },
   suggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -582,14 +631,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 4,
   },
-  suggestionIcon: {
-    marginRight: 10,
-  },
-  suggestionText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 15,
-    flex: 1,
-  },
+  suggestionIcon: { marginRight: 10 },
+  suggestionText: { fontFamily: FontFamily.ui, fontSize: 15, flex: 1 },
 
   // Search results
   searchResultRow: {
@@ -597,34 +640,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  searchRef: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 13,
-    marginBottom: 3,
-  },
-  searchSnippet: {
-    fontFamily: FontFamily.ui,
-    fontSize: 14,
-    lineHeight: 20,
-    opacity: 0.85,
-  },
-  searchLoadingRow: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
+  searchRef: { fontFamily: FontFamily.uiMedium, fontSize: 13, marginBottom: 3 },
+  searchSnippet: { fontFamily: FontFamily.ui, fontSize: 14, lineHeight: 20, opacity: 0.85 },
+  searchLoadingRow: { paddingVertical: 16, alignItems: 'center' },
 
-  // Mode container
-  modeContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 16,
-  },
+  // Content area
+  contentArea: { flex: 1 },
+  scrollContent: { paddingBottom: 16 },
+  loadingContainer: { paddingTop: 60, alignItems: 'center' },
 
   // Book sections
-  bookSection: {
-    marginBottom: 16,
-  },
+  bookSection: { marginBottom: 16 },
   sectionLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 12,
@@ -633,6 +659,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingHorizontal: 4,
   },
+
+  // Shared chip grid (books, chapters, verses all use this)
   chipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -652,36 +680,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Breadcrumb
-  breadcrumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
+  // Number chips (chapters + verses) — same flex-fill as book chips
+  numberChip: {
+    minWidth: '12%',
+    flexGrow: 1,
+    paddingVertical: 12,
     paddingHorizontal: 4,
-  },
-  breadcrumbBack: {
-    padding: 4,
-    marginRight: 8,
-  },
-  breadcrumbText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 16,
-  },
-
-  // Chapter grid
-  chapterGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  chapterCell: {
-    width: 46,
-    height: 46,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chapterNumber: {
+  numberText: {
     fontFamily: FontFamily.ui,
     fontSize: 15,
   },

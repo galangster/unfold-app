@@ -83,6 +83,12 @@ export default function BibleHomeScreen() {
     );
   }
 
+  // Blank screen while auto-navigating to reader on first mount
+  // Prevents the book picker from flashing for one frame
+  if (!hasAutoNavigated.current) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}

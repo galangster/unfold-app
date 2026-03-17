@@ -4,8 +4,6 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
-  FadeInDown,
-  FadeInUp,
   FadeOut,
   useSharedValue,
   useAnimatedStyle,
@@ -34,7 +32,6 @@ import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
-import { FeatureOnboarding } from '@/components/FeatureOnboarding';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { AccentGlow } from '@/components/AccentGlow';
@@ -48,6 +45,7 @@ import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -161,15 +159,20 @@ const RevealChar = React.memo(({ char, animDelay }: { char: string; animDelay: n
     return () => { cancelAnimation(opacity); cancelAnimation(colorProgress); };
   }, [animDelay]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
+  const containerStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
+  }));
+
+  const textColorStyle = useAnimatedStyle(() => ({
     color: interpolateColor(colorProgress.value, [0, 1], ['#FFFFFF', GOLD]),
   }));
 
   return (
-    <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 56, letterSpacing: -1.5 }, animatedStyle]}>
-      {char}
-    </Animated.Text>
+    <Animated.View style={containerStyle}>
+      <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 56, letterSpacing: -1.5 }, textColorStyle]}>
+        {char}
+      </Animated.Text>
+    </Animated.View>
   );
 });
 
@@ -228,7 +231,7 @@ function NotificationCard({
 
   return (
     <Animated.View
-      entering={entering(FadeInDown.duration(500).delay(delay))}
+      entering={entering(FadeIn.duration(400).delay(delay))}
       exiting={exiting(FadeOut.duration(300))}
       style={{ paddingHorizontal: 24, marginTop: 12 }}
     >
@@ -354,7 +357,6 @@ export default function HomeScreen() {
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
-  const hasSeenFeatureOnboarding = useUnfoldStore((s) => s.hasSeenFeatureOnboarding);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
@@ -746,16 +748,19 @@ export default function HomeScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header — greeting + orb */}
+          {/* Header — greeting + avatar */}
           <Animated.View
-            entering={entering(FadeInDown.delay(0).duration(600))}
+            entering={entering(FadeIn.duration(400))}
             style={{
               paddingHorizontal: 24,
               paddingTop: 20,
               paddingBottom: 12,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
             }}
           >
-            <View>
+            <View style={{ flex: 1 }}>
               <Text
                 style={{
                   fontFamily: FontFamily.bodyItalic,
@@ -779,6 +784,12 @@ export default function HomeScreen() {
                 </Text>
                 <StreakDisplay compact hideDayLabel />
               </View>
+            </View>
+            <View style={{ marginTop: 4 }}>
+              <ProfileAvatar
+                size={38}
+                onPress={() => router.push('/(tabs)/(you)')}
+              />
             </View>
           </Animated.View>
 
@@ -817,7 +828,7 @@ export default function HomeScreen() {
           {/* Resume card */}
           {shouldShowResumeCard && resumeContext && resumeDevotional && (
             <Animated.View
-              entering={entering(FadeInDown.duration(520).delay(80))}
+              entering={entering(FadeIn.duration(400).delay(80))}
               style={{ paddingHorizontal: 24, marginTop: 16 }}
             >
               <TouchableOpacity activeOpacity={0.7}
@@ -880,7 +891,7 @@ export default function HomeScreen() {
 
           {/* Main Journey Card */}
           <Animated.View
-            entering={entering(FadeInUp.delay(200).duration(600))}
+            entering={entering(FadeIn.delay(100).duration(400))}
             style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
           >
             {isJourneyComplete ? (
@@ -1216,7 +1227,7 @@ export default function HomeScreen() {
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
             <Animated.View
-              entering={entering(FadeInDown.duration(600).delay(400))}
+              entering={entering(FadeIn.duration(400).delay(200))}
               style={{ paddingHorizontal: 24, marginTop: 20 }}
             >
               <View
@@ -1322,7 +1333,7 @@ export default function HomeScreen() {
 
           {/* Streak Box */}
           <Animated.View
-            entering={entering(FadeInUp.delay(350).duration(600))}
+            entering={entering(FadeIn.delay(200).duration(400))}
             style={{ paddingHorizontal: 24, marginTop: 24 }}
           >
             <StreakBox
@@ -1346,8 +1357,6 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
-
-      {!hasSeenFeatureOnboarding && <FeatureOnboarding />}
 
       {currentDevotional && (
         <CheckInSheet

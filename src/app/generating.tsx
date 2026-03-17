@@ -41,6 +41,7 @@ import {
   sendDay1ReadyNotification,
 } from '@/lib/notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
+import { logger } from '@/lib/logger';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -507,7 +508,7 @@ export default function GeneratingScreen() {
           });
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          console.error('Progressive generation failed:', errorMessage);
+          logger.error('Progressive generation failed:', errorMessage);
           Sentry.captureException(err, {
             tags: { phase: 'progressive-generation' },
             extra: { devotionalId, devotionalLength: user.devotionalLength },
@@ -681,7 +682,7 @@ export default function GeneratingScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error('Generation failed:', errorMessage);
+        logger.error('Generation failed:', errorMessage);
         failGenerationSession(errorMessage);
         void logBugError('generation', err, {
           devotionalId,

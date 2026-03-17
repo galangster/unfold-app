@@ -12,6 +12,7 @@
  *   AsyncStorage → MMKV (unencrypted, id: 'unfold-store')
  *   → MMKV (encrypted, id: 'unfold-store-v2')
  */
+import 'react-native-get-random-values';
 import { MMKV } from 'react-native-mmkv';
 import type { StateStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,12 +38,10 @@ function getOrCreateEncryptionKey(): string | undefined {
     let key = SecureStore.getItem(ENCRYPTION_KEY_ID);
     if (key) return key;
 
-    // Generate a random 32-char hex key
-    const chars = '0123456789abcdef';
-    key = '';
-    for (let i = 0; i < 32; i++) {
-      key += chars[Math.floor(Math.random() * chars.length)];
-    }
+    // Generate a cryptographically secure 32-char hex key
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    key = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 
     SecureStore.setItem(ENCRYPTION_KEY_ID, key);
     logger.log('[MMKV] Created new encryption key in SecureStore');
@@ -115,6 +114,14 @@ function migrateData(): void {
 
 // Run migration on module load
 migrateData();
+
+/**
+ * Returns the MMKV encryption key (already resolved at module load).
+ * Other MMKV cache instances can reuse this to avoid creating separate keys.
+ */
+export function getSharedEncryptionKey(): string | undefined {
+  return encryptionKey;
+}
 
 /**
  * Zustand-compatible storage adapter using MMKV.

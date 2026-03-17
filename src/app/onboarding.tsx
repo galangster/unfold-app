@@ -51,6 +51,9 @@ import {
   getRandomDurationSubtext,
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
+import { getOfferings, purchasePackage, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import type { PurchasesPackage } from 'react-native-purchases';
+import { useQuery, useMutation } from '@tanstack/react-query';
 
 // Types with subject selection
 const TYPES_WITH_SUBJECT_SELECTION = ['book_study', 'character_study'];
@@ -297,6 +300,31 @@ export default function OnboardingScreen() {
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
 
+  // RevenueCat — fetch offerings for direct purchase from premiumShowcase
+  const { data: offeringsResult } = useQuery({
+    queryKey: ['revenuecat', 'offerings'],
+    queryFn: getOfferings,
+    enabled: isRevenueCatEnabled(),
+  });
+  const rcOfferings = offeringsResult?.ok ? offeringsResult.data : null;
+  const yearlyPackage = rcOfferings?.current?.availablePackages.find(
+    (pkg) => pkg.identifier === '$rc_annual'
+  );
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '$49.99';
+  const yearlyTrialDuration = (() => {
+    const intro = yearlyPackage?.product.introPrice;
+    if (!intro || intro.price !== 0) return '7-day';
+    const count = intro.periodNumberOfUnits;
+    const unit = intro.periodUnit.toLowerCase();
+    if (unit === 'day') return `${count}-day`;
+    if (unit === 'week') return `${count * 7}-day`;
+    return `${count}-${unit}`;
+  })();
+
+  const trialPurchaseMutation = useMutation({
+    mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
+  });
+
   // Mirror-back text — memoized so it doesn't change on re-render
   const mirrorBackText = useMemo(() => {
     const themeName = (data?.selectedThemes?.length ?? 0) > 0
@@ -352,6 +380,12 @@ export default function OnboardingScreen() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isAppleAvailable, setIsAppleAvailable] = useState(true);
   const [signInError, setSignInError] = useState<string | null>(null);
+
+  // Track Apple auth data collected during onboarding sign-in step.
+  // This is needed because updateUser() is a no-op when user is null (first-time users),
+  // so auth data from handleOnboardingAppleSignIn would be silently lost.
+  // We store it here and merge it into completeOnboarding's setUser/updateUser call.
+  const pendingAuthDataRef = useRef<Partial<UserProfile> | null>(null);
   
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
@@ -377,6 +411,7 @@ export default function OnboardingScreen() {
   // Track whether the user has already seen the paywall during onboarding
   const hasSeenPaywallRef = useRef(false);
   const isPremium = existingUser?.isPremium ?? false;
+  const [purchasedDuringOnboarding, setPurchasedDuringOnboarding] = useState(false);
 
   // Transition state for animations
   const isTransitioningRef = useRef(false);
@@ -612,30 +647,32 @@ export default function OnboardingScreen() {
     inputOpacity.value = withTiming(1, { duration: 300 });
   };
 
-  // Complete onboarding and navigate to generating screen
-  const completeOnboarding = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Persist ALL collected data to the store
-    const userUpdates: Partial<UserProfile> = {
-      name: data.name,
-      aboutMe: data.aboutMe,
-      currentSituation: data.currentSituation,
-      emotionalState: data.emotionalState,
-      spiritualSeeking: data.spiritualSeeking,
-      readingDuration: data.readingDuration,
-      devotionalLength: data.devotionalLength,
-      reminderTime: data.reminderTime,
-      bibleTranslation: data.bibleTranslation as BibleTranslation,
-      hasCompletedOnboarding: true,
-      writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
-      ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
-      ...(data.selectedType ? { selectedType: data.selectedType } : {}),
-      ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
-    };
+  // Save all onboarding data to the store (without navigating).
+  // Called by completeOnboarding and also before pushing to paywall so the
+  // paywall can navigate directly to /generating on purchase success.
+  const saveOnboardingData = useCallback((premiumOverride?: boolean) => {
+    const isPrem = premiumOverride ?? purchasedDuringOnboarding;
+    const pendingAuth = pendingAuthDataRef.current ?? {};
 
     if (existingUser) {
-      updateUser(userUpdates);
+      updateUser({
+        name: data.name,
+        aboutMe: data.aboutMe,
+        currentSituation: data.currentSituation,
+        emotionalState: data.emotionalState,
+        spiritualSeeking: data.spiritualSeeking,
+        readingDuration: data.readingDuration,
+        devotionalLength: data.devotionalLength,
+        reminderTime: data.reminderTime,
+        bibleTranslation: data.bibleTranslation as BibleTranslation,
+        hasCompletedOnboarding: true,
+        writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
+        ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
+        ...(data.selectedType ? { selectedType: data.selectedType } : {}),
+        ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
+        ...pendingAuth,
+        ...(isPrem ? { isPremium: true } : {}),
+      });
     } else {
       setUser({
         name: data.name,
@@ -649,7 +686,7 @@ export default function OnboardingScreen() {
         reminderTime: data.reminderTime,
         hasCompletedOnboarding: true,
         hasCompletedStyleOnboarding: false,
-        isPremium: false,
+        isPremium: isPrem,
         fontSize: 'medium',
         writingStyle: { tone: data.tone, depth: data.depth, faithBackground: data.faithBackground, lifeStage: data.lifeStage },
         bibleTranslation: data.bibleTranslation as BibleTranslation,
@@ -660,18 +697,17 @@ export default function OnboardingScreen() {
         ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
         ...(data.selectedType ? { selectedType: data.selectedType } : {}),
         ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
+        ...pendingAuth,
       });
     }
+  }, [data, existingUser, updateUser, setUser, purchasedDuringOnboarding]);
 
+  // Complete onboarding: save data + navigate to generating screen
+  const completeOnboarding = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    saveOnboardingData();
     router.replace('/generating');
-  }, [router, data, existingUser, updateUser, setUser]);
-
-  // Auto-advance after successful paywall subscription
-  useEffect(() => {
-    if (isPremium && hasSeenPaywallRef.current && currentStepId === 'premiumShowcase') {
-      completeOnboarding();
-    }
-  }, [isPremium, currentStepId, completeOnboarding]);
+  }, [router, saveOnboardingData]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -714,13 +750,18 @@ export default function OnboardingScreen() {
         Analytics.setUserId(result.user.uid);
         Analytics.setUserProperty('auth_provider', 'apple');
 
-        updateUser({
+        const authData: Partial<UserProfile> = {
           authUserId: result.user.uid,
           authProvider: 'apple',
           authEmail: result.user.email,
           authDisplayName: result.user.displayName,
           hasSeenSignInPrompt: true,
-        });
+        };
+
+        // Store auth data in ref so completeOnboarding can pick it up
+        // even if user profile hasn't been created yet (updateUser is a no-op when user is null)
+        pendingAuthDataRef.current = authData;
+        updateUser(authData);
 
         logger.log('[Onboarding] Successfully signed in with Apple', { userId: result.user.uid });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -771,10 +812,14 @@ export default function OnboardingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
 
-    updateUser({
+    const skipData: Partial<UserProfile> = {
       hasSeenSignInPrompt: true,
       signInPromptCount: (existingUser?.signInPromptCount ?? 0) + 1,
-    });
+    };
+
+    // Store in ref so completeOnboarding can pick it up (updateUser is no-op when user is null)
+    pendingAuthDataRef.current = skipData;
+    updateUser(skipData);
 
     logger.log('[Onboarding] User skipped sign-in during onboarding');
 
@@ -2178,17 +2223,17 @@ export default function OnboardingScreen() {
         { title: 'Deeper personalization', description: 'Your companion learns faster' },
       ];
       return (
-        <View style={{ gap: 28, marginTop: 8 }}>
-          <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: 16 }}>
+        <View style={{ gap: 16, marginTop: 4 }}>
+          <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: 8 }}>
             {features.map((feature, index) => (
               <Animated.View
                 key={feature.title}
-                entering={FadeIn.delay(300 + index * 120).duration(500)}
+                entering={FadeIn.delay(300 + index * 80).duration(500)}
                 style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 14,
-                  paddingVertical: 14, paddingHorizontal: 16,
+                  flexDirection: 'row', alignItems: 'center', gap: 12,
+                  paddingVertical: 10, paddingHorizontal: 14,
                   backgroundColor: colors.accent + '0A',
-                  borderRadius: 14,
+                  borderRadius: 12,
                 }}
               >
                 <View style={{
@@ -2203,27 +2248,56 @@ export default function OnboardingScreen() {
             ))}
           </Animated.View>
 
-          {/* CTA: Start free trial */}
+          {/* CTA: Start free trial — purchases directly via RevenueCat */}
           <Animated.View entering={FadeIn.delay(800).duration(400)}>
             <TouchableOpacity activeOpacity={0.7}
-              onPress={() => {
+              disabled={trialPurchaseMutation.isPending}
+              onPress={async () => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 hasSeenPaywallRef.current = true;
-                router.push({ pathname: '/paywall', params: { source: 'onboarding_showcase' } });
+                if (!yearlyPackage) {
+                  // Fallback: if offerings haven't loaded, go to full paywall
+                  saveOnboardingData();
+                  router.push({ pathname: '/paywall', params: { source: 'onboarding' } });
+                  return;
+                }
+                const result = await trialPurchaseMutation.mutateAsync(yearlyPackage);
+                if (result.ok) {
+                  updateUser({ isPremium: true });
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  completeOnboarding();
+                }
               }}
             >
               <View style={{
                 backgroundColor: colors.accent,
-                paddingVertical: 18, paddingHorizontal: 24, borderRadius: 16,
+                paddingVertical: 16, paddingHorizontal: 24, borderRadius: 16,
                 alignItems: 'center',
                 shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.5, shadowRadius: 20, elevation: 8,
+                opacity: trialPurchaseMutation.isPending ? 0.7 : 1,
               }}>
-                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>
-                  Start 7-day free trial
-                </Text>
+                {trialPurchaseMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>
+                    Start {yearlyTrialDuration} free trial
+                  </Text>
+                )}
               </View>
             </TouchableOpacity>
+
+            {/* Billing terms */}
+            <Text style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 12,
+              color: colors.textSubtle,
+              textAlign: 'center',
+              marginTop: 10,
+              lineHeight: 18,
+            }}>
+              After your free trial, {yearlyPrice}/year. Cancel anytime.
+            </Text>
           </Animated.View>
 
           {/* Skip option */}
@@ -2233,7 +2307,7 @@ export default function OnboardingScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 completeOnboarding();
               }}
-              style={{ alignItems: 'center', paddingVertical: 12 }}
+              style={{ alignItems: 'center', paddingVertical: 8 }}
             >
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>
                 Maybe later

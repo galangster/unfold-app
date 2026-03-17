@@ -17,7 +17,32 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, SoapResponses } from '@/lib/store';
 import { format } from 'date-fns';
 
-const SOAP_LABELS: { key: keyof SoapResponses; label: string; icon: React.ReactNode }[] = [];
+const SOAP_LABELS: { key: keyof SoapResponses; label: string; description: string; icon: React.ReactNode }[] = [
+  {
+    key: 'scripture',
+    label: 'Scripture',
+    description: 'What does the passage say?',
+    icon: <BookOpenIcon size={14} color="currentColor" weight="light" />,
+  },
+  {
+    key: 'observation',
+    label: 'Observation',
+    description: 'What stands out to me?',
+    icon: <EyeIcon size={14} color="currentColor" weight="light" />,
+  },
+  {
+    key: 'application',
+    label: 'Application',
+    description: 'How does this apply to my life?',
+    icon: <PencilSimpleIcon size={14} color="currentColor" weight="light" />,
+  },
+  {
+    key: 'prayer',
+    label: 'Prayer',
+    description: 'What is my response to God?',
+    icon: <HandsPrayingIcon size={14} color="currentColor" weight="light" />,
+  },
+];
 
 function SoapSectionDisplay({
   soapKey,

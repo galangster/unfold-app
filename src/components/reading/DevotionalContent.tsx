@@ -154,9 +154,18 @@ export function DevotionalContent({
       >
         {/* Reference + bookmark */}
         <View style={dcStyles.scriptureRefRow}>
-          <Text style={[dcStyles.scriptureRef, { color: colors.accent }]}>
-            {day.scriptureReference}
-          </Text>
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onScriptureTap?.(day.scriptureReference);
+            }}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          >
+            <Text style={[dcStyles.scriptureRef, { color: colors.accent }]}>
+              {day.scriptureReference}
+            </Text>
+          </TouchableOpacity>
 
           {onToggleBookmark && (
             <TouchableOpacity activeOpacity={0.7}
@@ -212,9 +221,18 @@ export function DevotionalContent({
           </View>
           {day.crossReferences.map((ref) => (
             <View key={ref.reference} style={dcStyles.crossRefItem}>
-              <Text style={[dcStyles.crossRefReference, { color: colors.accent }]}>
-                {ref.reference}
-              </Text>
+              <TouchableOpacity
+                activeOpacity={0.6}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  onScriptureTap?.(ref.reference);
+                }}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              >
+                <Text style={[dcStyles.crossRefReference, { color: colors.accent }]}>
+                  {ref.reference}
+                </Text>
+              </TouchableOpacity>
               <Text
                 style={{
                   fontFamily: readingFont.bodyItalic,

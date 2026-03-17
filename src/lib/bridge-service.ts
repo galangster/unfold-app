@@ -14,12 +14,17 @@ import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { buildPromptWithPersona } from '@/constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 
 // ---------------------------------------------------------------------------
 // MMKV cache (dedicated instance — not the Zustand store)
 // ---------------------------------------------------------------------------
 
-const bridgeCache = new MMKV({ id: 'unfold-bridge-cache' });
+const encKey = getSharedEncryptionKey();
+const bridgeCache = encKey
+  ? new MMKV({ id: 'unfold-bridge-cache', encryptionKey: encKey })
+  : new MMKV({ id: 'unfold-bridge-cache' });
 
 const LOG_PREFIX = '[Bridge]';
 
@@ -274,7 +279,19 @@ export async function generateBridge(
     return sanitizeBridgeText(cached);
   }
 
-  // 2. Build the prompt and send as Anthropic-format payload to the backend
+  // 2. Rate limit check before network call
+  try {
+    const rateCheck = await checkRateLimit('bridge');
+    if (!rateCheck.allowed) {
+      logger.warn(`${LOG_PREFIX} Rate limit reached, returning null`);
+      return null;
+    }
+  } catch (rateLimitError) {
+    // Fail open — don't block bridge if rate limit storage fails
+    logger.warn(`${LOG_PREFIX} Rate limit check failed, proceeding:`, rateLimitError);
+  }
+
+  // 3. Build the prompt and send as Anthropic-format payload to the backend
   const systemPrompt = buildPromptWithPersona('full', BRIDGE_INSTRUCTIONS);
   const userMessage = buildBridgeUserMessage(input);
 
@@ -289,6 +306,7 @@ export async function generateBridge(
 
     const cleanText = sanitizeBridgeText(result.bridgeText);
     setCachedBridge(cacheKey, cleanText);
+    await incrementRateLimit('bridge');
     return cleanText;
   } catch (error) {
     logger.error(

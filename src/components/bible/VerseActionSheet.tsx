@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native';
-import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { CopyIcon, ShareNetworkIcon, XIcon } from 'phosphor-react-native';
@@ -84,14 +84,14 @@ export function VerseActionSheet({
 
   return (
     <Animated.View
-      entering={SlideInDown.springify().damping(20).stiffness(200)}
-      exiting={SlideOutDown.duration(180)}
+      entering={FadeIn.duration(150).delay(30)}
+      exiting={FadeOut.duration(120)}
       style={[
         styles.container,
         {
           backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
           shadowColor: '#000',
-          bottom: tabBarHeight,
+          bottom: tabBarHeight + 16,
           paddingBottom: 16,
         },
       ]}

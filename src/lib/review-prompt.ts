@@ -1,5 +1,6 @@
 import * as StoreReview from 'expo-store-review';
 import { Platform } from 'react-native';
+import { logger } from '@/lib/logger';
 
 interface ReviewPromptConfig {
   // Minimum days completed before eligible
@@ -13,9 +14,9 @@ interface ReviewPromptConfig {
 }
 
 const DEFAULT_CONFIG: ReviewPromptConfig = {
-  minDaysCompleted: 3,
-  minJournalEntries: 1,
-  cooldownDays: 90,
+  minDaysCompleted: 1,   // First day completion — capture excitement early
+  minJournalEntries: 0,  // Don't require journaling
+  cooldownDays: 60,
   maxPromptsPerYear: 3,
 };
 
@@ -55,6 +56,10 @@ export class ReviewPromptManager {
     totalDaysCompleted: number;
     journalEntryCount: number;
     justCompletedDay: boolean;
+    /** Current streak length */
+    currentStreak?: number;
+    /** True if user just finished the last day of a series */
+    justCompletedSeries?: boolean;
   }): boolean {
     // Don't ask if already reviewed
     if (this.state.hasReviewed) return false;
@@ -69,28 +74,42 @@ export class ReviewPromptManager {
       return false;
     }
 
-    // Check engagement thresholds
-    const hasEnoughDays = options.totalDaysCompleted >= this.config.minDaysCompleted;
-    const hasEnoughJournal = options.journalEntryCount >= this.config.minJournalEntries;
-
     // Only prompt on actual completion moments (not random)
     if (!options.justCompletedDay) {
       return false;
     }
 
-    // Progressive engagement: Day 3 OR (Day 1 + journal entry)
-    const isDay3Milestone = options.totalDaysCompleted === 3;
-    const isAlternativeMilestone = 
-      options.totalDaysCompleted >= 1 && 
-      options.journalEntryCount >= 1 &&
-      options.totalDaysCompleted < 3;
-
-    // Don't ask on the same day we already asked
+    // Don't ask on the same day count we already asked
     if (this.state.daysCompletedAtLastPrompt === options.totalDaysCompleted) {
       return false;
     }
 
-    return (isDay3Milestone || isAlternativeMilestone) && (hasEnoughDays || hasEnoughJournal);
+    // ── High-dopamine trigger moments (ordered by impact) ──
+
+    // 1. First day completion — user just read their personalized devotional
+    //    for the first time. Peak "wow, this was made for me" moment.
+    //    This is the 3-5 minute mark. Capture the excitement.
+    if (options.totalDaysCompleted === 1) {
+      return true;
+    }
+
+    // 2. Series completion — just finished an entire journey
+    if (options.justCompletedSeries) {
+      return true;
+    }
+
+    // 3. Streak milestones — 7, 14, 30 day streaks
+    const streak = options.currentStreak ?? 0;
+    if (streak === 7 || streak === 14 || streak === 30) {
+      return true;
+    }
+
+    // 4. Day 3 — commitment signal (if first-day prompt was dismissed/cooldown)
+    if (options.totalDaysCompleted === 3) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -102,7 +121,7 @@ export class ReviewPromptManager {
       // Check if native review is available
       const isAvailable = await StoreReview.isAvailableAsync();
       if (!isAvailable) {
-        console.log('[ReviewPrompt] Native review not available');
+        logger.log('[ReviewPrompt] Native review not available');
         return false;
       }
 
@@ -114,7 +133,7 @@ export class ReviewPromptManager {
       
       return true;
     } catch (error) {
-      console.error('[ReviewPrompt] Error showing prompt:', error);
+      logger.error('[ReviewPrompt] Error showing prompt:', error);
       return false;
     }
   }

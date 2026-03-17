@@ -15,7 +15,18 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  withDelay,
+  interpolateColor,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   XIcon,
@@ -30,7 +41,6 @@ import {
   HandsPrayingIcon,
   PencilSimpleIcon,
   PlusIcon,
-  CheckCircleIcon as CheckCircleFillIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -39,6 +49,7 @@ import { isOnline } from '@/lib/network-error-handler';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -81,6 +92,50 @@ function SoapIcon({ name, size, color }: { name: string; size: number; color: st
   }
 }
 
+/** Animated prayer circle — fills with accent color + checkmark when answered */
+function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
+  isAnswered: boolean;
+  accentColor: string;
+  hintColor: string;
+}) {
+  const fillProgress = useSharedValue(isAnswered ? 1 : 0);
+  const checkScale = useSharedValue(isAnswered ? 1 : 0);
+
+  useEffect(() => {
+    if (isAnswered) {
+      fillProgress.value = withTiming(1, { duration: 300 });
+      checkScale.value = withDelay(100, withSpring(1, { damping: 8, stiffness: 300, mass: 0.5 }));
+    } else {
+      fillProgress.value = withTiming(0, { duration: 200 });
+      checkScale.value = withTiming(0, { duration: 150 });
+    }
+  }, [isAnswered, fillProgress, checkScale]);
+
+  const circleStyle = useAnimatedStyle(() => ({
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: fillProgress.value > 0.5 ? 0 : 1.5,
+    borderColor: hintColor,
+    backgroundColor: interpolateColor(fillProgress.value, [0, 1], ['transparent', accentColor]),
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  }));
+
+  const checkStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
+    opacity: checkScale.value,
+  }));
+
+  return (
+    <Animated.View style={circleStyle}>
+      <Animated.View style={checkStyle}>
+        <CheckIcon size={12} color="#fff" weight="bold" />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 export default function JournalScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -101,8 +156,15 @@ export default function JournalScreen() {
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  // Subscribe to journalEntries for reactive updates (prayer toggles, etc.)
+  const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
-  const existingEntry = getJournalEntry(devotionalId, dayNumber);
+  // Derive existingEntry from reactive journalEntries (not the stable getJournalEntry function)
+  // so that prayer toggles and other updates trigger re-renders
+  const existingEntry = useMemo(
+    () => journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber),
+    [journalEntries, devotionalId, dayNumber],
+  );
   const [content, setContent] = useState(existingEntry?.content ?? '');
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -376,12 +438,18 @@ export default function JournalScreen() {
   }, [newPrayerText, ensureEntry, addPrayerRequest]);
 
   const handleTogglePrayer = useCallback((prayerId: string) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const entryId = savedEntryIdRef.current;
-    if (entryId) {
-      togglePrayerAnswered(entryId, prayerId);
+    const entryId = savedEntryIdRef.current ?? ensureEntry();
+    if (!entryId) return;
+    // Find current prayer state to determine direction
+    const prayer = existingEntry?.prayerRequests?.find((p) => p.id === prayerId);
+    const willBeAnswered = !prayer?.isAnswered;
+    if (willBeAnswered) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  }, [togglePrayerAnswered]);
+    togglePrayerAnswered(entryId, prayerId);
+  }, [togglePrayerAnswered, ensureEntry, existingEntry]);
 
   // SOAP completion count
   const soapCompletedCount = useMemo(() => {
@@ -489,6 +557,20 @@ export default function JournalScreen() {
       return;
     }
 
+    // Rate limit check before network call
+    try {
+      const rateCheck = await checkRateLimit('go-deeper');
+      if (!rateCheck.allowed) {
+        logger.warn('[Go Deeper] Rate limit reached');
+        setDeeperError(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+    } catch (rateLimitError) {
+      // Fail open — don't block Go Deeper if rate limit storage fails
+      logger.warn('[Go Deeper] Rate limit check failed, proceeding:', rateLimitError);
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Keyboard.dismiss();
     setLoadingDeeper(true);
@@ -563,7 +645,7 @@ Their journal entry:
             try {
               parsed = JSON.parse(match[0]);
             } catch (innerErr) {
-              if (__DEV__) console.warn('[Go Deeper] Fallback JSON parse failed:', innerErr);
+              if (__DEV__) logger.warn('[Go Deeper] Fallback JSON parse failed:', innerErr);
               throw new Error('Could not parse response (fallback failed)');
             }
           } else {
@@ -573,6 +655,7 @@ Their journal entry:
       }
 
       if (Array.isArray(parsed) && parsed.length > 0) {
+        await incrementRateLimit('go-deeper');
         setDeeperPrompts(parsed.slice(0, 3));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
@@ -976,22 +1059,21 @@ Their journal entry:
                 >
                   <TouchableOpacity
                     onPress={() => handleTogglePrayer(prayer.id)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                     style={[
                       jStyles.prayerItemButton,
                       {
-                        backgroundColor: prayer.isAnswered ? colors.accent + '08' : 'transparent',
-                        borderColor: prayer.isAnswered ? colors.accent + '20' : colors.border + '40',
+                        backgroundColor: prayer.isAnswered ? colors.accent + '0D' : 'transparent',
+                        borderColor: prayer.isAnswered ? colors.accent + '30' : colors.border + '60',
                       },
                     ]}
                   >
-                    <View style={jStyles.prayerCheckWrapper}>
-                      {prayer.isAnswered ? (
-                        <CheckCircleFillIcon size={18} color={colors.accent} weight="fill" />
-                      ) : (
-                        <View style={[jStyles.prayerEmptyCircle, { borderColor: colors.textHint }]} />
-                      )}
-                    </View>
+                    <AnimatedPrayerCircle
+                      isAnswered={prayer.isAnswered}
+                      accentColor={colors.accent}
+                      hintColor={colors.textHint}
+                    />
                     <Text
                       style={[
                         jStyles.prayerText,
@@ -1014,7 +1096,7 @@ Their journal entry:
 
               {/* Add prayer input */}
               {showPrayerInput ? (
-                <Animated.View entering={FadeInDown.duration(250)} style={jStyles.prayerInputMargin}>
+                <Animated.View entering={FadeIn.duration(200)} style={jStyles.prayerInputMargin}>
                   <View style={[jStyles.prayerInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.accent + '30' }]}>
                     <TextInput
                       ref={prayerInputRef}
@@ -1026,28 +1108,42 @@ Their journal entry:
                       textAlignVertical="top"
                       autoFocus
                       style={[jStyles.prayerTextInput, { color: colors.text }]}
+                      onSubmitEditing={handleAddPrayer}
+                      blurOnSubmit
                     />
+                  </View>
+                  {/* Action buttons below input */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => { setShowPrayerInput(false); setNewPrayerText(''); }}
+                      activeOpacity={0.6}
+                      hitSlop={8}
+                    >
+                      <Text style={[jStyles.prayerCancelText, { color: colors.textSubtle }]}>
+                        Cancel
+                      </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleAddPrayer}
                       activeOpacity={0.6}
                       disabled={!newPrayerText.trim()}
-                      style={[jStyles.prayerSubmitButton, { backgroundColor: newPrayerText.trim() ? colors.accent : colors.border, opacity: newPrayerText.trim() ? 1 : 0.5 }]}
+                      hitSlop={8}
+                      style={{
+                        backgroundColor: newPrayerText.trim() ? colors.accent : colors.accent + '40',
+                        paddingHorizontal: 20,
+                        paddingVertical: 8,
+                        borderRadius: 16,
+                        opacity: newPrayerText.trim() ? 1 : 0.5,
+                      }}
                       accessibilityLabel="Add prayer"
                       accessibilityRole="button"
                       accessibilityState={{ disabled: !newPrayerText.trim() }}
                     >
-                      <CheckIcon size={16} color={newPrayerText.trim() ? '#fff' : colors.textHint} weight="bold" />
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: '#fff' }}>
+                        Add Prayer
+                      </Text>
                     </TouchableOpacity>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => { setShowPrayerInput(false); setNewPrayerText(''); }}
-                    activeOpacity={0.6}
-                    style={jStyles.prayerCancelButton}
-                  >
-                    <Text style={[jStyles.prayerCancelText, { color: colors.textSubtle }]}>
-                      Cancel
-                    </Text>
-                  </TouchableOpacity>
                 </Animated.View>
               ) : (
                 <TouchableOpacity
@@ -1386,15 +1482,7 @@ const jStyles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  prayerCheckWrapper: {
-    marginTop: 2,
-  },
-  prayerEmptyCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-  },
+  // prayerCheckWrapper and prayerEmptyCircle replaced by AnimatedPrayerCircle
   prayerText: {
     flex: 1,
     fontFamily: FontFamily.body,
@@ -1414,9 +1502,6 @@ const jStyles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     padding: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
   },
   prayerTextInput: {
     flex: 1,

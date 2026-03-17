@@ -102,7 +102,7 @@ if (isEnabled) {
     Purchases.configure({ apiKey: apiKey! });
     logger.log(`${LOG_PREFIX} SDK initialized successfully`);
   } catch (error) {
-    console.error(`${LOG_PREFIX} Failed to initialize:`, error);
+    logger.error(`${LOG_PREFIX} Failed to initialize:`, error);
   }
 }
 

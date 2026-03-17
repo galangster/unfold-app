@@ -105,7 +105,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
     return () => {
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
       // Stop any active recording when component unmounts
-      try { ExpoSpeechRecognitionModule.stop(); } catch {}
+      try { ExpoSpeechRecognitionModule.stop(); } catch (e) { /* cleanup on unmount — safe to ignore */ }
     };
   }, []);
 
@@ -149,7 +149,7 @@ export function SpeechToTextButton({ onTranscript, isActive = true }: SpeechToTe
           setErrorMessage('Voice input timed out. Try again.');
           if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
           errorTimerRef.current = setTimeout(() => setErrorMessage(''), 3000);
-          try { ExpoSpeechRecognitionModule.stop(); } catch {}
+          try { ExpoSpeechRecognitionModule.stop(); } catch (e) { /* timeout stop — safe to ignore */ }
         }
       }, 5000);
 

@@ -74,6 +74,7 @@
         "expo-haptics": "~55.0.8",
         "expo-image": "~55.0.5",
         "expo-image-manipulator": "~55.0.9",
+        "expo-image-picker": "~55.0.12",
         "expo-insights": "~55.0.10",
         "expo-keep-awake": "~55.0.4",
         "expo-linear-gradient": "~55.0.8",
@@ -1545,6 +1546,8 @@
     "expo-image-loader": ["expo-image-loader@55.0.0", "", { "peerDependencies": { "expo": "*" } }, "sha512-NOjp56wDrfuA5aiNAybBIjqIn1IxKeGJ8CECWZncQ/GzjZfyTYAHTCyeApYkdKkMBLHINzI4BbTGSlbCa0fXXQ=="],
 
     "expo-image-manipulator": ["expo-image-manipulator@55.0.9", "", { "dependencies": { "expo-image-loader": "~55.0.0" }, "peerDependencies": { "expo": "*" } }, "sha512-hEponYwRHwYlmYn2KTVr57U6i7dJ4NI6gYUT6LwxxLFspiev+ntlXL0e6M7qT0VIHMkLPtBcvP/z3+vaJCNgeQ=="],
+
+    "expo-image-picker": ["expo-image-picker@55.0.12", "", { "dependencies": { "expo-image-loader": "~55.0.0" }, "peerDependencies": { "expo": "*" } }, "sha512-ky8nzXTd5eLUDct5daAHng0xrWYRJyXfLCRmEdE9v/IUywYCnFU7aCnQ7PTQJvzGSzhePJJmP/POvTkVP//+qQ=="],
 
     "expo-insights": ["expo-insights@55.0.10", "", { "dependencies": { "expo-eas-client": "~55.0.2" }, "peerDependencies": { "expo": "*" } }, "sha512-Qkj2o/pwGw3CTzDvwxOoW3aVEm3tIfUa6q7elTDTSxFVZhxQDNLUxuRLxVSzGla7ACcBzEnmqos7E/8zGbTQXg=="],
 

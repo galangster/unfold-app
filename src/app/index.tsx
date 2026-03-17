@@ -1,4 +1,4 @@
-import { View, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -47,8 +47,11 @@ const RevealChar = React.memo(({
     };
   }, [animDelay]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
+  const containerStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
+  }));
+
+  const textColorStyle = useAnimatedStyle(() => ({
     color: interpolateColor(
       colorProgress.value,
       [0, 1],
@@ -57,18 +60,20 @@ const RevealChar = React.memo(({
   }));
 
   return (
-    <Animated.Text
-      style={[
-        {
-          fontFamily: FontFamily.display,
-          fontSize: 56,
-          letterSpacing: -1.5,
-        },
-        animatedStyle,
-      ]}
-    >
-      {char}
-    </Animated.Text>
+    <Animated.View style={containerStyle}>
+      <Animated.Text
+        style={[
+          {
+            fontFamily: FontFamily.display,
+            fontSize: 56,
+            letterSpacing: -1.5,
+          },
+          textColorStyle,
+        ]}
+      >
+        {char}
+      </Animated.Text>
+    </Animated.View>
   );
 });
 
@@ -192,7 +197,7 @@ export default function WelcomeScreen() {
             alignItems: 'center',
           }}
         >
-          <Animated.Text
+          <Text
             style={{
               fontFamily: FontFamily.uiMedium,
               fontSize: 17,
@@ -201,7 +206,7 @@ export default function WelcomeScreen() {
             }}
           >
             Begin Your Journey
-          </Animated.Text>
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     </View>

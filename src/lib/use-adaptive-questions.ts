@@ -11,6 +11,7 @@ import {
   StudyContext,
 } from './adaptive-questions';
 import { logBugEvent } from './bug-logger';
+import { logger } from '@/lib/logger';
 import { PERSONA_BRIEF } from '@/constants/persona';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 
@@ -172,7 +173,7 @@ RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "..."}`,
         };
       }
     } catch (error) {
-      console.error('Failed to generate question:', error);
+      logger.error('Failed to generate question:', error);
       
       // Fallback questions based on pool
       const fallbacks = [

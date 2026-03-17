@@ -13,6 +13,8 @@ import { logger } from '@/lib/logger';
 import { referenceToRoute, BIBLE_BOOKS } from '@/lib/bible-constants';
 import { getVerseByReference, getBibleDbStatus, type BibleTranslation } from '@/lib/bible-db';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 
 // ---------- Types ----------
 
@@ -68,7 +70,10 @@ const COMMENTARY_CACHE_PREFIX = 'commentary';
  * Separate from the Zustand store instance to keep concerns isolated.
  * Infinite TTL — verse text is immutable.
  */
-const verseCache = new MMKV({ id: 'unfold-verse-cache' });
+const bibleEncKey = getSharedEncryptionKey();
+const verseCache = bibleEncKey
+  ? new MMKV({ id: 'unfold-verse-cache', encryptionKey: bibleEncKey })
+  : new MMKV({ id: 'unfold-verse-cache' });
 
 /**
  * Build a deterministic cache key for a verse lookup.
@@ -298,6 +303,18 @@ export async function fetchCommentary(input: CommentaryInput): Promise<string | 
 
   logger.log('[BibleAPI] Generating commentary for:', input.reference);
 
+  // Rate limit check before network call
+  try {
+    const rateCheck = await checkRateLimit('commentary');
+    if (!rateCheck.allowed) {
+      logger.warn('[BibleAPI] Commentary rate limit reached for:', input.reference);
+      return null;
+    }
+  } catch (rateLimitError) {
+    // Fail open — don't block commentary if rate limit storage fails
+    logger.warn('[BibleAPI] Rate limit check failed, proceeding:', rateLimitError);
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -330,6 +347,7 @@ export async function fetchCommentary(input: CommentaryInput): Promise<string | 
     }
 
     setCachedCommentary(input.reference, input.todayTitle, commentary);
+    await incrementRateLimit('commentary');
     logger.log('[BibleAPI] Commentary generated and cached:', input.reference);
 
     return commentary;

@@ -26,6 +26,24 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   
   // Quote extraction: 50 per day
   'extract-quotes': { maxRequests: 50, windowMs: 24 * 60 * 60 * 1000 },
+
+  // Bridge text generation: 10 per hour
+  'bridge': { maxRequests: 10, windowMs: 60 * 60 * 1000 },
+
+  // Examen prayer generation: 5 per day
+  'examen': { maxRequests: 5, windowMs: 24 * 60 * 60 * 1000 },
+
+  // Companion AI responses: 20 per hour
+  'companion': { maxRequests: 20, windowMs: 60 * 60 * 1000 },
+
+  // Scripture commentary generation: 30 per hour
+  'commentary': { maxRequests: 30, windowMs: 60 * 60 * 1000 },
+
+  // Go Deeper journal prompts: 15 per hour
+  'go-deeper': { maxRequests: 15, windowMs: 60 * 60 * 1000 },
+
+  // Text-to-speech: 30 per hour
+  'tts': { maxRequests: 30, windowMs: 60 * 60 * 1000 },
 };
 
 const RATE_LIMIT_STORAGE_KEY = '@unfold_rate_limits';
@@ -60,7 +78,7 @@ export async function checkRateLimit(
       try {
         state = JSON.parse(stored);
       } catch {
-        if (__DEV__) console.warn('[RateLimit] Corrupt stored state, resetting');
+        if (__DEV__) logger.warn('[RateLimit] Corrupt stored state, resetting');
         state = { count: 0, windowStart: now };
       }
 
@@ -85,7 +103,7 @@ export async function checkRateLimit(
       limit: config.maxRequests,
     };
   } catch (error) {
-    console.error('[RateLimit] Error checking rate limit:', error);
+    logger.error('[RateLimit] Error checking rate limit:', error);
     // Fail open - allow request if storage fails
     return { allowed: true, remaining: Infinity, resetTime: 0, limit: Infinity };
   }
@@ -110,7 +128,7 @@ export async function incrementRateLimit(endpoint: string): Promise<void> {
       try {
         state = JSON.parse(stored);
       } catch {
-        if (__DEV__) console.warn('[RateLimit] Corrupt stored state, resetting');
+        if (__DEV__) logger.warn('[RateLimit] Corrupt stored state, resetting');
         state = { count: 0, windowStart: now };
       }
 
@@ -124,10 +142,10 @@ export async function incrementRateLimit(endpoint: string): Promise<void> {
 
     state.count++;
     await AsyncStorage.setItem(storageKey, JSON.stringify(state));
-    
+
     logger.log(`[RateLimit] ${endpoint}: ${state.count}/${config.maxRequests}`);
   } catch (error) {
-    console.error('[RateLimit] Error incrementing rate limit:', error);
+    logger.error('[RateLimit] Error incrementing rate limit:', error);
   }
 }
 
@@ -152,13 +170,17 @@ export function getTimeUntilReset(resetTime: number): string {
  * Reset all rate limits (for testing/debugging)
  */
 export async function resetAllRateLimits(): Promise<void> {
+  if (!__DEV__) {
+    logger.warn('[RateLimit] resetAllRateLimits is only available in development');
+    return;
+  }
   try {
     const keys = await AsyncStorage.getAllKeys();
     const rateLimitKeys = keys.filter(key => key.startsWith(RATE_LIMIT_STORAGE_KEY));
     await AsyncStorage.multiRemove(rateLimitKeys);
     logger.log('[RateLimit] All rate limits reset');
   } catch (error) {
-    console.error('[RateLimit] Error resetting rate limits:', error);
+    logger.error('[RateLimit] Error resetting rate limits:', error);
   }
 }
 

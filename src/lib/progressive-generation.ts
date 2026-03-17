@@ -11,6 +11,7 @@
  */
 
 import { logBugError, logBugEvent } from './bug-logger';
+import { logger as appLogger } from './logger';
 import {
   postJsonWithBackendFallback,
   getSystemPrompt,
@@ -60,9 +61,9 @@ import type {
 // ---------------------------------------------------------------------------
 
 const logger = {
-  log: (...args: unknown[]) => { if (__DEV__) console.log('[ProgressiveGen]', ...args); },
-  warn: (...args: unknown[]) => console.warn('[ProgressiveGen]', ...args),
-  error: (...args: unknown[]) => console.error('[ProgressiveGen]', ...args),
+  log: (...args: unknown[]) => { appLogger.log('[ProgressiveGen]', ...args); },
+  warn: (...args: unknown[]) => { appLogger.warn('[ProgressiveGen]', ...args); },
+  error: (...args: unknown[]) => { appLogger.error('[ProgressiveGen]', ...args); },
 };
 
 // ---------------------------------------------------------------------------
@@ -319,7 +320,7 @@ Bias toward extending (3-5 extra days) unless the arc clearly reached resolution
     try {
       result = JSON.parse(jsonMatch[0]) as typeof result;
     } catch (parseErr) {
-      if (__DEV__) console.warn('[Progressive] Extension eval JSON parse failed:', parseErr);
+      logger.warn('Extension eval JSON parse failed:', parseErr);
       throw new Error(`Extension eval: JSON parse failed — ${parseErr instanceof Error ? parseErr.message : 'unknown'}`);
     }
 

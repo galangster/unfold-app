@@ -19,11 +19,16 @@ import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
 import { PERSONA_FULL } from '@/constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
 
 // ---------------------------------------------------------------------------
 // MMKV cache instance
 // ---------------------------------------------------------------------------
-const examenCache = new MMKV({ id: 'unfold-examen-cache' });
+const examenEncKey = getSharedEncryptionKey();
+const examenCache = examenEncKey
+  ? new MMKV({ id: 'unfold-examen-cache', encryptionKey: examenEncKey })
+  : new MMKV({ id: 'unfold-examen-cache' });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -452,7 +457,19 @@ export async function generateExamen(
   const cached = getCachedExamen(cacheKey);
   if (cached) return cached;
 
-  // 2. Call backend with retry on parse failure (backend routes to Grok)
+  // 2. Rate limit check before network call
+  try {
+    const rateCheck = await checkRateLimit('examen');
+    if (!rateCheck.allowed) {
+      logger.warn('[Examen] Rate limit reached, returning null');
+      return null;
+    }
+  } catch (rateLimitError) {
+    // Fail open — don't block examen if rate limit storage fails
+    logger.warn('[Examen] Rate limit check failed, proceeding:', rateLimitError);
+  }
+
+  // 3. Call backend with retry on parse failure (backend routes to Grok)
   const MAX_ATTEMPTS = 2;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -509,8 +526,9 @@ export async function generateExamen(
           `${prayer.totalWordCount} words total`
       );
 
-      // 3. Cache the result
+      // 4. Cache the result and increment rate limit
       setCachedExamen(cacheKey, prayer);
+      await incrementRateLimit('examen');
       return prayer;
     } catch (error) {
       if (attempt < MAX_ATTEMPTS) {

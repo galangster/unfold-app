@@ -67,6 +67,14 @@ function RootLayoutNav() {
         />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
         <Stack.Screen
+          name="share-card"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+            contentStyle: { backgroundColor: '#000000' },
+          }}
+        />
+        <Stack.Screen
           name="paywall"
           options={{
             presentation: 'modal',
@@ -91,36 +99,36 @@ function RootLayoutNav() {
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    'InstrumentSerif_400Regular': require('@expo-google-fonts/instrument-serif/400Regular/InstrumentSerif_400Regular.ttf'),
-    'InstrumentSerif_400Regular_Italic': require('@expo-google-fonts/instrument-serif/400Regular_Italic/InstrumentSerif_400Regular_Italic.ttf'),
-    'SourceSerifPro_400Regular': require('@expo-google-fonts/source-serif-pro/SourceSerifPro_400Regular.ttf'),
-    'SourceSerifPro_400Regular_Italic': require('@expo-google-fonts/source-serif-pro/SourceSerifPro_400Regular_Italic.ttf'),
-    'SourceSerifPro_600SemiBold': require('@expo-google-fonts/source-serif-pro/SourceSerifPro_600SemiBold.ttf'),
-    'SourceSerifPro_700Bold': require('@expo-google-fonts/source-serif-pro/SourceSerifPro_700Bold.ttf'),
-    'JetBrainsMono_400Regular': require('@expo-google-fonts/jetbrains-mono/400Regular/JetBrainsMono_400Regular.ttf'),
-    'JetBrainsMono_500Medium': require('@expo-google-fonts/jetbrains-mono/500Medium/JetBrainsMono_500Medium.ttf'),
-    'Inter_400Regular': require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
-    'Inter_400Regular_Italic': require('@expo-google-fonts/inter/400Regular_Italic/Inter_400Regular_Italic.ttf'),
-    'Inter_500Medium': require('@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'),
-    'Inter_600SemiBold': require('@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'),
-    'Inter_700Bold': require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
+    'InstrumentSerif_400Regular': require('../../assets/fonts/InstrumentSerif_400Regular.ttf'),
+    'InstrumentSerif_400Regular_Italic': require('../../assets/fonts/InstrumentSerif_400Regular_Italic.ttf'),
+    'SourceSerifPro_400Regular': require('../../assets/fonts/SourceSerifPro_400Regular.ttf'),
+    'SourceSerifPro_400Regular_Italic': require('../../assets/fonts/SourceSerifPro_400Regular_Italic.ttf'),
+    'SourceSerifPro_600SemiBold': require('../../assets/fonts/SourceSerifPro_600SemiBold.ttf'),
+    'SourceSerifPro_700Bold': require('../../assets/fonts/SourceSerifPro_700Bold.ttf'),
+    'JetBrainsMono_400Regular': require('../../assets/fonts/JetBrainsMono_400Regular.ttf'),
+    'JetBrainsMono_500Medium': require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
+    'Inter_400Regular': require('../../assets/fonts/Inter_400Regular.ttf'),
+    'Inter_400Regular_Italic': require('../../assets/fonts/Inter_400Regular_Italic.ttf'),
+    'Inter_500Medium': require('../../assets/fonts/Inter_500Medium.ttf'),
+    'Inter_600SemiBold': require('../../assets/fonts/Inter_600SemiBold.ttf'),
+    'Inter_700Bold': require('../../assets/fonts/Inter_700Bold.ttf'),
     // Reading fonts (premium)
-    'EBGaramond_400Regular': require('@expo-google-fonts/eb-garamond/400Regular/EBGaramond_400Regular.ttf'),
-    'EBGaramond_400Regular_Italic': require('@expo-google-fonts/eb-garamond/400Regular_Italic/EBGaramond_400Regular_Italic.ttf'),
-    'EBGaramond_600SemiBold': require('@expo-google-fonts/eb-garamond/600SemiBold/EBGaramond_600SemiBold.ttf'),
-    'EBGaramond_700Bold': require('@expo-google-fonts/eb-garamond/700Bold/EBGaramond_700Bold.ttf'),
-    'Lora_400Regular': require('@expo-google-fonts/lora/400Regular/Lora_400Regular.ttf'),
-    'Lora_400Regular_Italic': require('@expo-google-fonts/lora/400Regular_Italic/Lora_400Regular_Italic.ttf'),
-    'Lora_600SemiBold': require('@expo-google-fonts/lora/600SemiBold/Lora_600SemiBold.ttf'),
-    'Lora_700Bold': require('@expo-google-fonts/lora/700Bold/Lora_700Bold.ttf'),
-    'CrimsonText_400Regular': require('@expo-google-fonts/crimson-text/400Regular/CrimsonText_400Regular.ttf'),
-    'CrimsonText_400Regular_Italic': require('@expo-google-fonts/crimson-text/400Regular_Italic/CrimsonText_400Regular_Italic.ttf'),
-    'CrimsonText_600SemiBold': require('@expo-google-fonts/crimson-text/600SemiBold/CrimsonText_600SemiBold.ttf'),
-    'CrimsonText_700Bold': require('@expo-google-fonts/crimson-text/700Bold/CrimsonText_700Bold.ttf'),
-    'Merriweather_400Regular': require('@expo-google-fonts/merriweather/400Regular/Merriweather_400Regular.ttf'),
-    'Merriweather_400Regular_Italic': require('@expo-google-fonts/merriweather/400Regular_Italic/Merriweather_400Regular_Italic.ttf'),
-    'Merriweather_700Bold': require('@expo-google-fonts/merriweather/700Bold/Merriweather_700Bold.ttf'),
-    'Merriweather_900Black': require('@expo-google-fonts/merriweather/900Black/Merriweather_900Black.ttf'),
+    'EBGaramond_400Regular': require('../../assets/fonts/EBGaramond_400Regular.ttf'),
+    'EBGaramond_400Regular_Italic': require('../../assets/fonts/EBGaramond_400Regular_Italic.ttf'),
+    'EBGaramond_600SemiBold': require('../../assets/fonts/EBGaramond_600SemiBold.ttf'),
+    'EBGaramond_700Bold': require('../../assets/fonts/EBGaramond_700Bold.ttf'),
+    'Lora_400Regular': require('../../assets/fonts/Lora_400Regular.ttf'),
+    'Lora_400Regular_Italic': require('../../assets/fonts/Lora_400Regular_Italic.ttf'),
+    'Lora_600SemiBold': require('../../assets/fonts/Lora_600SemiBold.ttf'),
+    'Lora_700Bold': require('../../assets/fonts/Lora_700Bold.ttf'),
+    'CrimsonText_400Regular': require('../../assets/fonts/CrimsonText_400Regular.ttf'),
+    'CrimsonText_400Regular_Italic': require('../../assets/fonts/CrimsonText_400Regular_Italic.ttf'),
+    'CrimsonText_600SemiBold': require('../../assets/fonts/CrimsonText_600SemiBold.ttf'),
+    'CrimsonText_700Bold': require('../../assets/fonts/CrimsonText_700Bold.ttf'),
+    'Merriweather_400Regular': require('../../assets/fonts/Merriweather_400Regular.ttf'),
+    'Merriweather_400Regular_Italic': require('../../assets/fonts/Merriweather_400Regular_Italic.ttf'),
+    'Merriweather_700Bold': require('../../assets/fonts/Merriweather_700Bold.ttf'),
+    'Merriweather_900Black': require('../../assets/fonts/Merriweather_900Black.ttf'),
   });
 
   useEffect(() => {

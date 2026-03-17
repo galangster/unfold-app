@@ -311,15 +311,15 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
         clearTimeout(replaceTimeoutRef.current);
         replaceTimeoutRef.current = null;
       }
-      console.log('[AudioPlayer] ▶️ auto-playing');
-      try { player.play(); } catch {}
+      logger.log('[AudioPlayer] auto-playing');
+      try { player.play(); } catch (e) { logger.warn('[AudioPlayer] play() failed:', e); }
     }, [status.isLoaded, status.duration, player]);
 
     // Detect playback failure — expo-audio's AudioPlayer.swift never emits .failed
     // but currentStatus getter does include playbackState as a string
     useEffect(() => {
       if ((status as any).playbackState === 'failed' && audioUrl && !hasError) {
-        console.log('[AudioPlayer] playbackState=failed detected');
+        logger.log('[AudioPlayer] playbackState=failed detected');
         setHasError(true);
         setErrorMessage('Audio format error. Tap to retry.');
         if (replaceTimeoutRef.current) {
@@ -353,7 +353,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
 
     useEffect(() => {
       return () => {
-        try { player.pause(); } catch {}
+        try { player.pause(); } catch (e) { logger.warn('[AudioPlayer] cleanup pause failed:', e); }
         audioUrlRef.current = null;
         shouldAutoplayRef.current = false;
         if (replaceTimeoutRef.current) {
@@ -406,7 +406,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
         progressAnim.value = 0;
 
         if (audioUrlRef.current) {
-          try { player.pause(); } catch {}
+          try { player.pause(); } catch (e) { logger.warn('[AudioPlayer] pause failed:', e); }
           audioUrlRef.current = null;
         }
 
@@ -419,7 +419,7 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
           voice_id: resolvedVoiceId,
         });
 
-        console.log(`[AudioPlayer] calling streamDevotionalAudio — textLen=${fullText.length}, voiceId=${resolvedVoiceId}`);
+        logger.log(`[AudioPlayer] calling streamDevotionalAudio — textLen=${fullText.length}, voiceId=${resolvedVoiceId}`);
         const result = await streamDevotionalAudio(fullText, resolvedVoiceId);
 
         if (!isMountedRef.current) return;
@@ -443,16 +443,16 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
             const s = player.currentStatus;
             const ready = s.isLoaded || s.playing || s.duration > 0;
             if (!ready && !hasError) {
-              console.log('[AudioPlayer] 15s timeout — audio never loaded');
+              logger.log('[AudioPlayer] 15s timeout — audio never loaded');
               setHasError(true);
               setErrorMessage('Audio took too long to load. Tap to retry.');
             }
-          } catch {}
+          } catch (e) { logger.warn('[AudioPlayer] timeout check failed:', e); }
           replaceTimeoutRef.current = null;
         }, 15000);
       } catch (error) {
         if (!isMountedRef.current) return;
-        console.log('[AudioPlayer] ❌ loadAndPlayAudio error:', error);
+        logger.log('[AudioPlayer] loadAndPlayAudio error:', error);
         logger.error('Error loading audio:', error);
         setHasError(true);
         if (error instanceof Error) {

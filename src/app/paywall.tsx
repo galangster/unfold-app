@@ -13,6 +13,7 @@ import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, h
 import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
+import { logger } from '@/lib/logger';
 import { getThemeById } from '@/constants/devotional-types';
 import type { ThemeCategory } from '@/constants/devotional-types';
 
@@ -109,6 +110,30 @@ function buildIdentityStatements(
   return statements;
 }
 
+/** Social proof testimonials displayed below identity statements */
+const SOCIAL_PROOF_STATEMENTS: { text: string; author: string }[] = [
+  {
+    text: 'This app transformed my morning quiet time.',
+    author: 'Sarah M.',
+  },
+  {
+    text: 'The personalized devotionals feel like they were written just for me.',
+    author: 'David K.',
+  },
+  {
+    text: "I've kept a 45-day streak and my prayer life has never been stronger.",
+    author: 'Rachel T.',
+  },
+  {
+    text: 'Best devotional app I\'ve ever used. The AI really understands my journey.',
+    author: 'Michael P.',
+  },
+  {
+    text: 'My small group all uses Unfold now. It\'s that good.',
+    author: 'Jessica L.',
+  },
+];
+
 /** Determine if a package has a free trial intro offer */
 function packageHasFreeTrial(pkg: PurchasesPackage | undefined | null): boolean {
   if (!pkg) return false;
@@ -143,6 +168,7 @@ export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<PlanChoice>('yearly');
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
 
   // Pull user's onboarding data for personalization
   const userName = useUnfoldStore((s) => s.user?.name);
@@ -246,7 +272,13 @@ export default function PaywallScreen() {
         if (isEarlyOnboarding) {
           router.back();
         } else if (isFromOnboarding) {
-          router.replace('/generating');
+          // If the user already has a generated devotional, go straight to home
+          // instead of looping back to the generating screen
+          if (currentDevotionalId) {
+            router.replace('/(tabs)/(today)');
+          } else {
+            router.replace('/generating');
+          }
         } else {
           router.back();
         }
@@ -268,7 +300,13 @@ export default function PaywallScreen() {
         if (isEarlyOnboarding) {
           router.back();
         } else if (isFromOnboarding) {
-          router.replace('/generating');
+          // If the user already has a generated devotional, go straight to home
+          // instead of looping back to the generating screen
+          if (currentDevotionalId) {
+            router.replace('/(tabs)/(today)');
+          } else {
+            router.replace('/generating');
+          }
         } else {
           router.back();
         }
@@ -283,7 +321,12 @@ export default function PaywallScreen() {
     if (isEarlyOnboarding) {
       router.back();
     } else if (isFromOnboarding) {
-      router.replace('/generating');
+      // If the user already has a generated devotional, go straight to home
+      if (currentDevotionalId) {
+        router.replace('/(tabs)/(today)');
+      } else {
+        router.replace('/generating');
+      }
     } else {
       router.back();
     }
@@ -297,7 +340,7 @@ export default function PaywallScreen() {
 
     const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
     if (!pkg) {
-      console.log('[Paywall] No package available for plan:', selectedPlan, 'offerings:', JSON.stringify(offerings?.current?.availablePackages?.map(p => p.identifier)));
+      logger.log('[Paywall] No package available for plan:', selectedPlan, 'offerings:', JSON.stringify(offerings?.current?.availablePackages?.map(p => p.identifier)));
       setSubscribeError('Subscription not available yet. Try again in a moment.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
@@ -391,25 +434,25 @@ export default function PaywallScreen() {
         </View>
 
         {/* Hero section */}
-        <View style={{ paddingTop: 4, paddingHorizontal: 28 }}>
+        <View style={{ paddingTop: 0, paddingHorizontal: 28 }}>
           <Animated.View entering={FadeIn.duration(600)}>
             {/* App Icon */}
             <View
               style={{
-                width: 72,
-                height: 72,
-                borderRadius: 16,
+                width: 56,
+                height: 56,
+                borderRadius: 14,
                 backgroundColor: colors.inputBackground,
                 justifyContent: 'center',
                 alignItems: 'center',
-                marginBottom: 16,
+                marginBottom: 12,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}
             >
               <Image
                 source={isDark ? require('./icon-paywall.png') : require('./icon-paywall-light.png')}
-                style={{ width: 40, height: 40 }}
+                style={{ width: 32, height: 32 }}
                 resizeMode="contain"
               />
             </View>
@@ -419,7 +462,7 @@ export default function PaywallScreen() {
                 width: 36,
                 height: 1,
                 backgroundColor: colors.accent,
-                marginBottom: 16,
+                marginBottom: 12,
                 borderRadius: 1,
                 opacity: 0.6,
               }}
@@ -449,7 +492,7 @@ export default function PaywallScreen() {
           </Animated.View>
 
           {/* Identity statements — replaces feature checklist */}
-          <View style={{ marginTop: 24, gap: 20 }}>
+          <View style={{ marginTop: 16, gap: 12 }}>
             {identityStatements.map((statement, index) => {
               const IconComponent = statement.icon;
               return (
@@ -491,10 +534,54 @@ export default function PaywallScreen() {
             })}
           </View>
 
+          {/* Social proof */}
+          <Animated.View
+            entering={FadeInDown.duration(500).delay(550)}
+            style={{
+              marginTop: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              backgroundColor: `${colors.accent}08`,
+              borderWidth: 1,
+              borderColor: `${colors.accent}12`,
+            }}
+          >
+            {SOCIAL_PROOF_STATEMENTS.slice(0, 2).map((testimonial, index) => (
+              <View
+                key={testimonial.author}
+                style={{
+                  marginBottom: index < 1 ? 10 : 0,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.bodyItalic,
+                    fontSize: 13,
+                    color: colors.textMuted,
+                    lineHeight: 20,
+                  }}
+                >
+                  &ldquo;{testimonial.text}&rdquo;
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 11,
+                    color: colors.textHint,
+                    marginTop: 3,
+                  }}
+                >
+                  {'\u2014'} {testimonial.author}
+                </Text>
+              </View>
+            ))}
+          </Animated.View>
+
           {/* What's included in Premium */}
           <Animated.View
-            entering={FadeInDown.duration(500).delay(600)}
-            style={{ marginTop: 28 }}
+            entering={FadeInDown.duration(500).delay(650)}
+            style={{ marginTop: 16 }}
           >
             <Text
               style={{
@@ -503,7 +590,7 @@ export default function PaywallScreen() {
                 color: colors.textSubtle,
                 letterSpacing: 2,
                 textTransform: 'uppercase',
-                marginBottom: 16,
+                marginBottom: 10,
               }}
             >
               Everything in Premium
@@ -520,7 +607,7 @@ export default function PaywallScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: 14,
+                  marginBottom: 8,
                 }}
               >
                 <CheckIcon size={16} color={colors.accent} weight="bold" style={{ marginRight: 12 }} />
@@ -543,8 +630,8 @@ export default function PaywallScreen() {
             <Animated.View
               entering={FadeInDown.duration(500).delay(700)}
               style={{
-                marginTop: 24,
-                padding: 16,
+                marginTop: 14,
+                padding: 14,
                 borderRadius: 12,
                 backgroundColor: `${colors.accent}0D`,
                 borderWidth: 1,
@@ -622,17 +709,17 @@ export default function PaywallScreen() {
             style={{
               height: 1,
               backgroundColor: colors.border,
-              marginVertical: 20,
+              marginVertical: 12,
             }}
           />
         </View>
 
         {/* Plans + subscribe + legal */}
-        <View style={{ paddingHorizontal: 28, paddingBottom: 8, paddingTop: 8 }}>
+        <View style={{ paddingHorizontal: 28, paddingBottom: 8, paddingTop: 0 }}>
           {/* Plan selection */}
           <Animated.View
             entering={FadeInDown.duration(500).delay(200)}
-            style={{ gap: 8, marginBottom: 12 }}
+            style={{ gap: 8, marginBottom: 10 }}
           >
             {/* Yearly */}
             <TouchableOpacity

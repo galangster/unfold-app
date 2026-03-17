@@ -165,7 +165,7 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
     }
     return identifier;
   } catch (error) {
-    console.error('[Notifications] Failed to schedule:', error);
+    logger.error('[Notifications] Failed to schedule:', error);
     return null;
   }
 }
@@ -215,7 +215,7 @@ export async function sendTestNotification(): Promise<boolean> {
     }
     return true;
   } catch (error) {
-    console.error('[Notifications] Failed to send test:', error);
+    logger.error('[Notifications] Failed to send test:', error);
     return false;
   }
 }
@@ -257,7 +257,7 @@ export async function sendDay1ReadyNotification(title: string): Promise<boolean>
     logger.log('[Notifications] Day 1 ready notification sent, id:', notificationId);
     return true;
   } catch (error) {
-    console.error('[Notifications] Failed to send Day 1 notification:', error);
+    logger.error('[Notifications] Failed to send Day 1 notification:', error);
     return false;
   }
 }
@@ -290,7 +290,7 @@ export async function sendDevotionalReadyNotification(title: string): Promise<bo
     logger.log('[Notifications] Devotional ready notification sent, id:', notificationId);
     return true;
   } catch (error) {
-    console.error('[Notifications] Failed to send completion notification:', error);
+    logger.error('[Notifications] Failed to send completion notification:', error);
     return false;
   }
 }
@@ -320,7 +320,7 @@ export async function scheduleMiddayCheckIn(): Promise<string | null> {
     logger.log('[Notifications] Midday check-in scheduled for 12:30 PM');
     return identifier;
   } catch (error) {
-    console.error('[Notifications] Failed to schedule midday check-in:', error);
+    logger.error('[Notifications] Failed to schedule midday check-in:', error);
     return null;
   }
 }
@@ -350,7 +350,7 @@ export async function scheduleEveningWindDown(): Promise<string | null> {
     logger.log('[Notifications] Evening wind-down scheduled for 8:30 PM');
     return identifier;
   } catch (error) {
-    console.error('[Notifications] Failed to schedule evening wind-down:', error);
+    logger.error('[Notifications] Failed to schedule evening wind-down:', error);
     return null;
   }
 }

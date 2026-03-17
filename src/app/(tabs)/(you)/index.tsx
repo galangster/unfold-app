@@ -20,10 +20,12 @@ import {
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { logger } from '@/lib/logger';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { ProfileAvatar } from '@/components/ProfileAvatar';
 
 interface MenuItem {
   icon: typeof GearIcon;
@@ -98,27 +100,29 @@ export default function YouScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Header — avatar + name */}
           <Animated.View
             entering={FadeIn.duration(700)}
             style={{
               paddingHorizontal: 24,
               paddingTop: 16,
               paddingBottom: 24,
+              alignItems: 'center',
             }}
           >
+            <ProfileAvatar size={80} editable />
             <Text
               style={{
                 fontFamily: FontFamily.display,
-                fontSize: 34,
+                fontSize: 28,
                 color: colors.text,
                 letterSpacing: -0.5,
-                marginBottom: 4,
+                marginTop: 14,
               }}
             >
               {user?.name ?? 'You'}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 }}>
               <StreakDisplay compact hideDayLabel />
               {isPremium && (
                 <View
@@ -154,7 +158,7 @@ export default function YouScreen() {
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
-                  console.log('[YOU] Premium banner tapped!');
+                  logger.log('[YOU] Premium banner tapped!');
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   router.push('/paywall');
                 }}
@@ -213,8 +217,8 @@ export default function YouScreen() {
             </View>
           )}
 
-          {/* Unfolded — year-in-review recap */}
-          {devotionals.length > 0 && (
+          {/* Unfolded — year-in-review recap (hidden for polish) */}
+          {false && devotionals.length > 0 && (
             <View
               style={{ paddingHorizontal: 24, marginBottom: 20 }}
             >

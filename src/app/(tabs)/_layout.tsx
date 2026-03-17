@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
@@ -12,6 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { useUIState } from '@/lib/ui-state';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -85,15 +86,54 @@ function AnimatedTabIcon({
 function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const tabBarHidden = useUIState((s) => s.tabBarHidden);
+  const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
+
+  // Slide channel (scroll-based) and instant channel (verse selection)
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  const lastModeRef = useRef<'slide' | 'instant'>('slide');
+
+  useEffect(() => {
+    if (tabBarHideMode === 'instant') {
+      // Instant — no transition, no flash. Just snap.
+      translateY.value = 0;
+      opacity.value = tabBarHidden ? 0 : 1;
+    } else {
+      // Slide for scroll-based hide/show
+      // If transitioning from instant-hidden → slide, fix positioning first
+      if (lastModeRef.current === 'instant' && tabBarHidden) {
+        // Was instant-hidden (opacity 0, translateY 0).
+        // Snap translateY to hidden position, restore opacity, then slide works normally.
+        translateY.value = 100;
+        opacity.value = 1;
+      } else if (lastModeRef.current === 'instant' && !tabBarHidden) {
+        // Was instant-hidden, now showing via slide → slide up from bottom
+        translateY.value = 100;
+        opacity.value = 1;
+        translateY.value = withTiming(0, { duration: 250 });
+      } else {
+        opacity.value = 1;
+        translateY.value = withTiming(tabBarHidden ? 100 : 0, { duration: 250 });
+      }
+    }
+    lastModeRef.current = tabBarHideMode;
+  }, [tabBarHidden, tabBarHideMode, translateY, opacity]);
+
+  const tabBarAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+    opacity: opacity.value,
+  }));
 
   return (
-    <View
-      style={{
+    <Animated.View
+      style={[{
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-      }}
+      }, tabBarAnimStyle]}
+      pointerEvents={tabBarHidden ? 'none' : 'auto'}
     >
       {/* Blur background layer */}
       {Platform.OS === 'ios' && (
@@ -134,6 +174,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
+          // Hide You tab — accessed via profile avatar on home screen
+          if (route.name === '(you)') return null;
           const isFocused = state.index === index;
 
           const activeColor = colors.accent;
@@ -228,7 +270,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -264,6 +306,7 @@ export default function TabLayout() {
         name="(you)"
         options={{
           title: 'You',
+          href: null,
         }}
       />
     </Tabs>

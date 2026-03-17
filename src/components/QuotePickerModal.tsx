@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { logger } from '@/lib/logger';
 import { XIcon, DownloadSimpleIcon, ShareNetworkIcon, QuotesIcon, CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native';
 import ViewShot from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
@@ -198,7 +199,7 @@ function QuoteWallpaperModal({ visible, onClose, onBack, quote, dayTitle }: Quot
       if (uri) setCapturedUri(uri);
       return uri || null;
     } catch (err) {
-      console.error('[QuoteWallpaper] Capture failed:', err);
+      logger.error('[QuoteWallpaper] Capture failed:', err);
       return null;
     }
   }, []);

@@ -6,6 +6,7 @@
 import { File, Paths } from 'expo-file-system';
 import { logger } from '@/lib/logger';
 import { getAuthHeaders } from '@/lib/api-config';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
 const TTS_PROXY_URL = 'https://tts-proxy-five.vercel.app/api/tts';
 
@@ -426,6 +427,21 @@ export async function streamDevotionalAudio(
     }
     logger.log('[TTS] cache MISS — downloading');
 
+    // Rate limit check before making any network request
+    try {
+      const rateCheck = await checkRateLimit('tts');
+      if (!rateCheck.allowed) {
+        throw new Error('TTS rate limit reached. Please try again later.');
+      }
+    } catch (rateLimitError) {
+      // If the error is our own rate limit message, propagate it
+      if (rateLimitError instanceof Error && rateLimitError.message.includes('rate limit')) {
+        throw rateLimitError;
+      }
+      // Otherwise fail open — don't block TTS if rate limit storage fails
+      logger.warn('[TTS] Rate limit check failed, proceeding:', rateLimitError);
+    }
+
     // If a prefetch (or prior call) is already downloading this exact audio, await it
     const existing = inFlightRequests.get(key);
     if (existing) {
@@ -438,12 +454,15 @@ export async function streamDevotionalAudio(
       }
     }
 
-    // Start fresh download
-    const promise = downloadAudio(text, voiceId, key);
+    // Start fresh download and increment rate limit on success
+    const promise = downloadAudio(text, voiceId, key).then(async (result) => {
+      await incrementRateLimit('tts');
+      return result;
+    });
     inFlightRequests.set(key, promise);
     return promise;
   } catch (error) {
-    console.error('[TTS] streamDevotionalAudio ERROR:', error);
+    logger.error('[TTS] streamDevotionalAudio ERROR:', error);
     throw error;
   }
 }

@@ -1,6 +1,7 @@
 import { logger } from '@/lib/logger';
 import { PERSONA_BRIEF } from '../constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
 export type CompanionMood = 'Grateful' | 'Peaceful' | 'Hopeful' | 'Restless' | 'Heavy' | 'Confused';
 export type CompanionResponseContext =
@@ -109,6 +110,18 @@ Context: ${context}
 ${moodPattern ? `Recent moods: ${moodPattern}` : ''}
 Generate a short, personal companion response and 2 suggestion pills.`;
 
+  // Rate limit check
+  try {
+    const rateCheck = await checkRateLimit('companion');
+    if (!rateCheck.allowed) {
+      logger.warn('[Companion] Rate limit reached, returning null');
+      return null;
+    }
+  } catch (rateLimitError) {
+    // Fail open — don't block companion if rate limit storage fails
+    logger.warn('[Companion] Rate limit check failed, proceeding:', rateLimitError);
+  }
+
   try {
     const backendCandidates = getBackendCandidates();
     let lastError: unknown = null;
@@ -170,6 +183,7 @@ Generate a short, personal companion response and 2 suggestion pills.`;
           try {
             const parsed = JSON.parse(jsonMatch[0]);
             if (parsed.response && Array.isArray(parsed.suggestions)) {
+              await incrementRateLimit('companion');
               return {
                 response: String(parsed.response).trim(),
                 suggestions: parsed.suggestions
@@ -179,7 +193,7 @@ Generate a short, personal companion response and 2 suggestion pills.`;
               };
             }
           } catch {
-            if (__DEV__) console.warn('[Companion] JSON parse failed for matched object');
+            if (__DEV__) logger.warn('[Companion] JSON parse failed for matched object');
           }
         }
 

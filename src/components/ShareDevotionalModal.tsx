@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { View, Text, Dimensions, ActivityIndicator, Alert, Modal, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { XIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { logger } from '@/lib/logger';
 import { DevotionalDay } from '@/lib/store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -27,6 +28,7 @@ interface ShareDevotionalModalProps {
 
 export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: ShareDevotionalModalProps) {
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const cardRef = useRef<View>(null);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -55,7 +57,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
       await new Promise(resolve => setTimeout(resolve, 300));
 
       if (!cardRef.current) {
-        console.log('[Share] cardRef is null, retrying after delay...');
+        logger.log('[Share] cardRef is null, retrying after delay...');
         await new Promise(resolve => setTimeout(resolve, 500));
         if (!cardRef.current) {
           Alert.alert('Error', 'Could not capture the image. Please try again.');
@@ -70,7 +72,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
         result: 'tmpfile',
       });
 
-      console.log('[Share] Captured image:', uri);
+      logger.log('[Share] Captured image:', uri);
 
       const isAvailable = await Sharing.isAvailableAsync();
       if (!isAvailable) {
@@ -87,7 +89,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
 
       onClose();
     } catch (err) {
-      console.log('[Share] Error:', err instanceof Error ? err.message : String(err));
+      logger.log('[Share] Error:', err instanceof Error ? err.message : String(err));
       // Only alert on actual errors, not user cancellation
       const msg = err instanceof Error ? err.message : '';
       if (!msg.includes('cancel') && !msg.includes('dismiss')) {
@@ -108,7 +110,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
           onPress={onClose}
           style={sdStyles.backdrop}
         >
-          <SafeAreaView style={sdStyles.flex1} edges={['top', 'bottom']}>
+          <View style={[sdStyles.flex1, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
             {/* Header */}
             <View style={sdStyles.header}>
               <TouchableOpacity
@@ -197,7 +199,7 @@ export function ShareDevotionalModal({ visible, onClose, day, seriesTitle }: Sha
                 )}
               </TouchableOpacity>
             </TouchableOpacity>
-          </SafeAreaView>
+          </View>
         </TouchableOpacity>
       </GestureHandlerRootView>
     </Modal>
@@ -216,7 +218,7 @@ const sdStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     paddingHorizontal: 20,
-    paddingTop: 4,
+    paddingTop: 12,
     paddingBottom: 4,
   },
   closeButton: {

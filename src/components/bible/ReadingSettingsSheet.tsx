@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, Switch, StyleSheet } from 'react-native';
-import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -14,9 +15,9 @@ interface ReadingSettingsSheetProps {
 }
 
 const LINE_HEIGHT_OPTIONS: Array<{ label: string; value: number }> = [
-  { label: 'Compact', value: 1.5 },
-  { label: 'Comfortable', value: 1.8 },
-  { label: 'Relaxed', value: 2.1 },
+  { label: 'Compact', value: 1.8 },
+  { label: 'Comfortable', value: 2.1 },
+  { label: 'Relaxed', value: 2.5 },
 ];
 
 const TRANSLATION_OPTIONS: Array<BibleReaderSettings['translation']> = ['BSB', 'KJV'];
@@ -24,39 +25,82 @@ const TRANSLATION_OPTIONS: Array<BibleReaderSettings['translation']> = ['BSB', '
 const MIN_FONT_SIZE = 14;
 const MAX_FONT_SIZE = 28;
 
+const EASE_OUT_QUART = Easing.bezier(0.165, 0.84, 0.44, 1);
+
+/* ─────────────────────────────────────────────────────────
+ * ANIMATION STORYBOARD — Reading Settings Sheet
+ *
+ *    0ms   overlay fades in (200ms)
+ *    0ms   card fades in + slides up 12px (250ms ease-out-quart)
+ *  250ms   settled
+ *
+ * Exit:
+ *    0ms   card fades out (180ms)
+ *    0ms   overlay fades out (150ms)
+ * ───────────────────────────────────────────────────────── */
+
+const ANIM = {
+  sheetEnter:   250,   // card fade + slide up
+  sheetExit:    180,   // card fade out
+  overlayEnter: 200,   // backdrop fade in
+  overlayExit:  150,   // backdrop fade out
+};
+
 export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: ReadingSettingsSheetProps) {
   const { colors, isDark } = useTheme();
   const settings = useUnfoldStore((s) => s.bibleReaderSettings);
   const updateSettings = useUnfoldStore((s) => s.updateBibleReaderSettings);
+  const [minusPressed, setMinusPressed] = useState(false);
+  const [plusPressed, setPlusPressed] = useState(false);
+
+  // Slide-up animation for the settings card
+  const sheetSlideY = useSharedValue(12);
+  useEffect(() => {
+    if (visible) {
+      sheetSlideY.value = 12;
+      sheetSlideY.value = withTiming(0, { duration: ANIM.sheetEnter, easing: EASE_OUT_QUART });
+    }
+  }, [visible]);
+  const sheetSlideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetSlideY.value }],
+  }));
 
   if (!visible) return null;
 
   const sectionBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
   const controlBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  const activeBg = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.1)';
+  const pressedBg = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.15)';
+  const selectedBg = isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.12)';
 
   return (
     <>
       {/* Dark overlay */}
-      <TouchableOpacity
+      <Animated.View
+        entering={FadeIn.duration(ANIM.overlayEnter)}
+        exiting={FadeOut.duration(ANIM.overlayExit)}
         style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-        accessibilityLabel="Close settings"
-        accessibilityRole="button"
-      />
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={onClose}
+          accessibilityLabel="Close settings"
+          accessibilityRole="button"
+        />
+      </Animated.View>
 
       {/* Settings card */}
       <Animated.View
-        entering={SlideInDown.springify().damping(20).stiffness(200)}
-        exiting={SlideOutDown.duration(180)}
+        entering={FadeIn.duration(ANIM.sheetEnter)}
+        exiting={FadeOut.duration(ANIM.sheetExit)}
         style={[
           styles.container,
           {
             backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
             shadowColor: '#000',
-            bottom: tabBarHeight,
+            bottom: tabBarHeight + 16,
           },
+          sheetSlideStyle,
         ]}
       >
         {/* Drag handle */}
@@ -88,15 +132,19 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
               <TouchableOpacity
                 onPress={() => {
                   if (settings.fontSize > MIN_FONT_SIZE) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     updateSettings({ fontSize: settings.fontSize - 1 });
                   }
                 }}
+                onPressIn={() => setMinusPressed(true)}
+                onPressOut={() => setMinusPressed(false)}
                 disabled={settings.fontSize <= MIN_FONT_SIZE}
                 style={[
                   styles.fontSizeButton,
-                  { backgroundColor: controlBg },
+                  { backgroundColor: minusPressed && settings.fontSize > MIN_FONT_SIZE ? pressedBg : controlBg },
                   settings.fontSize <= MIN_FONT_SIZE && styles.disabledControl,
                 ]}
+                activeOpacity={1}
                 accessibilityLabel="Decrease font size"
                 accessibilityRole="button"
                 hitSlop={4}
@@ -104,7 +152,7 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
                 <MinusIcon
                   size={16}
                   color={settings.fontSize <= MIN_FONT_SIZE ? colors.textHint : colors.text}
-                  weight="light"
+                  weight={minusPressed && settings.fontSize > MIN_FONT_SIZE ? 'bold' : 'light'}
                 />
               </TouchableOpacity>
 
@@ -115,15 +163,19 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
               <TouchableOpacity
                 onPress={() => {
                   if (settings.fontSize < MAX_FONT_SIZE) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     updateSettings({ fontSize: settings.fontSize + 1 });
                   }
                 }}
+                onPressIn={() => setPlusPressed(true)}
+                onPressOut={() => setPlusPressed(false)}
                 disabled={settings.fontSize >= MAX_FONT_SIZE}
                 style={[
                   styles.fontSizeButton,
-                  { backgroundColor: controlBg },
+                  { backgroundColor: plusPressed && settings.fontSize < MAX_FONT_SIZE ? pressedBg : controlBg },
                   settings.fontSize >= MAX_FONT_SIZE && styles.disabledControl,
                 ]}
+                activeOpacity={1}
                 accessibilityLabel="Increase font size"
                 accessibilityRole="button"
                 hitSlop={4}
@@ -131,7 +183,7 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
                 <PlusIcon
                   size={16}
                   color={settings.fontSize >= MAX_FONT_SIZE ? colors.textHint : colors.text}
-                  weight="light"
+                  weight={plusPressed && settings.fontSize < MAX_FONT_SIZE ? 'bold' : 'light'}
                 />
               </TouchableOpacity>
             </View>
@@ -147,19 +199,22 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
               return (
                 <TouchableOpacity
                   key={opt.value}
-                  onPress={() => updateSettings({ lineHeightMultiplier: opt.value })}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    updateSettings({ lineHeightMultiplier: opt.value });
+                  }}
                   style={[
                     styles.segmentButton,
-                    { backgroundColor: isActive ? activeBg : controlBg },
-                    isActive && { borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', borderWidth: 1 },
+                    { backgroundColor: isActive ? selectedBg : controlBg },
                   ]}
+                  activeOpacity={0.7}
                   accessibilityLabel={`${opt.label} line height`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                 >
                   <Text style={[
                     styles.segmentLabel,
-                    { color: isActive ? colors.text : colors.textSubtle },
+                    { color: isActive ? colors.text : colors.textHint },
                     isActive && { fontFamily: FontFamily.uiMedium },
                   ]}>
                     {opt.label}
@@ -171,7 +226,7 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
         </View>
 
         {/* Translation */}
-        <View style={[styles.section, { borderBottomColor: sectionBorder }]}>
+        <View style={styles.sectionLast}>
           <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Translation</Text>
           <View style={styles.segmentedRow}>
             {TRANSLATION_OPTIONS.map((t) => {
@@ -179,19 +234,22 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
               return (
                 <TouchableOpacity
                   key={t}
-                  onPress={() => updateSettings({ translation: t })}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    updateSettings({ translation: t });
+                  }}
                   style={[
                     styles.translationButton,
-                    { backgroundColor: isActive ? activeBg : controlBg },
-                    isActive && { borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', borderWidth: 1 },
+                    { backgroundColor: isActive ? selectedBg : controlBg },
                   ]}
+                  activeOpacity={0.7}
                   accessibilityLabel={`${t} translation`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                 >
                   <Text style={[
                     styles.translationLabel,
-                    { color: isActive ? colors.text : colors.textSubtle },
+                    { color: isActive ? colors.text : colors.textHint },
                     isActive && { fontFamily: FontFamily.uiMedium },
                   ]}>
                     {t}
@@ -199,40 +257,6 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
                 </TouchableOpacity>
               );
             })}
-          </View>
-        </View>
-
-        {/* Verse Numbers Toggle */}
-        <View style={[styles.section, { borderBottomColor: sectionBorder }]}>
-          <View style={styles.toggleRow}>
-            <Text style={[styles.toggleLabel, { color: colors.text }]}>Verse Numbers</Text>
-            <Switch
-              value={settings.showVerseNumbers}
-              onValueChange={(val) => updateSettings({ showVerseNumbers: val })}
-              trackColor={{
-                false: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                true: colors.accent,
-              }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Toggle verse numbers"
-            />
-          </View>
-        </View>
-
-        {/* Paragraph Mode Toggle */}
-        <View style={styles.sectionLast}>
-          <View style={styles.toggleRow}>
-            <Text style={[styles.toggleLabel, { color: colors.text }]}>Paragraph Mode</Text>
-            <Switch
-              value={settings.paragraphMode}
-              onValueChange={(val) => updateSettings({ paragraphMode: val })}
-              trackColor={{
-                false: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-                true: colors.accent,
-              }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Toggle paragraph mode"
-            />
           </View>
         </View>
       </Animated.View>
@@ -368,14 +392,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Toggle rows
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  toggleLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 15,
-  },
 });

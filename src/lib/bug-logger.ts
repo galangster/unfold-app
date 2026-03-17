@@ -4,6 +4,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { logger } from './logger';
 
 import { useUnfoldStore } from './store';
 
@@ -142,7 +143,7 @@ export function logBugEvent(
     };
     await writeLogEntries([...existing, next]);
   }).catch((error) => {
-    console.warn('[bug-logger] failed to write event', error);
+    logger.warn('[bug-logger] failed to write event', error);
   });
 
   return writeQueue;

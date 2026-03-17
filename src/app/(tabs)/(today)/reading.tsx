@@ -30,6 +30,7 @@ import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { triggerNextDayGeneration, evaluateSeriesExtension, generateArcExtension } from '@/lib/progressive-generation';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
+import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
@@ -38,6 +39,7 @@ import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
+import { referenceToRoute } from '@/lib/bible-constants';
 import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -583,8 +585,8 @@ export default function ReadingScreen() {
       recordStreakRead();
       syncWidgets();
 
-      // Check for review prompt eligibility — skip when continuation prompt is pending
-      if (!isProgressiveLastDay) {
+      // Check for review prompt eligibility at high-dopamine moments
+      {
         const reviewManager = createReviewPromptManager({
           reviewPromptLastDate,
           reviewPromptCount,
@@ -597,22 +599,26 @@ export default function ReadingScreen() {
           sum + d.days.filter(day => day.isRead).length, 0
         );
 
+        const streakCurrent = useUnfoldStore.getState().streakCurrent;
+
         if (reviewManager.shouldPrompt({
           totalDaysCompleted,
           journalEntryCount: journalEntries.length,
           justCompletedDay: true,
+          currentStreak: streakCurrent,
+          justCompletedSeries: completingLastDay,
         })) {
-          // Small delay to let celebration show first
+          // Delay lets celebration animation play first
           if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
           reviewTimerRef.current = setTimeout(async () => {
             if (!mountedRef.current) return;
             const shown = await reviewManager.showPrompt();
             if (shown) {
-            recordReviewPrompt(totalDaysCompleted);
-          }
-        }, 1500);
+              recordReviewPrompt(totalDaysCompleted);
+            }
+          }, 2000);
         }
-      } // end if (!isProgressiveLastDay)
+      }
     }
   }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, devotionals, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
@@ -731,7 +737,7 @@ export default function ReadingScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const retriable = isTransientGenerationError(message);
-      console.error('[Reading] Generate more failed:', message);
+      logger.error('[Reading] Generate more failed:', message);
       void logBugError('reading-generation', err, {
         devotionalId: currentDevotional.id,
         retriable,
@@ -921,7 +927,7 @@ export default function ReadingScreen() {
         // No need to force re-render — currentDayData will update via useMemo
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Something went wrong';
-        console.error('[Reading] Retry generation failed:', msg);
+        logger.error('[Reading] Retry generation failed:', msg);
         void logBugError('reading-generation', err, {
           viewingDay,
           phase: 'manual-retry',
@@ -1408,7 +1414,22 @@ export default function ReadingScreen() {
                 onToggleBookmark={handleToggleBookmark}
                 onQuoteSelected={handleQuoteSelected}
                 existingHighlights={currentDayHighlights}
-                onScriptureTap={(ref) => setScriptureSheetRef(ref)}
+                onScriptureTap={(ref) => {
+                  const parsed = referenceToRoute(ref);
+                  if (parsed) {
+                    router.push({
+                      pathname: '/(tabs)/(bible)/reader',
+                      params: {
+                        bookId: String(parsed.bookId),
+                        chapter: String(parsed.chapter),
+                        ...(parsed.verse ? { verse: String(parsed.verse) } : {}),
+                      },
+                    });
+                  } else {
+                    // Fallback to scripture sheet if reference can't be parsed
+                    setScriptureSheetRef(ref);
+                  }
+                }}
                 devotionalId={currentDevotionalId ?? ''}
                 dayNumber={viewingDay}
                 onOpenJournal={(focusQuestion) => {

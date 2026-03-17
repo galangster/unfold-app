@@ -4,6 +4,7 @@ import {
   Text,
   Dimensions,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,7 +22,7 @@ import Animated, {
   cancelAnimation,
   interpolate,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector, TouchableOpacity } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
   XIcon,
@@ -40,6 +41,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
+import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -1144,17 +1146,19 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
   }, []);
 
   const handleShare = useCallback(async () => {
+    logger.log('[UNFOLDED] handleShare called, isSharing:', isSharing);
     if (isSharing) return;
     setIsSharing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       if (!shareCardRef.current) {
+        logger.log('[UNFOLDED] shareCardRef is null');
         setIsSharing(false);
         return;
       }
 
-      // Wait for off-screen card to render fully
+      logger.log('[UNFOLDED] capturing ref...');
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const uri = await captureRef(shareCardRef, {
@@ -1162,8 +1166,10 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
         quality: 1,
         result: 'tmpfile',
       });
+      logger.log('[UNFOLDED] captured:', uri);
 
       const isAvailable = await Sharing.isAvailableAsync();
+      logger.log('[UNFOLDED] sharing available:', isAvailable);
       if (!isAvailable) {
         setIsSharing(false);
         return;
@@ -1174,8 +1180,8 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
         dialogTitle: 'Share your Unfolded story',
         UTI: 'public.png',
       });
-    } catch {
-      // User cancelled or capture failed silently
+    } catch (err) {
+      logger.error('[UNFOLDED] share error:', err);
     } finally {
       setIsSharing(false);
     }
@@ -1207,18 +1213,19 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
         <Text style={s.closingMessage}>{closingMessage}</Text>
       </Reveal>
 
-      <Reveal delay={1300}>
-        <TouchableOpacity
-          onPress={handleShare}
-          style={s.shareButton}
-          activeOpacity={0.7}
-        >
-          <ShareNetworkIcon size={18} color={PALETTE.black} weight="bold" />
-          <Text style={s.shareButtonText}>
-            {isSharing ? 'Preparing...' : 'Share your story'}
-          </Text>
-        </TouchableOpacity>
-      </Reveal>
+      <TouchableOpacity
+        onPress={() => {
+          logger.log('[UNFOLDED] Share button onPress fired!');
+          handleShare();
+        }}
+        style={[s.shareButton, { borderWidth: 2, borderColor: 'red' }]}
+        activeOpacity={0.7}
+      >
+        <ShareNetworkIcon size={18} color={PALETTE.black} weight="bold" />
+        <Text style={s.shareButtonText}>
+          {isSharing ? 'Preparing...' : 'Share your story'}
+        </Text>
+      </TouchableOpacity>
 
       {/* Off-screen share card — captured as image when sharing */}
       <View style={s.shareCardOffscreen} pointerEvents="none">
@@ -1373,15 +1380,29 @@ export default function UnfoldedScreen() {
     });
 
   // Compose gestures: tap + long press are exclusive, swipe is simultaneous
-  const composedGesture = Gesture.Race(
-    longPressGesture,
-    Gesture.Simultaneous(swipeGesture, tapGesture),
-  );
+  // Last card: no tap gesture — Share button needs to receive touches.
+  // Swipe still works for going back.
+  const composedGesture = currentCard === TOTAL_CARDS - 1
+    ? swipeGesture
+    : Gesture.Race(longPressGesture, Gesture.Simultaneous(swipeGesture, tapGesture));
 
+  const [isClosing, setIsClosing] = useState(false);
   const handleClose = useCallback(() => {
+    logger.log('[UNFOLDED] handleClose called, isClosing:', isClosing);
+    if (isClosing) return;
+    setIsClosing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.back();
-  }, [router]);
+    // Unmount heavy particle animations before exit transition to prevent freeze
+    setTimeout(() => {
+      logger.log('[UNFOLDED] navigating away...');
+      try {
+        router.dismiss();
+      } catch (err) {
+        logger.error('[UNFOLDED] dismiss failed:', err);
+        router.back();
+      }
+    }, 80);
+  }, [router, isClosing]);
 
   const renderCard = () => {
     switch (currentCard) {
@@ -1431,15 +1452,17 @@ export default function UnfoldedScreen() {
       />
 
       {/* Floating embers */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {embers.map((i) => (
-          <FloatingEmber
-            key={i}
-            index={i}
-            color={emberColor}
-          />
-        ))}
-      </View>
+      {!isClosing && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {embers.map((i) => (
+            <FloatingEmber
+              key={i}
+              index={i}
+              color={emberColor}
+            />
+          ))}
+        </View>
+      )}
 
       <View style={[s.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {/* Top: Stories-style progress + close */}
@@ -1466,11 +1489,18 @@ export default function UnfoldedScreen() {
         </View>
 
         {/* Card area — tap left/right to navigate, long-press to pause, swipe */}
-        <GestureDetector gesture={composedGesture}>
+        {currentCard === TOTAL_CARDS - 1 ? (
+          /* Last card: no gesture detector — Share button needs native touches */
           <Animated.View style={[s.cardArea, swipeAnimStyle]}>
             {renderCard()}
           </Animated.View>
-        </GestureDetector>
+        ) : (
+          <GestureDetector gesture={composedGesture}>
+            <Animated.View style={[s.cardArea, swipeAnimStyle]}>
+              {renderCard()}
+            </Animated.View>
+          </GestureDetector>
+        )}
       </View>
     </View>
   );
@@ -1868,6 +1898,7 @@ const s = StyleSheet.create({
 
   // ─── Closing Card (8) ───
   closingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,

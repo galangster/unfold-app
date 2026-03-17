@@ -10,7 +10,7 @@ export const FontFamily = {
 
   // Secondary sans (Inter) for body + UI. Variety comes from weights/italics, not more families.
   body: 'Inter_400Regular',
-  bodyItalic: 'Inter_400Italic',
+  bodyItalic: 'Inter_400Regular_Italic',
   bodyMedium: 'Inter_500Medium',
   bodyBold: 'Inter_700Bold',
 

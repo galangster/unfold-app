@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { logger } from '@/lib/logger';
 import { XIcon, DownloadSimpleIcon, ShareNetworkIcon, QuotesIcon } from 'phosphor-react-native';
 import ViewShot from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
@@ -48,7 +49,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
       }
       return null;
     } catch (err) {
-      console.error('[QuoteShareModal] Capture failed:', err);
+      logger.error('[QuoteShareModal] Capture failed:', err);
       return null;
     }
   }, []);
@@ -118,7 +119,7 @@ export function QuoteShareModal({ visible, onClose, quote, dayTitle }: QuoteShar
           onPress={onClose}
           style={{
             position: 'absolute',
-            top: 60,
+            top: 72,
             right: 20,
             zIndex: 10,
           }}

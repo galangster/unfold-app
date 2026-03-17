@@ -2,6 +2,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
+import { logger } from '@/lib/logger';
 import type { Devotional } from './store';
 
 const DEFAULT_ACCENT = '#5B8DEF';
@@ -1056,7 +1057,7 @@ export async function exportDevotionalToPDF(
       margins: { top: 54, right: 54, bottom: 54, left: 54 },
     });
 
-    console.log('[PDF Export] Generated PDF at:', uri);
+    logger.log('[PDF Export] Generated PDF at:', uri);
 
     // Copy the file with a clean name to the cache directory
     const sanitizedTitle = sanitizeFilename(devotional.title);
@@ -1073,9 +1074,9 @@ export async function exportDevotionalToPDF(
       }
       sourceFile.move(destFile);
       finalUri = destFile.uri;
-      console.log('[PDF Export] Moved PDF to:', finalUri);
+      logger.log('[PDF Export] Moved PDF to:', finalUri);
     } catch (moveError: any) {
-      console.warn('[PDF Export] Move failed:', moveError?.message || moveError);
+      logger.warn('[PDF Export] Move failed:', moveError?.message || moveError);
       // Fall back to the original UUID-named file
     }
 
@@ -1091,11 +1092,11 @@ export async function exportDevotionalToPDF(
       });
       return true;
     } else {
-      console.log('[PDF Export] Sharing not available on this platform');
+      logger.log('[PDF Export] Sharing not available on this platform');
       return false;
     }
   } catch (error) {
-    console.error('[PDF Export] Error:', error);
+    logger.error('[PDF Export] Error:', error);
     return false;
   }
 }
