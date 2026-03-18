@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  KeyboardAvoidingView,
   AccessibilityInfo,
 } from 'react-native';
 import {
@@ -34,6 +33,7 @@ import {
   BlockquoteBridge,
   PlaceholderBridge,
   useBridgeState,
+  useKeyboard,
 } from '@10play/tentap-editor';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -127,10 +127,33 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
 
   const editorState = useBridgeState(editor);
 
-  // Inject CSS once editor is ready
+  // Inject CSS + scroll behavior fix once editor is ready
   useEffect(() => {
     if (!editorState.isReady) return;
     editor.injectCSS(buildEditorCSS(colors));
+    // Override TipTap's scrollIntoView so cursor stays in place until it
+    // nears the bottom of the viewport (Notion-style). By default TipTap
+    // scrolls the cursor to the top on every Enter press.
+    editor.injectJS(`
+      (function() {
+        var origScroll = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = function(opts) {
+          if (typeof opts === 'object') {
+            opts.block = 'nearest';
+          } else {
+            opts = { block: 'nearest', behavior: 'smooth' };
+          }
+          origScroll.call(this, opts);
+        };
+        // Also override scrollIntoViewIfNeeded (WebKit-specific)
+        if (Element.prototype.scrollIntoViewIfNeeded) {
+          var origIfNeeded = Element.prototype.scrollIntoViewIfNeeded;
+          Element.prototype.scrollIntoViewIfNeeded = function(center) {
+            origIfNeeded.call(this, false);
+          };
+        }
+      })();
+    `);
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup on unmount
@@ -223,12 +246,10 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
     onToolbarAction?.('tag');
   }, [onToolbarAction]);
 
+  const { keyboardHeight, isKeyboardUp } = useKeyboard();
+
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 96 : 0}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Auto-save indicator */}
       <View style={styles.saveIndicatorContainer}>
         {saveState === 'saved' && (
@@ -278,12 +299,16 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
         )}
       </View>
 
-      {/* Toolbar — avoidIosKeyboard handles positioning on iOS */}
-      {editorState.isReady && (
+      {/* Toolbar — absolutely positioned above keyboard */}
+      {editorState.isReady && isKeyboardUp && (
         <View
           style={[
             styles.toolbar,
             {
+              position: 'absolute',
+              bottom: keyboardHeight,
+              left: 0,
+              right: 0,
               borderTopColor: colors.border,
               backgroundColor: isDark
                 ? 'rgba(20, 18, 16, 0.97)'
@@ -388,7 +413,7 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
           </View>
         </View>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -433,6 +458,7 @@ function buildEditorCSS(colors: any): string {
   return `
     html {
       background-color: ${colors.background} !important;
+      height: 100%;
     }
     body {
       font-family: -apple-system, 'Helvetica Neue', sans-serif;
@@ -444,7 +470,12 @@ function buildEditorCSS(colors: any): string {
       margin: 0;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
+      min-height: 100%;
     }
+    /* Prevent TipTap from scrolling cursor to top — only scroll when
+       cursor would go below the visible area (Notion-style behavior) */
+    .ProseMirror { overflow-anchor: none; }
+    .tiptap { scroll-padding-bottom: 60vh; }
     p { margin: 0 0 4px 0; }
     h1 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }
     h2 { font-size: 19px; font-weight: 600; margin: 10px 0 4px; }
@@ -452,16 +483,23 @@ function buildEditorCSS(colors: any): string {
     ul, ol { padding-left: 22px; margin: 4px 0; }
     li { margin: 2px 0; }
     ul[data-type="taskList"] { padding-left: 0; list-style: none; }
-    ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; }
-    ul[data-type="taskList"] li > label { margin-top: 4px; flex-shrink: 0; }
+    ul[data-type="taskList"] li { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    ul[data-type="taskList"] li > label { flex-shrink: 0; line-height: 1; display: flex; align-items: center; }
     ul[data-type="taskList"] li > label input[type="checkbox"] {
-      width: 16px; height: 16px;
+      width: 18px; height: 18px;
       accent-color: ${colors.accent};
       cursor: pointer;
+      margin: 0;
     }
+    ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
     ul[data-type="taskList"] li[data-checked="true"] > div {
       text-decoration: line-through;
       opacity: 0.45;
+    }
+    /* Hide placeholder when inside a task list */
+    ul[data-type="taskList"] .is-editor-empty::before,
+    ul[data-type="taskList"] .is-empty::before {
+      display: none !important;
     }
     blockquote {
       border-left: 3px solid ${colors.accent};

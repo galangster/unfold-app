@@ -24,7 +24,7 @@ import { generateExamen, type ExamenPrayer } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
 import { streamDevotionalAudio } from '@/lib/cartesia';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
-import { CompletionCelebration } from '@/components/CompletionCelebration';
+import { EveningCelebration } from '@/components/EveningCelebration';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
 
@@ -553,10 +553,9 @@ export default function EveningWindDownScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-      <CompletionCelebration
+      <EveningCelebration
         visible={showCelebration}
         onDismiss={handleDismissCelebration}
-        type="day"
         message={celebrationMessage}
       />
     </View>
