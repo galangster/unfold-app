@@ -14,11 +14,14 @@ import {
   NoteIcon,
   TrashIcon,
   TagIcon,
+  FolderSimpleIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Note, type NoteCategory } from '@/lib/store';
+import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { NoteEditor } from '@/components/notebook/NoteEditor';
+import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
+import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { logger } from '@/lib/logger';
 
 const CATEGORY_OPTIONS: { key: NoteCategory; label: string; Icon: typeof NoteIcon }[] = [
@@ -48,6 +51,8 @@ export default function NoteEditorScreen() {
   const addNote = useUnfoldStore((s) => s.addNote);
   const updateNote = useUnfoldStore((s) => s.updateNote);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
+  const folders = useUnfoldStore((s) => s.folders);
+  const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
 
   // Find existing note if editing
   const existingNote = params.noteId
@@ -61,8 +66,19 @@ export default function NoteEditorScreen() {
   );
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Scripture search & insert state
+  const [showScriptureSheet, setShowScriptureSheet] = useState(false);
+  const [pendingScriptureInsert, setPendingScriptureInsert] = useState<{
+    reference: string;
+    text: string;
+  } | null>(null);
+  const [scriptureRefs, setScriptureRefs] = useState<ScriptureRef[]>(
+    existingNote?.scriptureRefs ?? []
+  );
 
   // Track the latest content so the Done button can persist on tap
   const latestContentRef = useRef<{ title: string; content: string }>({
@@ -91,7 +107,7 @@ export default function NoteEditorScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     if (noteId) {
-      updateNote(noteId, { title, content, category });
+      updateNote(noteId, { title, content, category, scriptureRefs });
     } else {
       const id = addNote({
         title,
@@ -99,7 +115,7 @@ export default function NoteEditorScreen() {
         category,
         tags: [],
         isFavorite: false,
-        scriptureRefs: [],
+        scriptureRefs,
         devotionalId: params.devotionalId,
         dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
         bibleBookId: params.bookId ? Number(params.bookId) : undefined,
@@ -110,7 +126,7 @@ export default function NoteEditorScreen() {
     }
 
     router.back();
-  }, [noteId, category, params, addNote, updateNote, router]);
+  }, [noteId, category, scriptureRefs, params, addNote, updateNote, router]);
 
   /**
    * Called by NoteEditor's onSave (manual save).
@@ -146,7 +162,7 @@ export default function NoteEditorScreen() {
           category,
           tags: [],
           isFavorite: false,
-          scriptureRefs: [],
+          scriptureRefs,
           devotionalId: params.devotionalId,
           dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
           bibleBookId: params.bookId ? Number(params.bookId) : undefined,
@@ -156,7 +172,7 @@ export default function NoteEditorScreen() {
         logger.log('[NoteEditor] Auto-saved new note:', id);
       }
     },
-    [noteId, category, params, addNote, updateNote]
+    [noteId, category, scriptureRefs, params, addNote, updateNote]
   );
 
   const handleBack = useCallback(() => {
@@ -201,6 +217,69 @@ export default function NoteEditorScreen() {
     },
     [noteId, updateNote]
   );
+
+  const handleMoveToFolder = useCallback(() => {
+    setShowMoreMenu(false);
+    setShowCategoryPicker(false);
+    // Small delay so the menu closes before the sheet opens
+    setTimeout(() => {
+      setShowMoveFolderSheet(true);
+    }, 100);
+  }, []);
+
+  const handleMoveFolderSelect = useCallback(
+    (folderId: string | null) => {
+      if (!noteId) return;
+      moveNoteToFolder(noteId, folderId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [noteId, moveNoteToFolder],
+  );
+
+  /* ───── Scripture search & insert ───── */
+
+  const handleToolbarAction = useCallback((action: 'scripture') => {
+    if (action === 'scripture') {
+      setShowScriptureSheet(true);
+    }
+  }, []);
+
+  const handleScriptureInsert = useCallback(
+    (data: { reference: string; text: string; scriptureRef: ScriptureRef }) => {
+      // Set the pending insert — NoteEditor watches this and injects the blockquote
+      setPendingScriptureInsert({
+        reference: data.reference,
+        text: data.text,
+      });
+
+      // Add to scripture refs (avoid duplicates by checking reference string)
+      setScriptureRefs((prev) => {
+        const exists = prev.some(
+          (r) =>
+            r.bookId === data.scriptureRef.bookId &&
+            r.chapter === data.scriptureRef.chapter &&
+            r.verse === data.scriptureRef.verse &&
+            r.verseEnd === data.scriptureRef.verseEnd
+        );
+        if (exists) return prev;
+        const updated = [...prev, data.scriptureRef];
+
+        // Persist scripture refs to store if note already exists
+        if (noteId) {
+          updateNote(noteId, { scriptureRefs: updated });
+        }
+
+        return updated;
+      });
+
+      setShowScriptureSheet(false);
+    },
+    [noteId, updateNote]
+  );
+
+  const handleScriptureInserted = useCallback(() => {
+    setPendingScriptureInsert(null);
+  }, []);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -324,6 +403,23 @@ export default function NoteEditorScreen() {
             {/* Divider */}
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
+            {/* Move to folder */}
+            {noteId && (
+              <TouchableOpacity
+                onPress={handleMoveToFolder}
+                style={styles.menuItem}
+                activeOpacity={0.6}
+              >
+                <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
+                <Text style={[styles.menuItemText, { color: colors.text }]}>
+                  Move to folder
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Divider */}
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
             {/* Delete */}
             {noteId && (
               <TouchableOpacity
@@ -355,6 +451,9 @@ export default function NoteEditorScreen() {
             initialNote={existingNote}
             onSave={handleEditorSave}
             onAutoSave={handleAutoSave}
+            onToolbarAction={handleToolbarAction}
+            pendingScriptureInsert={pendingScriptureInsert}
+            onScriptureInserted={handleScriptureInserted}
           />
         </Animated.View>
       </SafeAreaView>
@@ -371,6 +470,23 @@ export default function NoteEditorScreen() {
           }}
         />
       )}
+
+      {/* Scripture search bottom sheet */}
+      <ScriptureSearchSheet
+        visible={showScriptureSheet}
+        onClose={() => setShowScriptureSheet(false)}
+        onInsert={handleScriptureInsert}
+        existingRefs={scriptureRefs}
+      />
+
+      {/* Move to Folder sheet */}
+      <MoveFolderSheet
+        visible={showMoveFolderSheet}
+        onClose={() => setShowMoveFolderSheet(false)}
+        folders={folders}
+        currentFolderId={existingNote?.folderId}
+        onSelect={handleMoveFolderSelect}
+      />
     </View>
   );
 }

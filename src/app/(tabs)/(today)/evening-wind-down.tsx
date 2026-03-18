@@ -13,6 +13,7 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
+import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { CaretLeftIcon, BookOpenIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
@@ -132,11 +133,6 @@ export default function EveningWindDownScreen() {
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
 
-  const [examen, setExamen] = useState<ExamenPrayer | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-  const [scriptureText, setScriptureText] = useState<string | null>(null);
-  const [scriptureLoading, setScriptureLoading] = useState(false);
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -155,16 +151,20 @@ export default function EveningWindDownScreen() {
     return getCheckIn(currentDevotional.id, currentDay.dayNumber, 'midday');
   }, [currentDevotional, currentDay, getCheckIn]);
 
-  const loadExamen = useCallback(async () => {
-    if (!currentDay || !user) return;
-    setLoading(true);
-    setError(false);
-    try {
+  // Rule 2 fix: useQuery replaces manual useEffect + setState data fetching
+  const {
+    data: examen,
+    isLoading: loading,
+    isError: error,
+    refetch: refetchExamen,
+  } = useQuery({
+    queryKey: ['examen', currentDevotional?.id, currentDay?.dayNumber, middayCheckIn?.mood],
+    queryFn: async () => {
       const result = await generateExamen(
         {
-          userName: user.name,
-          todayTheme: currentDay.title,
-          todayScripture: currentDay.scriptureReference,
+          userName: user!.name,
+          todayTheme: currentDay!.title,
+          todayScripture: currentDay!.scriptureReference,
           middayCheckIn: middayCheckIn
             ? {
                 mood: middayCheckIn.mood,
@@ -173,43 +173,37 @@ export default function EveningWindDownScreen() {
                 freeText: middayCheckIn.freeText,
               }
             : undefined,
-          currentSituation: user.currentSituation,
+          currentSituation: user!.currentSituation,
         },
         {
           devotionalId: currentDevotional!.id,
-          dayNumber: currentDay.dayNumber,
+          dayNumber: currentDay!.dayNumber,
         }
       );
-      if (result) {
-        setExamen(result);
-      } else {
-        setError(true);
-      }
-    } catch (e) {
-      logger.error('[EveningWindDown] Failed to load examen:', e);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentDay, user, middayCheckIn, currentDevotional]);
+      if (!result) throw new Error('Failed to generate examen');
+      return result;
+    },
+    enabled: !!currentDay && !!user && !!currentDevotional,
+    staleTime: Infinity,
+    retry: 1,
+  });
 
-  useEffect(() => {
-    if (!examen && !loading && !error) {
-      loadExamen();
-    }
-  }, [examen, loading, error, loadExamen]);
+  const {
+    data: scriptureResult,
+    isLoading: scriptureLoading,
+  } = useQuery({
+    queryKey: ['evening-scripture', currentDay?.eveningScriptureRef],
+    queryFn: async () => {
+      const result = await fetchVerse(currentDay!.eveningScriptureRef!);
+      if (!result) throw new Error('Failed to fetch verse');
+      return result;
+    },
+    enabled: !!currentDay?.eveningScriptureRef,
+    staleTime: Infinity,
+    retry: 1,
+  });
 
-  useEffect(() => {
-    if (currentDay?.eveningScriptureRef && !scriptureText && !scriptureLoading) {
-      setScriptureLoading(true);
-      fetchVerse(currentDay.eveningScriptureRef)
-        .then((result) => {
-          if (result) setScriptureText(result.text);
-        })
-        .catch((e) => logger.error('[EveningWindDown] Failed to fetch verse:', e))
-        .finally(() => setScriptureLoading(false));
-    }
-  }, [currentDay?.eveningScriptureRef, scriptureText, scriptureLoading]);
+  const scriptureText = scriptureResult?.text ?? null;
 
   const handlePlayScripture = useCallback(async () => {
     if (!scriptureText) return;
@@ -237,6 +231,8 @@ export default function EveningWindDownScreen() {
     }
   }, [scriptureText, audioUri, player, isPlaying]);
 
+  // Auto-play when player initializes after audioUri is set
+  // useAudioPlayer creates the player on re-render — this bridges the async gap
   useEffect(() => {
     if (audioUri && player) {
       player.play();
@@ -374,8 +370,7 @@ export default function EveningWindDownScreen() {
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setError(false);
-                    loadExamen();
+                    refetchExamen();
                   }}
                   style={{
                     flexDirection: 'row',

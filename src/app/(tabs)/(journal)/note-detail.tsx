@@ -11,6 +11,7 @@ import {
   TrashIcon,
   StarIcon,
   TagIcon,
+  FolderSimpleIcon,
   MicrophoneStageIcon,
   SunHorizonIcon,
   BookOpenIcon,
@@ -21,6 +22,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
+import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
 
 const CATEGORY_CONFIG: Record<NoteCategory, { Icon: typeof NoteIcon; label: string }> = {
@@ -339,14 +341,22 @@ export default function NoteDetailScreen() {
   const notes = useUnfoldStore((s) => s.notes);
   const updateNote = useUnfoldStore((s) => s.updateNote);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
+  const folders = useUnfoldStore((s) => s.folders);
+  const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
 
   const note = useMemo(
     () => notes.find((n) => n.id === params.noteId),
     [notes, params.noteId],
   );
 
+  const noteFolder = useMemo(
+    () => (note?.folderId ? folders.find((f) => f.id === note.folderId) : undefined),
+    [note?.folderId, folders],
+  );
+
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -404,6 +414,24 @@ export default function NoteDetailScreen() {
       setShowMoreMenu(false);
     },
     [note, updateNote],
+  );
+
+  const handleMoveToFolder = useCallback(() => {
+    setShowMoreMenu(false);
+    setShowCategoryPicker(false);
+    // Small delay so the menu closes before the sheet opens
+    setTimeout(() => {
+      setShowMoveFolderSheet(true);
+    }, 100);
+  }, []);
+
+  const handleMoveFolderSelect = useCallback(
+    (folderId: string | null) => {
+      if (!note) return;
+      moveNoteToFolder(note.id, folderId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [note, moveNoteToFolder],
   );
 
   // If the note doesn't exist (e.g., deleted), go back
@@ -483,6 +511,19 @@ export default function NoteDetailScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Backdrop for more menu — rendered before menu so menu items are tappable */}
+        {showMoreMenu && (
+          <TouchableOpacity
+            style={styles.backdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setShowMoreMenu(false);
+              setShowCategoryPicker(false);
+              setDeleteConfirm(false);
+            }}
+          />
+        )}
 
         {/* More menu */}
         {showMoreMenu && (
@@ -578,6 +619,21 @@ export default function NoteDetailScreen() {
             {/* Divider */}
             <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
+            {/* Move to folder */}
+            <TouchableOpacity
+              onPress={handleMoveToFolder}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+            >
+              <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                {noteFolder ? `Folder: ${noteFolder.name}` : 'Move to folder'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+
             {/* Delete */}
             <TouchableOpacity
               onPress={handleDelete}
@@ -613,6 +669,26 @@ export default function NoteDetailScreen() {
             <Text style={[detailStyles.metadataText, { color: colors.textHint }]}>
               {formatDate(note.createdAt)}
             </Text>
+            {noteFolder && (
+              <>
+                <Text style={[detailStyles.metadataDot, { color: colors.textHint }]}>
+                  {'\u00B7'}
+                </Text>
+                {noteFolder.color && (
+                  <View
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: noteFolder.color,
+                    }}
+                  />
+                )}
+                <Text style={[detailStyles.metadataText, { color: colors.textHint }]}>
+                  {noteFolder.name.toUpperCase()}
+                </Text>
+              </>
+            )}
             {note.isFavorite && (
               <>
                 <Text style={[detailStyles.metadataDot, { color: colors.textHint }]}>
@@ -711,19 +787,16 @@ export default function NoteDetailScreen() {
           )}
         </ScrollView>
 
-        {/* Backdrop for more menu */}
-        {showMoreMenu && (
-          <TouchableOpacity
-            style={styles.backdrop}
-            activeOpacity={1}
-            onPress={() => {
-              setShowMoreMenu(false);
-              setShowCategoryPicker(false);
-              setDeleteConfirm(false);
-            }}
-          />
-        )}
       </SafeAreaView>
+
+      {/* Move to Folder sheet */}
+      <MoveFolderSheet
+        visible={showMoveFolderSheet}
+        onClose={() => setShowMoveFolderSheet(false)}
+        folders={folders}
+        currentFolderId={note?.folderId}
+        onSelect={handleMoveFolderSelect}
+      />
     </View>
   );
 }

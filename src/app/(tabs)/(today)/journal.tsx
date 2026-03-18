@@ -174,7 +174,12 @@ export default function JournalScreen() {
   const isMountedRef = useRef(true);
 
   // Journal mode
-  const [activeMode, setActiveMode] = useState<JournalMode>(existingEntry?.journalMode ?? 'freewrite');
+  // Initialize mode from existing entry, or auto-suggest based on study method
+  const [activeMode, setActiveMode] = useState<JournalMode>(() => {
+    if (existingEntry?.journalMode) return existingEntry.journalMode;
+    if (currentDay?.studyMethod === 'soap_journal') return 'soap';
+    return 'freewrite';
+  });
 
   // SOAP state
   const [soapValues, setSoapValues] = useState<SoapResponses>(
@@ -202,7 +207,16 @@ export default function JournalScreen() {
 
   // Expandable question response state
   const [expandedQuestionIndex, setExpandedQuestionIndex] = useState<number | null>(null);
-  const [questionResponses, setQuestionResponses] = useState<Map<number, string>>(new Map());
+  const [questionResponses, setQuestionResponses] = useState<Map<number, string>>(() => {
+    if (!existingEntry?.questionResponses) return new Map();
+    const initial = new Map<number, string>();
+    const allQuestions = currentDay?.reflectionQuestions ?? [];
+    for (const qr of existingEntry.questionResponses) {
+      const idx = allQuestions.findIndex((q) => q === qr.question);
+      if (idx >= 0) initial.set(idx, qr.response);
+    }
+    return initial;
+  });
   const questionInputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
   const inputRef = useRef<TextInput>(null);
@@ -217,36 +231,6 @@ export default function JournalScreen() {
   // Get devotional context
   const currentDevotional = devotionals.find((d) => d.id === devotionalId);
   const currentDay = currentDevotional?.days.find((d) => d.dayNumber === dayNumber);
-
-  // Auto-suggest journal mode based on study method (only for new entries)
-  useEffect(() => {
-    if (existingEntry) return; // Don't override existing entry's mode
-    const method = currentDay?.studyMethod;
-    if (method === 'soap_journal') {
-      setActiveMode('soap');
-    }
-    // guided mode already the default for reflection questions flow
-  }, [currentDay?.studyMethod, existingEntry]);
-
-  // Initialize question responses from existing entry
-  useEffect(() => {
-    if (existingEntry?.questionResponses) {
-      const initial = new Map<number, string>();
-      for (const qr of existingEntry.questionResponses) {
-        const allQuestions = [
-          ...(currentDay?.reflectionQuestions ?? []),
-          ...deeperPrompts,
-        ];
-        const idx = allQuestions.findIndex((q) => q === qr.question);
-        if (idx >= 0) {
-          initial.set(idx, qr.response);
-        }
-      }
-      if (initial.size > 0) {
-        setQuestionResponses(initial);
-      }
-    }
-  }, [existingEntry?.id]);
 
   // Handle focusQuestion param from journal hub navigation
   useEffect(() => {

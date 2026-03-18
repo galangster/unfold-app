@@ -13,7 +13,6 @@ import {
   ListBulletsIcon,
   ListNumbersIcon,
   CheckSquareIcon,
-  HashIcon,
   CheckIcon,
   TextBIcon,
   TextItalicIcon,
@@ -73,8 +72,12 @@ interface NoteEditorProps {
   onSave: (data: { title: string; content: string }) => void;
   /** Called on auto-save (800ms debounce after last keystroke). */
   onAutoSave?: (data: { title: string; content: string }) => void;
-  /** Called when a toolbar action needs to open a sheet (scripture picker, tag picker). */
-  onToolbarAction?: (action: 'scripture' | 'tag') => void;
+  /** Called when a toolbar action needs to open a sheet (scripture picker). */
+  onToolbarAction?: (action: 'scripture') => void;
+  /** When set, the editor injects a blockquote with this scripture into the content. */
+  pendingScriptureInsert?: { reference: string; text: string } | null;
+  /** Called after the scripture blockquote has been injected into the editor. */
+  onScriptureInserted?: () => void;
 }
 
 /**
@@ -88,7 +91,13 @@ interface NoteEditorProps {
  *   "# "  → heading 1 (## → H2, ### → H3)
  *   "> "  → blockquote
  */
-export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEditorProps) {
+export function NoteEditor({
+  initialNote,
+  onAutoSave,
+  onToolbarAction,
+  pendingScriptureInsert,
+  onScriptureInserted,
+}: NoteEditorProps) {
   const { colors, isDark } = useTheme();
 
   const [title, setTitle] = useState(initialNote?.title ?? '');
@@ -163,6 +172,47 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
       if (savedResetRef.current) clearTimeout(savedResetRef.current);
     };
   }, []);
+
+  /* ───── Scripture insertion via pending prop ───── */
+  useEffect(() => {
+    if (!pendingScriptureInsert || !editorState.isReady) return;
+    const { reference, text } = pendingScriptureInsert;
+
+    // Escape single quotes and newlines for safe JS string injection
+    const escapedRef = reference.replace(/'/g, "\\'");
+    const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
+
+    editor.injectJS(`
+      window.editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: 'blockquote',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: '${escapedText}' },
+              ],
+            },
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  marks: [{ type: 'italic' }],
+                  text: '\\u2014 ${escapedRef}',
+                },
+              ],
+            },
+          ],
+        })
+        .run();
+    `);
+
+    onScriptureInserted?.();
+    scheduleAutoSave();
+  }, [pendingScriptureInsert, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ───── Debounced auto-save ───── */
   const scheduleAutoSave = useCallback(() => {
@@ -241,11 +291,6 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
     editor.lift();
   }, [editor]);
 
-  const handleTagPress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onToolbarAction?.('tag');
-  }, [onToolbarAction]);
-
   const { keyboardHeight, isKeyboardUp } = useKeyboard();
 
   return (
@@ -284,7 +329,7 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
       <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
         <RichText
           editor={editor}
-          style={styles.richText}
+          style={[styles.richText, !editorState.isReady && { opacity: 0 }]}
           webviewProps={{
             backgroundColor: colors.background,
           }}
@@ -405,10 +450,6 @@ export function NoteEditor({ initialNote, onAutoSave, onToolbarAction }: NoteEdi
 
             <ToolbarButton onPress={handleScripturePress} label="Add scripture">
               <BookBookmarkIcon size={18} color={colors.textMuted} weight="light" />
-            </ToolbarButton>
-
-            <ToolbarButton onPress={handleTagPress} label="Add tag">
-              <HashIcon size={18} color={colors.textMuted} weight="light" />
             </ToolbarButton>
           </View>
         </View>

@@ -434,6 +434,16 @@ export interface Note {
   dayNumber?: number;            // If linked to a devotional day
   bibleBookId?: number;          // If created from Bible reader
   bibleChapter?: number;         // If created from Bible reader
+  folderId?: string;             // If organized into a folder
+}
+
+export interface NoteFolder {
+  id: string;
+  name: string;
+  color?: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -628,10 +638,17 @@ interface UnfoldState {
   // Notebook
   notes: Note[];
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => string;
-  updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'category' | 'tags' | 'isFavorite' | 'scriptureRefs'>>) => void;
+  updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'category' | 'tags' | 'isFavorite' | 'scriptureRefs' | 'folderId'>>) => void;
   deleteNote: (id: string) => void;
   getNotesForScripture: (bookId: number, chapter: number) => Note[];
   getNotesForDevotional: (devotionalId: string, dayNumber?: number) => Note[];
+
+  // Folders
+  folders: NoteFolder[];
+  addFolder: (name: string, color?: string) => string;
+  updateFolder: (id: string, updates: Partial<Pick<NoteFolder, 'name' | 'color' | 'sortOrder'>>) => void;
+  deleteFolder: (id: string, deleteNotes?: boolean) => void;
+  moveNoteToFolder: (noteId: string, folderId: string | null) => void;
 
   // AI data consent (App Store Guideline 5.1.2(i))
   hasConsentedToAI: boolean;
@@ -695,6 +712,7 @@ const initialState = {
   hasConsentedToAI: false,
   // Notebook
   notes: [] as Note[],
+  folders: [] as NoteFolder[],
   // Bible Reader
   bibleHighlights: [] as BibleHighlight[],
   bibleReadingHistory: [] as BibleReadingPosition[],
@@ -1417,6 +1435,54 @@ export const useUnfoldStore = create<UnfoldState>()(
         );
       },
 
+      // Folder actions
+      addFolder: (name, color) => {
+        const id = `folder_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const now = new Date().toISOString();
+        set((state) => ({
+          folders: [
+            ...state.folders,
+            {
+              id,
+              name,
+              color,
+              sortOrder: state.folders.length,
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        }));
+        return id;
+      },
+
+      updateFolder: (id, updates) =>
+        set((state) => ({
+          folders: state.folders.map((f) =>
+            f.id === id
+              ? { ...f, ...updates, updatedAt: new Date().toISOString() }
+              : f,
+          ),
+        })),
+
+      deleteFolder: (id, deleteNotes = false) =>
+        set((state) => ({
+          folders: state.folders.filter((f) => f.id !== id),
+          notes: deleteNotes
+            ? state.notes.filter((n) => n.folderId !== id)
+            : state.notes.map((n) =>
+                n.folderId === id ? { ...n, folderId: undefined, updatedAt: new Date().toISOString() } : n,
+              ),
+        })),
+
+      moveNoteToFolder: (noteId, folderId) =>
+        set((state) => ({
+          notes: state.notes.map((n) =>
+            n.id === noteId
+              ? { ...n, folderId: folderId ?? undefined, updatedAt: new Date().toISOString() }
+              : n,
+          ),
+        })),
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -1428,7 +1494,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 20, // Increment when state structure changes
+      version: 21, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1615,6 +1681,14 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             ...state,
             notes: [],
+          } as UnfoldState;
+        }
+
+        // Migration from version 20 to 21: Add notebook folders
+        if (version < 21) {
+          return {
+            ...state,
+            folders: [],
           } as UnfoldState;
         }
 

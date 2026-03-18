@@ -615,14 +615,6 @@ export function CheckInSheet({
     }
   }, [visible]);
 
-  // Fire completion data when celebration shows — user dismisses manually
-  useEffect(() => {
-    if (showCelebration && completionDataRef.current) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onComplete(completionDataRef.current);
-    }
-  }, [showCelebration, onComplete]);
-
   const handleMoodSelect = useCallback((mood: MoodValue) => {
     setSelectedMood(mood);
     // Auto-advance after a short delay so user sees their selection
@@ -637,9 +629,11 @@ export function CheckInSheet({
   const triggerCelebration = useCallback(
     (data: { mood: MoodValue; moodLabel: string; chipAnswer?: string; freeText?: string }) => {
       completionDataRef.current = data;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onComplete(data);
       setShowCelebration(true);
     },
-    []
+    [onComplete]
   );
 
   const handleNoteSubmit = useCallback(

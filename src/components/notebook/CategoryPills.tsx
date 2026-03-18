@@ -13,6 +13,8 @@ type CategoryFilter = NoteCategory | 'all';
 interface CategoryPillsProps {
   selectedCategory: CategoryFilter;
   onSelectCategory: (category: CategoryFilter) => void;
+  /** Remove left padding when used inline alongside other elements */
+  compact?: boolean;
 }
 
 const CATEGORIES: { key: CategoryFilter; label: string }[] = [
@@ -29,7 +31,7 @@ const CATEGORIES: { key: CategoryFilter; label: string }[] = [
  * "All" pill uses an inverted style when active (solid text color bg).
  * Other pills use accent-tinted background when active.
  */
-export function CategoryPills({ selectedCategory, onSelectCategory }: CategoryPillsProps) {
+export function CategoryPills({ selectedCategory, onSelectCategory, compact = false }: CategoryPillsProps) {
   const { colors } = useTheme();
 
   return (
@@ -37,7 +39,10 @@ export function CategoryPills({ selectedCategory, onSelectCategory }: CategoryPi
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          compact && { paddingHorizontal: 0, paddingRight: 24 },
+        ]}
         style={styles.scrollContainer}
       >
         {CATEGORIES.map((cat) => (

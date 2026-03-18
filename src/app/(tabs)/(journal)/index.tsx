@@ -9,6 +9,8 @@ import {
   LayoutChangeEvent,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Share,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +21,6 @@ import Animated, {
   FadeOut,
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -32,12 +33,20 @@ import {
   XIcon,
   PlusIcon,
   NotepadIcon,
+  FolderSimpleIcon,
+  CaretDownIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Note, type NoteCategory } from '@/lib/store';
+import { useUnfoldStore, type Note, type NoteCategory, type NoteFolder } from '@/lib/store';
 import { NoteCard } from '@/components/notebook/NoteCard';
+import { SwipeableNoteCard } from '@/components/notebook/SwipeableNoteCard';
 import { CategoryPills } from '@/components/notebook/CategoryPills';
+// FolderPills replaced by compact folder dropdown + MoveFolderSheet picker
+import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
+import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
+import { UndoToast } from '@/components/UndoToast';
+import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
 
 type Segment = 'reflections' | 'notebook';
 type CategoryFilter = NoteCategory | 'all';
@@ -377,11 +386,11 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   }));
 
   const handlePressIn = useCallback(() => {
-    scale.value = withSpring(0.9, { damping: 15, stiffness: 300 });
+    scale.value = withTiming(0.9, { duration: 120 });
   }, [scale]);
 
   const handlePressOut = useCallback(() => {
-    scale.value = withSpring(1.0, { damping: 12, stiffness: 250 });
+    scale.value = withTiming(1.0, { duration: 180 });
   }, [scale]);
 
   const handlePress = useCallback(() => {
@@ -453,12 +462,29 @@ export default function JournalHubScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const notes = useUnfoldStore((s) => s.notes);
+  const deleteNote = useUnfoldStore((s) => s.deleteNote);
+
+  const folders = useUnfoldStore((s) => s.folders);
+  const addFolder = useUnfoldStore((s) => s.addFolder);
+  const updateFolder = useUnfoldStore((s) => s.updateFolder);
+  const storeDeleteFolder = useUnfoldStore((s) => s.deleteFolder);
+  const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
 
   const [activeSegment, setActiveSegment] = useState<Segment>('reflections');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [fabVisible, setFabVisible] = useState(true);
+
+  const [deletedNote, setDeletedNote] = useState<Note | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Folder sheet state
+  const [showCreateFolderSheet, setShowCreateFolderSheet] = useState(false);
+  const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
+  const [showFolderPickerSheet, setShowFolderPickerSheet] = useState(false);
+  const [noteToMove, setNoteToMove] = useState<Note | null>(null);
 
   const lastScrollY = useRef(0);
   const tabBarHeight = 56 + insets.bottom;
@@ -543,6 +569,11 @@ export default function JournalHubScreen() {
   const filteredNotes = useMemo(() => {
     let filtered = [...notes];
 
+    // Folder filter
+    if (activeFolderId !== null) {
+      filtered = filtered.filter((n) => n.folderId === activeFolderId);
+    }
+
     // Category filter
     if (activeCategory !== 'all') {
       filtered = filtered.filter((n) => n.category === activeCategory);
@@ -572,7 +603,7 @@ export default function JournalHubScreen() {
     );
 
     return filtered;
-  }, [notes, activeCategory, searchQuery]);
+  }, [notes, activeFolderId, activeCategory, searchQuery]);
 
   // ---- Reflections filtered entries ----
   const filteredEntries = useMemo(() => {
@@ -659,6 +690,138 @@ export default function JournalHubScreen() {
     },
     [router],
   );
+
+  const handleNoteShare = useCallback(async (note: Note) => {
+    const plainContent = isHtmlContent(note.content)
+      ? stripHtml(note.content)
+      : note.content;
+    const shareTitle = note.title.trim() || 'Note';
+    const shareMessage = note.title.trim()
+      ? `${note.title}\n\n${plainContent}`
+      : plainContent;
+
+    try {
+      await Share.share({ title: shareTitle, message: shareMessage });
+    } catch {
+      // User cancelled or share failed — no action needed
+    }
+  }, []);
+
+  const handleNoteMove = useCallback((note: Note) => {
+    setNoteToMove(note);
+    setShowMoveFolderSheet(true);
+  }, []);
+
+  const handleMoveFolderSelect = useCallback(
+    (folderId: string | null) => {
+      if (!noteToMove) return;
+      moveNoteToFolder(noteToMove.id, folderId);
+      setNoteToMove(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [noteToMove, moveNoteToFolder],
+  );
+
+  const handleCreateFolderSubmit = useCallback(
+    (name: string, color?: string) => {
+      addFolder(name, color);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [addFolder],
+  );
+
+  const handleFolderLongPress = useCallback(
+    (folder: NoteFolder) => {
+      Alert.alert(folder.name, undefined, [
+        {
+          text: 'Rename',
+          onPress: () => {
+            Alert.prompt(
+              'Rename Folder',
+              undefined,
+              (newName: string) => {
+                if (newName.trim()) {
+                  updateFolder(folder.id, { name: newName.trim() });
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }
+              },
+              'plain-text',
+              folder.name,
+            );
+          },
+        },
+        {
+          text: 'Delete Folder',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete folder?',
+              'Notes inside will be moved to Unfiled.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    storeDeleteFolder(folder.id, false);
+                    // If this folder was active, reset to All Notes
+                    if (activeFolderId === folder.id) {
+                      setActiveFolderId(null);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    },
+    [updateFolder, storeDeleteFolder, activeFolderId],
+  );
+
+  const handleNoteDelete = useCallback(
+    (note: Note) => {
+      // Clear any existing timer
+      if (deleteTimerRef.current) {
+        clearTimeout(deleteTimerRef.current);
+      }
+
+      // Store the full note for potential undo
+      setDeletedNote(note);
+
+      // Optimistically remove from store
+      deleteNote(note.id);
+
+      // Set auto-dismiss timer
+      deleteTimerRef.current = setTimeout(() => {
+        setDeletedNote(null);
+      }, 3000);
+    },
+    [deleteNote],
+  );
+
+  const handleUndoDelete = useCallback(() => {
+    if (!deletedNote) return;
+
+    // Clear the auto-dismiss timer
+    if (deleteTimerRef.current) {
+      clearTimeout(deleteTimerRef.current);
+    }
+
+    // Restore the exact original note (preserving id, timestamps, all fields)
+    useUnfoldStore.setState((state) => ({
+      notes: [deletedNote, ...state.notes],
+    }));
+
+    setDeletedNote(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [deletedNote]);
+
+  const handleUndoDismiss = useCallback(() => {
+    setDeletedNote(null);
+  }, []);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1240,17 +1403,79 @@ export default function JournalHubScreen() {
           {/* ================================================================ */}
           {activeSegment === 'notebook' && (
             <Animated.View entering={FadeIn.duration(250)}>
-              {/* Category filter pills */}
-              <View style={mainStyles.categoryPillsContainer}>
-                <CategoryPills
-                  selectedCategory={activeCategory}
-                  onSelectCategory={setActiveCategory}
-                />
+              {/* Unified filter row: folder dropdown + category pills */}
+              <View style={mainStyles.filterRow}>
+                {/* Compact folder dropdown */}
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowFolderPickerSheet(true);
+                  }}
+                  onLongPress={() => {
+                    if (activeFolderId) {
+                      const folder = folders.find((f) => f.id === activeFolderId);
+                      if (folder) handleFolderLongPress(folder);
+                    }
+                  }}
+                  activeOpacity={0.7}
+                  style={[
+                    mainStyles.folderDropdown,
+                    {
+                      backgroundColor: activeFolderId ? colors.accent + '12' : colors.buttonBackground,
+                      borderColor: activeFolderId ? colors.accent + '30' : colors.border,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Current folder: ${activeFolderId ? folders.find((f) => f.id === activeFolderId)?.name ?? 'Unknown' : 'All Notes'}. Tap to change.`}
+                >
+                  {activeFolderId && folders.find((f) => f.id === activeFolderId)?.color ? (
+                    <View
+                      style={[
+                        mainStyles.folderDropdownDot,
+                        { backgroundColor: folders.find((f) => f.id === activeFolderId)!.color },
+                      ]}
+                    />
+                  ) : (
+                    <FolderSimpleIcon
+                      size={14}
+                      color={activeFolderId ? colors.accent : colors.textMuted}
+                      weight="light"
+                    />
+                  )}
+                  <Text
+                    style={[
+                      mainStyles.folderDropdownText,
+                      {
+                        color: activeFolderId ? colors.accent : colors.textMuted,
+                        fontFamily: activeFolderId ? FontFamily.uiMedium : FontFamily.ui,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {activeFolderId
+                      ? folders.find((f) => f.id === activeFolderId)?.name ?? 'Folder'
+                      : 'All Notes'}
+                  </Text>
+                  <CaretDownIcon
+                    size={10}
+                    color={activeFolderId ? colors.accent : colors.textSubtle}
+                    weight="bold"
+                  />
+                </TouchableOpacity>
+
+                {/* Category pills scroll */}
+                <View style={mainStyles.categoryPillsInline}>
+                  <CategoryPills
+                    selectedCategory={activeCategory}
+                    onSelectCategory={setActiveCategory}
+                    compact
+                  />
+                </View>
               </View>
 
               {/* Notes list or empty state */}
               {filteredNotes.length === 0 ? (
-                activeCategory === 'all' && !searchQuery.trim() ? (
+                activeCategory === 'all' && !searchQuery.trim() && activeFolderId === null ? (
                   <View style={{ paddingHorizontal: 24 }}>
                     <NotebookEmptyState onCreateNote={handleCreateNote} />
                   </View>
@@ -1264,18 +1489,23 @@ export default function JournalHubScreen() {
                     >
                       {searchQuery.trim()
                         ? `No notes match "${searchQuery}"`
-                        : 'No notes in this category yet.'}
+                        : activeFolderId
+                          ? 'No notes in this folder yet.'
+                          : 'No notes in this category yet.'}
                     </Text>
                   </View>
                 )
               ) : (
                 <View style={mainStyles.notesListContainer}>
                   {filteredNotes.map((note, index) => (
-                    <NoteCard
+                    <SwipeableNoteCard
                       key={note.id}
                       note={note}
-                      onPress={handleNotePress}
                       index={index}
+                      onPress={handleNotePress}
+                      onShare={handleNoteShare}
+                      onMove={handleNoteMove}
+                      onDelete={handleNoteDelete}
                     />
                   ))}
                 </View>
@@ -1292,6 +1522,45 @@ export default function JournalHubScreen() {
             tabBarHeight={tabBarHeight}
           />
         )}
+
+        {/* Undo toast for note deletion */}
+        <UndoToast
+          visible={deletedNote !== null}
+          message="Note deleted"
+          onUndo={handleUndoDelete}
+          onDismiss={handleUndoDismiss}
+        />
+
+        {/* Create Folder sheet */}
+        <CreateFolderSheet
+          visible={showCreateFolderSheet}
+          onClose={() => setShowCreateFolderSheet(false)}
+          onSubmit={handleCreateFolderSubmit}
+        />
+
+        {/* Move to Folder sheet (from swipe action) */}
+        <MoveFolderSheet
+          visible={showMoveFolderSheet}
+          onClose={() => {
+            setShowMoveFolderSheet(false);
+            setNoteToMove(null);
+          }}
+          folders={folders}
+          currentFolderId={noteToMove?.folderId}
+          onSelect={handleMoveFolderSelect}
+        />
+
+        {/* Folder picker sheet (from dropdown filter) */}
+        <MoveFolderSheet
+          visible={showFolderPickerSheet}
+          onClose={() => setShowFolderPickerSheet(false)}
+          folders={folders}
+          currentFolderId={activeFolderId ?? undefined}
+          onSelect={(folderId) => setActiveFolderId(folderId)}
+          title="Folders"
+          showAllNotes
+          onCreateFolder={() => setShowCreateFolderSheet(true)}
+        />
       </SafeAreaView>
     </View>
   );
@@ -1339,8 +1608,34 @@ const mainStyles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 16,
   },
-  categoryPillsContainer: {
-    marginBottom: 20,
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingLeft: 24,
+    marginBottom: 16,
+  },
+  folderDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  folderDropdownDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  folderDropdownText: {
+    fontSize: 13,
+    maxWidth: 100,
+  },
+  categoryPillsInline: {
+    flex: 1,
   },
   notesListContainer: {
     paddingHorizontal: 24,

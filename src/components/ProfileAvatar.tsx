@@ -1,5 +1,5 @@
 import { View, Text, Image, TouchableOpacity, ActionSheetIOS, Alert } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { documentDirectory, copyAsync, deleteAsync } from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
@@ -65,9 +65,11 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
 
   const pickPhoto = useCallback(async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'image/*',
-        copyToCacheDirectory: true,
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
       });
       if (!result.canceled && result.assets?.[0]) {
         await savePhoto(result.assets[0].uri);
