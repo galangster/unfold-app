@@ -74,6 +74,17 @@ const DAY_MESSAGES = [
   'You chose the better portion today.',
   'There\'s no shortcut to depth. You know that.',
   'The quiet hours shape the loudest moments.',
+  'You gave that your attention. It counts.',
+  'You chose depth. That takes guts.',
+  'One more day closer.',
+  'You were here. That\'s the whole thing.',
+  'You are building something.',
+  'You were faithful today.',
+  'Growth happens in the ordinary days.',
+  'You showed up. Most people don\'t.',
+  'You chose the harder thing today.',
+  'One fewer distraction. One more truth.',
+  'Carry this one with you.',
 ];
 
 const SERIES_MESSAGES = [
@@ -87,6 +98,10 @@ const SERIES_MESSAGES = [
   'That commitment was no small thing.',
   'Finished. Let that word land.',
   'You gave this journey everything.',
+  'Finished. Every last day.',
+  'This is part of you now.',
+  'Complete. And it wasn\'t easy.',
+  'You gave this everything.',
 ];
 
 function pickRandom(arr: string[]): string {

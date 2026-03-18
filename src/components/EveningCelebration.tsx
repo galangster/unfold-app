@@ -73,6 +73,9 @@ const EVENING_MESSAGES = [
   'The night is gentle. So is He.',
   'Surrender the day. Receive the night.',
   'Goodnight. You are held.',
+  'Grace stays. Even now.',
+  'You are held.',
+  'Lay today down. Pick up rest.',
 ];
 
 function pickRandom(arr: string[]): string {
