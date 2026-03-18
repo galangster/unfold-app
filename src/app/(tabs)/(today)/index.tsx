@@ -25,7 +25,7 @@ import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore } from '@/lib/store';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon, CaretRightIcon } from 'phosphor-react-native';
+import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon, CaretRightIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
@@ -373,6 +373,7 @@ export default function HomeScreen() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [showTomorrowLockInfo, setShowTomorrowLockInfo] = useState(false);
 
   // Update time of day every minute
   useEffect(() => {
@@ -504,7 +505,11 @@ export default function HomeScreen() {
     if (!resumeContext || !resumeDevotional) return false;
     const isResumeDevotionalComplete = resumeDevotional.days.filter(d => d.isRead).length === resumeDevotional.totalDays;
     if (isResumeDevotionalComplete) return false;
+    const resumeDay = resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber);
+    // Journal route — always show; user may want to add notes to a completed day
     if (resumeContext.route === 'journal') return true;
+    // Reading route — hide if that specific day is already read (not just "current day advanced")
+    if (resumeDay?.isRead) return false;
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
@@ -728,6 +733,20 @@ export default function HomeScreen() {
   const isLastDay = currentDevotional.currentDay === currentDevotional.totalDays;
   const showDay1Review = daysCompleted >= 1 && !hasSeenDay1Review && !isJourneyComplete;
 
+  // True when today's reading is done and the card is previewing tomorrow's content
+  const isTomorrow = !isJourneyComplete && getReadingDayLabel() === 'Tomorrow';
+
+  // Extract a teaser sentence from tomorrow's bodyText to surface on the home card
+  const homeTomorrowTeaser = (() => {
+    if (!isTomorrow || !currentDayData?.bodyText) return null;
+    const stripped = currentDayData.bodyText
+      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+      .replace(/^---$/gm, '')
+      .trim();
+    const firstSentence = stripped.match(/^.+?[.!?]/s);
+    return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '…';
+  })();
+
   const getCtaText = () => {
     if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
     if (isFirstDay) return 'Build Your Rhythm';
@@ -859,7 +878,11 @@ export default function HomeScreen() {
                       marginBottom: 6,
                     }}
                   >
-                    {resumeContext.route === 'journal' ? 'Resume your reflection' : 'Resume where you left off'}
+                    {resumeContext.route === 'journal'
+                      ? (resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber)?.isRead
+                        ? `Add to Day ${resumeContext.dayNumber}`
+                        : 'Resume your reflection')
+                      : 'Resume where you left off'}
                   </Text>
 
                   <Text
@@ -985,7 +1008,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity activeOpacity={0.7}
-                onPress={isPreparingCurrentDay ? undefined : handleContinueReading}
+                onPress={isPreparingCurrentDay ? undefined : (isTomorrow ? () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowTomorrowLockInfo(v => !v);
+                } : handleContinueReading)}
                 disabled={isPreparingCurrentDay}
                 onPressIn={() => {
                   if (!isPreparingCurrentDay) journeyCardScale.value = withTiming(0.98, { duration: 120 });
@@ -1091,6 +1117,23 @@ export default function HomeScreen() {
                         </Text>
                       )}
 
+                      {/* Tomorrow teaser — first hook sentence from next day's content */}
+                      {isTomorrow && homeTomorrowTeaser && (
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.body,
+                            fontSize: 13,
+                            color: colors.textMuted,
+                            lineHeight: 20,
+                            marginBottom: 14,
+                            opacity: 0.72,
+                          }}
+                          numberOfLines={3}
+                        >
+                          {homeTomorrowTeaser}
+                        </Text>
+                      )}
+
                       {/* Today's approach — subtle method hint */}
                       {currentDayData.studyMethod && BIBLE_STUDY_METHODS[currentDayData.studyMethod] && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
@@ -1161,32 +1204,77 @@ export default function HomeScreen() {
                   </View>
 
                   {/* CTA Button */}
-                  <AccentGlow
-                    color={colors.accent}
-                    intensity="medium"
-                    active={!isJourneyComplete}
-                    style={{ borderRadius: 12 }}
-                  >
-                    <View
-                      style={{
-                        backgroundColor: colors.accent,
-                        paddingVertical: 15,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text
+                  {isTomorrow ? (
+                    <>
+                      <View
                         style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 15,
-                          color: colors.background,
-                          letterSpacing: 0.3,
+                          backgroundColor: colors.buttonBackground,
+                          paddingVertical: 15,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          flexDirection: 'row',
+                          justifyContent: 'center',
+                          gap: 8,
                         }}
                       >
-                        {getCtaText()}
-                      </Text>
-                    </View>
-                  </AccentGlow>
+                        <LockSimpleIcon size={15} color={colors.textMuted} weight="light" />
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiMedium,
+                            fontSize: 15,
+                            color: colors.textMuted,
+                            letterSpacing: 0.3,
+                          }}
+                        >
+                          Unlocks Tomorrow
+                        </Text>
+                      </View>
+                      {showTomorrowLockInfo && (
+                        <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: 10, paddingHorizontal: 4 }}>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.body,
+                              fontSize: 13,
+                              color: colors.textSubtle,
+                              textAlign: 'center',
+                              lineHeight: 20,
+                            }}
+                          >
+                            Give today a chance to sink in.{'\n'}Come back tomorrow — it'll be worth it.
+                          </Text>
+                        </Animated.View>
+                      )}
+                    </>
+                  ) : (
+                    <AccentGlow
+                      color={colors.accent}
+                      intensity="medium"
+                      active={!isJourneyComplete}
+                      style={{ borderRadius: 12 }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: colors.accent,
+                          paddingVertical: 15,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiMedium,
+                            fontSize: 15,
+                            color: colors.background,
+                            letterSpacing: 0.3,
+                          }}
+                        >
+                          {getCtaText()}
+                        </Text>
+                      </View>
+                    </AccentGlow>
+                  )}
 
                   {/* New Journey - Secondary Action */}
                   <TouchableOpacity activeOpacity={0.7}

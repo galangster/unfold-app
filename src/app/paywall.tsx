@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
-import { View, Text, ActivityIndicator, Linking, Image, ScrollView } from 'react-native';
+import { useState, useMemo } from 'react';
+import { View, Text, ActivityIndicator, Linking, ScrollView, Image } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay, Easing } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, CrownIcon, ShieldCheckIcon, SparkleIcon, ClockIcon, PathIcon, HeartIcon, SunIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, FireIcon, CheckIcon } from 'phosphor-react-native';
+import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, ShareNetworkIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -42,97 +42,38 @@ function getThemeIdentityPhrase(theme: ThemeCategory): string {
   return map[theme] ?? 'the version of yourself that follows through';
 }
 
-/** Build identity statements from whatever user data we have */
+/** Build 2 concise identity statements — one sentence each, punchy */
 function buildIdentityStatements(
   userName: string | undefined,
-  currentSituation: string | undefined,
   emotionalState: string | undefined,
   spiritualSeeking: string | undefined,
   selectedTheme: ThemeCategory | undefined,
-): { icon: typeof PathIcon; text: string }[] {
-  const statements: { icon: typeof PathIcon; text: string }[] = [];
-  const name = userName?.split(' ')[0]; // First name only
+): string[] {
+  const statements: string[] = [];
+  const name = userName?.split(' ')[0];
 
-  // Statement 1: Anchor on their theme / seeking — who they're becoming
+  // Statement 1: Anchor on their theme / seeking
   if (selectedTheme) {
-    const themeInfo = getThemeById(selectedTheme);
     const identityPhrase = getThemeIdentityPhrase(selectedTheme);
-    if (name) {
-      statements.push({
-        icon: PathIcon,
-        text: `${name}, you chose ${themeInfo?.name.toLowerCase() ?? selectedTheme} for a reason. Premium helps you become ${identityPhrase}.`,
-      });
-    } else {
-      statements.push({
-        icon: PathIcon,
-        text: `You chose ${themeInfo?.name.toLowerCase() ?? selectedTheme} for a reason. Premium helps you become ${identityPhrase}.`,
-      });
-    }
+    statements.push(`Premium helps you become ${identityPhrase}.`);
   } else if (spiritualSeeking) {
-    // Trim to keep it conversational
-    const seeking = spiritualSeeking.length > 80
-      ? spiritualSeeking.slice(0, 77).replace(/\s+\S*$/, '') + '...'
+    const seeking = spiritualSeeking.length > 60
+      ? spiritualSeeking.slice(0, 57).replace(/\s+\S*$/, '') + '...'
       : spiritualSeeking;
-    statements.push({
-      icon: PathIcon,
-      text: name
-        ? `${name}, you said you\u2019re looking for "${seeking}" \u2014 Premium gives you the space to actually find it.`
-        : `You\u2019re looking for "${seeking}" \u2014 Premium gives you the space to actually find it.`,
-    });
+    statements.push(`You\u2019re looking for "${seeking}" \u2014 this is where you find it.`);
   } else {
-    statements.push({
-      icon: PathIcon,
-      text: name
-        ? `${name}, this is the version of you that follows through \u2014 the one that doesn\u2019t just start, but stays.`
-        : 'This is the version of you that follows through \u2014 the one that doesn\u2019t just start, but stays.',
-    });
+    statements.push('Devotionals that grow with you, not generic content that stays the same.');
   }
 
-  // Statement 2: Emotional resonance — we see what you're carrying
+  // Statement 2: Emotional or story-based
   if (emotionalState && emotionalState.length > 10) {
-    statements.push({
-      icon: HeartIcon,
-      text: 'You opened up about something real. Premium means your devotionals keep meeting you exactly where you are \u2014 not where an algorithm guesses.',
-    });
+    statements.push('You opened up about something real. Premium keeps meeting you there.');
   } else {
-    statements.push({
-      icon: HeartIcon,
-      text: 'Devotionals that know your story, a voice that reads to you, journaling that goes deeper \u2014 all without limits.',
-    });
+    statements.push('Your story shapes every reading. Premium makes that personal.');
   }
-
-  // Statement 3: Forward-looking — the daily rhythm
-  statements.push({
-    icon: SunIcon,
-    text: 'Every morning, something waiting for you that actually matters. Not content. Conversation.',
-  });
 
   return statements;
 }
-
-/** Social proof testimonials displayed below identity statements */
-const SOCIAL_PROOF_STATEMENTS: { text: string; author: string }[] = [
-  {
-    text: 'This app transformed my morning quiet time.',
-    author: 'Sarah M.',
-  },
-  {
-    text: 'The personalized devotionals feel like they were written just for me.',
-    author: 'David K.',
-  },
-  {
-    text: "I've kept a 45-day streak and my prayer life has never been stronger.",
-    author: 'Rachel T.',
-  },
-  {
-    text: 'Best devotional app I\'ve ever used. The AI really understands my journey.',
-    author: 'Michael P.',
-  },
-  {
-    text: 'My small group all uses Unfold now. It\'s that good.',
-    author: 'Jessica L.',
-  },
-];
 
 /** Determine if a package has a free trial intro offer */
 function packageHasFreeTrial(pkg: PurchasesPackage | undefined | null): boolean {
@@ -164,7 +105,7 @@ export default function PaywallScreen() {
   const isFromOnboarding = source === 'onboarding' || source === 'onboarding_early';
   const isEarlyOnboarding = source === 'onboarding_early';
   const queryClient = useQueryClient();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<PlanChoice>('yearly');
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -172,17 +113,16 @@ export default function PaywallScreen() {
 
   // Pull user's onboarding data for personalization
   const userName = useUnfoldStore((s) => s.user?.name);
-  const currentSituation = useUnfoldStore((s) => s.user?.currentSituation);
   const emotionalState = useUnfoldStore((s) => s.user?.emotionalState);
   const spiritualSeeking = useUnfoldStore((s) => s.user?.spiritualSeeking);
   const selectedTheme = useUnfoldStore((s) => s.user?.selectedTheme);
 
   const firstName = userName?.split(' ')[0];
 
-  // Build the personalized identity statements
+  // Build the personalized identity statements (2 concise lines)
   const identityStatements = useMemo(
-    () => buildIdentityStatements(userName, currentSituation, emotionalState, spiritualSeeking, selectedTheme),
-    [userName, currentSituation, emotionalState, spiritualSeeking, selectedTheme],
+    () => buildIdentityStatements(userName, emotionalState, spiritualSeeking, selectedTheme),
+    [userName, emotionalState, spiritualSeeking, selectedTheme],
   );
 
   const { data: offeringsResult, isLoading } = useQuery({
@@ -356,40 +296,13 @@ export default function PaywallScreen() {
 
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
 
-  // Pulsing glow animation for subscribe button
-  const glowOpacity = useSharedValue(0.4);
-  const glowScale = useSharedValue(1);
-
-  useEffect(() => {
-    glowOpacity.value = withDelay(
-      800,
-      withRepeat(
-        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      )
-    );
-    glowScale.value = withDelay(
-      800,
-      withRepeat(
-        withTiming(1.02, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      )
-    );
-  }, []);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: glowOpacity.value * 0.7,
-    shadowRadius: 16 + glowOpacity.value * 12,
-    transform: [{ scale: glowScale.value }],
-  }));
-
   // Pull real prices from RevenueCat packages, fall back to hardcoded defaults
   const monthlyPrice = monthlyPackage?.product.priceString ?? '$5.99';
   const yearlyPrice = yearlyPackage?.product.priceString ?? '$49.99';
+  const monthlyRaw = monthlyPackage?.product.price ?? 5.99;
   const yearlyRaw = yearlyPackage?.product.price ?? 49.99;
   const perMonthFromYearly = `$${(yearlyRaw / 12).toFixed(2)}`;
+  const savingsPercent = Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100);
 
   // Personalized hero copy
   const heroTitle = isFromOnboarding
@@ -401,689 +314,450 @@ export default function PaywallScreen() {
       : 'Keep going.';
 
   const heroSubtitle = isFromOnboarding
-    ? 'You just told us what matters to you. Premium means your devotionals never stop growing with you.'
-    : isTrialEligible
-      ? 'You\u2019ve already started something real. See what it looks like without limits.'
-      : 'You\u2019ve already started something real. Go all the way in.';
+    ? 'Your story shaped a devotional just for you. Here\u2019s what premium unlocks.'
+    : 'Here\u2019s what you get with premium.';
+
+  // Concrete premium benefits — title + description, not vague labels
+  const premiumBenefits = [
+    { icon: SpeakerHighIcon, title: 'Listen hands-free', desc: '7 narration voices for your commute or quiet time' },
+    { icon: PaletteIcon, title: '7 reading themes', desc: 'Premium fonts and colors designed for focus' },
+    { icon: BookOpenTextIcon, title: '32 study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
+    { icon: InfinityIcon, title: 'Unlimited series', desc: 'Always shaped by your story and where you are now' },
+    { icon: PencilLineIcon, title: 'Journal & reflection', desc: 'AI-powered prompts to process what you read' },
+    { icon: ShareNetworkIcon, title: 'Share card themes', desc: 'Full palette of colors for sharing verses beautifully' },
+  ];
+
+  // Free vs premium comparison rows
+  const comparison = [
+    { label: 'Devotional series', free: '1 active', premium: 'Unlimited' },
+    { label: 'Reading themes', free: '2', premium: '7' },
+    { label: 'Study methods', free: 'Basic', premium: '32 methods' },
+    { label: 'Audio narration', free: false, premium: true },
+    { label: 'Journal prompts', free: false, premium: true },
+    { label: 'Share card styles', free: '2', premium: 'All' },
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* ─── Scrollable content ─── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 16) + 8 }}
+        contentContainerStyle={{ paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
-        bounces={false}
       >
-        {/* Close button row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 8 }}>
-          <TouchableOpacity
-            activeOpacity={0.6}
-            onPress={handleClose}
-            disabled={isPurchasing}
-            accessibilityLabel="Close paywall"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isPurchasing }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{
-              padding: 8,
-              opacity: isPurchasing ? 0.5 : 1,
-            }}
-          >
-            <XIcon size={22} color={colors.textSubtle} weight="light" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Hero section */}
-        <View style={{ paddingTop: 0, paddingHorizontal: 28 }}>
-          <Animated.View entering={FadeIn.duration(600)}>
-            {/* App Icon */}
-            <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 14,
-                backgroundColor: colors.inputBackground,
-                justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
-              <Image
-                source={isDark ? require('./icon-paywall.png') : require('./icon-paywall-light.png')}
-                style={{ width: 32, height: 32 }}
-                resizeMode="contain"
-              />
-            </View>
-
-            <View
-              style={{
-                width: 36,
-                height: 1,
-                backgroundColor: colors.accent,
-                marginBottom: 12,
-                borderRadius: 1,
-                opacity: 0.6,
-              }}
+        <View style={{ paddingHorizontal: 28, paddingTop: insets.top + 16 }}>
+          {/* Unfold icon + close button row */}
+          <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+            <Image
+              source={require('@/app/icon-paywall-light.png')}
+              style={{ width: 28, height: 28, tintColor: colors.accent, opacity: 0.8 }}
+              resizeMode="contain"
             />
+          </Animated.View>
+
+          {/* Hero — title + subtitle */}
+          <Animated.View entering={FadeIn.duration(600)}>
             <Text
               style={{
                 fontFamily: FontFamily.display,
-                fontSize: 36,
+                fontSize: 34,
                 color: colors.text,
-                letterSpacing: -1,
-                lineHeight: 42,
+                letterSpacing: -0.5,
+                lineHeight: 40,
               }}
             >
               {heroTitle}
             </Text>
             <Text
               style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: 16,
+                fontFamily: FontFamily.body,
+                fontSize: 15,
                 color: colors.textMuted,
-                marginTop: 10,
-                lineHeight: 24,
+                marginTop: 6,
+                lineHeight: 22,
               }}
             >
               {heroSubtitle}
             </Text>
           </Animated.View>
 
-          {/* Identity statements — replaces feature checklist */}
-          <View style={{ marginTop: 16, gap: 12 }}>
-            {identityStatements.map((statement, index) => {
-              const IconComponent = statement.icon;
+          {/* ─── Feature benefit rows ─── */}
+          <View style={{ marginTop: 24, gap: 18 }}>
+            {premiumBenefits.map((benefit, index) => {
+              const Icon = benefit.icon;
               return (
                 <Animated.View
-                  key={statement.text.slice(0, 40)}
-                  entering={FadeInDown.duration(500).delay(200 + index * 150)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                  }}
+                  key={benefit.title}
+                  entering={FadeInDown.duration(350).delay(150 + index * 70)}
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}
                 >
                   <View
                     style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      backgroundColor: `${colors.accent}14`,
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      backgroundColor: `${colors.accent}12`,
+                      borderWidth: 1,
+                      borderColor: `${colors.accent}18`,
                       justifyContent: 'center',
                       alignItems: 'center',
-                      marginRight: 14,
-                      marginTop: 2,
+                      marginTop: 1,
                     }}
                   >
-                    <IconComponent size={18} color={colors.accent} weight="light" />
+                    <Icon size={18} color={colors.accent} weight="light" />
                   </View>
-                  <Text
-                    style={{
-                      flex: 1,
-                      fontFamily: FontFamily.body,
-                      fontSize: 15,
-                      color: colors.text,
-                      lineHeight: 23,
-                    }}
-                  >
-                    {statement.text}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.text,
+                        lineHeight: 20,
+                      }}
+                    >
+                      {benefit.title}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 13,
+                        color: colors.textMuted,
+                        lineHeight: 18,
+                        marginTop: 2,
+                      }}
+                    >
+                      {benefit.desc}
+                    </Text>
+                  </View>
                 </Animated.View>
               );
             })}
           </View>
 
-          {/* Social proof */}
-          <Animated.View
-            entering={FadeInDown.duration(500).delay(550)}
-            style={{
-              marginTop: 16,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              backgroundColor: `${colors.accent}08`,
-              borderWidth: 1,
-              borderColor: `${colors.accent}12`,
-            }}
-          >
-            {SOCIAL_PROOF_STATEMENTS.slice(0, 2).map((testimonial, index) => (
+          {/* ─── Free vs Premium comparison ─── */}
+          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={{ marginTop: 28 }}>
+            {/* Column headers */}
+            <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
+              <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: 12, color: colors.textSubtle }}>
+              </Text>
+              <Text style={{ width: 70, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center', letterSpacing: 0.5 }}>
+                FREE
+              </Text>
+              <Text style={{ width: 80, fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.accent, textAlign: 'center', letterSpacing: 0.5 }}>
+                PREMIUM
+              </Text>
+            </View>
+
+            {/* Comparison rows */}
+            {comparison.map((row, i) => (
               <View
-                key={testimonial.author}
+                key={row.label}
                 style={{
-                  marginBottom: index < 1 ? 10 : 0,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 9,
+                  paddingLeft: 4,
+                  borderTopWidth: i === 0 ? 1 : 0,
+                  borderBottomWidth: 1,
+                  borderColor: colors.border,
                 }}
               >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.bodyItalic,
-                    fontSize: 13,
-                    color: colors.textMuted,
-                    lineHeight: 20,
-                  }}
-                >
-                  &ldquo;{testimonial.text}&rdquo;
+                <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: 13, color: colors.text }}>
+                  {row.label}
                 </Text>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 11,
-                    color: colors.textHint,
-                    marginTop: 3,
-                  }}
-                >
-                  {'\u2014'} {testimonial.author}
-                </Text>
+                <View style={{ width: 70, alignItems: 'center' }}>
+                  {typeof row.free === 'boolean' ? (
+                    row.free
+                      ? <CheckIcon size={15} color={colors.textMuted} weight="bold" />
+                      : <XCircleIcon size={15} color={colors.textSubtle} weight="light" />
+                  ) : (
+                    <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                      {row.free}
+                    </Text>
+                  )}
+                </View>
+                <View style={{ width: 80, alignItems: 'center' }}>
+                  {typeof row.premium === 'boolean' ? (
+                    <CheckIcon size={15} color={colors.accent} weight="bold" />
+                  ) : (
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.accent }}>
+                      {row.premium}
+                    </Text>
+                  )}
+                </View>
               </View>
             ))}
           </Animated.View>
 
-          {/* What's included in Premium */}
-          <Animated.View
-            entering={FadeInDown.duration(500).delay(650)}
-            style={{ marginTop: 16 }}
-          >
-            <Text
-              style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 10.5,
-                color: colors.textSubtle,
-                letterSpacing: 2,
-                textTransform: 'uppercase',
-                marginBottom: 10,
-              }}
-            >
-              Everything in Premium
-            </Text>
-            {[
-              { icon: BookOpenTextIcon, label: 'Unlimited devotional series' },
-              { icon: SpeakerHighIcon, label: 'AI-narrated audio for every reading' },
-              { icon: PencilSimpleLineIcon, label: 'AI-powered journal reflections' },
-              { icon: PaletteIcon, label: 'Custom themes, fonts, and accent colors' },
-              { icon: FireIcon, label: 'Unlimited streak freezes' },
-            ].map((item) => (
-              <View
-                key={item.label}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginBottom: 8,
-                }}
-              >
-                <CheckIcon size={16} color={colors.accent} weight="bold" style={{ marginRight: 12 }} />
-                <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: 14,
-                    color: colors.text,
-                    flex: 1,
-                  }}
-                >
-                  {item.label}
-                </Text>
-              </View>
-            ))}
-          </Animated.View>
-
-          {/* Trial timeline — only show when eligible */}
+          {/* ─── Trial timeline (when eligible) ─── */}
           {isTrialEligible && (
-            <Animated.View
-              entering={FadeInDown.duration(500).delay(700)}
-              style={{
-                marginTop: 14,
-                padding: 14,
-                borderRadius: 12,
-                backgroundColor: `${colors.accent}0D`,
-                borderWidth: 1,
-                borderColor: `${colors.accent}1A`,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <ClockIcon size={16} color={colors.accent} weight="light" style={{ marginRight: 8 }} />
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiSemiBold,
-                    fontSize: 13,
-                    color: colors.accent,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                  }}
-                >
-                  How your trial works
-                </Text>
-              </View>
-
-              {/* During trial */}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 }}>
-                <SparkleIcon size={16} color={colors.accent} weight="light" style={{ marginRight: 10, marginTop: 2 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 13,
-                    color: colors.text,
-                    marginBottom: 2,
-                  }}>
-                    During your {selectedTrialDuration} free trial
-                  </Text>
-                  <Text style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textMuted,
-                    lineHeight: 18,
-                  }}>
-                    Full access to everything. No charge. No strings.
-                  </Text>
+            <Animated.View entering={FadeInDown.duration(400).delay(700)} style={{ marginTop: 28 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8 }}>
+                {/* Today */}
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent}20`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                    <CheckIcon size={16} color={colors.accent} weight="bold" />
+                  </View>
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Today</Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>Full access{'\n'}starts now</Text>
                 </View>
-              </View>
-
-              {/* After trial */}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                <CrownIcon size={16} color={colors.textMuted} weight="light" style={{ marginRight: 10, marginTop: 2 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: 13,
-                    color: colors.text,
-                    marginBottom: 2,
-                  }}>
-                    After your trial ends
-                  </Text>
-                  <Text style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textMuted,
-                    lineHeight: 18,
-                  }}>
-                    {selectedPlan === 'yearly'
-                      ? `${perMonthFromYearly}/mo (billed ${yearlyPrice}/year)`
-                      : `${monthlyPrice}/month`}
-                    . Cancel anytime.
-                  </Text>
+                {/* Connector */}
+                <View style={{ flex: 0.5, justifyContent: 'flex-start', paddingTop: 16 }}>
+                  <View style={{ height: 1, backgroundColor: colors.border }} />
+                </View>
+                {/* Reminder */}
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                    <BellIcon size={16} color={colors.textMuted} weight="light" />
+                  </View>
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) - 2 || 12}</Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>We'll remind{'\n'}you</Text>
+                </View>
+                {/* Connector */}
+                <View style={{ flex: 0.5, justifyContent: 'flex-start', paddingTop: 16 }}>
+                  <View style={{ height: 1, backgroundColor: colors.border }} />
+                </View>
+                {/* Charge */}
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                    <CreditCardIcon size={16} color={colors.textMuted} weight="light" />
+                  </View>
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) || 14}</Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.textMuted, textAlign: 'center' }}>First charge{'\n'}Cancel anytime</Text>
                 </View>
               </View>
             </Animated.View>
           )}
-
-          {/* Separator */}
-          <View
-            style={{
-              height: 1,
-              backgroundColor: colors.border,
-              marginVertical: 12,
-            }}
-          />
-        </View>
-
-        {/* Plans + subscribe + legal */}
-        <View style={{ paddingHorizontal: 28, paddingBottom: 8, paddingTop: 0 }}>
-          {/* Plan selection */}
-          <Animated.View
-            entering={FadeInDown.duration(500).delay(200)}
-            style={{ gap: 8, marginBottom: 10 }}
-          >
-            {/* Yearly */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelectedPlan('yearly');
-              }}
-              accessibilityLabel={`Yearly plan, ${perMonthFromYearly} per month, billed ${yearlyPrice} per year${yearlyHasTrial ? `, includes ${yearlyTrialDuration} free trial` : ''}`}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  borderRadius: 14,
-                  borderWidth: selectedPlan === 'yearly' ? 2 : 1,
-                  borderColor: selectedPlan === 'yearly' ? colors.accent : colors.border,
-                  backgroundColor: selectedPlan === 'yearly'
-                    ? `${colors.accent}1F`
-                    : 'transparent',
-                }}
-              >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: selectedPlan === 'yearly' ? 6 : 1.5,
-                    borderColor: selectedPlan === 'yearly' ? colors.accent : colors.border,
-                    marginRight: 14,
-                  }}
-                />
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.text,
-                      }}
-                    >
-                      Yearly
-                    </Text>
-                    <View
-                      style={{
-                        backgroundColor: `${colors.accent}26`,
-                        paddingHorizontal: 7,
-                        paddingVertical: 2,
-                        borderRadius: 5,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiSemiBold,
-                          fontSize: 10,
-                          color: colors.accent,
-                          textTransform: 'uppercase',
-                          letterSpacing: 0.5,
-                        }}
-                      >
-                        Save 30%
-                      </Text>
-                    </View>
-                    {yearlyHasTrial && (
-                      <View
-                        style={{
-                          backgroundColor: `${colors.accent}14`,
-                          paddingHorizontal: 7,
-                          paddingVertical: 2,
-                          borderRadius: 5,
-                          borderWidth: 1,
-                          borderColor: `${colors.accent}26`,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiSemiBold,
-                            fontSize: 10,
-                            color: colors.accent,
-                            letterSpacing: 0.3,
-                          }}
-                        >
-                          {yearlyTrialDuration} free trial
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 12,
-                      color: colors.textMuted,
-                      marginTop: 2,
-                    }}
-                  >
-                    {perMonthFromYearly}/mo · billed {yearlyPrice}/year
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Monthly */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelectedPlan('monthly');
-              }}
-              accessibilityLabel={`Monthly plan, ${monthlyPrice} per month${monthlyHasTrial ? `, includes ${monthlyTrialDuration} free trial` : ''}`}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  borderRadius: 14,
-                  borderWidth: selectedPlan === 'monthly' ? 1.5 : 1,
-                  borderColor: selectedPlan === 'monthly' ? colors.accent : colors.border,
-                  backgroundColor: selectedPlan === 'monthly'
-                    ? `${colors.accent}0F`
-                    : 'transparent',
-                }}
-              >
-                <View
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: selectedPlan === 'monthly' ? 6 : 1.5,
-                    borderColor: selectedPlan === 'monthly' ? colors.accent : colors.border,
-                    marginRight: 14,
-                  }}
-                />
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.text,
-                      }}
-                    >
-                      Monthly
-                    </Text>
-                    {monthlyHasTrial && (
-                      <View
-                        style={{
-                          backgroundColor: `${colors.accent}14`,
-                          paddingHorizontal: 7,
-                          paddingVertical: 2,
-                          borderRadius: 5,
-                          borderWidth: 1,
-                          borderColor: `${colors.accent}26`,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiSemiBold,
-                            fontSize: 10,
-                            color: colors.accent,
-                            letterSpacing: 0.3,
-                          }}
-                        >
-                          {monthlyTrialDuration} free trial
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 12,
-                      color: colors.textMuted,
-                      marginTop: 2,
-                    }}
-                  >
-                    {monthlyPrice}/month
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* SUBSCRIBE BUTTON with glow */}
-          <View style={{ marginTop: 8, marginBottom: 4 }}>
-            <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  borderRadius: 28,
-                  backgroundColor: colors.accent,
-                  shadowColor: colors.accent,
-                  shadowOffset: { width: 0, height: 4 },
-                },
-                glowStyle,
-              ]}
-            />
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={handleSubscribe}
-              disabled={isPurchasing}
-              accessibilityLabel={isTrialEligible ? `Start your ${selectedTrialDuration} free trial` : 'Subscribe now'}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isPurchasing }}
-              style={{
-                backgroundColor: colors.accent,
-                paddingVertical: 18,
-                paddingHorizontal: 32,
-                borderRadius: 28,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: isPurchasing ? 0.7 : 1,
-              }}
-            >
-              {isPurchasing ? (
-                <ActivityIndicator color={colors.background} size="small" />
-              ) : (
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiSemiBold,
-                    fontSize: 17,
-                    color: colors.background,
-                    textAlign: 'center',
-                    letterSpacing: 0.3,
-                  }}
-                >
-                  {isTrialEligible
-                    ? `Start Your ${selectedTrialDuration} Free Trial`
-                    : selectedPlan === 'yearly'
-                      ? `Subscribe \u2014 ${yearlyPrice}/year`
-                      : `Subscribe \u2014 ${monthlyPrice}/month`}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Error message */}
-          {subscribeError ? (
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 13,
-                color: '#E85C5C',
-                textAlign: 'center',
-                marginTop: 8,
-                marginBottom: 4,
-              }}
-            >
-              {subscribeError}
-            </Text>
-          ) : null}
-
-          {/* Cancel anytime reassurance */}
-          {isTrialEligible && (
-            <Animated.View entering={FadeInDown.duration(400).delay(300)}>
-              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 4 }}>
-                <ShieldCheckIcon size={14} color={colors.textSubtle} weight="light" style={{ marginRight: 6 }} />
-                <Text
-                  style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 12,
-                    color: colors.textSubtle,
-                    textAlign: 'center',
-                  }}
-                >
-                  Try everything free for {selectedTrialDuration.replace('-', ' ')}s. Cancel anytime.
-                </Text>
-              </View>
-            </Animated.View>
-          )}
-
-          {/* Restore + Legal at bottom */}
-          <View style={{ alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
-            <TouchableOpacity
-              activeOpacity={0.6}
-              onPress={handleRestore}
-              disabled={isPurchasing}
-              accessibilityLabel="Restore purchases"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: isPurchasing }}
-              style={{
-                padding: 6,
-                opacity: isPurchasing ? 0.5 : 1,
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 13,
-                  color: colors.textSubtle,
-                  textAlign: 'center',
-                }}
-              >
-                Restore purchases
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Skip for onboarding flow */}
-          {isFromOnboarding && (
-            <TouchableOpacity
-              activeOpacity={0.6}
-              onPress={handleClose}
-              style={{
-                padding: 12,
-                alignSelf: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 14,
-                  color: colors.textSubtle,
-                  textAlign: 'center',
-                }}
-              >
-                Maybe later
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Legal links at bottom */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'center',
-              marginTop: 8,
-              gap: 16,
-            }}
-          >
-            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')} accessibilityRole="link" accessibilityLabel="Terms of Use">
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 11,
-                  color: colors.textHint,
-                  textDecorationLine: 'underline',
-                }}
-              >
-                Terms of Use
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity activeOpacity={0.6} onPress={() => Linking.openURL('https://unfoldapp.co/privacy')} accessibilityRole="link" accessibilityLabel="Privacy Policy">
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: 11,
-                  color: colors.textHint,
-                  textDecorationLine: 'underline',
-                }}
-              >
-                Privacy Policy
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </ScrollView>
+
+      {/* ─── Sticky footer: plans + CTA + legal ─── */}
+      <View
+        style={{
+          paddingHorizontal: 28,
+          paddingTop: 14,
+          paddingBottom: Math.max(insets.bottom, 16) + 4,
+          backgroundColor: colors.background,
+        }}
+      >
+        {/* Plan selection — stacked full-width cards */}
+        <View style={{ gap: 8, marginBottom: 14 }}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSelectedPlan('yearly');
+            }}
+            accessibilityLabel={`Yearly plan, ${perMonthFromYearly} per month`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: selectedPlan === 'yearly' }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 14,
+              paddingHorizontal: 18,
+              borderRadius: 12,
+              backgroundColor: selectedPlan === 'yearly' ? `${colors.accent}18` : 'rgba(255,255,255,0.04)',
+              borderWidth: 1.5,
+              borderColor: selectedPlan === 'yearly' ? colors.accent : 'rgba(255,255,255,0.15)',
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text
+                style={{
+                  fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                  fontSize: 15,
+                  color: selectedPlan === 'yearly' ? colors.text : colors.textMuted,
+                }}
+              >
+                Yearly
+              </Text>
+              {savingsPercent > 0 && (
+                <View style={{ backgroundColor: `${colors.accent}30`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 10, color: colors.accent }}>
+                    SAVE {savingsPercent}%
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text
+              style={{
+                fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                fontSize: 15,
+                color: selectedPlan === 'yearly' ? colors.text : colors.textMuted,
+              }}
+            >
+              {perMonthFromYearly}/mo
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setSelectedPlan('monthly');
+            }}
+            accessibilityLabel={`Monthly plan, ${monthlyPrice} per month`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: selectedPlan === 'monthly' }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 14,
+              paddingHorizontal: 18,
+              borderRadius: 12,
+              backgroundColor: selectedPlan === 'monthly' ? `${colors.accent}18` : 'rgba(255,255,255,0.04)',
+              borderWidth: 1.5,
+              borderColor: selectedPlan === 'monthly' ? colors.accent : 'rgba(255,255,255,0.15)',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                fontSize: 15,
+                color: selectedPlan === 'monthly' ? colors.text : colors.textMuted,
+              }}
+            >
+              Monthly
+            </Text>
+            <Text
+              style={{
+                fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.ui,
+                fontSize: 15,
+                color: selectedPlan === 'monthly' ? colors.text : colors.textMuted,
+              }}
+            >
+              {monthlyPrice}/mo
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* CTA button */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleSubscribe}
+          disabled={isPurchasing}
+          accessibilityLabel={isTrialEligible ? `Start your ${selectedTrialDuration} free trial` : 'Unlock Unfold Premium'}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isPurchasing }}
+          style={{
+            backgroundColor: colors.accent,
+            paddingVertical: 17,
+            paddingHorizontal: 32,
+            borderRadius: 28,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 4,
+            opacity: isPurchasing ? 0.7 : 1,
+          }}
+        >
+          {isPurchasing ? (
+            <ActivityIndicator color={colors.background} size="small" />
+          ) : (
+            <Text
+              style={{
+                fontFamily: FontFamily.uiSemiBold,
+                fontSize: 17,
+                color: colors.background,
+                textAlign: 'center',
+                letterSpacing: 0.3,
+              }}
+            >
+              {isTrialEligible
+                ? `Start My Free Trial`
+                : selectedPlan === 'yearly'
+                  ? `Unlock Premium \u2014 ${perMonthFromYearly}/mo`
+                  : `Unlock Premium \u2014 ${monthlyPrice}/mo`}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Error */}
+        {subscribeError ? (
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E85C5C', textAlign: 'center', marginTop: 6 }}>
+            {subscribeError}
+          </Text>
+        ) : null}
+
+        {/* Restore + Skip + Legal row */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 10, gap: 8 }}>
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={handleRestore}
+            disabled={isPurchasing}
+            accessibilityLabel="Restore purchases"
+            accessibilityRole="button"
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            style={{ padding: 6, opacity: isPurchasing ? 0.5 : 1 }}
+          >
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+              Restore
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ color: colors.textSubtle, fontSize: 11 }}>{'\u00B7'}</Text>
+          {isFromOnboarding && (
+            <>
+              <TouchableOpacity
+                activeOpacity={0.6}
+                onPress={handleClose}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                style={{ padding: 6 }}
+              >
+                <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                  Maybe later
+                </Text>
+              </TouchableOpacity>
+              <Text style={{ color: colors.textSubtle, fontSize: 11 }}>{'\u00B7'}</Text>
+            </>
+          )}
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}
+            accessibilityRole="link"
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            style={{ padding: 6 }}
+          >
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 11, color: colors.textMuted }}>
+              Terms
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ color: colors.textSubtle, fontSize: 11 }}>{'\u00B7'}</Text>
+          <TouchableOpacity
+            activeOpacity={0.6}
+            onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
+            accessibilityRole="link"
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            style={{ padding: 6 }}
+          >
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 11, color: colors.textMuted }}>
+              Privacy
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Close button — absolute, top right */}
+      <TouchableOpacity
+        activeOpacity={0.6}
+        onPress={handleClose}
+        disabled={isPurchasing}
+        accessibilityLabel="Close paywall"
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isPurchasing }}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        style={{
+          position: 'absolute',
+          top: insets.top + 8,
+          right: 16,
+          padding: 8,
+          opacity: isPurchasing ? 0.5 : 1,
+          zIndex: 10,
+        }}
+      >
+        <XIcon size={22} color={colors.textMuted} weight="light" />
+      </TouchableOpacity>
 
       {/* Purchase loading overlay */}
       {isPurchasing && (

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { CheckIcon } from 'phosphor-react-native';
+import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -33,10 +33,11 @@ export default function DayMenuScreen() {
   }
 
   const handleSelectDay = (dayNumber: number) => {
+    if (dayNumber > devotional.currentDay) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    // Navigate back with the selected day as a param
-    // The reading screen will pick this up via params or we navigate directly
     router.replace({
       pathname: '/(tabs)/(today)/reading',
       params: { dayNumber: dayNumber.toString() },
@@ -81,17 +82,19 @@ export default function DayMenuScreen() {
         {devotional.days.map((day, index) => {
           const isActive = day.dayNumber === currentViewingDay;
           const isDayRead = day.isRead;
+          const isLocked = day.dayNumber > devotional.currentDay;
 
           return (
             <Animated.View
               key={day.dayNumber}
               entering={FadeInDown.duration(350).delay(Math.min(index * 40, 400))}
             >
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={isLocked ? 1 : 0.7}
               onPress={() => handleSelectDay(day.dayNumber)}
-              onPressIn={() => setPressedDay(day.dayNumber)}
+              onPressIn={() => { if (!isLocked) setPressedDay(day.dayNumber); }}
               onPressOut={() => setPressedDay(null)}
               style={{
+                opacity: isLocked ? 0.38 : 1,
                 backgroundColor: isActive
                   ? colors.buttonBackgroundPressed
                   : pressedDay === day.dayNumber
@@ -107,7 +110,7 @@ export default function DayMenuScreen() {
                 borderColor: isActive ? colors.border : 'transparent',
               }}
             >
-              {/* Completion indicator */}
+              {/* Completion / lock indicator */}
               <View
                 style={{
                   width: 28,
@@ -119,7 +122,9 @@ export default function DayMenuScreen() {
                   marginRight: 14,
                 }}
               >
-                {isDayRead ? (
+                {isLocked ? (
+                  <LockSimpleIcon size={13} color={colors.textMuted} weight="light" />
+                ) : isDayRead ? (
                   <CheckIcon size={16} color={colors.background} weight="bold" />
                 ) : (
                   <Text
@@ -151,7 +156,7 @@ export default function DayMenuScreen() {
                   style={{
                     fontFamily: FontFamily.uiMedium,
                     fontSize: 16,
-                    color: colors.text,
+                    color: isLocked ? colors.textMuted : colors.text,
                   }}
                   numberOfLines={1}
                 >
@@ -159,7 +164,7 @@ export default function DayMenuScreen() {
                 </Text>
               </View>
 
-              {isActive && (
+              {isActive && !isLocked && (
                 <View
                   style={{
                     width: 8,

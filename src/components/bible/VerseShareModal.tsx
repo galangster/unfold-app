@@ -56,6 +56,9 @@ export function VerseShareModal({
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Toggle pointer events off/on after native share sheet dismisses to
+  // reconnect the touch responder chain (iOS share sheet leaves it stale).
+  const [touchActive, setTouchActive] = useState<'auto' | 'none'>('auto');
 
   // Prevent orphaned words
   const displayText = verseText.replace(/\s+(\S+)$/, '\u00A0$1');
@@ -149,6 +152,10 @@ export function VerseShareModal({
       }
     } finally {
       setIsSharing(false);
+      // iOS share sheet leaves RN touch handlers stale — toggle pointer events
+      // off then on to force the native touch system to re-register handlers
+      setTouchActive('none');
+      setTimeout(() => setTouchActive('auto'), 50);
     }
   }, [isSharing, captureCard, reference]);
 
@@ -191,7 +198,7 @@ export function VerseShareModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <GestureHandlerRootView style={s.flex1}>
+      <GestureHandlerRootView style={s.flex1} pointerEvents={touchActive}>
         <TouchableOpacity
           activeOpacity={1}
           onPress={onClose}

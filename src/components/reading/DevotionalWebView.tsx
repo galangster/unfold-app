@@ -307,12 +307,31 @@ export function DevotionalWebView({
       return result;
     };
 
+    // Convert inline markdown to HTML — runs AFTER escapeAndLinkScripture
+    // because `*` is not an HTML special char and survives escaping unchanged.
+    const applyInlineMarkdown = (escaped: string): string => escaped
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Render a single paragraph, handling --- dividers and standalone bold headers
+    const renderParagraph = (p: string, isFirst = false): string => {
+      // Horizontal rule
+      if (/^-{3,}$/.test(p)) return '<hr>';
+      // Full-paragraph bold = study method section header (e.g. **LECTIO — Read**)
+      const headerMatch = p.match(/^\*\*([^*]+)\*\*$/);
+      if (headerMatch) {
+        return `<p class="section-header">${escapeHtml(headerMatch[1])}</p>`;
+      }
+      const inner = applyInlineMarkdown(escapeAndLinkScripture(p));
+      return isFirst ? `<p class="first-paragraph">${inner}</p>` : `<p>${inner}</p>`;
+    };
+
     const bodyHtml = hasDropCap
       ? `
-        <p class="first-paragraph"><span class="drop-cap">${firstLetter}</span>${escapeAndLinkScripture(paragraphs[0] || '')}</p>
-        ${paragraphs.slice(1).map(p => `<p>${escapeAndLinkScripture(p)}</p>`).join('')}
+        <p class="first-paragraph"><span class="drop-cap">${firstLetter}</span>${applyInlineMarkdown(escapeAndLinkScripture(paragraphs[0] || ''))}</p>
+        ${paragraphs.slice(1).map(p => renderParagraph(p)).join('')}
       `
-      : paragraphs.map(p => `<p>${escapeAndLinkScripture(p)}</p>`).join('');
+      : paragraphs.map((p, i) => renderParagraph(p, i === 0)).join('');
 
     // Divider between body paragraphs and quotes
     const bodyToQuoteDivider = (day.quotes?.length)
@@ -463,6 +482,27 @@ export function DevotionalWebView({
       margin-top: 4px;
       padding-right: 2px;
       font-weight: 400;
+    }
+
+    /* Horizontal rule from --- markdown */
+    hr {
+      border: none;
+      border-top: 1px solid ${mutedColor};
+      opacity: 0.25;
+      margin: 28px 0;
+    }
+
+    /* Study method headers — standalone **BOLD** paragraphs */
+    p.section-header {
+      font-family: 'Inter', sans-serif;
+      font-size: ${bodyFontSize * 0.72}px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: ${accentColor};
+      opacity: 0.85;
+      margin-top: ${lineHeight * 1.2}px;
+      margin-bottom: ${lineHeight * 0.4}px;
     }
 
     /* Section divider -- centered dots */

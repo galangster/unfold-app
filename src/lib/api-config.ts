@@ -32,7 +32,7 @@ export function getBackendCandidates(): string[] {
  * Falls back gracefully to unauthenticated headers if Firebase is unavailable
  * (local-only mode, anonymous users).
  */
-export async function getAuthHeaders(): Promise<Record<string, string>> {
+export async function getAuthHeaders(forceRefresh = false): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -41,7 +41,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
     const auth = require('@react-native-firebase/auth').default;
     const user = auth().currentUser;
     if (user) {
-      const idToken = await user.getIdToken();
+      const idToken = await user.getIdToken(forceRefresh);
       headers['Authorization'] = `Bearer ${idToken}`;
     }
   } catch {

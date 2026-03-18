@@ -24,10 +24,13 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import {
   SmileySadIcon,
+  SmileyNervousIcon,
+  SmileyBlankIcon,
   SmileyIcon,
   SmileyMehIcon,
   SmileyWinkIcon,
   HeartIcon,
+  SunIcon,
   XIcon,
   PencilSimpleIcon,
 } from 'phosphor-react-native';
@@ -39,9 +42,9 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5;
 const TOTAL_STEPS = 3;
 
-type MoodValue = 1 | 2 | 3 | 4 | 5;
+type MoodValue = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
-const MOOD_LABELS: string[] = ['Struggling', 'Low', 'Okay', 'Good', 'Grateful'];
+const MOOD_LABELS: string[] = ['Struggling', 'Anxious', 'Tired', 'Low', 'Okay', 'Peaceful', 'Good', 'Grateful'];
 
 const MOOD_OPTIONS: Array<{
   value: MoodValue;
@@ -49,10 +52,13 @@ const MOOD_OPTIONS: Array<{
   Icon: typeof SmileySadIcon;
 }> = [
   { value: 1, label: 'Struggling', Icon: SmileySadIcon },
-  { value: 2, label: 'Low', Icon: SmileyMehIcon },
-  { value: 3, label: 'Okay', Icon: SmileyIcon },
-  { value: 4, label: 'Good', Icon: SmileyWinkIcon },
-  { value: 5, label: 'Grateful', Icon: HeartIcon },
+  { value: 2, label: 'Anxious', Icon: SmileyNervousIcon },
+  { value: 3, label: 'Tired', Icon: SmileyBlankIcon },
+  { value: 4, label: 'Low', Icon: SmileyMehIcon },
+  { value: 5, label: 'Okay', Icon: SmileyIcon },
+  { value: 6, label: 'Peaceful', Icon: SunIcon },
+  { value: 7, label: 'Good', Icon: SmileyWinkIcon },
+  { value: 8, label: 'Grateful', Icon: HeartIcon },
 ];
 
 export interface CheckInSheetProps {
@@ -499,7 +505,7 @@ function MagicChar({ char, delay, colors }: { char: string; delay: number; color
     <Animated.Text
       style={[
         {
-          fontFamily: FontFamily.bodyItalic,
+          fontFamily: FontFamily.body,
           fontSize: 20,
           color: colors.text,
           lineHeight: 30,
@@ -513,7 +519,7 @@ function MagicChar({ char, delay, colors }: { char: string; delay: number; color
 }
 
 /** Gentle celebration shown within the sheet after completing check-in */
-function CheckInCelebration({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }) {
+function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof useTheme>['colors']; onDismiss: () => void }) {
   const message = useMemo(
     () => CHECKIN_CELEBRATION_MESSAGES[Math.floor(Math.random() * CHECKIN_CELEBRATION_MESSAGES.length)],
     []
@@ -532,13 +538,23 @@ function CheckInCelebration({ colors }: { colors: ReturnType<typeof useTheme>['c
   }, [message]);
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+    <TouchableOpacity activeOpacity={1} onPress={onDismiss} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
         {message.split('').map((char, i) => (
           <MagicChar key={`${char}-${i}`} char={char} delay={charDelays[i]} colors={colors} />
         ))}
       </View>
-    </View>
+      <Text
+        style={{
+          fontFamily: FontFamily.ui,
+          fontSize: 12,
+          color: colors.textHint,
+          marginTop: 28,
+        }}
+      >
+        Tap anywhere to continue
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -597,17 +613,11 @@ export function CheckInSheet({
     }
   }, [visible]);
 
-  // Auto-dismiss celebration after 1.5s
+  // Fire completion data when celebration shows — user dismisses manually
   useEffect(() => {
     if (showCelebration && completionDataRef.current) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      const timer = setTimeout(() => {
-        if (completionDataRef.current) {
-          onComplete(completionDataRef.current);
-        }
-        setShowCelebration(false);
-      }, 1500);
-      return () => clearTimeout(timer);
+      onComplete(completionDataRef.current);
     }
   }, [showCelebration, onComplete]);
 
@@ -730,7 +740,7 @@ export function CheckInSheet({
             {/* Step content */}
             <View style={styles.stepContainer}>
               {showCelebration ? (
-                <CheckInCelebration colors={colors} />
+                <CheckInCelebration colors={colors} onDismiss={handleClose} />
               ) : (
                 <>
                   {currentStep === 0 && (
@@ -838,19 +848,21 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  /* Mood row */
+  /* Mood row — wraps into 2 rows of 4 */
   moodRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    justifyContent: 'space-evenly',
     paddingTop: 8,
+    rowGap: 6,
   },
   moodItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
     borderRadius: 14,
-    minWidth: 58,
+    width: 76,
   },
   moodLabel: {
     fontSize: FontSize.xs,
@@ -862,6 +874,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    marginTop: 16,
     marginBottom: 20,
   },
   chip: {

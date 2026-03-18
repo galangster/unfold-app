@@ -43,6 +43,7 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
+import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
@@ -1513,6 +1514,10 @@ export default function OnboardingScreen() {
             autoFocus
             maxLength={INPUT_LIMITS.NAME.max}
           />
+          <VoiceInputBar
+            value={data.name}
+            onChangeText={(text) => setData((prev) => ({ ...prev, name: text }))}
+          />
         </View>
       );
     }
@@ -1629,6 +1634,10 @@ export default function OnboardingScreen() {
               scrollEnabled
             />
           </View>
+          <VoiceInputBar
+            value={data[step.id as keyof OnboardingData] as string}
+            onChangeText={(text) => setData((prev) => ({ ...prev, [step.id]: text }))}
+          />
           {/* Encouragement to share more */}
           {isDiscoveryStep && (
             <Text style={{

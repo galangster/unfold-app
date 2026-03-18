@@ -16,6 +16,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
@@ -34,7 +35,7 @@ import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
-import { ShareDevotionalModal } from '@/components/ShareDevotionalModal';
+// ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
@@ -84,6 +85,44 @@ function parsePositiveInteger(value?: string | string[]): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
+// ── Thin scroll progress bar pinned directly under the header ────
+function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<number>; accentColor: string }) {
+  const barStyle = useAnimatedStyle(() => ({
+    width: `${Math.min(100, progress.value * 100)}%`,
+    opacity: progress.value > 0.005 ? 1 : 0,
+  }));
+  return (
+    <View style={{ height: 2, backgroundColor: 'transparent' }}>
+      <Animated.View style={[{ height: 2, borderRadius: 1, backgroundColor: accentColor }, barStyle]} />
+    </View>
+  );
+}
+
+// ── Animated shimmer bar for skeleton loaders ──────────────────
+function ShimmerBar({ bg, width, delay }: { bg: string; width: string | number; delay: number }) {
+  const opacity = useSharedValue(0.35);
+
+  useEffect(() => {
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(0.85, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.35, { duration: 700, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+    return () => { opacity.value = 0.35; };
+  }, [delay]);
+
+  const barStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return (
+    <Animated.View style={[barStyle, { height: 12, borderRadius: 6, backgroundColor: bg, width }]} />
+  );
+}
+
 export default function ReadingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string }>();
@@ -125,7 +164,7 @@ export default function ReadingScreen() {
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
 
   const [viewingDay, setViewingDay] = useState(() => requestedDayNumber ?? currentDevotional?.currentDay ?? 1);
-  const [shareModalOpen, setShareModalOpen] = useState(false);
+  // shareModalOpen removed — share now navigates to /share-card route
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
@@ -165,6 +204,7 @@ export default function ReadingScreen() {
   const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
   const bridgeOpacity = useSharedValue(0);
+  const scrollProgress = useSharedValue(0);
 
   // Button press micro-interaction — spring scale for Complete Day button
   const completeButtonScale = useSharedValue(1);
@@ -213,9 +253,13 @@ export default function ReadingScreen() {
 
   const tomorrowTeaser = useMemo(() => {
     if (!tomorrowDayData?.bodyText) return null;
-    // Extract first sentence as a teaser
-    const firstSentence = tomorrowDayData.bodyText.match(/^[^.!?]+[.!?]/);
-    return firstSentence ? firstSentence[0].trim() : tomorrowDayData.bodyText.slice(0, 120).trim() + '...';
+    // Strip markdown syntax so we get clean prose, not raw **bold** or *italic*
+    const stripped = tomorrowDayData.bodyText
+      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+      .replace(/^---$/gm, '')
+      .trim();
+    const firstSentence = stripped.match(/^.+?[.!?]/s);
+    return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
   }, [tomorrowDayData]);
 
   // Cleanup mounted ref and continuation timer on unmount
@@ -481,9 +525,18 @@ export default function ReadingScreen() {
 
   const handleShare = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Share is now free for everyone to encourage viral growth
-    setShareModalOpen(true);
-  }, []);
+    // Navigate to share-card route (same design as scripture share)
+    const quoteText = currentDayData?.quotableLine || currentDayData?.title || '';
+    const dayLabel = currentDayData?.title || '';
+    router.push({
+      pathname: '/share-card',
+      params: {
+        text: quoteText,
+        reference: dayLabel,
+        type: 'quote',
+      },
+    });
+  }, [currentDayData, currentDevotional, viewingDay, router]);
 
   const handleJournal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -513,17 +566,30 @@ export default function ReadingScreen() {
     router.push('/(tabs)/(today)');
   }, [router]);
 
-  // Memoized scroll handler to prevent re-renders during scroll
-  // Uses functional setState to avoid dependency on showScrollHint
-  const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+  // Memoized scroll handler — tracks progress bar + scroll hint visibility
+  const handleScroll = useCallback((e: {
+    nativeEvent: {
+      contentOffset: { y: number };
+      contentSize: { height: number };
+      layoutMeasurement: { height: number };
+    }
+  }) => {
     const offsetY = e.nativeEvent.contentOffset.y;
-    // Hide scroll hint after scrolling 100px
+    const totalHeight = e.nativeEvent.contentSize.height;
+    const viewHeight = e.nativeEvent.layoutMeasurement.height;
+    const scrollable = totalHeight - viewHeight;
+    if (scrollable > 0) {
+      scrollProgress.value = withTiming(
+        Math.min(1, Math.max(0, offsetY / scrollable)),
+        { duration: 80 }
+      );
+    }
     setShowScrollHint((current) => {
       if (offsetY > 100 && current) return false;
       if (offsetY <= 50 && !current) return true;
       return current;
     });
-  }, []);
+  }, [scrollProgress]);
 
   const handleComplete = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1138,7 +1204,7 @@ export default function ReadingScreen() {
                 accessibilityHint="Returns to the home screen"
                 style={{ padding: 8 }}
               >
-                <HouseIcon size={22} color={colors.textMuted} weight="light" />
+                <HouseIcon size={22} color={colors.text} weight="light" />
               </TouchableOpacity>
 
               {/* Day indicator -- editorial serif typography */}
@@ -1167,7 +1233,7 @@ export default function ReadingScreen() {
               >
                 {/* Left Chevron */}
                 {viewingDay > 1 ? (
-                  <CaretLeftIcon size={14} color={colors.textSubtle} weight="bold" />
+                  <CaretLeftIcon size={14} color={colors.textSubtle} weight="light" />
                 ) : (
                   <View style={{ width: 14 }} />
                 )}
@@ -1204,10 +1270,10 @@ export default function ReadingScreen() {
                     >
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.uiMedium,
                           fontSize: 9,
                           color: colors.accent,
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.8,
                         }}
                       >
                         TODAY
@@ -1218,7 +1284,7 @@ export default function ReadingScreen() {
 
                 {/* Right Chevron */}
                 {viewingDay < availableDays ? (
-                  <CaretRightIcon size={14} color={colors.textSubtle} weight="bold" />
+                  <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
                 ) : (
                   <View style={{ width: 14 }} />
                 )}
@@ -1316,6 +1382,9 @@ export default function ReadingScreen() {
             </View>
             </View>
 
+            {/* Scroll progress bar — animated thin line below header */}
+            <ReadingProgressBar progress={scrollProgress} accentColor={colors.accent} />
+
             {/* Premium nudge banner — audio teaser */}
             {premiumNudge && (
               <PremiumNudgeCard
@@ -1341,7 +1410,7 @@ export default function ReadingScreen() {
               showsVerticalScrollIndicator={false}
               bounces={true}
               onScroll={handleScroll}
-              scrollEventThrottle={150}
+              scrollEventThrottle={16}
               bottomOffset={20}
               extraKeyboardSpace={60}
             >
@@ -1360,9 +1429,9 @@ export default function ReadingScreen() {
                 >
                   {/* Shimmer skeleton lines */}
                   <View style={{ gap: 8 }}>
-                    <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.buttonBackground, width: '90%' }} />
-                    <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.buttonBackground, width: '75%' }} />
-                    <View style={{ height: 12, borderRadius: 6, backgroundColor: colors.buttonBackground, width: '60%' }} />
+                    <ShimmerBar bg={colors.buttonBackground} width="90%" delay={0} />
+                    <ShimmerBar bg={colors.buttonBackground} width="75%" delay={120} />
+                    <ShimmerBar bg={colors.buttonBackground} width="60%" delay={240} />
                   </View>
                 </Animated.View>
               )}
@@ -1705,8 +1774,8 @@ export default function ReadingScreen() {
                         paddingHorizontal: 20,
                         borderRadius: 14,
                         backgroundColor: colors.inputBackground,
-                        borderWidth: 1.5,
-                        borderColor: colors.accent,
+                        borderWidth: 1,
+                        borderColor: colors.accent + '55',
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -1870,13 +1939,7 @@ export default function ReadingScreen() {
         </View>
       </Modal>
 
-      {/* Share Devotional Modal */}
-      <ShareDevotionalModal
-        visible={shareModalOpen}
-        onClose={() => setShareModalOpen(false)}
-        day={currentDayData}
-        seriesTitle={currentDevotional.title}
-      />
+      {/* Share: now navigates to /share-card route */}
 
       {/* Audio Player Bottom Sheet */}
       {isPremium && isAudioPlayerVisible && currentDayData && (

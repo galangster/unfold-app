@@ -69,8 +69,8 @@ function RootLayoutNav() {
         <Stack.Screen
           name="share-card"
           options={{
-            presentation: 'fullScreenModal',
-            animation: 'slide_from_bottom',
+            presentation: 'modal',
+            headerShown: false,
             contentStyle: { backgroundColor: '#000000' },
           }}
         />

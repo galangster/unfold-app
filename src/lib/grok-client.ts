@@ -83,9 +83,9 @@ RULES:
 Respond with valid JSON only: {"bridgeText": "..."}`;
 
 /**
- * /api/generate-examen
+ * Examen prayer — sent via /api/generate/go-deeper
  *
- * System prompt for the Ignatian Examen prayer generation endpoint.
+ * System prompt for the Ignatian Examen prayer generation.
  * Input payload: { userName, todayTheme, todayScripture, middayCheckIn, currentSituation }
  * Expected output: { movements: [{ title: string, prayer: string }, ...] } (exactly 5)
  */

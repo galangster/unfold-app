@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import { cacheDirectory, writeAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import {
   Skia,
@@ -28,9 +29,10 @@ import {
   ImageFormat,
   TextAlign,
 } from '@shopify/react-native-skia';
-import { XIcon, UploadSimpleIcon } from 'phosphor-react-native';
+import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -72,17 +74,18 @@ interface CardTheme {
   id: string;
   name: string;
   bg: string;
+  premium?: boolean;
 }
 
 const CARD_THEMES: CardTheme[] = [
   { id: 'midnight', name: 'Midnight', bg: '#0A0A0A' },
   { id: 'cream', name: 'Cream', bg: '#FAF7F2' },
-  { id: 'parchment', name: 'Parchment', bg: '#F5EEE0' },
-  { id: 'ocean', name: 'Ocean', bg: '#0A1628' },
-  { id: 'forest', name: 'Forest', bg: '#0D1A0D' },
-  { id: 'dusk', name: 'Dusk', bg: '#1A0F1E' },
-  { id: 'clay', name: 'Clay', bg: '#2C1E14' },
-  { id: 'slate', name: 'Slate', bg: '#1C2833' },
+  { id: 'parchment', name: 'Parchment', bg: '#F5EEE0', premium: true },
+  { id: 'ocean', name: 'Ocean', bg: '#0A1628', premium: true },
+  { id: 'forest', name: 'Forest', bg: '#0D1A0D', premium: true },
+  { id: 'dusk', name: 'Dusk', bg: '#1A0F1E', premium: true },
+  { id: 'clay', name: 'Clay', bg: '#2C1E14', premium: true },
+  { id: 'slate', name: 'Slate', bg: '#1C2833', premium: true },
 ];
 
 // ─── Dynamic font sizing (for preview) ───────────────────────────────────────
@@ -119,6 +122,8 @@ export default function ShareCardScreen() {
     type?: string;
   }>();
 
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+
   const text = params.text ?? '';
   const reference = params.reference ?? '';
   const translation = params.translation ?? '';
@@ -132,6 +137,13 @@ export default function ShareCardScreen() {
 
   const [selectedTheme, setSelectedTheme] = useState(isDark ? 'midnight' : 'cream');
   const [isSharing, setIsSharing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Toggle pointer events off/on after native share sheet dismisses to
+  // reconnect the touch responder chain (iOS share sheet leaves it stale).
+  // Unlike key-based re-mount, this avoids re-triggering entering animations.
+  const [touchActive, setTouchActive] = useState<'auto' | 'none'>('auto');
 
   // Load fonts for Skia paragraph rendering
   const skiaFonts = useSkiaFonts({
@@ -299,19 +311,55 @@ export default function ShareCardScreen() {
       }
     } finally {
       setIsSharing(false);
+      // iOS share sheet leaves RN touch handlers stale — toggle pointer events
+      // off then on to force the native touch system to re-register handlers
+      setTouchActive('none');
+      setTimeout(() => setTouchActive('auto'), 50);
     }
   }, [isSharing, generateImage, reference]);
 
+  const handleSave = useCallback(async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Permission needed to save to your photo library');
+        setIsSaving(false);
+        return;
+      }
+      const uri = await generateImage();
+      if (!uri) {
+        Alert.alert('Error', 'Could not generate the image. Please try again.');
+        setIsSaving(false);
+        return;
+      }
+      await MediaLibrary.createAssetAsync(uri);
+      setSaved(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+    } catch {
+      Alert.alert('Error', 'Failed to save. Please try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [isSaving, generateImage]);
+
+  const isBusy = isSharing || isSaving;
+
   return (
-    <View style={[s.container, { backgroundColor: 'rgba(0, 0, 0, 0.94)' }]}>
+    <View pointerEvents={touchActive} style={[s.container, { backgroundColor: 'rgba(0, 0, 0, 0.94)' }]}>
       {/* Header */}
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
           activeOpacity={0.6}
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={() => router.dismiss()}
+          hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
           style={s.closeButton}
-          accessibilityLabel="Close"
+          accessibilityLabel="Close share card"
           accessibilityRole="button"
         >
           <XIcon size={22} color="rgba(255,255,255,0.7)" weight="light" />
@@ -345,9 +393,9 @@ export default function ShareCardScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
-                  fontSize: 11,
+                  fontSize: 13,
                   color: subtleColor,
-                  letterSpacing: 0.4,
+                  letterSpacing: 0.3,
                   textAlign: 'center',
                 }}
               >
@@ -358,10 +406,10 @@ export default function ShareCardScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 9,
+                  fontSize: 10,
                   color: subtleColor,
                   letterSpacing: 0.8,
-                  marginTop: 3,
+                  marginTop: 4,
                   textAlign: 'center',
                   opacity: 0.7,
                 }}
@@ -391,10 +439,16 @@ export default function ShareCardScreen() {
           contentContainerStyle={s.carouselContent}
           renderItem={({ item }) => {
             const isActive = selectedTheme === item.id;
+            const isLocked = item.premium && !isPremium;
             return (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => {
+                  if (isLocked) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    router.push('/paywall');
+                    return;
+                  }
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setSelectedTheme(item.id);
                 }}
@@ -407,13 +461,20 @@ export default function ShareCardScreen() {
                       backgroundColor: item.bg,
                       borderColor: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.2)',
                       borderWidth: isActive ? 2.5 : 1,
+                      opacity: isLocked ? 0.5 : 1,
                     },
                   ]}
-                />
+                >
+                  {isLocked && (
+                    <View style={s.lockBadge}>
+                      <LockSimpleIcon size={12} color="#ffffff" weight="fill" />
+                    </View>
+                  )}
+                </View>
                 <Text
                   style={[
                     s.themeLabel,
-                    { color: isActive ? '#FFFFFF' : 'rgba(255,255,255,0.4)' },
+                    { color: isActive ? '#FFFFFF' : isLocked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.4)' },
                   ]}
                 >
                   {item.name}
@@ -430,23 +491,45 @@ export default function ShareCardScreen() {
         entering={FadeInUp.duration(300).delay(200)}
         style={[s.actionsWrapper, { paddingBottom: insets.bottom + 16 }]}
       >
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleShare}
-          disabled={isSharing}
-          accessibilityLabel="Share image"
-          accessibilityRole="button"
-          style={[s.actionButton, s.shareButton, { opacity: isSharing ? 0.6 : 1, alignSelf: 'center', minWidth: 160 }]}
-        >
-          {isSharing ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <>
-              <UploadSimpleIcon size={17} color="#ffffff" weight="light" />
-              <Text style={s.actionText}>Share</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <View style={s.actionsRow}>
+          {/* Save */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleSave}
+            disabled={isBusy}
+            accessibilityLabel={saved ? 'Saved' : 'Save image'}
+            accessibilityRole="button"
+            style={[s.actionButton, s.saveButton, { opacity: isBusy && !saved ? 0.6 : 1 }]}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <DownloadSimpleIcon size={17} color="#ffffff" weight="light" />
+                <Text style={s.actionText}>{saved ? 'Saved!' : 'Save'}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Share */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleShare}
+            disabled={isBusy}
+            accessibilityLabel="Share image"
+            accessibilityRole="button"
+            style={[s.actionButton, s.shareButton, { opacity: isBusy ? 0.6 : 1 }]}
+          >
+            {isSharing ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <>
+                <UploadSimpleIcon size={17} color="#ffffff" weight="light" />
+                <Text style={s.actionText}>Share</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </View>
   );
@@ -477,35 +560,39 @@ const s = StyleSheet.create({
     height: CARD_HEIGHT,
     borderRadius: 16,
     overflow: 'hidden',
-    paddingHorizontal: 26,
-    paddingTop: 44,
-    paddingBottom: 24,
+    paddingHorizontal: 28,
+    paddingTop: 48,
+    paddingBottom: 28,
     justifyContent: 'space-between',
+    // Subtle border so dark themes don't disappear into the backdrop
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   textContainer: {
     flex: 1,
     justifyContent: 'center',
   },
   divider: {
-    height: StyleSheet.hairlineWidth,
-    width: 36,
+    height: 1,
+    width: 48,
     alignSelf: 'center',
-    marginVertical: 14,
+    marginVertical: 16,
   },
   refContainer: {
     alignItems: 'center',
   },
   brandRow: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 18,
   },
   brandIcon: {
-    width: 16,
-    height: 16,
-    opacity: 0.5,
+    width: 18,
+    height: 18,
+    opacity: 0.4,
   },
   carouselWrapper: {
-    paddingVertical: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   carouselContent: {
     paddingHorizontal: 24,
@@ -519,6 +606,16 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  lockBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   themeLabel: {
     fontFamily: FontFamily.ui,
@@ -528,6 +625,11 @@ const s = StyleSheet.create({
   actionsWrapper: {
     paddingHorizontal: 24,
   },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -536,6 +638,11 @@ const s = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 28,
     borderRadius: 14,
+  },
+  saveButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.20)',
   },
   shareButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.15)',

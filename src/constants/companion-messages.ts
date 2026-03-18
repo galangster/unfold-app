@@ -47,25 +47,26 @@ export function selectCompanionQuestion(ctx: {
   hasReadToday: boolean;
   streakCurrent: number;
 }): string {
+  const fallback = "How are you doing today?";
   if (ctx.isFirstCompanionCheckIn) {
-    return COMPANION_QUESTIONS.find((q) => q.condition === 'first_time')!.text;
+    return COMPANION_QUESTIONS.find((q) => q.condition === 'first_time')?.text ?? fallback;
   }
   if (ctx.daysSinceLastOpen >= 3) {
-    return COMPANION_QUESTIONS.find((q) => q.condition === 'returning_after_gap')!.text;
+    return COMPANION_QUESTIONS.find((q) => q.condition === 'returning_after_gap')?.text ?? fallback;
   }
   if (ctx.streakCurrent > 0 && ctx.streakCurrent % 7 === 0) {
-    return COMPANION_QUESTIONS.find((q) => q.condition === 'streak_milestone')!.text;
+    return COMPANION_QUESTIONS.find((q) => q.condition === 'streak_milestone')?.text ?? fallback;
   }
   if (ctx.hasActiveSeries && ctx.hasReadToday) {
-    return COMPANION_QUESTIONS.find((q) => q.condition === 'read_today')!.text;
+    return COMPANION_QUESTIONS.find((q) => q.condition === 'read_today')?.text ?? fallback;
   }
   if (ctx.hasActiveSeries && !ctx.hasReadToday) {
-    return COMPANION_QUESTIONS.find((q) => q.condition === 'has_active_not_read')!.text;
+    return COMPANION_QUESTIONS.find((q) => q.condition === 'has_active_not_read')?.text ?? fallback;
   }
   if (!ctx.hasActiveSeries) {
-    return COMPANION_QUESTIONS.find((q) => q.condition === 'between_series')!.text;
+    return COMPANION_QUESTIONS.find((q) => q.condition === 'between_series')?.text ?? fallback;
   }
-  return COMPANION_QUESTIONS.find((q) => q.condition === 'default')!.text;
+  return COMPANION_QUESTIONS.find((q) => q.condition === 'default')?.text ?? fallback;
 }
 
 // --- Mood × Context response matrix (24 variants) ---
