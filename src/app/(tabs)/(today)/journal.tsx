@@ -50,6 +50,7 @@ import { PERSONA_BRIEF } from '@/constants/persona';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { VoiceInputBar } from '@/components/VoiceInputBar';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -781,6 +782,7 @@ Their journal entry:
                     accessibilityLabel="Journal entry"
                     style={[jStyles.freewriteInput, { color: colors.text }]}
                   />
+                  <VoiceInputBar value={content} onChangeText={handleTextChange} />
                 </Animated.View>
 
                 {/* Go Deeper button */}
@@ -1112,6 +1114,7 @@ Their journal entry:
                       blurOnSubmit
                     />
                   </View>
+                  <VoiceInputBar value={newPrayerText} onChangeText={setNewPrayerText} />
                   {/* Action buttons below input */}
                   <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 10 }}>
                     <TouchableOpacity

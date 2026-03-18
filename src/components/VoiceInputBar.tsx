@@ -100,8 +100,11 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  const MAX_DURATION_SECONDS = 60;
+
   // Use refs to avoid stale closures in event callbacks
   const isRecordingRef = useRef(false);
+  const userStoppedRef = useRef(false); // distinguishes user-stop vs silence-stop
   const finalTranscriptRef = useRef('');
   const interimTranscriptRef = useRef('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -129,9 +132,14 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
   });
 
   useSpeechRecognitionEvent('end', () => {
-    if (isRecordingRef.current) {
-      // STT ended on its own (silence) — commit what we have
-      doCommit();
+    if (isRecordingRef.current && !userStoppedRef.current) {
+      // STT ended on its own (silence) — restart so pauses don't kill the session
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: true,
+      });
     }
   });
 
@@ -145,6 +153,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
 
   const resetRecordingState = useCallback(() => {
     isRecordingRef.current = false;
+    userStoppedRef.current = false;
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
     clearTimer();
@@ -194,12 +203,23 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     timerRef.current = setInterval(() => {
-      setElapsedSeconds((s) => s + 1);
+      setElapsedSeconds((s) => {
+        const next = s + 1;
+        if (next >= MAX_DURATION_SECONDS) {
+          // Safety net — auto-commit after max duration
+          userStoppedRef.current = true;
+          ExpoSpeechRecognitionModule.stop();
+          // Slight delay to let final result arrive before committing
+          setTimeout(() => doCommit(), 200);
+        }
+        return next;
+      });
     }, 1000);
-  }, []);
+  }, [doCommit]);
 
   // ── Cancel ───────────────────────────────────────────────
   const cancelRecording = useCallback(() => {
+    userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     resetRecordingState();
@@ -207,8 +227,8 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
 
   // ── Accept ───────────────────────────────────────────────
   const acceptRecording = useCallback(() => {
+    userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
-    // doCommit fires via 'end' event, but call directly as safety net
     doCommit();
   }, [doCommit]);
 

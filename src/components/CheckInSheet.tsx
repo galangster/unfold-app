@@ -37,6 +37,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
+import { VoiceInputBar } from '@/components/VoiceInputBar';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5;
@@ -417,7 +418,7 @@ function NoteStep({
         ref={inputRef}
         value={noteText}
         onChangeText={setNoteText}
-        placeholder="Write a thought, prayer, or feeling..."
+        placeholder="Write or speak a thought, prayer, or feeling..."
         placeholderTextColor={colors.textHint}
         style={[
           styles.noteInput,
@@ -433,6 +434,7 @@ function NoteStep({
         textAlignVertical="top"
         autoCorrect
       />
+      <VoiceInputBar value={noteText} onChangeText={setNoteText} />
 
       <View style={styles.noteActions}>
         <TouchableOpacity activeOpacity={0.7}
