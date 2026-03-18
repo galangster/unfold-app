@@ -220,7 +220,7 @@ export const CHECKIN_CELEBRATION_MESSAGES: string[] = [
   "Honesty is its own gift.",
   "That took courage. Thank you.",
   "Your heart was heard.",
-  "Small moment. But it counted.",
+  "Small moment. Big faithfulness.",
   "You paused. That's rare.",
   "Noted with care.",
   "This moment matters.",
