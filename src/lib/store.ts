@@ -649,6 +649,7 @@ interface UnfoldState {
   updateFolder: (id: string, updates: Partial<Pick<NoteFolder, 'name' | 'color' | 'sortOrder'>>) => void;
   deleteFolder: (id: string, deleteNotes?: boolean) => void;
   moveNoteToFolder: (noteId: string, folderId: string | null) => void;
+  reorderFolders: (orderedIds: string[]) => void;
 
   // AI data consent (App Store Guideline 5.1.2(i))
   hasConsentedToAI: boolean;
@@ -1482,6 +1483,18 @@ export const useUnfoldStore = create<UnfoldState>()(
               : n,
           ),
         })),
+
+      reorderFolders: (orderedIds) => {
+        set((state) => ({
+          folders: orderedIds
+            .map((id, index) => {
+              const folder = state.folders.find((f) => f.id === id);
+              if (!folder) return null;
+              return { ...folder, sortOrder: index };
+            })
+            .filter(Boolean) as NoteFolder[],
+        }));
+      },
 
       // Helpers
       getCurrentDevotional: () => {

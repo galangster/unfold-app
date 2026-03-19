@@ -1,49 +1,60 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  AccessibilityInfo,
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { WebView } from 'react-native-webview';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
   DotsThreeIcon,
   TrashIcon,
   StarIcon,
-  TagIcon,
   FolderSimpleIcon,
-  MicrophoneStageIcon,
-  SunHorizonIcon,
-  BookOpenIcon,
-  HandsPrayingIcon,
-  NoteIcon,
+  CheckIcon,
+  BookBookmarkIcon,
+  ListBulletsIcon,
+  ListNumbersIcon,
+  CheckSquareIcon,
+  TextBIcon,
+  TextItalicIcon,
+  ArrowLineLeftIcon,
+  ArrowLineRightIcon,
+  QuotesIcon,
 } from 'phosphor-react-native';
+import {
+  useEditorBridge,
+  RichText,
+  TenTapStartKit,
+  TaskListBridge,
+  HeadingBridge,
+  ListItemBridge,
+  BlockquoteBridge,
+  PlaceholderBridge,
+  useBridgeState,
+  useKeyboard,
+} from '@10play/tentap-editor';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type Note, type NoteCategory } from '@/lib/store';
+import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
+import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
-import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
+import { isHtmlContent } from '@/components/notebook/NoteEditor';
+import { logger } from '@/lib/logger';
 
-const CATEGORY_CONFIG: Record<NoteCategory, { Icon: typeof NoteIcon; label: string }> = {
-  sermon: { Icon: MicrophoneStageIcon, label: 'Sermon' },
-  'quiet-time': { Icon: SunHorizonIcon, label: 'Quiet Time' },
-  study: { Icon: BookOpenIcon, label: 'Study' },
-  prayer: { Icon: HandsPrayingIcon, label: 'Prayer' },
-  general: { Icon: NoteIcon, label: 'General' },
-};
 
-const CATEGORY_OPTIONS: { key: NoteCategory; label: string; Icon: typeof NoteIcon }[] = [
-  { key: 'sermon', label: 'Sermon', Icon: MicrophoneStageIcon },
-  { key: 'quiet-time', label: 'Quiet Time', Icon: SunHorizonIcon },
-  { key: 'study', label: 'Study', Icon: BookOpenIcon },
-  { key: 'prayer', label: 'Prayer', Icon: HandsPrayingIcon },
-  { key: 'general', label: 'General', Icon: NoteIcon },
-];
+/* ─────────────────────────────────────────────────────────
+ * Helpers
+ * ───────────────────────────────────────────────────────── */
 
-/**
- * Formats a date string into a readable display format.
- */
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
@@ -53,342 +64,502 @@ function formatDate(dateStr: string): string {
   });
 }
 
-/**
- * Simple content renderer that handles basic formatting:
- * - **bold** text
- * - *italic* text
- * - Lines starting with "- " as bullet points
- * - Lines starting with "[ ] " or "[x] " as checklists
- * - #tags rendered in accent color
- */
-function renderFormattedContent(
-  content: string,
-  colors: { text: string; textMuted: string; accent: string },
-): React.ReactNode[] {
-  if (!content.trim()) return [];
-
+/** Convert legacy plain-text/markdown to minimal HTML for TipTap */
+function legacyMarkdownToHtml(content: string): string {
   const lines = content.split('\n');
-  const elements: React.ReactNode[] = [];
-
-  lines.forEach((line, lineIndex) => {
+  const htmlLines = lines.map((line) => {
     const trimmed = line.trimStart();
-
-    // Checklist: [ ] or [x]
-    if (trimmed.startsWith('[ ] ') || trimmed.startsWith('[x] ')) {
-      const isChecked = trimmed.startsWith('[x]');
-      const text = trimmed.slice(4);
-      elements.push(
-        <View key={`line-${lineIndex}`} style={detailStyles.checklistItem}>
-          <View
-            style={[
-              detailStyles.checkbox,
-              {
-                borderColor: isChecked ? colors.accent : colors.textMuted,
-                backgroundColor: isChecked ? colors.accent + '20' : 'transparent',
-              },
-            ]}
-          >
-            {isChecked && (
-              <Text style={[detailStyles.checkmark, { color: colors.accent }]}>
-                {'\u2713'}
-              </Text>
-            )}
-          </View>
-          <Text
-            style={[
-              detailStyles.bodyText,
-              { color: colors.text },
-              isChecked && {
-                textDecorationLine: 'line-through',
-                color: colors.textMuted,
-              },
-            ]}
-          >
-            {text}
-          </Text>
-        </View>,
-      );
-      return;
+    if (trimmed.startsWith('[x] ')) {
+      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div>${trimmed.slice(4)}</div></li></ul>`;
     }
-
-    // Bullet list: - text
+    if (trimmed.startsWith('[ ] ')) {
+      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div>${trimmed.slice(4)}</div></li></ul>`;
+    }
     if (trimmed.startsWith('- ')) {
-      const text = trimmed.slice(2);
-      elements.push(
-        <View key={`line-${lineIndex}`} style={detailStyles.bulletItem}>
-          <Text style={[detailStyles.bulletDot, { color: colors.accent }]}>
-            {'\u2022'}
-          </Text>
-          <Text style={[detailStyles.bodyText, { color: colors.text }]}>
-            {text}
-          </Text>
-        </View>,
-      );
-      return;
+      return `<ul><li>${trimmed.slice(2)}</li></ul>`;
     }
-
-    // Regular paragraph (with inline formatting)
-    if (trimmed.length === 0) {
-      elements.push(
-        <View key={`line-${lineIndex}`} style={detailStyles.emptyLine} />,
-      );
-      return;
-    }
-
-    elements.push(
-      <Text
-        key={`line-${lineIndex}`}
-        style={[detailStyles.bodyText, { color: colors.text }]}
-      >
-        {renderInlineFormatting(line, colors)}
-      </Text>,
-    );
+    if (trimmed === '') return '<p></p>';
+    const html = trimmed
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return `<p>${html}</p>`;
   });
-
-  return elements;
+  return htmlLines.join('') || '<p></p>';
 }
 
-/**
- * Handles inline markdown-style formatting within a line of text.
- */
-function renderInlineFormatting(
-  text: string,
-  colors: { text: string; accent: string },
-): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  let remaining = text;
-  let keyIndex = 0;
-
-  while (remaining.length > 0) {
-    // Bold: **text**
-    const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-    // Italic: *text*
-    const italicMatch = remaining.match(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/);
-    // Tag: #word
-    const tagMatch = remaining.match(/#(\w+)/);
-
-    // Find the earliest match
-    const matches = [
-      boldMatch ? { type: 'bold', match: boldMatch, index: boldMatch.index ?? Infinity } : null,
-      italicMatch ? { type: 'italic', match: italicMatch, index: italicMatch.index ?? Infinity } : null,
-      tagMatch ? { type: 'tag', match: tagMatch, index: tagMatch.index ?? Infinity } : null,
-    ].filter(Boolean) as { type: string; match: RegExpMatchArray; index: number }[];
-
-    if (matches.length === 0) {
-      parts.push(<Text key={`t-${keyIndex++}`}>{remaining}</Text>);
-      break;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildEditorCSS(colors: any, isEditing: boolean): string {
+  return `
+    html {
+      background-color: ${colors.background} !important;
+      height: 100%;
     }
-
-    matches.sort((a, b) => a.index - b.index);
-    const earliest = matches[0];
-
-    // Add text before the match
-    if (earliest.index > 0) {
-      parts.push(
-        <Text key={`t-${keyIndex++}`}>{remaining.slice(0, earliest.index)}</Text>,
-      );
+    body {
+      font-family: -apple-system, 'Helvetica Neue', sans-serif;
+      font-size: 17px;
+      line-height: 1.65;
+      color: ${colors.text};
+      background-color: ${colors.background} !important;
+      padding: 0 24px 200px;
+      margin: 0;
+      caret-color: ${colors.accent};
+      -webkit-text-size-adjust: none;
+      min-height: 100%;
     }
-
-    if (earliest.type === 'bold') {
-      parts.push(
-        <Text
-          key={`b-${keyIndex++}`}
-          style={{ fontFamily: FontFamily.bodyBold }}
-        >
-          {earliest.match[1]}
-        </Text>,
-      );
-      remaining = remaining.slice(earliest.index + earliest.match[0].length);
-    } else if (earliest.type === 'italic') {
-      parts.push(
-        <Text
-          key={`i-${keyIndex++}`}
-          style={{ fontFamily: FontFamily.bodyItalic }}
-        >
-          {earliest.match[1]}
-        </Text>,
-      );
-      remaining = remaining.slice(earliest.index + earliest.match[0].length);
-    } else if (earliest.type === 'tag') {
-      parts.push(
-        <Text
-          key={`tag-${keyIndex++}`}
-          style={{ color: colors.accent }}
-        >
-          #{earliest.match[1]}
-        </Text>,
-      );
-      remaining = remaining.slice(earliest.index + earliest.match[0].length);
+    .ProseMirror { overflow-anchor: none; }
+    .tiptap { scroll-padding-bottom: 60vh; }
+    p { margin: 0 0 4px 0; }
+    h1 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }
+    h2 { font-size: 19px; font-weight: 600; margin: 10px 0 4px; }
+    h3 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
+    ul, ol { padding-left: 22px; margin: 4px 0; }
+    li { margin: 2px 0; }
+    ul[data-type="taskList"] { padding-left: 0; list-style: none; }
+    ul[data-type="taskList"] li { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    ul[data-type="taskList"] li > label { flex-shrink: 0; line-height: 1; display: flex; align-items: center; }
+    ul[data-type="taskList"] li > label input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: ${colors.accent};
+      cursor: ${isEditing ? 'pointer' : 'default'};
+      margin: 0;
     }
-  }
-
-  return parts;
+    ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+    ul[data-type="taskList"] li[data-checked="true"] > div {
+      text-decoration: line-through;
+      opacity: 0.45;
+    }
+    ul[data-type="taskList"] .is-editor-empty::before,
+    ul[data-type="taskList"] .is-empty::before {
+      display: none !important;
+    }
+    blockquote {
+      border-left: 3px solid ${colors.accent};
+      padding-left: 14px;
+      margin: 8px 0 8px 0;
+      color: ${colors.textMuted};
+      font-style: italic;
+    }
+    strong { font-weight: 700; }
+    em { font-style: italic; }
+    .tiptap p.is-editor-empty:first-child::before {
+      color: ${colors.textHint};
+      content: attr(data-placeholder);
+      float: left;
+      height: 0;
+      pointer-events: none;
+    }
+  `;
 }
+
 
 /* ─────────────────────────────────────────────────────────
- * HTML content renderer (for notes created with TipTap editor)
- * Uses a transparent WebView that auto-resizes to content height.
+ * Unified Note Screen — reads AND edits in one view
+ *
+ * Existing notes open in READ mode (editable: false).
+ * New notes (no noteId) open in EDIT mode (editable: true).
+ * Toggle between modes with Edit/Done header button.
+ * Uses @10play/tentap-editor for both read + edit rendering.
  * ───────────────────────────────────────────────────────── */
-interface HtmlContentViewProps {
-  html: string;
-  textColor: string;
-  accentColor: string;
-  mutedColor: string;
-  backgroundColor: string;
-}
-
-function HtmlContentView({ html, textColor, accentColor, mutedColor, backgroundColor }: HtmlContentViewProps) {
-  const [webHeight, setWebHeight] = useState(200);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const bg = backgroundColor;
-
-  const styledHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body {
-    margin: 0; padding: 0;
-    font-family: -apple-system, 'Helvetica Neue', sans-serif;
-    font-size: 17px;
-    line-height: 1.65;
-    color: ${textColor};
-    background-color: ${bg};
-    overflow: hidden;
-    -webkit-text-size-adjust: none;
-  }
-  p { margin: 0 0 6px 0; }
-  h1 { font-size: 22px; font-weight: 700; margin: 14px 0 6px; }
-  h2 { font-size: 19px; font-weight: 600; margin: 10px 0 4px; }
-  h3 { font-size: 17px; font-weight: 600; margin: 8px 0 4px; }
-  ul, ol { padding-left: 22px; margin: 4px 0; }
-  li { margin: 2px 0; }
-  ul[data-type="taskList"] { padding-left: 0; list-style: none; }
-  ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; }
-  ul[data-type="taskList"] li label { margin-top: 4px; flex-shrink: 0; }
-  ul[data-type="taskList"] li label input[type="checkbox"] {
-    width: 16px; height: 16px;
-    accent-color: ${accentColor};
-    pointer-events: none;
-  }
-  ul[data-type="taskList"] li[data-checked="true"] > div {
-    text-decoration: line-through; opacity: 0.45;
-  }
-  blockquote {
-    border-left: 3px solid ${accentColor};
-    padding-left: 14px; margin: 8px 0;
-    color: ${mutedColor}; font-style: italic;
-  }
-  strong { font-weight: 700; }
-  em { font-style: italic; }
-</style>
-</head>
-<body>${html}</body>
-<script>
-  window.onload = function() {
-    window.ReactNativeWebView.postMessage(JSON.stringify({type:'height',value:document.body.scrollHeight}));
-  };
-</script>
-</html>`;
-
-  return (
-    <View style={{ position: 'relative' }}>
-      <WebView
-        source={{ html: styledHtml }}
-        style={[detailHtmlStyles.webview, { height: webHeight }]}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        onMessage={(e) => {
-          try {
-            const msg = JSON.parse(e.nativeEvent.data);
-            if (msg.type === 'height' && typeof msg.value === 'number') {
-              setWebHeight(msg.value + 16);
-              setIsLoaded(true);
-            }
-          } catch {}
-        }}
-        onLoad={() => setIsLoaded(true)}
-        originWhitelist={['*']}
-        backgroundColor={backgroundColor}
-        javaScriptEnabled
-      />
-      {!isLoaded && (
-        <View
-          style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor, minHeight: webHeight },
-          ]}
-          pointerEvents="none"
-        />
-      )}
-    </View>
-  );
-}
-
-const detailHtmlStyles = StyleSheet.create({
-  webview: {
-    width: '100%',
-    opacity: 0.99, // iOS GPU compositing fix for transparent WebViews
-  },
-});
 
 export default function NoteDetailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ noteId: string }>();
-  const { colors } = useTheme();
+  const params = useLocalSearchParams<{
+    noteId?: string;
+    startEditing?: string;
+    devotionalId?: string;
+    dayNumber?: string;
+    bookId?: string;
+    chapter?: string;
+    verse?: string;
+    verseEnd?: string;
+    verseText?: string;
+    reference?: string;
+  }>();
 
+  const { colors, isDark } = useTheme();
+
+  // Store selectors
   const notes = useUnfoldStore((s) => s.notes);
+  const addNote = useUnfoldStore((s) => s.addNote);
   const updateNote = useUnfoldStore((s) => s.updateNote);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
   const folders = useUnfoldStore((s) => s.folders);
   const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
 
-  const note = useMemo(
-    () => notes.find((n) => n.id === params.noteId),
+  // Find existing note
+  const existingNote = useMemo(
+    () => (params.noteId ? notes.find((n) => n.id === params.noteId) : undefined),
     [notes, params.noteId],
   );
 
   const noteFolder = useMemo(
-    () => (note?.folderId ? folders.find((f) => f.id === note.folderId) : undefined),
-    [note?.folderId, folders],
+    () => (existingNote?.folderId ? folders.find((f) => f.id === existingNote.folderId) : undefined),
+    [existingNote?.folderId, folders],
   );
 
+  // Track the live note ID (may be set after first auto-save for new notes)
+  const [noteId, setNoteId] = useState<string | undefined>(params.noteId);
+  const category: NoteCategory = existingNote?.category ?? 'general';
+
+  // Editing state — new notes start in edit mode, existing in read mode
+  const isNewNote = !params.noteId;
+  const shouldStartEditing = isNewNote || params.startEditing === 'true';
+  const [isEditing, setIsEditing] = useState(shouldStartEditing);
+
+  // Title state
+  const [title, setTitle] = useState(existingNote?.title ?? '');
+  const latestTitleRef = useRef(existingNote?.title ?? '');
+
+  // Auto-save indicator
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const savedResetRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Menu state
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Clean up on unmount
+  // Scripture search & insert state
+  const [showScriptureSheet, setShowScriptureSheet] = useState(false);
+  const [pendingScriptureInsert, setPendingScriptureInsert] = useState<{
+    reference: string;
+    text: string;
+  } | null>(null);
+  const [scriptureRefs, setScriptureRefs] = useState<ScriptureRef[]>(
+    existingNote?.scriptureRefs ?? [],
+  );
+
+  // Latest content ref for Done button
+  const latestContentRef = useRef<{ title: string; content: string }>({
+    title: existingNote?.title ?? '',
+    content: existingNote?.content ?? '',
+  });
+
+  // Convert legacy plain-text/markdown to HTML for TipTap
+  const initialContent = existingNote?.content
+    ? isHtmlContent(existingNote.content)
+      ? existingNote.content
+      : legacyMarkdownToHtml(existingNote.content)
+    : '<p></p>';
+
+  /* ───── TipTap editor bridge ───── */
+
+  const editor = useEditorBridge({
+    avoidIosKeyboard: true,
+    autofocus: false,
+    editable: shouldStartEditing,
+    initialContent,
+    theme: {
+      webview: { backgroundColor: colors.background },
+      webviewContainer: { backgroundColor: colors.background },
+    },
+    bridgeExtensions: [
+      ...TenTapStartKit,
+      TaskListBridge,
+      HeadingBridge,
+      ListItemBridge,
+      BlockquoteBridge,
+      PlaceholderBridge.configureExtension({
+        placeholder: 'Start writing\u2026',
+      }),
+    ],
+    onChange: () => {
+      if (isEditingRef.current) {
+        scheduleAutoSave();
+      }
+    },
+  });
+
+  const editorState = useBridgeState(editor);
+  const { keyboardHeight, isKeyboardUp } = useKeyboard();
+
+  // Keep a ref for isEditing so the onChange callback always has the latest value
+  const isEditingRef = useRef(isEditing);
+  useEffect(() => {
+    isEditingRef.current = isEditing;
+  }, [isEditing]);
+
+  // Overlay covers the WebView until CSS is painted
+  const [editorReady, setEditorReady] = useState(false);
+
+  // Fallback: remove overlay after 1.5s
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      setEditorReady(true);
+      editor.injectCSS(buildEditorCSS(colors, isEditingRef.current));
+    }, 1500);
+    return () => clearTimeout(fallback);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Inject CSS + scroll behavior fix once editor is ready
+  useEffect(() => {
+    if (!editorState.isReady) return;
+    editor.injectCSS(buildEditorCSS(colors, isEditing));
+    // Delay removing overlay until CSS has had time to paint
+    setTimeout(() => {
+      setEditorReady(true);
+    }, 120);
+    // Override TipTap's scrollIntoView (Notion-style cursor behavior)
+    editor.injectJS(`
+      (function() {
+        var origScroll = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = function(opts) {
+          if (typeof opts === 'object') {
+            opts.block = 'nearest';
+          } else {
+            opts = { block: 'nearest', behavior: 'smooth' };
+          }
+          origScroll.call(this, opts);
+        };
+        if (Element.prototype.scrollIntoViewIfNeeded) {
+          var origIfNeeded = Element.prototype.scrollIntoViewIfNeeded;
+          Element.prototype.scrollIntoViewIfNeeded = function(center) {
+            origIfNeeded.call(this, false);
+          };
+        }
+      })();
+    `);
+
+    // If new note, auto-focus the editor after it's ready
+    if (shouldStartEditing && isNewNote) {
+      setTimeout(() => {
+        editor.focus('end');
+      }, 300);
+    }
+  }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (savedResetRef.current) clearTimeout(savedResetRef.current);
       if (deleteTimeoutRef.current) clearTimeout(deleteTimeoutRef.current);
     };
   }, []);
 
-  const handleBack = useCallback(() => {
-    router.back();
-  }, [router]);
+
+  /* ───── Scripture insertion via pending prop ───── */
+
+  useEffect(() => {
+    if (!pendingScriptureInsert || !editorState.isReady) return;
+    const { reference, text } = pendingScriptureInsert;
+
+    const escapedRef = reference.replace(/'/g, "\\'");
+    const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
+
+    editor.injectJS(`
+      window.editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: 'blockquote',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: '${escapedText}' },
+              ],
+            },
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  marks: [{ type: 'italic' }],
+                  text: '\\u2014 ${escapedRef}',
+                },
+              ],
+            },
+          ],
+        })
+        .run();
+    `);
+
+    setPendingScriptureInsert(null);
+    scheduleAutoSave();
+  }, [pendingScriptureInsert, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+  /* ───── Debounced auto-save ───── */
+
+  const scheduleAutoSave = useCallback(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (savedResetRef.current) clearTimeout(savedResetRef.current);
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      const html = await editor.getHTML();
+      const titleVal = latestTitleRef.current;
+
+      if (!titleVal.trim() && (!html || html === '<p></p>')) return;
+
+      // Update the content ref
+      latestContentRef.current = { title: titleVal, content: html };
+
+      setSaveState('saving');
+
+      if (noteId) {
+        updateNote(noteId, {
+          title: titleVal,
+          content: html,
+          category,
+        });
+      } else {
+        const id = addNote({
+          title: titleVal,
+          content: html,
+          category,
+          tags: [],
+          isFavorite: false,
+          scriptureRefs,
+          devotionalId: params.devotionalId,
+          dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
+          bibleBookId: params.bookId ? Number(params.bookId) : undefined,
+          bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+        });
+        setNoteId(id);
+        logger.log('[NoteDetail] Auto-saved new note:', id);
+      }
+
+      setTimeout(() => {
+        setSaveState('saved');
+        AccessibilityInfo.announceForAccessibility('Note saved');
+        savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
+      }, 150);
+    }, 800);
+  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote]);
+
+  const handleTitleChange = useCallback(
+    (text: string) => {
+      latestTitleRef.current = text;
+      setTitle(text);
+      scheduleAutoSave();
+    },
+    [scheduleAutoSave],
+  );
+
+
+  /* ───── Mode switching ───── */
 
   const handleEdit = useCallback(() => {
-    if (!note) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({
-      pathname: '/(tabs)/(journal)/note',
-      params: { noteId: note.id },
-    });
-  }, [note, router]);
+    setIsEditing(true);
+    editor.setEditable(true);
+    // Re-inject CSS for editing mode (e.g., cursor pointer on checkboxes)
+    editor.injectCSS(buildEditorCSS(colors, true));
+    setTimeout(() => {
+      editor.focus('end');
+    }, 100);
+  }, [editor, colors]);
+
+  const handleDone = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Get the final content from the editor
+    const html = await editor.getHTML();
+    const titleVal = latestTitleRef.current;
+
+    // Persist
+    if (titleVal.trim() || (html && html !== '<p></p>')) {
+      if (noteId) {
+        updateNote(noteId, {
+          title: titleVal,
+          content: html,
+          category,
+          scriptureRefs,
+        });
+      } else {
+        const id = addNote({
+          title: titleVal,
+          content: html,
+          category,
+          tags: [],
+          isFavorite: false,
+          scriptureRefs,
+          devotionalId: params.devotionalId,
+          dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
+          bibleBookId: params.bookId ? Number(params.bookId) : undefined,
+          bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+        });
+        setNoteId(id);
+        logger.log('[NoteDetail] Created new note on Done:', id);
+      }
+    } else if (!noteId) {
+      // Empty new note — just go back
+      router.back();
+      return;
+    }
+
+    // Switch to read mode
+    editor.blur();
+    editor.setEditable(false);
+    editor.injectCSS(buildEditorCSS(colors, false));
+    setIsEditing(false);
+
+    // Clear any pending save timers
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    setSaveState('idle');
+  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, router, colors]);
+
+
+  /* ───── Navigation ───── */
+
+  const handleBack = useCallback(async () => {
+    // If editing, save before going back
+    if (isEditingRef.current) {
+      const html = await editor.getHTML();
+      const titleVal = latestTitleRef.current;
+
+      if (titleVal.trim() || (html && html !== '<p></p>')) {
+        if (noteId) {
+          updateNote(noteId, {
+            title: titleVal,
+            content: html,
+            category,
+            scriptureRefs,
+          });
+        } else {
+          const id = addNote({
+            title: titleVal,
+            content: html,
+            category,
+            tags: [],
+            isFavorite: false,
+            scriptureRefs,
+            devotionalId: params.devotionalId,
+            dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
+            bibleBookId: params.bookId ? Number(params.bookId) : undefined,
+            bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+          });
+          setNoteId(id);
+          logger.log('[NoteDetail] Saved new note on back:', id);
+        }
+      }
+    }
+
+    router.back();
+  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, router]);
+
+
+  /* ───── Menu actions ───── */
 
   const handleToggleFavorite = useCallback(() => {
-    if (!note) return;
+    const id = noteId;
+    if (!id) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    updateNote(note.id, { isFavorite: !note.isFavorite });
+    const currentNote = notes.find((n) => n.id === id);
+    if (currentNote) {
+      updateNote(id, { isFavorite: !currentNote.isFavorite });
+    }
     setShowMoreMenu(false);
-  }, [note, updateNote]);
+  }, [noteId, notes, updateNote]);
 
   const handleDelete = useCallback(() => {
-    if (!note) return;
+    if (!noteId) {
+      router.back();
+      return;
+    }
 
     if (!deleteConfirm) {
       setDeleteConfirm(true);
@@ -400,26 +571,13 @@ export default function NoteDetailScreen() {
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    deleteNote(note.id);
+    deleteNote(noteId);
     setShowMoreMenu(false);
     router.back();
-  }, [note, deleteConfirm, deleteNote, router]);
-
-  const handleCategorySelect = useCallback(
-    (cat: NoteCategory) => {
-      if (!note) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      updateNote(note.id, { category: cat });
-      setShowCategoryPicker(false);
-      setShowMoreMenu(false);
-    },
-    [note, updateNote],
-  );
+  }, [noteId, deleteConfirm, deleteNote, router]);
 
   const handleMoveToFolder = useCallback(() => {
     setShowMoreMenu(false);
-    setShowCategoryPicker(false);
-    // Small delay so the menu closes before the sheet opens
     setTimeout(() => {
       setShowMoveFolderSheet(true);
     }, 100);
@@ -427,21 +585,129 @@ export default function NoteDetailScreen() {
 
   const handleMoveFolderSelect = useCallback(
     (folderId: string | null) => {
-      if (!note) return;
-      moveNoteToFolder(note.id, folderId);
+      if (!noteId) return;
+      moveNoteToFolder(noteId, folderId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [note, moveNoteToFolder],
+    [noteId, moveNoteToFolder],
   );
 
-  // If the note doesn't exist (e.g., deleted), go back
-  if (!note) {
+
+  /* ───── Scripture actions ───── */
+
+  const handleScripturePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowScriptureSheet(true);
+  }, []);
+
+  const handleScriptureInsert = useCallback(
+    (data: { reference: string; text: string; scriptureRef: ScriptureRef }) => {
+      setPendingScriptureInsert({
+        reference: data.reference,
+        text: data.text,
+      });
+
+      setScriptureRefs((prev) => {
+        const exists = prev.some(
+          (r) =>
+            r.bookId === data.scriptureRef.bookId &&
+            r.chapter === data.scriptureRef.chapter &&
+            r.verse === data.scriptureRef.verse &&
+            r.verseEnd === data.scriptureRef.verseEnd,
+        );
+        if (exists) return prev;
+        const updated = [...prev, data.scriptureRef];
+
+        if (noteId) {
+          updateNote(noteId, { scriptureRefs: updated });
+        }
+
+        return updated;
+      });
+
+      setShowScriptureSheet(false);
+    },
+    [noteId, updateNote],
+  );
+
+
+  /* ───── Toolbar actions ───── */
+
+  const handleBold = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.toggleBold();
+  }, [editor]);
+
+  const handleItalic = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.toggleItalic();
+  }, [editor]);
+
+  const handleBulletList = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.toggleBulletList();
+  }, [editor]);
+
+  const handleOrderedList = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.toggleOrderedList();
+  }, [editor]);
+
+  const handleTaskList = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.toggleTaskList();
+  }, [editor]);
+
+  const handleBlockquote = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.toggleBlockquote();
+  }, [editor]);
+
+  const handleIndent = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.sink();
+  }, [editor]);
+
+  const handleOutdent = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    editor.lift();
+  }, [editor]);
+
+
+  /* ───── Derived data ───── */
+
+  // Use the reactive note from the store for metadata display (reflects live updates)
+  const liveNote = useMemo(
+    () => (noteId ? notes.find((n) => n.id === noteId) : undefined),
+    [notes, noteId],
+  );
+
+  const displayTitle = title.trim() || 'Untitled';
+  const currentDate = formatDate(
+    liveNote?.createdAt ?? existingNote?.createdAt ?? new Date().toISOString(),
+  );
+  const currentFolder = useMemo(
+    () => {
+      const fId = liveNote?.folderId ?? existingNote?.folderId;
+      return fId ? folders.find((f) => f.id === fId) : undefined;
+    },
+    [liveNote?.folderId, existingNote?.folderId, folders],
+  );
+  const isFavorite = liveNote?.isFavorite ?? existingNote?.isFavorite ?? false;
+
+  // Get live scripture refs from the store
+  const liveScriptureRefs = liveNote?.scriptureRefs ?? existingNote?.scriptureRefs ?? [];
+
+
+  /* ───── Render: Note not found ───── */
+
+  if (params.noteId && !existingNote && !isNewNote) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <SafeAreaView style={styles.flex} edges={['top']}>
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={handleBack}
+              onPress={() => router.back()}
               style={styles.headerButton}
               activeOpacity={0.6}
             >
@@ -458,17 +724,13 @@ export default function NoteDetailScreen() {
     );
   }
 
-  const categoryConfig = CATEGORY_CONFIG[note.category];
-  const CategoryIcon = categoryConfig.Icon;
-  const displayTitle =
-    note.title.trim() ||
-    note.content.split('\n')[0]?.slice(0, 80) ||
-    'Untitled';
+
+  /* ───── Render: Main screen ───── */
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.flex} edges={['top']}>
-        {/* Header */}
+        {/* ── Header ── */}
         <View style={styles.header}>
           <TouchableOpacity
             onPress={handleBack}
@@ -482,23 +744,38 @@ export default function NoteDetailScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerRight}>
-            <TouchableOpacity
-              onPress={handleEdit}
-              style={styles.editButton}
-              activeOpacity={0.6}
-              accessibilityRole="button"
-              accessibilityLabel="Edit note"
-            >
-              <Text style={[styles.editText, { color: colors.accent }]}>
-                Edit
-              </Text>
-            </TouchableOpacity>
+            {/* Edit / Done toggle */}
+            {isEditing ? (
+              <TouchableOpacity
+                onPress={handleDone}
+                style={styles.actionButton}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel="Done editing"
+              >
+                <Text style={[styles.actionText, { color: colors.accent }]}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handleEdit}
+                style={styles.actionButton}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel="Edit note"
+              >
+                <Text style={[styles.actionText, { color: colors.accent }]}>
+                  Edit
+                </Text>
+              </TouchableOpacity>
+            )}
 
+            {/* More menu button */}
             <TouchableOpacity
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setShowMoreMenu(!showMoreMenu);
-                setShowCategoryPicker(false);
                 setDeleteConfirm(false);
               }}
               style={styles.headerButton}
@@ -512,20 +789,19 @@ export default function NoteDetailScreen() {
           </View>
         </View>
 
-        {/* Backdrop for more menu — rendered before menu so menu items are tappable */}
+        {/* ── Backdrop for more menu ── */}
         {showMoreMenu && (
           <TouchableOpacity
             style={styles.backdrop}
             activeOpacity={1}
             onPress={() => {
               setShowMoreMenu(false);
-              setShowCategoryPicker(false);
               setDeleteConfirm(false);
             }}
           />
         )}
 
-        {/* More menu */}
+        {/* ── More menu dropdown ── */}
         {showMoreMenu && (
           <Animated.View
             entering={FadeIn.duration(150)}
@@ -539,267 +815,379 @@ export default function NoteDetailScreen() {
             ]}
           >
             {/* Favorite toggle */}
-            <TouchableOpacity
-              onPress={handleToggleFavorite}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-            >
-              <StarIcon
-                size={16}
-                color={note.isFavorite ? colors.accent : colors.textMuted}
-                weight={note.isFavorite ? 'fill' : 'light'}
-              />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>
-                {note.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-
-            {/* Category picker toggle */}
-            <TouchableOpacity
-              onPress={() => {
-                setShowCategoryPicker(!showCategoryPicker);
-                setDeleteConfirm(false);
-              }}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-            >
-              <TagIcon size={16} color={colors.textMuted} weight="light" />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>
-                Category: {CATEGORY_CONFIG[note.category].label}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Inline category picker */}
-            {showCategoryPicker && (
-              <View style={styles.categoryPickerInline}>
-                {CATEGORY_OPTIONS.map((cat) => {
-                  const isActive = note.category === cat.key;
-                  return (
-                    <TouchableOpacity
-                      key={cat.key}
-                      onPress={() => handleCategorySelect(cat.key)}
-                      style={[
-                        styles.categoryOption,
-                        {
-                          backgroundColor: isActive
-                            ? colors.accent + '15'
-                            : colors.buttonBackground,
-                          borderColor: isActive
-                            ? colors.accent + '33'
-                            : colors.border,
-                        },
-                      ]}
-                      activeOpacity={0.7}
-                    >
-                      <cat.Icon
-                        size={14}
-                        color={isActive ? colors.accent : colors.textMuted}
-                        weight={isActive ? 'fill' : 'light'}
-                      />
-                      <Text
-                        style={[
-                          styles.categoryOptionText,
-                          {
-                            color: isActive ? colors.accent : colors.textMuted,
-                            fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
-                          },
-                        ]}
-                      >
-                        {cat.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+            {noteId && (
+              <TouchableOpacity
+                onPress={handleToggleFavorite}
+                style={styles.menuItem}
+                activeOpacity={0.6}
+              >
+                <StarIcon
+                  size={16}
+                  color={isFavorite ? colors.accent : colors.textMuted}
+                  weight={isFavorite ? 'fill' : 'light'}
+                />
+                <Text style={[styles.menuItemText, { color: colors.text }]}>
+                  {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                </Text>
+              </TouchableOpacity>
             )}
 
-            {/* Divider */}
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            {noteId && (
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            )}
 
             {/* Move to folder */}
-            <TouchableOpacity
-              onPress={handleMoveToFolder}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-            >
-              <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
-              <Text style={[styles.menuItemText, { color: colors.text }]}>
-                {noteFolder ? `Folder: ${noteFolder.name}` : 'Move to folder'}
-              </Text>
-            </TouchableOpacity>
+            {noteId && (
+              <TouchableOpacity
+                onPress={handleMoveToFolder}
+                style={styles.menuItem}
+                activeOpacity={0.6}
+              >
+                <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
+                <Text style={[styles.menuItemText, { color: colors.text }]}>
+                  {currentFolder ? `Folder: ${currentFolder.name}` : 'Move to folder'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
-            {/* Divider */}
-            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            {noteId && (
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+            )}
 
             {/* Delete */}
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={styles.menuItem}
-              activeOpacity={0.6}
-            >
-              <TrashIcon size={16} color={colors.error} weight="light" />
-              <Text style={[styles.menuItemText, { color: colors.error }]}>
-                {deleteConfirm ? 'Tap again to delete' : 'Delete note'}
-              </Text>
-            </TouchableOpacity>
+            {noteId && (
+              <TouchableOpacity
+                onPress={handleDelete}
+                style={styles.menuItem}
+                activeOpacity={0.6}
+              >
+                <TrashIcon size={16} color={colors.error} weight="light" />
+                <Text style={[styles.menuItemText, { color: colors.error }]}>
+                  {deleteConfirm ? 'Tap again to delete' : 'Delete note'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </Animated.View>
         )}
 
-        {/* Content */}
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={detailStyles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Metadata row */}
-          <Animated.View
-            entering={FadeIn.duration(600)}
-            style={detailStyles.metadataRow}
-          >
-            <CategoryIcon size={14} color={colors.accent} weight="light" />
-            <Text style={[detailStyles.metadataText, { color: colors.textHint }]}>
-              {categoryConfig.label.toUpperCase()}
-            </Text>
-            <Text style={[detailStyles.metadataDot, { color: colors.textHint }]}>
-              {'\u00B7'}
-            </Text>
-            <Text style={[detailStyles.metadataText, { color: colors.textHint }]}>
-              {formatDate(note.createdAt)}
-            </Text>
-            {noteFolder && (
-              <>
-                <Text style={[detailStyles.metadataDot, { color: colors.textHint }]}>
-                  {'\u00B7'}
-                </Text>
-                {noteFolder.color && (
-                  <View
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: noteFolder.color,
-                    }}
-                  />
-                )}
-                <Text style={[detailStyles.metadataText, { color: colors.textHint }]}>
-                  {noteFolder.name.toUpperCase()}
-                </Text>
-              </>
-            )}
-            {note.isFavorite && (
-              <>
-                <Text style={[detailStyles.metadataDot, { color: colors.textHint }]}>
-                  {'\u00B7'}
-                </Text>
-                <StarIcon size={12} color={colors.accent} weight="fill" />
-              </>
-            )}
-          </Animated.View>
-
-          {/* Title */}
-          <Animated.Text
-            entering={FadeInDown.duration(600).delay(50)}
-            style={[detailStyles.title, { color: colors.text }]}
-          >
-            {displayTitle}
-          </Animated.Text>
-
-          {/* Accent divider */}
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(100)}
-            style={[detailStyles.divider, { backgroundColor: colors.accent }]}
-          />
-
-          {/* Scripture references */}
-          {note.scriptureRefs.length > 0 && (
-            <Animated.View
-              entering={FadeInDown.duration(500).delay(150)}
-              style={detailStyles.scriptureSection}
-            >
-              {note.scriptureRefs.map((ref, idx) => (
+        {/* ── Metadata row ── */}
+        <View style={styles.metadataRow}>
+          <Text style={[styles.metadataText, { color: colors.textHint }]}>
+            {currentDate}
+          </Text>
+          {currentFolder && (
+            <>
+              <Text style={[styles.metadataDot, { color: colors.textHint }]}>
+                {'\u00B7'}
+              </Text>
+              {currentFolder.color && (
                 <View
-                  key={`${ref.reference}-${idx}`}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: currentFolder.color,
+                  }}
+                />
+              )}
+              <Text style={[styles.metadataText, { color: colors.textHint }]}>
+                {currentFolder.name.toUpperCase()}
+              </Text>
+            </>
+          )}
+          {isFavorite && (
+            <>
+              <Text style={[styles.metadataDot, { color: colors.textHint }]}>
+                {'\u00B7'}
+              </Text>
+              <StarIcon size={12} color={colors.accent} weight="fill" />
+            </>
+          )}
+
+          {/* Auto-save indicator (shown in edit mode) */}
+          {isEditing && saveState === 'saved' && (
+            <View style={styles.saveIndicatorSpacer} />
+          )}
+          {isEditing && saveState === 'saved' && (
+            <Animated.View
+              entering={FadeIn.duration(200)}
+              exiting={FadeOut.duration(300)}
+              style={styles.saveIndicator}
+            >
+              <CheckIcon size={14} color={colors.textSubtle} weight="bold" />
+              <Text style={[styles.saveText, { color: colors.textHint }]}>Saved</Text>
+            </Animated.View>
+          )}
+        </View>
+
+        {/* ── Scripture references (read mode only) ── */}
+        {!isEditing && liveScriptureRefs.length > 0 && (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={styles.scriptureSection}
+          >
+            {liveScriptureRefs.map((ref, idx) => (
+              <View
+                key={`${ref.reference}-${idx}`}
+                style={[
+                  styles.scriptureCard,
+                  {
+                    backgroundColor: colors.accent + '08',
+                    borderLeftColor: colors.accent,
+                  },
+                ]}
+              >
+                <ScriptureRefPill reference={ref} size="regular" />
+              </View>
+            ))}
+          </Animated.View>
+        )}
+
+        {/* ── Title ── */}
+        <TextInput
+          value={title}
+          onChangeText={handleTitleChange}
+          placeholder="Title"
+          placeholderTextColor={colors.textHint}
+          editable={isEditing}
+          style={[
+            styles.titleInput,
+            { color: colors.text },
+            !isEditing && styles.titleInputReadOnly,
+          ]}
+          returnKeyType="next"
+          onSubmitEditing={() => editor.focus('end')}
+          blurOnSubmit={false}
+          maxLength={200}
+          accessibilityLabel="Note title"
+        />
+
+        {/* ── Accent divider ── */}
+        <View
+          style={[
+            styles.titleDivider,
+            { backgroundColor: isEditing ? colors.border : colors.accent },
+            isEditing && { marginHorizontal: 24, height: StyleSheet.hairlineWidth },
+          ]}
+        />
+
+        {/* ── TipTap rich text body ── */}
+        <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
+          <RichText
+            editor={editor}
+            style={[styles.richText, { backgroundColor: colors.background }]}
+          />
+          {/* Solid overlay hides WebView white flash */}
+          {!editorReady && (
+            <Animated.View
+              exiting={FadeOut.duration(200)}
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+            />
+          )}
+        </View>
+
+        {/* ── Tags section (read mode only) ── */}
+        {!isEditing && liveNote && liveNote.tags.length > 0 && (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={styles.tagsSection}
+          >
+            <Text style={[styles.tagsSectionLabel, { color: colors.textSubtle }]}>
+              TAGS
+            </Text>
+            <View style={styles.tagsWrap}>
+              {liveNote.tags.map((tag) => (
+                <View
+                  key={tag}
                   style={[
-                    detailStyles.scriptureCard,
+                    styles.tagPill,
                     {
-                      backgroundColor: colors.accent + '08',
-                      borderLeftColor: colors.accent,
+                      backgroundColor: colors.accent + '15',
+                      borderColor: colors.accent + '33',
                     },
                   ]}
                 >
-                  <ScriptureRefPill reference={ref} size="regular" />
+                  <Text style={[styles.tagPillText, { color: colors.accent }]}>
+                    #{tag}
+                  </Text>
                 </View>
               ))}
-            </Animated.View>
-          )}
-
-          {/* Body content — HTML (new notes) or legacy markdown */}
-          <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-            {isHtmlContent(note.content) ? (
-              <HtmlContentView
-                html={note.content}
-                textColor={colors.text}
-                accentColor={colors.accent}
-                mutedColor={colors.textMuted}
-                backgroundColor={colors.background}
-              />
-            ) : (
-              renderFormattedContent(note.content, colors)
-            )}
+            </View>
           </Animated.View>
+        )}
 
-          {/* Tags section */}
-          {note.tags.length > 0 && (
-            <Animated.View
-              entering={FadeInDown.duration(500).delay(250)}
-              style={detailStyles.tagsSection}
-            >
-              <Text style={[detailStyles.sectionLabel, { color: colors.textSubtle }]}>
-                TAGS
-              </Text>
-              <View style={detailStyles.tagsWrap}>
-                {note.tags.map((tag) => (
-                  <View
-                    key={tag}
-                    style={[
-                      detailStyles.tagPill,
-                      {
-                        backgroundColor: colors.accent + '15',
-                        borderColor: colors.accent + '33',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        detailStyles.tagPillText,
-                        { color: colors.accent },
-                      ]}
-                    >
-                      #{tag}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </Animated.View>
-          )}
-        </ScrollView>
+        {/* ── Toolbar (edit mode only, when keyboard is up) ── */}
+        {isEditing && editorState.isReady && isKeyboardUp && (
+          <View
+            style={[
+              styles.toolbar,
+              {
+                position: 'absolute',
+                bottom: keyboardHeight,
+                left: 0,
+                right: 0,
+                borderTopColor: colors.border,
+                backgroundColor: isDark
+                  ? 'rgba(20, 18, 16, 0.97)'
+                  : 'rgba(252, 250, 247, 0.97)',
+              },
+            ]}
+          >
+            <View style={styles.toolbarRow}>
+              <ToolbarButton onPress={handleBold} active={editorState.isBoldActive} label="Bold">
+                <TextBIcon
+                  size={18}
+                  color={editorState.isBoldActive ? colors.accent : colors.textMuted}
+                  weight="regular"
+                />
+              </ToolbarButton>
 
+              <ToolbarButton onPress={handleItalic} active={editorState.isItalicActive} label="Italic">
+                <TextItalicIcon
+                  size={18}
+                  color={editorState.isItalicActive ? colors.accent : colors.textMuted}
+                  weight="regular"
+                />
+              </ToolbarButton>
+
+              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
+
+              <ToolbarButton onPress={handleBulletList} active={editorState.isBulletListActive} label="Bullet list">
+                <ListBulletsIcon
+                  size={18}
+                  color={editorState.isBulletListActive ? colors.accent : colors.textMuted}
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton onPress={handleOrderedList} active={editorState.isOrderedListActive} label="Numbered list">
+                <ListNumbersIcon
+                  size={18}
+                  color={editorState.isOrderedListActive ? colors.accent : colors.textMuted}
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton onPress={handleTaskList} active={editorState.isTaskListActive} label="Checklist">
+                <CheckSquareIcon
+                  size={18}
+                  color={editorState.isTaskListActive ? colors.accent : colors.textMuted}
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
+
+              <ToolbarButton
+                onPress={handleIndent}
+                label="Indent"
+                disabled={!editorState.canSink && !editorState.canSinkTaskListItem}
+              >
+                <ArrowLineRightIcon
+                  size={18}
+                  color={
+                    !editorState.canSink && !editorState.canSinkTaskListItem
+                      ? colors.textHint
+                      : colors.textMuted
+                  }
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onPress={handleOutdent}
+                label="Outdent"
+                disabled={!editorState.canLift && !editorState.canLiftTaskListItem}
+              >
+                <ArrowLineLeftIcon
+                  size={18}
+                  color={
+                    !editorState.canLift && !editorState.canLiftTaskListItem
+                      ? colors.textHint
+                      : colors.textMuted
+                  }
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
+
+              <ToolbarButton onPress={handleBlockquote} active={editorState.isBlockquoteActive} label="Blockquote">
+                <QuotesIcon
+                  size={18}
+                  color={editorState.isBlockquoteActive ? colors.accent : colors.textMuted}
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton onPress={handleScripturePress} label="Add scripture">
+                <BookBookmarkIcon size={18} color={colors.textMuted} weight="light" />
+              </ToolbarButton>
+            </View>
+          </View>
+        )}
       </SafeAreaView>
+
+      {/* Scripture search bottom sheet */}
+      <ScriptureSearchSheet
+        visible={showScriptureSheet}
+        onClose={() => setShowScriptureSheet(false)}
+        onInsert={handleScriptureInsert}
+        existingRefs={scriptureRefs}
+      />
 
       {/* Move to Folder sheet */}
       <MoveFolderSheet
         visible={showMoveFolderSheet}
         onClose={() => setShowMoveFolderSheet(false)}
         folders={folders}
-        currentFolderId={note?.folderId}
+        currentFolderId={liveNote?.folderId ?? existingNote?.folderId}
         onSelect={handleMoveFolderSelect}
       />
     </View>
   );
 }
+
+
+/* ─────────────────────────────────────────────────────────
+ * ToolbarButton
+ * ───────────────────────────────────────────────────────── */
+
+function ToolbarButton({
+  onPress,
+  active,
+  label,
+  disabled,
+  children,
+}: {
+  onPress: () => void;
+  active?: boolean;
+  label: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.toolbarButton,
+        disabled && styles.toolbarButtonDisabled,
+      ]}
+      activeOpacity={disabled ? 1 : 0.6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!active, disabled: !!disabled }}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+}
+
+
+/* ─────────────────────────────────────────────────────────
+ * Styles
+ * ───────────────────────────────────────────────────────── */
 
 const styles = StyleSheet.create({
   screen: {
@@ -826,11 +1214,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  editButton: {
+  actionButton: {
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
-  editText: {
+  actionText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 16,
   },
@@ -864,25 +1252,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 4,
   },
-  categoryPickerInline: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  categoryOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  categoryOptionText: {
-    fontSize: 12,
-  },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
@@ -896,19 +1265,17 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 15,
   },
-});
-
-const detailStyles = StyleSheet.create({
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 120,
-  },
   metadataRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 12,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  metadataDot: {
+    fontFamily: FontFamily.mono,
+    fontSize: 11,
   },
   metadataText: {
     fontFamily: FontFamily.mono,
@@ -916,24 +1283,22 @@ const detailStyles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  metadataDot: {
-    fontFamily: FontFamily.mono,
+  saveIndicatorSpacer: {
+    flex: 1,
+  },
+  saveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  saveText: {
+    fontFamily: FontFamily.ui,
     fontSize: 11,
   },
-  title: {
-    fontFamily: FontFamily.display,
-    fontSize: 24,
-    letterSpacing: -0.3,
-    marginBottom: 16,
-  },
-  divider: {
-    width: 40,
-    height: 1.5,
-    borderRadius: 1,
-    marginBottom: 24,
-  },
   scriptureSection: {
-    marginBottom: 16,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 4,
     gap: 8,
   },
   scriptureCard: {
@@ -942,49 +1307,38 @@ const detailStyles = StyleSheet.create({
     borderRadius: 10,
     borderLeftWidth: 2.5,
   },
-  bodyText: {
-    fontFamily: FontFamily.body,
-    fontSize: 17,
-    lineHeight: 28,
+  titleInput: {
+    fontFamily: FontFamily.display,
+    fontSize: 24,
+    letterSpacing: -0.3,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 12,
   },
-  bulletItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingLeft: 4,
+  titleInputReadOnly: {
+    // Make the disabled TextInput look like a regular Text
+    opacity: 1,
   },
-  bulletDot: {
-    fontFamily: FontFamily.body,
-    fontSize: 17,
-    lineHeight: 28,
+  titleDivider: {
+    width: 40,
+    height: 1.5,
+    borderRadius: 1,
+    marginHorizontal: 24,
+    marginBottom: 4,
   },
-  checklistItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    paddingLeft: 4,
-    marginVertical: 2,
+  editorContainer: {
+    flex: 1,
+    position: 'relative',
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 5,
-  },
-  checkmark: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  emptyLine: {
-    height: 14,
+  richText: {
+    flex: 1,
   },
   tagsSection: {
-    marginTop: 32,
+    paddingHorizontal: 24,
+    marginTop: 8,
+    paddingBottom: 24,
   },
-  sectionLabel: {
+  tagsSectionLabel: {
     fontFamily: FontFamily.mono,
     fontSize: 10,
     letterSpacing: 1,
@@ -1005,5 +1359,30 @@ const detailStyles = StyleSheet.create({
   tagPillText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 12,
+  },
+  toolbar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingBottom: Platform.OS === 'ios' ? 4 : 0,
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    height: 44,
+  },
+  toolbarButton: {
+    width: 34,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  toolbarButtonDisabled: {
+    opacity: 0.3,
+  },
+  toolbarSep: {
+    width: StyleSheet.hairlineWidth,
+    height: 18,
+    marginHorizontal: 3,
   },
 });

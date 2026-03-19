@@ -30,6 +30,8 @@ import {
   PARABLE_ANTI_PATTERNS,
   DIALOGUE_ANTI_PATTERNS,
   PATTERN_BREAK_DIRECTIVE,
+  getStoryDirectiveForDay,
+  getDialogueDirectiveForDay,
 } from '../constants/writing-craft';
 import {
   BIBLE_STUDY_METHODS,
@@ -529,14 +531,27 @@ async function _generateProgressiveDayInternal(
   );
   const patternBreaks = (context.readingDuration ?? 5) >= 15 ? PATTERN_BREAK_DIRECTIVE : '';
 
+  // Conditional injection: conviction only on days 3 through ~70% of the series
+  const totalDays = context.devotionalLength;
+  const isConvictionDay = dayNumber >= 3 && dayNumber <= Math.ceil(totalDays * 0.7);
+  const convictionDirective = isConvictionDay ? CONVICTION_DIRECTIVE : '';
+
+  // Conditional injection: parable/dialogue guardrails only when this day has a story/dialogue
+  const durationKey = context.readingDuration === 5 ? '5min' as const : context.readingDuration === 30 ? '30min' as const : '15min' as const;
+  const faithBg = context.writingStyle?.faithBackground ?? 'growing';
+  const hasStoryToday = getStoryDirectiveForDay(dayNumber, durationKey, faithBg) !== null;
+  const hasDialogueToday = getDialogueDirectiveForDay(dayNumber, durationKey, faithBg, hasStoryToday) !== null;
+  const parableGuardrails = hasStoryToday ? PARABLE_ANTI_PATTERNS : '';
+  const dialogueGuardrails = hasDialogueToday ? DIALOGUE_ANTI_PATTERNS : '';
+
   const systemPrompt = [
     baseSystem,
     PETER_ENNS_ADDITION,
     CRAFT_FOUNDATION,
     ANTI_SLOP_DIRECTIVE,
-    CONVICTION_DIRECTIVE,
-    PARABLE_ANTI_PATTERNS,
-    DIALOGUE_ANTI_PATTERNS,
+    convictionDirective,
+    parableGuardrails,
+    dialogueGuardrails,
     patternBreaks,
     voiceOverlay,
     voiceAdaptation,

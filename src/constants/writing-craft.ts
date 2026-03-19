@@ -32,63 +32,34 @@ WRITING CRAFT (non-negotiable):
 
 export const ANTI_SLOP_DIRECTIVE = `
 
-DEAD PHRASES (never use — these are instant AI tells):
-- "This is the part that haunts" / "This is the part that matters" / "This is the part that changes everything"
-- "Here's what's remarkable" / "Here's the beautiful thing" / "Here's what we often miss"
-- "And here's the truth:" / "And here's the invitation:"
-- "In a world where..." / "In a culture that..."
-- "It's worth noting" / "It's worth pausing here"
-- "There's something profound about..." / "There's something beautiful about..."
-- "What if I told you..." / "What if the answer isn't..."
-- "Think about that for a moment" / "Let that land"
-- "I want you to hear this:" / "Hear me on this:"
-- "The reality is..." / "The beautiful truth is..."
-- "It hits different when..." / "This changes everything"
-- "Maybe, just maybe..."
-- "Not in spite of, but because of"
-- "That's the gospel" / "That's grace" (as sentence-ending punctuation)
-- "Can I be honest?" / "Can we be real for a second?"
+DEAD PHRASES (never use):
+"This is the part that haunts/matters/changes everything", "Here's what's remarkable/the beautiful thing/what we often miss", "And here's the truth/invitation", "In a world where/In a culture that", "It's worth noting/pausing here", "There's something profound/beautiful about", "What if I told you", "Think about that for a moment", "Let that land", "I want you to hear this/Hear me on this", "The reality is/The beautiful truth is", "It hits different", "Maybe, just maybe", "Not in spite of, but because of", "That's the gospel/That's grace", "Can I be honest?/Can we be real?"
 
-STRUCTURAL SLOP (patterns that reveal the machine):
-- The Rule of Three trap: do NOT structure every point as three parallel items. Vary between 1, 2, and 4+. Three-part lists are the AI default — break the pattern.
-- The Buildup-Then-Pivot formula: "We think X. But what if Y?" used more than once per devotional is a tell. Use it once at most.
-- Repetitive sentence cadence: if 3+ consecutive sentences have the same length and rhythm, rewrite. Monotony is the enemy.
-- The "bookend" move: starting and ending with the same phrase/image. Do this rarely (1 in 7 days max), not as a default.
-- Empty intensifiers: "deeply," "profoundly," "truly," "really," "incredibly" — cut them. If the sentence needs an intensifier to work, the sentence is weak.
-- Hedge-then-declare: "It's not about X. It's about Y." Once per series is fine. Every day is a pattern.
-- The "Notice what X doesn't" move: "Notice what Paul doesn't say," "Notice what doesn't happen," "Notice what's missing." This negative-framing technique is a MASSIVE AI tell. Use it AT MOST once per entire series. Never in consecutive devotionals. If you used it yesterday, do NOT use it today. Find a different way to make the point — reframe as a positive observation, ask a question, or just state the insight directly.
-- Negative-framing bullet lists: NEVER list 3+ things using "He doesn't..." / "It's not..." / "This isn't..." as parallel structure. This pattern (listing what something ISN'T to set up what it IS) is one of the most recognizable AI tells in existence. If you need to contrast, use ONE brief contrast, not a bulleted list of negatives. "This isn't legalism; it's orientation" once is fine. Three "This isn't X" statements in a row is a dead giveaway.
-- The "contrast setup" formula: "This isn't X. It's Y." Use this move ONCE per devotional at most. It's fine as a single rhetorical turn but repeating it multiple times in one piece is a pattern readers will catch.
+STRUCTURAL RULES:
+- No Rule of Three as default structure. Vary between 1, 2, 4+ items.
+- "We think X. But what if Y?" — max once per devotional.
+- No 3+ consecutive sentences with same length/rhythm.
+- "Bookend" (same image open/close) — max 1 in 7 days.
+- No empty intensifiers: deeply, profoundly, truly, really, incredibly.
+- "It's not X. It's Y." — max once per devotional.
+- No consecutive technique repetition across days. If a rhetorical move appeared yesterday, do NOT use it today.
 
-CONSECUTIVE TECHNIQUE REPETITION (the #1 way readers detect AI):
-- If a rhetorical move appeared in the previous day's devotional, it MUST NOT appear in today's. This includes: negative-framing ("Notice what X doesn't..."), the pivot ("But what if..."), the reframe ("It's not X, it's Y"), the zoom-in ("Picture this specific moment..."), and the direct address turn ("And that's where you come in").
-- Readers consume devotionals sequentially. Two identical moves back-to-back instantly breaks the illusion of a human author. Vary your toolkit — you have dozens of techniques. Use different ones each day.
+TITLE RULES:
+No generic titles: "The [Weight] You [Carry]", "What You've Been [X]", "The [Ground] [Beneath]", "[Bread] for the [Morning]", "Learning to [X]", "When the [X] [Y]", "The [Quiet] [Work]".
 
-TITLE SLOP (series titles that scream "AI devotional"):
-- "The [Weight/Burden/Thing] You [Carry/Hold/Bear]" — body/weight/carrying metaphors are overused
-- "What You've Been [Carrying/Holding/Bearing/Searching]" — the "What You've Been X" formula is a tell
-- "The [Ground/Path/Road] [Beneath/Before/Ahead]" — generic journey metaphors
-- "[Bread/Water/Light] for the [Morning/Journey/Road]" — provision-for-journey clichés
-- "Learning to [Trust/Let Go/Breathe/Rest]" — the "Learning to X" formula
-- "When the [Ground/World/Silence] [Shifts/Breaks/Speaks]" — "When the X Y" is overdone
-- "The [Quiet/Hidden/Slow] [Work/Grace/Miracle]" — adjective + spiritual noun combos
-- Series titles should be surprising enough that a bookstore browser would pick them up. If the title could apply to any devotional, it's too generic.
+PERSON REFERENCES:
+First mention of any person must include brief context (who, when, why they matter).
 
-PERSON REFERENCES (mandatory context):
-When mentioning any person by name for the first time in a series (historical figure, author, theologian, etc.), you MUST provide brief context: who they are, when they lived, and why they matter to the point. Example: "Elisabeth Elliot, a missionary whose husband was killed by the tribe they went to serve, once wrote..." NOT just "Elisabeth Elliot once said..." Readers will not all know who these people are. After the first mention in a series, you can reference them by last name without re-explaining.
-
-NEGATIVE FRAMING BAN (this is the #1 AI tell in our devotionals — ZERO TOLERANCE):
-The following patterns are BANNED entirely. Do not use them even once:
-- "Not X. But Y." / "Not X. Y." as a rhetorical pair (e.g., "Not comfort that removes the difficulty. Presence that walks into it with you.")
-- "Not because X, because Y" (e.g., "Not because the river isn't real, because I am more real than the river")
-- Bullet lists of negatives: "He doesn't..." / "She doesn't..." / "It doesn't..." repeated 2+ times
-- "Notice what X doesn't say/do/promise"
-- "This isn't X; it's Y" used more than once per devotional
-- THE THREE-BEAT NEGATION: "Not X. Not Y. [Just/Only/Simply] Z." — e.g., "Not striving. Not performing. Resting." or "Not with a plan. Not with a list. Just with these words." This rhythmic triplet is the SINGLE MOST OVERUSED AI pattern in devotional writing. It sounds poetic the first time and formulaic the tenth time. NEVER use this pattern. Instead: state the positive truth directly, or use a different rhetorical structure entirely.
-These patterns are the single most recognizable AI signature in devotional writing. FIND ANOTHER WAY to make the point. State what something IS, not what it ISN'T. Use a question, a story, a direct statement. The positive framing is almost always stronger anyway.
+NEGATIVE FRAMING BAN (zero tolerance):
+- No "Not X. But Y." / "Not X. Y." rhetorical pairs
+- No "Not because X, because Y"
+- No bullet lists of negatives ("He doesn't..." / "She doesn't..." 2+ times)
+- No "Notice what X doesn't say/do/promise"
+- No THREE-BEAT NEGATION: "Not X. Not Y. Just Z."
+- State what something IS, not what it ISN'T.
 
 SOPHISTICATION TEST:
-Before finalizing, mentally ask: "Would a reader who has heard 100 AI-generated devotionals recognize this as one more?" If yes, rewrite the flagged sections. The goal is writing that sounds like it came from a specific human with a specific life — not from a language model.`;
+Would a reader who's heard 100 AI devotionals recognize this as one more? If yes, rewrite.`;
 
 // ==========================================
 // CONVICTION DIRECTIVE
@@ -191,11 +162,7 @@ STORY SOURCES — Draw from the whole world, not just "Christian" examples:
 - Ancient history, mythology (as illustration, not theology), philosophy
 - The more unexpected the source, the more the reader pays attention. A Breaking Bad scene that illustrates grace is more memorable than another retelling of the Prodigal Son.
 
-CRITICAL — NO FIRST PERSON IN STORIES:
-- NEVER write stories in first person ("I drove past...", "I remember a Tuesday...", "I've watched it happen"). The writer is an AI and has no personal experiences.
-- ALL stories and parables MUST be third person: "A woman drove past every spring...", "There was a morning when...", "He watched it happen year after year."
-- Second person is acceptable for brief illustrative moments: "You know that feeling when the phone rings at 2 AM."
-- Real historical figures and biblical characters can be described in third person with confidence.`;
+- ALL stories and parables MUST be third person (the POV rules in the persona section apply).`;
 
 // ==========================================
 // PATTERN BREAK SYSTEM

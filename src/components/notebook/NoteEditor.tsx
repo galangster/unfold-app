@@ -20,7 +20,10 @@ import {
   ArrowLineRightIcon,
   QuotesIcon,
 } from 'phosphor-react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeOut,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   useEditorBridge,
@@ -119,6 +122,10 @@ export function NoteEditor({
     avoidIosKeyboard: true,
     autofocus: false,
     initialContent,
+    theme: {
+      webview: { backgroundColor: colors.background },
+      webviewContainer: { backgroundColor: colors.background },
+    },
     bridgeExtensions: [
       ...TenTapStartKit,
       TaskListBridge,
@@ -136,10 +143,28 @@ export function NoteEditor({
 
   const editorState = useBridgeState(editor);
 
+  // Overlay covers the WebView until CSS is painted (WebViews punch through parent opacity on iOS)
+  const [editorReady, setEditorReady] = useState(false);
+
+  // Fallback: remove overlay after 1.5s even if isReady never fires
+  // (iOS WebView key-change reload can leave isReady stale)
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      setEditorReady(true);
+      // Also inject CSS as a safety net
+      editor.injectCSS(buildEditorCSS(colors));
+    }, 1500);
+    return () => clearTimeout(fallback);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Inject CSS + scroll behavior fix once editor is ready
   useEffect(() => {
     if (!editorState.isReady) return;
     editor.injectCSS(buildEditorCSS(colors));
+    // Delay removing overlay until CSS has had time to paint
+    setTimeout(() => {
+      setEditorReady(true);
+    }, 120);
     // Override TipTap's scrollIntoView so cursor stays in place until it
     // nears the bottom of the viewport (Notion-style). By default TipTap
     // scrolls the cursor to the top on every Enter press.
@@ -329,17 +354,15 @@ export function NoteEditor({
       <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
         <RichText
           editor={editor}
-          style={[styles.richText, !editorState.isReady && { opacity: 0 }]}
-          webviewProps={{
-            backgroundColor: colors.background,
-          }}
+          style={[styles.richText, { backgroundColor: colors.background }]}
         />
-        {/* Background mask — hides WebView flash before CSS loads */}
-        {!editorState.isReady && (
+        {/* Solid overlay hides WebView white flash — removed after CSS paints.
+            Uses pointerEvents='none' so taps pass through while the overlay fades. */}
+        {!editorReady && (
           <Animated.View
             exiting={FadeOut.duration(200)}
-            style={[styles.editorMask, { backgroundColor: colors.background }]}
             pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
           />
         )}
       </View>
@@ -636,10 +659,6 @@ const styles = StyleSheet.create({
   },
   richText: {
     flex: 1,
-  },
-  editorMask: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 10,
   },
   toolbar: {
     borderTopWidth: StyleSheet.hairlineWidth,

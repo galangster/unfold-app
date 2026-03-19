@@ -1,12 +1,22 @@
 /**
  * CreateFolderSheet — Modal bottom sheet for creating a new notebook folder.
  *
- * Uses React Native Modal instead of @gorhom/bottom-sheet for reliability
- * across all screen contexts. TextInput for folder name, optional color
- * selection, Create button.
+ * Uses React Native Modal for reliability across all screen contexts.
+ * TextInput for folder name, optional color selection, Create button.
+ * Sheet is fully opaque and renders above all other UI elements.
+ *
+ * ANIMATION STORYBOARD
+ *
+ *    0ms   Modal mounts, sheet starts at translateY = OFFSCREEN
+ *   16ms   Sheet springs up to rest position (spring: damping 22, stiffness 220)
+ *  ~350ms  Sheet settled, input auto-focuses
+ *
+ *  DISMISS (swipe or tap):
+ *    0ms   Sheet slides down (withTiming 180ms)
+ *  180ms   onClose() fires, Modal unmounts
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,11 +27,29 @@ import {
   Platform,
   StyleSheet,
 } from 'react-native';
-import Animated, { FadeIn, SlideInDown, SlideOutDown, FadeOut } from 'react-native-reanimated';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  Easing,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+
+// ---------------------------------------------------------------------------
+// Animation config
+// ---------------------------------------------------------------------------
+
+const OFFSCREEN = 500;
+const SLIDE_IN = { duration: 340, easing: Easing.out(Easing.cubic) };
+const DISMISS_DURATION = 180;
+const SWIPE_THRESHOLD = 80;
+const VELOCITY_THRESHOLD = 500;
 
 // ---------------------------------------------------------------------------
 // Preset color options
@@ -52,41 +80,75 @@ interface CreateFolderSheetProps {
 
 export function CreateFolderSheet({ visible, onClose, onSubmit }: CreateFolderSheetProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
+  const translateY = useSharedValue(OFFSCREEN);
+  const dismissing = useRef(false);
 
   const [folderName, setFolderName] = useState('');
   const [selectedColor, setSelectedColor] = useState<string | undefined>(undefined);
 
   const isCreateEnabled = folderName.trim().length > 0;
 
-  // Reset state and focus input when sheet opens
+  // Spring in when sheet opens, reset state
   useEffect(() => {
     if (visible) {
+      dismissing.current = false;
       setFolderName('');
       setSelectedColor(undefined);
+      translateY.value = OFFSCREEN;
+      translateY.value = withTiming(0, SLIDE_IN);
       const focusTimer = setTimeout(() => {
         inputRef.current?.focus();
-      }, 300);
+      }, 350);
       return () => clearTimeout(focusTimer);
     }
-  }, [visible]);
+  }, [visible, translateY]);
+
+  const dismissSheet = useCallback(() => {
+    if (dismissing.current) return;
+    dismissing.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+    setTimeout(onClose, DISMISS_DURATION);
+  }, [onClose, translateY]);
 
   const handleCreate = useCallback(() => {
-    if (!isCreateEnabled) return;
+    if (!isCreateEnabled || dismissing.current) return;
+    dismissing.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onSubmit(folderName.trim(), selectedColor);
-    onClose();
-  }, [folderName, selectedColor, isCreateEnabled, onSubmit, onClose]);
+    translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+    setTimeout(onClose, DISMISS_DURATION);
+  }, [folderName, selectedColor, isCreateEnabled, onSubmit, onClose, translateY]);
 
   const handleColorSelect = useCallback((color: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedColor((prev) => (prev === color ? undefined : color));
   }, []);
 
-  const handleBackdropPress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onClose();
-  }, [onClose]);
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((e) => {
+          if (e.translationY > 0) {
+            translateY.value = e.translationY;
+          }
+        })
+        .onEnd((e) => {
+          if (e.translationY > SWIPE_THRESHOLD || e.velocityY > VELOCITY_THRESHOLD) {
+            translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+            runOnJS(dismissSheet)();
+          } else {
+            translateY.value = withTiming(0, SLIDE_IN);
+          }
+        }),
+    [dismissSheet, translateY],
+  );
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   return (
     <Modal
@@ -94,130 +156,129 @@ export function CreateFolderSheet({ visible, onClose, onSubmit }: CreateFolderSh
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={dismissSheet}
     >
-      <KeyboardAvoidingView
-        style={styles.modalContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {/* Backdrop */}
-        <TouchableOpacity
-          style={styles.backdrop}
-          activeOpacity={1}
-          onPress={handleBackdropPress}
+      <GestureHandlerRootView style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            style={styles.backdropFill}
+          {/* Transparent dismiss area (tap above sheet to close) */}
+          <TouchableOpacity
+            style={styles.dismissArea}
+            activeOpacity={1}
+            onPress={dismissSheet}
           />
-        </TouchableOpacity>
 
-        {/* Sheet content */}
-        <Animated.View
-          entering={SlideInDown.duration(300)}
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.inputBackground,
-            },
-          ]}
-        >
-          {/* Handle indicator */}
-          <View style={styles.handleRow}>
-            <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
-          </View>
-
-          <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.headerRow}>
-              <FolderSimplePlusIcon size={20} color={colors.accent} weight="light" />
-              <Text style={[styles.title, { color: colors.text }]}>
-                New Folder
-              </Text>
-            </View>
-
-            {/* Folder name input */}
-            <TextInput
-              ref={inputRef}
+          {/* Sheet — single unified surface, slides up from bottom */}
+          <GestureDetector gesture={panGesture}>
+            <Animated.View
               style={[
-                styles.input,
+                styles.sheet,
+                sheetAnimatedStyle,
                 {
-                  color: colors.text,
-                  backgroundColor: colors.background,
-                  borderColor: folderName.trim() ? colors.accent + '40' : colors.border,
-                  borderWidth: 1,
+                  backgroundColor: colors.backgroundElevated,
+                  paddingBottom: insets.bottom + 200,
                 },
               ]}
-              placeholder="Folder name"
-              placeholderTextColor={colors.textHint}
-              value={folderName}
-              onChangeText={setFolderName}
-              autoCapitalize="sentences"
-              autoCorrect={false}
-              returnKeyType="done"
-              onSubmitEditing={handleCreate}
-              maxLength={40}
-            />
-
-            {/* Color selection */}
-            <View style={styles.colorSection}>
-              <Text style={[styles.colorLabel, { color: colors.textSubtle }]}>
-                COLOR (OPTIONAL)
-              </Text>
-              <View style={styles.colorRow}>
-                {FOLDER_COLORS.map((color) => {
-                  const isSelected = selectedColor === color;
-                  return (
-                    <TouchableOpacity
-                      key={color}
-                      onPress={() => handleColorSelect(color)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Select color`}
-                      accessibilityState={{ selected: isSelected }}
-                    >
-                      <View
-                        style={[
-                          styles.colorCircle,
-                          {
-                            backgroundColor: color,
-                            borderColor: isSelected ? colors.text : 'transparent',
-                            borderWidth: isSelected ? 2 : 0,
-                            transform: [{ scale: isSelected ? 1.15 : 1 }],
-                          },
-                        ]}
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Create button */}
-            <TouchableOpacity
-              onPress={handleCreate}
-              disabled={!isCreateEnabled}
-              activeOpacity={0.7}
-              style={[
-                styles.createButton,
-                {
-                  backgroundColor: isCreateEnabled ? colors.accent : colors.border,
-                  opacity: isCreateEnabled ? 1 : 0.5,
-                },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Create folder"
-              accessibilityState={{ disabled: !isCreateEnabled }}
             >
-              <Text style={[styles.createButtonText, { color: colors.background }]}>
-                Create
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
+              {/* Handle indicator */}
+              <View style={styles.handleRow}>
+                <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
+              </View>
+
+              <View style={styles.content}>
+                {/* Header */}
+                <View style={styles.headerRow}>
+                  <FolderSimplePlusIcon size={20} color={colors.accent} weight="light" />
+                  <Text style={[styles.title, { color: colors.text }]}>
+                    New Folder
+                  </Text>
+                </View>
+
+                {/* Folder name input */}
+                <TextInput
+                  ref={inputRef}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      backgroundColor: colors.background,
+                      borderColor: folderName.trim() ? colors.accent + '40' : colors.border,
+                      borderWidth: 1,
+                    },
+                  ]}
+                  placeholder="Folder name"
+                  placeholderTextColor={colors.textHint}
+                  value={folderName}
+                  onChangeText={setFolderName}
+                  autoCapitalize="sentences"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={handleCreate}
+                  maxLength={40}
+                />
+
+                {/* Color selection */}
+                <View style={styles.colorSection}>
+                  <Text style={[styles.colorLabel, { color: colors.textSubtle }]}>
+                    COLOR (OPTIONAL)
+                  </Text>
+                  <View style={styles.colorRow}>
+                    {FOLDER_COLORS.map((color) => {
+                      const isSelected = selectedColor === color;
+                      return (
+                        <TouchableOpacity
+                          key={color}
+                          onPress={() => handleColorSelect(color)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Select color`}
+                          accessibilityState={{ selected: isSelected }}
+                        >
+                          <View
+                            style={[
+                              styles.colorCircle,
+                              {
+                                backgroundColor: color,
+                                borderColor: isSelected ? colors.text : 'transparent',
+                                borderWidth: isSelected ? 2 : 0,
+                                transform: [{ scale: isSelected ? 1.15 : 1 }],
+                              },
+                            ]}
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Create button */}
+                <TouchableOpacity
+                  onPress={handleCreate}
+                  disabled={!isCreateEnabled}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.createButton,
+                    {
+                      backgroundColor: isCreateEnabled ? colors.accent : colors.border,
+                      opacity: isCreateEnabled ? 1 : 0.5,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create folder"
+                  accessibilityState={{ disabled: !isCreateEnabled }}
+                >
+                  <Text style={[styles.createButtonText, { color: colors.backgroundElevated }]}>
+                    Create
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </GestureDetector>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -231,27 +292,27 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backdropFill: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  dismissArea: {
+    flex: 1,
   },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingBottom: 56,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 24,
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 8,
   },
   handleBar: {
     width: 36,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 2.5,
   },
   content: {
     paddingHorizontal: 28,

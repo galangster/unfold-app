@@ -556,16 +556,6 @@ The reader has shared context about their life. Use this to INFORM your writing,
 
 The devotional should feel like it was written for any thoughtful Christian — but happens to land well for THIS person because you've chosen themes, scriptures, and angles that speak to their situation without announcing it.
 
-POINT OF VIEW — HARD RULE:
-- NEVER write in first person ("I", "I've", "I'm", "my", "me", "we", "our"). You are an AI. You have no personal experiences, memories, or anecdotes. First-person voice is dishonest.
-- WRONG: "I drive past a dogwood tree every spring." "I remember a Tuesday morning." "I've watched it happen."
-- RIGHT: "A woman drives past the same dogwood tree every spring." "There was a Tuesday morning when..." "You may have noticed..."
-- Use second person ("you", "your") as your primary voice to address the reader.
-- Use third person for all stories, parables, and illustrative examples.
-- You CAN create original parables — they must be third person.
-- You CAN reference real historical/biblical figures and events.
-- The ONLY exception: brief direct-to-God lines in closing prayers ("God, help us see...").
-
 ADDITIONAL ANTI-PATTERNS:
 - No rhetorical questions followed immediately by their answers
 - No lists of application points
@@ -688,24 +678,7 @@ CONVERSATIONAL DEPTH (Peter Enns-inspired):
 // Sticky sentence instruction for shareable moments - use when the devotional calls for it
 export const STICKY_SENTENCE_INSTRUCTION = `
 
-STICKY SENTENCES (Use When Natural):
-When a devotional naturally calls for a hard-hitting, memorable truth, include ONE standalone sentence as its own paragraph. This should feel earned, not forced.
-
-A sticky sentence works when:
-- The moment calls for emphasis or surprise
-- A truth lands better alone than surrounded by explanation
-- It crystallizes the day's core insight
-
-Characteristics:
-- Standalone as its own paragraph
-- Under 15 words if possible
-- Contains a surprise or reversal
-- Quot-worthy — something readers would screenshot
-- Packs theological depth into plain language
-
-Examples: "Faith isn't certainty. It's courage in the face of uncertainty." / "God doesn't need your strength. He needs your honesty."
-
-Important: Don't force a sticky sentence every day. Let it emerge naturally from the writing. Some days flow better without one.`;
+STICKY SENTENCES: When natural, include ONE standalone sentence as its own paragraph — under 15 words, contains a surprise or reversal, quotable. Not every day needs one.`;
 
 const getReadingLengthGuidance = (duration: 5 | 15 | 30): string => {
   switch (duration) {
@@ -746,37 +719,13 @@ ${REFLECTION_QUESTION_CRAFT}`;
 
 const REFLECTION_QUESTION_CRAFT = `
 REFLECTION QUESTION CRAFT:
-Good reflection questions are specific to the day's scripture and make the reader pause. Bad ones are vague, preachy, or use the same formula every day.
+Questions must be specific to today's scripture and make the reader pause. Under 20 words ideal.
 
-NEVER USE THESE PATTERNS (they are lazy and repetitive):
-- "What would it actually feel like to..." — this is a crutch. Ban it entirely.
-- "What would it look like if you..." — same formula, different words.
-- "How does [concept] challenge you to..." — too on-the-nose.
-- "In what ways do you..." — stiff, essay-prompt energy.
-- "How might God be inviting you to..." — too churchy, assumes the answer.
-- Any question that answers itself or implies what the "right" response should be.
+BANNED PATTERNS: "What would it feel like to...", "What would it look like if you...", "How might God be inviting you to..."
 
-WHAT MAKES A GOOD QUESTION:
-- It creates genuine tension or curiosity — the reader doesn't know the answer immediately.
-- It's rooted in something specific from TODAY'S text — not a generic spiritual prompt.
-- It's short (under 20 words is ideal).
-- It trusts the reader to connect the dots — no hand-holding.
-- It sometimes catches the reader off guard.
+GOOD EXAMPLES: "What are you pretending is fine?", "Name one thing you're afraid to ask God for.", "If you dropped the performance — what would be left?"
 
-GOOD EXAMPLES (notice the variety):
-- "Where are you holding on too tightly right now?"
-- "Name one thing you're afraid to ask God for."
-- "When was the last time you let yourself be weak in front of someone?"
-- "What are you pretending is fine?"
-- "If you dropped the performance — what would be left?"
-- "Who do you need to forgive that you haven't admitted yet?"
-- "What would you do differently today if you believed this verse?"
-
-VARIETY RULES:
-- Never start two consecutive questions the same way.
-- Mix question types: some begin with "What," some with "When/Where/Who," some with "If."
-- At least one question per series should be surprisingly direct or uncomfortable.
-- Questions should escalate: surface → personal → vulnerable.`;
+RULES: Never start two consecutive questions the same way. Mix types (What/When/Where/Who/If). Questions escalate: surface → personal → vulnerable.`;
 
 const getJsonSchemaForDuration = (duration: 5 | 15 | 30): string => {
   const baseSchema = `{
@@ -1167,9 +1116,22 @@ async function generateBatch(
   // retryLevel 2: no craft additions (minimal prompt)
   const craftFoundation = retryLevel <= 1 ? CRAFT_FOUNDATION : '';
   const antiSlop = retryLevel <= 1 ? ANTI_SLOP_DIRECTIVE : '';
-  const convictionDirective = retryLevel <= 1 ? CONVICTION_DIRECTIVE : '';
-  const parableGuardrails = retryLevel <= 1 ? PARABLE_ANTI_PATTERNS : '';
-  const dialogueGuardrails = retryLevel <= 1 ? DIALOGUE_ANTI_PATTERNS : '';
+  // Conviction directive only on days 3 through ~70% of the series (where conviction placement lives)
+  const isConvictionDay = startDay >= 3 && startDay <= Math.min(endDay, Math.ceil(context.devotionalLength * 0.7));
+  const convictionDirective = retryLevel <= 1 && isConvictionDay ? CONVICTION_DIRECTIVE : '';
+  // Parable guardrails only when batch contains a story day
+  const durationKey = context.readingDuration === 5 ? '5min' as const : context.readingDuration === 30 ? '30min' as const : '15min' as const;
+  const faithBackground = context.writingStyle?.faithBackground ?? 'growing';
+  const anyStoryDay = Array.from({length: endDay - startDay + 1}, (_, i) => startDay + i)
+    .some(day => getStoryDirectiveForDay(day, durationKey, faithBackground) !== null);
+  const parableGuardrails = retryLevel <= 1 && anyStoryDay ? PARABLE_ANTI_PATTERNS : '';
+  // Dialogue guardrails only when batch contains a dialogue day
+  const anyDialogueDay = Array.from({length: endDay - startDay + 1}, (_, i) => startDay + i)
+    .some(day => {
+      const hasStory = getStoryDirectiveForDay(day, durationKey, faithBackground) !== null;
+      return getDialogueDirectiveForDay(day, durationKey, faithBackground, hasStory) !== null;
+    });
+  const dialogueGuardrails = retryLevel <= 1 && anyDialogueDay ? DIALOGUE_ANTI_PATTERNS : '';
   // Pattern breaks for 15+ min readings — keeps engagement high through longer content
   const patternBreaks = retryLevel <= 1 && (context.readingDuration ?? 5) >= 15 ? PATTERN_BREAK_DIRECTIVE : '';
   const voiceOverlay = retryLevel === 0 ? buildV2VoiceOverlay(persona.primary, persona.secondary) : '';

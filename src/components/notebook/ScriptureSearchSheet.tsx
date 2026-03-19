@@ -1,5 +1,9 @@
 /**
- * ScriptureSearchSheet — Bottom sheet for searching and inserting scripture references into notes.
+ * ScriptureSearchSheet — Modal bottom sheet for searching and inserting
+ * scripture references into notes.
+ *
+ * Uses React Native Modal for reliability across all screen contexts.
+ * Sheet is fully opaque and renders above all other UI elements.
  *
  * UX Flow:
  *   1. Sheet opens with auto-focused text input
@@ -11,21 +15,38 @@
  * Existing scripture refs show as quick-tap pills for fast re-insertion.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   ActivityIndicator,
   ScrollView,
   Keyboard,
 } from 'react-native';
-import BottomSheet, {
-  BottomSheetBackdrop,
-  BottomSheetTextInput,
-} from '@gorhom/bottom-sheet';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  Easing,
+} from 'react-native-reanimated';
+
+// Animation config
+const OFFSCREEN = 500;
+const SLIDE_IN = { duration: 340, easing: Easing.out(Easing.cubic) };
+const DISMISS_DURATION = 180;
+const SWIPE_THRESHOLD = 80;
+const VELOCITY_THRESHOLD = 500;
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
   BookBookmarkIcon,
@@ -69,22 +90,33 @@ export function ScriptureSearchSheet({
   existingRefs = [],
 }: ScriptureSearchSheetProps) {
   const { colors, isDark } = useTheme();
-  const bottomSheetRef = useRef<BottomSheet>(null);
+  const insets = useSafeAreaInsets();
+  const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const translateY = useSharedValue(OFFSCREEN);
+  const dismissing = useRef(false);
 
   const [query, setQuery] = useState('');
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [verseResult, setVerseResult] = useState<VerseResult | null>(null);
   const [parsedRef, setParsedRef] = useState<ScriptureRef | null>(null);
 
-  // Open/close the sheet based on visibility
+  // Spring in when sheet opens, reset state
   useEffect(() => {
     if (visible) {
-      bottomSheetRef.current?.snapToIndex(0);
-    } else {
-      bottomSheetRef.current?.close();
+      dismissing.current = false;
+      setQuery('');
+      setSearchState('idle');
+      setVerseResult(null);
+      setParsedRef(null);
+      translateY.value = OFFSCREEN;
+      translateY.value = withTiming(0, SLIDE_IN);
+      const focusTimer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 350);
+      return () => clearTimeout(focusTimer);
     }
-  }, [visible]);
+  }, [visible, translateY]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {
@@ -93,25 +125,37 @@ export function ScriptureSearchSheet({
     };
   }, []);
 
-  // Reset state when sheet opens
-  useEffect(() => {
-    if (visible) {
-      setQuery('');
-      setSearchState('idle');
-      setVerseResult(null);
-      setParsedRef(null);
-    }
-  }, [visible]);
+  const dismissSheet = useCallback(() => {
+    if (dismissing.current) return;
+    dismissing.current = true;
+    Keyboard.dismiss();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+    setTimeout(onClose, DISMISS_DURATION);
+  }, [onClose, translateY]);
 
-  const handleSheetChange = useCallback(
-    (index: number) => {
-      if (index === -1) {
-        Keyboard.dismiss();
-        onClose();
-      }
-    },
-    [onClose]
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((e) => {
+          if (e.translationY > 0) {
+            translateY.value = e.translationY;
+          }
+        })
+        .onEnd((e) => {
+          if (e.translationY > SWIPE_THRESHOLD || e.velocityY > VELOCITY_THRESHOLD) {
+            translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+            runOnJS(dismissSheet)();
+          } else {
+            translateY.value = withTiming(0, SLIDE_IN);
+          }
+        }),
+    [dismissSheet, translateY],
   );
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   /**
    * Fetch a verse by reference string.
@@ -123,10 +167,7 @@ export function ScriptureSearchSheet({
     setParsedRef(null);
 
     try {
-      // Try local DB first (faster, offline-capable)
       let result = await fetchVerseLocal(reference, 'BSB');
-
-      // Fall back to remote API
       if (!result) {
         result = await fetchVerse(reference);
       }
@@ -134,8 +175,6 @@ export function ScriptureSearchSheet({
       if (result) {
         setVerseResult(result);
         setSearchState('found');
-
-        // Parse into ScriptureRef for the store
         const parsed = referenceToRoute(result.reference);
         if (parsed) {
           setParsedRef({
@@ -155,13 +194,9 @@ export function ScriptureSearchSheet({
     }
   }, []);
 
-  /**
-   * Handle text input changes with debounced parsing.
-   */
   const handleQueryChange = useCallback(
     (text: string) => {
       setQuery(text);
-
       if (debounceRef.current) clearTimeout(debounceRef.current);
 
       if (!text.trim()) {
@@ -172,12 +207,10 @@ export function ScriptureSearchSheet({
       }
 
       debounceRef.current = setTimeout(() => {
-        // Try to parse the reference from the text
         const refs = parseScriptureReferences(text.trim());
         if (refs.length > 0) {
           fetchVerseText(refs[0].reference);
         } else {
-          // Try the raw text as a direct reference (handles partial inputs)
           const parsed = referenceToRoute(text.trim());
           if (parsed) {
             fetchVerseText(text.trim());
@@ -192,9 +225,6 @@ export function ScriptureSearchSheet({
     [fetchVerseText]
   );
 
-  /**
-   * Handle tapping a quick-access pill.
-   */
   const handlePillPress = useCallback(
     (ref: ScriptureRef) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -204,258 +234,211 @@ export function ScriptureSearchSheet({
     [fetchVerseText]
   );
 
-  /**
-   * Handle the Insert button press.
-   */
   const handleInsert = useCallback(() => {
-    if (!verseResult || !parsedRef) return;
-
+    if (!verseResult || !parsedRef || dismissing.current) return;
+    dismissing.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
+    Keyboard.dismiss();
     onInsert({
       reference: verseResult.reference,
       text: verseResult.text,
       scriptureRef: parsedRef,
     });
-
-    // Reset and close
     setQuery('');
     setSearchState('idle');
     setVerseResult(null);
     setParsedRef(null);
-    onClose();
-  }, [verseResult, parsedRef, onInsert, onClose]);
-
-  const renderBackdrop = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5}
-        pressBehavior="close"
-      />
-    ),
-    []
-  );
-
-  if (!visible) return null;
+    translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+    setTimeout(onClose, DISMISS_DURATION);
+  }, [verseResult, parsedRef, onInsert, onClose, translateY]);
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={0}
-      snapPoints={['55%']}
-      enablePanDownToClose
-      onChange={handleSheetChange}
-      backdropComponent={renderBackdrop}
-      keyboardBehavior="interactive"
-      keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
-      backgroundStyle={{
-        backgroundColor: colors.inputBackground,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: colors.border,
-        width: 36,
-      }}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={dismissSheet}
     >
-      <View style={sheetStyles.content}>
-        {/* Header */}
-        <View style={sheetStyles.header}>
-          <BookBookmarkIcon size={20} color={colors.accent} weight="light" />
-          <Text style={[sheetStyles.headerTitle, { color: colors.text }]}>
-            Insert Scripture
-          </Text>
-        </View>
-
-        {/* Search input */}
-        <View
-          style={[
-            sheetStyles.inputContainer,
-            {
-              backgroundColor: isDark
-                ? 'rgba(255,255,255,0.06)'
-                : 'rgba(0,0,0,0.04)',
-              borderColor: colors.border,
-            },
-          ]}
+      <GestureHandlerRootView style={sheetStyles.modalContainer}>
+        <KeyboardAvoidingView
+          style={sheetStyles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <MagnifyingGlassIcon
-            size={16}
-            color={colors.textHint}
-            weight="light"
-            style={sheetStyles.inputIcon}
+          {/* Transparent dismiss area */}
+          <TouchableOpacity
+            style={sheetStyles.dismissArea}
+            activeOpacity={1}
+            onPress={dismissSheet}
           />
-          <BottomSheetTextInput
-            value={query}
-            onChangeText={handleQueryChange}
-            placeholder="e.g. John 3:16, Psalm 23:1-6"
-            placeholderTextColor={colors.textHint}
-            style={[sheetStyles.input, { color: colors.text }]}
-            autoFocus
-            autoCorrect={false}
-            autoCapitalize="words"
-            returnKeyType="search"
-            accessibilityLabel="Scripture reference input"
-            accessibilityHint="Type a Bible reference to search"
-          />
-        </View>
 
-        {/* Quick-access pills for existing refs */}
-        {existingRefs.length > 0 && searchState === 'idle' && (
-          <View style={sheetStyles.pillSection}>
-            <Text style={[sheetStyles.pillLabel, { color: colors.textHint }]}>
-              Recent references
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={sheetStyles.pillRow}
-              style={sheetStyles.pillScroll}
+          {/* Sheet — single unified surface, slides up from bottom */}
+          <GestureDetector gesture={panGesture}>
+            <Animated.View
+              style={[
+                sheetStyles.sheet,
+                sheetAnimatedStyle,
+                {
+                  backgroundColor: colors.backgroundElevated,
+                  paddingBottom: insets.bottom + 200,
+                },
+              ]}
             >
-              {existingRefs.map((ref, idx) => (
-                <TouchableOpacity
-                  key={`${ref.reference}-${idx}`}
-                  onPress={() => handlePillPress(ref)}
-                  activeOpacity={0.7}
+              {/* Handle indicator */}
+              <View style={sheetStyles.handleRow}>
+                <View style={[sheetStyles.handleBar, { backgroundColor: colors.borderStrong }]} />
+              </View>
+
+              <View style={sheetStyles.content}>
+                {/* Header */}
+                <View style={sheetStyles.header}>
+                  <BookBookmarkIcon size={20} color={colors.accent} weight="light" />
+                  <Text style={[sheetStyles.headerTitle, { color: colors.text }]}>
+                    Insert Scripture
+                  </Text>
+                </View>
+
+                {/* Search input */}
+                <View
                   style={[
-                    sheetStyles.pill,
+                    sheetStyles.inputContainer,
                     {
-                      backgroundColor: colors.accent + '0D',
+                      backgroundColor: colors.background,
+                      borderColor: query.trim() ? colors.accent + '40' : colors.border,
                     },
                   ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Insert ${ref.reference}`}
                 >
-                  <Text
-                    style={[sheetStyles.pillText, { color: colors.accent }]}
-                    numberOfLines={1}
+                  <MagnifyingGlassIcon
+                    size={16}
+                    color={colors.textHint}
+                    weight="light"
+                    style={sheetStyles.inputIcon}
+                  />
+                  <TextInput
+                    ref={inputRef}
+                    value={query}
+                    onChangeText={handleQueryChange}
+                    placeholder='e.g. John 3:16, Psalm 23:1-6'
+                    placeholderTextColor={colors.textHint}
+                    style={[sheetStyles.input, { color: colors.text }]}
+                    autoCorrect={false}
+                    autoCapitalize="words"
+                    returnKeyType="search"
+                    accessibilityLabel="Scripture reference input"
+                    accessibilityHint="Type a Bible reference to search"
+                  />
+                </View>
+
+                {/* Quick-access pills for existing refs */}
+                {existingRefs.length > 0 && searchState === 'idle' && (
+                  <View style={sheetStyles.pillSection}>
+                    <Text style={[sheetStyles.pillLabel, { color: colors.textHint }]}>
+                      Recent references
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={sheetStyles.pillRow}
+                      style={sheetStyles.pillScroll}
+                    >
+                      {existingRefs.map((ref, idx) => (
+                        <TouchableOpacity
+                          key={`${ref.reference}-${idx}`}
+                          onPress={() => handlePillPress(ref)}
+                          activeOpacity={0.7}
+                          style={[
+                            sheetStyles.pill,
+                            { backgroundColor: colors.accent + '0D' },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Insert ${ref.reference}`}
+                        >
+                          <Text
+                            style={[sheetStyles.pillText, { color: colors.accent }]}
+                            numberOfLines={1}
+                          >
+                            {ref.reference}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Search state feedback */}
+                {searchState === 'searching' && (
+                  <Animated.View entering={FadeIn.duration(200)} style={sheetStyles.stateContainer}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                    <Text style={[sheetStyles.stateText, { color: colors.textMuted }]}>
+                      Searching...
+                    </Text>
+                  </Animated.View>
+                )}
+
+                {searchState === 'not-found' && (
+                  <Animated.View entering={FadeIn.duration(200)} style={sheetStyles.stateContainer}>
+                    <WarningCircleIcon size={16} color={colors.textHint} weight="light" />
+                    <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
+                      Verse not found. Try a reference like "John 3:16"
+                    </Text>
+                  </Animated.View>
+                )}
+
+                {searchState === 'error' && (
+                  <Animated.View entering={FadeIn.duration(200)} style={sheetStyles.stateContainer}>
+                    <WarningCircleIcon size={16} color={colors.textHint} weight="light" />
+                    <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
+                      Something went wrong. Please try again.
+                    </Text>
+                  </Animated.View>
+                )}
+
+                {/* Verse preview card */}
+                {searchState === 'found' && verseResult && (
+                  <Animated.View
+                    entering={FadeIn.duration(300)}
+                    exiting={FadeOut.duration(150)}
+                    style={[
+                      sheetStyles.previewCard,
+                      {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+                        borderLeftColor: colors.accent,
+                      },
+                    ]}
                   >
-                    {ref.reference}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+                    <Text style={[sheetStyles.previewText, { color: colors.text }]} numberOfLines={6}>
+                      {verseResult.text}
+                    </Text>
+                    <Text style={[sheetStyles.previewRef, { color: colors.textMuted }]}>
+                      — {verseResult.reference}
+                      {verseResult.translation ? ` (${verseResult.translation.toUpperCase()})` : ''}
+                    </Text>
+                  </Animated.View>
+                )}
 
-        {/* Search state feedback */}
-        {searchState === 'searching' && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={sheetStyles.stateContainer}
-          >
-            <ActivityIndicator size="small" color={colors.accent} />
-            <Text style={[sheetStyles.stateText, { color: colors.textMuted }]}>
-              Searching...
-            </Text>
-          </Animated.View>
-        )}
-
-        {searchState === 'not-found' && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={sheetStyles.stateContainer}
-          >
-            <WarningCircleIcon
-              size={16}
-              color={colors.textHint}
-              weight="light"
-            />
-            <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
-              Verse not found. Try a reference like "John 3:16"
-            </Text>
-          </Animated.View>
-        )}
-
-        {searchState === 'error' && (
-          <Animated.View
-            entering={FadeIn.duration(200)}
-            style={sheetStyles.stateContainer}
-          >
-            <WarningCircleIcon
-              size={16}
-              color={colors.textHint}
-              weight="light"
-            />
-            <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
-              Something went wrong. Please try again.
-            </Text>
-          </Animated.View>
-        )}
-
-        {/* Verse preview card */}
-        {searchState === 'found' && verseResult && (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            exiting={FadeOut.duration(150)}
-            style={[
-              sheetStyles.previewCard,
-              {
-                backgroundColor: isDark
-                  ? 'rgba(255,255,255,0.04)'
-                  : 'rgba(0,0,0,0.02)',
-                borderLeftColor: colors.accent,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                sheetStyles.previewText,
-                { color: colors.text },
-              ]}
-              numberOfLines={6}
-            >
-              {verseResult.text}
-            </Text>
-            <Text
-              style={[
-                sheetStyles.previewRef,
-                { color: colors.textMuted },
-              ]}
-            >
-              — {verseResult.reference}
-              {verseResult.translation ? ` (${verseResult.translation.toUpperCase()})` : ''}
-            </Text>
-          </Animated.View>
-        )}
-
-        {/* Insert button */}
-        {searchState === 'found' && verseResult && parsedRef && (
-          <Animated.View entering={FadeIn.duration(200).delay(100)}>
-            <TouchableOpacity
-              onPress={handleInsert}
-              activeOpacity={0.7}
-              style={[
-                sheetStyles.insertButton,
-                { backgroundColor: colors.accent },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`Insert ${verseResult.reference} into note`}
-            >
-              <Text
-                style={[
-                  sheetStyles.insertButtonText,
-                  { color: colors.background },
-                ]}
-              >
-                Insert
-              </Text>
-              <ArrowRightIcon
-                size={16}
-                color={colors.background}
-                weight="bold"
-                style={sheetStyles.insertIcon}
-              />
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-      </View>
-    </BottomSheet>
+                {/* Insert button */}
+                {searchState === 'found' && verseResult && parsedRef && (
+                  <Animated.View entering={FadeIn.duration(200).delay(100)}>
+                    <TouchableOpacity
+                      onPress={handleInsert}
+                      activeOpacity={0.7}
+                      style={[sheetStyles.insertButton, { backgroundColor: colors.accent }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Insert ${verseResult.reference} into note`}
+                    >
+                      <Text style={[sheetStyles.insertButtonText, { color: colors.background }]}>
+                        Insert
+                      </Text>
+                      <ArrowRightIcon size={16} color={colors.background} weight="bold" style={sheetStyles.insertIcon} />
+                    </TouchableOpacity>
+                  </Animated.View>
+                )}
+              </View>
+            </Animated.View>
+          </GestureDetector>
+        </KeyboardAvoidingView>
+      </GestureHandlerRootView>
+    </Modal>
   );
 }
 
@@ -464,8 +447,34 @@ export function ScriptureSearchSheet({
 // ---------------------------------------------------------------------------
 
 const sheetStyles = StyleSheet.create({
-  content: {
+  modalContainer: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  dismissArea: {
+    flex: 1,
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+  handleRow: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  handleBar: {
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  content: {
     paddingHorizontal: 24,
     paddingTop: 4,
   },

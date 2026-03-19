@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon } from 'phosphor-react-native';
@@ -19,6 +20,7 @@ import { BookChapterNavigator } from '@/components/bible/BookChapterNavigator';
 import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
+import { getSectionHeadings } from '@/lib/bible-section-headings';
 // VerseShareModal removed — now uses share-card route
 
 // ─── Highlight colors ───────────────────────────────────────────────────────
@@ -51,6 +53,8 @@ const HEADER_HEIGHT = 52;
  *                    600ms  hold → 600ms fade out (ease-in-cubic)
  *  Toast:            200ms  enter (fade)
  *                    150ms  exit (fade)
+ *  Swipe nav:        horizontal pan > 50px + velocity > 400
+ *                    triggers chapter change (fade in via verse content)
  * ───────────────────────────────────────────────────────── */
 
 const ANIM = {
@@ -131,8 +135,8 @@ const VerseItem = React.memo(({
   // Flash highlight color — white glow on dark, subtle gray on light
   const flashBg = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.10)';
 
-  // Red-letter: muted red that's readable on dark/light backgrounds
-  const redLetterColor = isDark ? '#D4736E' : '#B5413B';
+  // Red-letter: bright warm red for Jesus's words — 8.3:1 contrast on #0A0A0A dark bg
+  const redLetterColor = isDark ? '#F28B82' : '#B5413B';
   const displayText = isSelected ? selectionText : (isRedLetter ? redLetterColor : textColor);
   const overlayBg = isSelected ? selectionBg : hlBg;
 
@@ -564,6 +568,39 @@ export default function BibleReaderScreen() {
   const isCrossBook = nextChapter !== null && nextChapter.bookId !== bookId;
   const isEndOfBible = nextChapter === null && bookId === 66;
 
+  // ─── Section headings for this chapter ──────────────────────────────────
+  const sectionHeadings = useMemo(
+    () => getSectionHeadings(bookId, chapter),
+    [bookId, chapter],
+  );
+  // Build a map: verse number → heading that appears before it
+  const headingBeforeVerse = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const h of sectionHeadings) {
+      map[h.beforeVerse] = h.title;
+    }
+    return map;
+  }, [sectionHeadings]);
+
+  // ─── Swipe gesture for chapter navigation ─────────────────────────────────
+  const swipeGesture = useMemo(() =>
+    Gesture.Pan()
+      .activeOffsetX([-30, 30])
+      .failOffsetY([-10, 10])
+      .onEnd((e) => {
+        'worklet';
+        // Require significant horizontal velocity + distance
+        if (Math.abs(e.velocityX) > 400 && Math.abs(e.translationX) > 50) {
+          if (e.translationX > 0 && prevChapter) {
+            runOnJS(navigateChapter)(-1);
+          } else if (e.translationX < 0 && nextChapter) {
+            runOnJS(navigateChapter)(1);
+          }
+        }
+      }),
+    [prevChapter, nextChapter, navigateChapter],
+  );
+
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
 
   const setTabBarHidden = useUIState((s) => s.setTabBarHidden);
@@ -663,7 +700,8 @@ export default function BibleReaderScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Scroll content */}
+      {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
+      <GestureDetector gesture={swipeGesture}>
       <ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
@@ -683,6 +721,20 @@ export default function BibleReaderScreen() {
                 key={v.verse}
                 onLayout={(e) => handleVerseLayout(v.verse, e.nativeEvent.layout.y)}
               >
+                {/* Section heading before this verse */}
+                {headingBeforeVerse[v.verse] && (
+                  <Text style={[
+                    styles.sectionHeading,
+                    {
+                      color: colors.text,
+                      fontFamily: readingFont.body,
+                      fontSize: fontSize + 1,
+                      lineHeight: Math.round((fontSize + 1) * 1.4),
+                    },
+                  ]}>
+                    {headingBeforeVerse[v.verse]}
+                  </Text>
+                )}
                 <VerseItem
                   verse={v}
                   fontSize={fontSize}
@@ -736,6 +788,7 @@ export default function BibleReaderScreen() {
           </Animated.View>
         )}
       </ScrollView>
+      </GestureDetector>
 
       {/* ─── Context Bar — replaces bottom tab bar when verses selected ──── */}
       {/* No exiting animation — tab bar snaps on top instantly, so exit plays behind it invisibly */}
@@ -898,6 +951,14 @@ const styles = StyleSheet.create({
   versesContent: { paddingHorizontal: 32 },
   loadingContainer: { paddingTop: 60, alignItems: 'center' },
   verseRow: { paddingVertical: 8 },
+
+  // Section headings
+  sectionHeading: {
+    fontStyle: 'italic',
+    marginTop: 28,
+    marginBottom: 8,
+    opacity: 0.85,
+  },
 
   // End of chapter
   endMarker: { alignItems: 'center', marginTop: 40, marginBottom: 20 },

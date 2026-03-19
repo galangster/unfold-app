@@ -5,9 +5,27 @@
  * Lists all folders plus an "Unfiled" option. A check mark indicates
  * the currently assigned folder. Tapping a folder calls onSelect
  * and dismisses the sheet.
+ *
+ * When `onReorder` is provided, drag handles appear on each folder row.
+ * Long-press the handle to start dragging, release to commit the new order.
+ *
+ * ANIMATION STORYBOARD
+ *
+ *    0ms   Modal mounts, sheet starts at translateY = OFFSCREEN
+ *   16ms   Sheet springs up to rest position (spring: damping 22, stiffness 220)
+ *  ~350ms  Sheet settled
+ *
+ *  DISMISS (swipe or tap):
+ *    0ms   Sheet slides down (withTiming 180ms)
+ *  180ms   onClose() fires, Modal unmounts
+ *
+ *  DRAG REORDER:
+ *    0ms   Long-press on grip dots — row lifts (scale 1.02, shadow)
+ *   ∞ms   Pan moves row, crossing ROW_HEIGHT threshold swaps positions
+ *   end   Row settles, reorderFolders called
  */
 
-import { useCallback } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +34,15 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import Animated, { FadeIn, SlideInDown, FadeOut } from 'react-native-reanimated';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  Easing,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import {
   FolderSimpleIcon,
@@ -24,10 +50,23 @@ import {
   TrayIcon,
   CheckIcon,
   NoteIcon,
+  DotsSixVerticalIcon,
+  TrashIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import type { NoteFolder } from '@/lib/store';
+
+// ---------------------------------------------------------------------------
+// Animation config
+// ---------------------------------------------------------------------------
+
+const OFFSCREEN = 500;
+const SLIDE_IN = { duration: 340, easing: Easing.out(Easing.cubic) };
+const DISMISS_DURATION = 180;
+const SWIPE_THRESHOLD = 80;
+const VELOCITY_THRESHOLD = 500;
+const ROW_HEIGHT = 46;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,6 +84,10 @@ interface MoveFolderSheetProps {
   showAllNotes?: boolean;
   /** Show "Create New Folder" button at bottom */
   onCreateFolder?: () => void;
+  /** When provided, enables drag-to-reorder with grip dots */
+  onReorder?: (orderedIds: string[]) => void;
+  /** When provided, shows a trash icon on each folder row */
+  onDeleteFolder?: (folderId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,22 +103,105 @@ export function MoveFolderSheet({
   title = 'Move to Folder',
   showAllNotes = false,
   onCreateFolder,
+  onReorder,
+  onDeleteFolder,
 }: MoveFolderSheetProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const translateY = useSharedValue(OFFSCREEN);
+  const dismissing = useRef(false);
+
+  // Local ordered copy of folders for drag-to-reorder
+  const [orderedFolders, setOrderedFolders] = useState<NoteFolder[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  // Sync local order when folders prop changes or sheet opens
+  useEffect(() => {
+    if (visible) {
+      const sorted = [...folders].sort(
+        (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
+      );
+      setOrderedFolders(sorted);
+    }
+  }, [visible, folders]);
+
+  // Spring in when sheet opens, reset when it closes
+  useEffect(() => {
+    if (visible) {
+      dismissing.current = false;
+      translateY.value = OFFSCREEN;
+      translateY.value = withTiming(0, SLIDE_IN);
+    }
+  }, [visible, translateY]);
+
+  const dismissSheet = useCallback(() => {
+    if (dismissing.current) return;
+    dismissing.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Commit any reorder on dismiss
+    if (onReorder && orderedFolders.length > 0) {
+      onReorder(orderedFolders.map((f) => f.id));
+    }
+    translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+    setTimeout(onClose, DISMISS_DURATION);
+  }, [onClose, translateY, onReorder, orderedFolders]);
 
   const handleSelect = useCallback(
     (folderId: string | null) => {
+      if (dismissing.current) return;
+      dismissing.current = true;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       onSelect(folderId);
-      onClose();
+      // Commit any reorder on select
+      if (onReorder && orderedFolders.length > 0) {
+        onReorder(orderedFolders.map((f) => f.id));
+      }
+      translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+      setTimeout(onClose, DISMISS_DURATION);
     },
-    [onSelect, onClose],
+    [onSelect, onClose, translateY, onReorder, orderedFolders],
   );
 
-  const handleBackdropPress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onClose();
-  }, [onClose]);
+  const handleSwapFolders = useCallback(
+    (fromId: string, direction: 'up' | 'down') => {
+      setOrderedFolders((prev) => {
+        const idx = prev.findIndex((f) => f.id === fromId);
+        if (idx < 0) return prev;
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+        const next = [...prev];
+        [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+        return next;
+      });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    [],
+  );
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((e) => {
+          if (e.translationY > 0) {
+            translateY.value = e.translationY;
+          }
+        })
+        .onEnd((e) => {
+          if (e.translationY > SWIPE_THRESHOLD || e.velocityY > VELOCITY_THRESHOLD) {
+            translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+            runOnJS(dismissSheet)();
+          } else {
+            translateY.value = withTiming(0, SLIDE_IN);
+          }
+        }),
+    [dismissSheet, translateY],
+  );
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const displayFolders = onReorder ? orderedFolders : folders;
 
   return (
     <Modal
@@ -83,222 +209,356 @@ export function MoveFolderSheet({
       transparent
       animationType="none"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={dismissSheet}
     >
-      <View style={styles.modalContainer}>
-        {/* Backdrop */}
+      <GestureHandlerRootView style={styles.modalContainer}>
+        {/* Transparent dismiss area (tap above sheet to close) */}
         <TouchableOpacity
-          style={styles.backdrop}
+          style={styles.dismissArea}
           activeOpacity={1}
-          onPress={handleBackdropPress}
-        >
+          onPress={dismissSheet}
+        />
+
+        {/* Sheet — single unified surface, slides up from bottom */}
+        <GestureDetector gesture={panGesture}>
           <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            style={styles.backdropFill}
-          />
-        </TouchableOpacity>
+            style={[
+              styles.sheet,
+              sheetAnimatedStyle,
+              {
+                backgroundColor: colors.backgroundElevated,
+                paddingBottom: insets.bottom + 200,
+              },
+            ]}
+          >
+            {/* Handle indicator */}
+            <View style={styles.handleRow}>
+              <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
+            </View>
 
-        {/* Sheet content */}
-        <Animated.View
-          entering={SlideInDown.duration(300)}
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.inputBackground,
-            },
-          ]}
-        >
-          {/* Handle indicator */}
-          <View style={styles.handleRow}>
-            <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
-          </View>
+            <View style={styles.content}>
+              {/* Header */}
+              <Text style={[styles.title, { color: colors.text }]}>
+                {title}
+              </Text>
 
-          <View style={styles.content}>
-            {/* Header */}
-            <Text style={[styles.title, { color: colors.text }]}>
-              {title}
-            </Text>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.list}
-              contentContainerStyle={styles.listContent}
-            >
-              {/* "All Notes" option — only in filter/picker mode */}
-              {showAllNotes && (
-                <TouchableOpacity
-                  onPress={() => handleSelect(null)}
-                  activeOpacity={0.6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Show all notes"
-                  accessibilityState={{ selected: currentFolderId === undefined || currentFolderId === null }}
-                  style={[
-                    styles.folderRow,
-                    {
-                      backgroundColor: !currentFolderId ? colors.accent + '0A' : 'transparent',
-                    },
-                  ]}
-                >
-                  <NoteIcon
-                    size={18}
-                    color={!currentFolderId ? colors.accent : colors.textMuted}
-                    weight="light"
-                  />
-                  <Text
-                    style={[
-                      styles.folderName,
-                      {
-                        color: !currentFolderId ? colors.accent : colors.text,
-                        fontFamily: !currentFolderId ? FontFamily.uiMedium : FontFamily.ui,
-                      },
-                    ]}
-                  >
-                    All Notes
-                  </Text>
-                  {!currentFolderId && (
-                    <CheckIcon size={16} color={colors.accent} weight="bold" />
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {/* Unfiled option — only in move-note mode (not filter mode) */}
-              {!showAllNotes && (
-                <TouchableOpacity
-                  onPress={() => handleSelect(null)}
-                  activeOpacity={0.6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Move to unfiled"
-                  accessibilityState={{ selected: !currentFolderId }}
-                  style={[
-                    styles.folderRow,
-                    {
-                      backgroundColor: !currentFolderId ? colors.accent + '0A' : 'transparent',
-                    },
-                  ]}
-                >
-                  <TrayIcon
-                    size={18}
-                    color={!currentFolderId ? colors.accent : colors.textMuted}
-                    weight="light"
-                  />
-                  <Text
-                    style={[
-                      styles.folderName,
-                      {
-                        color: !currentFolderId ? colors.accent : colors.text,
-                        fontFamily: !currentFolderId ? FontFamily.uiMedium : FontFamily.ui,
-                      },
-                    ]}
-                  >
-                    Unfiled
-                  </Text>
-                  {!currentFolderId && (
-                    <CheckIcon size={16} color={colors.accent} weight="bold" />
-                  )}
-                </TouchableOpacity>
-              )}
-
-              {/* Divider */}
-              {folders.length > 0 && (
-                <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              )}
-
-              {/* Folder list */}
-              {folders.map((folder) => {
-                const isSelected = currentFolderId === folder.id;
-                return (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                scrollEnabled={!draggingId}
+              >
+                {/* "All Notes" option — only in filter/picker mode */}
+                {showAllNotes && (
                   <TouchableOpacity
-                    key={folder.id}
-                    onPress={() => handleSelect(folder.id)}
+                    onPress={() => handleSelect(null)}
                     activeOpacity={0.6}
                     accessibilityRole="button"
-                    accessibilityLabel={`${showAllNotes ? 'Filter by' : 'Move to'} ${folder.name}`}
-                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel="Show all notes"
+                    accessibilityState={{ selected: currentFolderId === undefined || currentFolderId === null }}
                     style={[
                       styles.folderRow,
                       {
-                        backgroundColor: isSelected ? colors.accent + '0A' : 'transparent',
+                        backgroundColor: !currentFolderId ? colors.accent + '0A' : 'transparent',
                       },
                     ]}
                   >
-                    {folder.color ? (
-                      <View style={[styles.folderColorDot, { backgroundColor: folder.color }]} />
-                    ) : (
-                      <FolderSimpleIcon
-                        size={18}
-                        color={isSelected ? colors.accent : colors.textMuted}
-                        weight="light"
-                      />
-                    )}
-                    <Text
-                      style={[
-                        styles.folderName,
-                        {
-                          color: isSelected ? colors.accent : colors.text,
-                          fontFamily: isSelected ? FontFamily.uiMedium : FontFamily.ui,
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {folder.name}
-                    </Text>
-                    {isSelected && (
-                      <CheckIcon size={16} color={colors.accent} weight="bold" />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-
-              {/* Create New Folder option */}
-              {onCreateFolder && (
-                <>
-                  {folders.length > 0 && (
-                    <View style={[styles.divider, { backgroundColor: colors.border }]} />
-                  )}
-                  <TouchableOpacity
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      onClose();
-                      onCreateFolder();
-                    }}
-                    activeOpacity={0.6}
-                    accessibilityRole="button"
-                    accessibilityLabel="Create new folder"
-                    style={styles.folderRow}
-                  >
-                    <FolderSimplePlusIcon
+                    <NoteIcon
                       size={18}
-                      color={colors.textMuted}
+                      color={!currentFolderId ? colors.accent : colors.textMuted}
                       weight="light"
                     />
                     <Text
                       style={[
                         styles.folderName,
                         {
-                          color: colors.textMuted,
-                          fontFamily: FontFamily.ui,
+                          color: !currentFolderId ? colors.accent : colors.text,
+                          fontFamily: !currentFolderId ? FontFamily.uiMedium : FontFamily.ui,
                         },
                       ]}
                     >
-                      New Folder
+                      All Notes
                     </Text>
+                    {!currentFolderId && (
+                      <CheckIcon size={16} color={colors.accent} weight="bold" />
+                    )}
                   </TouchableOpacity>
-                </>
-              )}
+                )}
 
-              {folders.length === 0 && !onCreateFolder && (
-                <View style={styles.emptyState}>
-                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                    No folders yet.
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </Animated.View>
-      </View>
+                {/* Unfiled option — only in move-note mode (not filter mode) */}
+                {!showAllNotes && (
+                  <TouchableOpacity
+                    onPress={() => handleSelect(null)}
+                    activeOpacity={0.6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Move to unfiled"
+                    accessibilityState={{ selected: !currentFolderId }}
+                    style={[
+                      styles.folderRow,
+                      {
+                        backgroundColor: !currentFolderId ? colors.accent + '0A' : 'transparent',
+                      },
+                    ]}
+                  >
+                    <TrayIcon
+                      size={18}
+                      color={!currentFolderId ? colors.accent : colors.textMuted}
+                      weight="light"
+                    />
+                    <Text
+                      style={[
+                        styles.folderName,
+                        {
+                          color: !currentFolderId ? colors.accent : colors.text,
+                          fontFamily: !currentFolderId ? FontFamily.uiMedium : FontFamily.ui,
+                        },
+                      ]}
+                    >
+                      Unfiled
+                    </Text>
+                    {!currentFolderId && (
+                      <CheckIcon size={16} color={colors.accent} weight="bold" />
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {/* Divider */}
+                {displayFolders.length > 0 && (
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                )}
+
+                {/* Folder list */}
+                {displayFolders.map((folder) => {
+                  const isSelected = currentFolderId === folder.id;
+                  const isDragging = draggingId === folder.id;
+                  return (
+                    <DraggableFolderRow
+                      key={folder.id}
+                      folder={folder}
+                      isSelected={isSelected}
+                      isDragging={isDragging}
+                      showDragHandle={!!onReorder}
+                      showDeleteButton={!!onDeleteFolder}
+                      showAllNotes={showAllNotes}
+                      colors={colors}
+                      onSelect={() => handleSelect(folder.id)}
+                      onSwap={handleSwapFolders}
+                      onDragStart={() => setDraggingId(folder.id)}
+                      onDragEnd={() => setDraggingId(null)}
+                      onDelete={onDeleteFolder ? () => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        // Optimistically remove from local list
+                        setOrderedFolders((prev) => prev.filter((f) => f.id !== folder.id));
+                        onDeleteFolder(folder.id);
+                      } : undefined}
+                    />
+                  );
+                })}
+
+                {/* Create New Folder option */}
+                {onCreateFolder && (
+                  <>
+                    {displayFolders.length > 0 && (
+                      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                    )}
+                    <TouchableOpacity
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        onClose();
+                        onCreateFolder();
+                      }}
+                      activeOpacity={0.6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Create new folder"
+                      style={styles.folderRow}
+                    >
+                      <FolderSimplePlusIcon
+                        size={18}
+                        color={colors.textMuted}
+                        weight="light"
+                      />
+                      <Text
+                        style={[
+                          styles.folderName,
+                          {
+                            color: colors.textMuted,
+                            fontFamily: FontFamily.ui,
+                          },
+                        ]}
+                      >
+                        New Folder
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {displayFolders.length === 0 && !onCreateFolder && (
+                  <View style={styles.emptyState}>
+                    <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                      No folders yet.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </GestureHandlerRootView>
     </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Draggable folder row
+// ---------------------------------------------------------------------------
+
+interface DraggableFolderRowProps {
+  folder: NoteFolder;
+  isSelected: boolean;
+  isDragging: boolean;
+  showDragHandle: boolean;
+  showDeleteButton: boolean;
+  showAllNotes: boolean;
+  colors: ReturnType<typeof useTheme>['colors'];
+  onSelect: () => void;
+  onSwap: (folderId: string, direction: 'up' | 'down') => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDelete?: () => void;
+}
+
+function DraggableFolderRow({
+  folder,
+  isSelected,
+  isDragging,
+  showDragHandle,
+  showDeleteButton,
+  showAllNotes,
+  colors,
+  onSelect,
+  onSwap,
+  onDragStart,
+  onDragEnd,
+  onDelete,
+}: DraggableFolderRowProps) {
+  const dragOffsetY = useSharedValue(0);
+  const rowScale = useSharedValue(1);
+  const cumulativeSwap = useRef(0);
+
+  const dragGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activateAfterLongPress(200)
+        .onStart(() => {
+          cumulativeSwap.current = 0;
+          rowScale.value = withTiming(1.02, { duration: 120 });
+          runOnJS(onDragStart)();
+          runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Medium);
+        })
+        .onUpdate((e) => {
+          dragOffsetY.value = e.translationY;
+          // Check if we've crossed a row threshold
+          const swapCount = Math.round(e.translationY / ROW_HEIGHT);
+          if (swapCount !== cumulativeSwap.current) {
+            const direction = swapCount > cumulativeSwap.current ? 'down' : 'up';
+            cumulativeSwap.current = swapCount;
+            runOnJS(onSwap)(folder.id, direction);
+          }
+        })
+        .onEnd(() => {
+          dragOffsetY.value = withTiming(0, { duration: 150 });
+          rowScale.value = withTiming(1, { duration: 150 });
+          runOnJS(onDragEnd)();
+        }),
+    [folder.id, onSwap, onDragStart, onDragEnd, dragOffsetY, rowScale],
+  );
+
+  const animatedRowStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: dragOffsetY.value },
+      { scale: rowScale.value },
+    ],
+    zIndex: rowScale.value > 1 ? 10 : 0,
+  }));
+
+  return (
+    <Animated.View style={animatedRowStyle}>
+      <TouchableOpacity
+        onPress={onSelect}
+        activeOpacity={0.6}
+        accessibilityRole="button"
+        accessibilityLabel={`${showAllNotes ? 'Filter by' : 'Move to'} ${folder.name}`}
+        accessibilityState={{ selected: isSelected }}
+        style={[
+          styles.folderRow,
+          {
+            backgroundColor: isDragging
+              ? colors.backgroundElevated
+              : isSelected
+                ? colors.accent + '0A'
+                : 'transparent',
+            shadowColor: isDragging ? '#000' : 'transparent',
+            shadowOffset: { width: 0, height: isDragging ? 2 : 0 },
+            shadowOpacity: isDragging ? 0.15 : 0,
+            shadowRadius: isDragging ? 8 : 0,
+            elevation: isDragging ? 8 : 0,
+          },
+        ]}
+      >
+        {/* Drag handle — only shown when reorder is enabled */}
+        {showDragHandle && (
+          <GestureDetector gesture={dragGesture}>
+            <Animated.View
+              style={styles.dragHandle}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <DotsSixVerticalIcon
+                size={16}
+                color={colors.textSubtle}
+                weight="bold"
+              />
+            </Animated.View>
+          </GestureDetector>
+        )}
+
+        {folder.color ? (
+          <View style={[styles.folderColorDot, { backgroundColor: folder.color }]} />
+        ) : (
+          <FolderSimpleIcon
+            size={18}
+            color={isSelected ? colors.accent : colors.textMuted}
+            weight="light"
+          />
+        )}
+        <Text
+          style={[
+            styles.folderName,
+            {
+              color: isSelected ? colors.accent : colors.text,
+              fontFamily: isSelected ? FontFamily.uiMedium : FontFamily.ui,
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {folder.name}
+        </Text>
+        {isSelected && !showDeleteButton && (
+          <CheckIcon size={16} color={colors.accent} weight="bold" />
+        )}
+        {showDeleteButton && onDelete && (
+          <TouchableOpacity
+            onPress={onDelete}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${folder.name}`}
+            style={styles.deleteButton}
+          >
+            <TrashIcon size={16} color={colors.error} weight="light" />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -311,28 +571,28 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backdropFill: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  dismissArea: {
+    flex: 1,
   },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingBottom: 40,
-    maxHeight: '60%',
+    maxHeight: '70%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 24,
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: 12,
     paddingBottom: 8,
   },
   handleBar: {
     width: 36,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 2.5,
   },
   content: {
     paddingTop: 8,
@@ -367,6 +627,16 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  dragHandle: {
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    marginLeft: -8,
+    marginRight: -4,
+  },
+  deleteButton: {
+    padding: 6,
+    marginRight: -6,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

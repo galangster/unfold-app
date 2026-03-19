@@ -27,6 +27,8 @@
  *   Auth: Bearer XAI_API_KEY
  */
 
+import { PERSONA_BRIEF } from '@/constants/persona';
+
 export const FAST_MODEL = 'grok-4-1-fast-non-reasoning';
 
 /**
@@ -58,7 +60,7 @@ export const FAST_MODEL = 'grok-4-1-fast-non-reasoning';
  * Input payload: { userName, yesterdayCheckIn, todayTheme, todayScripture, currentSituation }
  * Expected output: { bridgeText: string }
  */
-export const BRIDGE_SYSTEM_PROMPT = `VOICE: You're a friend 5 years ahead in faith — not a pastor, not a professor. You've been through darkness and found something real. Short sentences (avg 10-14 words, 40%+ under 8 words). Concrete over abstract. Zero hedging. Name hard things directly. Never "journey," "season," "lean into," "sit with," "unpack," "beautiful," "amazing," "Have you ever," "deeply," "profoundly." End with a question or image, never a summary.
+export const BRIDGE_SYSTEM_PROMPT = `${PERSONA_BRIEF}
 
 WHAT YOU'RE DOING: Writing a personalized daily bridge — a 2-4 sentence (40-70 word) passage that transitions the reader from yesterday into today's devotional theme. Make them feel seen.
 
@@ -85,11 +87,15 @@ Respond with valid JSON only: {"bridgeText": "..."}`;
 /**
  * Examen prayer — sent via /api/generate/go-deeper
  *
+ * @deprecated DUPLICATED — the canonical Examen prompt lives in
+ * examen-service.ts (which uses PERSONA_FULL and first-person prayer voice).
+ * This version is kept for reference only. Remove once confirmed unused.
+ *
  * System prompt for the Ignatian Examen prayer generation.
  * Input payload: { userName, todayTheme, todayScripture, middayCheckIn, currentSituation }
  * Expected output: { movements: [{ title: string, prayer: string }, ...] } (exactly 5)
  */
-export const EXAMEN_SYSTEM_PROMPT = `VOICE: You're a friend 5 years ahead in faith — not a pastor, not a professor. You've been through darkness and found something real. Short sentences (avg 10-14 words, 40%+ under 8 words). Concrete over abstract. Zero hedging. Name hard things directly. Never "journey," "season," "lean into," "sit with," "pour out," "throne of grace," "beautiful," "amazing," "deeply," "profoundly."
+export const EXAMEN_SYSTEM_PROMPT = `${PERSONA_BRIEF}
 
 WHAT YOU'RE DOING: Writing a personalized 5-movement Ignatian Examen prayer for someone's evening.
 
@@ -120,7 +126,7 @@ Respond with valid JSON only: {"movements": [{"title": "Gratitude", "prayer": ".
  * Input payload: { reference, verseText, devotionalTheme, devotionalTitle }
  * Expected output: { commentary: string }
  */
-export const SCRIPTURE_COMMENTARY_SYSTEM_PROMPT = `VOICE: You're a friend 5 years ahead in faith — not a pastor, not a professor. Short sentences. Concrete over abstract. Zero hedging. Never "journey," "season," "lean into," "beautiful," "amazing," "deeply," "profoundly."
+export const SCRIPTURE_COMMENTARY_SYSTEM_PROMPT = `${PERSONA_BRIEF}
 
 WHAT YOU'RE DOING: Writing brief commentary connecting a Bible verse to today's devotional theme. This appears when someone taps a scripture reference while reading.
 

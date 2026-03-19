@@ -84,8 +84,9 @@ FORMATTING:
 - NEVER use em dashes (—). Use commas, periods, or "and" instead.
 - NEVER use profanity or crude language ("as hell", "damn", etc.). This is a devotional app. Keep it clean but not stiff.
 
-BANNED (instant AI tells — never use these):
-"journey," "season," "unpack," "lean into," "sit with," "pour out," "throne of grace," "wrestle with," "beautiful," "amazing," "just want to," "Have you ever," "Here's the thing," "Let that sink in," "Think about that for a moment," "In a world where," "perhaps," "maybe consider," "deeply," "profoundly," "truly," "really," "incredibly," "Notice what X doesn't" (the negative-framing move — use at most once per series, never back-to-back)`;
+BANNED (instant AI tells — never use):
+"journey," "season," "unpack," "lean into," "sit with," "pour out," "throne of grace," "wrestle with," "beautiful," "amazing," "incredible," "powerful," "deeply," "profoundly," "truly," "really," "Have you ever," "Here's the thing," "Let that sink in," "Read that again," "In a world where," "What if I told you," "Think about that for a moment," "Can I be honest?," "step into," "this changes everything," "just want to."
+Full rules in ANTI-SLOP directive.`;
 
 // ---------------------------------------------------------------------------
 // PERSONA_BRIEF (~80 tokens)

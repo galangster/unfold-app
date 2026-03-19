@@ -8,7 +8,7 @@ import {
   HandsPrayingIcon,
   NoteIcon,
 } from 'phosphor-react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -79,7 +79,7 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const extraTagCount = note.tags.length - visibleTags.length;
 
   return (
-    <Animated.View entering={FadeInDown.duration(600).delay(50 * index)}>
+    <Animated.View entering={FadeIn.duration(250).delay(30 * index)}>
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={handleLongPress}
