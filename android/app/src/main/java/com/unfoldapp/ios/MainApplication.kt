@@ -1,4 +1,4 @@
-package com.vibecode.unfold.x9fj08t
+package com.unfoldapp.ios
 
 import android.app.Application
 import android.content.res.Configuration

@@ -323,8 +323,8 @@ export default function PaywallScreen() {
     { icon: PaletteIcon, title: '7 reading themes', desc: 'Premium fonts and colors designed for focus' },
     { icon: BookOpenTextIcon, title: '32 study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
     { icon: InfinityIcon, title: 'Unlimited series', desc: 'Always shaped by your story and where you are now' },
-    { icon: PencilLineIcon, title: 'Journal & reflection', desc: 'AI-powered prompts to process what you read' },
-    { icon: ShareNetworkIcon, title: 'Share card themes', desc: 'Full palette of colors for sharing verses beautifully' },
+    { icon: PencilLineIcon, title: 'Full note-taking suite', desc: 'Rich-text journal with folders, favorites, and scripture linking' },
+    { icon: ShareNetworkIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
   ];
 
   // Free vs premium comparison rows

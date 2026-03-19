@@ -12,6 +12,7 @@
 
 import { logBugError, logBugEvent } from './bug-logger';
 import { logger as appLogger } from './logger';
+import { reportError } from './report-error';
 import {
   postJsonWithBackendFallback,
   getSystemPrompt,
@@ -1242,6 +1243,7 @@ export async function triggerNextDayGeneration(
     return day;
   } catch (err) {
     logger.error(`Failed to generate day ${nextDay}:`, err);
+    reportError('progressive-generation', err, { devotionalId, completedDay, nextDay });
     void logBugError('progressive-gen', err instanceof Error ? err : new Error(String(err)), {
       devotionalId,
       completedDay,

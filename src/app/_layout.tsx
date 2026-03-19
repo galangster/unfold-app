@@ -1,7 +1,8 @@
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useNavigationContainerRef } from 'expo-router';
 import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Application from 'expo-application';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,14 +15,37 @@ import { Colors } from '@/constants/colors';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnfoldStore } from '@/lib/store';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GlowBackground } from '@/components/GlowBackground';
 
+const navigationIntegration = Sentry.reactNavigationIntegration({
+  enableTimeToInitialDisplay: true,
+});
+
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  enabled: !__DEV__,
-  tracesSampleRate: 0.2,
   environment: __DEV__ ? 'development' : 'production',
+  release: `unfold@${Application.nativeApplicationVersion ?? '1.0.0'}`,
+  dist: Application.nativeBuildVersion ?? '1',
+
+  // Capture every error at TestFlight scale — drop tracesSampleRate to 0.2 at launch
+  tracesSampleRate: __DEV__ ? 0 : 1.0,
+  profilesSampleRate: 1.0,
+
+  // Attach screenshots and view hierarchy on crash
+  attachScreenshot: true,
+  attachViewHierarchy: true,
+  sendDefaultPii: true,
+  enableCaptureFailedRequests: true,
+  maxBreadcrumbs: 100,
+
+  integrations: [navigationIntegration],
+
+  // Filter out dev server noise from spans
+  shouldCreateSpanForRequest: (url) => {
+    return !url.includes('localhost') && !url.includes('127.0.0.1');
+  },
 });
 
 export const unstable_settings = {
@@ -35,12 +59,33 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
+  const ref = useNavigationContainerRef();
 
   // Initialize Firebase Auth and listen to auth state changes (always call hook unconditionally)
-  useAuth();
+  const { userId, email, authProvider } = useAuth();
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
+
+  const isPremium = useUnfoldStore((s) => s.isPremium);
+
+  // Register navigation container with Sentry for screen tracking
+  useEffect(() => {
+    if (ref) {
+      navigationIntegration.registerNavigationContainer(ref);
+    }
+  }, [ref]);
+
+  // Set Sentry user context when auth state changes
+  useEffect(() => {
+    if (userId) {
+      Sentry.setUser({ id: userId, email: email ?? undefined });
+      Sentry.setTag('auth_provider', authProvider ?? 'none');
+      Sentry.setTag('is_premium', String(isPremium));
+    } else {
+      Sentry.setUser(null);
+    }
+  }, [userId, email, authProvider, isPremium]);
 
   return (
     <NavigationThemeProvider value={navigationTheme}>

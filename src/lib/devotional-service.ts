@@ -1,6 +1,7 @@
 import { DevotionalDay, Devotional, Quote, CrossReference, BibleTranslation, UsedScripture, ThemeCategory, DevotionalType, SeriesPersonaRecord } from './store';
 import { logBugEvent, logBugError } from './bug-logger';
 import { logger } from '@/lib/logger';
+import { reportError } from '@/lib/report-error';
 import { checkRateLimit, incrementRateLimit, getTimeUntilReset } from './rate-limit';
 import {
   getThemeById,
@@ -1593,7 +1594,7 @@ export async function generateDevotional(
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('Generation error:', errorMessage);
+      reportError('devotional-generation', error, { phase: 'full-generation' });
       void logBugError('devotional-service', error, {
         phase: 'full-generation',
       });
@@ -1724,6 +1725,10 @@ export async function continueGeneratingDays(
 
       return allDays;
     } catch (error) {
+      reportError('devotional-continuation', error, {
+        devotionalId: devotional.id,
+        phase: 'continuation',
+      });
       void logBugError('devotional-service', error, {
         devotionalId: devotional.id,
         phase: 'continuation',

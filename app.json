@@ -14,7 +14,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vibecode.unfold.x9fj08t",
+      "bundleIdentifier": "com.unfoldapp.ios",
       "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
@@ -33,7 +33,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.vibecode.unfold.x9fj08t",
+      "package": "com.unfoldapp.ios",
       "versionCode": 1,
       "permissions": [
         "android.permission.RECORD_AUDIO"
@@ -89,8 +89,8 @@
       [
         "expo-widgets",
         {
-          "bundleIdentifier": "com.vibecode.unfold.x9fj08t.widgets",
-          "groupIdentifier": "group.com.vibecode.unfold.x9fj08t",
+          "bundleIdentifier": "com.unfoldapp.ios.widgets",
+          "groupIdentifier": "group.com.unfoldapp.ios",
           "enablePushNotifications": false,
           "widgets": [
             {

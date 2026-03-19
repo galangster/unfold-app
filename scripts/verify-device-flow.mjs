@@ -55,7 +55,7 @@ if (!hasCmd('agent-device')) {
 }
 
 const configured = process.env.CVL_IOS_APP_BUNDLE?.trim();
-const defaults = ['com.vibecode.unfold.9fj08t', 'com.vibecode.unfold.x9fj08t'];
+const defaults = ['com.unfoldapp.ios'];
 const discovered = discoverUnfoldBundleIds();
 const strict = process.env.CVL_STRICT_DEVICE === '1';
 const candidates = [...new Set([configured, ...discovered, ...defaults].filter(Boolean))];

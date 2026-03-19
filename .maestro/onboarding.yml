@@ -1,7 +1,7 @@
 # Maestro E2E Testing for Unfold
 # Run: maestro test .maestro/
 
-appId: com.vibecode.unfold.x9fj08t
+appId: com.unfoldapp.ios
 ---
 # Onboarding Flow Test
 - launchApp

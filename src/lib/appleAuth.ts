@@ -9,6 +9,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { getRandomBytesAsync } from 'expo-crypto';
 import { logger } from './logger';
+import { reportError } from './report-error';
 
 // Re-export the type so consumers don't need to import Firebase directly
 export type { FirebaseAuthTypes } from '@react-native-firebase/auth';
@@ -208,6 +209,7 @@ export async function signInWithApple(): Promise<AppleAuthResult> {
       }
     }
 
+    reportError('apple-auth', error, { errorCode });
     logger.error('[AppleAuth] Sign in error', { error: errorMessage, code: errorCode });
     return {
       success: false,

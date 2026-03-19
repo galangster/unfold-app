@@ -5,6 +5,7 @@
 
 import { File, Paths } from 'expo-file-system';
 import { logger } from '@/lib/logger';
+import { reportError } from '@/lib/report-error';
 import { getAuthHeaders } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
@@ -462,7 +463,7 @@ export async function streamDevotionalAudio(
     inFlightRequests.set(key, promise);
     return promise;
   } catch (error) {
-    logger.error('[TTS] streamDevotionalAudio ERROR:', error);
+    reportError('tts-audio', error, { voiceId });
     throw error;
   }
 }

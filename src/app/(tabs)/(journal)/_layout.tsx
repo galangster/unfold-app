@@ -13,7 +13,7 @@ export default function JournalLayout() {
         animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" options={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="entry" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="note" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="note-detail" options={{ animation: 'ios_from_right' }} />

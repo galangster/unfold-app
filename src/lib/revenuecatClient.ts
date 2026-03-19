@@ -30,10 +30,10 @@ import Purchases, {
 // Check if running on web
 const isWeb = Platform.OS === "web";
 
-// Check for environment keys (support both old VIBECODE_ prefix and new names)
-const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY || process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_TEST_KEY;
-const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY || process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_APPLE_KEY;
-const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || process.env.EXPO_PUBLIC_VIBECODE_REVENUECAT_GOOGLE_KEY;
+// Check for environment keys
+const testKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY;
+const appleKey = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY;
+const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY;
 
 // Use __DEV__ and Platform to determine which key to use
 const getApiKey = (): string | undefined => {

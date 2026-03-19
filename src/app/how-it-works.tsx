@@ -89,16 +89,24 @@ const PAGES: Page[] = [
     type: 'feature',
     card: {
       headline: 'A full Bible reader',
-      body: 'Read any book, chapter, and verse right inside the app. No switching between apps.',
+      body: 'Every book, chapter, and verse. Tap any scripture in your devotional to read it in context.',
       animation: 'openBook',
     },
   },
   {
     type: 'feature',
     card: {
-      headline: 'Reflect and journal',
-      body: 'Guided prompts after each reading. Write what stirred your heart. Watch your growth over time.',
+      headline: 'A real note-taking suite',
+      body: 'Rich-text journal with folders, favorites, and scripture linking. Your thoughts stay with the verses that sparked them.',
       animation: 'pulseLine',
+    },
+  },
+  {
+    type: 'feature',
+    card: {
+      headline: 'Everything in one place',
+      body: 'Bible. Devotionals. Notes. Audio. No more switching between three apps to do your quiet time.',
+      animation: 'stack',
     },
   },
 ];
