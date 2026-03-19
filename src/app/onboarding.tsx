@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -15,6 +14,7 @@ import {
   Dimensions,
   StyleSheet,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -2270,11 +2270,19 @@ export default function OnboardingScreen() {
                   router.push({ pathname: '/paywall', params: { source: 'onboarding' } });
                   return;
                 }
-                const result = await trialPurchaseMutation.mutateAsync(yearlyPackage);
-                if (result.ok) {
-                  updateUser({ isPremium: true });
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  completeOnboarding();
+                try {
+                  const result = await trialPurchaseMutation.mutateAsync(yearlyPackage);
+                  if (result.ok) {
+                    updateUser({ isPremium: true });
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    completeOnboarding();
+                  } else {
+                    // User cancelled or purchase didn't complete — no action needed
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                  }
+                } catch (e) {
+                  logger.log('[Onboarding] Purchase error:', e);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
                 }
               }}
             >
@@ -2561,7 +2569,7 @@ export default function OnboardingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
             {currentStepIndex > 0 ? (
               <TouchableOpacity activeOpacity={0.7}
@@ -2606,7 +2614,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={20}>
                 <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40 }}>
                   <View>
                     <TypewriterText
@@ -2634,9 +2642,9 @@ export default function OnboardingScreen() {
                   )}
                   {showInput && <Animated.View style={[inputAnimatedStyle, { flex: 1 }]}>{renderInput()}</Animated.View>}
                 </View>
-              </ScrollView>
+              </KeyboardAwareScrollView>
             ) : (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={20}>
                 <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
@@ -2714,10 +2722,10 @@ export default function OnboardingScreen() {
                   )}
                   {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
                 </View>
-              </ScrollView>
+              </KeyboardAwareScrollView>
             )}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     </View>
   );

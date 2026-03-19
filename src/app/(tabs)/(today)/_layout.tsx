@@ -13,7 +13,7 @@ export default function TodayLayout() {
         animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" options={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="reading" options={{ animation: 'fade' }} />
       <Stack.Screen name="journal" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="journal-detail" options={{ animation: 'ios_from_right' }} />

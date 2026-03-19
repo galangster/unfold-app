@@ -90,6 +90,9 @@ function legacyMarkdownToHtml(content: string): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildEditorCSS(colors: any, isEditing: boolean): string {
   return `
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
     html {
       background-color: ${colors.background} !important;
       height: 100%;
@@ -102,11 +105,23 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
       background-color: ${colors.background} !important;
       padding: 0 24px 200px;
       margin: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
       min-height: 100%;
     }
-    .ProseMirror { overflow-anchor: none; }
+    ::selection {
+      background: ${colors.accent}33;
+    }
+    .ProseMirror {
+      overflow-anchor: none;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
     .tiptap { scroll-padding-bottom: 60vh; }
     p { margin: 0 0 4px 0; }
     h1 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }

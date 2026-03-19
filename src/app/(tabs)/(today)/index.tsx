@@ -606,11 +606,18 @@ export default function HomeScreen() {
   };
 
   // Check if midday/evening check-ins already completed today
+  // Evening check-in belongs to the day just completed, which may be currentDay - 1
+  // if the reading was finished and the day already advanced
+  const eveningCheckInDay = currentDevotional
+    ? (currentDevotional.currentDay > 1
+      ? currentDevotional.currentDay - 1
+      : currentDevotional.currentDay)
+    : 1;
   const todayCheckIn = currentDevotional
     ? getCheckIn(currentDevotional.id, currentDevotional.currentDay, 'midday')
     : undefined;
   const todayEveningCheckIn = currentDevotional
-    ? getCheckIn(currentDevotional.id, currentDevotional.currentDay, 'evening')
+    ? getCheckIn(currentDevotional.id, eveningCheckInDay, 'evening')
     : undefined;
 
   const todayDateStr = new Date().toISOString().split('T')[0];

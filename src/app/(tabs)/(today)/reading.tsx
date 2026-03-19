@@ -21,12 +21,13 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon } from 'phosphor-react-native';
+import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
+import type { FontSize } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { triggerNextDayGeneration, evaluateSeriesExtension, generateArcExtension } from '@/lib/progressive-generation';
@@ -167,6 +168,7 @@ export default function ReadingScreen() {
   // shareModalOpen removed — share now navigates to /share-card route
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
+  const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
   const audioPlayerRef = useRef<BottomSheet>(null);
@@ -1316,6 +1318,21 @@ export default function ReadingScreen() {
                   />
                 </TouchableOpacity>
 
+                {/* Reading Settings (Aa) Button */}
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowReadingSettings(true);
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reading settings"
+                  accessibilityHint="Adjust font size and reading font"
+                  style={{ padding: 8 }}
+                >
+                  <TextAaIcon size={22} color={colors.text} weight="light" />
+                </TouchableOpacity>
+
                 {/* Audio Player Button */}
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
@@ -1360,26 +1377,6 @@ export default function ReadingScreen() {
               </View>
             </View>
 
-            {/* Progress bar -- thin line showing position in series */}
-            <View
-              style={{
-                height: 2,
-                backgroundColor: colors.border,
-                marginHorizontal: 24,
-                borderRadius: 1,
-                overflow: 'hidden',
-              }}
-            >
-              <Animated.View
-                style={{
-                  height: 2,
-                  borderRadius: 1,
-                  backgroundColor: colors.accent,
-                  width: `${(viewingDay / currentDevotional.totalDays) * 100}%`,
-                  opacity: 0.7,
-                }}
-              />
-            </View>
             </View>
 
             {/* Scroll progress bar — animated thin line below header */}
@@ -1989,7 +1986,169 @@ export default function ReadingScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature={premiumFeature}
       />
+
+      {showReadingSettings && (
+        <DevotionalSettingsSheet
+          onClose={() => setShowReadingSettings(false)}
+        />
+      )}
     </View>
+  );
+}
+
+/* ─── Devotional Reading Settings Sheet ─── */
+
+const FONT_SIZE_OPTIONS: Array<{ label: string; value: FontSize }> = [
+  { label: 'Small', value: 'small' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'Large', value: 'large' },
+];
+
+function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
+  const { colors, isDark } = useTheme();
+  const currentFontSize = useUnfoldStore((s) => s.user?.fontSize ?? 'medium');
+  const currentReadingFont = useUnfoldStore((s) => s.user?.readingFont ?? 'source-serif');
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const updateUser = useUnfoldStore((s) => s.updateUser);
+
+  const controlBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  const selectedBg = isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.12)';
+
+  return (
+    <>
+      {/* Overlay */}
+      <Animated.View
+        entering={FadeIn.duration(200)}
+        exiting={FadeOut.duration(150)}
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          zIndex: 99,
+        }}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={onClose}
+          accessibilityLabel="Close settings"
+          accessibilityRole="button"
+        />
+      </Animated.View>
+
+      {/* Settings card */}
+      <Animated.View
+        entering={FadeIn.duration(250)}
+        exiting={FadeOut.duration(180)}
+        style={{
+          position: 'absolute',
+          left: 12,
+          right: 12,
+          bottom: 100,
+          zIndex: 100,
+          borderRadius: 20,
+          backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: isDark ? 0.4 : 0.12,
+          shadowRadius: 20,
+          elevation: 12,
+          paddingBottom: 20,
+        }}
+      >
+        {/* Handle */}
+        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 8 }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }} />
+        </View>
+
+        {/* Font Size */}
+        <View style={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
+          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
+            Font Size
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {FONT_SIZE_OPTIONS.map((opt) => {
+              const isActive = currentFontSize === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    updateUser({ fontSize: opt.value });
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    backgroundColor: isActive ? selectedBg : controlBg,
+                    alignItems: 'center',
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityLabel={`${opt.label} font size`}
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={{
+                    fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
+                    fontSize: 14,
+                    color: isActive ? colors.text : colors.textHint,
+                  }}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Reading Font */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
+            Reading Font
+          </Text>
+          <View style={{ gap: 6 }}>
+            {READING_FONTS.map((font) => {
+              const isActive = currentReadingFont === font.id;
+              const isLocked = font.id !== 'source-serif' && !isPremium;
+              return (
+                <TouchableOpacity
+                  key={font.id}
+                  onPress={() => {
+                    if (isLocked) return;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    updateUser({ readingFont: font.id });
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    borderRadius: 10,
+                    backgroundColor: isActive ? selectedBg : 'transparent',
+                    opacity: isLocked ? 0.4 : 1,
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityLabel={`${font.name} font${isLocked ? ', premium' : ''}`}
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <Text style={{
+                    fontFamily: font.regular,
+                    fontSize: 16,
+                    color: isActive ? colors.text : colors.textMuted,
+                  }}>
+                    {font.name}
+                  </Text>
+                  {isLocked && (
+                    <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.accent, letterSpacing: 0.5 }}>
+                      PRO
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </Animated.View>
+    </>
   );
 }
 

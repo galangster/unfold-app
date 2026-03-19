@@ -71,14 +71,18 @@ const FOLDER_COLORS = [
 interface CreateFolderSheetProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (name: string, color?: string) => void;
+  onSubmit: (name: string, color?: string, parentId?: string) => void;
+  /** When set, creates a subfolder inside this parent */
+  parentFolderId?: string;
+  /** Display name of parent folder (shown as context in header) */
+  parentFolderName?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function CreateFolderSheet({ visible, onClose, onSubmit }: CreateFolderSheetProps) {
+export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, parentFolderName }: CreateFolderSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
@@ -117,7 +121,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit }: CreateFolderSh
     if (!isCreateEnabled || dismissing.current) return;
     dismissing.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onSubmit(folderName.trim(), selectedColor);
+    onSubmit(folderName.trim(), selectedColor, parentFolderId);
     translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
     setTimeout(onClose, DISMISS_DURATION);
   }, [folderName, selectedColor, isCreateEnabled, onSubmit, onClose, translateY]);
@@ -191,9 +195,16 @@ export function CreateFolderSheet({ visible, onClose, onSubmit }: CreateFolderSh
                 {/* Header */}
                 <View style={styles.headerRow}>
                   <FolderSimplePlusIcon size={20} color={colors.accent} weight="light" />
-                  <Text style={[styles.title, { color: colors.text }]}>
-                    New Folder
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.title, { color: colors.text }]}>
+                      {parentFolderName ? 'New Subfolder' : 'New Folder'}
+                    </Text>
+                    {parentFolderName && (
+                      <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>
+                        Inside "{parentFolderName}"
+                      </Text>
+                    )}
+                  </View>
                 </View>
 
                 {/* Folder name input */}

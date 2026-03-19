@@ -471,8 +471,10 @@ export default function JournalHubScreen() {
   const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
   const reorderFolders = useUnfoldStore((s) => s.reorderFolders);
 
+  const getDescendantFolderIds = useUnfoldStore((s) => s.getDescendantFolderIds);
   const [activeSegment, setActiveSegment] = useState<Segment>('reflections');
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  const [currentParentId, setCurrentParentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [fabVisible, setFabVisible] = useState(true);
@@ -580,9 +582,11 @@ export default function JournalHubScreen() {
   const filteredNotes = useMemo(() => {
     let filtered = [...notes];
 
-    // Folder filter
+    // Folder filter — includes notes in subfolders
     if (activeFolderId !== null) {
-      filtered = filtered.filter((n) => n.folderId === activeFolderId);
+      const descendantIds = getDescendantFolderIds(activeFolderId);
+      const allFolderIds = new Set([activeFolderId, ...descendantIds]);
+      filtered = filtered.filter((n) => n.folderId && allFolderIds.has(n.folderId));
     }
 
     // Search filter (applies to both segments when active)
@@ -609,7 +613,7 @@ export default function JournalHubScreen() {
     );
 
     return filtered;
-  }, [notes, activeFolderId, searchQuery]);
+  }, [notes, activeFolderId, searchQuery, getDescendantFolderIds]);
 
   // ---- Reflections filtered entries ----
   const filteredEntries = useMemo(() => {
@@ -732,12 +736,15 @@ export default function JournalHubScreen() {
   );
 
   const handleCreateFolderSubmit = useCallback(
-    (name: string, color?: string) => {
-      addFolder(name, color);
+    (name: string, color?: string, parentId?: string) => {
+      addFolder(name, color, parentId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     [addFolder],
   );
+
+  // Track which parent folder we're creating a subfolder inside
+  const [createFolderParent, setCreateFolderParent] = useState<{ id: string; name: string } | null>(null);
 
   const handleFolderLongPress = useCallback(
     (folder: NoteFolder) => {
@@ -760,6 +767,13 @@ export default function JournalHubScreen() {
           },
         },
         {
+          text: 'Add Subfolder',
+          onPress: () => {
+            setCreateFolderParent({ id: folder.id, name: folder.name });
+            setShowCreateFolderSheet(true);
+          },
+        },
+        {
           text: 'Delete Folder',
           style: 'destructive',
           onPress: () => {
@@ -772,13 +786,14 @@ export default function JournalHubScreen() {
 
             setUndoAction({ type: 'folder', folder, affectedNoteIds });
 
-            // Delete folder (notes → Unfiled)
+            // Delete folder (notes → Unfiled) — cascades to subfolders
             storeDeleteFolder(folder.id, false);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
             // Reset filter if the deleted folder was active
             if (activeFolderId === folder.id) {
               setActiveFolderId(null);
+              setCurrentParentId(null);
             }
 
             // Auto-dismiss undo after 4s
@@ -1423,8 +1438,20 @@ export default function JournalHubScreen() {
                   folders={folders}
                   activeFolderId={activeFolderId}
                   onSelectFolder={setActiveFolderId}
-                  onCreateFolder={() => setShowCreateFolderSheet(true)}
+                  onCreateFolder={() => {
+                    setCreateFolderParent(currentParentId
+                      ? { id: currentParentId, name: folders.find((f) => f.id === currentParentId)?.name ?? '' }
+                      : null
+                    );
+                    setShowCreateFolderSheet(true);
+                  }}
                   onFolderLongPress={handleFolderLongPress}
+                  currentParentId={currentParentId}
+                  onDrillInto={(folderId) => {
+                    setCurrentParentId(folderId);
+                    if (folderId) setActiveFolderId(folderId);
+                    else setActiveFolderId(null);
+                  }}
                 />
               </View>
 
@@ -1492,8 +1519,13 @@ export default function JournalHubScreen() {
         {/* Create Folder sheet */}
         <CreateFolderSheet
           visible={showCreateFolderSheet}
-          onClose={() => setShowCreateFolderSheet(false)}
+          onClose={() => {
+            setShowCreateFolderSheet(false);
+            setCreateFolderParent(null);
+          }}
           onSubmit={handleCreateFolderSubmit}
+          parentFolderId={createFolderParent?.id}
+          parentFolderName={createFolderParent?.name}
         />
 
         {/* Move to Folder sheet (from swipe action) */}

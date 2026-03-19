@@ -57,9 +57,9 @@ export const READING_FONTS: ReadingFont[] = [
 export type { ThemeCategory, DevotionalType };
 
 export const FONT_SIZE_VALUES: Record<FontSize, { body: number; scripture: number; title: number }> = {
-  small: { body: 15, scripture: 15, title: 28 },
-  medium: { body: 17, scripture: 17, title: 32 },
-  large: { body: 20, scripture: 19, title: 36 },
+  small: { body: 15, scripture: 17, title: 28 },
+  medium: { body: 17, scripture: 19, title: 32 },
+  large: { body: 20, scripture: 22, title: 36 },
 };
 
 // Bible translation preferences
@@ -441,6 +441,7 @@ export interface NoteFolder {
   id: string;
   name: string;
   color?: string;
+  parentId?: string;            // If nested inside another folder
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -645,8 +646,11 @@ interface UnfoldState {
 
   // Folders
   folders: NoteFolder[];
-  addFolder: (name: string, color?: string) => string;
-  updateFolder: (id: string, updates: Partial<Pick<NoteFolder, 'name' | 'color' | 'sortOrder'>>) => void;
+  addFolder: (name: string, color?: string, parentId?: string) => string;
+  updateFolder: (id: string, updates: Partial<Pick<NoteFolder, 'name' | 'color' | 'sortOrder' | 'parentId'>>) => void;
+  getSubfolders: (parentId: string | undefined) => NoteFolder[];
+  getDescendantFolderIds: (folderId: string) => string[];
+  getFolderBreadcrumbs: (folderId: string) => NoteFolder[];
   deleteFolder: (id: string, deleteNotes?: boolean) => void;
   moveNoteToFolder: (noteId: string, folderId: string | null) => void;
   reorderFolders: (orderedIds: string[]) => void;
@@ -1437,22 +1441,26 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       // Folder actions
-      addFolder: (name, color) => {
+      addFolder: (name, color, parentId) => {
         const id = `folder_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         const now = new Date().toISOString();
-        set((state) => ({
-          folders: [
-            ...state.folders,
-            {
-              id,
-              name,
-              color,
-              sortOrder: state.folders.length,
-              createdAt: now,
-              updatedAt: now,
-            },
-          ],
-        }));
+        set((state) => {
+          const siblings = state.folders.filter((f) => (f.parentId ?? undefined) === parentId);
+          return {
+            folders: [
+              ...state.folders,
+              {
+                id,
+                name,
+                color,
+                parentId,
+                sortOrder: siblings.length,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+          };
+        });
         return id;
       },
 
@@ -1466,14 +1474,31 @@ export const useUnfoldStore = create<UnfoldState>()(
         })),
 
       deleteFolder: (id, deleteNotes = false) =>
-        set((state) => ({
-          folders: state.folders.filter((f) => f.id !== id),
-          notes: deleteNotes
-            ? state.notes.filter((n) => n.folderId !== id)
-            : state.notes.map((n) =>
-                n.folderId === id ? { ...n, folderId: undefined, updatedAt: new Date().toISOString() } : n,
-              ),
-        })),
+        set((state) => {
+          // Collect this folder + all descendant folder IDs
+          const idsToDelete = new Set<string>([id]);
+          let changed = true;
+          while (changed) {
+            changed = false;
+            for (const f of state.folders) {
+              if (f.parentId && idsToDelete.has(f.parentId) && !idsToDelete.has(f.id)) {
+                idsToDelete.add(f.id);
+                changed = true;
+              }
+            }
+          }
+          const now = new Date().toISOString();
+          return {
+            folders: state.folders.filter((f) => !idsToDelete.has(f.id)),
+            notes: deleteNotes
+              ? state.notes.filter((n) => !n.folderId || !idsToDelete.has(n.folderId))
+              : state.notes.map((n) =>
+                  n.folderId && idsToDelete.has(n.folderId)
+                    ? { ...n, folderId: undefined, updatedAt: now }
+                    : n,
+                ),
+          };
+        }),
 
       moveNoteToFolder: (noteId, folderId) =>
         set((state) => ({
@@ -1496,6 +1521,39 @@ export const useUnfoldStore = create<UnfoldState>()(
         }));
       },
 
+      getSubfolders: (parentId) => {
+        return get().folders
+          .filter((f) => (f.parentId ?? undefined) === parentId)
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+      },
+
+      getDescendantFolderIds: (folderId) => {
+        const all = get().folders;
+        const ids: string[] = [];
+        const queue = [folderId];
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          for (const f of all) {
+            if (f.parentId === current) {
+              ids.push(f.id);
+              queue.push(f.id);
+            }
+          }
+        }
+        return ids;
+      },
+
+      getFolderBreadcrumbs: (folderId) => {
+        const all = get().folders;
+        const crumbs: NoteFolder[] = [];
+        let current = all.find((f) => f.id === folderId);
+        while (current) {
+          crumbs.unshift(current);
+          current = current.parentId ? all.find((f) => f.id === current!.parentId) : undefined;
+        }
+        return crumbs;
+      },
+
       // Helpers
       getCurrentDevotional: () => {
         const state = get();
@@ -1507,7 +1565,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 21, // Increment when state structure changes
+      version: 22, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1703,6 +1761,12 @@ export const useUnfoldStore = create<UnfoldState>()(
             ...state,
             folders: [],
           } as UnfoldState;
+        }
+
+        // Migration from version 21 to 22: Add parentId to folders (subfolder support)
+        if (version < 22) {
+          // Existing folders get parentId: undefined (top-level) — no data change needed
+          return state as UnfoldState;
         }
 
         return state as UnfoldState;

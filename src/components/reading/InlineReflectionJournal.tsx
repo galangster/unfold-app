@@ -12,7 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { CheckCircleIcon, PencilSimpleLineIcon, ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
 
@@ -21,6 +21,7 @@ interface InlineReflectionJournalProps {
   devotionalId: string;
   dayNumber: number;
   onOpenFullJournal: (focusQuestion?: number) => void;
+  fontSize?: FontSize;
 }
 
 /**
@@ -33,9 +34,11 @@ export function InlineReflectionJournal({
   devotionalId,
   dayNumber,
   onOpenFullJournal,
+  fontSize = 'medium',
 }: InlineReflectionJournalProps) {
   const { colors } = useTheme();
   const readingFont = useReadingFont();
+  const fontSizes = FONT_SIZE_VALUES[fontSize];
 
   // Store actions
   const getJournalEntry = useUnfoldStore((s) => s.getJournalEntry);
@@ -240,6 +243,7 @@ export function InlineReflectionJournal({
             inputRefs={inputRefs}
             colors={colors}
             readingFont={readingFont}
+            fontSizes={fontSizes}
           />
         );
       })}
@@ -298,6 +302,7 @@ function ReflectionQuestionCard({
   inputRefs,
   colors,
   readingFont,
+  fontSizes,
 }: {
   index: number;
   question: string;
@@ -309,6 +314,7 @@ function ReflectionQuestionCard({
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
   readingFont: any;
+  fontSizes: { body: number; scripture: number; title: number };
 }) {
   // Animate border accent
   const borderProgress = useSharedValue(isAnswered ? 1 : 0);
@@ -369,9 +375,9 @@ function ReflectionQuestionCard({
             style={{
               flex: 1,
               fontFamily: readingFont.bodyItalic,
-              fontSize: 16,
+              fontSize: fontSizes.body,
               color: colors.text,
-              lineHeight: 26,
+              lineHeight: fontSizes.body * 1.7,
               opacity: 0.9,
             }}
           >
@@ -412,9 +418,9 @@ function ReflectionQuestionCard({
               style={{
                 minHeight: 80,
                 fontFamily: FontFamily.body,
-                fontSize: 15,
+                fontSize: fontSizes.body,
                 color: colors.text,
-                lineHeight: 24,
+                lineHeight: fontSizes.body * 1.6,
                 padding: 0,
               }}
             />
@@ -448,9 +454,9 @@ function ReflectionQuestionCard({
           <Text
             style={{
               fontFamily: FontFamily.body,
-              fontSize: 13,
+              fontSize: fontSizes.body - 2,
               color: colors.textMuted,
-              lineHeight: 20,
+              lineHeight: (fontSizes.body - 2) * 1.5,
             }}
             numberOfLines={2}
           >

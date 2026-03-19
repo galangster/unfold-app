@@ -222,7 +222,16 @@ export default function PaywallScreen() {
         } else {
           router.back();
         }
+      } else {
+        // Purchase was cancelled or failed without throwing
+        logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
+    },
+    onError: (error) => {
+      logger.log('[Paywall] Purchase error:', error);
+      setSubscribeError('Something went wrong. Please try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
   });
 
@@ -240,8 +249,6 @@ export default function PaywallScreen() {
         if (isEarlyOnboarding) {
           router.back();
         } else if (isFromOnboarding) {
-          // If the user already has a generated devotional, go straight to home
-          // instead of looping back to the generating screen
           if (currentDevotionalId) {
             router.replace('/(tabs)/(today)');
           } else {
@@ -250,7 +257,15 @@ export default function PaywallScreen() {
         } else {
           router.back();
         }
+      } else {
+        setSubscribeError('No active subscription found.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       }
+    },
+    onError: (error) => {
+      logger.log('[Paywall] Restore error:', error);
+      setSubscribeError('Could not restore purchases. Please try again.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
   });
 

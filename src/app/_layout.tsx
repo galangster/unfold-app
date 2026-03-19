@@ -42,10 +42,9 @@ Sentry.init({
 
   integrations: [navigationIntegration],
 
-  // Filter out dev server noise from spans
-  shouldCreateSpanForRequest: (url) => {
-    return !url.includes('localhost') && !url.includes('127.0.0.1');
-  },
+  // Session Replay — capture 10% of sessions, 100% on error
+  replaysSessionSampleRate: __DEV__ ? 0 : 0.1,
+  replaysOnErrorSampleRate: 1.0,
 });
 
 export const unstable_settings = {
@@ -67,7 +66,7 @@ function RootLayoutNav() {
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
 
-  const isPremium = useUnfoldStore((s) => s.isPremium);
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
   // Register navigation container with Sentry for screen tracking
   useEffect(() => {
@@ -89,16 +88,16 @@ function RootLayoutNav() {
 
   return (
     <NavigationThemeProvider value={navigationTheme}>
-      <View style={{ flex: 1, backgroundColor: '#0a0a0a' }}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
         <GlowBackground color={colors.accent} intensity={0.6} emberCount={14} />
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: 'transparent' },
+            contentStyle: { backgroundColor: colors.background },
             animation: 'fade',
           }}
         >
-        <Stack.Screen name="index" options={{ animation: 'fade' }} />
+        <Stack.Screen name="index" options={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen name="how-it-works" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="generating" options={{ animation: 'fade_from_bottom', gestureEnabled: false }} />
@@ -107,10 +106,9 @@ function RootLayoutNav() {
           options={{
             presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
-            contentStyle: { backgroundColor: '#0a0a0a' },
           }}
         />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none' }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen
           name="share-card"
           options={{
@@ -124,7 +122,6 @@ function RootLayoutNav() {
           options={{
             presentation: 'modal',
             animation: 'slide_from_bottom',
-            contentStyle: { backgroundColor: '#0a0a0a' },
           }}
         />
         <Stack.Screen
@@ -178,7 +175,11 @@ function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      // Wait one frame for the first render to paint before hiding splash
+      // This prevents a white flash between splash dismissal and first JS frame
+      requestAnimationFrame(() => {
+        SplashScreen.hideAsync();
+      });
     }
   }, [fontsLoaded, fontError]);
 

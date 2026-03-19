@@ -259,6 +259,7 @@ export function DevotionalContent({
               devotionalId={devotionalId}
               dayNumber={dayNumber}
               onOpenFullJournal={onOpenJournal}
+              fontSize={fontSize}
             />
           ) : (
             <View>

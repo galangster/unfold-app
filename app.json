@@ -5,14 +5,16 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "backgroundColor": "#0A0A0A",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#121214"
+      "backgroundColor": "#0A0A0A"
     },
     "scheme": "unfold",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "backgroundColor": "#0A0A0A",
       "supportsTablet": true,
       "bundleIdentifier": "com.unfoldapp.ios",
       "buildNumber": "1",
@@ -45,6 +47,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "expo-system-ui",
       "expo-router",
       "@react-native-firebase/app",
       [
@@ -77,7 +80,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#121214"
+          "color": "#0A0A0A"
         }
       ],
       [

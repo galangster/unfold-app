@@ -142,8 +142,13 @@ export default function EveningWindDownScreen() {
   const player = useAudioPlayer(audioUri);
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
+  // Evening wind-down is for the day just completed, which may be currentDay - 1
+  // if the reading screen already advanced the day counter
+  const eveningDayNumber = (currentDevotional?.currentDay ?? 1) > 1
+    ? (currentDevotional?.currentDay ?? 1) - 1
+    : (currentDevotional?.currentDay ?? 1);
   const currentDay = currentDevotional?.days.find(
-    (d) => d.dayNumber === (currentDevotional?.currentDay ?? 1)
+    (d) => d.dayNumber === eveningDayNumber
   );
 
   const middayCheckIn = useMemo(() => {

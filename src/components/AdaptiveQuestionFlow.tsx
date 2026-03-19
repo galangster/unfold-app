@@ -8,6 +8,7 @@ import {
   Keyboard,
   LayoutAnimation,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
@@ -65,7 +66,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
   }, [answer, isLoading, submitAnswer]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bottomOffset={20}>
       {/* Progress indicator */}
       <View style={{ marginBottom: 24 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -220,6 +221,6 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
           </Text>
         </Animated.View>
       )}
-    </View>
+    </KeyboardAwareScrollView>
   );
 }

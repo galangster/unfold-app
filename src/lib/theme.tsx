@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useMemo, useEffect, ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
+import * as SystemUI from 'expo-system-ui';
 import {
   ColorTheme,
   DarkColors,
@@ -69,6 +70,11 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       themeMode,
     };
   }, [themeMode, systemColorScheme, accentThemeId]);
+
+  // Sync native root view background with current theme to prevent flash on theme switch
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(value.colors.background);
+  }, [value.colors.background]);
 
   return (
     <ThemeContext.Provider value={value}>

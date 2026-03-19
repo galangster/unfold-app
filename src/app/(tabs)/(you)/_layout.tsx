@@ -13,7 +13,7 @@ export default function YouLayout() {
         animationDuration: 280,
       }}
     >
-      <Stack.Screen name="index" options={{ animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
+      <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="settings" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="streak-settings" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="past-devotionals" options={{ animation: 'ios_from_right' }} />
