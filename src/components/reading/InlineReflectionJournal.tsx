@@ -49,7 +49,8 @@ export function InlineReflectionJournal({
   const savedEntryIdRef = useRef<string | null>(existingEntry?.id ?? null);
 
   // Track which question is expanded
-  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  // Auto-open the first question so users discover the inline journal
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
 
   // Local response state (before debounced save)
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());

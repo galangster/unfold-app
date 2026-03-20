@@ -175,7 +175,7 @@ const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
-  { id: 'stylePreferences1', question: "Where are you in your faith?", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'stylePreferences1', question: "A little about\u00A0you.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // STYLE PREFERENCES: Tone + depth
   { id: 'stylePreferences2', question: "How should this feel?", subtext: 'The tone and depth that serves you best.', type: 'stylePreferences2' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
@@ -200,7 +200,7 @@ const ALL_STEPS = [
   // FOUNDER NOTE: A personal letter from the founder
   { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SIGN-IN: Optional Apple Sign In before generating
-  { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your journey safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your progress safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // PREMIUM SHOWCASE: Final premium pitch before generating
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
@@ -519,6 +519,11 @@ export default function OnboardingScreen() {
       
       // Skip sign-in if user is already authenticated with Apple
       if (step.id === 'signIn' && existingUser?.authProvider === 'apple') {
+        return false;
+      }
+
+      // Skip premium showcase during onboarding — show paywall after first reading instead
+      if (step.id === 'premiumShowcase' && !existingUser?.hasCompletedOnboarding) {
         return false;
       }
 
@@ -1515,11 +1520,35 @@ export default function OnboardingScreen() {
             }}
             autoFocus
             maxLength={INPUT_LIMITS.NAME.max}
+            onSubmitEditing={canProceed() ? handleNext : undefined}
+            returnKeyType="done"
           />
           <VoiceInputBar
             value={data.name}
             onChangeText={(text) => setData((prev) => ({ ...prev, name: text }))}
           />
+          {/* Continue button below input — easy thumb reach with keyboard up */}
+          {canProceed() && (
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={handleNext}
+              style={{
+                marginTop: 20,
+                backgroundColor: colors.accent,
+                paddingVertical: 16,
+                borderRadius: 14,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 16,
+                color: colors.background,
+                letterSpacing: 0.2,
+              }}>
+                Continue
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       );
     }
@@ -1924,7 +1953,7 @@ export default function OnboardingScreen() {
                 lineHeight: 30,
               }}
             >
-              I built Unfold because I needed it. I was going through a season where I craved something deeper than a daily verse notification — something that actually knew where I was and met me there.
+              I built Unfold because I needed it. I craved something deeper than a daily verse notification — something that actually knew where I was and met me there.
             </Animated.Text>
 
             <Animated.Text
@@ -1948,7 +1977,7 @@ export default function OnboardingScreen() {
                 lineHeight: 30,
               }}
             >
-              I'm dedicating myself to making this that space. Thank you for trusting me with yours.
+              I'm dedicating myself to making Unfold that space. Thank you for trusting me with yours.
             </Animated.Text>
           </View>
 
@@ -2355,7 +2384,7 @@ export default function OnboardingScreen() {
         {
           icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
           title: 'Personalized experience',
-          description: 'Unlock features tailored to your journey',
+          description: 'Unlock features tailored to where you are',
         },
       ];
 
@@ -2637,7 +2666,7 @@ export default function OnboardingScreen() {
                         {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
                           ? "Select up to 3 themes that resonate with where you are."
                           : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
-                          ? "Choose a study style for your journey."
+                          ? "Choose a study style for your series."
                           : getStepSubtext()}
                       </Text>
                     </Animated.View>

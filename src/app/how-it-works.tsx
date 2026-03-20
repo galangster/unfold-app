@@ -57,7 +57,7 @@ const PAGES: Page[] = [
     type: 'feature',
     card: {
       headline: 'Personal daily check-ins',
-      body: "Your answers today help give shape to tomorrow's Word.",
+      body: "Your answers today shape tomorrow's Word.",
       animation: 'heartbeat',
     },
   },
@@ -923,7 +923,7 @@ const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }
         <RevealWord
           key={`${pageKey}-${i}`}
           word={word}
-          delay={300 + i * 120}
+          delay={300 + i * 70}
           color={color}
           style={{
             fontFamily: FontFamily.display,
@@ -942,7 +942,7 @@ function AnimatedBody({ text, color, pageKey }: { text: string; color: string; p
   const translateY = useSharedValue(10);
   const wordCount = text.split(' ').length;
   // Body fades in after all headline words have revealed
-  const bodyDelay = 300 + wordCount * 120 + 200;
+  const bodyDelay = 300 + wordCount * 70 + 200;
 
   useEffect(() => {
     opacity.value = 0;
@@ -1084,7 +1084,7 @@ export default function HowItWorksScreen() {
 
                     <View style={{ gap: 14 }}>
                       <AnimatedHeadline
-                        text="The only app that grows with you."
+                        text="The only app that grows with you"
                         color={colors.text}
                         pageKey={currentPage}
                       />

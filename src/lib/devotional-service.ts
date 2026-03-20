@@ -720,7 +720,7 @@ ${REFLECTION_QUESTION_CRAFT}`;
 - Include 2-3 quotes from theologians, mystics, or authors (C.S. Lewis, Henri Nouwen, Thomas Merton, A.W. Tozer, etc.)
 - Include brief historical or cultural context where it enriches understanding
 - End with 3-4 reflection questions that progressively deepen (see REFLECTION QUESTION CRAFT below)
-- Include a brief closing prayer or benediction
+- Include a brief closing prayer or benediction written in FIRST PERSON (I/me/my). The reader will pray this aloud — never use their name or third person in the prayer
 - If a story/parable is included: 150-250 words — a substantial narrative with specific details and sensory grounding
 - Total reading time: ~20 minutes, leaving 10 minutes for journaling/reflection
 ${REFLECTION_QUESTION_CRAFT}`;
@@ -787,7 +787,7 @@ const getJsonSchemaForDuration = (duration: 5 | 15 | 30): string => {
       ],
       "reflectionQuestions": ["Question 1...", "Question 2...", "Question 3..."],
       "contextNote": "Brief historical or cultural context...",
-      "closingPrayer": "A brief prayer or benediction..."${checkInFields}
+      "closingPrayer": "A first-person prayer (I/me/my) — never use the reader's name"${checkInFields}
     }
   ]
 }`;

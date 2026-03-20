@@ -889,7 +889,7 @@ Respond with valid JSON only:
   "crossReferences": [{"reference": "...", "text": "Full text"}],
   "reflectionQuestions": ["Question 1", "Question 2", "Question 3"],
   "contextNote": "Brief historical/cultural context for the scripture",
-  "closingPrayer": "A closing prayer inspired by today's reading",
+  "closingPrayer": "A first-person prayer (I/me/my) — never use the reader's name",
   "checkInQuestion": "A midday check-in question related to today's theme",
   "checkInChips": ["Quick response 1", "Quick response 2", "Quick response 3"],
   "eveningScriptureRef": "A calming evening scripture reference"
