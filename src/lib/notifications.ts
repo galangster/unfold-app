@@ -9,6 +9,8 @@ export interface NotificationTeaser {
   quotableLine: string;
   seriesTitle: string;
   dayNumber: number;
+  totalDays: number;
+  scripture: string;
 }
 
 // Configure how notifications appear when the app is in the foreground
@@ -93,34 +95,42 @@ export function getTodayTeaser(): NotificationTeaser | null {
     quotableLine: todayDay.quotableLine,
     seriesTitle: currentDevotional.title,
     dayNumber: currentDevotional.currentDay,
+    totalDays: currentDevotional.totalDays,
+    scripture: todayDay.scriptureReference ?? '',
   };
 }
 
-// Generate notification body with teaser content
+// Generate notification body — content-driven, describes what the reading is about
 function generateNotificationBody(teaser: NotificationTeaser | null): string {
   if (!teaser) {
-    return 'Take a moment to pause and reflect with today\'s devotional.';
+    return 'Your next reading is waiting.';
   }
 
-  // Use the quotable line as the teaser - it's designed to be engaging
-  // Truncate if too long for notification
-  const maxLength = 100;
-  let body = teaser.quotableLine;
-
-  if (body.length > maxLength) {
-    body = body.substring(0, maxLength - 3) + '...';
+  // Lead with the quotable line — it's the hook
+  if (teaser.quotableLine) {
+    const maxLength = 100;
+    let body = teaser.quotableLine;
+    if (body.length > maxLength) {
+      body = body.substring(0, maxLength - 3) + '...';
+    }
+    return body;
   }
 
-  return body;
+  // Fall back to scripture reference if no quotable line
+  if (teaser.scripture) {
+    return `Today's reading: ${teaser.scripture}`;
+  }
+
+  return 'Your next reading is waiting.';
 }
 
-// Generate notification title with day info
+// Generate notification title — the devotional day title, not generic branding
 function generateNotificationTitle(teaser: NotificationTeaser | null): string {
   if (!teaser) {
     return 'Time to Unfold';
   }
 
-  // Show the day's title as the notification title
+  // Use the day's actual title — describes what the content is about
   return teaser.dayTitle;
 }
 

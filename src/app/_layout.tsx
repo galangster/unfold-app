@@ -29,9 +29,9 @@ Sentry.init({
   release: `unfold@${Application.nativeApplicationVersion ?? '1.0.0'}`,
   dist: Application.nativeBuildVersion ?? '1',
 
-  // Capture every error at TestFlight scale — drop tracesSampleRate to 0.2 at launch
-  tracesSampleRate: __DEV__ ? 0 : 1.0,
-  profilesSampleRate: 1.0,
+  // Performance: 20% of transactions in production, 5% profiled
+  tracesSampleRate: __DEV__ ? 0 : 0.2,
+  profilesSampleRate: __DEV__ ? 0 : 0.05,
 
   // Attach screenshots and view hierarchy on crash
   attachScreenshot: true,
@@ -40,7 +40,12 @@ Sentry.init({
   enableCaptureFailedRequests: true,
   maxBreadcrumbs: 100,
 
-  integrations: [navigationIntegration],
+  integrations: [
+    navigationIntegration,
+    Sentry.mobileReplayIntegration(),
+    Sentry.httpClientIntegration(),
+    Sentry.feedbackIntegration(),
+  ],
 
   // Session Replay — capture 10% of sessions, 100% on error
   replaysSessionSampleRate: __DEV__ ? 0 : 0.1,

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -100,7 +100,7 @@ function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<n
 }
 
 // ── Animated shimmer bar for skeleton loaders ──────────────────
-function ShimmerBar({ bg, width, delay }: { bg: string; width: string | number; delay: number }) {
+function ShimmerBar({ bg, width, delay }: { bg: string; width: DimensionValue; delay: number }) {
   const opacity = useSharedValue(0.35);
 
   useEffect(() => {
@@ -629,6 +629,10 @@ export default function ReadingScreen() {
         if (currentDevotional?.generationMode === 'progressive') {
           setIsPreparingNextDay(true);
           triggerNextDayGeneration(currentDevotionalId, viewingDay)
+            .then(() => {
+              // Refresh notification now that next day's content exists
+              refreshDailyReminder();
+            })
             .finally(() => setIsPreparingNextDay(false));
         }
       }

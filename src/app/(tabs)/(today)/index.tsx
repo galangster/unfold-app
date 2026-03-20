@@ -23,7 +23,7 @@ import { FontFamily } from '@/constants/fonts';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
-import { useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon, CaretRightIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
@@ -581,7 +581,7 @@ export default function HomeScreen() {
   };
 
   const handleCheckInComplete = (data: {
-    mood: 1 | 2 | 3 | 4 | 5;
+    mood: MoodLevel;
     moodLabel: string;
     chipAnswer?: string;
     freeText?: string;
@@ -631,6 +631,7 @@ export default function HomeScreen() {
   const showEveningCard =
     (timeOfDay === 'evening' || timeOfDay === 'night') &&
     !!currentDevotional &&
+    hasReadToday &&
     !todayEveningCheckIn &&
     dismissedEveningCardDate !== todayDateStr;
 

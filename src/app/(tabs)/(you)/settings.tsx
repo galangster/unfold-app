@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, CrownIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, UserCircleIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, LifeStage, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
@@ -2257,6 +2257,47 @@ export default function SettingsScreen() {
                 marginBottom: 24,
               }}
             >
+              {user?.isPremium && (
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
+                  accessibilityRole="link"
+                  accessibilityLabel="Manage Subscription"
+                  accessibilityHint="Opens Apple subscription management"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: 16,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      backgroundColor: colors.buttonBackground,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <CreditCardIcon size={18} color={colors.text} weight="light" />
+                  </View>
+                  <View style={{ marginLeft: 14, flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Manage Subscription
+                    </Text>
+                  </View>
+                  <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleReportBug}
                 disabled={isExportingData}

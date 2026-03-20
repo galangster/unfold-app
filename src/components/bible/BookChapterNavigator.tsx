@@ -26,6 +26,7 @@ import {
   OT_BOOKS,
   NT_BOOKS,
   referenceToRoute,
+  getBookColor,
   type BibleBookInfo,
 } from '@/lib/bible-constants';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
@@ -378,6 +379,7 @@ export function BookChapterNavigator({
       <View style={styles.chipGrid}>
         {books.map((book) => {
           const isCurrentBook = book.id === currentBookId;
+          const bookColor = getBookColor(book.id, isDark);
           return (
             <TouchableOpacity
               key={book.id}
@@ -385,14 +387,14 @@ export function BookChapterNavigator({
               style={[
                 styles.bookChip,
                 { backgroundColor: chipBg },
-                isCurrentBook && { borderWidth: 1.5, borderColor: colors.accent },
+                isCurrentBook && { borderWidth: 1.5, borderColor: bookColor },
               ]}
               accessibilityLabel={`${book.name}${isCurrentBook ? ', current book' : ''}`}
             >
               <Text
                 style={[
                   styles.chipText,
-                  { color: colors.text },
+                  { color: bookColor },
                   isCurrentBook && { fontFamily: FontFamily.uiMedium },
                 ]}
                 numberOfLines={1}

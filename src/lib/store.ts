@@ -248,7 +248,7 @@ export interface JournalEntry {
 }
 
 // Phase 2: Midday Check-In
-export type MoodLevel = 1 | 2 | 3 | 4 | 5;
+export type MoodLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type CheckInTimeOfDay = 'morning' | 'midday' | 'evening' | 'companion';
 
 export interface CheckIn {

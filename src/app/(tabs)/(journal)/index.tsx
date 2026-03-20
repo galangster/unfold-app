@@ -663,7 +663,7 @@ export default function JournalHubScreen() {
     if (!currentDevotional) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({
-      pathname: '/(tabs)/(today)/journal',
+      pathname: '/(tabs)/(journal)/entry',
       params: {
         devotionalId: currentDevotional.id,
         dayNumber: String(currentDevotional.currentDay),
@@ -676,7 +676,7 @@ export default function JournalHubScreen() {
       if (!currentDevotional) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       router.push({
-        pathname: '/(tabs)/(today)/journal',
+        pathname: '/(tabs)/(journal)/entry',
         params: {
           devotionalId: currentDevotional.id,
           dayNumber: String(currentDevotional.currentDay),
@@ -1303,7 +1303,7 @@ export default function JournalHubScreen() {
                               Haptics.ImpactFeedbackStyle.Light,
                             );
                             router.push({
-                              pathname: '/(tabs)/(today)/journal',
+                              pathname: '/(tabs)/(journal)/entry',
                               params: {
                                 devotionalId: entry.devotionalId,
                                 dayNumber: String(entry.dayNumber),

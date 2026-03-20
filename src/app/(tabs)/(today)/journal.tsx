@@ -5,14 +5,13 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
   Keyboard,
-  Platform,
   ScrollView,
   ActivityIndicator,
   AccessibilityInfo,
   StyleSheet,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -663,10 +662,6 @@ Their journal entry:
   return (
     <TouchableOpacity activeOpacity={1} style={[jStyles.flex1, { backgroundColor: colors.background }]} onPress={Keyboard.dismiss}>
       <SafeAreaView style={jStyles.flex1} edges={['top']}>
-        <KeyboardAvoidingView
-          style={jStyles.flex1}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
           {/* Header */}
           <View style={jStyles.headerRow}>
             <TouchableOpacity
@@ -724,11 +719,14 @@ Their journal entry:
           </View>
 
           {/* Content */}
-          <ScrollView
+          <KeyboardAwareScrollView
             ref={scrollViewRef}
             style={jStyles.flex1}
             contentContainerStyle={jStyles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            bottomOffset={20}
+            extraKeyboardSpace={60}
           >
             {/* Scripture anchor — connects the blank page to today's content */}
             {currentDay && (
@@ -880,7 +878,12 @@ Their journal entry:
                                   placeholderTextColor={colors.textHint}
                                   multiline
                                   textAlignVertical="top"
-                                  style={[jStyles.questionTextInput, { color: colors.text }]}
+                                  style={[jStyles.questionTextInput, { color: colors.text, paddingBottom: 40 }]}
+                                />
+                                <VoiceInputBar
+                                  inline
+                                  value={responseText}
+                                  onChangeText={(text) => handleQuestionResponseChange(index, prompt, text)}
                                 />
                               </View>
                             </Animated.View>
@@ -991,7 +994,12 @@ Their journal entry:
                               multiline
                               textAlignVertical="top"
                               accessibilityLabel={`${section.label} journal entry`}
-                              style={[jStyles.soapTextInput, { color: colors.text }]}
+                              style={[jStyles.soapTextInput, { color: colors.text, paddingBottom: 40 }]}
+                            />
+                            <VoiceInputBar
+                              inline
+                              value={soapValues[section.key]}
+                              onChangeText={(text) => handleSoapChange(section.key, text)}
                             />
                           </View>
                           <Text style={[jStyles.autoSavedLabel, { color: colors.textHint }]}>
@@ -1093,12 +1101,12 @@ Their journal entry:
                       multiline
                       textAlignVertical="top"
                       autoFocus
-                      style={[jStyles.prayerTextInput, { color: colors.text }]}
+                      style={[jStyles.prayerTextInput, { color: colors.text, paddingBottom: 40 }]}
                       onSubmitEditing={handleAddPrayer}
                       blurOnSubmit
                     />
+                    <VoiceInputBar inline value={newPrayerText} onChangeText={setNewPrayerText} />
                   </View>
-                  <VoiceInputBar value={newPrayerText} onChangeText={setNewPrayerText} />
                   {/* Action buttons below input */}
                   <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 10 }}>
                     <TouchableOpacity
@@ -1148,7 +1156,7 @@ Their journal entry:
                 </TouchableOpacity>
               )}
             </Animated.View>
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
           {/* Bottom hint — crossfade between states */}
           <Animated.View
@@ -1164,7 +1172,6 @@ Their journal entry:
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}
             </Animated.Text>
           </Animated.View>
-        </KeyboardAvoidingView>
       </SafeAreaView>
 
       <PremiumFeatureSheet

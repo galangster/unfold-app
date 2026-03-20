@@ -90,10 +90,12 @@ interface VoiceInputBarProps {
   value: string;
   onChangeText: (text: string) => void;
   accentColor?: string;
+  /** Place mic icon inside the input card (absolute bottom-right) instead of below it */
+  inline?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────
-export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBarProps) {
+export function VoiceInputBar({ value, onChangeText, accentColor, inline }: VoiceInputBarProps) {
   const { colors } = useTheme();
   const accent = accentColor ?? colors.accent;
 
@@ -117,6 +119,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
 
   // ── STT events ───────────────────────────────────────────
   useSpeechRecognitionEvent('result', (e) => {
+    if (!isRecordingRef.current) return; // Only the active recording instance processes results
     const transcript = e.results?.[0]?.transcript ?? '';
     interimTranscriptRef.current = transcript;
     if (e.isFinal) {
@@ -125,6 +128,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
   });
 
   useSpeechRecognitionEvent('error', (e) => {
+    if (!isRecordingRef.current) return; // Only the active recording instance handles errors
     if (e.error !== 'no-speech') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
@@ -240,7 +244,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor }: VoiceInputBa
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel="Tap to speak"
-        style={styles.micButton}
+        style={inline ? styles.micButtonInline : styles.micButton}
       >
         <View style={[styles.micInner, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
           <MicrophoneIcon size={18} color={accent} weight="light" />
@@ -302,6 +306,11 @@ const styles = StyleSheet.create({
   micButton: {
     alignSelf: 'flex-end',
     marginTop: 8,
+  },
+  micButtonInline: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
   },
   micInner: {
     width: 36,

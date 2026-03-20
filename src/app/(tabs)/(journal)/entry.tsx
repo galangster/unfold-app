@@ -1,19 +1,3 @@
-import { Redirect, useLocalSearchParams } from 'expo-router';
-
-// Redirect to the journal screen in the today tab for now
-// This will be enhanced in Phase 4 with the full journal entry view
-export default function JournalEntryScreen() {
-  const { devotionalId, dayNumber } = useLocalSearchParams<{
-    devotionalId: string;
-    dayNumber: string;
-  }>();
-
-  return (
-    <Redirect
-      href={{
-        pathname: '/(tabs)/(today)/journal',
-        params: { devotionalId, dayNumber },
-      }}
-    />
-  );
-}
+// Re-export the journal reflection screen so it renders within the Journal tab's stack.
+// This ensures router.back() returns to the Journal tab (not the Today tab).
+export { default } from '../(today)/journal';

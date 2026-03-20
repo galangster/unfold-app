@@ -9,7 +9,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { BIBLE_BOOKS, OT_BOOKS, NT_BOOKS, type BibleBookInfo } from '@/lib/bible-constants';
+import { BIBLE_BOOKS, OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 
 export default function BibleHomeScreen() {
@@ -64,6 +64,54 @@ export default function BibleHomeScreen() {
   const handleSavedPress = useCallback(() => {
     router.push('/(tabs)/(bible)/saved');
   }, [router]);
+
+  /** Group books by literary category and render with sub-labels */
+  const renderCategorizedBooks = useCallback((books: BibleBookInfo[]) => {
+    // Group books into contiguous category runs
+    const groups: Array<{ category: BibleCategory; books: BibleBookInfo[] }> = [];
+    for (const book of books) {
+      const cat = getBookCategory(book.id);
+      const last = groups[groups.length - 1];
+      if (last && last.category === cat) {
+        last.books.push(book);
+      } else {
+        groups.push({ category: cat, books: [book] });
+      }
+    }
+
+    return (
+      <View style={{ marginBottom: 28 }}>
+        {groups.map((group) => (
+          <View key={group.category} style={{ marginBottom: 16 }}>
+            <Text style={[styles.categoryLabel, { color: getBookColor(group.books[0].id, isDark) }]}>
+              {CATEGORY_LABELS[group.category]}
+            </Text>
+            <View style={styles.bookGrid}>
+              {group.books.map((book) => {
+                const bookColor = getBookColor(book.id, isDark);
+                return (
+                  <TouchableOpacity
+                    key={book.id}
+                    onPress={() => handleBookPress(book)}
+                    style={[styles.bookPill, {
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                    }]}
+                    activeOpacity={0.6}
+                    accessibilityLabel={book.name}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.bookName, { color: bookColor }]} numberOfLines={1}>
+                      {book.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  }, [isDark, handleBookPress]);
 
   // Show download prompt if Bible not ready (including during download)
   if (!isReady) {
@@ -156,47 +204,13 @@ export default function BibleHomeScreen() {
         <Text style={[styles.sectionHeader, { color: colors.textHint }]}>
           Old Testament
         </Text>
-        <View style={styles.bookGrid}>
-          {OT_BOOKS.map((book) => (
-            <TouchableOpacity
-              key={book.id}
-              onPress={() => handleBookPress(book)}
-              style={[styles.bookPill, {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-              }]}
-              activeOpacity={0.6}
-              accessibilityLabel={book.name}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.bookName, { color: colors.text }]} numberOfLines={1}>
-                {book.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {renderCategorizedBooks(OT_BOOKS)}
 
         {/* New Testament */}
         <Text style={[styles.sectionHeader, { color: colors.textHint }]}>
           New Testament
         </Text>
-        <View style={styles.bookGrid}>
-          {NT_BOOKS.map((book) => (
-            <TouchableOpacity
-              key={book.id}
-              onPress={() => handleBookPress(book)}
-              style={[styles.bookPill, {
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-              }]}
-              activeOpacity={0.6}
-              accessibilityLabel={book.name}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.bookName, { color: colors.text }]} numberOfLines={1}>
-                {book.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {renderCategorizedBooks(NT_BOOKS)}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -342,11 +356,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginTop: 4,
   },
+  categoryLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    opacity: 0.7,
+  },
   bookGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 28,
   },
   bookPill: {
     paddingHorizontal: 12,

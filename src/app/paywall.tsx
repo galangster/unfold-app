@@ -194,8 +194,8 @@ export default function PaywallScreen() {
   }, [monthlyPackage, trialEligibility]);
 
   // Trial duration strings
-  const yearlyTrialDuration = getTrialDuration(yearlyPackage) ?? '14-day';
-  const monthlyTrialDuration = getTrialDuration(monthlyPackage) ?? '14-day';
+  const yearlyTrialDuration = getTrialDuration(yearlyPackage) ?? '7-day';
+  const monthlyTrialDuration = getTrialDuration(monthlyPackage) ?? '7-day';
   const selectedTrialDuration = selectedPlan === 'yearly' ? yearlyTrialDuration : monthlyTrialDuration;
 
   const purchaseMutation = useMutation({
@@ -222,8 +222,11 @@ export default function PaywallScreen() {
         } else {
           router.back();
         }
+      } else if (result.reason === 'user_cancelled') {
+        // User tapped Cancel on the Apple payment sheet — do nothing
+        return;
       } else {
-        // Purchase was cancelled or failed without throwing
+        // Actual SDK error
         logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
@@ -316,7 +319,9 @@ export default function PaywallScreen() {
   const yearlyPrice = yearlyPackage?.product.priceString ?? '$49.99';
   const monthlyRaw = monthlyPackage?.product.price ?? 5.99;
   const yearlyRaw = yearlyPackage?.product.price ?? 49.99;
-  const perMonthFromYearly = `$${(yearlyRaw / 12).toFixed(2)}`;
+  // Extract currency symbol from locale-aware priceString (e.g., "$" from "$49.99", "€" from "49,99 €")
+  const currencySymbol = (yearlyPrice.replace(/[\d.,\s]/g, '').trim()) || '$';
+  const perMonthFromYearly = `${currencySymbol}${(yearlyRaw / 12).toFixed(2)}`;
   const savingsPercent = Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100);
 
   // Personalized hero copy

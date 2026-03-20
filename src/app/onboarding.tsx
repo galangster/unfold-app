@@ -301,6 +301,28 @@ export default function OnboardingScreen() {
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
 
+  // Form data (declared early — mirrorBackText useMemo depends on it)
+  const [data, setData] = useState<OnboardingData>({
+    name: existingUser?.name || '',
+    bibleTranslation: existingUser?.bibleTranslation || 'WEB',
+    aboutMe: existingUser?.aboutMe || '',
+    faithBackground: 'growing',
+    lifeStage: 'building',
+    tone: 'warm',
+    depth: 'balanced',
+    selectedMainOption: undefined,
+    selectedThemes: [],
+    selectedType: undefined,
+    selectedStudySubject: undefined,
+    currentSituation: '',
+    emotionalState: '',
+    spiritualSeeking: '',
+    readingDuration: 15,
+    devotionalLength: 7,
+    reminderTime: '8:00 AM',
+    mirrorBackCommitted: false,
+  });
+
   // RevenueCat — fetch offerings for direct purchase from premiumShowcase
   const { data: offeringsResult } = useQuery({
     queryKey: ['revenuecat', 'offerings'],
@@ -417,27 +439,7 @@ export default function OnboardingScreen() {
   // Transition state for animations
   const isTransitioningRef = useRef(false);
   
-  // Form data
-  const [data, setData] = useState<OnboardingData>({
-    name: existingUser?.name || '',
-    bibleTranslation: existingUser?.bibleTranslation || 'WEB',
-    aboutMe: existingUser?.aboutMe || '',
-    faithBackground: 'growing',
-    lifeStage: 'building',
-    tone: 'warm',
-    depth: 'balanced',
-    selectedMainOption: undefined,
-    selectedThemes: [],
-    selectedType: undefined,
-    selectedStudySubject: undefined,
-    currentSituation: '',
-    emotionalState: '',
-    spiritualSeeking: '',
-    readingDuration: 15,
-    devotionalLength: 7,
-    reminderTime: '8:00 AM',
-    mirrorBackCommitted: false,
-  });
+  // (data state declared earlier — before mirrorBackText useMemo)
   
   // UI animation states
   const [showInput, setShowInput] = useState(false);

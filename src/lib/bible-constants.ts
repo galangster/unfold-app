@@ -100,6 +100,82 @@ export const BIBLE_BOOKS: BibleBookInfo[] = [
   { id: 66, name: 'Revelation',      abbreviation: 'Rev',    testament: 'NT', chapterCount: 22  },
 ];
 
+// ─── Literary Categories ────────────────────────────────────────────────────
+
+export type BibleCategory =
+  | 'pentateuch'
+  | 'historical'
+  | 'wisdom'
+  | 'majorProphets'
+  | 'minorProphets'
+  | 'gospels'
+  | 'acts'
+  | 'paulineEpistles'
+  | 'generalEpistles'
+  | 'prophecy';
+
+/** Map a book ID (1-66) to its literary category */
+export function getBookCategory(bookId: number): BibleCategory {
+  if (bookId <= 5) return 'pentateuch';
+  if (bookId <= 17) return 'historical';
+  if (bookId <= 22) return 'wisdom';
+  if (bookId <= 27) return 'majorProphets';
+  if (bookId <= 39) return 'minorProphets';
+  if (bookId <= 43) return 'gospels';
+  if (bookId === 44) return 'acts';
+  if (bookId <= 57) return 'paulineEpistles';
+  if (bookId <= 65) return 'generalEpistles';
+  return 'prophecy';
+}
+
+/** Category display labels */
+export const CATEGORY_LABELS: Record<BibleCategory, string> = {
+  pentateuch: 'Law',
+  historical: 'History',
+  wisdom: 'Wisdom',
+  majorProphets: 'Major Prophets',
+  minorProphets: 'Minor Prophets',
+  gospels: 'Gospels',
+  acts: 'History',
+  paulineEpistles: 'Paul\u2019s Letters',
+  generalEpistles: 'General Letters',
+  prophecy: 'Prophecy',
+};
+
+/** Category text colors — muted tones that work on dark chip backgrounds */
+export const CATEGORY_COLORS_DARK: Record<BibleCategory, string> = {
+  pentateuch: '#E8836B',
+  historical: '#A09A90',
+  wisdom: '#8DAA7B',
+  majorProphets: '#7B9EC0',
+  minorProphets: '#6DB5A8',
+  gospels: '#E8836B',
+  acts: '#6DB5A8',
+  paulineEpistles: '#B088C4',
+  generalEpistles: '#8A9DD0',
+  prophecy: '#6BC08B',
+};
+
+/** Category text colors — deeper tones for light backgrounds */
+export const CATEGORY_COLORS_LIGHT: Record<BibleCategory, string> = {
+  pentateuch: '#B84A32',
+  historical: '#6E685E',
+  wisdom: '#4A7038',
+  majorProphets: '#3D6488',
+  minorProphets: '#2E7A6A',
+  gospels: '#B84A32',
+  acts: '#2E7A6A',
+  paulineEpistles: '#7A4A90',
+  generalEpistles: '#4A5E94',
+  prophecy: '#2E7A4A',
+};
+
+/** Get category color for a book, respecting dark/light mode */
+export function getBookColor(bookId: number, isDark: boolean): string {
+  const category = getBookCategory(bookId);
+  return isDark ? CATEGORY_COLORS_DARK[category] : CATEGORY_COLORS_LIGHT[category];
+}
+
 // ─── Derived collections ─────────────────────────────────────────────────────
 
 export const OT_BOOKS: BibleBookInfo[] = BIBLE_BOOKS.filter(b => b.testament === 'OT');

@@ -54,7 +54,8 @@ const LOG_PREFIX = "[RevenueCat]";
 export type RevenueCatGuardReason =
   | "web_not_supported"
   | "not_configured"
-  | "sdk_error";
+  | "sdk_error"
+  | "user_cancelled";
 
 export type RevenueCatResult<T> =
   | { ok: true; data: T }
@@ -81,6 +82,11 @@ const guardRevenueCatUsage = async <T>(
     const data = await operation();
     return { ok: true, data };
   } catch (error) {
+    // RevenueCat sets userCancelled on the error when the user dismisses the payment sheet
+    if (error && typeof error === "object" && "userCancelled" in error && (error as { userCancelled: boolean }).userCancelled) {
+      logger.log(`${LOG_PREFIX} ${action}: user cancelled`);
+      return { ok: false, reason: "user_cancelled" };
+    }
     logger.log(`${LOG_PREFIX} ${action} failed:`, error);
     return { ok: false, reason: "sdk_error", error };
   }
@@ -289,8 +295,9 @@ export const hasActiveSubscription = async (): Promise<
     };
   }
 
-  const hasSubscription =
-    Object.keys(customerInfoResult.data.entitlements.active || {}).length > 0;
+  const hasSubscription = Boolean(
+    customerInfoResult.data.entitlements.active?.['Unfold Premium'],
+  );
   return { ok: true, data: hasSubscription };
 };
 
