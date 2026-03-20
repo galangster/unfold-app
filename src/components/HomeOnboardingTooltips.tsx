@@ -147,6 +147,7 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
 
   useEffect(() => {
     if (hasSeenHomeTooltips || !isVisible) return;
+    if (!step || !targets) return;
 
     const ref = targets[step.targetKey];
     if (!ref?.current) return;
@@ -161,7 +162,7 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
     }, 200);
 
     return () => clearTimeout(timer);
-  }, [currentStep, isVisible, hasSeenHomeTooltips, step.targetKey, targets]);
+  }, [currentStep, isVisible, hasSeenHomeTooltips, step, targets]);
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
@@ -183,8 +184,8 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
     dismiss();
   }, [dismiss]);
 
-  // Don't render if already seen, dismissed, or target not measured yet
-  if (hasSeenHomeTooltips || !isVisible) return null;
+  // Don't render if already seen, dismissed, or step out of bounds
+  if (hasSeenHomeTooltips || !isVisible || !step) return null;
 
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
   const tooltipBg = isDark ? colors.inputBackground : colors.background;
