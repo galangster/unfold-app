@@ -7,43 +7,31 @@ import Animated, {
   FadeOutDown,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowDownIcon, BookOpenIcon, SunIcon, SquaresFourIcon } from 'phosphor-react-native';
+import { ArrowDownIcon, BookOpenIcon, SunIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
-/**
- * Tooltip step configuration.
- * Positions are approximate percentages of screen height
- * to place the tooltip relative to the spotlighted element.
- */
 interface TooltipStep {
   title: string;
   message: string;
-  /** Icon component key */
-  icon: 'journey' | 'streak' | 'links';
+  icon: 'journey' | 'streak';
   /** Where the tooltip card appears relative to screen */
-  tooltipPosition: 'below-header' | 'middle' | 'bottom';
+  tooltipPosition: 'upper' | 'center';
 }
 
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
-    title: 'Your Daily Devotional',
-    message: 'This is your daily devotional. Tap to begin reading.',
+    title: 'Written for You',
+    message: 'This reading was shaped by your story. Tap to start.',
     icon: 'journey',
-    tooltipPosition: 'below-header',
+    tooltipPosition: 'upper',
   },
   {
-    title: 'Reading Streak',
-    message: 'Your reading streak lives here. Read daily to keep it growing.',
+    title: 'Your Streak',
+    message: 'Come back tomorrow to keep it growing. Small steps build lasting rhythms.',
     icon: 'streak',
-    tooltipPosition: 'middle',
-  },
-  {
-    title: 'Quick Links',
-    message: 'Find your past journeys, journal entries, and saved passages here.',
-    icon: 'links',
-    tooltipPosition: 'bottom',
+    tooltipPosition: 'center',
   },
 ];
 
@@ -53,8 +41,6 @@ function StepIcon({ step, color, size }: { step: TooltipStep['icon']; color: str
       return <BookOpenIcon size={size} color={color} weight="light" />;
     case 'streak':
       return <SunIcon size={size} color={color} weight="light" />;
-    case 'links':
-      return <SquaresFourIcon size={size} color={color} weight="light" />;
   }
 }
 
@@ -94,18 +80,12 @@ export function HomeOnboardingTooltips() {
   const step = TOOLTIP_STEPS[currentStep];
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
 
-  // Calculate tooltip card vertical position based on which element is spotlighted
   const getTooltipTopOffset = (): number => {
     switch (step.tooltipPosition) {
-      case 'below-header':
-        // Journey card area -- position tooltip roughly in upper-mid screen
+      case 'upper':
         return screenHeight * 0.28;
-      case 'middle':
-        // Streak box area -- position tooltip in middle of screen
+      case 'center':
         return screenHeight * 0.38;
-      case 'bottom':
-        // Quick links area -- position tooltip lower
-        return screenHeight * 0.45;
     }
   };
 

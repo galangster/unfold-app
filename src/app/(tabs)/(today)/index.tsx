@@ -29,9 +29,11 @@ import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, 
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import { cancelMiddayCheckIn, scheduleMiddayCheckIn } from '@/lib/notifications';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
+import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { AccentGlow } from '@/components/AccentGlow';
@@ -420,6 +422,16 @@ export default function HomeScreen() {
     return dev.days.some((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === today);
   }, [currentDevotionalId, devotionals]);
 
+  // Streak celebration: show once when hasReadToday flips from false→true
+  const [showCelebration, setShowCelebration] = useState(false);
+  const prevHasReadToday = React.useRef(hasReadToday);
+  useEffect(() => {
+    if (hasReadToday && !prevHasReadToday.current) {
+      setShowCelebration(true);
+    }
+    prevHasReadToday.current = hasReadToday;
+  }, [hasReadToday]);
+
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
 
   // Progressive generation: detect missing current day and trigger generation on app open
@@ -596,6 +608,8 @@ export default function HomeScreen() {
       freeText: data.freeText,
       timeOfDay: 'midday',
     });
+    // Reschedule midday notification with tomorrow's rotating message
+    cancelMiddayCheckIn().then(() => scheduleMiddayCheckIn());
     setShowCheckInSheet(false);
   };
 
@@ -1474,7 +1488,16 @@ export default function HomeScreen() {
         feature="series"
       />
 
-      {/* Companion tooltip removed — companion surfaces via notification cards instead */}
+      {/* Streak celebration — fires once when today's reading is completed */}
+      {showCelebration && (
+        <StreakCelebration
+          streak={streakCurrent}
+          onComplete={() => setShowCelebration(false)}
+        />
+      )}
+
+      {/* First-time onboarding tooltips — shown once, persisted in store */}
+      <HomeOnboardingTooltips />
     </View>
   );
 }

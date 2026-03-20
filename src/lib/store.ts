@@ -655,6 +655,12 @@ interface UnfoldState {
   moveNoteToFolder: (noteId: string, folderId: string | null) => void;
   reorderFolders: (orderedIds: string[]) => void;
 
+  // Check-in notification scheduling toggles
+  middayCheckInEnabled: boolean;
+  eveningWindDownEnabled: boolean;
+  setMiddayCheckInEnabled: (enabled: boolean) => void;
+  setEveningWindDownEnabled: (enabled: boolean) => void;
+
   // AI data consent (App Store Guideline 5.1.2(i))
   hasConsentedToAI: boolean;
   setHasConsentedToAI: (consented: boolean) => void;
@@ -713,6 +719,9 @@ const initialState = {
   streakJustReset: false,
   justCompletedSeriesTitle: null as string | null,
   hasUsedAudio: false,
+  // Check-in notification toggles
+  middayCheckInEnabled: true,
+  eveningWindDownEnabled: true,
   // AI data consent
   hasConsentedToAI: false,
   // Notebook
@@ -1251,6 +1260,10 @@ export const useUnfoldStore = create<UnfoldState>()(
       clearJustCompletedSeriesTitle: () => set({ justCompletedSeriesTitle: null }),
       setHasUsedAudio: () => set({ hasUsedAudio: true }),
 
+      // Check-in notification toggles
+      setMiddayCheckInEnabled: (enabled) => set({ middayCheckInEnabled: enabled }),
+      setEveningWindDownEnabled: (enabled) => set({ eveningWindDownEnabled: enabled }),
+
       // AI data consent
       setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
 
@@ -1565,7 +1578,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 22, // Increment when state structure changes
+      version: 23, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1767,6 +1780,15 @@ export const useUnfoldStore = create<UnfoldState>()(
         if (version < 22) {
           // Existing folders get parentId: undefined (top-level) — no data change needed
           return state as UnfoldState;
+        }
+
+        // Migration from version 22 to 23: Add check-in notification toggles
+        if (version < 23) {
+          return {
+            ...state,
+            middayCheckInEnabled: true,
+            eveningWindDownEnabled: true,
+          } as UnfoldState;
         }
 
         return state as UnfoldState;

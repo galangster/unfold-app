@@ -2,6 +2,14 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { useUnfoldStore } from './store';
 import { logger } from '@/lib/logger';
+import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
+
+// Notification identifiers for targeted cancel/reschedule
+export const NOTIFICATION_IDS = {
+  DAILY_REMINDER: 'unfold-daily-reminder',
+  MIDDAY_CHECKIN: 'unfold-midday-checkin',
+  EVENING_WINDDOWN: 'unfold-evening-winddown',
+} as const;
 
 // Teaser content for daily notifications
 export interface NotificationTeaser {
@@ -53,6 +61,13 @@ export async function areNotificationsEnabled(): Promise<boolean> {
 
   const { status } = await Notifications.getPermissionsAsync();
   return status === 'granted';
+}
+
+// Cancel a specific scheduled notification by its identifier
+export async function cancelNotificationById(identifier: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.cancelScheduledNotificationAsync(identifier);
+  logger.log(`[Notifications] Cancelled notification: ${identifier}`);
 }
 
 // Parse time string like "8:00 AM" to hours and minutes
@@ -141,8 +156,8 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
     return null;
   }
 
-  // First cancel any existing reminders
-  await cancelAllReminders();
+  // Cancel only the daily reminder (not midday/evening)
+  await cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER);
 
   const hasPermission = await requestNotificationPermissions();
   if (!hasPermission) {
@@ -157,6 +172,7 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
 
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_IDS.DAILY_REMINDER,
       content: {
         title: generateNotificationTitle(teaser),
         body: generateNotificationBody(teaser),
@@ -180,14 +196,18 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
   }
 }
 
-// Cancel all scheduled reminders
+// Cancel all Unfold reminders (daily + midday + evening) by ID
 export async function cancelAllReminders(): Promise<void> {
   if (Platform.OS === 'web') {
     return;
   }
 
-  await Notifications.cancelAllScheduledNotificationsAsync();
-  logger.log('[Notifications] All reminders cancelled');
+  await Promise.all([
+    cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER),
+    cancelNotificationById(NOTIFICATION_IDS.MIDDAY_CHECKIN),
+    cancelNotificationById(NOTIFICATION_IDS.EVENING_WINDDOWN),
+  ]);
+  logger.log('[Notifications] All Unfold reminders cancelled');
 }
 
 // Send a test notification immediately
@@ -310,15 +330,20 @@ export async function sendDevotionalReadyNotification(title: string): Promise<bo
 export async function scheduleMiddayCheckIn(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
 
+  // Cancel existing before rescheduling
+  await cancelNotificationById(NOTIFICATION_IDS.MIDDAY_CHECKIN);
+
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) return null;
 
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_IDS.MIDDAY_CHECKIN,
       content: {
         title: 'Quick check-in',
-        body: "How's that landing — the thing you read this morning?",
+        body: getMessageForToday(MIDDAY_MESSAGES),
         sound: true,
+        data: { type: 'midday-checkin' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -340,15 +365,20 @@ export async function scheduleMiddayCheckIn(): Promise<string | null> {
 export async function scheduleEveningWindDown(): Promise<string | null> {
   if (Platform.OS === 'web') return null;
 
+  // Cancel existing before rescheduling
+  await cancelNotificationById(NOTIFICATION_IDS.EVENING_WINDDOWN);
+
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) return null;
 
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_IDS.EVENING_WINDDOWN,
       content: {
         title: 'One last thing',
-        body: 'One last thing before you close your eyes tonight.',
+        body: getMessageForToday(EVENING_MESSAGES),
         sound: true,
+        data: { type: 'evening-winddown' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -363,6 +393,16 @@ export async function scheduleEveningWindDown(): Promise<string | null> {
     logger.error('[Notifications] Failed to schedule evening wind-down:', error);
     return null;
   }
+}
+
+// Cancel midday check-in notification
+export async function cancelMiddayCheckIn(): Promise<void> {
+  await cancelNotificationById(NOTIFICATION_IDS.MIDDAY_CHECKIN);
+}
+
+// Cancel evening wind-down notification
+export async function cancelEveningWindDown(): Promise<void> {
+  await cancelNotificationById(NOTIFICATION_IDS.EVENING_WINDDOWN);
 }
 
 // Refresh daily reminder with new content (call when day advances)

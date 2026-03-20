@@ -207,13 +207,4 @@ export async function checkNotificationPermissions(): Promise<boolean> {
   return status === 'granted';
 }
 
-// Configure notification handler
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// NOTE: setNotificationHandler is registered once in notifications.ts — not duplicated here

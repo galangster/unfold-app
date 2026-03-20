@@ -16,6 +16,10 @@ import {
   scheduleDailyReminder,
   cancelAllReminders,
   areNotificationsEnabled,
+  scheduleMiddayCheckIn,
+  scheduleEveningWindDown,
+  cancelMiddayCheckIn,
+  cancelEveningWindDown,
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
@@ -87,6 +91,10 @@ export default function SettingsScreen() {
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const reset = useUnfoldStore((s) => s.reset);
+  const middayCheckInEnabled = useUnfoldStore((s) => s.middayCheckInEnabled);
+  const eveningWindDownEnabled = useUnfoldStore((s) => s.eveningWindDownEnabled);
+  const setMiddayCheckInEnabled = useUnfoldStore((s) => s.setMiddayCheckInEnabled);
+  const setEveningWindDownEnabled = useUnfoldStore((s) => s.setEveningWindDownEnabled);
   const { colors, isDark } = useTheme();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -162,11 +170,34 @@ export default function SettingsScreen() {
       if (result) {
         setNotificationsEnabled(true);
         updateUser({ reminderTime: time });
+        // Also reschedule midday/evening if their toggles are on
+        if (middayCheckInEnabled) await scheduleMiddayCheckIn();
+        if (eveningWindDownEnabled) await scheduleEveningWindDown();
       }
     } else {
-      // Disable notifications
+      // Disable all notifications (daily + midday + evening)
       await cancelAllReminders();
       setNotificationsEnabled(false);
+    }
+  };
+
+  const handleToggleMiddayCheckIn = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMiddayCheckInEnabled(value);
+    if (value) {
+      await scheduleMiddayCheckIn();
+    } else {
+      await cancelMiddayCheckIn();
+    }
+  };
+
+  const handleToggleEveningWindDown = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEveningWindDownEnabled(value);
+    if (value) {
+      await scheduleEveningWindDown();
+    } else {
+      await cancelEveningWindDown();
     }
   };
 
@@ -1205,6 +1236,104 @@ export default function SettingsScreen() {
                     </Text>
                   </TouchableOpacity>
                 )}
+
+                {/* Midday check-in toggle */}
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Midday check-in"
+                  accessibilityHint={middayCheckInEnabled ? "Turn off midday check-in notifications" : "Turn on midday check-in notifications"}
+                  accessibilityState={{ selected: middayCheckInEnabled }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 13,
+                    paddingHorizontal: 16,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                  }}
+                >
+                  <View>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Midday check-in
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 12,
+                        color: colors.textMuted,
+                        marginTop: 2,
+                      }}
+                    >
+                      12:30 PM
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 14,
+                      color: middayCheckInEnabled ? colors.text : colors.textMuted,
+                    }}
+                  >
+                    {middayCheckInEnabled ? 'On' : 'Off'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Evening wind-down toggle */}
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Evening wind-down"
+                  accessibilityHint={eveningWindDownEnabled ? "Turn off evening wind-down notifications" : "Turn on evening wind-down notifications"}
+                  accessibilityState={{ selected: eveningWindDownEnabled }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 13,
+                    paddingHorizontal: 16,
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                  }}
+                >
+                  <View>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Evening wind-down
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 12,
+                        color: colors.textMuted,
+                        marginTop: 2,
+                      }}
+                    >
+                      8:30 PM
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: 14,
+                      color: eveningWindDownEnabled ? colors.text : colors.textMuted,
+                    }}
+                  >
+                    {eveningWindDownEnabled ? 'On' : 'Off'}
+                  </Text>
+                </TouchableOpacity>
               </View>
               {/* Voice subsection - Moved into Premium */}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>

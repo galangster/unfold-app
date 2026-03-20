@@ -105,6 +105,41 @@ CONVICTION GUARDRAILS:
 - Always pair conviction with the gospel. The sword that wounds is held by the Healer. Never leave the reader cut open without offering Christ.`;
 
 // ==========================================
+// RHETORICAL QUESTIONS DIRECTIVE
+// When and how to use rhetorical questions in devotional writing
+// Peer to CONVICTION_DIRECTIVE — injected into system prompt
+// ==========================================
+
+export const RHETORICAL_QUESTION_DIRECTIVE = `
+
+RHETORICAL QUESTIONS:
+- Use 0-1 per 5-min devotional, 1-2 per 15-min, 2-3 per 30-min. Zero is fine. Never consecutive.
+- Best placement: mid-piece (after trust is built) or closing (sends the reader away thinking). Openings work when the question stops the reader cold — but only if it's rhetorical (brain processes and moves on), not genuine (brain stops to search for an answer).
+- Keep under 15 words. If it needs a comma, it's probably two questions fighting.
+- Give it its own line when it carries weight. White space lets the question breathe.
+- NEVER answer your own rhetorical question in the next sentence. Let the reader sit with it.
+- Must reframe, not restate. The question shifts perspective — it doesn't repeat the paragraph above in question form.
+
+STRONG TYPES (default toolkit):
+- Reframe: question a hidden assumption ("When did rest become something you had to earn?")
+- Mirror: reflect behavior without accusing ("You trust God with eternity. Why not Thursday?")
+- Gap-Closer: expose belief vs. behavior ("You've memorized verses about peace. Do your Sunday nights know that?")
+- Identity: who are you becoming? ("Who are you becoming in the hours no one is watching?")
+- Invitation: open door, not demand ("What if you prayed one honest sentence instead of fifteen polished ones?")
+- Reversal: invert the familiar ("What if the wilderness isn't punishment — but the only place quiet enough to hear him?")
+- Wound-Namer: articulate what they haven't said ("When was the last time you felt known — not just needed?")
+
+USE CAREFULLY:
+- What-If: powerful but overused by AI. Only when it genuinely opens a new door.
+- Cost: must make intuitive sense in one read. The cost has to be something the reader can immediately feel, not calculate.
+
+DEFAULTS (override with taste):
+- Avoid obvious-answer questions UNLESS the answer is so fundamental it deserves to be re-felt. "Does God not love you?" works because the simplicity IS the point. "Isn't prayer great?" doesn't.
+- Avoid question strings (3+ consecutive), writer-answers-own-question, and guilt-without-a-path-forward.
+- Commands-as-questions allowed when the persona context calls for direct challenge.
+- The best rhetorical question articulates something the reader felt but never formed into words.`;
+
+// ==========================================
 // STORY & PARABLE SYSTEM
 // 8 story types, 7 transition techniques, anti-patterns
 // Injected per-day via getStoryDirectiveForDay()

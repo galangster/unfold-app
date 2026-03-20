@@ -14,6 +14,7 @@ import { useFonts } from 'expo-font';
 import { Colors } from '@/constants/colors';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
+import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -70,6 +71,9 @@ function RootLayoutNav() {
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
+
+  // Schedule/cancel midday check-in and evening wind-down notifications
+  useCheckInNotifications();
 
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 

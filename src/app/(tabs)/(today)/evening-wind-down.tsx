@@ -25,6 +25,7 @@ import { generateExamen, type ExamenPrayer } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
 import { streamDevotionalAudio } from '@/lib/cartesia';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
+import { cancelEveningWindDown, scheduleEveningWindDown } from '@/lib/notifications';
 import { EveningCelebration } from '@/components/EveningCelebration';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
@@ -255,6 +256,8 @@ export default function EveningWindDownScreen() {
         mood: 3 as const,
         moodLabel: 'completed',
       });
+      // Reschedule evening notification with tomorrow's rotating message
+      cancelEveningWindDown().then(() => scheduleEveningWindDown());
     }
     const msg = EVENING_CELEBRATION_MESSAGES[Math.floor(Math.random() * EVENING_CELEBRATION_MESSAGES.length)];
     setCelebrationMessage(msg);

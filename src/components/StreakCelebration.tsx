@@ -81,7 +81,7 @@ const SparkleParticle = React.memo(function SparkleParticle({
     particleScale.value = withDelay(
       delay,
       withSequence(
-        withSpring(1, { damping: 8, stiffness: 100 }),
+        withSpring(1, { damping: 20, stiffness: 90 }),
         withDelay(400, withTiming(0.2, { duration: 400 }))
       )
     );
@@ -149,8 +149,8 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
     }
     // Fade in
     opacity.value = withTiming(1, { duration: 200 });
-    // Spring scale in with milestone-aware target
-    scale.value = withSpring(milestoneScale, { damping: 6, stiffness: 40 });
+    // Critically-damped scale — no bounce
+    scale.value = withSpring(milestoneScale, { damping: 20, stiffness: 90 });
     // After hold, fade out and call onComplete
     opacity.value = withDelay(
       holdDuration,

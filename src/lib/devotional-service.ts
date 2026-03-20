@@ -30,6 +30,7 @@ import {
   CRAFT_FOUNDATION,
   ANTI_SLOP_DIRECTIVE,
   CONVICTION_DIRECTIVE,
+  RHETORICAL_QUESTION_DIRECTIVE,
   PARABLE_ANTI_PATTERNS,
   DIALOGUE_ANTI_PATTERNS,
   PATTERN_BREAK_DIRECTIVE,
@@ -1143,7 +1144,8 @@ async function generateBatch(
         context.writingStyle?.depth
       )
     : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + convictionDirective + parableGuardrails + dialogueGuardrails + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
+  const rhetoricalQuestions = retryLevel <= 1 ? RHETORICAL_QUESTION_DIRECTIVE : '';
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + rhetoricalQuestions + convictionDirective + parableGuardrails + dialogueGuardrails + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
   // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
