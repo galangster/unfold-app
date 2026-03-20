@@ -10,13 +10,11 @@ import Animated, {
   withTiming,
   withDelay,
   withRepeat,
-  withSpring,
   withSequence,
   interpolate,
   interpolateColor,
   cancelAnimation,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
@@ -24,7 +22,6 @@ import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon, CaretRightIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
@@ -191,7 +188,6 @@ function shuffleRevealOrder(length: number): number[] {
 function NotificationCard({
   colors,
   onPress,
-  onDismiss,
   message,
   icon,
   accentColor,
@@ -199,37 +195,12 @@ function NotificationCard({
 }: {
   colors: ColorTheme;
   onPress: () => void;
-  onDismiss: () => void;
   message: string;
   icon: React.ReactNode;
   accentColor: string;
   delay?: number;
 }) {
   const { entering, exiting } = useAccessibleAnimation();
-  const translateX = useSharedValue(0);
-  const dismissed = useSharedValue(false);
-
-  const swipeGesture = Gesture.Pan()
-    .activeOffsetX(20)
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = e.translationX;
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > 120) {
-        translateX.value = withTiming(400, { duration: 200 });
-        dismissed.value = true;
-        runOnJS(onDismiss)();
-      } else {
-        translateX.value = withSpring(0, { damping: 15 });
-      }
-    });
-
-  const cardAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-    opacity: interpolate(translateX.value, [0, 200], [1, 0]),
-  }));
 
   return (
     <Animated.View
@@ -237,44 +208,28 @@ function NotificationCard({
       exiting={exiting(FadeOut.duration(300))}
       style={{ paddingHorizontal: 24, marginTop: 12 }}
     >
-      <GestureDetector gesture={swipeGesture}>
-        <Animated.View style={cardAnimStyle}>
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={onPress}
-          >
-            <View
-              style={[homeStyles.notificationCard, { backgroundColor: accentColor + '0D' }]}
-            >
-              {/* Companion orb */}
-              <View style={homeStyles.notificationOrb}>
-                <CompanionOrb accentColor={accentColor} size={28} />
-              </View>
+      <TouchableOpacity activeOpacity={0.7}
+        onPress={onPress}
+      >
+        <View
+          style={[homeStyles.notificationCard, { backgroundColor: accentColor + '0D' }]}
+        >
+          {/* Companion orb */}
+          <View style={homeStyles.notificationOrb}>
+            <CompanionOrb accentColor={accentColor} size={28} />
+          </View>
 
-              {/* Message text */}
-              <View style={homeStyles.flex1}>
-                <Text style={[homeStyles.notificationMessage, { color: colors.text }]}>
-                  {message}
-                </Text>
-              </View>
+          {/* Message text */}
+          <View style={homeStyles.flex1}>
+            <Text style={[homeStyles.notificationMessage, { color: colors.text }]}>
+              {message}
+            </Text>
+          </View>
 
-              {/* Action chevron */}
-              <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={homeStyles.notificationChevron} />
-
-              {/* Dismiss X */}
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  onDismiss();
-                }}
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 12 }}
-                style={homeStyles.notificationDismiss}
-              >
-                <XIcon size={14} color={colors.textSubtle} weight="light" />
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-      </GestureDetector>
+          {/* Action chevron */}
+          <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={homeStyles.notificationChevron} />
+        </View>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -366,10 +321,7 @@ export default function HomeScreen() {
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
-  const dismissedMiddayCardDate = useUnfoldStore((s) => s.dismissedMiddayCardDate);
-  const dismissedEveningCardDate = useUnfoldStore((s) => s.dismissedEveningCardDate);
-  const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
-  const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
+  // dismissedMiddayCardDate/dismissedEveningCardDate removed — cards now expire by time window
 
 
   // Refs for onboarding spotlight targets
@@ -638,30 +590,20 @@ export default function HomeScreen() {
     ? getCheckIn(currentDevotional.id, eveningCheckInDay, 'evening')
     : undefined;
 
-  const todayDateStr = new Date().toISOString().split('T')[0];
-
-  // Time-aware card visibility — hidden if completed, dismissed today, or wrong time
+  // Time-aware card visibility — cards appear during their window and expire naturally
+  // Midday: 12pm–5pm (afternoon)  |  Evening: 5pm–11:30pm
+  const currentHour = new Date().getHours();
+  const currentMinute = new Date().getMinutes();
   const showCheckInCard =
     timeOfDay === 'afternoon' &&
     !!currentDevotional &&
-    !todayCheckIn &&
-    dismissedMiddayCardDate !== todayDateStr;
+    !todayCheckIn;
   const showEveningCard =
     (timeOfDay === 'evening' || timeOfDay === 'night') &&
+    !(currentHour === 23 && currentMinute >= 30) && // Expires at 11:30pm
     !!currentDevotional &&
     hasReadToday &&
-    !todayEveningCheckIn &&
-    dismissedEveningCardDate !== todayDateStr;
-
-  const handleDismissMiddayCard = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDismissedMiddayCardDate(todayDateStr);
-  };
-
-  const handleDismissEveningCard = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDismissedEveningCardDate(todayDateStr);
-  };
+    !todayEveningCheckIn;
 
   const handleDay1ReviewOption = async (option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -851,7 +793,6 @@ export default function HomeScreen() {
             <NotificationCard
               colors={colors}
               onPress={handleCheckIn}
-              onDismiss={handleDismissMiddayCard}
               message={middayMessage}
               icon={<ChatCircleDotsIcon size={16} color={colors.textSubtle} weight="light" />}
               accentColor={colors.accent}
@@ -862,7 +803,6 @@ export default function HomeScreen() {
             <NotificationCard
               colors={colors}
               onPress={handleEveningWindDown}
-              onDismiss={handleDismissEveningCard}
               message={eveningMessage}
               icon={<MoonIcon size={16} color={colors.textSubtle} weight="light" />}
               accentColor={colors.accent}
@@ -1554,14 +1494,6 @@ const homeStyles = StyleSheet.create({
   },
   notificationChevron: {
     marginLeft: 8,
-  },
-  notificationDismiss: {
-    padding: 4,
-    marginLeft: 4,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   shimmerWrapper: {
     paddingHorizontal: 24,
