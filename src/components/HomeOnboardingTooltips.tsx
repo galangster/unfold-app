@@ -184,8 +184,8 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
     dismiss();
   }, [dismiss]);
 
-  // Don't render if already seen, dismissed, or target not measured yet
-  if (hasSeenHomeTooltips || !isVisible) return null;
+  // Don't render if already seen, dismissed, or step out of bounds
+  if (hasSeenHomeTooltips || !isVisible || !step) return null;
 
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
   const tooltipBg = isDark ? colors.inputBackground : colors.background;
