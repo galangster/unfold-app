@@ -46,6 +46,11 @@ import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constan
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 
+// Computed once at module load — avoids Hermes HMR stale-reference errors that
+// occur when these values are captured inside useMemo closures during hot reload.
+const MIDDAY_MESSAGE_TODAY = getMessageForToday(MIDDAY_MESSAGES);
+const EVENING_MESSAGE_TODAY = getMessageForToday(EVENING_MESSAGES);
+
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
 function getTimeOfDay(): TimeOfDay {
@@ -419,8 +424,8 @@ export default function HomeScreen() {
       .finally(() => setIsPreparingCurrentDay(false));
   }, [currentDevotional]);
 
-  const middayMessage = useMemo(() => getMessageForToday(MIDDAY_MESSAGES), []);
-  const eveningMessage = useMemo(() => getMessageForToday(EVENING_MESSAGES), []);
+  const middayMessage = MIDDAY_MESSAGE_TODAY;
+  const eveningMessage = EVENING_MESSAGE_TODAY;
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
