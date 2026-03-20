@@ -41,6 +41,7 @@ import {
 } from '../constants/writing-craft';
 import { PERSONA_FULL } from '../constants/persona';
 import { buildVoiceAdaptationDirective } from '../constants/voice-adaptation';
+import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-service';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -1150,7 +1151,35 @@ async function generateBatch(
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
     : '';
-  const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule);
+  // Fetch real stories from the API for story days in this batch
+  let storiesBlock = '';
+  if (retryLevel === 0 && anyStoryDay) {
+    const searchThemes: string[] = [];
+    if (context.themeCategory) searchThemes.push(context.themeCategory);
+    if (context.currentSituation) {
+      const words = context.currentSituation.toLowerCase().split(/\s+/)
+        .filter(w => w.length > 3 && !['this', 'that', 'with', 'from', 'into', 'about', 'their', 'them', 'they', 'have', 'been', 'will', 'your', 'more', 'what', 'when', 'than'].includes(w));
+      searchThemes.push(...words.slice(0, 3));
+    }
+    const uniqueThemes = [...new Set(searchThemes)];
+    if (uniqueThemes.length > 0) {
+      try {
+        const stories = await fetchStoriesForGeneration(uniqueThemes, {
+          limit: 5,
+          spinnable: true,
+        });
+        storiesBlock = formatStoriesForPrompt(stories);
+        if (storiesBlock) {
+          logger.log(`[Devotional] Batch: fetched ${stories.length} stories for themes [${uniqueThemes.join(', ')}]`);
+        }
+      } catch {
+        logger.warn('[Devotional] Batch story fetch failed, continuing without');
+      }
+    }
+  }
+
+  const userPrompt = buildUserPrompt(context, startDay, endDay, seriesTitle, previousDayTitles, retryLevel, varietySchedule)
+    + (storiesBlock ? `\n\n${storiesBlock}` : '');
 
   // Sonnet 4.6 for core devotional generation — quality is the product
   const model = 'claude-sonnet-4-6';

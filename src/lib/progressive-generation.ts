@@ -13,6 +13,7 @@
 import { logBugError, logBugEvent } from './bug-logger';
 import { logger as appLogger } from './logger';
 import { reportError } from './report-error';
+import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-service';
 import {
   postJsonWithBackendFallback,
   getSystemPrompt,
@@ -546,6 +547,45 @@ async function _generateProgressiveDayInternal(
   const parableGuardrails = hasStoryToday ? PARABLE_ANTI_PATTERNS : '';
   const dialogueGuardrails = hasDialogueToday ? DIALOGUE_ANTI_PATTERNS : '';
 
+  // Fetch real stories from the API when this day gets a story directive
+  let storiesBlock = '';
+  if (hasStoryToday) {
+    const dayHint = arc.dayHints.find((h) => h.dayNumber === dayNumber);
+    // Derive search themes from arc theme hint, overarching theme, and user context
+    const searchThemes: string[] = [];
+    if (dayHint?.themeHint) {
+      // Extract key words from the theme hint (skip common filler words)
+      const words = dayHint.themeHint.toLowerCase().split(/\s+/)
+        .filter(w => w.length > 3 && !['this', 'that', 'with', 'from', 'into', 'about', 'their', 'them', 'they', 'have', 'been', 'will', 'your', 'more', 'what', 'when', 'than'].includes(w));
+      searchThemes.push(...words.slice(0, 3));
+    }
+    if (arc.overarchingTheme) {
+      const words = arc.overarchingTheme.toLowerCase().split(/\s+/)
+        .filter(w => w.length > 3 && !['this', 'that', 'with', 'from', 'into', 'about', 'their', 'them', 'they', 'have', 'been', 'will', 'your', 'more', 'what', 'when', 'than'].includes(w));
+      searchThemes.push(...words.slice(0, 2));
+    }
+    if (context.themeCategory) searchThemes.push(context.themeCategory);
+
+    // Deduplicate
+    const uniqueThemes = [...new Set(searchThemes)];
+
+    if (uniqueThemes.length > 0) {
+      try {
+        const stories = await fetchStoriesForGeneration(uniqueThemes, {
+          limit: 3,
+          spinnable: true,
+        });
+        storiesBlock = formatStoriesForPrompt(stories);
+        if (storiesBlock) {
+          logger.log(`Day ${dayNumber}: fetched ${stories.length} stories for themes [${uniqueThemes.join(', ')}]`);
+        }
+      } catch {
+        // Silent fallback — generation works without stories
+        logger.warn(`Day ${dayNumber}: story fetch failed, continuing without`);
+      }
+    }
+  }
+
   const systemPrompt = [
     baseSystem,
     PETER_ENNS_ADDITION,
@@ -562,9 +602,14 @@ async function _generateProgressiveDayInternal(
   ].join('');
 
   // Build the progressive user prompt
-  const userPrompt = buildProgressiveUserPrompt(
+  let userPrompt = buildProgressiveUserPrompt(
     context, dayNumber, arc, memory, scriptureAnalysis,
   );
+
+  // Append real stories from the API (if available) to the user prompt
+  if (storiesBlock) {
+    userPrompt += `\n\n${storiesBlock}`;
+  }
 
   // Token budget for a single day
   const tokensPerDay =
