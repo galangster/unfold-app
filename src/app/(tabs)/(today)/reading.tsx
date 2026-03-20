@@ -706,9 +706,12 @@ export default function ReadingScreen() {
       // Advance to next day and trigger generation
       advanceDay(currentDevotionalId);
       // Read the completed day from store (not the stale closure) so triggerNext generates the right day
-      const completedDay = useUnfoldStore.getState().devotionals.find(
+      const freshState = useUnfoldStore.getState();
+      const completedDay = freshState.devotionals.find(
         (d) => d.id === currentDevotionalId
-      )?.currentDay ?? viewingDay;
+      )?.currentDay ?? freshState.devotionals.find(
+        (d) => d.id === currentDevotionalId
+      )?.days?.length ?? 1;
       setIsPreparingNextDay(true);
       triggerNextDayGeneration(currentDevotionalId, completedDay - 1)
         .finally(() => { if (mountedRef.current) setIsPreparingNextDay(false); });
@@ -727,7 +730,7 @@ export default function ReadingScreen() {
     } finally {
       if (mountedRef.current) setIsExtendingArc(false);
     }
-  }, [currentDevotionalId, continuationDays, viewingDay, advanceDay]);
+  }, [currentDevotionalId, continuationDays, advanceDay]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }

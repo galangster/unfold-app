@@ -108,6 +108,7 @@ export default function GeneratingScreen() {
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: false });
   }, [navigation]);
+
   const colors = {
     ...themeColors,
     background: '#0A0A0A',
@@ -166,6 +167,24 @@ export default function GeneratingScreen() {
   const generationInFlightRef = useRef(false);
   const [isProgressiveMode, setIsProgressiveMode] = useState(false);
   const notificationPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Block deep-link / external navigation while generation is in progress.
+  // Our own router.replace() calls dispatch a REPLACE action which we allow;
+  // deep links dispatch NAVIGATE or RESET — those are blocked while generating.
+  useEffect(() => {
+    if (!isGenerating) return;
+
+    const unsubscribe = navigation.addListener('beforeRemove' as never, (e: { data: { action: { type: string } }; preventDefault: () => void }) => {
+      const actionType = e.data.action.type;
+      // Allow programmatic REPLACE that we trigger ourselves
+      if (actionType === 'REPLACE') return;
+      // Block external navigation (deep links typically use NAVIGATE or RESET)
+      logger.warn('[generating] Blocked external navigation during generation, action:', actionType);
+      e.preventDefault();
+    });
+
+    return unsubscribe;
+  }, [navigation, isGenerating]);
 
   // Notification state
   const [notificationPermission, setNotificationPermission] = useState<'unknown' | 'granted' | 'denied'>('unknown');

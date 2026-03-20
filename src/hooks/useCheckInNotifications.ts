@@ -23,15 +23,21 @@ export function useCheckInNotifications() {
   useEffect(() => {
     if (!hasCompletedOnboarding) return;
 
+    let cancelled = false;
+
     const sync = async () => {
+      if (cancelled) return;
+
       const hasPermission = await areNotificationsEnabled();
-      if (!hasPermission) return;
+      if (!hasPermission || cancelled) return;
 
       if (middayEnabled) {
         await scheduleMiddayCheckIn();
       } else {
         await cancelMiddayCheckIn();
       }
+
+      if (cancelled) return;
 
       if (eveningEnabled) {
         await scheduleEveningWindDown();
@@ -41,6 +47,8 @@ export function useCheckInNotifications() {
     };
 
     sync();
+
+    return () => { cancelled = true; };
   }, [middayEnabled, eveningEnabled, hasCompletedOnboarding]);
 
   // Reschedule on app foreground (catches iOS Settings permission changes)

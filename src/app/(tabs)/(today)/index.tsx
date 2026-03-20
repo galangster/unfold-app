@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -371,6 +371,10 @@ export default function HomeScreen() {
   const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
   const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
 
+
+  // Refs for onboarding spotlight targets
+  const journeyCardRef = useRef<View>(null);
+  const streakBoxRef = useRef<View>(null);
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -935,6 +939,7 @@ export default function HomeScreen() {
           )}
 
           {/* Main Journey Card */}
+          <View ref={journeyCardRef} collapsable={false}>
           <Animated.View
             entering={entering(FadeIn.delay(100).duration(400))}
             style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
@@ -1333,6 +1338,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           </Animated.View>
+          </View>
 
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
@@ -1442,6 +1448,7 @@ export default function HomeScreen() {
           )}
 
           {/* Streak Box */}
+          <View ref={streakBoxRef} collapsable={false}>
           <Animated.View
             entering={entering(FadeIn.delay(200).duration(400))}
             style={{ paddingHorizontal: 24, marginTop: 24 }}
@@ -1451,6 +1458,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/(tabs)/(you)/streak-settings')}
             />
           </Animated.View>
+          </View>
 
           {/* Premium Nudge Card — contextual, inline upsell */}
           {premiumNudge && (
@@ -1497,7 +1505,7 @@ export default function HomeScreen() {
       )}
 
       {/* First-time onboarding tooltips — shown once, persisted in store */}
-      <HomeOnboardingTooltips />
+      <HomeOnboardingTooltips targets={{ reading: journeyCardRef, streak: streakBoxRef }} />
     </View>
   );
 }

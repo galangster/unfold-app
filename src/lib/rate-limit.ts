@@ -1,11 +1,17 @@
 /**
  * Client-side rate limiting for AI API calls
- * Stores limits in AsyncStorage to persist across app sessions
+ * Stores limits in MMKV (synchronous) to avoid read-then-write race conditions
  * Provides basic protection against accidental spam
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { logger } from '@/lib/logger';
+
+// mmkvStorage.getItem is synchronous (MMKV) but typed as string | null | Promise
+// because it implements Zustand's StateStorage interface. This helper narrows the type.
+function mmkvGet(key: string): string | null {
+  return mmkvStorage.getItem(key) as string | null;
+}
 
 interface RateLimitConfig {
   maxRequests: number;
@@ -49,8 +55,35 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
 const RATE_LIMIT_STORAGE_KEY = '@unfold_rate_limits';
 
 /**
+ * Read the current rate-limit state from MMKV (synchronous).
+ * Returns a fresh state if nothing is stored or if the window has expired.
+ */
+function readState(storageKey: string, windowMs: number): RateLimitState {
+  const now = Date.now();
+  const stored = mmkvGet(storageKey);
+
+  if (stored) {
+    try {
+      const state = JSON.parse(stored) as RateLimitState;
+      // Reset if window expired
+      if (now - state.windowStart > windowMs) {
+        return { count: 0, windowStart: now };
+      }
+      return state;
+    } catch {
+      if (__DEV__) logger.warn('[RateLimit] Corrupt stored state, resetting');
+    }
+  }
+
+  return { count: 0, windowStart: now };
+}
+
+/**
  * Check if a request is allowed under rate limits
  * Returns { allowed: boolean, remaining: number, resetTime: number }
+ *
+ * Kept async for API compatibility with existing callers, but internally
+ * uses synchronous MMKV reads — no async gap between check and increment.
  */
 export async function checkRateLimit(
   endpoint: string
@@ -66,31 +99,10 @@ export async function checkRateLimit(
     return { allowed: true, remaining: Infinity, resetTime: 0, limit: Infinity };
   }
 
-  const now = Date.now();
   const storageKey = `${RATE_LIMIT_STORAGE_KEY}_${endpoint}`;
-  
-  try {
-    // Get current state
-    const stored = await AsyncStorage.getItem(storageKey);
-    let state: RateLimitState;
-    
-    if (stored) {
-      try {
-        state = JSON.parse(stored);
-      } catch {
-        if (__DEV__) logger.warn('[RateLimit] Corrupt stored state, resetting');
-        state = { count: 0, windowStart: now };
-      }
 
-      // Check if window has expired
-      if (now - state.windowStart > config.windowMs) {
-        // Reset window
-        state = { count: 0, windowStart: now };
-      }
-    } else {
-      // First request
-      state = { count: 0, windowStart: now };
-    }
+  try {
+    const state = readState(storageKey, config.windowMs);
 
     const allowed = state.count < config.maxRequests;
     const remaining = Math.max(0, config.maxRequests - state.count);
@@ -112,36 +124,20 @@ export async function checkRateLimit(
 /**
  * Increment the rate limit counter for an endpoint
  * Call this after a successful request
+ *
+ * Synchronous MMKV read+write eliminates the race condition where two
+ * concurrent calls both read the same count before either writes.
  */
 export async function incrementRateLimit(endpoint: string): Promise<void> {
   const config = RATE_LIMITS[endpoint];
   if (!config) return;
 
   const storageKey = `${RATE_LIMIT_STORAGE_KEY}_${endpoint}`;
-  
+
   try {
-    const stored = await AsyncStorage.getItem(storageKey);
-    let state: RateLimitState;
-    const now = Date.now();
-    
-    if (stored) {
-      try {
-        state = JSON.parse(stored);
-      } catch {
-        if (__DEV__) logger.warn('[RateLimit] Corrupt stored state, resetting');
-        state = { count: 0, windowStart: now };
-      }
-
-      // Check if window has expired
-      if (now - state.windowStart > config.windowMs) {
-        state = { count: 0, windowStart: now };
-      }
-    } else {
-      state = { count: 0, windowStart: now };
-    }
-
+    const state = readState(storageKey, config.windowMs);
     state.count++;
-    await AsyncStorage.setItem(storageKey, JSON.stringify(state));
+    mmkvStorage.setItem(storageKey, JSON.stringify(state));
 
     logger.log(`[RateLimit] ${endpoint}: ${state.count}/${config.maxRequests}`);
   } catch (error) {
@@ -175,9 +171,10 @@ export async function resetAllRateLimits(): Promise<void> {
     return;
   }
   try {
-    const keys = await AsyncStorage.getAllKeys();
-    const rateLimitKeys = keys.filter(key => key.startsWith(RATE_LIMIT_STORAGE_KEY));
-    await AsyncStorage.multiRemove(rateLimitKeys);
+    for (const endpoint of Object.keys(RATE_LIMITS)) {
+      const storageKey = `${RATE_LIMIT_STORAGE_KEY}_${endpoint}`;
+      mmkvStorage.removeItem(storageKey);
+    }
     logger.log('[RateLimit] All rate limits reset');
   } catch (error) {
     logger.error('[RateLimit] Error resetting rate limits:', error);

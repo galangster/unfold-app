@@ -1,57 +1,167 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, type RefObject } from 'react';
 import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  FadeInDown,
-  FadeOutDown,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { ArrowDownIcon, BookOpenIcon, SunIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface TargetRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface TooltipStep {
   title: string;
   message: string;
-  icon: 'journey' | 'streak';
-  /** Where the tooltip card appears relative to screen */
-  tooltipPosition: 'upper' | 'center';
+  targetKey: 'reading' | 'streak';
+  /** Where the tooltip appears relative to the spotlight */
+  placement: 'below' | 'above';
 }
+
+export interface OnboardingTargets {
+  reading: RefObject<View | null>;
+  streak: RefObject<View | null>;
+}
+
+// ---------------------------------------------------------------------------
+// Steps
+// ---------------------------------------------------------------------------
 
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
-    title: 'Written for You',
-    message: 'This reading was shaped by your story. Tap to start.',
-    icon: 'journey',
-    tooltipPosition: 'upper',
+    title: 'Today\u2019s Reading',
+    message: 'Made for you, based on what you shared. Tap the card to begin.',
+    targetKey: 'reading',
+    placement: 'below',
   },
   {
     title: 'Your Streak',
-    message: 'Come back tomorrow to keep it growing. Small steps build lasting rhythms.',
-    icon: 'streak',
-    tooltipPosition: 'center',
+    message: 'Read each day to build momentum. Small steps add up.',
+    targetKey: 'streak',
+    placement: 'above',
   },
 ];
 
-function StepIcon({ step, color, size }: { step: TooltipStep['icon']; color: string; size: number }) {
-  switch (step) {
-    case 'journey':
-      return <BookOpenIcon size={size} color={color} weight="light" />;
-    case 'streak':
-      return <SunIcon size={size} color={color} weight="light" />;
-  }
+// ---------------------------------------------------------------------------
+// SVG spotlight mask — full screen dark + rounded-rect hole
+// ---------------------------------------------------------------------------
+
+const SPOTLIGHT_PADDING = 10;
+const SPOTLIGHT_RADIUS = 22;
+const BACKDROP_OPACITY = 0.55;
+
+function buildMaskPath(
+  screenW: number,
+  screenH: number,
+  rect: TargetRect,
+): string {
+  // Outer rect (full screen)
+  const outer = `M0,0 H${screenW} V${screenH} H0 Z`;
+
+  // Inner rounded rect (the hole) — slightly larger than the target
+  const x = rect.x - SPOTLIGHT_PADDING;
+  const y = rect.y - SPOTLIGHT_PADDING;
+  const w = rect.width + SPOTLIGHT_PADDING * 2;
+  const h = rect.height + SPOTLIGHT_PADDING * 2;
+  const r = SPOTLIGHT_RADIUS;
+
+  const inner = [
+    `M${x + r},${y}`,
+    `H${x + w - r}`,
+    `A${r},${r} 0 0 1 ${x + w},${y + r}`,
+    `V${y + h - r}`,
+    `A${r},${r} 0 0 1 ${x + w - r},${y + h}`,
+    `H${x + r}`,
+    `A${r},${r} 0 0 1 ${x},${y + h - r}`,
+    `V${y + r}`,
+    `A${r},${r} 0 0 1 ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+
+  return `${outer} ${inner}`;
 }
 
-export function HomeOnboardingTooltips() {
+// ---------------------------------------------------------------------------
+// Arrow triangle component
+// ---------------------------------------------------------------------------
+
+const ARROW_SIZE = 8;
+
+function Arrow({ direction, color }: { direction: 'up' | 'down'; color: string }) {
+  if (direction === 'down') {
+    return (
+      <View
+        style={{
+          width: 0,
+          height: 0,
+          borderLeftWidth: ARROW_SIZE,
+          borderRightWidth: ARROW_SIZE,
+          borderTopWidth: ARROW_SIZE,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderTopColor: color,
+        }}
+      />
+    );
+  }
+  return (
+    <View
+      style={{
+        width: 0,
+        height: 0,
+        borderLeftWidth: ARROW_SIZE,
+        borderRightWidth: ARROW_SIZE,
+        borderBottomWidth: ARROW_SIZE,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderBottomColor: color,
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets }) {
   const { colors, isDark } = useTheme();
-  const { height: screenHeight } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+
+  // Measure the current step's target element
+  const step = TOOLTIP_STEPS[currentStep];
+
+  useEffect(() => {
+    if (hasSeenHomeTooltips || !isVisible) return;
+
+    const ref = targets[step.targetKey];
+    if (!ref?.current) return;
+
+    // Wait for layout to settle, then measure
+    const timer = setTimeout(() => {
+      ref.current?.measureInWindow((x, y, width, height) => {
+        if (width > 0 && height > 0) {
+          setTargetRect({ x, y, width, height });
+        }
+      });
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [currentStep, isVisible, hasSeenHomeTooltips, step.targetKey, targets]);
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
@@ -61,6 +171,7 @@ export function HomeOnboardingTooltips() {
   const handleNext = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentStep < TOOLTIP_STEPS.length - 1) {
+      setTargetRect(null); // Clear rect so it re-measures for next step
       setCurrentStep((prev) => prev + 1);
     } else {
       dismiss();
@@ -72,241 +183,257 @@ export function HomeOnboardingTooltips() {
     dismiss();
   }, [dismiss]);
 
-  // Don't render if already seen or dismissed
-  if (hasSeenHomeTooltips || !isVisible) {
-    return null;
+  // Don't render if already seen, dismissed, or target not measured yet
+  if (hasSeenHomeTooltips || !isVisible) return null;
+
+  const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
+  const tooltipBg = isDark ? colors.inputBackground : colors.background;
+  const tooltipBorder = colors.border;
+
+  // While waiting for measurement, show just the backdrop
+  if (!targetRect) {
+    return (
+      <Animated.View
+        entering={FadeIn.duration(300)}
+        style={styles.overlay}
+        pointerEvents="box-none"
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={[styles.backdrop, { backgroundColor: `rgba(0, 0, 0, ${BACKDROP_OPACITY})` }]}
+          onPress={handleOverlayPress}
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+        />
+      </Animated.View>
+    );
   }
 
-  const step = TOOLTIP_STEPS[currentStep];
-  const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
+  // Calculate tooltip position
+  const GAP = 12; // gap between spotlight edge and tooltip
+  const TOOLTIP_MARGIN_H = 24;
+  const spotlightBottom = targetRect.y + targetRect.height + SPOTLIGHT_PADDING;
+  const spotlightTop = targetRect.y - SPOTLIGHT_PADDING;
 
-  const getTooltipTopOffset = (): number => {
-    switch (step.tooltipPosition) {
-      case 'upper':
-        return screenHeight * 0.28;
-      case 'center':
-        return screenHeight * 0.38;
-    }
-  };
+  let tooltipTop: number;
+  let arrowDirection: 'up' | 'down';
 
-  const tooltipCardBg = colors.inputBackground;
-  const tooltipCardBorder = colors.border;
+  if (step.placement === 'below') {
+    tooltipTop = spotlightBottom + GAP;
+    arrowDirection = 'up';
+  } else {
+    // We'll calculate from the bottom of the tooltip, but we need to estimate height first
+    // Tooltip is roughly 80-100px tall. Place it above the spotlight.
+    tooltipTop = spotlightTop - GAP - 90;
+    arrowDirection = 'down';
+  }
+
+  // Arrow horizontal position — center it on the target
+  const arrowLeft = targetRect.x + targetRect.width / 2 - ARROW_SIZE;
+
+  // SVG mask path
+  const maskPath = buildMaskPath(screenW, screenH, targetRect);
 
   return (
     <Animated.View
-      entering={FadeIn.duration(400)}
-      exiting={FadeOut.duration(300)}
+      entering={FadeIn.duration(300)}
+      exiting={FadeOut.duration(200)}
       style={styles.overlay}
       pointerEvents="box-none"
     >
-      {/* Semi-transparent backdrop -- tap to dismiss */}
-      <TouchableOpacity activeOpacity={0.7}
-        style={styles.backdrop}
+      {/* SVG spotlight mask — dark everywhere except the target */}
+      <TouchableOpacity
+        activeOpacity={1}
         onPress={handleOverlayPress}
+        style={StyleSheet.absoluteFill}
         accessibilityRole="button"
-        accessibilityLabel="Skip onboarding tooltips"
-        accessibilityHint="Tap anywhere on the dark overlay to dismiss all tooltips"
-      />
+        accessibilityLabel="Skip onboarding"
+      >
+        <Svg width={screenW} height={screenH} style={StyleSheet.absoluteFill}>
+          <Path
+            d={maskPath}
+            fill={`rgba(0, 0, 0, ${BACKDROP_OPACITY})`}
+            fillRule="evenodd"
+          />
+        </Svg>
+      </TouchableOpacity>
+
+      {/* Arrow */}
+      <Animated.View
+        key={`arrow-${currentStep}`}
+        entering={FadeIn.duration(300).delay(150)}
+        exiting={FadeOut.duration(150)}
+        style={{
+          position: 'absolute',
+          top: arrowDirection === 'up' ? tooltipTop - ARROW_SIZE : undefined,
+          bottom: arrowDirection === 'down' ? screenH - tooltipTop - 90 - ARROW_SIZE : undefined,
+          left: arrowLeft,
+        }}
+        pointerEvents="none"
+      >
+        <Arrow direction={arrowDirection} color={tooltipBg} />
+      </Animated.View>
 
       {/* Tooltip card */}
       <Animated.View
         key={`tooltip-${currentStep}`}
-        entering={FadeInDown.duration(450).delay(100)}
-        exiting={FadeOutDown.duration(250)}
+        entering={FadeIn.duration(350).delay(100)}
+        exiting={FadeOut.duration(200)}
         style={[
           styles.tooltipCard,
           {
-            top: getTooltipTopOffset(),
-            backgroundColor: tooltipCardBg,
-            borderColor: tooltipCardBorder,
-            shadowColor: colors.accent,
+            top: tooltipTop,
+            left: TOOLTIP_MARGIN_H,
+            right: TOOLTIP_MARGIN_H,
+            backgroundColor: tooltipBg,
+            borderColor: tooltipBorder,
           },
         ]}
         pointerEvents="box-none"
       >
-        {/* Accent line at top */}
-        <View
-          style={{
-            width: 32,
-            height: 2,
-            backgroundColor: colors.accent,
-            borderRadius: 1,
-            alignSelf: 'center',
-            marginBottom: 20,
-          }}
-        />
-
-        {/* Icon */}
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
-            backgroundColor: isDark ? 'rgba(245, 240, 235, 0.06)' : 'rgba(28, 23, 16, 0.04)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            alignSelf: 'center',
-            marginBottom: 16,
-          }}
-        >
-          <StepIcon step={step.icon} color={colors.accent} size={24} />
-        </View>
-
-        {/* Title */}
+        {/* Title + message */}
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
-            fontSize: 17,
+            fontSize: 15,
             color: colors.text,
-            textAlign: 'center',
-            marginBottom: 8,
             letterSpacing: -0.2,
+            marginBottom: 4,
           }}
         >
           {step.title}
         </Text>
-
-        {/* Message */}
         <Text
           style={{
             fontFamily: FontFamily.ui,
-            fontSize: 15,
+            fontSize: 13,
             color: colors.textMuted,
-            textAlign: 'center',
-            lineHeight: 22,
-            marginBottom: 24,
-            paddingHorizontal: 8,
+            lineHeight: 18,
+            marginBottom: 14,
           }}
         >
           {step.message}
         </Text>
 
-        {/* Step indicator dots */}
-        <View style={styles.dotsRow}>
-          {TOOLTIP_STEPS.map((_, index) => (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                {
-                  backgroundColor:
-                    index === currentStep
-                      ? colors.accent
-                      : isDark
-                        ? 'rgba(245, 240, 235, 0.15)'
-                        : 'rgba(28, 23, 16, 0.12)',
-                  width: index === currentStep ? 18 : 6,
-                },
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Action button */}
-        <TouchableOpacity activeOpacity={0.7}
-          onPress={handleNext}
-          accessibilityRole="button"
-          accessibilityLabel={isLastStep ? 'Got it' : 'Next tooltip'}
-          accessibilityHint={
-            isLastStep
-              ? 'Dismiss the onboarding tooltips'
-              : `Go to tooltip ${currentStep + 2} of ${TOOLTIP_STEPS.length}`
-          }
-        >
-          <View
-            style={{
-              backgroundColor: colors.accent,
-              paddingVertical: 14,
-              borderRadius: 12,
-              alignItems: 'center',
-              marginTop: 16,
-            }}
-          >
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: 15,
-                color: colors.background,
-                letterSpacing: 0.3,
-              }}
-            >
-              {isLastStep ? 'Got it' : 'Next'}
-            </Text>
+        {/* Bottom row: dots + actions */}
+        <View style={styles.bottomRow}>
+          {/* Step dots */}
+          <View style={styles.dotsRow}>
+            {TOOLTIP_STEPS.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor:
+                      index === currentStep
+                        ? colors.accent
+                        : isDark
+                          ? 'rgba(245, 240, 235, 0.15)'
+                          : 'rgba(28, 23, 16, 0.10)',
+                    width: index === currentStep ? 14 : 5,
+                  },
+                ]}
+              />
+            ))}
           </View>
-        </TouchableOpacity>
 
-        {/* Skip hint */}
-        {!isLastStep && (
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={dismiss}
-            accessibilityRole="button"
-            accessibilityLabel="Skip all tooltips"
-            style={{ marginTop: 12, alignSelf: 'center' }}
-          >
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 13,
-                color: colors.textSubtle,
-              }}
+          {/* Actions */}
+          <View style={styles.actionsRow}>
+            {!isLastStep && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={dismiss}
+                accessibilityRole="button"
+                accessibilityLabel="Skip"
+                style={styles.skipButton}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 13,
+                    color: colors.textSubtle,
+                  }}
+                >
+                  Skip
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleNext}
+              accessibilityRole="button"
+              accessibilityLabel={isLastStep ? 'Got it' : 'Next'}
+              style={[styles.nextButton, { backgroundColor: colors.accent }]}
             >
-              Skip
-            </Text>
-          </TouchableOpacity>
-        )}
-      </Animated.View>
-
-      {/* Down arrow indicator pointing toward the spotlighted area */}
-      <Animated.View
-        key={`arrow-${currentStep}`}
-        entering={FadeIn.duration(600).delay(300)}
-        exiting={FadeOut.duration(200)}
-        style={{
-          position: 'absolute',
-          top: getTooltipTopOffset() - 36,
-          alignSelf: 'center',
-        }}
-        pointerEvents="none"
-      >
-        <ArrowDownIcon size={20} color={colors.accent} weight="light" />
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: 13,
+                  color: colors.background,
+                }}
+              >
+                {isLastStep ? 'Got it' : 'Next'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Animated.View>
     </Animated.View>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   tooltipCard: {
-    marginHorizontal: 28,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 20,
-    borderRadius: 20,
+    position: 'absolute',
+    borderRadius: 14,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 8 },
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
-    width: '85%',
-    maxWidth: 360,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   dotsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   dot: {
-    height: 6,
-    borderRadius: 3,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  skipButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  nextButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
 });

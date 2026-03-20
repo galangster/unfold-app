@@ -88,12 +88,19 @@ export async function postJsonWithBackendFallback(
       // If 401, the Firebase token may be stale — force refresh and retry once
       if (response.status === 401) {
         logger.warn(`[Devotional] 401 from ${backendUrl}; refreshing token and retrying`);
-        response = await fetch(`${backendUrl}${path}`, {
-          method: 'POST',
-          headers: await getAuthHeaders(true),
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
+        clearTimeout(timeoutId); // Clear the old timeout
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), timeoutMs);
+        try {
+          response = await fetch(`${backendUrl}${path}`, {
+            method: 'POST',
+            headers: await getAuthHeaders(true),
+            body: JSON.stringify(payload),
+            signal: retryController.signal,
+          });
+        } finally {
+          clearTimeout(retryTimeoutId);
+        }
       }
 
       // If this backend fails and we have a fallback endpoint, try it.
@@ -1311,9 +1318,15 @@ async function generateBatch(
     throw new Error('OUTPUT_TRUNCATED');
   }
 
+  // If the backend returned a top-level error field despite 200 OK, treat as error
+  if ('error' in data && data.error) {
+    logger.error('[Devotional] Backend returned 200 with error field:', data.error);
+    throw new Error(`Backend error: ${typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}`);
+  }
+
   const content = (data as { content?: { text?: string }[] }).content?.[0]?.text;
 
-  if (!content) {
+  if (typeof content !== 'string' || content.length === 0) {
     logger.error('[Devotional] No content in response. Data keys:', Object.keys(data));
     throw new Error('No content in response');
   }

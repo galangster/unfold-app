@@ -506,9 +506,15 @@ export async function generateProgressiveDay(
 
   inFlightDayRequests.set(key, promise);
   try {
-    return await promise;
-  } finally {
+    const result = await promise;
+    // Success — remove immediately so the next legitimate request can proceed
     inFlightDayRequests.delete(key);
+    return result;
+  } catch (error) {
+    // Keep the (now-rejected) promise in the map for a short cooldown period
+    // so rapid retries see the existing entry and don't re-execute immediately
+    setTimeout(() => inFlightDayRequests.delete(key), 5000);
+    throw error;
   }
 }
 

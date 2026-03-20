@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ThemeCategory, DevotionalType } from '../constants/devotional-types';
@@ -1585,210 +1586,236 @@ export const useUnfoldStore = create<UnfoldState>()(
 
         // Migration from version 1 to 2: Add review prompt fields
         if (version < 2) {
-          return {
-            ...state,
-            reviewPromptLastDate: null,
-            reviewPromptCount: 0,
-            hasReviewed: false,
-            reviewPromptDaysAtLast: 0,
-            streakLastReadDate: null,
-            streakCurrent: 0,
-            streakLongest: 0,
-            streakGraceDaysUsedThisWeek: 0,
-            streakWeekStart: null,
-          } as UnfoldState;
+          try {
+            (state as any).reviewPromptLastDate = (state as any).reviewPromptLastDate ?? null;
+            (state as any).reviewPromptCount = (state as any).reviewPromptCount ?? 0;
+            (state as any).hasReviewed = (state as any).hasReviewed ?? false;
+            (state as any).reviewPromptDaysAtLast = (state as any).reviewPromptDaysAtLast ?? 0;
+            (state as any).streakLastReadDate = (state as any).streakLastReadDate ?? null;
+            (state as any).streakCurrent = (state as any).streakCurrent ?? 0;
+            (state as any).streakLongest = (state as any).streakLongest ?? 0;
+            (state as any).streakGraceDaysUsedThisWeek = (state as any).streakGraceDaysUsedThisWeek ?? 0;
+            (state as any).streakWeekStart = (state as any).streakWeekStart ?? null;
+          } catch (err) {
+            console.error('[store] Migration v1→2 failed:', err);
+          }
         }
 
         // Migration from version 2 to 3: Add streak tracking fields
         if (version < 3) {
-          return {
-            ...state,
-            streakLastReadDate: null,
-            streakCurrent: 0,
-            streakLongest: 0,
-            streakGraceDaysUsedThisWeek: 0,
-            streakWeekStart: null,
-          } as UnfoldState;
+          try {
+            (state as any).streakLastReadDate = (state as any).streakLastReadDate ?? null;
+            (state as any).streakCurrent = (state as any).streakCurrent ?? 0;
+            (state as any).streakLongest = (state as any).streakLongest ?? 0;
+            (state as any).streakGraceDaysUsedThisWeek = (state as any).streakGraceDaysUsedThisWeek ?? 0;
+            (state as any).streakWeekStart = (state as any).streakWeekStart ?? null;
+          } catch (err) {
+            console.error('[store] Migration v2→3 failed:', err);
+          }
         }
 
         // Migration from version 3 to 4: Add streak freeze and weekend amnesty
         if (version < 4) {
-          return {
-            ...state,
-            streakWeekendAmnesty: true,
-            streakFreezes: 0,
-          } as UnfoldState;
+          try {
+            (state as any).streakWeekendAmnesty = (state as any).streakWeekendAmnesty ?? true;
+            (state as any).streakFreezes = (state as any).streakFreezes ?? 0;
+          } catch (err) {
+            console.error('[store] Migration v3→4 failed:', err);
+          }
         }
 
         // Migration from version 4 to 5: Add preferredVoice default to user
         if (version < 5) {
-          if (state.user && typeof state.user === 'object' && !state.user.preferredVoice) {
-            state.user.preferredVoice = '694f9389-aac1-45b6-b726-9d9369183238'; // Katie
+          try {
+            if (state.user && typeof state.user === 'object' && !state.user.preferredVoice) {
+              state.user.preferredVoice = '694f9389-aac1-45b6-b726-9d9369183238'; // Katie
+            }
+          } catch (err) {
+            console.error('[store] Migration v4→5 failed:', err);
           }
-          return state as UnfoldState;
         }
 
         // Migration from version 5 to 6: Add seriesPersonaHistory
         if (version < 6) {
-          return {
-            ...state,
-            seriesPersonaHistory: [],
-          } as UnfoldState;
+          try {
+            (state as any).seriesPersonaHistory = (state as any).seriesPersonaHistory ?? [];
+          } catch (err) {
+            console.error('[store] Migration v5→6 failed:', err);
+          }
         }
 
         // Migration from version 6 to 7: Add hasSeenHomeTooltips
         if (version < 7) {
-          return {
-            ...state,
-            hasSeenHomeTooltips: false,
-          } as UnfoldState;
+          try {
+            (state as any).hasSeenHomeTooltips = (state as any).hasSeenHomeTooltips ?? false;
+          } catch (err) {
+            console.error('[store] Migration v6→7 failed:', err);
+          }
         }
 
         // Migration from version 7 to 8: Add hasSeenFeatureOnboarding
         if (version < 8) {
-          return {
-            ...state,
-            hasSeenFeatureOnboarding: false,
-          } as UnfoldState;
+          try {
+            (state as any).hasSeenFeatureOnboarding = (state as any).hasSeenFeatureOnboarding ?? false;
+          } catch (err) {
+            console.error('[store] Migration v7→8 failed:', err);
+          }
         }
 
         // Migration from version 8 to 9: Add checkIns array
         if (version < 9) {
-          return {
-            ...state,
-            checkIns: [],
-          } as UnfoldState;
+          try {
+            (state as any).checkIns = (state as any).checkIns ?? [];
+          } catch (err) {
+            console.error('[store] Migration v8→9 failed:', err);
+          }
         }
 
         if (version < 10) {
-          return {
-            ...state,
-            hasSeenDay1Review: false,
-          } as UnfoldState;
+          try {
+            (state as any).hasSeenDay1Review = (state as any).hasSeenDay1Review ?? false;
+          } catch (err) {
+            console.error('[store] Migration v9→10 failed:', err);
+          }
         }
 
         // Migration from version 11 to 12: Add companion orb state
         if (version < 12) {
-          return {
-            ...state,
-            hasSeenCompanionIntro: false,
-            lastCompanionCheckInDate: null,
-          } as UnfoldState;
+          try {
+            (state as any).hasSeenCompanionIntro = (state as any).hasSeenCompanionIntro ?? false;
+            (state as any).lastCompanionCheckInDate = (state as any).lastCompanionCheckInDate ?? null;
+          } catch (err) {
+            console.error('[store] Migration v10→12 failed:', err);
+          }
         }
 
         if (version < 13) {
-          return {
-            ...state,
-            dismissedMiddayCardDate: null,
-            dismissedEveningCardDate: null,
-          } as UnfoldState;
+          try {
+            (state as any).dismissedMiddayCardDate = (state as any).dismissedMiddayCardDate ?? null;
+            (state as any).dismissedEveningCardDate = (state as any).dismissedEveningCardDate ?? null;
+          } catch (err) {
+            console.error('[store] Migration v12→13 failed:', err);
+          }
         }
 
         // Migration from version 13 to 14: Add premium nudge system
         if (version < 14) {
-          return {
-            ...state,
-            nudgeImpressions: [],
-            nudgeShownThisSession: false,
-            nudgeDismissals: [],
-            streakJustReset: false,
-            justCompletedSeriesTitle: null,
-            hasUsedAudio: false,
-          } as UnfoldState;
+          try {
+            (state as any).nudgeImpressions = (state as any).nudgeImpressions ?? [];
+            (state as any).nudgeShownThisSession = (state as any).nudgeShownThisSession ?? false;
+            (state as any).nudgeDismissals = (state as any).nudgeDismissals ?? [];
+            (state as any).streakJustReset = (state as any).streakJustReset ?? false;
+            (state as any).justCompletedSeriesTitle = (state as any).justCompletedSeriesTitle ?? null;
+            (state as any).hasUsedAudio = (state as any).hasUsedAudio ?? false;
+          } catch (err) {
+            console.error('[store] Migration v13→14 failed:', err);
+          }
         }
 
         // Migration from version 14 to 15: Add companion name and recent check-ins
         if (version < 15) {
-          return {
-            ...state,
-            companionName: null,
-            recentCompanionCheckIns: [],
-          } as UnfoldState;
+          try {
+            (state as any).companionName = (state as any).companionName ?? null;
+            (state as any).recentCompanionCheckIns = (state as any).recentCompanionCheckIns ?? [];
+          } catch (err) {
+            console.error('[store] Migration v14→15 failed:', err);
+          }
         }
 
         // Migration from version 15 to 16: Add progressive generation
         if (version < 16) {
-          const devos = (state as any).devotionals ?? [];
-          for (const d of devos) {
-            if (!d.generationMode) d.generationMode = 'batch';
-          }
-          return {
-            ...state,
-            devotionals: devos,
-            progressiveGeneration: {
+          try {
+            const devos = (state as any).devotionals ?? [];
+            for (const d of devos) {
+              if (!d) continue; // Skip null/undefined entries
+              if (!d.generationMode) d.generationMode = 'batch';
+            }
+            (state as any).devotionals = devos;
+            (state as any).progressiveGeneration = (state as any).progressiveGeneration ?? {
               devotionalId: null,
               currentDayGeneration: null,
               isArcGenerated: false,
-            },
-          } as UnfoldState;
+            };
+          } catch (err) {
+            console.error('[store] Migration v15→16 failed:', err);
+          }
         }
 
         // Migration from version 16 to 17: Add Bible Reader state
         if (version < 17) {
-          return {
-            ...state,
-            bibleHighlights: [],
-            bibleReadingHistory: [],
-            bibleReaderSettings: {
+          try {
+            (state as any).bibleHighlights = (state as any).bibleHighlights ?? [];
+            (state as any).bibleReadingHistory = (state as any).bibleReadingHistory ?? [];
+            (state as any).bibleReaderSettings = (state as any).bibleReaderSettings ?? {
               fontSize: 20,
               lineHeightMultiplier: 1.8,
               showVerseNumbers: true,
               paragraphMode: false,
               translation: 'BSB',
-            },
-          } as UnfoldState;
+            };
+          } catch (err) {
+            console.error('[store] Migration v16→17 failed:', err);
+          }
         }
 
         // Migration from version 17 to 18: Improve Bible Reader defaults
         if (version < 18) {
-          const settings = (state as any).bibleReaderSettings ?? {};
-          return {
-            ...state,
-            bibleReaderSettings: {
+          try {
+            const settings = (state as any).bibleReaderSettings ?? {};
+            (state as any).bibleReaderSettings = {
               ...settings,
               fontSize: 20,
               lineHeightMultiplier: 1.8,
-            },
-          } as UnfoldState;
+            };
+          } catch (err) {
+            console.error('[store] Migration v17→18 failed:', err);
+          }
         }
 
         // Migration from version 18 to 19: Add AI data consent flag
         if (version < 19) {
-          return {
-            ...state,
-            hasConsentedToAI: false,
-          } as UnfoldState;
+          try {
+            (state as any).hasConsentedToAI = (state as any).hasConsentedToAI ?? false;
+          } catch (err) {
+            console.error('[store] Migration v18→19 failed:', err);
+          }
         }
 
         // Migration from version 19 to 20: Add notebook notes
         if (version < 20) {
-          return {
-            ...state,
-            notes: [],
-          } as UnfoldState;
+          try {
+            (state as any).notes = (state as any).notes ?? [];
+          } catch (err) {
+            console.error('[store] Migration v19→20 failed:', err);
+          }
         }
 
         // Migration from version 20 to 21: Add notebook folders
         if (version < 21) {
-          return {
-            ...state,
-            folders: [],
-          } as UnfoldState;
+          try {
+            (state as any).folders = (state as any).folders ?? [];
+          } catch (err) {
+            console.error('[store] Migration v20→21 failed:', err);
+          }
         }
 
         // Migration from version 21 to 22: Add parentId to folders (subfolder support)
         if (version < 22) {
-          // Existing folders get parentId: undefined (top-level) — no data change needed
-          return state as UnfoldState;
+          try {
+            // Existing folders get parentId: undefined (top-level) — no data change needed
+          } catch (err) {
+            console.error('[store] Migration v21→22 failed:', err);
+          }
         }
 
         // Migration from version 22 to 23: Add check-in notification toggles
         if (version < 23) {
-          return {
-            ...state,
-            middayCheckInEnabled: true,
-            eveningWindDownEnabled: true,
-          } as UnfoldState;
+          try {
+            (state as any).middayCheckInEnabled = (state as any).middayCheckInEnabled ?? true;
+            (state as any).eveningWindDownEnabled = (state as any).eveningWindDownEnabled ?? true;
+          } catch (err) {
+            console.error('[store] Migration v22→23 failed:', err);
+          }
         }
 
         return state as UnfoldState;
@@ -1843,6 +1870,18 @@ export const useUnfoldStore = create<UnfoldState>()(
     }
   )
 );
+
+// Hydration tracking — components can check if persisted state has been loaded
+export const useHasHydrated = () => {
+  const [hasHydrated, setHasHydrated] = useState(useUnfoldStore.persist.hasHydrated());
+
+  useEffect(() => {
+    const unsub = useUnfoldStore.persist.onFinishHydration(() => setHasHydrated(true));
+    return () => unsub();
+  }, []);
+
+  return hasHydrated;
+};
 
 // Helper function to get the start of the current week (Sunday)
 function getWeekStart(date: Date): Date {
