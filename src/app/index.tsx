@@ -205,7 +205,7 @@ export default function WelcomeScreen() {
               letterSpacing: 0.3,
             }}
           >
-            Begin Your Journey
+            Begin Your Series
           </Text>
         </TouchableOpacity>
       </Animated.View>

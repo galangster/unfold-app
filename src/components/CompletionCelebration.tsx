@@ -357,7 +357,7 @@ export function CompletionCelebration({
 
   if (!visible) return null;
 
-  const title = type === 'series' ? 'Journey\nComplete' : 'Day\nComplete';
+  const title = type === 'series' ? 'Series\nComplete' : 'Day\nComplete';
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>

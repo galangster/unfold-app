@@ -665,7 +665,7 @@ export default function HomeScreen() {
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleCreateNew}
                 accessibilityRole="button"
-                accessibilityLabel="Begin your devotional journey"
+                accessibilityLabel="Begin your devotional series"
               >
                 <View
                   style={{
@@ -687,7 +687,7 @@ export default function HomeScreen() {
                       letterSpacing: 0.3,
                     }}
                   >
-                    Begin Your Journey
+                    Begin Your Series
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -736,9 +736,9 @@ export default function HomeScreen() {
   })();
 
   const getCtaText = () => {
-    if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
+    if (isFirstDay && streakCurrent === 0) return 'Begin Your Series';
     if (isFirstDay) return 'Build Your Rhythm';
-    if (isLastDay && !isJourneyComplete) return 'Finish Your Journey';
+    if (isLastDay && !isJourneyComplete) return 'Finish Your Series';
     if (streakCurrent >= 7) return 'Deepen Your Practice';
     if (streakCurrent >= 3) return 'Stay Rooted';
     if (streakCurrent >= 1) return 'Keep Going';
@@ -914,7 +914,7 @@ export default function HomeScreen() {
                   journeyCardScale.value = withTiming(1, { duration: 150 });
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Start a new journey"
+                accessibilityLabel="Start a new series"
                 style={{
                   borderRadius: 20,
                   overflow: 'hidden',
@@ -955,7 +955,7 @@ export default function HomeScreen() {
                       marginBottom: 8,
                     }}
                   >
-                    Start a New Journey
+                    Start a New Series
                   </Text>
 
                   <Text
@@ -969,7 +969,7 @@ export default function HomeScreen() {
                       paddingHorizontal: 8,
                     }}
                   >
-                    Continue your journey with a new{'\n'}personalized devotional series.
+                    Continue with a new{'\n'}personalized devotional series.
                   </Text>
 
                   <View
@@ -988,7 +988,7 @@ export default function HomeScreen() {
                         letterSpacing: 0.3,
                       }}
                     >
-                      Create Journey
+                      Create Series
                     </Text>
                   </View>
                 </View>
@@ -1267,7 +1267,7 @@ export default function HomeScreen() {
                   <TouchableOpacity activeOpacity={0.7}
                     onPress={handleCreateNew}
                     accessibilityRole="button"
-                    accessibilityLabel="Start a new journey"
+                    accessibilityLabel="Start a new series"
                     style={{
                       marginTop: 12,
                       opacity: 1,
@@ -1290,7 +1290,7 @@ export default function HomeScreen() {
                           color: colors.textSubtle,
                         }}
                       >
-                        New Journey
+                        New Series
                       </Text>
                     </View>
                   </TouchableOpacity>

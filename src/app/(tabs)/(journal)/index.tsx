@@ -1184,7 +1184,7 @@ export default function JournalHubScreen() {
                         marginBottom: 16,
                       }}
                     >
-                      YOUR JOURNEY
+                      YOUR SERIES
                     </Text>
                   )}
 

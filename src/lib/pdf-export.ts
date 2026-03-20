@@ -302,7 +302,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
   const moodSummaryHTML = moodCounts.size > 0
     ? `
       <div class="journey-mood-summary">
-        <h4>My Mood Journey</h4>
+        <h4>My Mood Over Time</h4>
         <div class="mood-grid">
           ${Array.from(moodCounts.entries())
             .sort((a, b) => b[1].count - a[1].count)
@@ -325,7 +325,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
     <div class="journey-page page-break">
       <div class="day-header">
         <span class="day-number">Summary</span>
-        <h2 class="day-title">My Journey</h2>
+        <h2 class="day-title">My Series</h2>
         <div class="title-rule"></div>
       </div>
 
@@ -340,7 +340,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
 
       <div class="section final-reflection">
         <h4>Final Reflection</h4>
-        <p class="reflection-prompt">As you look back on this journey, what has God revealed to you? What will you carry forward?</p>
+        <p class="reflection-prompt">As you look back on this series, what has God revealed to you? What will you carry forward?</p>
         <div class="writing-space writing-space-large">
           ${generateLinedSpace(12, accent)}
         </div>
@@ -1021,7 +1021,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         <div class="cover-content">
           <div class="cover-accent-line"></div>
           <h1>${devotional.title}</h1>
-          <p class="subtitle">A ${devotional.totalDays}-Day Devotional Journey</p>
+          <p class="subtitle">A ${devotional.totalDays}-Day Devotional Series</p>
           <div class="accent-divider"></div>
         </div>
         <div class="cover-bottom">

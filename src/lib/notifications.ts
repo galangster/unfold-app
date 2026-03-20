@@ -311,7 +311,7 @@ export async function sendDevotionalReadyNotification(title: string): Promise<bo
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Your devotional is ready',
-        body: `"${title}" has been created. Open Unfold to begin your journey.`,
+        body: `"${title}" has been created. Open Unfold to begin.`,
         sound: true,
       },
       trigger: null, // Send immediately

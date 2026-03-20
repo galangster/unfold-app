@@ -274,7 +274,7 @@ function computeArchetype(params: {
   return {
     archetype: 'beginner',
     name: 'The Beginner',
-    description: 'Every journey starts with showing up. And you did.',
+    description: 'Every story starts with showing up. And you did.',
   };
 }
 

@@ -56,7 +56,7 @@ export function syncWidgets(): void {
       streakLongest: state.streakLongest,
       hasReadToday,
       devotionalTitle: devotional?.title ?? 'Unfold',
-      dayTitle: currentDay?.title ?? 'Start your journey',
+      dayTitle: currentDay?.title ?? 'Start your series',
       dayNumber: devotional?.currentDay ?? 0,
       totalDays: devotional?.totalDays ?? 0,
       scriptureReference: currentDay?.scriptureReference ?? '',

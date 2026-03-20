@@ -704,7 +704,7 @@ function DaysCard({ data }: { data: RecapData }) {
               {data.totalSeries}
             </Text>
             <Text style={s.statLabel}>
-              {data.totalSeries === 1 ? 'journey' : 'journeys'}
+              {data.totalSeries === 1 ? 'series' : 'series'}
             </Text>
           </View>
           <View style={s.statDivider} />
@@ -1191,7 +1191,7 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
     ? 'You have built something rare — a rhythm of returning. Whatever comes next, you have the roots for it.'
     : data.totalDaysRead >= 7
       ? 'A week of showing up changes more than you think. The seeds are already taking root.'
-      : 'The journey has begun. The most important step is the next one.';
+      : 'It has begun. The most important step is the next one.';
 
   return (
     <View style={s.closingContainer}>

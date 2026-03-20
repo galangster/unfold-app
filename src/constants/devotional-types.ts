@@ -188,7 +188,7 @@ export interface DevotionalTypeInfo {
 export const DEVOTIONAL_TYPES: DevotionalTypeInfo[] = [
   {
     id: 'personal',
-    name: 'Personal Journey',
+    name: 'Personal Series',
     description: 'A devotional crafted around your story and what you\'re walking through',
     icon: 'User',
     minDays: 3,
@@ -215,8 +215,8 @@ export const DEVOTIONAL_TYPES: DevotionalTypeInfo[] = [
   },
   {
     id: 'psalm_journey',
-    name: 'Psalm Journey',
-    description: 'An immersive journey through the prayers and songs of the Psalms',
+    name: 'Psalm Series',
+    description: 'An immersive walk through the prayers and songs of the Psalms',
     icon: 'Music',
     minDays: 7,
     structureGuidance: 'Each day features a complete psalm or section. Let the emotional range of the Psalter guide the journey—lament, thanksgiving, trust, praise.',

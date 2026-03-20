@@ -215,10 +215,10 @@ function buildNudgePayload(type: NudgeType, ctx: NudgeContext): EligibleNudge {
         premiumFeature: 'audio',
       };
     case 'journey_completion': {
-      const seriesName = ctx.seriesJustCompleted ?? 'your journey';
+      const seriesName = ctx.seriesJustCompleted ?? 'your series';
       return {
         type: 'journey_completion',
-        message: `You finished ${seriesName}! Premium members can create unlimited journeys.`,
+        message: `You finished ${seriesName}! Premium members can create unlimited series.`,
         cta: 'Explore',
         premiumFeature: 'series',
       };

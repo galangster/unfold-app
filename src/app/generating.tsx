@@ -838,7 +838,7 @@ export default function GeneratingScreen() {
                   textTransform: 'uppercase',
                 }}
               >
-                Your {user?.devotionalLength}-day journey
+                Your {user?.devotionalLength}-day series
               </Text>
             </Animated.View>
 

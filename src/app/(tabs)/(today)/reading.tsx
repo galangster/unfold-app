@@ -615,7 +615,7 @@ export default function ReadingScreen() {
 
       // Announce completion to screen reader
       const announcement = completingLastDay
-        ? 'Congratulations! You have completed your devotional journey.'
+        ? 'Congratulations! You\'ve completed this devotional series.'
         : `Day ${viewingDay} completed. Great job!`;
       AccessibilityInfo.announceForAccessibility(announcement);
 
@@ -940,7 +940,7 @@ export default function ReadingScreen() {
   if (!currentDevotional) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>No journey found</Text>
+        <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>No series found</Text>
       </View>
     );
   }
@@ -1595,7 +1595,7 @@ export default function ReadingScreen() {
                         completeButtonScale.value = withSpring(1, { damping: 40, stiffness: 400 });
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Journey' : 'Complete Day')}
+                      accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Series' : 'Complete Day')}
                       style={{
                         paddingVertical: 18,
                         paddingHorizontal: 32,
@@ -1620,7 +1620,7 @@ export default function ReadingScreen() {
                         {isCompleted
                           ? 'Day Completed'
                           : isLastDay
-                            ? 'Complete Journey'
+                            ? 'Complete Series'
                             : 'Complete Day'}
                       </Text>
                     </TouchableOpacity>
@@ -1660,7 +1660,7 @@ export default function ReadingScreen() {
                           marginBottom: (isWaitingForConnection || autoRetrySecondsLeft !== null) ? 8 : 20,
                         }}
                       >
-                        Your journey has more days that haven't been written yet.
+                        Your series has more days that haven't been written yet.
                       </Text>
                       {isWaitingForConnection && !isGeneratingMore && (
                         <Text
@@ -1890,7 +1890,7 @@ export default function ReadingScreen() {
         <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
           <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: 20, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
             <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: 12, letterSpacing: -0.5 }}>
-              Your journey{'\n'}could continue
+              Your series{'\n'}could continue
             </Text>
             <View style={{ width: 32, height: 1.5, backgroundColor: colors.accent, marginBottom: 16, borderRadius: 1 }} />
             <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
@@ -1907,7 +1907,7 @@ export default function ReadingScreen() {
               style={{ backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12, opacity: isExtendingArc ? 0.7 : 1 }}
               disabled={isExtendingArc}
               accessibilityRole="button"
-              accessibilityLabel="Continue your journey"
+              accessibilityLabel="Continue your series"
               accessibilityState={{ disabled: isExtendingArc }}
             >
               {isExtendingArc ? (

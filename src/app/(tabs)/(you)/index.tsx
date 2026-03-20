@@ -63,8 +63,8 @@ export default function YouScreen() {
     },
     {
       icon: BookOpenIcon,
-      label: 'Past Journeys',
-      subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'journey' : 'journeys'}`,
+      label: 'Past Series',
+      subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'series' : 'series'}`,
       route: '/(tabs)/(you)/past-devotionals',
     },
     {
@@ -82,7 +82,7 @@ export default function YouScreen() {
     {
       icon: ChartBarIcon,
       label: 'Reading Stats',
-      subtitle: 'Your journey in numbers',
+      subtitle: 'Your progress',
       route: '/(tabs)/(you)/stats',
     },
     {
@@ -209,7 +209,7 @@ export default function YouScreen() {
                         lineHeight: 20,
                       }}
                     >
-                      Unlock unlimited journeys, themes, and more
+                      Unlock unlimited series, themes, and more
                     </Text>
                   </LinearGradient>
                 </View>
@@ -284,7 +284,7 @@ export default function YouScreen() {
                           lineHeight: 18,
                         }}
                       >
-                        See your journey in a whole new way
+                        See your progress in a whole new way
                       </Text>
                     </View>
                     <CaretRightIcon size={18} color="#C8A55C" weight="bold" />

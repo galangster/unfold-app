@@ -1632,7 +1632,7 @@ export async function generateDevotional(
       await incrementRateLimit('devotional');
 
       return {
-        title: seriesTitle || 'Your Devotional Journey',
+        title: seriesTitle || 'Your Devotional Series',
         days: allDays,
         resolvedPersona,
       };

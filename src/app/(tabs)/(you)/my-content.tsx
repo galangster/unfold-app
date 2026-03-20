@@ -254,7 +254,7 @@ export default function MyContentScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
                       <BookOpenIcon size={14} color={colors.accent} weight="light" />
                       <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
-                        {devotional?.title || 'Unknown Journey'}
+                        {devotional?.title || 'Untitled Series'}
                       </Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
                         · Day {entry.dayNumber}

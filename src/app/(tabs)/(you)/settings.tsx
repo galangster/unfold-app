@@ -2057,7 +2057,7 @@ export default function SettingsScreen() {
                       color: colors.text,
                     }}
                   >
-                    Faith Journey
+                    Faith Background
                   </Text>
                   <Text
                     style={{

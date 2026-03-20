@@ -105,7 +105,7 @@ export default function WelcomeCelebrationScreen() {
                   }}
                 >
                   <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#FFFFFF' }}>
-                    Begin Your Journey
+                    Begin Your Series
                   </Text>
                 </View>
             </TouchableOpacity>

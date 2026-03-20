@@ -26,7 +26,7 @@ export default function DayMenuScreen() {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>
-          Journey not found
+          Series not found
         </Text>
       </SafeAreaView>
     );

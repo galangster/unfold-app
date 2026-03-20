@@ -35,7 +35,7 @@ const StreakWidget = (props: WidgetBase<StreakWidgetProps>) => {
   const streak = props.streakCount ?? 0;
   const hasRead = props.hasReadToday ?? false;
   const longest = props.streakLongest ?? 0;
-  const title = props.devotionalTitle ?? 'Start your journey';
+  const title = props.devotionalTitle ?? 'Start your series';
   const day = props.dayNumber ?? 0;
   const total = props.totalDays ?? 0;
 

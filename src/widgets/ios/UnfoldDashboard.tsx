@@ -51,7 +51,7 @@ const DashboardWidget = (props: WidgetBase<DashboardWidgetProps>) => {
   const streak = props.streakCount ?? 0;
   const hasRead = props.hasReadToday ?? false;
   const seriesTitle = props.devotionalTitle ?? 'Unfold';
-  const dayTitle = props.dayTitle ?? 'Start your journey';
+  const dayTitle = props.dayTitle ?? 'Start your series';
   const day = props.dayNumber ?? 0;
   const total = props.totalDays ?? 0;
   const scripture = props.scriptureReference ?? '';

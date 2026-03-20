@@ -130,7 +130,7 @@ export default function HighlightsScreen() {
                     color: colors.text,
                   }}
                 >
-                  {devotional?.title || 'Unknown Journey'}
+                  {devotional?.title || 'Untitled Series'}
                 </Text>
               </View>
 

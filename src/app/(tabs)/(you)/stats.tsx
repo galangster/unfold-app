@@ -221,7 +221,7 @@ export default function StatsScreen() {
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
             <Text style={[statStyles.headerTitle, { color: colors.text }]}>
-              {selectedThemeName ? `${selectedThemeName} Journey` : 'Your Journey'}
+              {selectedThemeName ? `${selectedThemeName} Stats` : 'Your Stats'}
             </Text>
           </View>
 
@@ -297,7 +297,7 @@ export default function StatsScreen() {
               <StatCard
                 icon={<CrosshairIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.completedJourneys}
-                label={stats.completedJourneys === 1 ? 'Journey finished' : 'Journeys finished'}
+                label={stats.completedJourneys === 1 ? 'Series finished' : 'Series finished'}
                 colors={colors}
               />
             </Animated.View>
@@ -324,7 +324,7 @@ export default function StatsScreen() {
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJourneys}
-                label={stats.totalJourneys === 1 ? 'Journey started' : 'Journeys started'}
+                label={stats.totalJourneys === 1 ? 'Series started' : 'Series started'}
                 colors={colors}
               />
             </Animated.View>
@@ -366,7 +366,7 @@ export default function StatsScreen() {
             <View style={[statStyles.quoteBlock, { borderLeftColor: colors.accent }]}>
               <Text style={[statStyles.quoteText, { color: colors.textMuted }]}>
                 {stats.totalDaysCompleted === 0
-                  ? '"The journey of a thousand miles begins with a single step."'
+                  ? '"The path of a thousand miles begins with a single step."'
                   : stats.currentStreak >= 7
                     ? '"Blessed is the one who perseveres under trial."  — James 1:12'
                     : '"His mercies are new every morning."  — Lamentations 3:23'}

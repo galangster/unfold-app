@@ -326,7 +326,7 @@ export default function SignInScreen() {
           <View style={[styles.topLine, { backgroundColor: colors.accent }]} />
 
           <Text style={[styles.eyebrow, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
-            Keep your journey safe
+            Keep your progress safe
           </Text>
 
           <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
