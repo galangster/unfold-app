@@ -327,6 +327,11 @@ export default function HomeScreen() {
   // Refs for onboarding spotlight targets
   const journeyCardRef = useRef<View>(null);
   const streakBoxRef = useRef<View>(null);
+  const onboardingTargets = useMemo(
+    () => ({ reading: journeyCardRef, streak: streakBoxRef }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -1445,7 +1450,7 @@ export default function HomeScreen() {
       )}
 
       {/* First-time onboarding tooltips — shown once, persisted in store */}
-      <HomeOnboardingTooltips targets={{ reading: journeyCardRef, streak: streakBoxRef }} />
+      <HomeOnboardingTooltips targets={onboardingTargets} />
     </View>
   );
 }
