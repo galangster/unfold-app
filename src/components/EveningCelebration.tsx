@@ -57,7 +57,7 @@ const EVENING_MESSAGES = [
   'Lay it down. All of it.',
   'Breathe. You made it.',
   'God\u2019s got the night shift.',
-  'Your rest is earned.',
+  'Your rest is given, not earned.',
   'Still. Quiet. Held.',
   'Sleep knowing you are loved.',
   'The worries can wait till morning.',

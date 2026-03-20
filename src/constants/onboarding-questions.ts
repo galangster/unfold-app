@@ -24,7 +24,7 @@ export const ENTRY_QUESTIONS = {
   direct: [
     { question: "What's weighing on you?", subtext: "Heavy or light, visible or invisible." },
     { question: "What's been on your heart lately?", subtext: "Whatever comes to mind first." },
-    { question: "What are you walking through right now?", subtext: "A season, a challenge, a transition—whatever feels present." },
+    { question: "What are you walking through right now?", subtext: "A challenge, a change, a transition—whatever feels present." },
     { question: "What feels most pressing in your life right now?", subtext: "The thing that keeps tapping you on the shoulder." },
   ],
 };
@@ -93,16 +93,16 @@ export const LONGING_QUESTIONS = {
 // Dynamic subtexts for duration options
 export const DURATION_SUBTEXTS = {
   3: ["A sacred pause", "A brief retreat", "Just enough to begin", "A moment of reset", "A short pilgrimage", "Time to catch your breath", "A spiritual clearing", "Enough to plant a seed", "A window of stillness", "A gentle start"],
-  7: ["A week of presence", "Seven days of intention", "A rhythm of rest", "A meaningful stretch", "One complete cycle", "Room to settle in", "Time for transformation to begin", "A full week's journey", "Enough days to build momentum", "A contemplative week"],
-  14: ["A deeper dive", "Time to establish roots", "A fortnight of formation", "Space for real change", "A sustained practice", "Enough to form new patterns", "A meaningful commitment", "Time to go beneath the surface", "A journey with staying power", "Two weeks of intention"],
-  30: ["A month of transformation", "A season of growth", "Time to be remade", "Deep work, lasting change", "A true pilgrimage", "A month-long retreat", "Space for the soul to shift", "Thirty days of becoming", "A committed practice", "Real transformation takes time"],
+  7: ["A week of presence", "Seven days of intention", "A rhythm of rest", "A meaningful stretch", "One complete cycle", "Room to settle in", "Time for something to shift", "A full week of reading", "Enough days to build momentum", "A contemplative week"],
+  14: ["A deeper dive", "Time to establish roots", "A fortnight of formation", "Space for real change", "A sustained practice", "Enough to form new patterns", "A meaningful commitment", "Time to go beneath the surface", "Two weeks that stick with you", "Two weeks of intention"],
+  30: ["A month of formation", "Thirty days of depth", "Time to be remade", "Deep work, lasting change", "A true pilgrimage", "A month-long retreat", "Space for the soul to shift", "Thirty days of showing up", "A committed practice", "Real change takes time"],
 };
 
 // Dynamic subtexts for reading duration options
 export const READING_SUBTEXTS = {
   5: ["A quick breath", "Perfect for busy mornings", "A small pause that matters", "Brief but focused", "A pocket of peace", "Time for one deep thought"],
   15: ["A thoughtful pause", "Time to really settle in", "Long enough to matter", "A substantial moment", "Room for reflection", "Space to go deeper"],
-  30: ["A deep dive", "Time for the soul to unfold", "A contemplative practice", "Space for real stillness", "An unhurried journey", "Time to really listen"],
+  30: ["A deep dive", "Time for the soul to unfold", "A contemplative practice", "Space for real stillness", "An unhurried reading", "Time to really listen"],
 };
 
 // Helper functions

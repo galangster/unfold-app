@@ -104,7 +104,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
   useEffect(() => {
     if (isAnswered) {
       fillProgress.value = withTiming(1, { duration: 300 });
-      checkScale.value = withDelay(100, withSpring(1, { damping: 8, stiffness: 300, mass: 0.5 }));
+      checkScale.value = withDelay(100, withSpring(1, { damping: 25, stiffness: 300, mass: 0.5 }));
     } else {
       fillProgress.value = withTiming(0, { duration: 200 });
       checkScale.value = withTiming(0, { duration: 150 });

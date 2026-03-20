@@ -129,7 +129,6 @@ export default function ReadingScreen() {
   const params = useLocalSearchParams<{ dayNumber?: string }>();
   const { colors, isDark } = useTheme();
 
-  const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
   const advanceDay = useUnfoldStore((s) => s.advanceDay);
@@ -157,9 +156,8 @@ export default function ReadingScreen() {
   // Premium nudge system (audio teaser on reading screen)
   const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
 
-  const currentDevotional = useMemo(
-    () => devotionals.find((d) => d.id === currentDevotionalId),
-    [devotionals, currentDevotionalId]
+  const currentDevotional = useUnfoldStore(
+    (s) => s.devotionals.find((d) => d.id === currentDevotionalId)
   );
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
@@ -325,7 +323,7 @@ export default function ReadingScreen() {
   useEffect(() => {
     if (!isPremium || !currentDayData) return;
     const voiceId = user?.preferredVoice || getDefaultVoice();
-    const fullText = `${currentDayData.bodyText}\n\n${currentDayData.scriptureReference}: ${currentDayData.scriptureText}`;
+    const fullText = `${currentDayData.scriptureReference}.\n${currentDayData.scriptureText}\n\n${currentDayData.bodyText}`;
     prefetchDevotionalAudio(fullText, voiceId);
   }, [isPremium, currentDayData, user?.preferredVoice]);
 
@@ -667,7 +665,7 @@ export default function ReadingScreen() {
         });
 
         // Calculate total days completed across all devotionals
-        const totalDaysCompleted = devotionals.reduce((sum, d) =>
+        const totalDaysCompleted = useUnfoldStore.getState().devotionals.reduce((sum, d) =>
           sum + d.days.filter(day => day.isRead).length, 0
         );
 
@@ -692,7 +690,7 @@ export default function ReadingScreen() {
         }
       }
     }
-  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, devotionals, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   // Phase 5: Handle "Keep Going" from continuation prompt
   const handleContinueJourney = useCallback(async () => {
@@ -1590,11 +1588,11 @@ export default function ReadingScreen() {
                       onPress={!isCompleted ? handleComplete : undefined}
                       onPressIn={() => {
                         if (!isCompleted) {
-                          completeButtonScale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
+                          completeButtonScale.value = withSpring(0.96, { damping: 40, stiffness: 400 });
                         }
                       }}
                       onPressOut={() => {
-                        completeButtonScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                        completeButtonScale.value = withSpring(1, { damping: 40, stiffness: 400 });
                       }}
                       accessibilityRole="button"
                       accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Journey' : 'Complete Day')}

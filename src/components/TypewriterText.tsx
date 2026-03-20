@@ -57,7 +57,7 @@ const MagicalChar = React.memo(({
 
     // Scale spring
     scale.value = withSpring(1, {
-      damping: 14,
+      damping: 19,
       stiffness: 220,
       mass: 0.4,
     });

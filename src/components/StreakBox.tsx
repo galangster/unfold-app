@@ -15,12 +15,12 @@ import { useTheme } from '@/lib/theme';
 
 /** Returns motivational micro-copy based on streak length */
 function getStreakMotivation(streak: number): string {
-  if (streak === 0) return 'Start your journey today';
+  if (streak === 0) return 'Start today';
   if (streak <= 2) return "You're building momentum!";
   if (streak <= 6) return 'Keep going \u2014 a freeze awaits at day 7!';
-  if (streak <= 13) return 'Amazing week! Keep the light shining';
-  if (streak <= 29) return "Two weeks strong! You're glowing";
-  return `Incredible dedication! ${streak} days and counting`;
+  if (streak <= 13) return 'A full week. Keep the light shining';
+  if (streak <= 29) return `Two weeks strong! ${streak} days and counting`;
+  return `${streak} days and counting. That's serious`;
 }
 
 interface DayData {

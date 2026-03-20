@@ -363,13 +363,10 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
       };
     }, [player]);
 
-    // Auto-load for premium
+    // Auto-load audio (component only renders for premium users)
     useEffect(() => {
-      if (isPremium && !audioUrl && !hasError) {
+      if (!audioUrl && !hasError) {
         loadAndPlayAudio();
-      } else if (!isPremium) {
-        setHasError(true);
-        setErrorMessage('Audio playback is a premium feature. Upgrade to listen.');
       }
     }, []);
 
@@ -840,11 +837,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       <TouchableOpacity activeOpacity={0.7}
                         onPress={skipBack}
                         onPressIn={() => {
-                          skipBackScale.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                          skipBackScale.value = withSpring(0.85, { damping: 40, stiffness: 400 });
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         }}
                         onPressOut={() => {
-                          skipBackScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                          skipBackScale.value = withSpring(1, { damping: 40, stiffness: 400 });
                         }}
                         style={styles.skipButton}
                         disabled={isLoading || !isAudioReady}
@@ -879,11 +876,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       <TouchableOpacity activeOpacity={0.7}
                         onPress={togglePlayback}
                         onPressIn={() => {
-                          playButtonScale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
+                          playButtonScale.value = withSpring(0.9, { damping: 40, stiffness: 400 });
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         }}
                         onPressOut={() => {
-                          playButtonScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                          playButtonScale.value = withSpring(1, { damping: 40, stiffness: 400 });
                         }}
                         style={[
                           styles.playButton,
@@ -913,11 +910,11 @@ export const AudioPlayer = forwardRef<BottomSheet, AudioPlayerProps>(
                       <TouchableOpacity activeOpacity={0.7}
                         onPress={skipForward}
                         onPressIn={() => {
-                          skipForwardScale.value = withSpring(0.85, { damping: 15, stiffness: 400 });
+                          skipForwardScale.value = withSpring(0.85, { damping: 40, stiffness: 400 });
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         }}
                         onPressOut={() => {
-                          skipForwardScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+                          skipForwardScale.value = withSpring(1, { damping: 40, stiffness: 400 });
                         }}
                         style={styles.skipButton}
                         disabled={isLoading || !isAudioReady}

@@ -53,7 +53,7 @@ const FEATURES: Record<string, FeatureConfig> = {
   },
   series: {
     icon: BookOpenTextIcon,
-    headline: 'Your journey continues',
+    headline: 'Keep going deeper',
     description: 'Unlock unlimited devotional series, each one personalized to where you are right now.',
     cta: 'Try free for 7 days',
   },

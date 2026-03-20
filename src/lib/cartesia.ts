@@ -208,11 +208,11 @@ function hashKey(text: string, voiceId: string): string {
  */
 const inFlightRequests = new Map<string, Promise<TTSResult>>();
 
-const CHUNK_THRESHOLD = 800;
+const CHUNK_THRESHOLD = 1500;
 
 /**
  * Split text into chunks at paragraph or sentence boundaries.
- * Each chunk stays under ~800 chars so the proxy handles it in <15s.
+ * Each chunk stays under ~1500 chars to balance fewer requests vs proxy timeout.
  */
 function splitTextIntoChunks(text: string): string[] {
   const trimmed = text.trim();
@@ -349,14 +349,14 @@ async function downloadAudio(text: string, voiceId: string, cacheKey: string): P
       finalBytes = await fetchChunk(chunks[0], voiceId);
       logger.log(`[TTS] single chunk done — ${finalBytes.length} bytes, ${Date.now() - fetchStart}ms`);
     } else {
-      // Long text — sequential requests with brief delay to avoid rate limits
-      const chunkBytes: Uint8Array[] = [];
-      for (let i = 0; i < chunks.length; i++) {
-        if (i > 0) await new Promise(r => setTimeout(r, 300));
-        logger.log(`[TTS] chunk ${i + 1}/${chunks.length} fetching (${chunks[i].length} chars)...`);
-        chunkBytes.push(await fetchChunk(chunks[i], voiceId));
-        logger.log(`[TTS] chunk ${i + 1} done — ${Date.now() - fetchStart}ms`);
-      }
+      // Long text — parallel requests (Promise.all preserves order for concatenation)
+      logger.log(`[TTS] fetching ${chunks.length} chunks in parallel (${chunks.map(c => c.length).join(', ')} chars)...`);
+      const chunkBytes = await Promise.all(
+        chunks.map((chunk, i) => {
+          logger.log(`[TTS] chunk ${i + 1}/${chunks.length} starting (${chunk.length} chars)...`);
+          return fetchChunk(chunk, voiceId);
+        })
+      );
       logger.log(`[TTS] all ${chunkBytes.length} chunks done — ${Date.now() - fetchStart}ms`);
 
       // Concatenate: keep first chunk's ID3 header, strip from subsequent chunks

@@ -41,7 +41,7 @@ export const MIDDAY_MESSAGES: string[] = [
   "Hey — got 30 seconds?",
   "Quick internal weather report.",
   "How's the afternoon shaping up?",
-  "Your heart wants to say something.",
+  "Got something on your mind?",
   "Pause. Breathe. How are you?",
   "What's one thing you're feeling?",
   "Moment of honesty. How's today?",
@@ -65,9 +65,9 @@ export const MIDDAY_MESSAGES: string[] = [
   "Dropping a pin on your mood.",
   "Hey. No rush. How's it going?",
   "Life check-in time.",
-  "What's sitting with you today?",
-  "How's your internal weather?",
-  "A small pause for a big question.",
+  "What's on your mind today?",
+  "What's the honest read right now?",
+  "One question. Be honest.",
   "What's the honest answer today?",
   "Halfway through. How's it feel?",
   "Just want to know: how are you?",
@@ -78,7 +78,7 @@ export const MIDDAY_MESSAGES: string[] = [
   "What's today been like so far?",
   "Checking the temperature.",
   "Your afternoon moment.",
-  "How's it all sitting with you?",
+  "How's everything landing today?",
   "A small act of self-care starts here.",
   "What's one honest thing about today?",
   "Quick — what are you feeling?",
@@ -90,7 +90,7 @@ export const MIDDAY_MESSAGES: string[] = [
   "How's the middle of your day?",
   "Taking stock. How's it going?",
   "Your daily emotional check-in.",
-  "How's your bandwidth right now?",
+  "Running on fumes or full tank?",
   "What's the prevailing mood?",
   "Quick personal inventory.",
   "How are things — really?",
@@ -101,10 +101,10 @@ export const MIDDAY_MESSAGES: string[] = [
   "Name the feeling. No judgment.",
   "How's the day flowing?",
   "What's going on in there?",
-  "Midday mindfulness moment.",
+  "Stop scrolling. How are you?",
   "Somewhere between morning and night — how are you?",
   "Before you forget to ask yourself: how are you?",
-  "The day asked me to check on you.",
+  "Checking on you. How's it going?",
 ];
 
 export const EVENING_MESSAGES: string[] = [
@@ -131,7 +131,7 @@ export const EVENING_MESSAGES: string[] = [
   "Before tomorrow comes — be here now.",
   "Wind down. You've earned it.",
   "A soft landing for today.",
-  "The day gave a lot. Take something back.",
+  "Long day? God was in it with you.",
   "Your evening calm awaits.",
   "Let this moment be gentle.",
   "The world can wait. You rest first.",
@@ -143,13 +143,13 @@ export const EVENING_MESSAGES: string[] = [
   "Slow down. You're almost there.",
   "The evening hush is here.",
   "One sacred moment before sleep.",
-  "Today is releasing its grip.",
+  "You can put today down now.",
   "A twilight moment, just for you.",
   "Let go of what you're holding.",
-  "The night is wrapping you in peace.",
+  "He watches while you rest.",
   "Your evening exhale.",
   "Before the stars take over — one moment.",
-  "Rest is calling. Answer it.",
+  "You've done enough today. Rest.",
   "A gentle transition into night.",
   "The day's chapter is closing.",
   "Let this be your final good moment today.",
@@ -161,18 +161,18 @@ export const EVENING_MESSAGES: string[] = [
   "A quiet moment in the dark.",
   "Before dreams come — one more thing.",
   "Your pre-sleep sanctuary.",
-  "The day bows out. Rest takes over.",
+  "God's got the night shift. You rest.",
   "A whispered goodnight to your soul.",
   "Evening stillness awaits.",
   "Let the night hold what you can't.",
   "Your day's final breath.",
   "A warm close to everything.",
-  "The evening is whispering peace.",
+  "Close your eyes. He's close.",
   "Before you drift — one more moment.",
   "Your nightly wind-down.",
   "Ease into the night.",
   "A moment of peace before rest.",
-  "The day is releasing you.",
+  "Tomorrow is His problem, not yours.",
   "Your evening is sacred.",
   "Hush. The day is done.",
   "Let tonight be gentle.",
@@ -186,12 +186,12 @@ export const EVENING_MESSAGES: string[] = [
   "Wind down. Tomorrow will wait.",
   "A peaceful pause in the dark.",
   "Your evening heart check.",
-  "The night opens its arms.",
+  "Sleep is an act of trust.",
   "Let this moment be enough.",
   "A soft conclusion to your day.",
   "Your evening retreat is ready.",
   "Breathe in the night.",
-  "The day surrenders to rest.",
+  "Nothing left to prove today.",
   "One final sacred moment.",
   "Your nightly debrief with God.",
   "The evening star is out. Rest.",
@@ -200,11 +200,11 @@ export const EVENING_MESSAGES: string[] = [
   "Let peace write the last page.",
   "Evening has arrived. Be still.",
   "Before sleep: one more moment of grace.",
-  "The day made its noise. Now: silence.",
+  "Quiet now. You're safe.",
   "Your nighttime sanctuary opens.",
   "Rest is not earned. It's given.",
   "A lullaby for your thoughts.",
-  "The evening makes space for peace.",
+  "One last breath. Then rest.",
   "Your pre-sleep pause.",
   "Let the dark be comforting.",
   "One last breath before tomorrow.",
@@ -262,4 +262,83 @@ export function getMessageForToday(messages: string[]): string {
   const diff = now.getTime() - start.getTime();
   const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
   return messages[dayOfYear % messages.length];
+}
+
+// ============================================================================
+// Content-aware message templates
+// Interpolate devotional data for personalized check-in cards.
+// Falls back to generic pool when devotional data is unavailable.
+// ============================================================================
+
+interface DayContext {
+  title?: string;
+  scriptureReference?: string;
+  quotableLine?: string;
+  checkInQuestion?: string;
+}
+
+const MIDDAY_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
+  (ctx) => `Still thinking about "${ctx.title}"?`,
+  (ctx) => `How is "${ctx.title}" landing for you?`,
+  (ctx) => `That passage in ${ctx.scriptureReference} — how's it landing?`,
+  (ctx) => `How is ${ctx.scriptureReference} showing up in your afternoon?`,
+  (ctx) => `Anything from "${ctx.title}" worth revisiting?`,
+  (ctx) => `"${ctx.quotableLine}" — still resonating?`,
+  (ctx) => `One thought about ${ctx.scriptureReference} before the day moves on.`,
+  (ctx) => `How did "${ctx.title}" meet you today?`,
+];
+
+const EVENING_CONTENT_TEMPLATES: ((ctx: DayContext) => string)[] = [
+  (ctx) => `How did "${ctx.title}" shape your day?`,
+  (ctx) => `Before rest — one thought about "${ctx.title}."`,
+  (ctx) => `Winding down with ${ctx.scriptureReference} on your mind.`,
+  (ctx) => `How did ${ctx.scriptureReference} meet you today?`,
+  (ctx) => `"${ctx.quotableLine}" — how did that land?`,
+  (ctx) => `A quiet moment to reflect on "${ctx.title}."`,
+  (ctx) => `Looking back on ${ctx.scriptureReference} tonight.`,
+  (ctx) => `One last thought about "${ctx.title}" before sleep.`,
+];
+
+/**
+ * Content-aware midday message. Uses the AI-generated checkInQuestion if available,
+ * otherwise picks a template that references the devotional, falling back to generic.
+ */
+export function getContentAwareMiddayMessage(day?: DayContext | null): string {
+  if (!day) return getMessageForToday(MIDDAY_MESSAGES);
+
+  // Prefer the AI-generated check-in question (already content-specific)
+  if (day.checkInQuestion) return day.checkInQuestion;
+
+  // Filter templates to those whose required fields exist
+  const viable = MIDDAY_CONTENT_TEMPLATES.filter((tmpl) => {
+    const test = tmpl(day);
+    return !test.includes('undefined') && !test.includes('""');
+  });
+
+  if (viable.length === 0) return getMessageForToday(MIDDAY_MESSAGES);
+
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  return viable[dayOfYear % viable.length](day);
+}
+
+/**
+ * Content-aware evening message. References the devotional content,
+ * falling back to generic evening pool.
+ */
+export function getContentAwareEveningMessage(day?: DayContext | null): string {
+  if (!day) return getMessageForToday(EVENING_MESSAGES);
+
+  const viable = EVENING_CONTENT_TEMPLATES.filter((tmpl) => {
+    const test = tmpl(day);
+    return !test.includes('undefined') && !test.includes('""');
+  });
+
+  if (viable.length === 0) return getMessageForToday(EVENING_MESSAGES);
+
+  const dayOfYear = Math.floor(
+    (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  return viable[dayOfYear % viable.length](day);
 }

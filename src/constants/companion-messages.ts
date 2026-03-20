@@ -74,7 +74,7 @@ type ResponseKey = `${CompanionMoodLabel}_${CompanionContext}`;
 
 const COMPANION_RESPONSES: Record<ResponseKey, string> = {
   // Grateful
-  Grateful_has_active_series: "Love that. Gratitude hits different when you're in a rhythm.",
+  Grateful_has_active_series: "Love that. Gratitude runs deeper when you're in a rhythm.",
   Grateful_between_series: "Grateful even in the in-between — that's real growth.",
   Grateful_first_time: "Starting grateful? I love that energy.",
   Grateful_returning_after_gap: "Back and grateful — that's a great place to be.",
@@ -120,9 +120,9 @@ export function getCompanionResponse(
 
 // --- Suggestion pills ---
 export const COMPANION_SUGGESTIONS: Record<CompanionContext, string[]> = {
-  has_active_series: ['Sit with this', 'Continue reading'],
-  between_series: ['Start something new', 'Sit with this'],
-  first_time: ['Explore a topic', 'Sit with this'],
+  has_active_series: ['Stay here a while', 'Continue reading'],
+  between_series: ['Start something new', 'Stay here a while'],
+  first_time: ['Explore a topic', 'Stay here a while'],
   returning_after_gap: ['Pick up where I left off', 'Start fresh'],
 };
 
@@ -150,15 +150,15 @@ export const TOOLTIP_TRIGGERS: TooltipTrigger[] = [
     condition: 'first_open_afternoon',
     messages: ['Hey! How\'s your day going?', 'What\'s on your mind today?'],
     namedMessages: ['{name} here. How\'s today going?', 'Hey! What\'s on your mind?'],
-    themedMessages: ['How\'s your day? That {theme} passage was on my mind.', 'Afternoon check-in. Still sitting with that {theme} reading?'],
+    themedMessages: ['How\'s your day? That {theme} passage was on my mind.', 'Afternoon check-in. Still thinking about that {theme} reading?'],
     namedThemedMessages: ['{name} here. That {theme} reading was on my mind too.'],
   },
   {
     condition: 'first_open_evening',
     messages: ['Winding down? How was today?', 'Hey, how are you doing tonight?'],
     namedMessages: ['{name} here. How was today?', 'Evening! {name} checking in.'],
-    themedMessages: ['Winding down? How are you sitting with that {theme} series?', 'Evening. That {theme} reading hit different today.'],
-    namedThemedMessages: ['{name} here. How are you sitting with that {theme} series?'],
+    themedMessages: ['Winding down? How did that {theme} series land today?', 'Evening. That {theme} reading stayed with me today.'],
+    namedThemedMessages: ['{name} here. How did that {theme} series land today?'],
   },
   {
     condition: 'after_reading',

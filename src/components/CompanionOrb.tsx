@@ -235,8 +235,8 @@ export function CompanionOrb({
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     tapPulse.value = withSequence(
-      withSpring(1, { damping: 12, stiffness: 500 }),
-      withSpring(0, { damping: 15, stiffness: 300 }),
+      withSpring(1, { damping: 45, stiffness: 500 }),
+      withSpring(0, { damping: 35, stiffness: 300 }),
     );
     onPress?.();
   };

@@ -125,13 +125,13 @@ export function AudioWaveform({
           staggerDelay,
           withRepeat(
             withSequence(
-              withSpring(maxHeight, { 
-                damping: 12 + Math.random() * 6, 
+              withSpring(maxHeight, {
+                damping: 30 + Math.random() * 6,
                 stiffness: 120 + Math.random() * 60,
                 mass: 0.8 + Math.random() * 0.4,
               }),
-              withSpring(minHeight, { 
-                damping: 14 + Math.random() * 6, 
+              withSpring(minHeight, {
+                damping: 26 + Math.random() * 6,
                 stiffness: 100 + Math.random() * 40,
                 mass: 0.8 + Math.random() * 0.4,
               })

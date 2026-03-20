@@ -21,7 +21,7 @@ type TabBarProps = {
   navigation: { emit: (event: any) => any; navigate: (...args: any[]) => void };
 };
 
-const SPRING_CONFIG = { damping: 15, stiffness: 200, mass: 0.6 };
+const SPRING_CONFIG = { damping: 22, stiffness: 200, mass: 0.6 };
 
 /** Animated wrapper for each tab icon -- handles scale spring + dot indicator */
 function AnimatedTabIcon({

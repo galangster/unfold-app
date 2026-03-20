@@ -42,7 +42,7 @@ import { logBugEvent } from '@/lib/bug-logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
-import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
+import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 
@@ -424,8 +424,8 @@ export default function HomeScreen() {
       .finally(() => setIsPreparingCurrentDay(false));
   }, [currentDevotional]);
 
-  const middayMessage = useMemo(() => getMessageForToday(MIDDAY_MESSAGES), []);
-  const eveningMessage = useMemo(() => getMessageForToday(EVENING_MESSAGES), []);
+  // Content-aware messages are computed after currentDayData is available (line ~698)
+  // See middayMessage / eveningMessage below
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
@@ -701,6 +701,21 @@ export default function HomeScreen() {
   const daysCompleted = currentDevotional.days.filter(d => d.isRead).length;
   const progressPercent = (daysCompleted / currentDevotional.totalDays) * 100;
   const currentDayData = currentDevotional.days.find(d => d.dayNumber === currentDevotional.currentDay);
+
+  // Content-aware check-in messages — reference today's devotional when available
+  const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
+    title: currentDayData.title,
+    scriptureReference: currentDayData.scriptureReference,
+    quotableLine: currentDayData.quotableLine,
+    checkInQuestion: currentDayData.checkInQuestion,
+  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, currentDayData?.checkInQuestion]);
+
+  const eveningMessage = useMemo(() => getContentAwareEveningMessage(currentDayData ? {
+    title: currentDayData.title,
+    scriptureReference: currentDayData.scriptureReference,
+    quotableLine: currentDayData.quotableLine,
+  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine]);
+
   const isJourneyComplete = daysCompleted === currentDevotional.totalDays;
   const isFirstDay = currentDevotional.currentDay === 1 && daysCompleted === 0;
   const isLastDay = currentDevotional.currentDay === currentDevotional.totalDays;
