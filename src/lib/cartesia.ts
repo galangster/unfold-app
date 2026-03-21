@@ -6,10 +6,10 @@
 import { File, Paths } from 'expo-file-system';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
-import { getAuthHeaders } from '@/lib/api-config';
+import { getAuthHeaders, RAILWAY_BACKEND_URL } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
-const TTS_PROXY_URL = 'https://tts-proxy-five.vercel.app/api/tts';
+const TTS_PROXY_URL = `${RAILWAY_BACKEND_URL}/api/tts`;
 
 // Voice options for Unfold - ALL PREMIUM
 export const CARTESIA_VOICES = [
@@ -274,7 +274,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
 /**
  * Fetch a single small chunk from the TTS proxy.
  * Requests base64 JSON format to avoid binary response handling issues in RN/Hermes.
- * Each chunk is short enough to complete well within Vercel's 60s limit.
+ * Each chunk is short enough to complete quickly via the Railway backend proxy.
  */
 async function fetchChunk(text: string, voiceId: string): Promise<Uint8Array> {
   try {
