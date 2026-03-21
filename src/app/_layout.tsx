@@ -37,7 +37,7 @@ Sentry.init({
   // Attach screenshots and view hierarchy on crash
   attachScreenshot: true,
   attachViewHierarchy: true,
-  sendDefaultPii: true,
+  sendDefaultPii: false,
   enableCaptureFailedRequests: true,
   maxBreadcrumbs: 100,
 
@@ -51,6 +51,15 @@ Sentry.init({
   // Session Replay — capture 10% of sessions, 100% on error
   replaysSessionSampleRate: __DEV__ ? 0 : 0.1,
   replaysOnErrorSampleRate: 1.0,
+
+  // Defense-in-depth: strip any PII that leaks through
+  beforeSend(event) {
+    if (event.user) {
+      delete event.user.email;
+      delete event.user.username;
+    }
+    return event;
+  },
 });
 
 export const unstable_settings = {
@@ -98,7 +107,7 @@ function RootLayoutNav() {
   // Set Sentry user context when auth state changes
   useEffect(() => {
     if (userId) {
-      Sentry.setUser({ id: userId, email: email ?? undefined });
+      Sentry.setUser({ id: userId });
       Sentry.setTag('auth_provider', authProvider ?? 'none');
       Sentry.setTag('is_premium', String(isPremium));
     } else {

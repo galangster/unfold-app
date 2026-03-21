@@ -13,6 +13,7 @@
 import { logBugError, logBugEvent } from './bug-logger';
 import { logger as appLogger } from './logger';
 import { reportError } from './report-error';
+import { sanitizeForPrompt } from '@/lib/api-config';
 import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-service';
 import {
   postJsonWithBackendFallback,
@@ -108,11 +109,11 @@ export async function generateSeriesArc(
   const userPrompt = `Create a ${totalDays}-day devotional series arc.
 
 READER CONTEXT:
-Name: ${context.name}
-About them: ${context.aboutMe}
-Walking through: ${context.currentSituation}
-Feeling: ${context.emotionalState}
-Seeking: ${context.spiritualSeeking}
+Name: ${sanitizeForPrompt(context.name, 50)}
+About them: ${sanitizeForPrompt(context.aboutMe, 300)}
+Walking through: ${sanitizeForPrompt(context.currentSituation, 300)}
+Feeling: ${sanitizeForPrompt(context.emotionalState, 200)}
+Seeking: ${sanitizeForPrompt(context.spiritualSeeking, 200)}
 Faith background: ${context.writingStyle?.faithBackground ?? 'growing'}
 Depth preference: ${context.writingStyle?.depth ?? 'balanced'}
 ${context.themeCategory ? `Theme focus: ${context.themeCategory}` : ''}
@@ -771,11 +772,11 @@ function buildProgressiveUserPrompt(
 
   // Section 1: Reader context (from onboarding)
   sections.push(`=== READER CONTEXT ===
-Name: ${context.name}
-About: ${context.aboutMe}
-Walking through: ${context.currentSituation}
-Feeling: ${context.emotionalState}
-Seeking: ${context.spiritualSeeking}
+Name: ${sanitizeForPrompt(context.name, 50)}
+About: ${sanitizeForPrompt(context.aboutMe, 300)}
+Walking through: ${sanitizeForPrompt(context.currentSituation, 300)}
+Feeling: ${sanitizeForPrompt(context.emotionalState, 200)}
+Seeking: ${sanitizeForPrompt(context.spiritualSeeking, 200)}
 Faith background: ${context.writingStyle?.faithBackground ?? 'growing'}
 Bible translation: ${context.bibleTranslation}`);
 

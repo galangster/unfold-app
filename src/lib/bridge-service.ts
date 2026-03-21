@@ -240,8 +240,8 @@ function buildBridgeUserMessage(input: BridgeInput): string {
     parts.push(`\nTheir current situation: ${sanitizeForPrompt(input.currentSituation, 500)}`);
   }
 
-  parts.push(`\nToday's devotional theme: ${input.todayTheme}`);
-  parts.push(`Today's scripture: ${input.todayScripture}`);
+  parts.push(`\nToday's devotional theme: ${sanitizeForPrompt(input.todayTheme, 200)}`);
+  parts.push(`Today's scripture: ${sanitizeForPrompt(input.todayScripture, 200)}`);
 
   parts.push(`\nWrite the bridge.`);
 

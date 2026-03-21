@@ -47,7 +47,7 @@ import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-servi
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
 
 // Centralized backend config + auth headers
-import { getBackendCandidates, getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import { getBackendCandidates, getAuthHeaders, PRIMARY_BACKEND_URL, sanitizeForPrompt } from '@/lib/api-config';
 
 interface BackendPostOptions {
   timeoutMs?: number;
@@ -1373,16 +1373,6 @@ async function generateBatch(
   return parsed;
 }
 
-// Helper to sanitize user input to avoid content filter triggers
-function sanitizeForGeneration(text: string, maxLength: number = 300): string {
-  // Trim and limit length
-  let sanitized = text.trim();
-  if (sanitized.length > maxLength) {
-    sanitized = sanitized.substring(0, maxLength).trim() + '...';
-  }
-  return sanitized;
-}
-
 // Helper to check if an error is a network/connectivity error
 function isNetworkError(error: Error): boolean {
   const msg = error.message.toLowerCase();
@@ -1413,10 +1403,11 @@ async function generateBatchWithRetry(
       // On first attempt, pre-sanitize context to reasonable lengths
       const contextToUse = {
         ...context,
-        aboutMe: sanitizeForGeneration(context.aboutMe, 300),
-        currentSituation: sanitizeForGeneration(context.currentSituation, 300),
-        emotionalState: sanitizeForGeneration(context.emotionalState, 200),
-        spiritualSeeking: sanitizeForGeneration(context.spiritualSeeking, 200),
+        name: sanitizeForPrompt(context.name, 50),
+        aboutMe: sanitizeForPrompt(context.aboutMe, 300),
+        currentSituation: sanitizeForPrompt(context.currentSituation, 300),
+        emotionalState: sanitizeForPrompt(context.emotionalState, 200),
+        spiritualSeeking: sanitizeForPrompt(context.spiritualSeeking, 200),
       };
 
       // retryLevel controls both system prompt and user prompt complexity
@@ -1510,10 +1501,10 @@ function buildFullGenerationRequestKey(context: GenerationContext): string {
     context.themeCategory ?? 'none',
     context.devotionalType ?? 'personal',
     context.studySubject ?? 'none',
-    sanitizeForGeneration(context.aboutMe, 120),
-    sanitizeForGeneration(context.currentSituation, 120),
-    sanitizeForGeneration(context.emotionalState, 120),
-    sanitizeForGeneration(context.spiritualSeeking, 120),
+    sanitizeForPrompt(context.aboutMe, 120),
+    sanitizeForPrompt(context.currentSituation, 120),
+    sanitizeForPrompt(context.emotionalState, 120),
+    sanitizeForPrompt(context.spiritualSeeking, 120),
   ].join('|');
 }
 

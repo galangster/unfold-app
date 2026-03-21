@@ -69,11 +69,20 @@ export async function getAuthHeaders(forceRefresh = false): Promise<Record<strin
 export function sanitizeForPrompt(text: string, maxLength = 2000): string {
   let cleaned = text.slice(0, maxLength);
 
+  // Normalize Unicode to catch homoglyph bypass attacks (Cyrillic 'о' → Latin 'o', etc.)
+  // Wrapped in try-catch: Hermes may not support String.prototype.normalize()
+  try { cleaned = cleaned.normalize('NFKC'); } catch {};
+
   // Remove code fence markers that could break prompt structure
   cleaned = cleaned.replace(/```/g, '');
 
   // Remove XML/HTML-like tags that could interfere with prompt delimiters
   cleaned = cleaned.replace(/<\/?(?:system|user|assistant|prompt|instruction)[^>]*>/gi, '');
+
+  // Remove LLM prompt delimiters used by various models
+  cleaned = cleaned.replace(/\[(?:SYSTEM|INST|\/INST|SYS|\/SYS)\]/gi, '');
+  cleaned = cleaned.replace(/<<\/?SYS>>/gi, '');
+  cleaned = cleaned.replace(/<\|(?:im_start|im_end|system|user|assistant)\|>/gi, '');
 
   // Remove "ignore previous instructions" patterns
   cleaned = cleaned.replace(

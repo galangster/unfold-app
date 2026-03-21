@@ -638,6 +638,8 @@ export default function HomeScreen() {
   if (!currentDevotional) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* Ambient embers for cinematic feel */}
+        <GoldEmberField density="low" active style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
             {/* Character-by-character "Unfold" reveal */}
@@ -665,7 +667,7 @@ export default function HomeScreen() {
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleCreateNew}
                 accessibilityRole="button"
-                accessibilityLabel="Begin your devotional series"
+                accessibilityLabel="Begin your first devotional"
               >
                 <View
                   style={{
@@ -687,7 +689,7 @@ export default function HomeScreen() {
                       letterSpacing: 0.3,
                     }}
                   >
-                    Begin Your Series
+                    Begin Your First Devotional
                   </Text>
                 </View>
               </TouchableOpacity>
