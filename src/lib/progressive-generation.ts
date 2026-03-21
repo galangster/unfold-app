@@ -787,9 +787,12 @@ ${memory.narrative.narrative}`);
   }
 
   // Section 3: Summarized history (Layer 2)
+  // When a narrative exists it already covers older history, so only include
+  // the 5 most recent summaries to avoid prompt bloat at high day counts.
   if (memory.summaries.length > 0) {
-    const summaryBlock = memory.summaries
-      .sort((a, b) => b.startDay - a.startDay)
+    const sorted = memory.summaries.sort((a, b) => b.startDay - a.startDay);
+    const capped = memory.narrative ? sorted.slice(0, 5) : sorted;
+    const summaryBlock = capped
       .map((s) => `${s.dayRange}: ${s.summary}`)
       .join('\n\n');
     sections.push(`=== SUMMARIZED HISTORY ===
@@ -802,7 +805,6 @@ ${summaryBlock}`);
       .sort((a, b) => b.dayNumber - a.dayNumber)
       .map((d) => {
         const lines = [`Day ${d.dayNumber} — "${d.devotionalTitle}" (${d.scriptureReference})`];
-        if (d.readAt) lines.push(`  Read: ${new Date(d.readAt).toLocaleDateString()}`);
         if (d.journalContent) lines.push(`  Journal: ${d.journalContent.slice(0, 500)}`);
         if (d.soapResponses) {
           if (d.soapResponses.observation) lines.push(`  SOAP Observation: ${d.soapResponses.observation.slice(0, 300)}`);
