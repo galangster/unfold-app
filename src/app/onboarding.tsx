@@ -825,6 +825,27 @@ export default function OnboardingScreen() {
       signInPromptCount: (existingUser?.signInPromptCount ?? 0) + 1,
     };
 
+    // Create Firebase anonymous user so backend API calls work
+    try {
+      const result = await signInAnonymously();
+      if (result.success && result.user) {
+        skipData.authUserId = result.user.uid;
+        skipData.authProvider = 'anonymous';
+        Analytics.setUserId(result.user.uid);
+        Analytics.setUserProperty('auth_provider', 'anonymous');
+        logger.log('[Onboarding] Created anonymous Firebase user', { userId: result.user.uid });
+      } else {
+        // Firebase anonymous auth failed — proceed with local-only mode
+        skipData.authUserId = `local-${Date.now()}`;
+        skipData.authProvider = 'anonymous';
+        logger.warn('[Onboarding] Firebase anonymous auth failed, continuing locally', { error: result.error });
+      }
+    } catch (error) {
+      skipData.authUserId = `local-${Date.now()}`;
+      skipData.authProvider = 'anonymous';
+      logger.warn('[Onboarding] Anonymous auth exception, continuing locally', { error });
+    }
+
     // Store in ref so completeOnboarding can pick it up (updateUser is no-op when user is null)
     pendingAuthDataRef.current = skipData;
     updateUser(skipData);
@@ -1802,7 +1823,7 @@ export default function OnboardingScreen() {
         {
           icon: <SparkleIcon size={22} color={colors.accent} weight="light" />,
           title: 'AI-Generated Content',
-          description: 'Behind every reading: 32 study methods, rich theological frameworks, and 7 carefully crafted writing personas. AI weaves it all together with your story to create devotionals no one else will ever read.',
+          description: 'AI weaves 32 study methods, theological frameworks, and your story together to create devotionals no one else will ever read.',
         },
         {
           icon: <SpeakerHighIcon size={22} color={colors.accent} weight="light" />,
@@ -1817,13 +1838,13 @@ export default function OnboardingScreen() {
       ];
 
       return (
-        <View style={{ gap: 20, marginTop: 8 }}>
+        <View style={{ gap: 14, marginTop: 0 }}>
           {/* Shield icon header */}
           <Animated.View
             entering={FadeIn.delay(200).duration(600)}
-            style={{ alignItems: 'center', marginBottom: 4 }}
+            style={{ alignItems: 'center' }}
           >
-            <ShieldCheckIcon size={40} color={colors.accent} weight="light" />
+            <ShieldCheckIcon size={32} color={colors.accent} weight="light" />
           </Animated.View>
 
           {/* Disclosure cards */}
@@ -1833,12 +1854,12 @@ export default function OnboardingScreen() {
               entering={FadeIn.delay(400 + index * 150).duration(500)}
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
-                padding: 18,
+                borderRadius: 14,
+                padding: 14,
                 borderWidth: 1,
                 borderColor: colors.border,
                 flexDirection: 'row',
-                gap: 14,
+                gap: 12,
               }}
             >
               <View style={{ marginTop: 2 }}>
@@ -1847,17 +1868,17 @@ export default function OnboardingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={{
                   fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 15,
+                  fontSize: 14,
                   color: colors.text,
-                  marginBottom: 4,
+                  marginBottom: 3,
                 }}>
                   {item.title}
                 </Text>
                 <Text style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 13,
+                  fontSize: 12.5,
                   color: colors.textMuted,
-                  lineHeight: 19,
+                  lineHeight: 18,
                 }}>
                   {item.description}
                 </Text>
@@ -1870,11 +1891,10 @@ export default function OnboardingScreen() {
             entering={FadeIn.delay(900).duration(500)}
             style={{
               fontFamily: FontFamily.ui,
-              fontSize: 13,
+              fontSize: 12.5,
               color: colors.textSubtle,
               textAlign: 'center',
-              lineHeight: 19,
-              marginTop: 4,
+              lineHeight: 18,
               paddingHorizontal: 8,
             }}
           >

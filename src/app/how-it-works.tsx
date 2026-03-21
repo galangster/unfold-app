@@ -49,7 +49,7 @@ const PAGES: Page[] = [
     type: 'feature',
     card: {
       headline: 'Written for you',
-      body: 'Every word shaped by your story, your struggles, where you are right now. No one in the world will have the same devotionals as you.',
+      body: 'Every word shaped by your story, your struggles, where you are right now. No one in the world will have the same experience as you.',
       animation: 'pencil',
     },
   },

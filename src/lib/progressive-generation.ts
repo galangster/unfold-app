@@ -156,6 +156,9 @@ JSON SCHEMA:
   );
 
   if (!response.ok) {
+    let body = '';
+    try { body = await response.text(); } catch { /* ignore */ }
+    logger.error(`[ProgressiveGen] Arc generation HTTP ${response.status}: ${body.slice(0, 200)}`);
     throw new Error(`Arc generation failed: ${response.status}`);
   }
 
