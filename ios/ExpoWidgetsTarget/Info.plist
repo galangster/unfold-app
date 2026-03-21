@@ -11,5 +11,7 @@
 	</dict>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<key>CFBundleDisplayName</key>
+	<string>Unfold Widgets</string>
 </dict>
 </plist>
