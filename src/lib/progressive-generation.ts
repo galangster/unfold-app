@@ -609,7 +609,7 @@ async function _generateProgressiveDayInternal(
     voiceOverlay,
     voiceAdaptation,
     STICKY_SENTENCE_INSTRUCTION,
-  ].join('');
+  ].filter(Boolean).join('');
 
   // Build the progressive user prompt
   let userPrompt = buildProgressiveUserPrompt(
@@ -628,7 +628,7 @@ async function _generateProgressiveDayInternal(
       : 2000;
   const maxTokens = Math.max(tokensPerDay + 2000, 6000);
 
-  logger.log(`Generating day ${dayNumber}, maxTokens=${maxTokens}`);
+  logger.log(`Generating day ${dayNumber}, maxTokens=${maxTokens}, systemPrompt=${systemPrompt.length}chars, userPrompt=${userPrompt.length}chars`);
 
   const { response } = await postJsonWithBackendFallback(
     '/api/generate/devotional',
@@ -642,6 +642,9 @@ async function _generateProgressiveDayInternal(
   );
 
   if (!response.ok) {
+    let body = '';
+    try { body = await response.text(); } catch { /* ignore */ }
+    logger.error(`Day ${dayNumber} generation HTTP ${response.status}: ${body.slice(0, 200)}`);
     throw new Error(`Day ${dayNumber} generation failed: ${response.status}`);
   }
 
