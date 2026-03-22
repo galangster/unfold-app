@@ -339,10 +339,13 @@ export async function fetchCommentary(input: CommentaryInput): Promise<string | 
     }
 
     const data = await response.json();
-    const commentary = data.commentary;
+    // Backend returns Anthropic-format: { content: [{ type: "text", text: "..." }], ... }
+    const commentary = data.commentary
+      ?? data.content?.[0]?.text
+      ?? (typeof data.text === 'string' ? data.text : null);
 
     if (!commentary || typeof commentary !== 'string') {
-      logger.warn('[BibleAPI] Invalid commentary response');
+      logger.warn('[BibleAPI] Invalid commentary response:', JSON.stringify(data).slice(0, 200));
       return null;
     }
 
