@@ -738,7 +738,7 @@ export default function HomeScreen() {
   })();
 
   const getCtaText = () => {
-    if (isFirstDay && streakCurrent === 0) return 'Begin Your Series';
+    if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
     if (isFirstDay) return 'Build Your Rhythm';
     if (isLastDay && !isJourneyComplete) return 'Finish Your Series';
     if (streakCurrent >= 7) return 'Deepen Your Practice';

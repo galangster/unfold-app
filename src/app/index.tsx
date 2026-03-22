@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -91,6 +91,8 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
 
+  const iconOpacity = useSharedValue(0);
+  const iconScale = useSharedValue(0.92);
   const subtitleOpacity = useSharedValue(0);
   const buttonOpacity = useSharedValue(0);
   const buttonTranslateY = useSharedValue(16);
@@ -125,6 +127,16 @@ export default function WelcomeScreen() {
       return;
     }
 
+    // Icon fades in first, before title chars
+    iconOpacity.value = withDelay(
+      100,
+      withTiming(1, { duration: 800, easing: EASE })
+    );
+    iconScale.value = withDelay(
+      100,
+      withTiming(1, { duration: 800, easing: EASE })
+    );
+
     // Subtitle fade in after title finishes
     subtitleOpacity.value = withDelay(
       titleEndTime,
@@ -142,6 +154,11 @@ export default function WelcomeScreen() {
     );
   }, [user, titleEndTime]);
 
+  const iconStyle = useAnimatedStyle(() => ({
+    opacity: iconOpacity.value,
+    transform: [{ scale: iconScale.value }],
+  }));
+
   const subtitleStyle = useAnimatedStyle(() => ({
     opacity: subtitleOpacity.value,
   }));
@@ -154,6 +171,15 @@ export default function WelcomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+        {/* Icon — fades in before title */}
+        <Animated.View style={[{ marginBottom: 28 }, iconStyle]}>
+          <Image
+            source={require('../../assets/icon-paywall.png')}
+            style={{ width: 56, height: 56 }}
+            resizeMode="contain"
+          />
+        </Animated.View>
+
         {/* Title — each character pre-rendered, fades in shuffled order */}
         <View style={{ flexDirection: 'row', marginBottom: 20 }}>
           {titleChars.map((char, i) => (
@@ -205,7 +231,7 @@ export default function WelcomeScreen() {
               letterSpacing: 0.3,
             }}
           >
-            Begin Your Series
+            Begin Your Journey
           </Text>
         </TouchableOpacity>
       </Animated.View>
