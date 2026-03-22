@@ -18,7 +18,19 @@ export type PersonaTrait =
   | 'urgent'
   | 'confessional'
   | 'practical'
-  | 'liturgical';
+  | 'liturgical'
+  | 'apophatic'
+  | 'monastic'
+  | 'prophetic_lament'
+  | 'doxological'
+  | 'socratic'
+  | 'midwife'
+  | 'iconoclast'
+  | 'elder'
+  | 'pilgrim'
+  | 'artisan'
+  | 'comic'
+  | 'intercessor';
 
 export type StructuralElement =
   | 'opening'
@@ -65,7 +77,22 @@ export type HookStyle =
   | 'science_wonder'
   | 'invocation'
   | 'lyric_fragment'
-  | 'textual';
+  | 'textual'
+  | 'definition_subversion'
+  | 'future_memory'
+  | 'imperative_sentence'
+  | 'found_artifact'
+  | 'census_opening'
+  | 'aphorism_twist'
+  | 'weather_report'
+  | 'second_person_scene'
+  | 'negation_opening'
+  | 'translation_note'
+  | 'prayer_overheard'
+  | 'geographic_pin'
+  | 'interrupted_sentence'
+  | 'synesthesia_opening'
+  | 'one_word_opening';
 
 export type TransitionStyle =
   | 'gradual'
@@ -97,7 +124,17 @@ export type TransitionStyle =
   | 'scenic_cut'
   | 'tension_build'
   | 'release'
-  | 'telescoping';
+  | 'telescoping'
+  | 'associative_leap'
+  | 'white_space'
+  | 'refrain_return'
+  | 'concentric_rings'
+  | 'antiphonal'
+  | 'volta'
+  | 'excavation'
+  | 'braided'
+  | 'staircase'
+  | 'door_opening';
 
 export type ClosingStyle =
   | 'question'
@@ -129,7 +166,17 @@ export type ClosingStyle =
   | 'companionship'
   | 'confession_close'
   | 'charge'
-  | 'rest';
+  | 'rest'
+  | 'echo_close'
+  | 'breath_prayer'
+  | 'micro_action'
+  | 'antiphon'
+  | 'open_door'
+  | 'tombstone_test'
+  | 'collect_close'
+  | 'doxological_turn'
+  | 'selah'
+  | 'lyric_fragment_close';
 
 // ==========================================
 // PERSONA TRAITS (Ingredients, not recipes)
@@ -319,6 +366,150 @@ export const PERSONA_TRAITS: Record<PersonaTrait, {
       'Use structured repetition — anaphora, litany, refrain. The rhythm carries the reader when understanding falters.',
       'Weave the church calendar into the devotional — Advent waiting, Lenten stripping, Easter joy, Ordinary Time faithfulness.',
       'Close with a collect-style prayer: address God, name one attribute, make one request, state the hoped-for result.',
+    ],
+  },
+
+  apophatic: {
+    voice: 'austere, unflinching, comfortable-with-darkness',
+    sentenceStyle: 'Stripped. Spare. Sentences that approach by retreating — "God is not... God is not..." Until the not-knowing becomes its own revelation.',
+    keyPhrases: ['God is not...', 'In the unknowing...', 'What if the darkness is not absence but...', 'Release your grip on certainty.'],
+    systemPromptAdditions: [
+      'Describe God primarily by what God is NOT. Dismantle comfortable images of the divine. The reader should feel their theology get spacious, not threatened.',
+      'Embrace mystery as a destination, not a waypoint. The reader does not pass through unknowing to arrive at knowing — the unknowing IS the arrival.',
+      'Use language of subtraction: stripping, emptying, letting go, unlearning. The soul gets lighter, not heavier.',
+      'Close with silence or a single image — never a resolution. The apophatic tradition trusts that God fills the spaces we evacuate.',
+    ],
+  },
+
+  monastic: {
+    voice: 'measured, rhythmic, formation-through-repetition',
+    sentenceStyle: 'Like a bell struck at intervals. Steady. Unhurried. Each sentence at walking pace, as if the reader is processing between tolls.',
+    keyPhrases: ['Return to the practice...', 'Again. And again...', 'The rule is simple...', 'In the daily-ness...'],
+    systemPromptAdditions: [
+      'Write from the rhythm of a structured life — bells, hours, seasons. Every truth has a corresponding practice. Formation happens through repetition, not inspiration.',
+      'The mundane IS the spiritual. Washing dishes, making the bed, showing up again — these are not interruptions to the spiritual life but its native language.',
+      'Include one concrete practice per devotional rooted in monastic tradition — a fixed-hour pause, a manual task done prayerfully, a deliberate silence.',
+      'Close with return — the reader is not sent out on a quest but invited back to the ordinary, now seen differently.',
+    ],
+  },
+
+  prophetic_lament: {
+    voice: 'grief-soaked, refusing-premature-consolation, the-wound-as-offering',
+    sentenceStyle: 'Fragmented. Repetitive. "How long, O Lord? How long?" The repetition is not weakness — it is the prayer.',
+    keyPhrases: ['How long...', 'I will not pretend this is okay...', 'The tears are not weakness...', 'Sit here. Do not rush past this.'],
+    systemPromptAdditions: [
+      'Write from inside the grief, not above it. Refuse premature consolation. If the reader is hurting, honor it with more than a pivot to "but God."',
+      'Use the Psalms of Lament as structural blueprint: name the pain, cry out to God, remember past faithfulness, choose trust anyway — but the trust is hard-won, not easy.',
+      'Repetition is a tool, not a flaw. "How long?" said three times carries more weight than a paragraph of theology.',
+      'Close with honest trust — not "everything is fine" but "I will trust anyway, and it costs me."',
+    ],
+  },
+
+  doxological: {
+    voice: 'overflow, cannot-stop-praising, relentlessly-amazed',
+    sentenceStyle: 'Sentences that spiral upward. Exclamatory without exclamation marks. The wonder is structural, not decorative.',
+    keyPhrases: ['And still He...', 'Look at this...', 'Do you see what He has done?', 'Glory upon glory...'],
+    systemPromptAdditions: [
+      'Write from overflow — the writer cannot stop praising. Every observation becomes worship. The delight is genuine, not performed.',
+      'Ground the praise in specific, concrete observations — not vague "God is good" but "God put 400 billion stars in our galaxy alone and then stooped to count the hairs on your head."',
+      'Build: start with a small observation, escalate to cosmic wonder, then land on the intimately personal. The movement is always toward the reader\'s specific life.',
+      'Close with doxology that IS the argument — the praise is not an appendix but the conclusion.',
+    ],
+  },
+
+  socratic: {
+    voice: 'questioning, never-telling, the-midwife-of-insight',
+    sentenceStyle: 'Almost entirely questions. Each deeper than the last. The reader teaches themselves. The writer merely arranges the sequence.',
+    keyPhrases: ['But is that true?', 'And if so — what then?', 'What would change if...', 'When did you first...'],
+    systemPromptAdditions: [
+      'Teach by asking, never telling. Every paragraph ends with a question that goes deeper than the last. The reader should feel like THEY discovered the truth.',
+      'Use Jesus\' questioning method from the Gospels — counter-questions that reframe the original question entirely. The reader asks about fairness; you ask about mercy.',
+      'Build question chains: 4-7 questions that escalate logically. Each follows from the previous. The final question should feel like a revelation.',
+      'Close with the most uncomfortable question — the one the reader will carry into the shower, into the commute, into the quiet of next Tuesday.',
+    ],
+  },
+
+  midwife: {
+    voice: 'observational, supportive, never-prescriptive',
+    sentenceStyle: 'Gentle, present-tense observations. "I notice..." "Something is shifting..." The writer describes what they see happening in the reader.',
+    keyPhrases: ['I see something stirring in you...', 'You already know the answer...', 'Something is being born...', 'Trust what\'s emerging.'],
+    systemPromptAdditions: [
+      'The writer is not the expert but the companion. They don\'t have the answers — they help the reader deliver their own. Presence, not prescription.',
+      'Use observational language: "I notice..." "It seems like..." "Something is happening here that you might not have named yet."',
+      'Honor the reader\'s own wisdom. The Holy Spirit is the teacher; the writer merely creates space for the conversation already happening inside the reader.',
+      'Close with permission and blessing — "You have what you need. You can trust what is emerging."',
+    ],
+  },
+
+  iconoclast: {
+    voice: 'precise, clich\u00e9-smashing, scalpel-not-hammer',
+    sentenceStyle: 'Short, shocking sentences. Then one that reconstructs. The demolition is always followed by an offer.',
+    keyPhrases: ['That\'s not what that verse means...', 'Stop...', 'The comfortable version of this is a lie...', 'Here\'s what\'s actually happening.'],
+    systemPromptAdditions: [
+      'Smash religious clich\u00e9s with precision, not anger. "Your quiet time isn\'t working. Not because you\'re doing it wrong. Because it was never supposed to be quiet."',
+      'Target the comfortable theology — the version of faith that asks nothing and costs nothing. But always offer something better in its place.',
+      'Use Flannery O\'Connor\'s method: make the familiar strange so the reader can see it clearly for the first time.',
+      'Close with reconstruction — after demolishing the comfortable lie, offer the harder, truer, more beautiful reality.',
+    ],
+  },
+
+  elder: {
+    voice: 'experiential-authority, simple-declaration, earned-wisdom',
+    sentenceStyle: 'Simple, declarative, warm. Short sentences that carry decades of weight. "Child, let me tell you something."',
+    keyPhrases: ['Listen to me...', 'I\'ve been where you are...', 'Let me tell you what I know...', 'You\'re going to make it.'],
+    systemPromptAdditions: [
+      'Authority comes from experience, not education. "I\'ve been where you are and I\'m still here" carries more weight than any commentary.',
+      'Use the language of a grandparent — "child," "baby," "my dear" — without condescension. The relationship earns the tenderness.',
+      'Include one sentence that could only come from someone who has lived a long time: a hard truth softened by survival.',
+      'Close with declaration — not argument, not persuasion. Just the settled certainty of someone who has been through the fire and found God there.',
+    ],
+  },
+
+  pilgrim: {
+    voice: 'fellow-traveler, discovering-alongside, beautifully-unfinished',
+    sentenceStyle: 'Journal-like. Observational. "I don\'t know where this road goes. But I noticed something on the way."',
+    keyPhrases: ['I\'m still figuring this out...', 'I noticed something today...', 'The road is teaching me...', 'We\'re in this together.'],
+    systemPromptAdditions: [
+      'Write as a fellow traveler, not a guide. Discover truth alongside the reader. The journey IS the teaching. Never arrive too neatly.',
+      'Use the language of walking, roads, landscapes, weather. The physical journey is the spiritual metaphor. Let them overlap.',
+      'Include one moment of genuine surprise — something the writer discovered while writing, not before. Spontaneous theology.',
+      'Close with companionship — "I\'m still walking. You\'re still walking. That\'s enough for today."',
+    ],
+  },
+
+  artisan: {
+    voice: 'precise, hands-on, the-craft-is-the-theology',
+    sentenceStyle: 'Concrete nouns. Active verbs. No abstractions. "The wood splits cleanly only when you follow the grain."',
+    keyPhrases: ['Here\'s how it works...', 'Watch closely...', 'The material teaches you...', 'You learn this with your hands.'],
+    systemPromptAdditions: [
+      'Write with the precision of someone who works with their hands. Every word is chosen the way a carpenter chooses a joint.',
+      'Ground every spiritual truth in a physical process — woodworking, gardening, cooking, building. The craft IS the theology.',
+      'Use material language: grain, weight, heat, tension, join, shape. The reader should feel like they\'re in a workshop, not a classroom.',
+      'Close with the work — send the reader to their hands, not their heads. "Now go make something."',
+    ],
+  },
+
+  comic: {
+    voice: 'self-deprecating, observational, the-laugh-opens-the-door',
+    sentenceStyle: 'Setup, setup, punchline — then the theological gut-punch while they\'re still laughing.',
+    keyPhrases: ['I\'m not great at this, but...', 'Here\'s what nobody tells you...', 'If I\'m being honest, which I rarely am...', 'This is the part where I pretend I have it together.'],
+    systemPromptAdditions: [
+      'Humor is the setup; theology is the punchline. The laugh cracks open a door the reader didn\'t know was closed.',
+      'Self-deprecation earns the right to speak truth. "I tried to have a spiritual experience at the retreat but my roommate snored like a diesel engine."',
+      'The humor must be specific — not generic observations but precise, relatable moments. The reader should think "that\'s me."',
+      'Close with the turn — the laugh dissolves into something true and tender. The reader goes from smiling to still.',
+    ],
+  },
+
+  intercessor: {
+    voice: 'urgent-intimacy, praying-in-real-time, the-devotional-is-the-prayer',
+    sentenceStyle: 'Direct address to God with the reader overhearing. "I am praying this over you right now."',
+    keyPhrases: ['I am lifting you up right now...', 'Father, this reader...', 'The Spirit is pressing your name into my chest...', 'This prayer has your name on it.'],
+    systemPromptAdditions: [
+      'Write as someone who is praying FOR the reader in real time. The devotional IS the prayer, not a lesson followed by a prayer.',
+      'Address God directly while the reader overhears — the power comes from being included in someone else\'s intercession.',
+      'Include specific, pointed prayers: not "bless them" but "meet them in the 3 a.m. fear. Stand between them and the lie that says they\'re alone."',
+      'Close with commissioning: "I have prayed this. Now carry it. The prayer walks with you today."',
     ],
   },
 };
@@ -545,6 +736,69 @@ export const STRUCTURAL_TEMPLATES: StructuralTemplate[] = [
     description: 'Designed for night: reviews the day with gentleness, releases what was left undone, receives peace for sleep.',
     elements: ['reflection', 'scripture_block', 'confession', 'contemplation', 'blessing'],
     idealFor: ['evening_readings', 'winding_down'],
+  },
+  {
+    id: 'lowry_loop',
+    name: 'Lowry Loop',
+    description: 'Narrative sermon: upset equilibrium, analyze discrepancy, disclose the clue, experience the gospel, anticipate consequences.',
+    elements: ['opening', 'reflection', 'scripture_block', 'application', 'invitation'],
+    idealFor: ['disruptive_days', 'paradigm_shifts'],
+  },
+  {
+    id: 'four_pages',
+    name: 'Four Pages',
+    description: 'Wilson framework: trouble in the text, trouble in our world, grace in the text, grace in our world. Grace gets the last word.',
+    elements: ['scripture_block', 'reflection', 'scripture_block', 'application', 'blessing'],
+    idealFor: ['balanced_days', 'grace_emphasis'],
+  },
+  {
+    id: 'chiastic',
+    name: 'Chiastic Ring',
+    description: 'A-B-C-B\'-A\' structure. The center is the theological hinge; the ending mirrors the beginning from a transformed perspective.',
+    elements: ['opening', 'reflection', 'scripture_block', 'reflection', 'opening'],
+    idealFor: ['literary_days', 'transformation_arcs'],
+  },
+  {
+    id: 'brueggemann_arc',
+    name: 'Brueggemann Arc',
+    description: 'Three-phase psalmic movement: orientation (settled faith) \u2192 disorientation (crisis) \u2192 new orientation (deeper faith through suffering).',
+    elements: ['opening', 'confession', 'scripture_block', 'reflection', 'blessing'],
+    idealFor: ['suffering_days', 'crisis_faith'],
+  },
+  {
+    id: 'mystagogical',
+    name: 'Mystagogical',
+    description: 'Post-experience reflection: the reader has already had the experience, and the devotional unpacks what just happened to them.',
+    elements: ['reflection', 'scripture_block', 'contemplation', 'application', 'prayer'],
+    idealFor: ['after_events', 'processing_days'],
+  },
+  {
+    id: 'diatribe',
+    name: 'Pauline Diatribe',
+    description: 'The writer argues with an imaginary opponent \u2014 raising objections and answering them. The devotional IS the argument.',
+    elements: ['opening', 'scripture_block', 'reflection', 'challenge', 'invitation'],
+    idealFor: ['doubt_days', 'apologetics_moments'],
+  },
+  {
+    id: 'wisdom_collection',
+    name: 'Wisdom Collection',
+    description: 'Multiple short, independent insights on a single theme \u2014 proverb-style constellation. The reader finds the one that lands.',
+    elements: ['scripture_block', 'reflection', 'reflection', 'reflection', 'blessing'],
+    idealFor: ['proverb_days', 'wisdom_literature'],
+  },
+  {
+    id: 'catena',
+    name: 'Scripture Chain',
+    description: 'A chain of passages connected by a theme \u2014 the texts interpret each other with minimal commentary. The Bible preaches itself.',
+    elements: ['scripture_block', 'scripture_block', 'scripture_block', 'contemplation', 'prayer'],
+    idealFor: ['scripture_rich_days', 'thematic_studies'],
+  },
+  {
+    id: 'hermit_crab',
+    name: 'Hermit Crab',
+    description: 'The devotional adopts the form of something else \u2014 a recipe, a medical chart, a real estate listing, a flight safety card.',
+    elements: ['story', 'scripture_block', 'reflection', 'application', 'blessing'],
+    idealFor: ['creative_days', 'surprise_moments'],
   },
 ];
 
@@ -792,6 +1046,126 @@ export const HOOK_LIBRARY: Record<HookStyle, string[]> = {
     'This verse has been on a thousand coffee mugs. Today we\'re reading what it actually says.',
     'Before this became an Instagram caption, it was a revolutionary act of defiance against an empire.',
   ],
+
+  definition_subversion: [
+    'Webster defines "faith" as "belief without proof." Webster has never waited for a biopsy.',
+    'The dictionary says "grace" is "unmerited favor." Clinically accurate. Spiritually bankrupt.',
+    'Merriam-Webster: "hope — to cherish a desire with anticipation." That\'s not hope. That\'s a wish list.',
+    'The textbook calls it "forgiveness." The woman who did it called it "the hardest thing I\'ve ever chosen to repeat."',
+    '"Peace: a state of tranquility." Tell that to Jesus in Gethsemane. His peace looked like blood sweat.',
+  ],
+
+  future_memory: [
+    'Years from now, you\'ll remember this season. Not the anxiety. The thing you almost missed because of it.',
+    'The person you\'ll be in five years is watching this moment. They\'re not disappointed. They\'re tender.',
+    'One day you\'ll tell someone about this exact struggle, and it will be the reason they don\'t quit.',
+    'Future you is already grateful for something happening right now that present you can\'t see yet.',
+    'This chapter has a title. You just can\'t read it from inside the page.',
+  ],
+
+  imperative_sentence: [
+    'Stop reading your Bible like it\'s a self-help book.',
+    'Put down the performance. Nobody asked for it.',
+    'Tell the truth. Just once today. To one person. Starting with yourself.',
+    'Stop apologizing for needing God. That\'s literally the point.',
+    'Quit waiting until you feel spiritual enough to pray. Pray from the mess.',
+  ],
+
+  found_artifact: [
+    'On the wall of a concentration camp, someone scratched: "I believe in the sun even when it is not shining."',
+    'Found in the margin of a Bible donated to Goodwill, in pencil: "God, if you\'re real, this is your last chance."',
+    'A prayer card left in a library book, dated 1987: "Lord, help me love the person I married instead of the person I imagined."',
+    'Written on a napkin at a hospital cafeteria: "Day 47. Still here. That counts for something."',
+    'Scratched into a church pew in fading ink: "He showed up." No date. No name.',
+  ],
+
+  census_opening: [
+    'There are 31,102 verses in the Bible. You have memorized maybe twelve. One of the twelve is about to save you.',
+    'The average person spends 11 hours a day consuming media and 7 minutes in prayer. Seven.',
+    'You will make roughly 35,000 decisions today. Most of them on autopilot. One of them matters more than you think.',
+    'Eighty percent of New Year\'s resolutions fail by February. Spiritual ones aren\'t different. Let\'s talk about why.',
+    'There are 8 billion people on Earth. You are reading this. That\'s not statistics. That\'s providence.',
+  ],
+
+  aphorism_twist: [
+    'They say God helps those who help themselves. That\'s not in the Bible. The Bible says God helps those who can\'t.',
+    '"Everything happens for a reason." Actually, some things happen for no reason. And God shows up anyway.',
+    'They say time heals all wounds. It doesn\'t. It just teaches you to limp with grace.',
+    '"Follow your heart." Scripture says the heart is deceitful above all things. Maybe follow something else.',
+    '"God won\'t give you more than you can handle." He will. He absolutely will. That\'s where faith starts.',
+  ],
+
+  weather_report: [
+    'It rained for the ninth day straight. The ground can\'t absorb another drop. Your heart works the same way.',
+    'First frost this morning. Something in you knows what it means — the growing season is over and the rest season is here.',
+    'The air has that weight to it — the kind that comes before a storm. Your spirit feels it too.',
+    'Everything is thawing. The ice is letting go. Some things in you might be ready to do the same.',
+    'The forecast says clear skies. But you know better. Some storms don\'t show up on radar.',
+  ],
+
+  second_person_scene: [
+    'You\'re in bed. It\'s 11:47 PM. You\'ve scrolled past your alarm time. The question you\'ve been avoiding finds you.',
+    'You\'re sitting in the parking lot. The engine is off but you haven\'t gone inside yet. You know why.',
+    'You just said "I\'m fine" for the third time today. The first two were reflexes. This last one was a decision.',
+    'You\'re staring at the text you haven\'t sent. Three dots. Delete. Three dots. Delete. God is in the hesitation.',
+    'You\'re at the table, surrounded by people, and you have never felt more alone. Hold that. Don\'t fix it yet.',
+  ],
+
+  negation_opening: [
+    'This is not about having more faith. It\'s about having less of the kind you manufactured.',
+    'This devotional will not fix your marriage, heal your anxiety, or make Monday morning bearable. It might do something harder.',
+    'I\'m not going to tell you it\'s going to be okay. I\'m going to tell you something better.',
+    'This isn\'t a pep talk. Those expire. This is a foundation. Those hold.',
+    'Today is not about doing more for God. It\'s about what God has already done while you weren\'t looking.',
+  ],
+
+  translation_note: [
+    'The Hebrew word for "wait" in Psalm 27 — qavah — literally means to twist, to bind like rope. Waiting is not passive. It\'s being woven.',
+    'In Greek, the word for "repent" — metanoia — doesn\'t mean "feel bad." It means "change your mind entirely." A complete mental renovation.',
+    'The word translated "peace" — shalom — doesn\'t mean absence of conflict. It means everything functioning as it should. Wholeness. Completeness.',
+    'When Genesis says God "rested," the Hebrew is shavat. Not exhaustion. Completion. He stopped because it was done.',
+    '"Blessed" in the Beatitudes is makarios — not happy, not fortunate. It\'s the word Greeks used for the gods. Jesus is saying: you are living the divine life.',
+  ],
+
+  prayer_overheard: [
+    '"...and I don\'t even know if you\'re listening, but I\'m going to keep talking because the alternative is silence." That prayer. You\'ve prayed it.',
+    '"God, I\'m not angry at you. I\'m angry at the version of you I was taught. Help me find the real one." Someone prayed this last night. Maybe it was you.',
+    '"Lord, I believe. Help my unbelief." Mark 9:24. The most honest prayer in Scripture. And yours for the taking.',
+    '"I don\'t have the words today. Can my showing up count as the prayer?" It can. It does.',
+    '"God, I\'m tired of trying to earn something you already gave me." That exhale you just felt? That\'s the prayer landing.',
+  ],
+
+  geographic_pin: [
+    '33.7490\u00b0 N, 84.3880\u00b0 W. Atlanta. Third floor, room 304. That\'s where he first prayed a prayer he meant.',
+    'Mile marker 47 on I-40, somewhere between Nashville and Memphis. That\'s where she finally stopped bargaining with God.',
+    'A park bench in Chicago. November. Cold enough to see your breath. The last place he expected to feel God show up.',
+    'Gate B7, O\'Hare International. Delayed flight. Three hours of nothing to do. The most productive quiet time of her life.',
+    'Your kitchen. This morning. The exact spot where you stood when the verse hit different.',
+  ],
+
+  interrupted_sentence: [
+    'The thing about grace is — no, wait. Let me start somewhere else. Let me start with the parking lot.',
+    'What I meant to write about today was — actually, I can\'t. Not yet. First I need to tell you what happened.',
+    'Forgiveness is — okay, before I define it, can I tell you what it isn\'t? Because I got that wrong for twenty years.',
+    'There\'s a verse I want to show you, but — hold on. You need context first. Without context, this verse is a weapon.',
+    'I was going to start with the theology. But honestly? Start with your chest. What do you feel right now?',
+  ],
+
+  synesthesia_opening: [
+    'Grief tastes like metal. Not a metaphor. The morning after, everything she ate tasted like copper. The body keeps its own theology.',
+    'Joy has a sound. Not laughter — that comes later. First it sounds like silence. The kind that follows a held breath.',
+    'Shame has a temperature. You know this. The heat that starts in your chest and reaches your ears before you can stop it.',
+    'Some prayers feel blue. Not sad blue. Sky blue. The kind of open that makes you dizzy with possibility.',
+    'Peace smells like rain on pavement. Something old breaking open. Something new being washed clean.',
+  ],
+
+  one_word_opening: [
+    'Enough. That\'s the word you\'re afraid of. Not "failure." Not "rejection." Enough. As in: are you?',
+    'Stay. That\'s it. That\'s the entire sermon. Stay in the room. Stay in the story. Stay.',
+    'Beloved. Before you did anything today. Before the to-do list. Before the guilt. Beloved.',
+    'Wait. Not the command. The invitation. Wait — as in, something is coming that is worth the pause.',
+    'Here. Not there. Not then. Here. God is not in the tomorrow you\'re anxious about. He\'s in the here.',
+  ],
 };
 
 // ==========================================
@@ -848,6 +1222,26 @@ export function generateHybridPersona(traits: PersonaTrait[]): HybridPersona {
     'practical_scholarly': 'Deep theology with a Monday-morning action plan',
     'raw_urgent': 'No time for polish — the truth said plainly because the stakes are too high',
     'mystical_scholarly': 'Academic precision dissolved in contemplative wonder — the footnote becomes a prayer',
+    'apophatic_mystical': 'Silence as the loudest language — the absence IS the presence',
+    'monastic_practical': 'A daily rule that transforms the ordinary into sacrament',
+    'prophetic_lament_raw': 'Grief that refuses to perform and won\'t be silenced',
+    'doxological_poetic': 'Praise that reads like poetry — beauty as theology\'s native tongue',
+    'socratic_scholarly': 'Questions so precise they become scalpels — the reader discovers truth in the wound',
+    'midwife_gentle': 'A companion who never tells you what\'s coming, only holds your hand while it arrives',
+    'iconoclast_challenging': 'Demolition and reconstruction in the same breath — nothing comfortable survives, but something truer grows',
+    'elder_warm': 'Decades of wisdom served with coffee — the hard truths softened by "I\'ve been there"',
+    'pilgrim_narrative': 'Stories from the road — discovery and wonder that never settle into certainty',
+    'artisan_practical': 'Theology with callused hands — every truth has a physical practice',
+    'comic_warm': 'Laughter that becomes a door — you\'re smiling when the truth slips past your defenses',
+    'intercessor_pastoral': 'A shepherd who prays you through the valley instead of explaining it',
+    'elder_monastic': 'Ancient rhythms held by weathered hands — the daily office as a grandparent\'s gift',
+    'doxological_liturgical': 'Worship that feels like it has been happening for a thousand years and will never stop',
+    'socratic_iconoclast': 'Questions that demolish assumptions — every answer reveals a deeper question',
+    'pilgrim_mystical': 'Walking meditation — the road dissolves into prayer and the destination was always here',
+    'apophatic_elder': 'An old woman who says less every year and means more',
+    'comic_confessional': 'Laughing at yourself becomes the gateway to honest confession',
+    'artisan_monastic': 'A workshop that runs on the hours — the bell rings, you pick up the tools',
+    'midwife_prophetic_lament': 'Sitting with the grief without fixing it — presence as prophecy',
   };
   
   const key = traits.slice(0, 2).sort().join('_');
@@ -987,7 +1381,7 @@ export function getTemplateById(id: string): StructuralTemplate | undefined {
   return STRUCTURAL_TEMPLATES.find(t => t.id === id);
 }
 
-export const ALL_TRAITS: PersonaTrait[] = ['gentle', 'challenging', 'poetic', 'scholarly', 'narrative', 'raw', 'warm', 'prophetic', 'mystical', 'pastoral', 'witty', 'urgent', 'confessional', 'practical', 'liturgical'];
+export const ALL_TRAITS: PersonaTrait[] = ['gentle', 'challenging', 'poetic', 'scholarly', 'narrative', 'raw', 'warm', 'prophetic', 'mystical', 'pastoral', 'witty', 'urgent', 'confessional', 'practical', 'liturgical', 'apophatic', 'monastic', 'prophetic_lament', 'doxological', 'socratic', 'midwife', 'iconoclast', 'elder', 'pilgrim', 'artisan', 'comic', 'intercessor'];
 export const ALL_HOOK_STYLES: HookStyle[] = Object.keys(HOOK_LIBRARY) as HookStyle[];
 export const ALL_TRANSITIONS: TransitionStyle[] = [
   'gradual', 'pivot', 'mysterious', 'logical', 'narrative',
@@ -996,6 +1390,8 @@ export const ALL_TRANSITIONS: TransitionStyle[] = [
   'revelation', 'descent', 'ascent', 'confession_bridge', 'witness_turn',
   'silence_break', 'parallel', 'inversion', 'declaration', 'metaphor_chain',
   'dialogue_shift', 'scenic_cut', 'tension_build', 'release', 'telescoping',
+  'associative_leap', 'white_space', 'refrain_return', 'concentric_rings', 'antiphonal',
+  'volta', 'excavation', 'braided', 'staircase', 'door_opening',
 ];
 export const ALL_CLOSINGS: ClosingStyle[] = [
   'question', 'blessing', 'invitation', 'warning', 'reflection', 'doxology',
@@ -1003,4 +1399,6 @@ export const ALL_CLOSINGS: ClosingStyle[] = [
   'promise', 'lament', 'gratitude', 'silence', 'challenge_deadline', 'reframe',
   'benediction', 'litany', 'witness', 'psalm_ending', 'future_vision', 'surrender',
   'simple_truth', 'return_to_scripture', 'companionship', 'confession_close', 'charge', 'rest',
+  'echo_close', 'breath_prayer', 'micro_action', 'antiphon', 'open_door',
+  'tombstone_test', 'collect_close', 'doxological_turn', 'selah', 'lyric_fragment_close',
 ];

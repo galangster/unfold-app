@@ -419,6 +419,18 @@ function mapWritingStyleToTraits(
       confessional: 'narrative',
       practical: 'warm',
       liturgical: 'mystical',
+      apophatic: 'mystical',
+      monastic: 'liturgical',
+      prophetic_lament: 'raw',
+      doxological: 'poetic',
+      socratic: 'scholarly',
+      midwife: 'gentle',
+      iconoclast: 'challenging',
+      elder: 'warm',
+      pilgrim: 'narrative',
+      artisan: 'practical',
+      comic: 'warm',
+      intercessor: 'pastoral',
     };
     secondary = fallbacks[primary];
   }

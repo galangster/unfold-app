@@ -184,6 +184,20 @@ export const STORY_TYPES: StoryType[] = [
   { id: 'medical_narrative', name: 'Medical Narrative', desc: 'Uses the precision of diagnosis, treatment, or recovery as a framework for spiritual truth', example: 'Surgeons call it debridement — cutting away dead tissue so healthy tissue can grow. The most painful part of healing, and not optional', faithLevel: ['growing', 'mature'] },
   { id: 'letter_unsent', name: 'Letter Unsent', desc: 'Frames the story as a letter to someone specific — a younger self, a prodigal friend, God — creating raw intimacy through direct address', example: 'Dear me at nineteen: you are about to make the worst decision of your life, and it will not be the end of your story', faithLevel: ['new', 'growing', 'mature'] },
   { id: 'architectural_parable', name: 'Building Parable', desc: 'Uses the structural logic of architecture — foundations, load-bearing walls, arches — as a precise metaphor for spiritual formation', example: 'The arch only holds because every stone is falling. Remove the keystone and you see the truth: it was always gravity and trust', faithLevel: ['new', 'growing'] },
+  { id: 'exemplum', name: 'Medieval Exemplum', desc: 'A brief moral tale with a clear but non-obvious lesson — the preacher\'s anecdote distilled to its sharpest form', example: 'A king sent three servants on a journey with sealed letters. Two opened theirs early. The third waited until arrival. Only his letter still had instructions that made sense.', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'ikigai_discovery', name: 'Vocation Discovery', desc: 'Someone discovers their calling not through a dramatic moment but through the slow accumulation of small yeses', example: 'She didn\'t hear a voice. She noticed she was never bored when she was doing it. That was the voice.', faithLevel: ['growing', 'mature'] },
+  { id: 'apophthegma', name: 'Desert Saying', desc: 'Ultra-compressed wisdom encounter: a seeker comes, asks a question, receives a disorienting one-liner', example: 'A brother came to Abba Moses and said, "Give me a word." Abba Moses said, "Go to your cell and your cell will teach you everything." There was no more.', faithLevel: ['growing', 'mature'] },
+  { id: 'parable_inversion', name: 'Parable Retold Wrong', desc: 'Take a famous parable and tell it from an unexpected perspective — the older brother, the innkeeper, the soil', example: 'I am the soil beside the path. I didn\'t choose to be here. The seed fell and the birds came and everyone blamed me for not being deeper.', faithLevel: ['growing', 'mature'] },
+  { id: 'liturgical_snapshot', name: 'Sacred Calendar Moment', desc: 'The story takes place on a specific liturgical date — the day itself is the protagonist', example: 'It is Holy Saturday. The worst day in the Christian calendar. Not because of what happened. Because of what hasn\'t happened yet. Everything hangs.', faithLevel: ['growing', 'mature'] },
+  { id: 'found_text', name: 'Found Text', desc: 'The story is a discovered artifact — a journal entry, a hospital note, a prayer card left in a library book', example: 'Found in the margin of a donated Bible, in pencil: "God, if you\'re real, this is your last chance with me." Two pages later, same handwriting: "Okay."', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'systems_parable', name: 'Systems Parable', desc: 'Uses the logic of complex systems — feedback loops, emergence, network effects — to illuminate spiritual truth', example: 'Termites build cathedrals with no architect. Each follows two rules. Two rules, repeated by millions, produce a structure none planned. The early church had two rules too.', faithLevel: ['growing', 'mature'] },
+  { id: 'athletic_narrative', name: 'Athletic Narrative', desc: 'The specific mechanics of training or competition as precise spiritual metaphor', example: 'Marathoners hit the wall at mile 20 when glycogen runs out. Runners who finish trained their bodies to switch fuel sources. Sanctification works the same way.', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'cosmic_reframe', name: 'Cosmic Reframe', desc: 'Zoom out to astronomical or geological scale, then snap back to the human — the vastness becomes the sermon', example: 'Light from the star you saw tonight left before Jesus was born. It has been traveling toward your backyard for 2,000 years. It arrived tonight.', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'migration_story', name: 'Migration Story', desc: 'The experience of leaving, traveling, arriving somewhere strange — displacement as spiritual metaphor', example: 'Everything you own fits in one suitcase. You don\'t speak the language. This is how every Christian should feel on earth, and most don\'t.', faithLevel: ['growing', 'mature'] },
+  { id: 'ecological_parable', name: 'Ecological Parable', desc: 'An ecosystem relationship — symbiosis, mycorrhizal networks — as theological framework', example: 'Trees share nutrients through underground fungal networks. The oldest feed the youngest. The dying dump resources into the network. The forest knew what the church keeps forgetting.', faithLevel: ['growing', 'mature'] },
+  { id: 'threshold_moment', name: 'Threshold Moment', desc: 'A specific threshold — a doorway, a border crossing — where standing AT the threshold is the entire story', example: 'She stood at the NICU door for eleven minutes. Inside: her son and all the machines. Outside: the world before. That threshold is where most prayer happens.', faithLevel: ['new', 'growing', 'mature'] },
+  { id: 'hagiographic_moment', name: 'Saint\'s Pivotal Moment', desc: 'A real historical moment from a saint\'s life, told with novelistic specificity rather than hagiographic polish', example: 'The night before his conversion, Augustine didn\'t feel peace. He felt nausea. The man who would reshape Western theology spent his last pagan night throwing up in a garden.', faithLevel: ['growing', 'mature'] },
+  { id: 'economic_parable', name: 'Economic Parable', desc: 'Uses the logic of money, debt, investment, compound interest as a precise metaphor for spiritual truth', example: 'Compound interest works because you earn returns on your returns. Bitterness compounds the same way. A grudge at 5% daily interest becomes a prison sentence in under a year.', faithLevel: ['new', 'growing'] },
 ];
 
 export const STORY_TRANSITIONS = [
@@ -564,6 +578,86 @@ export const DIALOGUE_TYPES: DialogueType[] = [
     craftNote: 'Open with "May you..." or "May the God who..." Use second person. At least one line should surprise. Close with a period, not an amen.',
     faithLevel: ['new', 'growing', 'mature'],
   },
+  {
+    id: 'catechism_exchange',
+    name: 'Catechism Exchange',
+    desc: 'Q&A format adapted for intimacy — a question posed formally, then answered with economy and depth',
+    example: '"Q: What is your only comfort in life and death? A: That I am not my own, but belong — body and soul — to my faithful Savior." Then sit with what "not my own" costs.',
+    craftNote: 'Use the formal Q&A structure but make the answer land in the gut, not just the head. The ancient form creates surprising emotional weight.',
+    faithLevel: ['growing', 'mature'],
+  },
+  {
+    id: 'debate_interior',
+    name: 'Interior Debate',
+    desc: 'Two named inner voices argue — not vague "part of me" but named roles: The Cynic vs. The Pilgrim, Fear vs. Memory',
+    example: 'The Cynic: "You\'ve tried this before." Memory: "Yes. And you survived."',
+    craftNote: 'Name the voices specifically. Both must be real — no straw men. The debate should feel unresolved enough that the reader continues it internally.',
+    faithLevel: ['growing', 'mature'],
+  },
+  {
+    id: 'imagined_interview',
+    name: 'Imagined Interview',
+    desc: 'The writer interviews a biblical or historical figure using journalist-style questions — formal yet probing',
+    example: '"If I could sit across from Martha: \'What were you actually angry about that day?\' \'I wasn\'t angry. I was terrified of being unnecessary.\'"',
+    craftNote: 'Use interview format with quotes. The figure\'s answers must be psychologically plausible and reveal something the text doesn\'t say directly.',
+    faithLevel: ['growing', 'mature'],
+  },
+  {
+    id: 'ekphrasis_voice',
+    name: 'Artwork Speaks',
+    desc: 'A painting, sculpture, or piece of sacred art narrates its own scene — the artwork becomes the theologian',
+    example: '"I am the hand Caravaggio painted — the one pointing at Matthew. Notice I look exactly like Adam\'s hand in the Sistine ceiling. Same gesture. That\'s the point."',
+    craftNote: 'Name a specific, real artwork. The art\'s "voice" should reveal something a sermon wouldn\'t. Keep to 2-3 sentences from the artwork.',
+    faithLevel: ['growing', 'mature'],
+  },
+  {
+    id: 'reader_interrupts',
+    name: 'Reader Interrupts',
+    desc: 'The writer anticipates and scripts the reader\'s objection mid-paragraph, then responds — breaking the fourth wall',
+    example: '"You\'re thinking: easy for you to say. And you\'re right. It IS easy to say. Doing it cost me a marriage and eighteen months of silence."',
+    craftNote: 'The objection must be the real one, not a softball. The response must cost the writer something. Breaking the fourth wall only works if it\'s honest.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'creation_psalm',
+    name: 'Creation Psalm',
+    desc: 'Multiple creation elements testify antiphonally — multi-voice and liturgical, each with a distinct theological witness',
+    example: '"Sun: I rise because He told me to. / Moon: I reflect what I cannot produce. / Sea: I hold boundaries I did not choose. / You: ___"',
+    craftNote: 'Each creation element gets ONE sentence. Build to the human at the end. Leave the human\'s line blank or incomplete — the reader fills it.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'table_talk',
+    name: 'Table Talk',
+    desc: 'Informal theological conversation over a meal — the casualness IS the theology (Luther\'s Tischreden, Emmaus road)',
+    example: '"She passed the bread and said, \'I think God is less interested in my quiet time than in whether I called my sister back.\' The butter melted. Nobody argued."',
+    craftNote: 'Include food details. The setting must feel real — a kitchen table, not a lecture hall. The theology arrives mid-bite, unrehearsed.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'god_remembers',
+    name: 'God Remembers',
+    desc: 'God narrating a specific memory of the reader — not commanding, just recalling. "I remember the Tuesday you..."',
+    example: '"I remember the night you sat in the parking lot and cried. You thought no one saw. I was in the passenger seat."',
+    craftNote: 'God\'s tone is tender nostalgia, not instruction. Use specific, ordinary details. The power comes from God noticing what the reader thought was invisible.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'ancestor_testimony',
+    name: 'Ancestor Testimony',
+    desc: 'A grandparent\'s voice, remembered or imagined, speaking faith-truth with the authority of a life lived',
+    example: '"Baby, the Lord didn\'t bring us this far to leave us here." She said it stirring oatmeal. She said it at funerals. It was the only theology she needed.',
+    craftNote: 'Use the ancestor\'s actual speech patterns — dialect, rhythm, repetition. The simplicity IS the authority. No academic commentary needed.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
+  {
+    id: 'litany_of_names',
+    name: 'Litany of Names',
+    desc: 'A rhythmic naming — of saints, of wounds, of gifts — where repetition builds to revelation',
+    example: '"This is for the woman who put on mascara before the funeral. For the man who Googled \'how to pray\' at 42. For the teenager who knows the Bible better than her parents and is lonelier for it."',
+    craftNote: 'Minimum 4 names/descriptions, maximum 8. Each more specific than the last. Build toward the one that lands in the reader\'s chest.',
+    faithLevel: ['new', 'growing', 'mature'],
+  },
 ];
 
 export const DIALOGUE_ANTI_PATTERNS = `
@@ -769,6 +863,114 @@ export const CRAFT_INFLUENCES: Record<PersonaTrait, {
     ],
     secondaryPick: 'Fleming Rutledge: Advent as the master season — all of Christian life is waiting, watching, hoping.',
   },
+
+  apophatic: {
+    primary: [
+      'Meister Eckhart: "The eye through which I see God is the same eye through which God sees me." Write from union, not distance.',
+      'The Cloud of Unknowing: approach God through not-knowing. The darkness is not failure — it\'s intimacy. Strip away images.',
+      'Simone Weil: attention is the rarest form of generosity. Write with the attentiveness that makes ordinary moments luminous.',
+    ],
+    secondaryPick: 'Pseudo-Dionysius: the divine darkness — what we cannot say about God reveals more than what we can.',
+  },
+
+  monastic: {
+    primary: [
+      'Thomas Merton: solitude is not isolation. Write from the cell that opens onto the world. The monk sees more clearly because he sees less.',
+      'Joan Chittister: the Rule of Benedict applied to Tuesday. Every mundane act — cooking, cleaning, showing up — is liturgy if done with attention.',
+      'Kathleen Norris: acedia is the real spiritual enemy. Write about the boring faithfulness that defeats it — one hour, one office, one day at a time.',
+    ],
+    secondaryPick: 'Benedict of Nursia: ora et labora — prayer and work are the same thing said in different languages.',
+  },
+
+  prophetic_lament: {
+    primary: [
+      'K.J. Ramsey: name pain with clinical precision and pastoral tenderness. Do not rush to resolution. The wound is not a detour — it is the road.',
+      'Soong-Chan Rah: prophetic grief for what the church has become. Lament is not weakness — it is the courage to name what others normalize.',
+      'Nicholas Wolterstorff: "Lament for a Son" — grief so specific it becomes universal. Every parent, every loss, every unanswered "why" lives in these pages.',
+    ],
+    secondaryPick: 'Jeremiah: the weeping prophet. Sometimes faithfulness looks like tears, not triumph.',
+  },
+
+  doxological: {
+    primary: [
+      'G.K. Chesterton: gratitude as the foundation of sanity. The world is not mundane — it is magical, and we have gone deaf to the spell.',
+      'Jonathan Edwards: beauty as the primary attribute of God. Write from aesthetic arrest — the moment creation makes you gasp.',
+      'Julian of Norwich: "All shall be well" spoken from an anchorite\'s cell during plague. Radical divine optimism rooted in suffering, not denial.',
+    ],
+    secondaryPick: 'The Psalms: David\'s praise erupts from the same pen as his lament. Doxology that ignores pain is not doxology — it\'s denial.',
+  },
+
+  socratic: {
+    primary: [
+      'Jesus in the Gospels: "What do you want me to do for you?" "Who do you say I am?" Questions that expose the real question underneath.',
+      'Kierkegaard: indirect communication. The reader must discover truth themselves or it isn\'t truth — it\'s information.',
+      'Parker Palmer: "Let your life speak." Ask the questions that help the reader listen to what their life is already saying.',
+    ],
+    secondaryPick: 'Dallas Willard: "What would I do if I actually believed what I say I believe?" The question that closes every gap.',
+  },
+
+  midwife: {
+    primary: [
+      'Henri Nouwen: the wounded healer. Your presence, not your expertise, is the gift. Sit with the suffering before you speak into it.',
+      'Jean Vanier: "Community is the place where our limitations and our darkness are revealed to us." Companion in the revealing, not the fixing.',
+      'Quaker tradition: eldering — the art of asking questions that help someone hear what the Spirit is already saying to them.',
+    ],
+    secondaryPick: 'Dietrich Bonhoeffer: "The first service one owes to others in a community is listening." Listen on the page.',
+  },
+
+  iconoclast: {
+    primary: [
+      'Flannery O\'Connor: "When you can assume that your audience holds the same beliefs you do, you can relax and use more normal means. When you have to assume it does not, then you have to make your vision apparent by shock."',
+      'Kierkegaard: the attack on Christendom. Comfortable Christianity is not Christianity. The church\'s biggest enemy is its own success.',
+      'Dorothy Day: radical hospitality that indicts comfort. "The Gospel takes away our right to discriminate between the deserving and the undeserving poor."',
+    ],
+    secondaryPick: 'Nadia Bolz-Weber: "God\'s grace is not defined as God being forgiving to us even though we sin. Grace is when God is a source of life-giving wholeness, even at the places in our lives where we would rather experience death."',
+  },
+
+  elder: {
+    primary: [
+      'Corrie ten Boom: "There is no pit so deep that God\'s love is not deeper still." Wisdom forged in a concentration camp. The simplest truths, the highest cost.',
+      'Maya Angelou: "When someone shows you who they are, believe them the first time." Experiential authority wrapped in grace.',
+      'Henri Nouwen (late work): "The Return of the Prodigal Son" — a dying man writing about homecoming. Every sentence earned.',
+    ],
+    secondaryPick: 'Brennan Manning: "God loves you as you are, not as you should be, because you will never be as you should be." Said by a man who knew.',
+  },
+
+  pilgrim: {
+    primary: [
+      'Augustine\'s Confessions: prayer as autobiography. The journey toward God is told TO God — the reader overhears a conversation between a pilgrim and his destination.',
+      'John Bunyan: allegory that maps onto real geography. The reader\'s Tuesday commute becomes a stage in Pilgrim\'s Progress.',
+      'Thomas Merton\'s journals: thinking out loud. The discovery happens on the page, not before it.',
+    ],
+    secondaryPick: 'Frederick Buechner: "Listen to your life. See it for the fathomless mystery it is." The pilgrim\'s practice is attention.',
+  },
+
+  artisan: {
+    primary: [
+      'Wendell Berry: "The soil is the great connector of lives." Write from the material world — dirt, grain, wood, stone. Theology with calluses.',
+      'Annie Dillard: observation so precise it becomes prayer. "Seeing is of course very much a matter of verbalization."',
+      'Eugene Peterson (The Message): translate cosmic truth into kitchen-table language without losing a single calorie of meaning.',
+    ],
+    secondaryPick: 'Makoto Fujimura: "Culture care" — the artist as one who makes the world more habitable for the soul.',
+  },
+
+  comic: {
+    primary: [
+      'Anne Lamott: "The three things I cannot live without: laughter, chocolate, and mercy." Radical honesty that happens to be funny.',
+      'Bob Goff: whimsy as resistance against a joyless faith. "I used to think you had to be special for God to use you. Now I know you just need to say yes."',
+      'G.K. Chesterton: "Angels can fly because they take themselves lightly." Humor as the serious business of heaven.',
+    ],
+    secondaryPick: 'Nadia Bolz-Weber: profane grace — sometimes the truest word for what God does is the one you can\'t say in church.',
+  },
+
+  intercessor: {
+    primary: [
+      'Paul\'s prison prayers: "I pray that out of his glorious riches he may strengthen you with power through his Spirit." Praying FOR someone while imprisoned yourself.',
+      'Andrew Murray: "Prayer is not monologue but dialogue; God\'s voice in response to mine is its most essential part." The intercession listens as much as it speaks.',
+      'Stormie Omartian (adapted for literary depth): specific, targeted prayer that names the exact situation. "Lord, meet them in the 3 a.m. fear."',
+    ],
+    secondaryPick: 'Dietrich Bonhoeffer: "A Christian community either lives by the intercessory prayers of its members for one another, or it is destroyed."',
+  },
 };
 
 // ==========================================
@@ -848,6 +1050,66 @@ export const DAILY_CRAFT_TECHNIQUES: CraftTechnique[] = [
     id: 'prophetic_conviction',
     name: 'Prophetic Conviction',
     directive: 'Include one moment of piercing conviction — a mirror, not a finger. Name the comfortable lie. Close the gap between theology and Tuesday. The reader should feel the floor shift beneath a belief they didn\'t know was fragile. Pair the wound with the gospel — the sword is held by the Healer.',
+  },
+  {
+    id: 'via_negativa',
+    name: 'Via Negativa',
+    directive: 'Describe the truth by naming what it ISN\'T. Approach God through negation and subtraction. What the reader removes matters more than what they add.',
+  },
+  {
+    id: 'concrete_to_cosmic',
+    name: 'Concrete to Cosmic',
+    directive: 'Start with the smallest possible detail — a grain of sand, a single breath, one word. Expand to the largest frame — eternity, the cosmos. Then snap back to the grain.',
+  },
+  {
+    id: 'leave_a_scar',
+    name: 'Leave a Scar',
+    directive: 'Write one sentence so specific to this reader\'s situation that they physically react — a flinch, a held breath. Then sit with them in it. Do not rush to comfort.',
+  },
+  {
+    id: 'catalog_accumulation',
+    name: 'Catalog / Accumulation',
+    directive: 'Build meaning through a catalog: a list that starts ordinary and becomes overwhelming. "Grace is: the unanswered text that\'s not about you, the diagnosis that could have been worse, the sunrise you didn\'t earn..."',
+  },
+  {
+    id: 'negative_space',
+    name: 'Negative Space',
+    directive: 'Write around the central truth without naming it directly. Let the reader discover the shape of what\'s missing. The unsaid thing should be more powerful than anything written.',
+  },
+  {
+    id: 'defamiliarization',
+    name: 'Defamiliarization',
+    directive: 'Take a familiar Bible story or doctrine and make it strange again. Strip away centuries of familiarity so the reader encounters it as if hearing it for the first time.',
+  },
+  {
+    id: 'incarnational_writing',
+    name: 'Incarnational Writing',
+    directive: 'Ground every spiritual truth in the body. What does grace feel like in the shoulders? Where does fear live in the stomach? The body is the primary text.',
+  },
+  {
+    id: 'rule_of_one',
+    name: 'Rule of One',
+    directive: 'One scripture. One image. One story. One truth. One question. Remove everything that competes with the single point. Radical economy.',
+  },
+  {
+    id: 'slow_reveal',
+    name: 'Slow Reveal',
+    directive: 'Withhold the key information until the final paragraph. Build the entire devotional as setup for one revelation. The reader should not see the ending coming.',
+  },
+  {
+    id: 'liturgical_echo',
+    name: 'Liturgical Echo',
+    directive: 'Write in the rhythm of liturgy — repetition, response, ascent. Not a teaching but a service. The reader should feel like they participated in something, not just read something.',
+  },
+  {
+    id: 'paradox_dwelling',
+    name: 'Paradox Dwelling',
+    directive: 'Identify the central paradox and refuse to resolve it. Both sides are true. The reader\'s discomfort with the tension IS the point.',
+  },
+  {
+    id: 'testimony_architecture',
+    name: 'Testimony Architecture',
+    directive: 'Structure as: (1) What I believed before, (2) What happened, (3) What I believe now, (4) What this means for you. The transformation IS the argument.',
   },
 ];
 
