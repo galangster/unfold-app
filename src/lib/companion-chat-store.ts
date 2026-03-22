@@ -45,6 +45,9 @@ interface CompanionChatState {
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+// Cap stored messages to prevent unbounded growth in MMKV
+const MAX_STORED_MESSAGES = 200;
+
 export const useCompanionChatStore = create<CompanionChatState>()(
   persist(
     (set) => ({
@@ -52,7 +55,13 @@ export const useCompanionChatStore = create<CompanionChatState>()(
       conversationId: makeId(),
 
       addMessage: (msg) =>
-        set((s) => ({ messages: [...s.messages, msg] })),
+        set((s) => {
+          const updated = [...s.messages, msg];
+          // Trim oldest messages when exceeding cap
+          return { messages: updated.length > MAX_STORED_MESSAGES
+            ? updated.slice(-MAX_STORED_MESSAGES)
+            : updated };
+        }),
 
       updateMessage: (id, updates) =>
         set((s) => ({

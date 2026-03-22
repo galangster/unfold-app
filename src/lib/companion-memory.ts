@@ -8,15 +8,21 @@
  * No AI calls — simple keyword + regex extraction.
  */
 import { mmkvStorage } from './mmkv-storage';
+import { sanitizeForPrompt } from '@/lib/api-config';
 
 const MEMORY_KEY = 'companion-conversation-memory';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
+interface PrayerRequest {
+  text: string;
+  addedAt: number;
+}
+
 interface CompanionMemory {
   topics: string[];
   versesMentioned: string[];
-  prayerRequests: string[];
+  prayerRequests: (string | PrayerRequest)[];  // supports legacy string format
   lastUpdated: number;
 }
 
@@ -90,21 +96,24 @@ export function updateCompanionMemory(
     }
   }
 
-  // Extract prayer requests from user messages
-  const newPrayers: string[] = [];
+  // Extract prayer requests from user messages (sanitized to prevent prompt injection)
+  const newPrayers: PrayerRequest[] = [];
+  const existingTexts = existing.prayerRequests.map((p) =>
+    typeof p === 'string' ? p : p.text
+  );
   for (const text of userTexts) {
     for (const indicator of PRAYER_INDICATORS) {
       const idx = text.indexOf(indicator);
       if (idx >= 0) {
-        // Grab the rest of the sentence (up to 80 chars)
-        const rest = text
+        const raw = text
           .slice(idx + indicator.length)
           .trim()
           .slice(0, 80)
           .split(/[.!?]/)[0]
           .trim();
-        if (rest && !existing.prayerRequests.includes(rest)) {
-          newPrayers.push(rest);
+        const rest = sanitizeForPrompt(raw, 80);
+        if (rest && !existingTexts.includes(rest)) {
+          newPrayers.push({ text: rest, addedAt: Date.now() });
         }
       }
     }
@@ -125,13 +134,35 @@ export function updateCompanionMemory(
  * Build a compact prompt fragment summarizing conversation memory.
  * Returns empty string if no memory exists.
  */
+// TTL constants
+const PRAYER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MEMORY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+
 export function getMemoryPromptFragment(): string {
   const memory = getCompanionMemory();
+  if (!memory) return '';
+
+  // Expire stale memory — topics/verses after 60 days
+  const now = Date.now();
+  const memoryAge = now - memory.lastUpdated;
+
+  if (memoryAge > MEMORY_TTL_MS) {
+    clearCompanionMemory();
+    return '';
+  }
+
+  // Prayer requests expire individually after 30 days (supports legacy string format)
+  const prayerRequests = (memory.prayerRequests || [])
+    .filter((p) => {
+      if (typeof p === 'string') return memoryAge < PRAYER_TTL_MS; // legacy: use global age
+      return (now - p.addedAt) < PRAYER_TTL_MS;
+    })
+    .map((p) => (typeof p === 'string' ? p : p.text));
+
   if (
-    !memory ||
-    (memory.topics.length === 0 &&
-      memory.versesMentioned.length === 0 &&
-      memory.prayerRequests.length === 0)
+    memory.topics.length === 0 &&
+    memory.versesMentioned.length === 0 &&
+    prayerRequests.length === 0
   ) {
     return '';
   }
@@ -144,8 +175,8 @@ export function getMemoryPromptFragment(): string {
   if (memory.versesMentioned.length > 0) {
     parts.push(`- Verses referenced: ${memory.versesMentioned.join(', ')}`);
   }
-  if (memory.prayerRequests.length > 0) {
-    parts.push(`- Recent prayer concerns: ${memory.prayerRequests.join('; ')}`);
+  if (prayerRequests.length > 0) {
+    parts.push(`- Recent prayer concerns: ${prayerRequests.join('; ')}`);
   }
 
   return parts.join('\n');

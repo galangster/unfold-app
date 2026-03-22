@@ -40,13 +40,13 @@ interface UserContext {
 
 function buildSystemPrompt(ctx: UserContext): string {
   const nameClause = ctx.userName
-    ? `The person you're talking to is named ${ctx.userName}.`
+    ? `The person you're talking to is named ${sanitizeForPrompt(ctx.userName, 50)}.`
     : '';
 
   // Phase 4: Devotional context
   let devotionalContext = '';
   if (ctx.devotionalTitle && ctx.devotionalDay && ctx.devotionalTotal) {
-    devotionalContext = `\nCURRENT DEVOTIONAL: "${ctx.devotionalTitle}" — Day ${ctx.devotionalDay} of ${ctx.devotionalTotal}. Reference this if relevant to the conversation.`;
+    devotionalContext = `\nCURRENT DEVOTIONAL: "${sanitizeForPrompt(ctx.devotionalTitle, 200)}" — Day ${ctx.devotionalDay} of ${ctx.devotionalTotal}. Reference this if relevant to the conversation.`;
   }
 
   // Phase 4: Streak context
@@ -344,7 +344,7 @@ export function useCompanionChat() {
           .slice(-10)
           .map((m) => ({
             role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-            content: m.content,
+            content: sanitizeForPrompt(m.content),
           }));
 
         const chatMessages = [
