@@ -411,6 +411,14 @@ function mapWritingStyleToTraits(
       narrative: 'gentle',
       raw: 'narrative',
       warm: 'gentle',
+      prophetic: 'pastoral',
+      mystical: 'poetic',
+      pastoral: 'gentle',
+      witty: 'scholarly',
+      urgent: 'challenging',
+      confessional: 'narrative',
+      practical: 'warm',
+      liturgical: 'mystical',
     };
     secondary = fallbacks[primary];
   }

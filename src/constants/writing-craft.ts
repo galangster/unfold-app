@@ -697,6 +697,78 @@ export const CRAFT_INFLUENCES: Record<PersonaTrait, {
     ],
     secondaryPick: 'Priscilla Shirer: one concrete "try this today" action. Small enough to actually do.',
   },
+
+  prophetic: {
+    primary: [
+      'Martin Luther King Jr.: theological argument as moral architecture — build the case so airtight that silence becomes complicity.',
+      'Lisa Sharon Harper: name the system before naming the sin. Show how structures shape souls. The personal is always political.',
+      'Walter Brueggemann: prophetic imagination — critique what IS and energize hope for what COULD BE. Grief and amazement in the same breath.',
+    ],
+    secondaryPick: 'Cornel West: truth-telling as an act of love, not an act of war. Prophetic fire tempered by tragic optimism.',
+  },
+
+  mystical: {
+    primary: [
+      'Richard Rohr: hold the paradox — both/and, not either/or. Let contradictions sit unresolved; the tension is the teacher.',
+      'Julian of Norwich: radical divine optimism rooted in suffering, not denial. "All shall be well" spoken from an anchorite\'s cell.',
+      'Howard Thurman: interior encounter — God is found in the deep places of the self. Stillness is the precondition for courageous action.',
+    ],
+    secondaryPick: 'Thomas Merton: write from solitude toward community. The monk\'s cell is the clearest window into the world.',
+  },
+
+  pastoral: {
+    primary: [
+      'Eugene Peterson: long obedience in the same direction. Write in the tempo of a life, not a crisis.',
+      'Dallas Willard: the with-God life as the most natural thing. "Grace is not opposed to effort; it is opposed to earning."',
+      'Barbara Brown Taylor: find God in the darkness, the leaving, the unraveling. The pastor trusts MORE for admitting uncertainty.',
+    ],
+    secondaryPick: 'Henri Nouwen: the wounded healer — your vulnerability is your credibility. Lead from your limp, not your strength.',
+  },
+
+  witty: {
+    primary: [
+      'G.K. Chesterton: paradox as the native language of truth. Make familiar doctrines strange again through the side door of wit.',
+      'Dorothy Sayers: intellectual rigor that refuses to be boring. "The dogma IS the drama."',
+      'Timothy Keller: steel-man the objection, then offer the better story. The reader\'s skepticism deserves the best version of itself.',
+    ],
+    secondaryPick: 'C.S. Lewis: the perfectly chosen analogy — one image that makes an abstract truth feel obvious.',
+  },
+
+  urgent: {
+    primary: [
+      'Dietrich Bonhoeffer: the cost of discipleship is not theoretical. "Cheap grace is the deadly enemy of our church."',
+      'Sojourner Truth: embodied testimony that refuses to be theoretical. Let urgency come from incarnation, not volume.',
+      'Jackie Hill Perry: theological precision as activism. Name the idol with clinical accuracy.',
+    ],
+    secondaryPick: 'Jon Tyson: frame the cultural moment as a spiritual crisis that demands a response TODAY.',
+  },
+
+  confessional: {
+    primary: [
+      'Anne Lamott: radical self-honesty that becomes universal. Write your mess with enough specificity that the reader sees their own.',
+      'Barbara Brown Taylor: leaving as a spiritual practice. Name what you lost, what you found, what you\'re still looking for.',
+      'Augustine of Hippo: prayer as autobiography. Address God while the reader overhears.',
+    ],
+    secondaryPick: 'Frederick Buechner: "listen to your life" — treat your own biography as scripture.',
+  },
+
+  practical: {
+    primary: [
+      'John Ortberg: spiritual formation through ordinary routines. Give a practice so small they cannot fail, then show why it matters cosmically.',
+      'Priscilla Shirer: Bible study with a to-do list. "What will you do differently before you go to sleep tonight?"',
+      'James Clear (adapted): identity-based formation — frame spiritual practices as identity votes, not obligations.',
+    ],
+    secondaryPick: 'Mark Batterson: circle the promise — pick one truth and build a practice around it.',
+  },
+
+  liturgical: {
+    primary: [
+      'Thomas Cranmer: collects that compress theology into four lines. Address, attribute, petition, result. Every word is load-bearing.',
+      'Phyllis Tickle: fixed-hour prayer as scaffolding. Write as if the reader joins a stream of prayer that flows whether they show up or not.',
+      'Walter Brueggemann: the Psalms as the grammar of prayer — lament, praise, thanksgiving, rage, wonder.',
+    ],
+    secondaryPick: 'Fleming Rutledge: Advent as the master season — all of Christian life is waiting, watching, hoping.',
+  },
 };
 
 // ==========================================

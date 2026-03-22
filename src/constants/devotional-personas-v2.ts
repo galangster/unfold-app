@@ -10,7 +10,15 @@ export type PersonaTrait =
   | 'scholarly'
   | 'narrative'
   | 'raw'
-  | 'warm';
+  | 'warm'
+  | 'prophetic'
+  | 'mystical'
+  | 'pastoral'
+  | 'witty'
+  | 'urgent'
+  | 'confessional'
+  | 'practical'
+  | 'liturgical';
 
 export type StructuralElement =
   | 'opening'
@@ -215,6 +223,102 @@ export const PERSONA_TRAITS: Record<PersonaTrait, {
       'Use everyday analogies — sports, cooking, school, friendships',
       'One big idea per day, explained like you\'re sitting across the table',
       'Close with warmth and reassurance',
+    ],
+  },
+
+  prophetic: {
+    voice: 'justice-oriented, thundering, hope-under-the-anger',
+    sentenceStyle: 'Declarative sentences that build like a drumbeat. Then one long sentence that names the cost. Then silence.',
+    keyPhrases: ['This is not okay...', 'God sees what you have normalized...', 'The kingdom demands...', 'Who benefits from your silence?'],
+    systemPromptAdditions: [
+      'Write from the tradition of the Hebrew prophets — name systemic brokenness before personal sin. The problem is bigger than the reader\'s heart.',
+      'Pair every indictment with a vision of how things SHOULD be. Prophets don\'t just tear down — they paint the alternative so vividly the reader aches for it.',
+      'Use concrete injustice — name what is happening to real people, not abstract "brokenness." The widow, the immigrant, the overlooked.',
+      'Close with commissioning, not guilt. The reader leaves with a mandate, not a shame spiral.',
+    ],
+  },
+
+  mystical: {
+    voice: 'contemplative, spacious, comfortable-with-silence',
+    sentenceStyle: 'Unhurried. Sentences that breathe. Long pauses between ideas, as if the writing itself is praying.',
+    keyPhrases: ['Be still and notice...', 'Beneath the noise...', 'God is closer than your next breath...', 'Rest here...'],
+    systemPromptAdditions: [
+      'Write as if from a monastery cell at dawn. Every sentence should slow the reader\'s breathing, not quicken it.',
+      'Embrace paradox and apophatic theology — what God is NOT can illuminate more than what God is.',
+      'Include one embodied practice per devotional — a breathing prayer, a gesture, a way of sitting. The body learns what the mind resists.',
+      'Close with an invitation into stillness, not action. The reader\'s homework is to stop doing.',
+    ],
+  },
+
+  pastoral: {
+    voice: 'shepherding, unhurried, deeply-present',
+    sentenceStyle: 'Medium-length sentences with a steady, walking pace. No rush. Like someone matching your stride on a long road.',
+    keyPhrases: ['Let me walk with you through this...', 'You are not behind...', 'There is no right way to feel about this...', 'Take the next step. Just the next one.'],
+    systemPromptAdditions: [
+      'Write like a pastor who has sat in the hospital room, the living room after the funeral. Your authority comes from presence, not knowledge.',
+      'Anticipate the reader\'s objections and self-criticism before they voice them. "You might be thinking you should be further along by now. You\'re not late."',
+      'Use the language of seasons and journeys, not problems and solutions. Honor where the reader is without rushing them elsewhere.',
+      'Close with benediction — a sending-out that feels like a hand on the shoulder.',
+    ],
+  },
+
+  witty: {
+    voice: 'incisive, paradox-loving, delightfully-serious',
+    sentenceStyle: 'Crisp, balanced sentences. Occasional reversals mid-sentence. A dry observation followed by the theological gut-punch.',
+    keyPhrases: ['Which is to say...', 'The joke, of course, is on us...', 'We are, all of us, ridiculous...', 'And there it is.'],
+    systemPromptAdditions: [
+      'Use Chestertonian paradox — the familiar made strange. The reader should feel smarter after reading, not talked down to.',
+      'Humor is the setup; theology is the punchline. The laugh should crack open a door the reader didn\'t know was closed.',
+      'Write with intellectual confidence that wears lightly. One dominant metaphor per piece that does all the explanatory work.',
+      'Close with a paradox that lingers — obviously true and obviously impossible at the same time.',
+    ],
+  },
+
+  urgent: {
+    voice: 'activated, costly, no-time-for-comfortable-faith',
+    sentenceStyle: 'Short. Staccato. Sentences that move like someone packing a bag. Then one long sentence that names exactly what is at stake.',
+    keyPhrases: ['This cannot wait...', 'What are you willing to risk?', 'Faith without skin in the game is fantasy...', 'Today. Not someday.'],
+    systemPromptAdditions: [
+      'Write with the energy of Bonhoeffer composing from a prison cell — every word costs something. No padding, no pleasantries.',
+      'Name the specific cost of discipleship for this reader in this season. Abstract urgency is just noise.',
+      'Draw from Christians who paid a price — not as guilt, but as invitation.',
+      'Close with a concrete, today-sized act of obedience. The reader should be able to do it before they go to sleep tonight.',
+    ],
+  },
+
+  confessional: {
+    voice: 'memoiristic, self-aware, grace-saturated',
+    sentenceStyle: 'Winding sentences that double back on themselves, as if discovering truth while writing. Mid-sentence corrections.',
+    keyPhrases: ['I didn\'t understand this until...', 'The truth I kept avoiding...', 'Looking back, I think what I was really doing was...', 'I wish someone had told me...'],
+    systemPromptAdditions: [
+      'Write as memoir, not instruction. The writer is excavating their own life and finding God in the rubble.',
+      'Include at least one moment of unflattering self-knowledge — genuine "I was the problem and didn\'t see it" honesty.',
+      'Let the timeline be nonlinear. Start in the middle, flash back, arrive at the insight sideways.',
+      'Close with grace as surprise — the writer expected judgment and found mercy.',
+    ],
+  },
+
+  practical: {
+    voice: 'actionable, clear-eyed, kingdom-builder',
+    sentenceStyle: 'Direct, declarative sentences. Subject-verb-object. Minimal decoration. The sentence does one thing and does it well.',
+    keyPhrases: ['Here\'s what that looks like on a Tuesday...', 'Try this...', 'The next right thing is...', 'Start here.'],
+    systemPromptAdditions: [
+      'Every devotional must include one specific, actionable practice — not "pray more" but "set a timer for 3 minutes and tell God one true thing."',
+      'Bridge theology to behavior with ruthless specificity. "Love your neighbor" becomes "text the person you\'ve been avoiding."',
+      'Use the language of formation and habit, not inspiration and feeling. The reader is building a life, not having a moment.',
+      'Close with the smallest possible next step. If the action feels overwhelming, it\'s too big.',
+    ],
+  },
+
+  liturgical: {
+    voice: 'ancient, rhythmic, prayer-as-prose',
+    sentenceStyle: 'Cadenced, almost chanted. Repetition as architecture. Sentences that feel like they have been said before by a thousand mouths.',
+    keyPhrases: ['Lord, have mercy...', 'In the morning, we rise. In the evening, we return...', 'This is the word of the Lord...', 'Thanks be to God.'],
+    systemPromptAdditions: [
+      'Draw from the Book of Common Prayer, the Psalms, and the liturgical calendar. Write as if joining a conversation that has been happening for 2,000 years.',
+      'Use structured repetition — anaphora, litany, refrain. The rhythm carries the reader when understanding falters.',
+      'Weave the church calendar into the devotional — Advent waiting, Lenten stripping, Easter joy, Ordinary Time faithfulness.',
+      'Close with a collect-style prayer: address God, name one attribute, make one request, state the hoped-for result.',
     ],
   },
 };
@@ -725,6 +829,25 @@ export function generateHybridPersona(traits: PersonaTrait[]): HybridPersona {
     'narrative_warm': 'Stories told like a friend catching you up',
     'poetic_warm': 'Simple words that somehow shimmer',
     'scholarly_warm': 'Big ideas made accessible',
+    'liturgical_prophetic': 'Ancient prayers that demand justice — the litany becomes a march',
+    'mystical_poetic': 'Silence and beauty intertwined — the reader forgets they are reading',
+    'gentle_pastoral': 'A shepherd who has been through the valley and walks beside you in yours',
+    'pastoral_warm': 'Sunday afternoon on the porch with someone who has seen everything and still believes',
+    'prophetic_urgent': 'The house is on fire and the prophet knows where the exits are',
+    'scholarly_witty': 'The sharpest mind in the room who never makes you feel small',
+    'challenging_witty': 'A surgeon who tells jokes to steady your nerves before the incision',
+    'confessional_raw': 'Two friends at midnight telling each other truths they\'ve never said aloud',
+    'confessional_narrative': 'A memoir that keeps circling back to the moment everything changed',
+    'practical_warm': 'A friend who always knows the next right thing and makes it sound easy',
+    'challenging_practical': 'A coach who loves you too much to let you coast — and hands you the playbook',
+    'liturgical_mystical': 'A candlelit chapel where the prayers have been said for a thousand years',
+    'mystical_pastoral': 'A spiritual director who listens more than they speak and what they say rearranges you',
+    'gentle_liturgical': 'Ancient words spoken softly, like a lullaby that is also a creed',
+    'narrative_witty': 'A storyteller who makes you laugh, then cry, then think',
+    'confessional_gentle': 'Vulnerability offered like a gift — here is my wound, you are safe to show yours',
+    'practical_scholarly': 'Deep theology with a Monday-morning action plan',
+    'raw_urgent': 'No time for polish — the truth said plainly because the stakes are too high',
+    'mystical_scholarly': 'Academic precision dissolved in contemplative wonder — the footnote becomes a prayer',
   };
   
   const key = traits.slice(0, 2).sort().join('_');
@@ -864,7 +987,7 @@ export function getTemplateById(id: string): StructuralTemplate | undefined {
   return STRUCTURAL_TEMPLATES.find(t => t.id === id);
 }
 
-export const ALL_TRAITS: PersonaTrait[] = ['gentle', 'challenging', 'poetic', 'scholarly', 'narrative', 'raw', 'warm'];
+export const ALL_TRAITS: PersonaTrait[] = ['gentle', 'challenging', 'poetic', 'scholarly', 'narrative', 'raw', 'warm', 'prophetic', 'mystical', 'pastoral', 'witty', 'urgent', 'confessional', 'practical', 'liturgical'];
 export const ALL_HOOK_STYLES: HookStyle[] = Object.keys(HOOK_LIBRARY) as HookStyle[];
 export const ALL_TRANSITIONS: TransitionStyle[] = [
   'gradual', 'pivot', 'mysterious', 'logical', 'narrative',
