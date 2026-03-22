@@ -42,8 +42,6 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>ExpoWidgetsAppGroupIdentifier</key>
-	<string>group.com.unfoldapp.ios</string>
 	<key>ExpoWidgets_EnablePushNotifications</key>
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>

@@ -93,7 +93,6 @@
         "expo-widgets",
         {
           "bundleIdentifier": "com.unfoldapp.ios.widgets",
-          "groupIdentifier": "group.com.unfoldapp.ios",
           "enablePushNotifications": false,
           "widgets": [
             {
