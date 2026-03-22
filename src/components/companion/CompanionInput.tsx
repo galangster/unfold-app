@@ -164,6 +164,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
               activeOpacity={0.7}
               onPress={handleStop}
               accessibilityLabel="Stop generating"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{
                 width: 32,
                 height: 32,
@@ -180,6 +181,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
               activeOpacity={0.7}
               onPress={handleMicPress}
               accessibilityLabel="Voice input"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{
                 width: 32,
                 height: 32,
@@ -197,6 +199,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
               onPress={handleSend}
               disabled={!canSend}
               accessibilityLabel="Send message"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{
                 width: 32,
                 height: 32,

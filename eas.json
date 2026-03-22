@@ -26,7 +26,8 @@
         "EXPO_PUBLIC_BACKEND_URL": "https://unfold-backend-production.up.railway.app",
         "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
-        "EAS_USE_CACHE": "1"
+        "EAS_USE_CACHE": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "ios": {
         "distribution": "store"

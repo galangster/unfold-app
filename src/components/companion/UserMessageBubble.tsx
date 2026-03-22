@@ -5,7 +5,7 @@
  * ANIMATION: Fade + slide up on entrance (200ms, ease-out).
  */
 import { View, Text } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -17,7 +17,7 @@ import type { CompanionMessage } from '@/lib/companion-chat-store';
  *         duration 200ms, ease-out cubic
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeInDown.duration(200).damping(20).stiffness(300);
+const ENTERING = FadeInDown.duration(200).easing(Easing.out(Easing.cubic));
 
 interface Props {
   message: CompanionMessage;

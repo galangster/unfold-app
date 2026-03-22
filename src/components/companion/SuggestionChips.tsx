@@ -32,7 +32,7 @@ interface Props {
   visible: boolean;
 }
 
-const PRESS_SPRING = { damping: 20, stiffness: 300 }; // critically-damped, no bounce
+const PRESS_SPRING = { damping: 35, stiffness: 300 }; // critically-damped (ratio >= 1.0), no bounce
 
 function AnimatedChip({
   text,

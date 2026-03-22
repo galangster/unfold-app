@@ -3,7 +3,7 @@
  * Pi-style single continuous conversation.
  * Phase 2: rich text with verse pills, blockquotes, scripture tap sheet.
  */
-import { useCallback, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useRef, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -36,7 +36,7 @@ import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
-function MessageItem({
+const MessageItem = React.memo(function MessageItem({
   item,
   index,
   messages,
@@ -87,7 +87,14 @@ function MessageItem({
       )}
     </View>
   );
-}
+}, (prev, next) =>
+  prev.item.id === next.item.id &&
+  prev.item.content === next.item.content &&
+  prev.item.status === next.item.status &&
+  prev.item.feedback === next.item.feedback &&
+  prev.isStreaming === next.isStreaming &&
+  prev.index === next.index
+);
 
 // ── Screen ─────────────────────────────────────────────────────────────────
 
@@ -232,6 +239,10 @@ export default function CompanionScreen() {
               scrollEventThrottle={16}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
+              initialNumToRender={15}
+              maxToRenderPerBatch={10}
+              windowSize={11}
+              removeClippedSubviews
               contentContainerStyle={{
                 paddingBottom: 8,
                 paddingTop: 8,
@@ -295,6 +306,8 @@ export default function CompanionScreen() {
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={scrollToBottom}
+                  accessibilityLabel="Scroll to bottom"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   style={{
                     width: 36,
                     height: 36,
@@ -326,8 +339,8 @@ export default function CompanionScreen() {
         isStreaming={isStreaming}
       />
 
-      {/* Bottom safe area spacer */}
-      <View style={{ height: insets.bottom + 60 }} />
+      {/* Bottom safe area spacer (tab bar is handled by navigator) */}
+      <View style={{ height: insets.bottom }} />
 
       {/* Scripture tap sheet */}
       <ScriptureTapSheet
