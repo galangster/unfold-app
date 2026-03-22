@@ -131,58 +131,6 @@ export function updateCompanionMemory(
 }
 
 /**
- * Build a compact prompt fragment summarizing conversation memory.
- * Returns empty string if no memory exists.
- */
-// TTL constants
-const PRAYER_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const MEMORY_TTL_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
-
-export function getMemoryPromptFragment(): string {
-  const memory = getCompanionMemory();
-  if (!memory) return '';
-
-  // Expire stale memory — topics/verses after 60 days
-  const now = Date.now();
-  const memoryAge = now - memory.lastUpdated;
-
-  if (memoryAge > MEMORY_TTL_MS) {
-    clearCompanionMemory();
-    return '';
-  }
-
-  // Prayer requests expire individually after 30 days (supports legacy string format)
-  const prayerRequests = (memory.prayerRequests || [])
-    .filter((p) => {
-      if (typeof p === 'string') return memoryAge < PRAYER_TTL_MS; // legacy: use global age
-      return (now - p.addedAt) < PRAYER_TTL_MS;
-    })
-    .map((p) => (typeof p === 'string' ? p : p.text));
-
-  if (
-    memory.topics.length === 0 &&
-    memory.versesMentioned.length === 0 &&
-    prayerRequests.length === 0
-  ) {
-    return '';
-  }
-
-  const parts: string[] = ['CONVERSATION MEMORY (from past conversations):'];
-
-  if (memory.topics.length > 0) {
-    parts.push(`- Topics discussed: ${memory.topics.join(', ')}`);
-  }
-  if (memory.versesMentioned.length > 0) {
-    parts.push(`- Verses referenced: ${memory.versesMentioned.join(', ')}`);
-  }
-  if (prayerRequests.length > 0) {
-    parts.push(`- Recent prayer concerns: ${prayerRequests.join('; ')}`);
-  }
-
-  return parts.join('\n');
-}
-
-/**
  * Clear all conversation memory.
  */
 export function clearCompanionMemory(): void {
