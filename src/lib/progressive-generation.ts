@@ -190,6 +190,22 @@ JSON SCHEMA:
     }
   }
 
+  // Deduplicate methods — if LLM assigned the same method twice, replace duplicates
+  const usedMethods = new Set<string>();
+  for (const hint of parsed.dayHints) {
+    if (hint.studyMethod) {
+      if (usedMethods.has(hint.studyMethod)) {
+        // This method was already used — replace with a fallback pick
+        const genre = regionToGenre(hint.scriptureRegion);
+        const difficulty = roleToDifficulty(hint.narrativeRole, context.writingStyle?.faithBackground);
+        const replacement = pickMethod(genre, difficulty, Array.from(usedMethods));
+        logger.log(`Arc dedup: day ${hint.dayNumber} had duplicate "${hint.studyMethod}" → replaced with "${replacement.id}"`);
+        hint.studyMethod = replacement.id;
+      }
+      usedMethods.add(hint.studyMethod);
+    }
+  }
+
   // Ensure dayHints count matches totalDays — pad missing hints
   while (parsed.dayHints.length < totalDays) {
     const nextDay = parsed.dayHints.length + 1;

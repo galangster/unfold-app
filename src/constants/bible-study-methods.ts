@@ -842,11 +842,12 @@ ADVANCED (turning point days${capAtIntermediate ? ' — NOT for this reader' : '
 ${advancedList}
 
 RULES:
-- No method should repeat within 3 consecutive days
+- ZERO REPEATS: Every single day in the series MUST use a DIFFERENT study method. Never assign the same method twice in one series.
 - Match method to scripture genre (don't apply epistle analysis to a psalm)
 - Map narrative role to difficulty: foundation→accessible, deepening→intermediate, tension→intermediate, turning→advanced, resolution→accessible
 - Include the assigned method ID in each day's arc hint as "studyMethod"
 - IMPORTANT: Use EXACT method IDs from the lists above (e.g. "lectio_divina", not "lectio-divina" or "Lectio Divina")
 - If unsure which method fits, use "expository" as a safe default
+- DO NOT default to lectio_divina — spread across all available methods
 `;
 }
