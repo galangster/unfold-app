@@ -13,10 +13,12 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
+import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter } from '@/lib/bible-constants';
 import type { BibleTranslation } from '@/lib/bible-db';
 import { ReadingSettingsSheet } from '@/components/bible/ReadingSettingsSheet';
 import { BookChapterNavigator } from '@/components/bible/BookChapterNavigator';
+import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
@@ -221,6 +223,7 @@ export default function BibleReaderScreen() {
   const bookId = parseInt(params.bookId ?? '1', 10);
   const chapter = parseInt(params.chapter ?? '1', 10);
 
+  const { isReady: isDbReady, isDownloading, progress: downloadProgress, download: downloadDb, error: downloadError } = useBibleDb();
   const bibleReaderSettings = useUnfoldStore((s) => s.bibleReaderSettings);
   const bibleHighlights = useUnfoldStore((s) => s.bibleHighlights);
   const addBibleHighlight = useUnfoldStore((s) => s.addBibleHighlight);
@@ -710,7 +713,20 @@ export default function BibleReaderScreen() {
         contentContainerStyle={[styles.versesContent, { paddingTop: insets.top + HEADER_HEIGHT + 16, paddingBottom: tabBarHeight + 80 }]}
         showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
+        {!isDbReady ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+            <DownloadBibleSheet
+              visible
+              onComplete={() => {}}
+              colors={colors}
+              isDark={isDark}
+              progress={downloadProgress}
+              isDownloading={isDownloading}
+              error={downloadError}
+              onDownload={downloadDb}
+            />
+          </View>
+        ) : isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color={colors.textSubtle} size="small" />
           </View>

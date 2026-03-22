@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
-import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon } from 'phosphor-react-native';
+import { HouseIcon, BookBookmarkIcon, ChatCircleDotsIcon, BookOpenIcon, UserIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -189,9 +189,11 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 ? 'Today'
                 : route.name === '(bible)'
                   ? 'Bible'
-                  : route.name === '(journal)'
-                    ? 'Journal'
-                    : 'You';
+                  : route.name === '(ask)'
+                    ? 'Ask'
+                    : route.name === '(journal)'
+                      ? 'Journal'
+                      : 'You';
 
           const onPress = () => {
             const event = navigation.emit({
@@ -224,6 +226,8 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 return <HouseIcon {...iconProps} />;
               case '(bible)':
                 return <BookBookmarkIcon {...iconProps} />;
+              case '(ask)':
+                return <ChatCircleDotsIcon {...iconProps} />;
               case '(journal)':
                 return <BookOpenIcon {...iconProps} />;
               case '(you)':
@@ -295,6 +299,12 @@ export default function TabLayout() {
         name="(bible)"
         options={{
           title: 'Bible',
+        }}
+      />
+      <Tabs.Screen
+        name="(ask)"
+        options={{
+          title: 'Ask',
         }}
       />
       <Tabs.Screen

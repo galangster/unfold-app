@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
-import Animated, { FadeIn, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet, Pressable } from 'react-native';
+import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon } from 'phosphor-react-native';
+import { useRouter } from 'expo-router';
+import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { fetchVerse, fetchVerseLocal, fetchCommentary, type VerseResult } from '@/lib/bible-api';
+import { BIBLE_BOOKS } from '@/lib/bible-constants';
 
 interface ScriptureTapSheetProps {
   visible: boolean;
@@ -19,6 +21,23 @@ interface ScriptureTapSheetProps {
   devotionalTitle?: string;
 }
 
+/** Parse "Romans 8:28" into { bookId, chapter, verse } for Bible reader navigation */
+function parseReferenceForNav(reference: string): { bookId: number; chapter: number; verse: number } | null {
+  const match = reference.match(/^(.+?)\s+(\d+)(?::(\d+))?/);
+  if (!match) return null;
+
+  const bookName = match[1].trim();
+  const chapter = parseInt(match[2], 10);
+  const verse = match[3] ? parseInt(match[3], 10) : 1;
+
+  const book = BIBLE_BOOKS.find(
+    (b) => b.name.toLowerCase() === bookName.toLowerCase()
+  );
+  if (!book) return null;
+
+  return { bookId: book.id, chapter, verse };
+}
+
 export function ScriptureTapSheet({
   visible,
   onClose,
@@ -28,7 +47,8 @@ export function ScriptureTapSheet({
   dayTitle,
   devotionalTitle,
 }: ScriptureTapSheetProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const router = useRouter();
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
   const isBookmarked = useUnfoldStore((s) => s.isBookmarked);
   const user = useUnfoldStore((s) => s.user);
@@ -48,6 +68,8 @@ export function ScriptureTapSheet({
     ? isBookmarked(devotionalId, dayNumber)
     : false;
 
+  const canNavigate = parseReferenceForNav(reference) !== null;
+
   useEffect(() => {
     if (visible && reference) {
       setLoading(true);
@@ -56,8 +78,6 @@ export function ScriptureTapSheet({
       setCommentary(null);
       setCommentaryLoading(false);
       const translation = user?.bibleTranslation ?? 'BSB';
-      // Prefer local SQLite DB for BSB/KJV (offline, correct translation)
-      // Fall back to bible-api.com for other translations
       const fetchFn = ['BSB', 'KJV'].includes(translation.toUpperCase())
         ? () => fetchVerseLocal(reference, translation.toUpperCase() as 'BSB' | 'KJV')
             .then((local) => local ?? fetchVerse(reference, 'web'))
@@ -65,7 +85,6 @@ export function ScriptureTapSheet({
       fetchFn()
         .then((result) => {
           setVerse(result);
-          // Start loading AI commentary after verse loads
           if (result && dayTitle) {
             setCommentaryLoading(true);
             fetchCommentary({
@@ -105,153 +124,184 @@ export function ScriptureTapSheet({
     setSaved(true);
   };
 
+  const handleReadInBible = () => {
+    const nav = parseReferenceForNav(reference);
+    if (!nav) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onClose();
+    setTimeout(() => {
+      router.push(`/(tabs)/(bible)/reader?bookId=${nav.bookId}&chapter=${nav.chapter}&verse=${nav.verse}`);
+    }, 200);
+  };
+
   if (!visible) return null;
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="none"
+      animationType="fade"
       onRequestClose={onClose}
     >
-      {/* Backdrop */}
-      <TouchableOpacity activeOpacity={0.7}
-        onPress={onClose}
-        style={stStyles.backdrop}
-      >
+      <View style={s.container}>
+        {/* Backdrop */}
+        <Pressable onPress={onClose} style={s.backdrop} />
+
         {/* Sheet */}
         <Animated.View
-          entering={SlideInDown.duration(300)}
-          exiting={SlideOutDown.duration(200)}
-          style={[stStyles.sheet, { backgroundColor: colors.background }]}
+          entering={FadeInDown.duration(250)}
+          exiting={FadeOut.duration(150)}
+          style={[s.sheet, { backgroundColor: colors.background }]}
         >
-          <TouchableOpacity activeOpacity={0.7} onPress={(e) => e.stopPropagation()}>
-            {/* Grab handle */}
-            <View style={stStyles.handleContainer}>
-              <View style={[stStyles.handle, { backgroundColor: colors.border }]} />
-            </View>
+          {/* Drag indicator */}
+          <View style={s.handleRow}>
+            <View style={[s.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
+          </View>
 
-            {/* Header */}
-            <View style={stStyles.header}>
-              <Text style={[stStyles.headerTitle, { color: colors.text }]}>
+          {/* Header row: reference + translation + actions + close */}
+          <View style={s.header}>
+            <View style={s.headerLeft}>
+              <Text style={[s.reference, { color: colors.text }]} numberOfLines={1}>
                 {reference}
               </Text>
+              {verse && (
+                <View style={[s.translationPill, { backgroundColor: colors.accent + '1A' }]}>
+                  <Text style={[s.translationPillText, { color: colors.accent }]}>
+                    {verse.translation.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-              <TouchableOpacity activeOpacity={0.7}
+            <View style={s.headerActions}>
+              {/* Copy */}
+              {verse && (
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  onPress={handleCopy}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={[s.iconBtn, { backgroundColor: copied ? colors.accent + '1A' : 'transparent' }]}
+                >
+                  {copied ? (
+                    <CheckIcon size={16} color={colors.accent} weight="bold" />
+                  ) : (
+                    <CopyIcon size={16} color={colors.textMuted} weight="light" />
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Bookmark */}
+              {verse && devotionalId && dayNumber && !alreadyBookmarked && (
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  onPress={handleBookmark}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={[s.iconBtn, { backgroundColor: saved ? colors.accent + '1A' : 'transparent' }]}
+                >
+                  <BookmarkSimpleIcon
+                    size={16}
+                    color={saved ? colors.accent : colors.textMuted}
+                    weight={saved ? 'fill' : 'light'}
+                  />
+                </TouchableOpacity>
+              )}
+
+              {/* Close */}
+              <TouchableOpacity
+                activeOpacity={0.6}
                 onPress={onClose}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={stStyles.closeButton}
+                style={s.iconBtn}
                 accessibilityLabel="Close scripture view"
                 accessibilityRole="button"
               >
-                <XIcon size={20} color={colors.textSubtle} weight="light" />
+                <XIcon size={18} color={colors.textSubtle} weight="light" />
               </TouchableOpacity>
             </View>
+          </View>
 
-            {/* Content */}
-            <ScrollView style={stStyles.scrollContent} showsVerticalScrollIndicator={false}>
-              {loading ? (
-                <View style={stStyles.loadingContainer}>
-                  <ActivityIndicator size="small" color={colors.accent} />
-                </View>
-              ) : verse ? (
-                <>
-                  {/* Verse text */}
-                  <Text style={[stStyles.verseText, { color: colors.text }]}>
+          {/* Scrollable content */}
+          <ScrollView
+            style={s.scroll}
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces
+          >
+            {loading ? (
+              <View style={s.loadingWrap}>
+                <ActivityIndicator size="small" color={colors.accent} />
+              </View>
+            ) : verse ? (
+              <>
+                {/* Verse text — accent left border for visual identity */}
+                <View style={[s.verseBlock, { borderLeftColor: colors.accent + '40' }]}>
+                  <Text style={[s.verseText, { color: colors.text }]}>
                     {verse.text}
                   </Text>
+                </View>
 
-                  {/* Translation badge */}
-                  <View style={[stStyles.translationBadge, { backgroundColor: colors.inputBackground }]}>
-                    <Text style={[stStyles.translationText, { color: colors.textSubtle }]}>
-                      {verse.translation.toUpperCase()}
+                {/* AI Commentary */}
+                {commentaryLoading && (
+                  <Animated.View
+                    entering={FadeIn.duration(200)}
+                    style={[s.commentaryLoading, { backgroundColor: colors.inputBackground }]}
+                  >
+                    <ActivityIndicator size={12} color={colors.accent} />
+                    <Text style={[s.commentaryLoadingLabel, { color: colors.textSubtle }]}>
+                      Connecting to today's theme...
                     </Text>
-                  </View>
-
-                  {/* AI Commentary */}
-                  {commentaryLoading && (
-                    <Animated.View
-                      entering={FadeIn.duration(200)}
-                      style={[stStyles.commentaryLoading, { backgroundColor: colors.inputBackground }]}
-                    >
-                      <ActivityIndicator size={12} color={colors.accent} />
-                      <Text style={[stStyles.commentaryLoadingText, { color: colors.textSubtle }]}>
-                        Connecting to today's theme...
+                  </Animated.View>
+                )}
+                {commentary && !commentaryLoading && (
+                  <Animated.View
+                    entering={FadeIn.duration(400)}
+                    style={[s.commentaryCard, { backgroundColor: colors.inputBackground }]}
+                  >
+                    <View style={s.commentaryHeaderRow}>
+                      <SparkleIcon size={11} color={colors.accent} weight="fill" />
+                      <Text style={[s.commentaryLabel, { color: colors.accent }]}>
+                        Today's Connection
                       </Text>
-                    </Animated.View>
-                  )}
-                  {commentary && !commentaryLoading && (
-                    <Animated.View
-                      entering={FadeIn.duration(400)}
-                      style={[stStyles.commentaryCard, { backgroundColor: colors.inputBackground, borderLeftColor: colors.accent }]}
-                    >
-                      <View style={stStyles.commentaryHeader}>
-                        <SparkleIcon size={12} color={colors.accent} weight="fill" />
-                        <Text style={[stStyles.commentaryLabel, { color: colors.accent }]}>
-                          Today's Connection
-                        </Text>
-                      </View>
-                      <Text style={[stStyles.commentaryText, { color: colors.textMuted }]}>
-                        {commentary}
-                      </Text>
-                    </Animated.View>
-                  )}
+                    </View>
+                    <Text style={[s.commentaryBody, { color: colors.textMuted }]}>
+                      {commentary}
+                    </Text>
+                  </Animated.View>
+                )}
 
-                  {/* Action buttons */}
-                  <View style={stStyles.actionsRow}>
-                    <TouchableOpacity activeOpacity={0.7}
-                      onPress={handleCopy}
-                      style={[stStyles.actionButton, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-                    >
-                      {copied ? (
-                        <CheckIcon size={16} color={colors.accent} weight="bold" />
-                      ) : (
-                        <CopyIcon size={16} color={colors.textMuted} weight="light" />
-                      )}
-                      <Text style={[stStyles.actionButtonText, { color: copied ? colors.accent : colors.text }]}>
-                        {copied ? 'Copied' : 'Copy'}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {devotionalId && dayNumber && !alreadyBookmarked && (
-                      <TouchableOpacity activeOpacity={0.7}
-                        onPress={handleBookmark}
-                        style={[
-                          stStyles.actionButton,
-                          {
-                            backgroundColor: saved ? colors.accent + '15' : colors.inputBackground,
-                            borderColor: saved ? colors.accent : colors.border,
-                          },
-                        ]}
-                      >
-                        <BookmarkSimpleIcon
-                          size={16}
-                          color={saved ? colors.accent : colors.textMuted}
-                          weight={saved ? 'fill' : 'light'}
-                        />
-                        <Text style={[stStyles.actionButtonText, { color: saved ? colors.accent : colors.text }]}>
-                          {saved ? 'Saved' : 'Bookmark'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </>
-              ) : (
-                <Text style={[stStyles.errorText, { color: colors.textMuted }]}>
-                  Couldn't load this passage. Try again later.
-                </Text>
-              )}
-            </ScrollView>
-          </TouchableOpacity>
+                {/* Read in Bible — primary CTA */}
+                {canNavigate && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleReadInBible}
+                    style={[s.readCta, { backgroundColor: colors.accent + '12' }]}
+                  >
+                    <BookOpenIcon size={16} color={colors.accent} weight="light" />
+                    <Text style={[s.readCtaText, { color: colors.accent }]}>
+                      Read in Bible
+                    </Text>
+                    <ArrowRightIcon size={14} color={colors.accent} weight="bold" style={{ marginLeft: 'auto' }} />
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <Text style={[s.errorText, { color: colors.textMuted }]}>
+                Couldn't load this passage. Try again later.
+              </Text>
+            )}
+          </ScrollView>
         </Animated.View>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
 
-const stStyles = StyleSheet.create({
-  backdrop: {
+const s = StyleSheet.create({
+  container: {
     flex: 1,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
@@ -259,60 +309,91 @@ const stStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '55%',
-    paddingBottom: 100,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '65%',
   },
-  handleContainer: {
+
+  // ─── Handle ─────────────────────────────────────
+  handleRow: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
   },
+
+  // ─── Header ─────────────────────────────────────
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 14,
   },
-  headerTitle: {
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reference: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 17,
-    flex: 1,
+    flexShrink: 1,
   },
-  closeButton: {
-    padding: 4,
+  translationPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  translationPillText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10,
+    letterSpacing: 0.6,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 8,
+  },
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ─── Scroll ─────────────────────────────────────
+  scroll: {
+    paddingHorizontal: 20,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingBottom: 48,
   },
-  loadingContainer: {
+  loadingWrap: {
     alignItems: 'center',
     paddingVertical: 40,
+  },
+
+  // ─── Verse ──────────────────────────────────────
+  verseBlock: {
+    borderLeftWidth: 2,
+    paddingLeft: 16,
+    marginBottom: 20,
   },
   verseText: {
     fontFamily: FontFamily.body,
     fontSize: 17,
-    lineHeight: 28,
-    marginBottom: 12,
+    lineHeight: 30,
   },
-  translationBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 16,
-  },
-  translationText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
+
+  // ─── Commentary ─────────────────────────────────
   commentaryLoading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,20 +402,19 @@ const stStyles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 16,
   },
-  commentaryLoadingText: {
+  commentaryLoadingLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 12,
   },
   commentaryCard: {
     padding: 14,
     borderRadius: 12,
-    borderLeftWidth: 2,
     marginBottom: 16,
   },
-  commentaryHeader: {
+  commentaryHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     marginBottom: 6,
   },
   commentaryLabel: {
@@ -343,29 +423,27 @@ const stStyles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  commentaryText: {
+  commentaryBody: {
     fontFamily: FontFamily.body,
     fontSize: 14,
     lineHeight: 22,
   },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
+
+  // ─── Read CTA ───────────────────────────────────
+  readCta: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 12,
-    borderWidth: 1,
   },
-  actionButtonText: {
+  readCtaText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 14,
   },
+
+  // ─── Error ──────────────────────────────────────
   errorText: {
     fontFamily: FontFamily.body,
     fontSize: 15,

@@ -133,6 +133,23 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
     }
   }
 
+  // Auto-detect DB file if status isn't 'ready' (e.g., stuck download, manual copy)
+  if (meta.status !== 'ready') {
+    const fileInfo = await getInfoAsync(DB_FILE_PATH);
+    if (fileInfo.exists) {
+      const sizeBytes = 'size' in fileInfo ? (fileInfo.size ?? 0) : 0;
+      if (sizeBytes >= 5 * 1024 * 1024) {
+        logger.log('[BibleDB] Found existing DB file, marking as ready');
+        setMeta(META_KEY_STATUS, 'ready');
+        setMeta(META_KEY_VERSION, DB_VERSION);
+        setMeta(META_KEY_SIZE, String(sizeBytes));
+        setMeta(META_KEY_DOWNLOADED_AT, new Date().toISOString());
+        setMeta(META_KEY_ERROR, null);
+        return 'ready';
+      }
+    }
+  }
+
   return meta.status;
 }
 
