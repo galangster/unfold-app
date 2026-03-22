@@ -42,7 +42,6 @@ import { FontFamily } from '@/constants/fonts';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
-import { AdaptiveQuestionFlow } from '@/components/AdaptiveQuestionFlow';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
 import { generateAdaptiveQuestion } from '@/lib/devotional-service';
@@ -347,6 +346,24 @@ export default function OnboardingScreen() {
   const trialPurchaseMutation = useMutation({
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
   });
+
+  // Create anonymous Firebase user early so adaptive questions can auth with backend.
+  // The signIn step comes AFTER the discovery steps in the flow, but the discovery steps
+  // need a valid Firebase token to call /api/generate/adaptive-question.
+  useEffect(() => {
+    const ensureAuth = async () => {
+      try {
+        const auth = require('@react-native-firebase/auth').default;
+        if (!auth().currentUser) {
+          await signInAnonymously();
+          logger.log('[onboarding] Created anonymous Firebase user for backend auth');
+        }
+      } catch {
+        // Non-blocking — adaptive questions will fall back to defaults if this fails
+      }
+    };
+    ensureAuth();
+  }, []);
 
   // Mirror-back text — memoized so it doesn't change on re-render
   const mirrorBackText = useMemo(() => {
