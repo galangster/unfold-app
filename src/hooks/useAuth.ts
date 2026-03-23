@@ -33,9 +33,9 @@ export function useAuth() {
     const primary = clerkUser.externalAccounts?.[0];
     if (!primary) return 'apple'; // fallback
     const provider = primary.provider;
-    if (provider === 'oauth_apple' || provider === 'apple') return 'apple';
-    if (provider === 'oauth_google' || provider === 'google') return 'google';
-    if (provider === 'oauth_facebook' || provider === 'facebook') return 'facebook';
+    if (provider === 'apple') return 'apple';
+    if (provider === 'google') return 'google';
+    if (provider === 'facebook') return 'facebook';
     return 'apple';
   })();
 

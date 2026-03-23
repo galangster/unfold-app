@@ -18,7 +18,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.unfoldapp.ios",
       "buildNumber": "1",
-      "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false
@@ -49,7 +48,6 @@
     "plugins": [
       "expo-system-ui",
       "expo-router",
-      "@react-native-firebase/app",
       [
         "expo-build-properties",
         {
