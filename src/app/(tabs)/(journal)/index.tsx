@@ -582,11 +582,9 @@ export default function JournalHubScreen() {
   const filteredNotes = useMemo(() => {
     let filtered = [...notes];
 
-    // Folder filter — includes notes in subfolders
+    // Folder filter — direct children only (not descendant subfolders)
     if (activeFolderId !== null) {
-      const descendantIds = getDescendantFolderIds(activeFolderId);
-      const allFolderIds = new Set([activeFolderId, ...descendantIds]);
-      filtered = filtered.filter((n) => n.folderId && allFolderIds.has(n.folderId));
+      filtered = filtered.filter((n) => n.folderId === activeFolderId);
     }
 
     // Search filter (applies to both segments when active)
@@ -613,7 +611,7 @@ export default function JournalHubScreen() {
     );
 
     return filtered;
-  }, [notes, activeFolderId, searchQuery, getDescendantFolderIds]);
+  }, [notes, activeFolderId, searchQuery]);
 
   // ---- Reflections filtered entries ----
   const filteredEntries = useMemo(() => {
@@ -786,14 +784,22 @@ export default function JournalHubScreen() {
 
             setUndoAction({ type: 'folder', folder, affectedNoteIds });
 
+            // Collect all descendant IDs before deletion (store method needs data to still exist)
+            const descendantIds = new Set(getDescendantFolderIds(folder.id));
+            descendantIds.add(folder.id);
+
             // Delete folder (notes → Unfiled) — cascades to subfolders
             storeDeleteFolder(folder.id, false);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            // Reset filter if the deleted folder was active
-            if (activeFolderId === folder.id) {
-              setActiveFolderId(null);
-              setCurrentParentId(null);
+            // Reset navigation if viewing the deleted folder or any of its descendants
+            if (activeFolderId !== null && descendantIds.has(activeFolderId)) {
+              // Navigate to the deleted folder's parent (or root)
+              setActiveFolderId(folder.parentId ?? null);
+              setCurrentParentId(folder.parentId ?? null);
+            } else if (currentParentId !== null && descendantIds.has(currentParentId)) {
+              // Viewing subfolder level that was deleted — go to deleted folder's parent
+              setCurrentParentId(folder.parentId ?? null);
             }
 
             // Auto-dismiss undo after 4s
@@ -1033,7 +1039,7 @@ export default function JournalHubScreen() {
                           }}
                         >
                           Day {currentDevotional.currentDay}/
-                          {currentDevotional.days.length}
+                          {Math.max(currentDevotional.totalDays, currentDevotional.days.length)}
                         </Text>
                       </View>
 
@@ -1085,6 +1091,7 @@ export default function JournalHubScreen() {
                           backgroundColor: colors.border,
                           borderRadius: 1,
                           marginTop: 16,
+                          overflow: 'hidden',
                         }}
                       >
                         <View
@@ -1092,7 +1099,7 @@ export default function JournalHubScreen() {
                             height: 2,
                             backgroundColor: colors.accent,
                             borderRadius: 1,
-                            width: `${Math.round((currentDevotional.currentDay / currentDevotional.days.length) * 100)}%`,
+                            width: `${Math.min(Math.round((currentDevotional.currentDay / Math.max(currentDevotional.totalDays, currentDevotional.days.length, 1)) * 100), 100)}%`,
                           }}
                         />
                       </View>
@@ -1457,7 +1464,7 @@ export default function JournalHubScreen() {
 
               {/* Notes list or empty state */}
               {filteredNotes.length === 0 ? (
-                !searchQuery.trim() && activeFolderId === null ? (
+                !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
                   <View style={{ paddingHorizontal: 24 }}>
                     <NotebookEmptyState onCreateNote={handleCreateNote} />
                   </View>
@@ -1471,7 +1478,9 @@ export default function JournalHubScreen() {
                     >
                       {searchQuery.trim()
                         ? `No notes match "${searchQuery}"`
-                        : 'No notes in this folder yet.'}
+                        : activeFolderId !== null
+                          ? 'No notes in this folder yet.\nLong-press a folder to add subfolders.'
+                          : 'No notes here yet.'}
                     </Text>
                   </View>
                 )
@@ -1537,6 +1546,7 @@ export default function JournalHubScreen() {
           }}
           folders={folders}
           currentFolderId={noteToMove?.folderId}
+          currentParentId={currentParentId}
           onSelect={handleMoveFolderSelect}
           onReorder={reorderFolders}
           onCreateFolder={() => setShowCreateFolderSheet(true)}
@@ -1550,10 +1560,20 @@ export default function JournalHubScreen() {
               .filter((n) => n.folderId === folderId)
               .map((n) => n.id);
 
+            // Collect descendants before deletion
+            const descendantIds = new Set(getDescendantFolderIds(folderId));
+            descendantIds.add(folderId);
+
             setUndoAction({ type: 'folder', folder, affectedNoteIds });
             storeDeleteFolder(folderId, false);
 
-            if (activeFolderId === folderId) setActiveFolderId(null);
+            // Reset navigation if viewing the deleted folder or a descendant
+            if (activeFolderId !== null && descendantIds.has(activeFolderId)) {
+              setActiveFolderId(folder.parentId ?? null);
+              setCurrentParentId(folder.parentId ?? null);
+            } else if (currentParentId !== null && descendantIds.has(currentParentId)) {
+              setCurrentParentId(folder.parentId ?? null);
+            }
 
             deleteTimerRef.current = setTimeout(() => {
               setUndoAction(null);

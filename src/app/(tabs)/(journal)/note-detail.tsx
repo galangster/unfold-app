@@ -8,9 +8,10 @@ import {
   Platform,
   AccessibilityInfo,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -103,13 +104,14 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
       line-height: 1.65;
       color: ${colors.text};
       background-color: ${colors.background} !important;
-      padding: 0 24px 200px;
+      padding: 0 4px 200px;
       margin: 0;
-      width: 100%;
-      max-width: 100%;
+      width: auto;
+      max-width: 100vw;
       overflow-x: hidden;
       overflow-wrap: break-word;
       word-wrap: break-word;
+      word-break: break-word;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
       min-height: 100%;
@@ -121,6 +123,8 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
       overflow-anchor: none;
       overflow-wrap: break-word;
       word-wrap: break-word;
+      word-break: break-word;
+      max-width: 100%;
     }
     .tiptap { scroll-padding-bottom: 60vh; }
     p { margin: 0 0 4px 0; }
@@ -345,6 +349,33 @@ export default function NoteDetailScreen() {
     }
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Adjust scroll threshold when keyboard + toolbar are both visible.
+  // tentap-editor internally sets ProseMirror paddingBottom to keyboardHeight + 10,
+  // but our custom toolbar (48px) sits above the keyboard and occludes content.
+  // We inject extra padding so the cursor is never hidden behind the toolbar.
+  const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
+  useEffect(() => {
+    if (!editorState.isReady) return;
+    if (isEditing && isKeyboardUp && keyboardHeight > 0) {
+      const extraPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 10;
+      editor.injectJS(`
+        (function() {
+          var doc = document.querySelector('.ProseMirror');
+          if (doc) doc.style.paddingBottom = '${extraPadding}px';
+        })();
+      `);
+      editor.updateScrollThresholdAndMargin(extraPadding);
+    } else {
+      editor.injectJS(`
+        (function() {
+          var doc = document.querySelector('.ProseMirror');
+          if (doc) doc.style.paddingBottom = '0px';
+        })();
+      `);
+      editor.updateScrollThresholdAndMargin(0);
+    }
+  }, [isEditing, isKeyboardUp, keyboardHeight, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -364,32 +395,46 @@ export default function NoteDetailScreen() {
     const escapedRef = reference.replace(/'/g, "\\'");
     const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
 
+    // Restore the saved cursor position before inserting so the blockquote
+    // lands where the user's cursor was, not at the top of the document.
+    // Falls back to the end of the document if no position was saved.
     editor.injectJS(`
-      window.editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: 'blockquote',
-          content: [
-            {
-              type: 'paragraph',
-              content: [
-                { type: 'text', text: '${escapedText}' },
-              ],
-            },
-            {
-              type: 'paragraph',
-              content: [
-                {
-                  type: 'text',
-                  marks: [{ type: 'italic' }],
-                  text: '\\u2014 ${escapedRef}',
-                },
-              ],
-            },
-          ],
-        })
-        .run();
+      (function() {
+        var pos = typeof window.__savedSelection === 'number'
+          ? window.__savedSelection
+          : window.editor.state.doc.content.size - 1;
+        // Clamp to valid range
+        var maxPos = window.editor.state.doc.content.size - 1;
+        if (pos > maxPos) pos = maxPos;
+        if (pos < 0) pos = 0;
+        window.editor
+          .chain()
+          .focus()
+          .setTextSelection(pos)
+          .insertContent({
+            type: 'blockquote',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: '${escapedText}' },
+                ],
+              },
+              {
+                type: 'paragraph',
+                content: [
+                  {
+                    type: 'text',
+                    marks: [{ type: 'italic' }],
+                    text: '\\u2014 ${escapedRef}',
+                  },
+                ],
+              },
+            ],
+          })
+          .run();
+        delete window.__savedSelection;
+      })();
     `);
 
     setPendingScriptureInsert(null);
@@ -467,6 +512,19 @@ export default function NoteDetailScreen() {
       editor.focus('end');
     }, 100);
   }, [editor, colors]);
+
+  // Double-tap on editor body enters edit mode
+  const doubleTapGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .numberOfTaps(2)
+        .onEnd(() => {
+          if (!isEditingRef.current) {
+            runOnJS(handleEdit)();
+          }
+        }),
+    [handleEdit],
+  );
 
   const handleDone = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -559,19 +617,47 @@ export default function NoteDetailScreen() {
 
   /* ───── Menu actions ───── */
 
-  const handleToggleFavorite = useCallback(() => {
-    const id = noteId;
-    if (!id) return;
+  /**
+   * Ensure the note has been persisted to the store and return its ID.
+   * If the note hasn't been saved yet (new/empty), creates it immediately.
+   */
+  const ensureNoteSaved = useCallback(async (): Promise<string> => {
+    if (noteId) return noteId;
+    const html = await editor.getHTML();
+    const titleVal = latestTitleRef.current;
+    const id = addNote({
+      title: titleVal,
+      content: html || '<p></p>',
+      category,
+      tags: [],
+      isFavorite: false,
+      scriptureRefs,
+      devotionalId: params.devotionalId,
+      dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
+      bibleBookId: params.bookId ? Number(params.bookId) : undefined,
+      bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+    });
+    setNoteId(id);
+    logger.log('[NoteDetail] Saved note via menu action:', id);
+    return id;
+  }, [noteId, editor, category, scriptureRefs, params, addNote]);
+
+  const handleToggleFavorite = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const id = await ensureNoteSaved();
     const currentNote = notes.find((n) => n.id === id);
     if (currentNote) {
       updateNote(id, { isFavorite: !currentNote.isFavorite });
+    } else {
+      // Note was just created — toggle it to favorite
+      updateNote(id, { isFavorite: true });
     }
     setShowMoreMenu(false);
-  }, [noteId, notes, updateNote]);
+  }, [ensureNoteSaved, notes, updateNote]);
 
   const handleDelete = useCallback(() => {
     if (!noteId) {
+      setShowMoreMenu(false);
       router.back();
       return;
     }
@@ -599,12 +685,12 @@ export default function NoteDetailScreen() {
   }, []);
 
   const handleMoveFolderSelect = useCallback(
-    (folderId: string | null) => {
-      if (!noteId) return;
-      moveNoteToFolder(noteId, folderId);
+    async (folderId: string | null) => {
+      const id = await ensureNoteSaved();
+      moveNoteToFolder(id, folderId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [noteId, moveNoteToFolder],
+    [ensureNoteSaved, moveNoteToFolder],
   );
 
 
@@ -612,8 +698,11 @@ export default function NoteDetailScreen() {
 
   const handleScripturePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Save the current cursor position before the sheet opens and steals focus.
+    // Without this, .focus() defaults to the start of the document on re-entry.
+    editor.injectJS(`window.__savedSelection = window.editor.state.selection.anchor;`);
     setShowScriptureSheet(true);
-  }, []);
+  }, [editor]);
 
   const handleScriptureInsert = useCallback(
     (data: { reference: string; text: string; scriptureRef: ScriptureRef }) => {
@@ -830,58 +919,48 @@ export default function NoteDetailScreen() {
             ]}
           >
             {/* Favorite toggle */}
-            {noteId && (
-              <TouchableOpacity
-                onPress={handleToggleFavorite}
-                style={styles.menuItem}
-                activeOpacity={0.6}
-              >
-                <StarIcon
-                  size={16}
-                  color={isFavorite ? colors.accent : colors.textMuted}
-                  weight={isFavorite ? 'fill' : 'light'}
-                />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>
-                  {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={handleToggleFavorite}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+            >
+              <StarIcon
+                size={16}
+                color={isFavorite ? colors.accent : colors.textMuted}
+                weight={isFavorite ? 'fill' : 'light'}
+              />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                {isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              </Text>
+            </TouchableOpacity>
 
-            {noteId && (
-              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            )}
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
             {/* Move to folder */}
-            {noteId && (
-              <TouchableOpacity
-                onPress={handleMoveToFolder}
-                style={styles.menuItem}
-                activeOpacity={0.6}
-              >
-                <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
-                <Text style={[styles.menuItemText, { color: colors.text }]}>
-                  {currentFolder ? `Folder: ${currentFolder.name}` : 'Move to folder'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={handleMoveToFolder}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+            >
+              <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.text }]}>
+                {currentFolder ? `Folder: ${currentFolder.name}` : 'Move to folder'}
+              </Text>
+            </TouchableOpacity>
 
-            {noteId && (
-              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
-            )}
+            <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
 
-            {/* Delete */}
-            {noteId && (
-              <TouchableOpacity
-                onPress={handleDelete}
-                style={styles.menuItem}
-                activeOpacity={0.6}
-              >
-                <TrashIcon size={16} color={colors.error} weight="light" />
-                <Text style={[styles.menuItemText, { color: colors.error }]}>
-                  {deleteConfirm ? 'Tap again to delete' : 'Delete note'}
-                </Text>
-              </TouchableOpacity>
-            )}
+            {/* Delete / Discard */}
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={styles.menuItem}
+              activeOpacity={0.6}
+            >
+              <TrashIcon size={16} color={colors.error} weight="light" />
+              <Text style={[styles.menuItemText, { color: colors.error }]}>
+                {deleteConfirm ? 'Tap again to delete' : noteId ? 'Delete note' : 'Discard note'}
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         )}
 
@@ -987,20 +1066,22 @@ export default function NoteDetailScreen() {
         />
 
         {/* ── TipTap rich text body ── */}
-        <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
-          <RichText
-            editor={editor}
-            style={[styles.richText, { backgroundColor: colors.background }]}
-          />
-          {/* Solid overlay hides WebView white flash */}
-          {!editorReady && (
-            <Animated.View
-              exiting={FadeOut.duration(200)}
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+        <GestureDetector gesture={doubleTapGesture}>
+          <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
+            <RichText
+              editor={editor}
+              style={[styles.richText, { backgroundColor: colors.background }]}
             />
-          )}
-        </View>
+            {/* Solid overlay hides WebView white flash */}
+            {!editorReady && (
+              <Animated.View
+                exiting={FadeOut.duration(200)}
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+              />
+            )}
+          </View>
+        </GestureDetector>
 
         {/* ── Tags section (read mode only) ── */}
         {!isEditing && liveNote && liveNote.tags.length > 0 && (
@@ -1344,6 +1425,7 @@ const styles = StyleSheet.create({
   editorContainer: {
     flex: 1,
     position: 'relative',
+    paddingHorizontal: 20,
   },
   richText: {
     flex: 1,

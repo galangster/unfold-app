@@ -1,6 +1,7 @@
 import React, { useRef, useMemo, useState } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor } from '@/lib/store';
@@ -149,11 +150,18 @@ export function DevotionalWebView({
       setTimeout(reportHeight, 500);
       setTimeout(reportHeight, 1000);
       
+      // Suppress iOS native context menu (Copy/Look Up/Share)
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      });
+
       // Selection handling
       let selectedText = '';
       let selectionRange = null;
+      let toolbarShown = false;
       const toolbar = document.getElementById('highlight-toolbar');
-      
+
       function positionToolbar() {
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
@@ -172,62 +180,94 @@ export function DevotionalWebView({
         toolbar.style.top = top + 'px';
         // Left centering handled by CSS (left:50% + margin-left)
       }
-      
+
+      function showToolbar() {
+        if (!toolbarShown) {
+          toolbarShown = true;
+          // Request haptic feedback from React Native
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'HAPTIC_SELECTION'
+          }));
+        }
+        toolbar.classList.add('visible');
+      }
+
+      function hideToolbar() {
+        toolbarShown = false;
+        toolbar.classList.remove('visible');
+      }
+
       function checkSelection() {
         const selection = window.getSelection();
-        const newText = selection.toString().trim();
-        
+        const newText = selection ? selection.toString().trim() : '';
+
         if (newText.length > 5 && newText !== selectedText) {
           selectedText = newText;
-          selectionRange = selection.getRangeAt(0);
+          try {
+            selectionRange = selection.getRangeAt(0).cloneRange();
+          } catch(e) {
+            selectionRange = null;
+          }
           positionToolbar();
-          toolbar.classList.add('visible');
+          showToolbar();
         } else if (newText.length <= 5) {
           selectedText = '';
-          toolbar.classList.remove('visible');
+          hideToolbar();
         }
       }
-      
-      // Poll for selection changes
-      document.addEventListener('selectionchange', () => {
+
+      // Listen for selection changes (primary mechanism on iOS)
+      document.addEventListener('selectionchange', function() {
         setTimeout(checkSelection, 50);
       });
 
-      document.addEventListener('touchend', () => {
-        setTimeout(checkSelection, 100);
+      // Backup: also check on touchend
+      document.addEventListener('touchend', function() {
+        setTimeout(checkSelection, 150);
       });
-      
-      // Handle color button clicks
-      document.querySelectorAll('.color-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+
+      // Prevent toolbar touches from clearing the selection
+      toolbar.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }, { passive: false });
+
+      // Handle color button taps via touchend (more reliable than click on iOS)
+      document.querySelectorAll('.color-btn').forEach(function(btn) {
+        btn.addEventListener('touchend', function(e) {
           e.preventDefault();
           e.stopPropagation();
-          
-          const color = btn.dataset.color;
+
+          var color = btn.dataset.color;
           if (!selectedText || !window.rangyHighlighter) return;
-          
-          let context = '';
+
+          // Haptic feedback for color tap
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'HAPTIC_IMPACT'
+          }));
+
+          var context = '';
           if (selectionRange) {
-            const container = selectionRange.commonAncestorContainer;
-            const element = container.nodeType === 3 ? container.parentElement : container;
-            context = element?.textContent?.substring(0, 150) || '';
+            var container = selectionRange.commonAncestorContainer;
+            var element = container.nodeType === 3 ? container.parentElement : container;
+            context = element && element.textContent ? element.textContent.substring(0, 150) : '';
           }
-          
-          let highlightApplied = false;
-          let serializedHighlight = '';
-          
+
+          var highlightApplied = false;
+          var serializedHighlight = '';
+
           try {
-            const selection = window.getSelection();
+            var selection = window.getSelection();
             selection.removeAllRanges();
             selection.addRange(selectionRange);
-            
+
             window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
             highlightApplied = true;
             serializedHighlight = window.rangyHighlighter.serialize();
-          } catch (e) {
-            console.log('Highlight failed:', e);
+          } catch (err) {
+            console.log('Highlight failed:', err);
           }
-          
+
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'QUOTE_SELECTED',
             text: selectedText,
@@ -236,21 +276,29 @@ export function DevotionalWebView({
             serializedRange: serializedHighlight,
             color: color
           }));
-          
+
           window.getSelection().removeAllRanges();
-          toolbar.classList.remove('visible');
+          hideToolbar();
           selectedText = '';
         });
+
+        // Prevent click from interfering
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+        });
       });
-      
+
       // Hide toolbar when tapping elsewhere
-      document.addEventListener('click', (e) => {
+      document.addEventListener('touchend', function(e) {
         if (!e.target.closest('#highlight-toolbar')) {
-          const selection = window.getSelection();
-          if (!selection.toString().trim()) {
-            toolbar.classList.remove('visible');
-            selectedText = '';
-          }
+          setTimeout(function() {
+            var selection = window.getSelection();
+            if (!selection || !selection.toString().trim()) {
+              hideToolbar();
+              selectedText = '';
+            }
+          }, 200);
         }
       });
       
@@ -389,9 +437,9 @@ export function DevotionalWebView({
       padding: 0;
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
+      -webkit-touch-callout: none !important;
     }
-    
+
     body {
       font-family: '${webFont}', Georgia, serif;
       font-size: ${bodyFontSize}px;
@@ -402,6 +450,7 @@ export function DevotionalWebView({
       max-width: 100%;
       -webkit-user-select: text;
       user-select: text;
+      -webkit-touch-callout: none !important;
     }
     
     /* Staggered fade-in animation for paragraphs */
@@ -443,9 +492,10 @@ export function DevotionalWebView({
     }
     
     /* Prevent native context menu on long press */
-    p, span, div {
+    p, span, div, mark {
       -webkit-user-select: text;
       user-select: text;
+      -webkit-touch-callout: none !important;
     }
     
     /* Highlight colors */
@@ -616,13 +666,16 @@ export function DevotionalWebView({
       display: flex;
       gap: 8px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      z-index: 1000;
+      z-index: 10000;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s, transform 0.2s;
       transform: translateY(10px);
       left: 50%;
       margin-left: -100px;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none;
+      user-select: none;
     }
     
     #highlight-toolbar.visible {
@@ -635,17 +688,20 @@ export function DevotionalWebView({
       width: 32px;
       height: 32px;
       border-radius: 16px;
-      border: 2px solid transparent;
+      border: 2.5px solid transparent;
       cursor: pointer;
-      transition: transform 0.1s, border-color 0.2s;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      -webkit-touch-callout: none !important;
+      -webkit-user-select: none;
+      user-select: none;
+      outline: none;
+      -webkit-appearance: none;
     }
-    
-    .color-btn:hover {
-      transform: scale(1.1);
-    }
-    
+
     .color-btn:active {
-      transform: scale(0.95);
+      transform: scale(0.9);
+      border-color: rgba(255,255,255,0.9);
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.3);
     }
     
     .color-btn.yellow { background: linear-gradient(135deg, #FFE066, #FFD43B); }
@@ -700,6 +756,10 @@ export function DevotionalWebView({
         onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {
         setWebViewHeight(Math.max(data.height, 200));
+      } else if (data.type === 'HAPTIC_SELECTION') {
+        Haptics.selectionAsync();
+      } else if (data.type === 'HAPTIC_IMPACT') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (e) {
       logger.error('WebView message parse error:', e);

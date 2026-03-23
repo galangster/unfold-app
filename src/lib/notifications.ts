@@ -360,6 +360,47 @@ export async function scheduleMiddayCheckIn(): Promise<string | null> {
   }
 }
 
+// Cancel today's midday notification and reschedule starting tomorrow.
+// Call this after a user completes the midday check-in so the already-queued
+// notification for today doesn't still fire.
+export async function cancelAndRescheduleMiddayForTomorrow(): Promise<void> {
+  if (Platform.OS === 'web') return;
+
+  // Cancel the current daily trigger (which would fire today if not yet 12:30)
+  await cancelNotificationById(NOTIFICATION_IDS.MIDDAY_CHECKIN);
+
+  const hasPermission = await areNotificationsEnabled();
+  if (!hasPermission) return;
+
+  // Schedule a one-shot for tomorrow at 12:30 PM, then on app foreground
+  // the useCheckInNotifications hook will re-establish the daily trigger
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(12, 30, 0, 0);
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_IDS.MIDDAY_CHECKIN,
+      content: {
+        title: 'Quick check-in',
+        body: getMessageForToday(MIDDAY_MESSAGES),
+        sound: true,
+        data: { type: 'midday-checkin' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: tomorrow,
+      },
+    });
+
+    logger.log('[Notifications] Midday check-in rescheduled for tomorrow 12:30 PM');
+  } catch (error) {
+    logger.error('[Notifications] Failed to reschedule midday for tomorrow:', error);
+    // Fall back to daily trigger so notifications don't stop permanently
+    await scheduleMiddayCheckIn();
+  }
+}
+
 // Schedule evening wind-down notification (Phase 5)
 // Fires at 8:30pm local time, daily
 export async function scheduleEveningWindDown(): Promise<string | null> {
@@ -403,6 +444,42 @@ export async function cancelMiddayCheckIn(): Promise<void> {
 // Cancel evening wind-down notification
 export async function cancelEveningWindDown(): Promise<void> {
   await cancelNotificationById(NOTIFICATION_IDS.EVENING_WINDDOWN);
+}
+
+// Cancel today's evening notification and reschedule starting tomorrow.
+// Call this after a user completes the evening wind-down.
+export async function cancelAndRescheduleEveningForTomorrow(): Promise<void> {
+  if (Platform.OS === 'web') return;
+
+  await cancelNotificationById(NOTIFICATION_IDS.EVENING_WINDDOWN);
+
+  const hasPermission = await areNotificationsEnabled();
+  if (!hasPermission) return;
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(20, 30, 0, 0);
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_IDS.EVENING_WINDDOWN,
+      content: {
+        title: 'One last thing',
+        body: getMessageForToday(EVENING_MESSAGES),
+        sound: true,
+        data: { type: 'evening-winddown' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: tomorrow,
+      },
+    });
+
+    logger.log('[Notifications] Evening wind-down rescheduled for tomorrow 8:30 PM');
+  } catch (error) {
+    logger.error('[Notifications] Failed to reschedule evening for tomorrow:', error);
+    await scheduleEveningWindDown();
+  }
 }
 
 // Refresh daily reminder with new content (call when day advances)

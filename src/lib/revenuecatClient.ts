@@ -38,7 +38,13 @@ const googleKey = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY;
 // Use __DEV__ and Platform to determine which key to use
 const getApiKey = (): string | undefined => {
   if (isWeb) return undefined;
-  if (__DEV__) return testKey;
+
+  if (__DEV__) {
+    // In dev, prefer the test key. If not set, fall back to the platform key
+    // so offerings still load during simulator/development testing.
+    if (testKey) return testKey;
+    return Platform.OS === "ios" ? appleKey : googleKey;
+  }
 
   // Production: use platform-specific key
   return Platform.OS === "ios" ? appleKey : googleKey;
@@ -106,10 +112,17 @@ if (isEnabled) {
     });
 
     Purchases.configure({ apiKey: apiKey! });
-    logger.log(`${LOG_PREFIX} SDK initialized successfully`);
+    const keyType = __DEV__
+      ? (testKey ? 'test' : (Platform.OS === 'ios' ? 'apple (dev fallback)' : 'google (dev fallback)'))
+      : (Platform.OS === 'ios' ? 'apple' : 'google');
+    logger.log(`${LOG_PREFIX} SDK initialized successfully (${keyType} key, ${Platform.OS})`);
   } catch (error) {
     logger.error(`${LOG_PREFIX} Failed to initialize:`, error);
   }
+} else {
+  logger.log(
+    `${LOG_PREFIX} SDK NOT initialized — isWeb: ${isWeb}, testKey: ${!!testKey}, appleKey: ${!!appleKey}, googleKey: ${!!googleKey}, __DEV__: ${__DEV__}`,
+  );
 }
 
 /**

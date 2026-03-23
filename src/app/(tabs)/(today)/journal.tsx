@@ -285,11 +285,11 @@ export default function JournalScreen() {
   }, [devotionalId, dayNumber, addJournalEntry, getJournalEntry, activeMode]);
 
   const saveEntry = useCallback((text: string) => {
-    if (!text.trim() || !isMountedRef.current) return;
-
     if (savedEntryIdRef.current) {
+      // Always persist to the existing entry — including empty text (user deleted content)
       updateJournalEntry(savedEntryIdRef.current, text);
-    } else {
+    } else if (text.trim()) {
+      // Only create a brand-new entry if there's actual content
       addJournalEntry({
         devotionalId,
         dayNumber,
@@ -306,13 +306,15 @@ export default function JournalScreen() {
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
-      isMountedRef.current = false;
       if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
-      if (hasChangesRef.current && contentRef.current.trim()) {
+      // Flush any pending changes on unmount — including deletions (empty content).
+      // Must run before setting isMountedRef to false so saveEntry is not blocked.
+      if (hasChangesRef.current) {
         saveEntry(contentRef.current);
       }
+      isMountedRef.current = false;
     };
   }, [saveEntry]);
 
@@ -890,14 +892,22 @@ Their journal entry:
                           )}
 
                           {!isExpanded && isAnswered && (
-                            <Animated.View
-                              entering={FadeIn.duration(200)}
-                              style={jStyles.questionPreview}
+                            <TouchableOpacity
+                              activeOpacity={0.6}
+                              onPress={() => handleToggleQuestion(index)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Edit your response to prompt ${index + 1}`}
+                              accessibilityHint="Tap to edit your response"
                             >
-                              <Text style={[jStyles.questionPreviewText, { color: colors.textMuted }]} numberOfLines={2}>
-                                {responseText}
-                              </Text>
-                            </Animated.View>
+                              <Animated.View
+                                entering={FadeIn.duration(200)}
+                                style={jStyles.questionPreview}
+                              >
+                                <Text style={[jStyles.questionPreviewText, { color: colors.textMuted }]} numberOfLines={2}>
+                                  {responseText}
+                                </Text>
+                              </Animated.View>
+                            </TouchableOpacity>
                           )}
                         </Animated.View>
                       );

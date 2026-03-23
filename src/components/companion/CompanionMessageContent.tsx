@@ -1,11 +1,12 @@
 /**
  * CompanionMessageContent — full-width, no bubble.
  * Shows companion icon on first message of a group.
- * Renders rich text (verse pills, blockquotes) for complete messages,
- * plain text during streaming.
+ * Renders rich text (verse pills, blockquotes, bold, italic, bullets)
+ * for complete messages, lightly-stripped text during streaming.
  *
  * ANIMATION: Fade in on mount (200ms, ease-out).
  */
+import { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { ChatCircleDotsIcon } from 'phosphor-react-native';
@@ -14,6 +15,17 @@ import { FontFamily } from '@/constants/fonts';
 import { StreamingCursor } from './StreamingCursor';
 import { RichMessageText } from './RichMessageText';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
+
+/** Lightweight markdown strip for streaming text — removes syntax chars only */
+function stripMarkdownLight(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, '')       // headers
+    .replace(/\*\*(.+?)\*\*/g, '$1')   // bold
+    .replace(/\*(.+?)\*/g, '$1')       // italic
+    .replace(/^[-*]\s+/gm, '\u2022 ')  // bullet lists
+    .replace(/^\d+\.\s+/gm, '\u2022 ') // numbered lists
+    .replace(/^[-*_]{3,}\s*$/gm, '');   // horizontal rules
+}
 
 interface Props {
   message: CompanionMessage;
@@ -30,6 +42,23 @@ interface Props {
  * ───────────────────────────────────────────────────────── */
 
 const ENTERING = FadeIn.duration(200);
+
+/** Memoized streaming text that strips markdown on the fly */
+function StreamingText({ content, color }: { content: string; color: string }) {
+  const stripped = useMemo(() => stripMarkdownLight(content), [content]);
+  return (
+    <Text
+      style={{
+        fontFamily: FontFamily.body,
+        fontSize: 16,
+        lineHeight: 27.2,
+        color,
+      }}
+    >
+      {stripped}
+    </Text>
+  );
+}
 
 export function CompanionMessageContent({ message, showIcon, isStreaming, onVersePress }: Props) {
   const { colors } = useTheme();
@@ -84,18 +113,9 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
             onVersePress={onVersePress}
           />
         ) : (
-          // Streaming or pending — plain text with cursor
+          // Streaming or pending — lightly stripped text with cursor
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 16,
-                lineHeight: 27.2, // 1.7x — more generous than user messages
-                color: colors.text,
-              }}
-            >
-              {message.content}
-            </Text>
+            <StreamingText content={message.content} color={colors.text} />
             {isStreaming && message.status === 'streaming' && (
               <View style={{ marginBottom: 4 }}>
                 <StreamingCursor />

@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import {
   MagnifyingGlassIcon,
   BookBookmarkIcon,
+  ArrowBendUpRightIcon,
   CaretLeftIcon,
   XCircleIcon,
   XIcon,
@@ -241,6 +242,13 @@ export function BookChapterNavigator({
     }
   }, [mode]);
 
+  const handleGoToRef = useCallback(() => {
+    if (!parsedRef) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Keyboard.dismiss();
+    onSelect(parsedRef.bookId, parsedRef.chapter, parsedRef.verse);
+  }, [parsedRef, onSelect]);
+
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
   }, []);
@@ -292,9 +300,10 @@ export function BookChapterNavigator({
         placeholderTextColor={colors.textHint}
         value={searchQuery}
         onChangeText={setSearchQuery}
+        onSubmitEditing={handleGoToRef}
         autoCorrect={false}
         autoCapitalize="none"
-        returnKeyType="search"
+        returnKeyType="go"
         accessibilityLabel="Search Bible books or verses"
       />
       {searchQuery.length > 0 && (
@@ -314,15 +323,11 @@ export function BookChapterNavigator({
       <View style={styles.suggestionsContainer}>
         {parsedRef && (
           <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              Keyboard.dismiss();
-              onSelect(parsedRef.bookId, parsedRef.chapter, parsedRef.verse);
-            }}
+            onPress={handleGoToRef}
             style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}
             accessibilityLabel={`Go to ${BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name} ${parsedRef.chapter}`}
           >
-            <BookBookmarkIcon size={18} color={colors.accent} weight="light" style={styles.suggestionIcon} />
+            <ArrowBendUpRightIcon size={18} color={colors.accent} weight="light" style={styles.suggestionIcon} />
             <Text style={[styles.suggestionText, { color: colors.text }]}>
               Go to {BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name} {parsedRef.chapter}
               {parsedRef.verse ? `:${parsedRef.verse}` : ''}

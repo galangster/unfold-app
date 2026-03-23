@@ -451,9 +451,9 @@ function PulseLine({ accent }: { accent: string }) {
 
   useEffect(() => {
     pulse.value = withRepeat(
-      withTiming(1, { duration: 2500, easing: Easing.linear }),
+      withTiming(1, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
       -1,
-      false,
+      true,
     );
   }, []);
 

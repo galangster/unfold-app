@@ -625,6 +625,10 @@ export function pickMethod(
     return genreMatch && difficultyMatch && notRecent;
   });
 
+  // Deprioritize lectio_divina: if other options exist, filter it out
+  const nonLectio = candidates.filter((m) => m.id !== 'lectio_divina');
+  if (nonLectio.length > 0) return nonLectio[Math.floor(Math.random() * nonLectio.length)];
+
   // Fallback: relax difficulty constraint
   if (candidates.length === 0) {
     const relaxed = Object.values(BIBLE_STUDY_METHODS).filter((m) => {
@@ -847,7 +851,9 @@ RULES:
 - Map narrative role to difficulty: foundation→accessible, deepening→intermediate, tension→intermediate, turning→advanced, resolution→accessible
 - Include the assigned method ID in each day's arc hint as "studyMethod"
 - IMPORTANT: Use EXACT method IDs from the lists above (e.g. "lectio_divina", not "lectio-divina" or "Lectio Divina")
-- If unsure which method fits, use "expository" as a safe default
-- DO NOT default to lectio_divina — spread across all available methods
+- If unsure which method fits, use "discovery_bible_study" as a safe default
+- NEVER use lectio_divina for Day 1. For Day 1 foundation, choose from: soap_journal, discovery_bible_study, narrative_study, swedish_method, or character_study
+- Spread contemplative methods (lectio_divina, ignatian_contemplation, scripture_meditation, breath_prayer, examen_with_scripture) across the series — never assign more than ONE contemplative method per 5 days
+- Prioritize variety: analytical methods (soap_journal, swedish_method, discovery_bible_study), creative methods (storytelling_renarration, narrative_study), and reflective methods (character_study, lament_study) should appear before defaulting to contemplative ones
 `;
 }

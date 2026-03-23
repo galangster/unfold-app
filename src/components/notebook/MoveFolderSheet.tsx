@@ -52,6 +52,8 @@ import {
   NoteIcon,
   DotsSixVerticalIcon,
   TrashIcon,
+  CaretRightIcon,
+  CaretLeftIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -88,6 +90,8 @@ interface MoveFolderSheetProps {
   onReorder?: (orderedIds: string[]) => void;
   /** When provided, shows a trash icon on each folder row */
   onDeleteFolder?: (folderId: string) => void;
+  /** Current parent folder being viewed — filters to show only siblings at this level */
+  currentParentId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +109,7 @@ export function MoveFolderSheet({
   onCreateFolder,
   onReorder,
   onDeleteFolder,
+  currentParentId: initialParentId = null,
 }: MoveFolderSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -115,15 +120,47 @@ export function MoveFolderSheet({
   const [orderedFolders, setOrderedFolders] = useState<NoteFolder[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  // Sync local order when folders prop changes or sheet opens
+  // Sheet-local navigation level for drilling into subfolders
+  const [sheetParentId, setSheetParentId] = useState<string | null>(initialParentId ?? null);
+
+  // Reset sheet parent when opening
   useEffect(() => {
     if (visible) {
-      const sorted = [...folders].sort(
-        (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
-      );
-      setOrderedFolders(sorted);
+      setSheetParentId(initialParentId ?? null);
     }
-  }, [visible, folders]);
+  }, [visible, initialParentId]);
+
+  // Filter folders to only show siblings at the current sheet level
+  const levelFolders = useMemo(() => {
+    return [...folders]
+      .filter((f) => (f.parentId ?? null) === sheetParentId)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [folders, sheetParentId]);
+
+  // Check if a folder has children
+  const hasChildren = useCallback(
+    (folderId: string) => folders.some((f) => f.parentId === folderId),
+    [folders],
+  );
+
+  // Build breadcrumb for current sheet level
+  const sheetBreadcrumbs = useMemo(() => {
+    if (!sheetParentId) return [];
+    const crumbs: NoteFolder[] = [];
+    let current = folders.find((f) => f.id === sheetParentId);
+    while (current) {
+      crumbs.unshift(current);
+      current = current.parentId ? folders.find((f) => f.id === current!.parentId) : undefined;
+    }
+    return crumbs;
+  }, [sheetParentId, folders]);
+
+  // Sync local order when folders prop changes or sheet opens — use level-filtered folders
+  useEffect(() => {
+    if (visible) {
+      setOrderedFolders(levelFolders);
+    }
+  }, [visible, levelFolders]);
 
   // Spring in when sheet opens, reset when it closes
   useEffect(() => {
@@ -201,7 +238,7 @@ export function MoveFolderSheet({
     transform: [{ translateY: translateY.value }],
   }));
 
-  const displayFolders = onReorder ? orderedFolders : folders;
+  const displayFolders = onReorder ? orderedFolders : levelFolders;
 
   return (
     <Modal
@@ -241,6 +278,33 @@ export function MoveFolderSheet({
               <Text style={[styles.title, { color: colors.text }]}>
                 {title}
               </Text>
+
+              {/* Breadcrumb navigation when drilled into a subfolder */}
+              {sheetBreadcrumbs.length > 0 && (
+                <View style={styles.breadcrumbRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const parentFolder = sheetBreadcrumbs.length > 1
+                        ? sheetBreadcrumbs[sheetBreadcrumbs.length - 2]
+                        : null;
+                      setSheetParentId(parentFolder?.id ?? null);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    style={styles.backButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back to parent folder"
+                  >
+                    <CaretLeftIcon size={14} color={colors.accent} weight="bold" />
+                    <Text style={[styles.breadcrumbText, { color: colors.accent }]}>
+                      {sheetBreadcrumbs.length > 1
+                        ? sheetBreadcrumbs[sheetBreadcrumbs.length - 2].name
+                        : 'All Folders'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -331,6 +395,7 @@ export function MoveFolderSheet({
                 {displayFolders.map((folder) => {
                   const isSelected = currentFolderId === folder.id;
                   const isDragging = draggingId === folder.id;
+                  const folderHasChildren = hasChildren(folder.id);
                   return (
                     <DraggableFolderRow
                       key={folder.id}
@@ -340,8 +405,13 @@ export function MoveFolderSheet({
                       showDragHandle={!!onReorder}
                       showDeleteButton={!!onDeleteFolder}
                       showAllNotes={showAllNotes}
+                      hasChildren={folderHasChildren}
                       colors={colors}
                       onSelect={() => handleSelect(folder.id)}
+                      onDrillIn={folderHasChildren ? () => {
+                        setSheetParentId(folder.id);
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      } : undefined}
                       onSwap={handleSwapFolders}
                       onDragStart={() => setDraggingId(folder.id)}
                       onDragEnd={() => setDraggingId(null)}
@@ -419,8 +489,10 @@ interface DraggableFolderRowProps {
   showDragHandle: boolean;
   showDeleteButton: boolean;
   showAllNotes: boolean;
+  hasChildren?: boolean;
   colors: ReturnType<typeof useTheme>['colors'];
   onSelect: () => void;
+  onDrillIn?: () => void;
   onSwap: (folderId: string, direction: 'up' | 'down') => void;
   onDragStart: () => void;
   onDragEnd: () => void;
@@ -434,8 +506,10 @@ function DraggableFolderRow({
   showDragHandle,
   showDeleteButton,
   showAllNotes,
+  hasChildren,
   colors,
   onSelect,
+  onDrillIn,
   onSwap,
   onDragStart,
   onDragEnd,
@@ -542,6 +616,19 @@ function DraggableFolderRow({
         >
           {folder.name}
         </Text>
+        {/* Drill-in chevron for folders with subfolders */}
+        {hasChildren && onDrillIn && !showDeleteButton && (
+          <TouchableOpacity
+            onPress={onDrillIn}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel={`View subfolders of ${folder.name}`}
+            style={styles.drillInButton}
+          >
+            <CaretRightIcon size={14} color={colors.textSubtle} weight="bold" />
+          </TouchableOpacity>
+        )}
         {isSelected && !showDeleteButton && (
           <CheckIcon size={16} color={colors.accent} weight="bold" />
         )}
@@ -652,5 +739,24 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 14,
     textAlign: 'center',
+  },
+  breadcrumbRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+    paddingBottom: 12,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  breadcrumbText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 13,
+  },
+  drillInButton: {
+    padding: 6,
+    marginRight: -6,
   },
 });

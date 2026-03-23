@@ -1,8 +1,14 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } from 'phosphor-react-native';
@@ -11,6 +17,183 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { format } from 'date-fns';
 import { exportDevotionalToPDF, isPDFExportSupported } from '@/lib/pdf-export';
+
+// ============================================================================
+// Segmented Control
+// ============================================================================
+
+type PastSeriesTab = 'progress' | 'completed';
+
+interface SegmentedControlProps {
+  activeTab: PastSeriesTab;
+  onTabChange: (tab: PastSeriesTab) => void;
+}
+
+function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
+  const { colors } = useTheme();
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const activeIndex = activeTab === 'progress' ? 0 : 1;
+  const segmentWidth = containerWidth > 0 ? (containerWidth - 4) / 2 : 0;
+
+  const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
+
+  // Update animation when tab changes — fast ease-out, no bounce
+  const prevIndex = useRef(activeIndex);
+  if (prevIndex.current !== activeIndex && segmentWidth > 0) {
+    indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+    });
+    prevIndex.current = activeIndex;
+  }
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: indicatorTranslateX.value }],
+    width: segmentWidth,
+  }));
+
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const width = e.nativeEvent.layout.width;
+    setContainerWidth(width);
+  }, []);
+
+  // When containerWidth changes and we know the index, set position without animation
+  const containerWidthRef = useRef(0);
+  if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {
+    containerWidthRef.current = containerWidth;
+    indicatorTranslateX.value = activeIndex * ((containerWidth - 4) / 2);
+  }
+
+  const handlePress = useCallback(
+    (tab: PastSeriesTab) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onTabChange(tab);
+    },
+    [onTabChange],
+  );
+
+  return (
+    <View
+      onLayout={handleLayout}
+      style={[
+        segStyles.container,
+        {
+          backgroundColor: colors.inputBackground,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      {/* Sliding indicator */}
+      {segmentWidth > 0 && (
+        <Animated.View
+          style={[
+            segStyles.indicator,
+            {
+              backgroundColor: colors.glassBackground,
+              borderColor: colors.glassBorder,
+              shadowColor: '#000',
+            },
+            indicatorStyle,
+          ]}
+        />
+      )}
+
+      {/* Segments */}
+      <TouchableOpacity
+        onPress={() => handlePress('progress')}
+        style={segStyles.segment}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: activeTab === 'progress' }}
+        accessibilityLabel="In Progress tab, 1 of 2"
+      >
+        <Text
+          style={[
+            segStyles.segmentText,
+            {
+              fontFamily:
+                activeTab === 'progress'
+                  ? FontFamily.uiMedium
+                  : FontFamily.ui,
+              color:
+                activeTab === 'progress'
+                  ? colors.text
+                  : colors.textSubtle,
+            },
+          ]}
+        >
+          In Progress
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => handlePress('completed')}
+        style={segStyles.segment}
+        activeOpacity={0.7}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: activeTab === 'completed' }}
+        accessibilityLabel="Completed tab, 2 of 2"
+      >
+        <Text
+          style={[
+            segStyles.segmentText,
+            {
+              fontFamily:
+                activeTab === 'completed'
+                  ? FontFamily.uiMedium
+                  : FontFamily.ui,
+              color:
+                activeTab === 'completed'
+                  ? colors.text
+                  : colors.textSubtle,
+            },
+          ]}
+        >
+          Completed
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const segStyles = StyleSheet.create({
+  container: {
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 2,
+    position: 'relative',
+  },
+  indicator: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    height: 30,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    zIndex: 1,
+  },
+  segmentText: {
+    fontSize: 14,
+  },
+});
+
+// ============================================================================
+// Main Screen
+// ============================================================================
 
 export default function PastDevotionalsScreen() {
   const router = useRouter();
@@ -21,6 +204,7 @@ export default function PastDevotionalsScreen() {
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
+  const [activeTab, setActiveTab] = useState<PastSeriesTab>('progress');
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportSuccessId, setExportSuccessId] = useState<string | null>(null);
   const exportSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -30,6 +214,15 @@ export default function PastDevotionalsScreen() {
       if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
     };
   }, []);
+
+  // Filter devotionals by tab
+  const filteredDevotionals = useMemo(() => {
+    return devotionals.filter((d) => {
+      const completedDays = d.days.filter((day) => day.isRead).length;
+      const isComplete = completedDays >= d.totalDays;
+      return activeTab === 'completed' ? isComplete : !isComplete;
+    });
+  }, [devotionals, activeTab]);
 
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -181,7 +374,9 @@ export default function PastDevotionalsScreen() {
               color: colors.textSubtle,
             }}
           >
-            Day {item.currentDay} of {item.totalDays}
+            {completedDays === item.totalDays
+              ? `${item.totalDays} days completed`
+              : `Day ${item.currentDay} of ${item.totalDays}`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -240,6 +435,10 @@ export default function PastDevotionalsScreen() {
     );
   }
 
+  const emptyLabel = activeTab === 'completed'
+    ? 'No completed series yet'
+    : 'No series in progress';
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -269,13 +468,38 @@ export default function PastDevotionalsScreen() {
           </Text>
         </View>
 
-        <FlashList
-          data={devotionals}
-          renderItem={renderItem as any}
-          keyExtractor={(item: Devotional) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 100 } as any}
-          showsVerticalScrollIndicator={false}
-        />
+        {/* Segmented Control */}
+        <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
+          <SegmentedControl activeTab={activeTab} onTabChange={setActiveTab} />
+        </View>
+
+        {filteredDevotionals.length === 0 ? (
+          <Animated.View
+            entering={FadeIn.duration(300)}
+            style={{ alignItems: 'center', paddingTop: 48 }}
+          >
+            <BookOpenIcon size={36} color={colors.textHint} weight="light" />
+            <Text
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: 15,
+                color: colors.textMuted,
+                textAlign: 'center',
+                marginTop: 12,
+              }}
+            >
+              {emptyLabel}
+            </Text>
+          </Animated.View>
+        ) : (
+          <FlashList
+            data={filteredDevotionals}
+            renderItem={renderItem as any}
+            keyExtractor={(item: Devotional) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 100 } as any}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </SafeAreaView>
     </View>
   );

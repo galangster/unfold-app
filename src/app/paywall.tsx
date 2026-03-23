@@ -125,10 +125,13 @@ export default function PaywallScreen() {
     [userName, emotionalState, spiritualSeeking, selectedTheme],
   );
 
-  const { data: offeringsResult, isLoading } = useQuery({
+  const { data: offeringsResult, isLoading: isLoadingOfferings, isError: isOfferingsError, refetch: refetchOfferings } = useQuery({
     queryKey: ['revenuecat', 'offerings'],
     queryFn: getOfferings,
     enabled: isRevenueCatEnabled(),
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    staleTime: 1000 * 60 * 10, // 10 min — offerings rarely change
   });
 
   const offerings = offeringsResult?.ok ? offeringsResult.data : null;
@@ -138,6 +141,11 @@ export default function PaywallScreen() {
   const yearlyPackage = offerings?.current?.availablePackages.find(
     (pkg) => pkg.identifier === '$rc_annual'
   );
+
+  // Track whether offerings loaded but packages are missing (configuration issue)
+  const offeringsLoaded = !isLoadingOfferings && offeringsResult !== undefined;
+  const hasPackages = !!(monthlyPackage || yearlyPackage);
+  const isRevenueCatDisabled = !isRevenueCatEnabled();
 
   // Check trial eligibility via RevenueCat SDK
   const { data: trialEligibility } = useQuery({
@@ -292,17 +300,53 @@ export default function PaywallScreen() {
 
   const [subscribeError, setSubscribeError] = useState('');
 
-  const handleSubscribe = () => {
+  const [isRetryingOfferings, setIsRetryingOfferings] = useState(false);
+
+  const handleSubscribe = async () => {
     if (isPurchasing) return;
     setSubscribeError('');
 
-    const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
+    let pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
+
+    // If packages aren't available yet, attempt one more fetch before giving up
     if (!pkg) {
-      logger.log('[Paywall] No package available for plan:', selectedPlan, 'offerings:', JSON.stringify(offerings?.current?.availablePackages?.map(p => p.identifier)));
-      setSubscribeError('Subscription not available yet. Try again in a moment.');
+      logger.log('[Paywall] No package available for plan:', selectedPlan, '. Attempting refetch...');
+      setIsRetryingOfferings(true);
+      try {
+        const freshResult = await refetchOfferings();
+        const freshOfferings = freshResult.data?.ok ? freshResult.data.data : null;
+        pkg = selectedPlan === 'yearly'
+          ? freshOfferings?.current?.availablePackages.find((p) => p.identifier === '$rc_annual')
+          : freshOfferings?.current?.availablePackages.find((p) => p.identifier === '$rc_monthly');
+      } catch (e) {
+        logger.log('[Paywall] Refetch failed:', e);
+      } finally {
+        setIsRetryingOfferings(false);
+      }
+    }
+
+    if (!pkg) {
+      logger.log(
+        '[Paywall] Still no package after refetch. plan:',
+        selectedPlan,
+        'enabled:', isRevenueCatEnabled(),
+        'offerings:', JSON.stringify(offerings?.current?.availablePackages?.map(p => p.identifier)),
+        'result ok:', offeringsResult?.ok,
+        'result reason:', offeringsResult && !offeringsResult.ok ? offeringsResult.reason : 'n/a',
+      );
+
+      if (isRevenueCatDisabled) {
+        setSubscribeError('Subscriptions are being set up. Please try again later.');
+      } else if (offeringsResult && !offeringsResult.ok) {
+        setSubscribeError('Could not connect to the store. Check your connection and try again.');
+      } else {
+        // Offerings loaded OK but no packages — likely a RevenueCat dashboard config issue
+        setSubscribeError('Subscription plans are being configured. Please try again shortly.');
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     purchaseMutation.mutate(pkg);
   };
@@ -312,7 +356,7 @@ export default function PaywallScreen() {
     restoreMutation.mutate();
   };
 
-  const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending;
+  const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
 
   // Pull real prices from RevenueCat packages, fall back to hardcoded defaults
   const monthlyPrice = monthlyPackage?.product.priceString ?? '$5.99';
@@ -658,10 +702,16 @@ export default function PaywallScreen() {
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={handleSubscribe}
-          disabled={isPurchasing}
-          accessibilityLabel={isTrialEligible ? `Start your ${selectedTrialDuration} free trial` : 'Unlock Unfold Premium'}
+          disabled={isPurchasing || isLoadingOfferings}
+          accessibilityLabel={
+            isLoadingOfferings
+              ? 'Loading subscription plans'
+              : isTrialEligible
+                ? `Start your ${selectedTrialDuration} free trial`
+                : 'Unlock Unfold Premium'
+          }
           accessibilityRole="button"
-          accessibilityState={{ disabled: isPurchasing }}
+          accessibilityState={{ disabled: isPurchasing || isLoadingOfferings }}
           style={{
             backgroundColor: colors.accent,
             paddingVertical: 17,
@@ -670,11 +720,24 @@ export default function PaywallScreen() {
             alignItems: 'center',
             justifyContent: 'center',
             marginBottom: 4,
-            opacity: isPurchasing ? 0.7 : 1,
+            opacity: (isPurchasing || isLoadingOfferings) ? 0.7 : 1,
           }}
         >
-          {isPurchasing ? (
-            <ActivityIndicator color={colors.background} size="small" />
+          {(isPurchasing || isLoadingOfferings) ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <ActivityIndicator color={colors.background} size="small" />
+              {isLoadingOfferings && !isPurchasing && (
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.background,
+                  }}
+                >
+                  Loading plans...
+                </Text>
+              )}
+            </View>
           ) : (
             <Text
               style={{
@@ -696,9 +759,24 @@ export default function PaywallScreen() {
 
         {/* Error */}
         {subscribeError ? (
-          <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E85C5C', textAlign: 'center', marginTop: 6 }}>
-            {subscribeError}
-          </Text>
+          <View style={{ alignItems: 'center', marginTop: 6, gap: 4 }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E85C5C', textAlign: 'center' }}>
+              {subscribeError}
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={() => {
+                setSubscribeError('');
+                refetchOfferings();
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+              style={{ paddingVertical: 4, paddingHorizontal: 12 }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent }}>
+                Tap to retry
+              </Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
 
         {/* Restore + Skip + Legal row */}
