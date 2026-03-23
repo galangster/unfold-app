@@ -26,7 +26,7 @@ import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, 
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
-import { cancelMiddayCheckIn, scheduleMiddayCheckIn } from '@/lib/notifications';
+import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
@@ -45,6 +45,8 @@ import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { RememberThisCard } from '@/components/home/RememberThisCard';
+import { YourSeriesSection } from '@/components/home/YourSeriesSection';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -569,8 +571,8 @@ export default function HomeScreen() {
       freeText: data.freeText,
       timeOfDay: 'midday',
     });
-    // Reschedule midday notification with tomorrow's rotating message
-    cancelMiddayCheckIn().then(() => scheduleMiddayCheckIn());
+    // Cancel today's midday notification and reschedule for tomorrow
+    cancelAndRescheduleMiddayForTomorrow();
     setShowCheckInSheet(false);
   };
 
@@ -809,6 +811,9 @@ export default function HomeScreen() {
           {bridgeText && !bridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
             <DailyBridgeCard text={bridgeText} colors={colors} />
           )}
+
+          {/* Remember This — daily random highlight */}
+          <RememberThisCard />
 
           {/* Notification cards — above journey card */}
           {showCheckInCard && (
@@ -1301,6 +1306,9 @@ export default function HomeScreen() {
             )}
           </Animated.View>
           </View>
+
+          {/* Your Series — recent devotional series */}
+          <YourSeriesSection />
 
           {/* Day 1 Review Prompt */}
           {showDay1Review && (

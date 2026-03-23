@@ -1,11 +1,12 @@
 import { useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { BookOpenIcon, BookmarkSimpleIcon } from 'phosphor-react-native';
+import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
+  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -30,6 +31,7 @@ interface DevotionalContentProps {
   devotionalId?: string;
   dayNumber?: number;
   onOpenJournal?: (focusQuestion?: number) => void;
+  onStudyMethodPress?: (methodId: string) => void;
 }
 
 /**
@@ -76,6 +78,7 @@ export function DevotionalContent({
   devotionalId,
   dayNumber,
   onOpenJournal,
+  onStudyMethodPress,
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
@@ -94,10 +97,19 @@ export function DevotionalContent({
     width: accentLineWidth.value,
   }));
 
+  // Bookmark spring animation — critically-damped scale
+  const bookmarkScale = useSharedValue(1);
+
   const handleBookmarkPress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    bookmarkScale.value = 0.8;
+    bookmarkScale.value = withSpring(1, { damping: 20, stiffness: 300 });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onToggleBookmark?.();
-  }, [onToggleBookmark]);
+  }, [onToggleBookmark, bookmarkScale]);
+
+  const bookmarkAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: bookmarkScale.value }],
+  }));
 
   // Subtle scripture background tint (accent at 4% opacity)
   const scriptureBgColor = isDark
@@ -133,13 +145,20 @@ export function DevotionalContent({
         ]}
       />
 
-      {/* Study method badge */}
+      {/* Study method row — tappable to open method info sheet */}
       {day.studyMethod && BIBLE_STUDY_METHODS[day.studyMethod] && (
-        <View style={dcStyles.studyMethodBadge}>
-          <Text style={[dcStyles.studyMethodText, { color: colors.textSubtle }]}>
+        <TouchableOpacity
+          style={[dcStyles.methodRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}
+          onPress={() => onStudyMethodPress?.(day.studyMethod!)}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={`Study method: ${BIBLE_STUDY_METHODS[day.studyMethod].name}. Tap for details.`}
+        >
+          <Text style={[dcStyles.methodName, { color: colors.textSubtle }]}>
             {BIBLE_STUDY_METHODS[day.studyMethod].name}
           </Text>
-        </View>
+          <CaretRightIcon size={14} color={colors.textMuted} weight="light" />
+        </TouchableOpacity>
       )}
 
       {/* Scripture block */}
@@ -175,11 +194,13 @@ export function DevotionalContent({
               accessibilityLabel={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
               style={dcStyles.bookmarkButton}
             >
-              <BookmarkSimpleIcon
-                size={15}
-                color={isBookmarked ? colors.accent : colors.textSubtle}
-                weight={isBookmarked ? "fill" : "regular"}
-              />
+              <Animated.View style={bookmarkAnimStyle}>
+                <BookmarkSimpleIcon
+                  size={15}
+                  color={isBookmarked ? colors.accent : colors.textSubtle}
+                  weight={isBookmarked ? "fill" : "regular"}
+                />
+              </Animated.View>
             </TouchableOpacity>
           )}
         </View>
@@ -370,16 +391,21 @@ const dcStyles = StyleSheet.create({
     height: 1.5,
     borderRadius: 1,
   },
-  studyMethodBadge: {
+  methodRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     marginBottom: 20,
   },
-  studyMethodText: {
+  methodName: {
     fontFamily: FontFamily.mono,
     fontSize: 10,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
+    flex: 1,
   },
   scriptureBlock: {
     borderLeftWidth: 2.5,

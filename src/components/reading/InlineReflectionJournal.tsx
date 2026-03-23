@@ -54,7 +54,10 @@ export function InlineReflectionJournal({
 
   // Local response state (before debounced save)
   const [localResponses, setLocalResponses] = useState<Map<number, string>>(new Map());
+  const localResponsesRef = useRef<Map<number, string>>(localResponses);
+  localResponsesRef.current = localResponses;
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasPendingSaveRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
@@ -97,6 +100,8 @@ export function InlineReflectionJournal({
     },
     [ensureEntry, updateQuestionResponse]
   );
+  const saveResponseRef = useRef(saveResponse);
+  saveResponseRef.current = saveResponse;
 
   const handleResponseChange = useCallback(
     (index: number, question: string, text: string) => {
@@ -107,9 +112,11 @@ export function InlineReflectionJournal({
       });
 
       // Debounced save
+      hasPendingSaveRef.current = true;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         saveResponse(index, question, text);
+        hasPendingSaveRef.current = false;
       }, 800);
     },
     [saveResponse]
@@ -140,17 +147,19 @@ export function InlineReflectionJournal({
   useEffect(() => {
     return () => {
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-        // Flush pending saves
-        localResponses.forEach((response, index) => {
-          if (response.trim() && index < questions.length) {
-            saveResponse(index, questions[index], response);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      // Flush all local responses on unmount if there's a pending debounced save.
+      // Uses refs to access the latest values (not stale closure from mount time).
+      // Saves empty responses too so deletions persist.
+      if (hasPendingSaveRef.current) {
+        localResponsesRef.current.forEach((response, index) => {
+          if (index < questions.length) {
+            saveResponseRef.current(index, questions[index], response);
           }
         });
       }
     };
-  }, []);
+  }, [questions]);
 
   const getResponse = useCallback(
     (index: number, question: string): string => {
@@ -442,28 +451,36 @@ function ReflectionQuestionCard({
         </Animated.View>
       )}
 
-      {/* Collapsed: Show response preview if answered */}
+      {/* Collapsed: Show response preview if answered — tap to re-open editing */}
       {!isExpanded && isAnswered && (
-        <Animated.View
-          entering={FadeIn.duration(200)}
-          style={{
-            marginLeft: 50,
-            marginTop: 6,
-            paddingRight: 16,
-          }}
+        <TouchableOpacity
+          activeOpacity={0.6}
+          onPress={() => onTap(index)}
+          accessibilityRole="button"
+          accessibilityLabel={`Edit your response to question ${index + 1}`}
+          accessibilityHint="Tap to edit your response"
         >
-          <Text
+          <Animated.View
+            entering={FadeIn.duration(200)}
             style={{
-              fontFamily: FontFamily.body,
-              fontSize: fontSizes.body - 2,
-              color: colors.textMuted,
-              lineHeight: (fontSizes.body - 2) * 1.5,
+              marginLeft: 50,
+              marginTop: 6,
+              paddingRight: 16,
             }}
-            numberOfLines={2}
           >
-            {response}
-          </Text>
-        </Animated.View>
+            <Text
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: fontSizes.body - 2,
+                color: colors.textMuted,
+                lineHeight: (fontSizes.body - 2) * 1.5,
+              }}
+              numberOfLines={2}
+            >
+              {response}
+            </Text>
+          </Animated.View>
+        </TouchableOpacity>
       )}
     </Animated.View>
   );

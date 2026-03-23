@@ -41,6 +41,7 @@ export default function YouScreen() {
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
+  const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
 
@@ -69,9 +70,9 @@ export default function YouScreen() {
     },
     {
       icon: BookmarkSimpleIcon,
-      label: 'Saved Passages',
-      subtitle: `${bookmarks.length} ${bookmarks.length === 1 ? 'passage' : 'passages'}`,
-      route: '/(tabs)/(you)/saved-passages',
+      label: 'Your Library',
+      subtitle: `${bookmarks.length + highlights.length} saved items`,
+      route: '/(tabs)/(you)/saved',
     },
     {
       icon: PencilLineIcon,

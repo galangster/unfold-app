@@ -4,6 +4,9 @@
  * Shows a small, contextual bottom sheet when a free user taps a premium feature.
  * Less disruptive than a full-screen paywall. Higher trust, better conversion.
  *
+ * Wrapped in a React Native Modal so it renders in a separate native layer,
+ * preventing clipping/z-index issues when rendered inside nested scroll views.
+ *
  * Usage:
  *   <PremiumFeatureSheet
  *     visible={showSheet}
@@ -13,8 +16,9 @@
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -121,18 +125,9 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
   const { colors } = useTheme();
   const router = useRouter();
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const tabBarHeight = 90; // Approximate tab bar height — safe fallback
 
   const config = FEATURES[feature] ?? FEATURES.general;
   const IconComponent = config.icon as React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
-
-  useEffect(() => {
-    if (visible) {
-      bottomSheetRef.current?.snapToIndex(0);
-    } else {
-      bottomSheetRef.current?.close();
-    }
-  }, [visible]);
 
   const handleSheetChanges = useCallback(
     (index: number) => {
@@ -182,73 +177,89 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
   if (!visible) return null;
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={0}
-      snapPoints={['42%']}
-      enablePanDownToClose
-      onChange={handleSheetChanges}
-      backdropComponent={renderBackdrop}
-      bottomInset={tabBarHeight}
-      backgroundStyle={{
-        backgroundColor: colors.inputBackground,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-      }}
-      handleIndicatorStyle={{
-        backgroundColor: colors.border,
-        width: 36,
-      }}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
     >
-      <View style={pfStyles.content}>
-        {/* Icon + headline */}
-        <Animated.View entering={FadeIn.duration(400)} style={pfStyles.centerContent}>
-          <View style={[pfStyles.iconContainer, { backgroundColor: `${colors.accent}14` }]}>
-            <IconComponent size={28} color={colors.accent} weight="light" />
+      <GestureHandlerRootView style={pfStyles.modalRoot}>
+        <BottomSheet
+          ref={bottomSheetRef}
+          index={0}
+          snapPoints={['42%']}
+          enablePanDownToClose
+          onChange={handleSheetChanges}
+          backdropComponent={renderBackdrop}
+          backgroundStyle={{
+            backgroundColor: colors.inputBackground,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+          }}
+          handleIndicatorStyle={{
+            backgroundColor: colors.border,
+            width: 36,
+          }}
+        >
+          <View style={pfStyles.content}>
+            {/* Icon + headline */}
+            <Animated.View entering={FadeIn.duration(400)} style={pfStyles.centerContent}>
+              <View style={[pfStyles.iconContainer, { backgroundColor: `${colors.accent}14` }]}>
+                <IconComponent size={28} color={colors.accent} weight="light" />
+              </View>
+
+              <Text style={[pfStyles.headline, { color: colors.text }]}>
+                {config.headline}
+              </Text>
+
+              <Text style={[pfStyles.description, { color: colors.textMuted }]}>
+                {config.description}
+              </Text>
+            </Animated.View>
+
+            {/* CTA button */}
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={handleStartTrial}
+              accessibilityRole="button"
+              accessibilityLabel={config.cta}
+              style={[pfStyles.ctaButton, { backgroundColor: colors.accent }]}
+            >
+              <Text style={[pfStyles.ctaText, { color: colors.background }]}>
+                {config.cta}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Trial reassurance */}
+            <View style={pfStyles.reassuranceRow}>
+              <ShieldCheckIcon size={13} color={colors.textSubtle} weight="light" style={pfStyles.shieldIcon} />
+              <Text style={[pfStyles.reassuranceText, { color: colors.textSubtle }]}>
+                Cancel anytime. No commitment.
+              </Text>
+            </View>
+
+            {/* Maybe later */}
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={handleMaybeLater}
+              accessibilityRole="button"
+              accessibilityLabel="Maybe later"
+              style={pfStyles.maybeLaterButton}
+            >
+              <Text style={[pfStyles.maybeLaterText, { color: colors.textHint ?? colors.textSubtle }]}>
+                Maybe later
+              </Text>
+            </TouchableOpacity>
           </View>
-
-          <Text style={[pfStyles.headline, { color: colors.text }]}>
-            {config.headline}
-          </Text>
-
-          <Text style={[pfStyles.description, { color: colors.textMuted }]}>
-            {config.description}
-          </Text>
-        </Animated.View>
-
-        {/* CTA button */}
-        <TouchableOpacity activeOpacity={0.7}
-          onPress={handleStartTrial}
-          style={[pfStyles.ctaButton, { backgroundColor: colors.accent }]}
-        >
-          <Text style={[pfStyles.ctaText, { color: colors.background }]}>
-            {config.cta}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Trial reassurance */}
-        <View style={pfStyles.reassuranceRow}>
-          <ShieldCheckIcon size={13} color={colors.textSubtle} weight="light" style={pfStyles.shieldIcon} />
-          <Text style={[pfStyles.reassuranceText, { color: colors.textSubtle }]}>
-            Cancel anytime. No commitment.
-          </Text>
-        </View>
-
-        {/* Maybe later */}
-        <TouchableOpacity activeOpacity={0.7}
-          onPress={handleMaybeLater}
-          style={pfStyles.maybeLaterButton}
-        >
-          <Text style={[pfStyles.maybeLaterText, { color: colors.textHint ?? colors.textSubtle }]}>
-            Maybe later
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </BottomSheet>
+        </BottomSheet>
+      </GestureHandlerRootView>
+    </Modal>
   );
 }
 
 const pfStyles = StyleSheet.create({
+  modalRoot: {
+    flex: 1,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 28,

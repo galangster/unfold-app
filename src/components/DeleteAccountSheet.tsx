@@ -21,7 +21,7 @@ import { MMKV } from 'react-native-mmkv';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import { deleteAccount, getCurrentUser } from '@/lib/appleAuth';
+import { useUser, useClerk } from '@clerk/clerk-expo';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -53,6 +53,8 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
   const router = useRouter();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const reset = useUnfoldStore((s) => s.reset);
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
 
   const [step, setStep] = useState<1 | 2>(1);
   const [confirmText, setConfirmText] = useState('');
@@ -102,33 +104,20 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
     try {
-      // Check if user has a Firebase account (not anonymous/local-only)
-      const firebaseUser = getCurrentUser();
-
-      if (firebaseUser) {
-        // Delete Firebase account
-        const result = await deleteAccount();
-
-        if (!result.success) {
-          if (result.error?.includes('requires-recent-login')) {
-            Alert.alert(
-              'Re-authentication required',
-              'For security, please sign out and sign back in before deleting your account.',
-              [{ text: 'OK' }]
-            );
-            setIsDeleting(false);
-            return;
-          }
-
-          // Generic error
+      // Delete Clerk account if user is signed in
+      if (clerkUser) {
+        try {
+          await clerkUser.delete();
+        } catch (clerkErr: any) {
           Alert.alert(
             'Deletion failed',
-            result.error ?? 'Something went wrong. Please try again.',
+            clerkErr?.errors?.[0]?.longMessage ?? 'Something went wrong. Please try again.',
             [{ text: 'OK' }]
           );
           setIsDeleting(false);
           return;
         }
+        await signOut();
       }
 
       // Clear Zustand store

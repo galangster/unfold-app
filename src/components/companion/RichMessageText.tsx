@@ -2,6 +2,7 @@
  * RichMessageText — renders companion message text with:
  * - Tappable scripture reference pills ([Romans 5:8] → accent inline text)
  * - Blockquote formatting (lines starting with > or ")
+ * - Markdown rendering: headers, **bold**, *italic*, bullet lists
  * - Paragraph breaks
  *
  * Uses nested <Text> with onPress for inline tappable verses
@@ -23,12 +24,45 @@ interface Props {
 
 type TextSegment =
   | { type: 'text'; content: string }
+  | { type: 'bold'; content: string }
+  | { type: 'italic'; content: string }
   | { type: 'verse'; reference: string };
 
-// ── Parse text into segments ──────────────────────────────────────────────
+// ── Strip markdown from a line (headers, horizontal rules) ───────────────
+
+function stripLineMarkdown(line: string): string {
+  // Remove header markers: # Header → Header
+  let cleaned = line.replace(/^#{1,6}\s+/, '');
+  // Remove horizontal rules
+  if (/^[-*_]{3,}\s*$/.test(cleaned)) return '';
+  return cleaned;
+}
+
+// ── Pre-process full text: strip markdown line-level syntax ──────────────
+
+function preprocessMarkdown(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      // Convert unordered list items: - item or * item → bullet
+      if (/^[-*]\s+/.test(trimmed)) {
+        return '\u2022 ' + trimmed.replace(/^[-*]\s+/, '');
+      }
+      // Convert numbered list items: 1. item → bullet (keeps numbering simple)
+      if (/^\d+\.\s+/.test(trimmed)) {
+        return '\u2022 ' + trimmed.replace(/^\d+\.\s+/, '');
+      }
+      return stripLineMarkdown(trimmed);
+    })
+    .filter((line) => line !== '')
+    .join('\n');
+}
+
+// ── Parse text into segments with bold, italic, and verse refs ───────────
 
 function parseSegments(text: string): TextSegment[] {
-  // Find scripture references wrapped in brackets: [Romans 5:8]
+  // First, find scripture references (bracket and bare)
   const bracketRefs: ScriptureRef[] = [];
   const bracketRegex = /\[([^\]]+)\]/g;
   let match: RegExpExecArray | null;
@@ -45,10 +79,8 @@ function parseSegments(text: string): TextSegment[] {
     }
   }
 
-  // Also find bare scripture references (without brackets)
   const bareRefs = parseScriptureReferences(text);
 
-  // Merge, preferring bracket refs (avoid duplicates)
   const allRefs = [...bracketRefs];
   for (const bare of bareRefs) {
     const overlaps = bracketRefs.some(
@@ -61,24 +93,57 @@ function parseSegments(text: string): TextSegment[] {
 
   allRefs.sort((a, b) => a.startIndex - b.startIndex);
 
-  if (allRefs.length === 0) {
-    return [{ type: 'text', content: text }];
-  }
-
-  const result: TextSegment[] = [];
+  // Split text around verse refs first, then parse inline markdown in each text chunk
+  const chunks: TextSegment[] = [];
   let cursor = 0;
 
   for (const ref of allRefs) {
     if (ref.startIndex > cursor) {
-      result.push({ type: 'text', content: text.slice(cursor, ref.startIndex) });
+      chunks.push(...parseInlineMarkdown(text.slice(cursor, ref.startIndex)));
     }
-    result.push({ type: 'verse', reference: ref.reference });
+    chunks.push({ type: 'verse', reference: ref.reference });
     cursor = ref.endIndex;
   }
   if (cursor < text.length) {
-    result.push({ type: 'text', content: text.slice(cursor) });
+    chunks.push(...parseInlineMarkdown(text.slice(cursor)));
   }
 
+  if (chunks.length === 0) {
+    return parseInlineMarkdown(text);
+  }
+
+  return chunks;
+}
+
+// ── Parse inline bold/italic markdown within a text chunk ────────────────
+
+function parseInlineMarkdown(text: string): TextSegment[] {
+  // Match **bold** and *italic* (bold first since ** contains *)
+  const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
+  const result: TextSegment[] = [];
+  let cursor = 0;
+  let inlineMatch: RegExpExecArray | null;
+
+  while ((inlineMatch = regex.exec(text)) !== null) {
+    if (inlineMatch.index > cursor) {
+      result.push({ type: 'text', content: text.slice(cursor, inlineMatch.index) });
+    }
+    if (inlineMatch[1] != null) {
+      // **bold**
+      result.push({ type: 'bold', content: inlineMatch[1] });
+    } else if (inlineMatch[2] != null) {
+      // *italic*
+      result.push({ type: 'italic', content: inlineMatch[2] });
+    }
+    cursor = inlineMatch.index + inlineMatch[0].length;
+  }
+
+  if (cursor < text.length) {
+    result.push({ type: 'text', content: text.slice(cursor) });
+  }
+  if (result.length === 0) {
+    return [{ type: 'text', content: text }];
+  }
   return result;
 }
 
@@ -124,29 +189,50 @@ function InlineText({
         fontStyle: isBlockquote ? 'italic' : 'normal',
       }}
     >
-      {segments.map((seg, i) =>
-        seg.type === 'text' ? (
-          <Text key={i}>{seg.content}</Text>
-        ) : (
-          <Text
-            key={i}
-            onPress={() => handleVersePress(i, seg.reference)}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${seg.reference}`}
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: 14,
-              color: colors.accent,
-              backgroundColor: colors.accent + (flashIndex === i ? '4D' : '1A'), // 30% flash / 10% rest
-              borderRadius: 6,
-              paddingHorizontal: 2,
-              lineHeight: 22,
-            }}
-          >
-            {' '}{seg.reference}{' '}
-          </Text>
-        )
-      )}
+      {segments.map((seg, i) => {
+        if (seg.type === 'verse') {
+          return (
+            <Text
+              key={i}
+              onPress={() => handleVersePress(i, seg.reference)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${seg.reference}`}
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 14,
+                color: colors.accent,
+                backgroundColor: colors.accent + (flashIndex === i ? '4D' : '1A'),
+                borderRadius: 6,
+                paddingHorizontal: 2,
+                lineHeight: 22,
+              }}
+            >
+              {' '}{seg.reference}{' '}
+            </Text>
+          );
+        }
+        if (seg.type === 'bold') {
+          return (
+            <Text
+              key={i}
+              style={{ fontFamily: FontFamily.bodyBold ?? FontFamily.uiSemiBold }}
+            >
+              {seg.content}
+            </Text>
+          );
+        }
+        if (seg.type === 'italic') {
+          return (
+            <Text
+              key={i}
+              style={{ fontStyle: 'italic' }}
+            >
+              {seg.content}
+            </Text>
+          );
+        }
+        return <Text key={i}>{seg.content}</Text>;
+      })}
     </Text>
   );
 }
@@ -157,8 +243,11 @@ export function RichMessageText({ text, onVersePress }: Props) {
   const { colors } = useTheme();
 
   const blocks = useMemo(() => {
+    // Pre-process markdown: strip headers, convert lists to bullets
+    const processed = preprocessMarkdown(text);
+
     // Split on double newlines for paragraphs
-    const paragraphs = text.split(/\n{2,}/);
+    const paragraphs = processed.split(/\n{2,}/);
 
     return paragraphs
       .map((para) => {

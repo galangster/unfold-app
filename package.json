@@ -25,6 +25,7 @@
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
+    "@clerk/clerk-expo": "^2.19.31",
     "@codeherence/react-native-header": "^1.0.0",
     "@expo-google-fonts/crimson-text": "^0.4.0",
     "@expo-google-fonts/eb-garamond": "^0.4.2",
@@ -46,8 +47,6 @@
     "@react-native-community/datetimepicker": "8.6.0",
     "@react-native-community/netinfo": "11.5.2",
     "@react-native-community/slider": "5.1.2",
-    "@react-native-firebase/app": "^23.8.6",
-    "@react-native-firebase/auth": "^23.8.6",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@react-native-menu/menu": "1.2.2",
     "@react-native-picker/picker": "2.11.4",

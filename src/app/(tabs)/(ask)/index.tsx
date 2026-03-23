@@ -96,12 +96,18 @@ const MessageItem = React.memo(function MessageItem({
   prev.index === next.index
 );
 
+// Height of the custom absolutely-positioned tab bar (content + padding)
+const TAB_BAR_CONTENT_HEIGHT = 56;
+
 // ── Screen ─────────────────────────────────────────────────────────────────
 
 export default function CompanionScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const listRef = useRef<any>(null);
+
+  // Full tab bar height including safe area (home indicator)
+  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
 
   const {
     messages,
@@ -204,7 +210,7 @@ export default function CompanionScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
     >
       {/* Header — companion orb */}
       <View
@@ -339,8 +345,10 @@ export default function CompanionScreen() {
         isStreaming={isStreaming}
       />
 
-      {/* Bottom safe area spacer (tab bar is handled by navigator) */}
-      <View style={{ height: insets.bottom }} />
+      {/* Bottom spacer: clears the absolutely-positioned custom tab bar.
+          keyboardVerticalOffset negates this when the keyboard opens,
+          so the input sits flush at the keyboard top. */}
+      <View style={{ height: tabBarHeight }} />
 
       {/* Scripture tap sheet */}
       <ScriptureTapSheet

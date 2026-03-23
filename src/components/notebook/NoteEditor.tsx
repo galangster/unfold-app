@@ -142,6 +142,7 @@ export function NoteEditor({
   });
 
   const editorState = useBridgeState(editor);
+  const { keyboardHeight, isKeyboardUp } = useKeyboard();
 
   // Overlay covers the WebView until CSS is painted (WebViews punch through parent opacity on iOS)
   const [editorReady, setEditorReady] = useState(false);
@@ -190,6 +191,33 @@ export function NoteEditor({
     `);
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Adjust scroll threshold when keyboard + toolbar are both visible.
+  // tentap-editor internally sets ProseMirror paddingBottom to keyboardHeight + 10,
+  // but our custom toolbar (48px) sits above the keyboard and occludes content.
+  // We inject extra padding so the cursor is never hidden behind the toolbar.
+  const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
+  useEffect(() => {
+    if (!editorState.isReady) return;
+    if (isKeyboardUp && keyboardHeight > 0) {
+      const extraPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 10;
+      editor.injectJS(`
+        (function() {
+          var doc = document.querySelector('.ProseMirror');
+          if (doc) doc.style.paddingBottom = '${extraPadding}px';
+        })();
+      `);
+      editor.updateScrollThresholdAndMargin(extraPadding);
+    } else {
+      editor.injectJS(`
+        (function() {
+          var doc = document.querySelector('.ProseMirror');
+          if (doc) doc.style.paddingBottom = '0px';
+        })();
+      `);
+      editor.updateScrollThresholdAndMargin(0);
+    }
+  }, [isKeyboardUp, keyboardHeight, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -207,32 +235,46 @@ export function NoteEditor({
     const escapedRef = reference.replace(/'/g, "\\'");
     const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
 
+    // Restore the saved cursor position before inserting so the blockquote
+    // lands where the user's cursor was, not at the top of the document.
+    // Falls back to the end of the document if no position was saved.
     editor.injectJS(`
-      window.editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: 'blockquote',
-          content: [
-            {
-              type: 'paragraph',
-              content: [
-                { type: 'text', text: '${escapedText}' },
-              ],
-            },
-            {
-              type: 'paragraph',
-              content: [
-                {
-                  type: 'text',
-                  marks: [{ type: 'italic' }],
-                  text: '\\u2014 ${escapedRef}',
-                },
-              ],
-            },
-          ],
-        })
-        .run();
+      (function() {
+        var pos = typeof window.__savedSelection === 'number'
+          ? window.__savedSelection
+          : window.editor.state.doc.content.size - 1;
+        // Clamp to valid range
+        var maxPos = window.editor.state.doc.content.size - 1;
+        if (pos > maxPos) pos = maxPos;
+        if (pos < 0) pos = 0;
+        window.editor
+          .chain()
+          .focus()
+          .setTextSelection(pos)
+          .insertContent({
+            type: 'blockquote',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: '${escapedText}' },
+                ],
+              },
+              {
+                type: 'paragraph',
+                content: [
+                  {
+                    type: 'text',
+                    marks: [{ type: 'italic' }],
+                    text: '\\u2014 ${escapedRef}',
+                  },
+                ],
+              },
+            ],
+          })
+          .run();
+        delete window.__savedSelection;
+      })();
     `);
 
     onScriptureInserted?.();
@@ -273,8 +315,11 @@ export function NoteEditor({
   /* ───── Toolbar actions ───── */
   const handleScripturePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Save the current cursor position before the sheet opens and steals focus.
+    // Without this, .focus() defaults to the start of the document on re-entry.
+    editor.injectJS(`window.__savedSelection = window.editor.state.selection.anchor;`);
     onToolbarAction?.('scripture');
-  }, [onToolbarAction]);
+  }, [editor, onToolbarAction]);
 
   const handleBold = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -315,8 +360,6 @@ export function NoteEditor({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     editor.lift();
   }, [editor]);
-
-  const { keyboardHeight, isKeyboardUp } = useKeyboard();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -520,6 +563,9 @@ function ToolbarButton({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildEditorCSS(colors: any): string {
   return `
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
     html {
       background-color: ${colors.background} !important;
       height: 100%;
@@ -530,15 +576,27 @@ function buildEditorCSS(colors: any): string {
       line-height: 1.65;
       color: ${colors.text};
       background-color: ${colors.background} !important;
-      padding: 0 24px 200px;
+      padding: 0 4px 200px;
       margin: 0;
+      width: auto;
+      max-width: 100vw;
+      overflow-x: hidden;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: break-word;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
       min-height: 100%;
     }
     /* Prevent TipTap from scrolling cursor to top — only scroll when
        cursor would go below the visible area (Notion-style behavior) */
-    .ProseMirror { overflow-anchor: none; }
+    .ProseMirror {
+      overflow-anchor: none;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: break-word;
+      max-width: 100%;
+    }
     .tiptap { scroll-padding-bottom: 60vh; }
     p { margin: 0 0 4px 0; }
     h1 { font-size: 22px; font-weight: 700; margin: 14px 0 4px; }
@@ -656,6 +714,7 @@ const styles = StyleSheet.create({
   editorContainer: {
     flex: 1,
     position: 'relative',
+    paddingHorizontal: 20,
   },
   richText: {
     flex: 1,

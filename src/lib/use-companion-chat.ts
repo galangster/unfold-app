@@ -247,7 +247,7 @@ export function useCompanionChat() {
   const streakDays = useUnfoldStore((s) => s.streakCurrent);
 
   const currentDevotional = currentDevotionalId
-    ? devotionals.find((d) => d.id === currentDevotionalId)
+    ? devotionals.find((d) => d.id === currentDevotionalId) ?? null
     : null;
 
   // ── Send message ───────────────────────────────────────────────────────

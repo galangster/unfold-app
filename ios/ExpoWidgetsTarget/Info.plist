@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ExpoWidgetsAppGroupIdentifier</key>
+	<string>group.com.unfoldapp.ios</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>
@@ -9,7 +11,5 @@
 	</dict>
 	<key>RCTNewArchEnabled</key>
 	<true/>
-	<key>CFBundleDisplayName</key>
-	<string>Unfold Widgets</string>
 </dict>
 </plist>

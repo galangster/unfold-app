@@ -11,6 +11,8 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useFonts } from 'expo-font';
 
+import { ClerkProvider, ClerkLoaded, useAuth as useClerkAuth } from '@clerk/clerk-expo';
+import { tokenCache, setTokenGetter } from '@/lib/clerk';
 import { Colors } from '@/constants/colors';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
@@ -19,6 +21,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GlowBackground } from '@/components/GlowBackground';
+
+const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 const navigationIntegration = Sentry.reactNavigationIntegration({
   enableTimeToInitialDisplay: true,
@@ -86,7 +90,13 @@ function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
   const ref = useNavigationContainerRef();
 
-  // Initialize Firebase Auth and listen to auth state changes (always call hook unconditionally)
+  // Sync Clerk token getter to module-level ref for non-React service files
+  const { getToken } = useClerkAuth();
+  useEffect(() => {
+    setTokenGetter(getToken);
+  }, [getToken]);
+
+  // Auth state — syncs Clerk to Zustand, RevenueCat, Sentry
   const { userId, email, authProvider } = useAuth();
 
   // Sync RevenueCat subscription status with Zustand store
@@ -219,17 +229,21 @@ function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
-          <KeyboardProvider>
-            <ThemeProvider>
-              <RootLayoutNav />
-            </ThemeProvider>
-          </KeyboardProvider>
-        </GestureHandlerRootView>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY!} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
+              <KeyboardProvider>
+                <ThemeProvider>
+                  <RootLayoutNav />
+                </ThemeProvider>
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </ClerkLoaded>
+    </ClerkProvider>
   );
 }
 

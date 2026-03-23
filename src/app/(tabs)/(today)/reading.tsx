@@ -16,6 +16,8 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
+  SlideInDown,
+  SlideOutDown,
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -38,6 +40,7 @@ import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { createReviewPromptManager } from '@/lib/review-prompt';
 import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
@@ -192,7 +195,11 @@ export default function ReadingScreen() {
   const [extensionError, setExtensionError] = useState(false);
   const [bridgeText, setBridgeText] = useState<string | null>(null);
   const [isBridgeLoading, setIsBridgeLoading] = useState(false);
+  const [bookmarkToast, setBookmarkToast] = useState(false);
+  const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const mountedRef = useRef(true);
+  const bookmarkToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const continuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,6 +212,20 @@ export default function ReadingScreen() {
   const contentOpacity = useSharedValue(1);
   const bridgeOpacity = useSharedValue(0);
   const scrollProgress = useSharedValue(0);
+
+  // Bookmark toast auto-dismiss after 2.5s
+  useEffect(() => {
+    if (bookmarkToast) {
+      bookmarkToastTimerRef.current = setTimeout(() => {
+        setBookmarkToast(false);
+      }, 2500);
+    }
+    return () => {
+      if (bookmarkToastTimerRef.current) {
+        clearTimeout(bookmarkToastTimerRef.current);
+      }
+    };
+  }, [bookmarkToast]);
 
   // Button press micro-interaction — spring scale for Complete Day button
   const completeButtonScale = useSharedValue(1);
@@ -270,6 +291,7 @@ export default function ReadingScreen() {
       if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
       if (audioExpandTimerRef.current) clearTimeout(audioExpandTimerRef.current);
+      if (bookmarkToastTimerRef.current) clearTimeout(bookmarkToastTimerRef.current);
     };
   }, []);
 
@@ -467,9 +489,17 @@ export default function ReadingScreen() {
         scriptureReference: currentDayData.scriptureReference,
         scriptureText: currentDayData.scriptureText,
       });
+      // Show bookmark toast on save only
+      setBookmarkToast(true);
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Haptic removed — DevotionalContent handles it (Medium weight)
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, bookmarks, addBookmark, removeBookmark]);
+
+  const handleStudyMethodPress = useCallback((methodId: string) => {
+    audioPlayerRef.current?.close(); // dismiss audio player first
+    setSelectedStudyMethod(methodId);
+    setStudyMethodVisible(true);
+  }, []);
 
   const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string; color?: string }) => {
     if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
@@ -1483,6 +1513,7 @@ export default function ReadingScreen() {
                 titleSharedTransitionTag={`devotional-title-${currentDevotional.id}-${viewingDay}`}
                 isBookmarked={isCurrentDayBookmarked}
                 onToggleBookmark={handleToggleBookmark}
+                onStudyMethodPress={handleStudyMethodPress}
                 onQuoteSelected={handleQuoteSelected}
                 existingHighlights={currentDayHighlights}
                 onScriptureTap={(ref) => {
@@ -1997,6 +2028,42 @@ export default function ReadingScreen() {
           onClose={() => setShowReadingSettings(false)}
         />
       )}
+
+      {/* Bookmark saved toast */}
+      {bookmarkToast && (
+        <Animated.View
+          entering={SlideInDown.duration(300)}
+          exiting={SlideOutDown.duration(250)}
+          style={[
+            styles.bookmarkToastContainer,
+            { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(40, 40, 40, 0.95)' },
+          ]}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <BookmarkSimpleIcon size={16} color={colors.accent} weight="fill" />
+          <Text style={styles.bookmarkToastText}>Saved to your library</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setBookmarkToast(false);
+              router.push('/(tabs)/(you)/saved');
+            }}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="link"
+            accessibilityLabel="View saved bookmarks"
+          >
+            <Text style={[styles.bookmarkToastLink, { color: colors.accent }]}>View</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Study Method Info Sheet */}
+      <StudyMethodSheet
+        methodId={selectedStudyMethod}
+        visible={studyMethodVisible}
+        onClose={() => setStudyMethodVisible(false)}
+      />
     </View>
   );
 }
@@ -2180,5 +2247,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  bookmarkToastContainer: {
+    position: 'absolute',
+    bottom: 100,
+    left: 24,
+    right: 24,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 200,
+  },
+  bookmarkToastText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
+    color: '#FFFFFF',
+    flex: 1,
+  },
+  bookmarkToastLink: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
   },
 });

@@ -5,6 +5,7 @@
  * All service files should import from here instead of defining their own URLs.
  */
 import { logger } from '@/lib/logger';
+import { getClerkToken } from '@/lib/clerk';
 
 // ---------------------------------------------------------------------------
 // Backend URL (single definition — used by all service files)
@@ -24,28 +25,28 @@ export function getBackendCandidates(): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Authenticated headers — sends Firebase ID token when available
+// Authenticated headers — sends Clerk session token when available
 // ---------------------------------------------------------------------------
 
 /**
- * Build request headers with Firebase ID token for backend authentication.
- * Falls back gracefully to unauthenticated headers if Firebase is unavailable
- * (local-only mode, anonymous users).
+ * Build request headers with Clerk session token for backend authentication.
+ * Falls back gracefully to unauthenticated headers if no token is available
+ * (guest mode).
  */
-export async function getAuthHeaders(forceRefresh = false): Promise<Record<string, string>> {
+export async function getAuthHeaders(
+  _forceRefresh = false,
+): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
   try {
-    const auth = require('@react-native-firebase/auth').default;
-    const user = auth().currentUser;
-    if (user) {
-      const idToken = await user.getIdToken(forceRefresh);
-      headers['Authorization'] = `Bearer ${idToken}`;
+    const token = await getClerkToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
   } catch {
-    // Firebase not available — continue without auth header (local-only mode)
+    // No token available — guest mode, requests will get 401 on protected endpoints
   }
 
   return headers;

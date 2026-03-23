@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, type RefObject } from 'react';
-import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
+import { useState, useCallback, useEffect, useRef, type RefObject } from 'react';
+import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet, InteractionManager } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
@@ -144,6 +144,8 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
 
   // Measure the current step's target element
   const step = TOOLTIP_STEPS[currentStep];
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 8;
 
   useEffect(() => {
     if (hasSeenHomeTooltips || !isVisible) return;
@@ -152,16 +154,44 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
     const ref = targets[step.targetKey];
     if (!ref?.current) return;
 
-    // Wait for layout to settle, then measure
-    const timer = setTimeout(() => {
-      ref.current?.measureInWindow((x, y, width, height) => {
+    let cancelled = false;
+    retryCountRef.current = 0;
+
+    // Attempt to measure the target view. Retries with increasing delay
+    // because views inside a ScrollView with entering animations may not
+    // have valid layout dimensions on the first attempt.
+    function attemptMeasure() {
+      if (cancelled) return;
+
+      const node = ref.current;
+      if (!node) return;
+
+      node.measureInWindow((x, y, width, height) => {
+        if (cancelled) return;
+
         if (width > 0 && height > 0) {
           setTargetRect({ x, y, width, height });
+        } else if (retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current += 1;
+          // Exponential backoff: 200, 400, 600, 800...
+          const delay = 200 * retryCountRef.current;
+          timerId = setTimeout(attemptMeasure, delay);
         }
       });
-    }, 200);
+    }
 
-    return () => clearTimeout(timer);
+    // Wait for all animations/interactions to complete, then start measuring
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    const handle = InteractionManager.runAfterInteractions(() => {
+      // Extra 500ms for entering animations (FadeIn.delay(100/200).duration(400))
+      timerId = setTimeout(attemptMeasure, 500);
+    });
+
+    return () => {
+      cancelled = true;
+      handle.cancel();
+      if (timerId) clearTimeout(timerId);
+    };
   }, [currentStep, isVisible, hasSeenHomeTooltips, step, targets]);
 
   const dismiss = useCallback(() => {

@@ -151,6 +151,11 @@ export default function GeneratingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
 
+  // Track whether we are auto-retrying after returning from background
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  // Track background entry timestamp to know if errors happened while backgrounded
+  const backgroundedAtRef = useRef<number | null>(null);
+
   // Announce to screen readers when generation is complete
   useEffect(() => {
     if (isComplete && devotionalTitle) {
@@ -244,18 +249,139 @@ export default function GeneratingScreen() {
     };
   }, []);
 
-  // Handle app state changes (for background notification)
+  // Handle app state changes — foreground recovery + background notification
   const [wasInBackground, setWasInBackground] = useState(false);
   const [pendingNotification, setPendingNotification] = useState<{ title: string } | null>(null);
+  // Keep a ref to latest state values so the AppState callback can read them
+  // without stale closures triggering extra re-renders.
+  const latestStateRef = useRef({
+    isGenerating: true,
+    isComplete: false,
+    error: null as string | null,
+    generationInFlight: false,
+  });
+  useEffect(() => {
+    latestStateRef.current = {
+      isGenerating,
+      isComplete,
+      error,
+      generationInFlight: generationInFlightRef.current,
+    };
+  }, [isGenerating, isComplete, error]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // Record when we went to background so we can tell if an error
+        // happened while the app was suspended
+        backgroundedAtRef.current = Date.now();
         setWasInBackground(true);
+        return;
+      }
+
+      // ---- Returning to foreground ----
+      if (nextAppState === 'active' && backgroundedAtRef.current !== null) {
+        const bgDuration = Date.now() - backgroundedAtRef.current;
+        backgroundedAtRef.current = null;
+
+        logger.log(`[generating] Returned from background after ${Math.round(bgDuration / 1000)}s`);
+
+        // 1) Check if generation already completed while we were away
+        //    (the devotional with Day 1 may have landed in the store before
+        //    iOS suspended the JS thread)
+        const currentSession = useUnfoldStore.getState().generationSession;
+        if (currentSession.status === 'complete' || currentSession.status === 'running') {
+          const devId = currentSession.devotionalId;
+          if (devId) {
+            const existing = useUnfoldStore.getState().devotionals.find(
+              (d) => d.id === devId && d.days.some((day) => day.dayNumber === 1),
+            );
+            if (existing) {
+              // Generation finished! Transition straight to complete.
+              logger.log('[generating] Devotional already complete in store after background return');
+              setDevotionalTitle(existing.title);
+              setCurrentSeriesTitle(existing.title);
+              setGeneratedDays(existing.days);
+              setIsGenerating(false);
+              setIsComplete(true);
+              setError(null);
+              setIsReconnecting(false);
+              generationInFlightRef.current = false;
+              if (currentSession.status !== 'complete') {
+                completeGenerationSession({ title: existing.title });
+              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              return;
+            }
+          }
+        }
+
+        // 2) If we came back and there's an error state, auto-retry transparently.
+        //    The user sees "Reconnecting..." instead of the error wall.
+        const { error: currentError, isComplete: alreadyComplete, isGenerating: stillGenerating } = latestStateRef.current;
+        if (currentError && !alreadyComplete) {
+          logger.log('[generating] Error detected on foreground return — auto-retrying');
+          setIsReconnecting(true);
+          setError(null);
+          setGeneratedDays([]);
+          setCurrentSeriesTitle('');
+          setCanStartReading(false);
+          setIsGenerating(true);
+          generationInFlightRef.current = false; // Reset so the effect can re-run
+          clearGenerationSession();
+          // Small delay to let state settle, then trigger retry
+          setTimeout(() => {
+            setRetryCount((prev) => prev + 1);
+          }, 300);
+          return;
+        }
+
+        // 3) If generation is supposedly still running but the ref says the
+        //    async work is no longer in-flight (JS thread was suspended mid-fetch,
+        //    promise was silently dropped), restart it.
+        if (stillGenerating && !alreadyComplete && !currentError && !generationInFlightRef.current && bgDuration > 5000) {
+          logger.log('[generating] Generation appears stalled after background — restarting');
+          setIsReconnecting(true);
+          setGeneratedDays([]);
+          setCurrentSeriesTitle('');
+          setCanStartReading(false);
+          setIsGenerating(true);
+          clearGenerationSession();
+          setTimeout(() => {
+            setRetryCount((prev) => prev + 1);
+          }, 300);
+          return;
+        }
+
+        // 4) The fetch promise is technically still in-flight but may be hung
+        //    (iOS killed the TCP socket while JS was suspended). Set a watchdog:
+        //    if nothing changes after 8 seconds, force a restart.
+        if (stillGenerating && !alreadyComplete && !currentError && generationInFlightRef.current && bgDuration > 10000) {
+          logger.log('[generating] In-flight request may be hung after long background — starting watchdog');
+          setTimeout(() => {
+            const snap = latestStateRef.current;
+            // If still generating with no error and no completion after 8s, it's hung
+            if (snap.isGenerating && !snap.isComplete && !snap.error) {
+              logger.log('[generating] Watchdog: request confirmed hung — forcing restart');
+              setIsReconnecting(true);
+              setError(null);
+              setGeneratedDays([]);
+              setCurrentSeriesTitle('');
+              setCanStartReading(false);
+              setIsGenerating(true);
+              generationInFlightRef.current = false;
+              clearGenerationSession();
+              setTimeout(() => {
+                setRetryCount((prev) => prev + 1);
+              }, 300);
+            }
+          }, 8000);
+        }
       }
     });
 
     return () => subscription.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -441,6 +567,9 @@ export default function GeneratingScreen() {
           // Step 1: Generate series arc (~2s via Grok)
           void logBugEvent('generation', 'progressive-arc-start', { devotionalId });
           const { arc, title: seriesTitle } = await generateSeriesArc(context, recentScriptures);
+          // If this was a reconnect retry, clear the reconnecting flag now that
+          // we've confirmed the network is alive again.
+          setIsReconnecting(false);
           setCurrentSeriesTitle(seriesTitle);
           updateGenerationSessionProgress({ title: seriesTitle });
 
@@ -518,6 +647,7 @@ export default function GeneratingScreen() {
           setPendingNotification({ title: seriesTitle });
           setIsGenerating(false);
           setIsComplete(true);
+          setIsReconnecting(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
           void logBugEvent('generation', 'progressive-generation-complete', {
@@ -538,6 +668,7 @@ export default function GeneratingScreen() {
             phase: 'progressive-generation',
           });
           setIsGenerating(false);
+          setIsReconnecting(false);
           setError(errorMessage);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         } finally {
@@ -698,6 +829,7 @@ export default function GeneratingScreen() {
 
         setIsGenerating(false);
         setIsComplete(true);
+        setIsReconnecting(false);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -708,6 +840,7 @@ export default function GeneratingScreen() {
           phase: 'full-series-generation',
         });
         setIsGenerating(false);
+        setIsReconnecting(false);
         setError(errorMessage);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } finally {
@@ -729,15 +862,9 @@ export default function GeneratingScreen() {
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    let shouldShowSignIn = false;
-    try {
-      require('@react-native-firebase/auth');
-      shouldShowSignIn =
-        !user?.hasSeenSignInPrompt &&
-        user?.authProvider !== 'apple';
-    } catch {
-      shouldShowSignIn = false;
-    }
+    const shouldShowSignIn =
+      !user?.hasSeenSignInPrompt &&
+      user?.authProvider === 'guest';
 
     if (shouldShowSignIn) {
       router.replace('/(onboarding)/sign-in');
@@ -757,10 +884,12 @@ export default function GeneratingScreen() {
     void logBugEvent('generation', 'generation-user-retry');
     clearGenerationSession();
     setError(null);
+    setIsReconnecting(false);
     setGeneratedDays([]);
     setCurrentSeriesTitle('');
     setCanStartReading(false);
     setIsGenerating(true);
+    generationInFlightRef.current = false; // Ensure stale guard is cleared
     setRetryCount(prev => prev + 1);
   };
 
@@ -950,22 +1079,37 @@ export default function GeneratingScreen() {
             </View>
           )}
 
-          {/* Rotating contemplative message */}
+          {/* Rotating contemplative message — swapped for reconnecting msg when auto-retrying */}
           {!canStartReading && (
             <View style={{ height: 28, justifyContent: 'center', marginBottom: 12 }}>
-              <Animated.Text
-                key={messageIndex}
-                entering={entering(FadeIn.duration(600))}
-                exiting={exiting(FadeOut.duration(300))}
-                style={{
-                  fontFamily: FontFamily.bodyItalic,
-                  fontSize: 17,
-                  color: colors.text,
-                  textAlign: 'center',
-                }}
-              >
-                {WAITING_MESSAGES[messageIndex]}
-              </Animated.Text>
+              {isReconnecting ? (
+                <Animated.Text
+                  key="reconnecting"
+                  entering={entering(FadeIn.duration(600))}
+                  style={{
+                    fontFamily: FontFamily.bodyItalic,
+                    fontSize: 17,
+                    color: colors.text,
+                    textAlign: 'center',
+                  }}
+                >
+                  {'Reconnecting\u2026'}
+                </Animated.Text>
+              ) : (
+                <Animated.Text
+                  key={messageIndex}
+                  entering={entering(FadeIn.duration(600))}
+                  exiting={exiting(FadeOut.duration(300))}
+                  style={{
+                    fontFamily: FontFamily.bodyItalic,
+                    fontSize: 17,
+                    color: colors.text,
+                    textAlign: 'center',
+                  }}
+                >
+                  {WAITING_MESSAGES[messageIndex]}
+                </Animated.Text>
+              )}
             </View>
           )}
 
