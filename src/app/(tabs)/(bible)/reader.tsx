@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS } from 'react-native-reanimated';
@@ -220,8 +220,8 @@ export default function BibleReaderScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ bookId: string; chapter: string; verse?: string }>();
-  const bookId = parseInt(params.bookId ?? '1', 10);
-  const chapter = parseInt(params.chapter ?? '1', 10);
+  const bookId = parseInt(params.bookId ?? '1', 10) || 1;
+  const chapter = parseInt(params.chapter ?? '1', 10) || 1;
 
   const { isReady: isDbReady, isDownloading, progress: downloadProgress, download: downloadDb, error: downloadError } = useBibleDb();
   const bibleReaderSettings = useUnfoldStore((s) => s.bibleReaderSettings);
@@ -251,6 +251,7 @@ export default function BibleReaderScreen() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState('');
   const noteInputRef = useRef<TextInput>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   // shareModalData removed — share navigates to /share-card route
   const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);
   const [scrollToVerse, setScrollToVerse] = useState<number | null>(null);
@@ -271,6 +272,19 @@ export default function BibleReaderScreen() {
   const contextBarSlideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: contextBarSlideY.value }],
   }));
+
+  // Track keyboard height so note input stays above keyboard
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   // Header overlap: content has paddingTop for the header, but onLayout Y is relative
   // to the content container (after padding). scrollTo y=0 puts the first verse behind the header.
@@ -815,7 +829,8 @@ export default function BibleReaderScreen() {
             styles.contextBarFull,
             {
               backgroundColor: isDark ? 'rgba(28, 28, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
-              paddingBottom: Math.max(insets.bottom, 8),
+              paddingBottom: showNoteInput && keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
+              bottom: showNoteInput && keyboardHeight > 0 ? keyboardHeight - insets.bottom : 0,
               borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
             },
             contextBarSlideStyle,

@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getChapter,
+  openBibleDb,
   type BibleVerse,
   type BibleTranslation,
 } from '@/lib/bible-db';
@@ -78,6 +79,14 @@ export function useBibleChapter(
 
   const bookInfo = BOOK_BY_ID[bookId] ?? null;
 
+  // Eagerly open the DB connection as soon as it's marked ready,
+  // so the first query doesn't have to wait for SQLite cold-start
+  useEffect(() => {
+    if (isReady) {
+      openBibleDb().catch(() => {});
+    }
+  }, [isReady]);
+
   const queryResult = useQuery<BibleVerse[]>({
     queryKey: bibleChapterKeys.chapter(bookId, chapter, translation),
     queryFn: async () => {
@@ -94,6 +103,7 @@ export function useBibleChapter(
     enabled: isReady && bookId >= 1 && bookId <= 66 && chapter >= 1,
     staleTime: Infinity, // Bible text never changes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    retry: 2, // Retry on cold-start failures
   });
 
   // Pre-fetch adjacent chapters for smooth swiping/navigation
