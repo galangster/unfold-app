@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -14,13 +13,17 @@ import Animated, {
   FadeIn,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CloudIcon, ShieldIcon, SparkleIcon } from 'phosphor-react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { useOAuth } from '@clerk/clerk-expo';
+import { AppleLogoIcon, GoogleLogoIcon, FacebookLogoIcon, CloudIcon, ShieldIcon, SparkleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
-import { signInWithApple, signInAnonymously } from '@/lib/appleAuth';
+import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -67,7 +70,6 @@ function BenefitItem({ icon, title, description, delay, colors }: BenefitItemPro
 export default function SignInScreen() {
   const router = useRouter();
   const { colors: themeColors } = useTheme();
-  const isDark = true;
   const colors = {
     ...themeColors,
     background: '#0A0A0A',
@@ -83,9 +85,13 @@ export default function SignInScreen() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const userProfile = useUnfoldStore((s) => s.user);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAppleAvailable, setIsAppleAvailable] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Clerk OAuth hooks
+  const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: 'oauth_apple' });
+  const { startOAuthFlow: startGoogleFlow } = useOAuth({ strategy: 'oauth_google' });
+  const { startOAuthFlow: startFacebookFlow } = useOAuth({ strategy: 'oauth_facebook' });
 
   // Animation values
   const headerOpacity = useSharedValue(0);
@@ -93,14 +99,9 @@ export default function SignInScreen() {
   const buttonOpacity = useSharedValue(0);
   const buttonScale = useSharedValue(0.95);
   const skipOpacity = useSharedValue(0);
-  const sparkleOpacity = useSharedValue(0);
-  const sparkleScale = useSharedValue(0.5);
   const loadingRotation = useSharedValue(0);
 
   useEffect(() => {
-    // Check if Apple Sign In is available
-    AppleAuthentication.isAvailableAsync().then(setIsAppleAvailable);
-
     // Track sign-in prompt shown
     Analytics.logEvent(AnalyticsEvents.SIGN_IN_PROMPT_SHOWN);
 
@@ -112,15 +113,11 @@ export default function SignInScreen() {
     buttonScale.value = withDelay(400, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
 
     skipOpacity.value = withDelay(600, withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }));
-
-    // Sparkle animation (subtle pulse)
-    sparkleOpacity.value = withDelay(400, withTiming(1, { duration: 500 }));
-    sparkleScale.value = withDelay(400, withTiming(1, { duration: 500, easing: Easing.out(Easing.back(1.5)) }));
   }, []);
 
   // Loading spinner animation
   useEffect(() => {
-    if (isLoading) {
+    if (isSigningIn) {
       loadingRotation.value = withRepeat(
         withTiming(360, { duration: 1000, easing: Easing.linear }),
         -1,
@@ -129,7 +126,7 @@ export default function SignInScreen() {
     } else {
       loadingRotation.value = 0;
     }
-  }, [isLoading]);
+  }, [isSigningIn]);
 
   const headerStyle = useAnimatedStyle(() => ({
     opacity: headerOpacity.value,
@@ -145,157 +142,87 @@ export default function SignInScreen() {
     opacity: skipOpacity.value,
   }));
 
-  const sparkleStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(sparkleOpacity.value, [0, 1], [0.6, 1]),
-    transform: [{ scale: sparkleScale.value }],
-  }));
-
   const spinnerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${loadingRotation.value}deg` }],
   }));
 
-  const handleAppleSignIn = useCallback(async () => {
-    if (isLoading) return;
+  const handleOAuthSignIn = useCallback(
+    async (
+      startFlow: typeof startAppleFlow,
+      providerName: string,
+    ) => {
+      if (isSigningIn) return;
+      setIsSigningIn(true);
+      setError(null);
 
-    setIsLoading(true);
-    setErrorMessage(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
 
-    // Track Apple Sign In tapped
-    Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
-
-    try {
-      const result = await signInWithApple();
-
-      if (result.success && result.user) {
-        // Track successful sign in
-        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, {
-          auth_provider: 'apple',
-        });
-        Analytics.setUserId(result.user.uid);
-        Analytics.setUserProperty('auth_provider', 'apple');
-
-        // Update store with auth info
-        updateUser({
-          authUserId: result.user.uid,
-          authProvider: 'apple',
-          authEmail: result.user.email,
-          authDisplayName: result.user.displayName,
-          hasSeenSignInPrompt: true,
+        const { createdSessionId, setActive } = await startFlow({
+          redirectUrl: 'unfold://oauth-callback',
         });
 
-        logger.log('[SignIn] Successfully signed in with Apple', {
-          userId: result.user.uid,
-        });
+        if (createdSessionId && setActive) {
+          await setActive({ session: createdSessionId });
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, {
+            auth_provider: providerName.toLowerCase(),
+          });
 
-        // Navigate to home
-        router.replace('/(tabs)/(today)');
-      } else if (result.isCancelled) {
-        logger.log('[SignIn] User cancelled Apple Sign In');
-        // Stay on screen, user can try again or skip
-      } else {
-        // Track error
-        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
-          auth_provider: 'apple',
-          error_type: result.error || 'unknown',
-        });
+          // useAuth hook will sync to Zustand + RevenueCat automatically
+          updateUser({ hasSeenSignInPrompt: true });
 
-        logger.error('[SignIn] Apple Sign In failed', { error: result.error });
-
-        // Show user-friendly error message
-        let friendlyError = 'Unable to sign in. Please try again.';
-        if (result.error?.includes('network')) {
-          friendlyError = 'Network error. Check your connection and try again.';
-        } else if (result.error?.includes('credential') || result.error?.includes('already')) {
-          friendlyError = 'This Apple account is already linked to another user.';
-        } else if (result.error?.includes('unavailable') || result.error?.includes('digest')) {
-          friendlyError = 'Apple Sign In requires a real device. Try "Continue without signing in" for now.';
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          router.replace('/(tabs)/(today)');
         }
-        setErrorMessage(friendlyError);
+      } catch (err: any) {
+        logger.error(`[SignIn] ${providerName} OAuth error:`, err);
+
+        if (err?.errors?.[0]?.code === 'session_exists') {
+          router.replace('/(tabs)/(today)');
+          return;
+        }
+
+        // User cancelled — silent
+        if (
+          err?.errors?.[0]?.code === 'user_cancelled' ||
+          err?.message?.includes('cancelled')
+        ) {
+          setIsSigningIn(false);
+          return;
+        }
+
+        Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
+          auth_provider: providerName.toLowerCase(),
+          error_type: err?.errors?.[0]?.code || 'unknown',
+        });
+
+        setError(
+          err?.errors?.[0]?.longMessage ??
+            "We couldn't reach our servers. Please check your connection.",
+        );
+      } finally {
+        setIsSigningIn(false);
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      logger.error('[SignIn] Unexpected error during Apple Sign In', { error: msg });
+    },
+    [isSigningIn, router, updateUser],
+  );
 
-      if (msg.includes('digest') || msg.includes('subtle')) {
-        setErrorMessage('Apple Sign In requires a real device. Try "Continue without signing in" for now.');
-      } else {
-        setErrorMessage('Something went wrong. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading, router, updateUser]);
-
-  const handleContinueAnonymous = useCallback(async () => {
-    if (isLoading) return;
-
-    setIsLoading(true);
-    setErrorMessage(null);
+  const handleGuestMode = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-    // Track skip tapped
     Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
 
     const currentCount = userProfile?.signInPromptCount ?? 0;
+    continueAsGuest();
+    updateUser({
+      hasSeenSignInPrompt: true,
+      signInPromptCount: currentCount + 1,
+    });
 
-    try {
-      // Create anonymous user if needed
-      const result = await signInAnonymously();
-
-      if (result.success && result.user) {
-        // Track anonymous sign in
-        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, {
-          auth_provider: 'anonymous',
-        });
-        Analytics.setUserId(result.user.uid);
-        Analytics.setUserProperty('auth_provider', 'anonymous');
-
-        updateUser({
-          authUserId: result.user.uid,
-          authProvider: 'anonymous',
-          hasSeenSignInPrompt: true,
-          signInPromptCount: currentCount + 1,
-        });
-
-        logger.log('[SignIn] Continued anonymously', {
-          userId: result.user.uid,
-          promptCount: currentCount + 1,
-        });
-
-        // Navigate to home
-        router.replace('/(tabs)/(today)');
-      } else {
-        // Firebase anonymous auth failed — proceed with local-only mode
-        logger.warn('[SignIn] Firebase anonymous auth failed, continuing locally', { error: result.error });
-
-        updateUser({
-          authUserId: `local-${Date.now()}`,
-          authProvider: 'anonymous',
-          hasSeenSignInPrompt: true,
-          signInPromptCount: currentCount + 1,
-        });
-
-        router.replace('/(tabs)/(today)');
-      }
-    } catch (error) {
-      // Even on exception, let user through with local-only mode
-      logger.warn('[SignIn] Anonymous auth exception, continuing locally', { error });
-
-      updateUser({
-        authUserId: `local-${Date.now()}`,
-        authProvider: 'anonymous',
-        hasSeenSignInPrompt: true,
-        signInPromptCount: currentCount + 1,
-      });
-
-      router.replace('/(tabs)/(today)');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading, router, updateUser, userProfile?.signInPromptCount]);
+    logger.log('[SignIn] Continued as guest');
+    router.replace('/(tabs)/(today)');
+  }, [router, updateUser, userProfile?.signInPromptCount]);
 
   const benefits: Omit<BenefitItemProps, 'colors' | 'delay'>[] = [
     {
@@ -317,12 +244,9 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Removed decorative background blob for cleaner, calmer composition */}
-
       <View style={styles.content}>
         {/* Header Section */}
         <Animated.View style={[styles.header, headerStyle]}>
-          {/* Decorative line */}
           <View style={[styles.topLine, { backgroundColor: colors.accent }]} />
 
           <Text style={[styles.eyebrow, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
@@ -351,7 +275,7 @@ export default function SignInScreen() {
         </View>
 
         {/* Error Message */}
-        {errorMessage && (
+        {error && (
           <Animated.View
             entering={FadeIn.duration(300)}
             style={{
@@ -370,62 +294,65 @@ export default function SignInScreen() {
                 lineHeight: 20,
               }}
             >
-              {errorMessage}
+              {error}
             </Text>
           </Animated.View>
         )}
 
-        {/* Button Section */}
-        <View style={styles.buttonSection}>
-          <Animated.View style={buttonStyle}>
-            {isAppleAvailable ? (
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                buttonStyle={isDark ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                cornerRadius={14}
-                style={styles.appleButton}
-                onPress={handleAppleSignIn}
-              />
-            ) : (
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleAppleSignIn}
-                disabled={isLoading}
-                accessibilityRole="button"
-                accessibilityLabel={isLoading ? 'Signing in' : 'Sign in with Apple'}
-                accessibilityState={{ disabled: isLoading }}
-                style={[
-                  styles.fallbackButton,
-                  {
-                    backgroundColor: colors.text,
-                    opacity: isLoading ? 0.8 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.fallbackButtonText, { color: colors.background, fontFamily: FontFamily.uiSemiBold }]}>
-                  {isLoading ? 'Signing in...' : 'Sign in with Apple'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </Animated.View>
-
-          <Animated.View style={skipStyle}>
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleContinueAnonymous}
-              disabled={isLoading}
-              accessibilityRole="button"
-              accessibilityLabel="Continue without signing in"
-              accessibilityState={{ disabled: isLoading }}
-              style={[
-                styles.skipButton,
-                { opacity: isLoading ? 0.6 : 1 },
-              ]}
+        {/* OAuth Buttons */}
+        <Animated.View style={[styles.buttonSection, buttonStyle]}>
+          <View style={styles.authButtons}>
+            <TouchableOpacity
+              style={[styles.oauthButton, styles.appleButton]}
+              onPress={() => handleOAuthSignIn(startAppleFlow, 'Apple')}
+              activeOpacity={0.8}
+              disabled={isSigningIn}
             >
-              <Text style={[styles.skipText, { color: colors.textSubtle, fontFamily: FontFamily.ui }]}>
-                Continue without signing in
+              <AppleLogoIcon size={20} color="#FFFFFF" weight="fill" />
+              <Text style={[styles.oauthButtonText, { color: '#FFFFFF' }]}>
+                Sign in with Apple
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.oauthButton, styles.googleButton]}
+              onPress={() => handleOAuthSignIn(startGoogleFlow, 'Google')}
+              activeOpacity={0.8}
+              disabled={isSigningIn}
+            >
+              <GoogleLogoIcon size={20} color="#1F1F1F" weight="bold" />
+              <Text style={[styles.oauthButtonText, { color: '#1F1F1F' }]}>
+                Sign in with Google
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.oauthButton, styles.facebookButton]}
+              onPress={() => handleOAuthSignIn(startFacebookFlow, 'Facebook')}
+              activeOpacity={0.8}
+              disabled={isSigningIn}
+            >
+              <FacebookLogoIcon size={20} color="#FFFFFF" weight="fill" />
+              <Text style={[styles.oauthButtonText, { color: '#FFFFFF' }]}>
+                Sign in with Facebook
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Guest link */}
+          <Animated.View style={skipStyle}>
+            <TouchableOpacity
+              onPress={handleGuestMode}
+              style={styles.guestLink}
+              activeOpacity={0.6}
+              disabled={isSigningIn}
+            >
+              <Text style={[styles.guestLinkText, { color: colors.textSubtle }]}>
+                Continue as Guest
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </View>
+        </Animated.View>
 
         {/* Privacy Note */}
         <Animated.View style={[styles.privacyContainer, skipStyle]}>
@@ -436,7 +363,7 @@ export default function SignInScreen() {
       </View>
 
       {/* Loading Overlay */}
-      {isLoading && (
+      {isSigningIn && (
         <View
           style={{
             position: 'absolute',
@@ -483,19 +410,6 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  sparkleContainer: {
-    position: 'absolute',
-    top: -100,
-    right: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-  },
-  sparkle: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 150,
   },
   content: {
     flex: 1,
@@ -549,9 +463,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  benefitIconText: {
-    fontSize: 20,
-  },
   benefitTextContainer: {
     flex: 1,
     gap: 2,
@@ -565,31 +476,40 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   buttonSection: {
-    gap: 12,
+    gap: 4,
+  },
+  authButtons: {
+    gap: 14,
+    width: '100%',
+  },
+  oauthButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    borderRadius: 12,
+    gap: 10,
   },
   appleButton: {
-    width: SCREEN_WIDTH - 56,
-    height: 54,
+    backgroundColor: '#000000',
   },
-  fallbackButton: {
-    width: SCREEN_WIDTH - 56,
-    height: 54,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  googleButton: {
+    backgroundColor: '#FFFFFF',
   },
-  fallbackButtonText: {
+  facebookButton: {
+    backgroundColor: '#1877F2',
+  },
+  oauthButtonText: {
+    fontFamily: FontFamily.uiSemiBold,
     fontSize: 16,
   },
-  skipButton: {
+  guestLink: {
+    paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    paddingVertical: 12,
-    marginTop: 28,
   },
-  skipText: {
-    fontSize: 15,
+  guestLinkText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 14,
   },
   privacyContainer: {
     alignItems: 'center',
