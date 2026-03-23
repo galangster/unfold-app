@@ -26,7 +26,7 @@ import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { CARTESIA_VOICES } from '@/lib/cartesia';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
-import { getCurrentUser } from '@/lib/appleAuth';
+import { useAuth } from '@/hooks/useAuth';
 
 /** Bundled voice samples — Psalm 23:1 read by each voice. Instant playback, zero network. */
 const VOICE_SAMPLES: Record<string, any> = {
@@ -96,6 +96,7 @@ export default function SettingsScreen() {
   const setMiddayCheckInEnabled = useUnfoldStore((s) => s.setMiddayCheckInEnabled);
   const setEveningWindDownEnabled = useUnfoldStore((s) => s.setEveningWindDownEnabled);
   const { colors, isDark } = useTheme();
+  const { isAuthenticated, isAnonymous } = useAuth();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
@@ -2656,7 +2657,7 @@ export default function SettingsScreen() {
               </View>
             </TouchableOpacity>
 
-            {getCurrentUser() && (
+            {isAuthenticated && !isAnonymous && (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => {
