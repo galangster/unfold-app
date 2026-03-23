@@ -25,6 +25,7 @@
   "dependencies": {
     "@10play/tentap-editor": "^1.0.1",
     "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
+    "@clerk/clerk-expo": "^2.19.31",
     "@codeherence/react-native-header": "^1.0.0",
     "@expo-google-fonts/crimson-text": "^0.4.0",
     "@expo-google-fonts/eb-garamond": "^0.4.2",
