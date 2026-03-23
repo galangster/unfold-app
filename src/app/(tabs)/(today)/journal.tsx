@@ -219,7 +219,7 @@ export default function JournalScreen() {
   const questionInputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
   const inputRef = useRef<TextInput>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<any>(null);
 
   // Track refs for unmount save
   const contentRef = useRef(content);
