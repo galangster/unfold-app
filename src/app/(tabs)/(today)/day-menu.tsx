@@ -47,16 +47,20 @@ export default function DayMenuScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       {/* Header */}
-      <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
+      <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: 32, paddingTop: 20, paddingBottom: 20 }}>
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
-            fontSize: 13,
+            fontSize: 12,
             color: colors.textSubtle,
             textTransform: 'uppercase',
-            letterSpacing: 1.5,
+            letterSpacing: 1.2,
             textAlign: 'center',
+            lineHeight: 18,
           }}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
         >
           {devotional.title}
         </Text>
@@ -66,7 +70,7 @@ export default function DayMenuScreen() {
             fontSize: 24,
             color: colors.text,
             textAlign: 'center',
-            marginTop: 8,
+            marginTop: 12,
           }}
         >
           Select a Day

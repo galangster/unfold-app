@@ -1,14 +1,11 @@
 import { Stack } from 'expo-router';
-import { useTheme } from '@/lib/theme';
 
 export default function YouLayout() {
-  const { colors } = useTheme();
-
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: 'transparent' },
         animation: 'ios_from_right',
         animationDuration: 280,
       }}
