@@ -141,9 +141,9 @@ export interface UserProfile {
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
   preferredVoice: string;
-  // Auth-related fields (synced from Firebase)
+  // Auth-related fields (synced from Clerk)
   authUserId?: string | null;
-  authProvider?: 'apple' | 'anonymous' | null;
+  authProvider?: 'apple' | 'google' | 'facebook' | 'guest' | null;
   authEmail?: string | null;
   authDisplayName?: string | null;
   signInPromptCount?: number;
@@ -509,6 +509,7 @@ interface UnfoldState {
   highlights: Highlight[];
   addHighlight: (highlight: Omit<Highlight, 'id' | 'createdAt'>) => void;
   removeHighlight: (id: string) => void;
+  getRandomHighlight: () => Highlight | null;
 
   // Bookmarks
   bookmarks: Bookmark[];
@@ -997,6 +998,15 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => ({
           highlights: state.highlights.filter((h) => h.id !== id),
         })),
+
+      getRandomHighlight: () => {
+        const highlights = get().highlights;
+        if (highlights.length === 0) return null;
+        const today = new Date().toISOString().split('T')[0];
+        const seed = today.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        const index = seed % highlights.length;
+        return highlights[index];
+      },
 
       // Generation session actions
       startGenerationSession: ({ devotionalId, totalDays }) =>
@@ -1579,7 +1589,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 23, // Increment when state structure changes
+      version: 24, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1818,6 +1828,18 @@ export const useUnfoldStore = create<UnfoldState>()(
           }
         }
 
+        if (version < 24) {
+          // Rename 'anonymous' auth provider to 'guest' for Clerk migration
+          try {
+            const user = (state as any).user;
+            if (user?.authProvider === 'anonymous') {
+              user.authProvider = 'guest';
+            }
+          } catch (err) {
+            console.error('[store] Migration v23→24 failed:', err);
+          }
+        }
+
         return state as UnfoldState;
       },
       // Validate state on rehydration
@@ -1837,6 +1859,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               Array.isArray(state.devotionals) &&
               Array.isArray(state.journalEntries) &&
               Array.isArray(state.bookmarks) &&
+              Array.isArray(state.highlights) &&
               Array.isArray(state.usedScriptures) &&
               state.generationSession != null &&
               typeof state.generationSession === 'object';
@@ -1850,6 +1873,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               state.devotionals = initialState.devotionals;
               state.journalEntries = initialState.journalEntries;
               state.bookmarks = initialState.bookmarks;
+              state.highlights = initialState.highlights;
               state.usedScriptures = initialState.usedScriptures;
               state.generationSession = initialState.generationSession;
               state.resumeContext = initialState.resumeContext;
