@@ -57,6 +57,7 @@ import {
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
@@ -461,11 +462,7 @@ const sheetStyles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     maxHeight: '70%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 24,
+    ...Shadow.sheet,
   },
   handleRow: {
     alignItems: 'center',

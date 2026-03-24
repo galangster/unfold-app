@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { ScriptureRefPill } from './ScriptureRefPill';
 import { stripHtml, isHtmlContent } from './NoteEditor';
 
@@ -188,11 +189,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     // Card shadow (matches existing journal entry cards)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    ...Shadow.sm,
   },
   titleRow: {
     flexDirection: 'row',

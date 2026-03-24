@@ -7,6 +7,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -434,11 +435,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    ...Shadow.lg,
   },
   bottomRow: {
     flexDirection: 'row',
