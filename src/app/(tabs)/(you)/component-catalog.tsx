@@ -25,12 +25,19 @@ import {
   PencilSimpleIcon,
   CheckIcon,
   XIcon,
+  BookOpenIcon,
+  FolderSimpleIcon,
+  SparkleIcon,
+  FireIcon,
+  HeartStraightIcon,
+  CompassIcon,
+  ChatCircleIcon,
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { Button } from '@/components/ui';
+import { Button, Chip } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
 // Section Header
@@ -62,10 +69,29 @@ export default function ComponentCatalogScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['All Notes']));
+  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
 
   const handleLoadingDemo = () => {
     setLoadingDemo(true);
     setTimeout(() => setLoadingDemo(false), 2000);
+  };
+
+  const toggleFilter = (name: string) => {
+    setSelectedFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const toggleTheme = (name: string) => {
+    setSelectedThemes((prev) => {
+      if (prev.includes(name)) return prev.filter((t) => t !== name);
+      if (prev.length >= 5) return prev;
+      return [...prev, name];
+    });
   };
 
   return (
@@ -221,6 +247,106 @@ export default function ComponentCatalogScreen() {
             <Button variant="icon" icon={<ShareNetworkIcon />} size="sm" accessibilityLabel="Share" onPress={() => {}} />
             <Button variant="icon" icon={<BookmarkSimpleIcon />} size="sm" accessibilityLabel="Bookmark" onPress={() => {}} />
             <Button variant="icon" icon={<TrashIcon />} size="sm" accessibilityLabel="Delete" onPress={() => {}} />
+          </View>
+        </View>
+
+        {/* ============================================================= */}
+        {/* CHIP — VARIANTS                                               */}
+        {/* ============================================================= */}
+
+        <SectionTitle title="CHIP — FILTER VARIANT" />
+
+        <SubLabel text="Folder filter pills (tap to toggle)" />
+        <View style={styles.row}>
+          <Chip variant="filter" label="All Notes" selected={selectedFilters.has('All Notes')} onPress={() => toggleFilter('All Notes')} />
+          <Chip variant="filter" label="Prayers" selected={selectedFilters.has('Prayers')} colorDot="#6DAF7B" onPress={() => toggleFilter('Prayers')} />
+          <Chip variant="filter" label="Reflections" selected={selectedFilters.has('Reflections')} colorDot="#D4828F" onPress={() => toggleFilter('Reflections')} />
+          <Chip variant="filter" label="Sermons" selected={selectedFilters.has('Sermons')} colorDot="#5B9BD5" onPress={() => toggleFilter('Sermons')} />
+        </View>
+
+        <SubLabel text="Theme selection with badges (tap to select, max 5)" />
+        <View style={styles.row}>
+          {[
+            { name: 'Identity', icon: <SparkleIcon /> },
+            { name: 'Purpose', icon: <CompassIcon /> },
+            { name: 'Anxiety', icon: <FireIcon /> },
+            { name: 'Relationships', icon: <HeartStraightIcon /> },
+          ].map((theme) => {
+            const idx = selectedThemes.indexOf(theme.name);
+            return (
+              <Chip
+                key={theme.name}
+                variant="filter"
+                label={theme.name}
+                icon={theme.icon}
+                selected={idx >= 0}
+                badge={idx >= 0 ? idx + 1 : undefined}
+                onPress={() => toggleTheme(theme.name)}
+              />
+            );
+          })}
+        </View>
+
+        <SectionTitle title="CHIP — SUGGESTION VARIANT" />
+
+        <SubLabel text="Companion follow-up prompts" />
+        <View style={styles.row}>
+          <Chip variant="suggestion" label="Tell me more about grace" onPress={() => {}} />
+          <Chip variant="suggestion" label="How do I pray about this?" onPress={() => {}} />
+          <Chip variant="suggestion" label="What does Scripture say?" onPress={() => {}} />
+        </View>
+
+        <SectionTitle title="CHIP — REFERENCE VARIANT" />
+
+        <SubLabel text="Scripture reference pills (md)" />
+        <View style={styles.row}>
+          <Chip variant="reference" label="Romans 8:28" icon={<BookOpenIcon />} onPress={() => {}} />
+          <Chip variant="reference" label="Psalm 23:1-4" icon={<BookOpenIcon />} onPress={() => {}} />
+          <Chip variant="reference" label="John 3:16" icon={<BookOpenIcon />} onPress={() => {}} />
+        </View>
+
+        <SubLabel text="Scripture reference pills (sm — compact inline)" />
+        <View style={styles.row}>
+          <Chip variant="reference" size="sm" label="Gen 1:1" icon={<BookOpenIcon />} onPress={() => {}} />
+          <Chip variant="reference" size="sm" label="Rev 22:21" icon={<BookOpenIcon />} onPress={() => {}} />
+        </View>
+
+        <SectionTitle title="CHIP — STATES" />
+
+        <SubLabel text="Disabled" />
+        <View style={styles.row}>
+          <Chip variant="filter" label="Disabled Filter" disabled onPress={() => {}} />
+          <Chip variant="suggestion" label="Disabled Suggestion" disabled onPress={() => {}} />
+          <Chip variant="reference" label="Disabled Ref" disabled icon={<BookOpenIcon />} onPress={() => {}} />
+        </View>
+
+        <SectionTitle title="CHIP — REAL-WORLD EXAMPLES" />
+
+        <SubLabel text="Notebook folder bar" />
+        <View style={[styles.exampleCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
+          <View style={styles.row}>
+            <Chip variant="filter" label="All" selected onPress={() => {}} />
+            <Chip variant="filter" label="Morning" colorDot="#C8A55C" onPress={() => {}} />
+            <Chip variant="filter" label="Evening" colorDot="#9B8EC4" onPress={() => {}} />
+            <Chip variant="filter" label="Study" colorDot="#5B9BD5" onPress={() => {}} />
+          </View>
+        </View>
+
+        <SubLabel text="Companion chat suggestions" />
+        <View style={[styles.exampleCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
+          <View style={[styles.row, { marginBottom: 0 }]}>
+            <Chip variant="suggestion" label="Pray with me" icon={<ChatCircleIcon />} onPress={() => {}} />
+            <Chip variant="suggestion" label="Explain this verse" icon={<BookOpenIcon />} onPress={() => {}} />
+          </View>
+        </View>
+
+        <SubLabel text="Inline scripture references" />
+        <View style={[styles.exampleCard, { backgroundColor: colors.backgroundElevated, borderColor: colors.border }]}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Spacing[2] }}>
+            <Text style={[Typography.bodySm, { color: colors.text }]}>Referenced in</Text>
+            <Chip variant="reference" size="sm" label="Matt 5:4" icon={<BookOpenIcon />} onPress={() => {}} />
+            <Text style={[Typography.bodySm, { color: colors.text }]}>and</Text>
+            <Chip variant="reference" size="sm" label="Ps 34:18" icon={<BookOpenIcon />} onPress={() => {}} />
           </View>
         </View>
 
