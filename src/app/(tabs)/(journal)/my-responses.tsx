@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, PencilLineIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { format } from 'date-fns';
@@ -119,7 +120,7 @@ export default function MyResponsesScreen() {
                       <View
                         style={{
                           backgroundColor: colors.inputBackground,
-                          borderRadius: 16,
+                          borderRadius: Radius.lg,
                           borderWidth: 1,
                           borderColor: colors.border,
                           padding: 20,

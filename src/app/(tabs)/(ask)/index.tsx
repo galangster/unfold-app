@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { useCompanionChat } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -281,7 +282,7 @@ export default function CompanionScreen() {
                   marginHorizontal: 16,
                   marginBottom: 8,
                   backgroundColor: alpha(colors.error, 0.10),
-                  borderRadius: 12,
+                  borderRadius: Radius.md,
                   padding: 12,
                 }}
               >

@@ -13,6 +13,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, HighlighterIcon, BookOpenIcon, QuotesIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
 
@@ -141,7 +142,7 @@ export default function HighlightsScreen() {
                   onPress={() => handleHighlightPress(highlight)}
                   style={{
                     backgroundColor: colors.inputBackground,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     padding: 16,
                     marginBottom: 12,
                   }}
