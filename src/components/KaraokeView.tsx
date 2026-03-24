@@ -9,6 +9,7 @@ import {
   StatusBar,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { XIcon, PlayIcon, PauseIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -153,8 +154,8 @@ export function KaraokeView({
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
-      exiting={FadeOut.duration(200)}
+      entering={FadeIn.duration(Duration.slow)}
+      exiting={FadeOut.duration(Duration.normal)}
       style={[styles.container, { backgroundColor: isDark ? '#0A0A0A' : '#FAFAF8' }]}
     >
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />

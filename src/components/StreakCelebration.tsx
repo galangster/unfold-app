@@ -16,6 +16,7 @@ import { SunIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { AccentGlow } from './AccentGlow';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -140,7 +141,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
       scale.value = milestoneScale;
       opacity.value = withDelay(
         holdDuration,
-        withTiming(0, { duration: 300 }, (finished) => {
+        withTiming(0, { duration: Duration.slow }, (finished) => {
           if (finished && onComplete) {
             runOnJS(onComplete)();
           }
@@ -149,13 +150,13 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
       return;
     }
     // Fade in
-    opacity.value = withTiming(1, { duration: 200 });
+    opacity.value = withTiming(1, { duration: Duration.normal });
     // Critically-damped scale — no bounce
     scale.value = withSpring(milestoneScale, { damping: 20, stiffness: 90 });
     // After hold, fade out and call onComplete
     opacity.value = withDelay(
       holdDuration,
-      withTiming(0, { duration: 300 }, (finished) => {
+      withTiming(0, { duration: Duration.slow }, (finished) => {
         if (finished && onComplete) {
           runOnJS(onComplete)();
         }

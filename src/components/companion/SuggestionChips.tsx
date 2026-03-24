@@ -66,7 +66,7 @@ function AnimatedChip({
   }));
 
   return (
-    <Animated.View style={style} exiting={FadeOut.duration(150)}>
+    <Animated.View style={style} exiting={FadeOut.duration(Duration.fast)}>
       <TouchableOpacity
         activeOpacity={0.7}
         onPressIn={() => {

@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -313,9 +314,9 @@ export function CompletionCelebration({
       // Dismiss hint appears last
       hintOpacity.value = withDelay(2200, withTiming(1, { duration: 800 }));
     } else {
-      overlayOpacity.value = withTiming(0, { duration: 300 });
-      titleOpacity.value = withTiming(0, { duration: 200 });
-      subtitleOpacity.value = withTiming(0, { duration: 200 });
+      overlayOpacity.value = withTiming(0, { duration: Duration.slow });
+      titleOpacity.value = withTiming(0, { duration: Duration.normal });
+      subtitleOpacity.value = withTiming(0, { duration: Duration.normal });
       lineWidth.value = 0;
       hintOpacity.value = 0;
       titleTranslateY.value = 18;

@@ -9,6 +9,7 @@
 import { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -44,7 +45,7 @@ interface Props {
  *         streaming cursor starts immediately if streaming
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeIn.duration(200);
+const ENTERING = FadeIn.duration(Duration.normal);
 
 /** Memoized streaming text that strips markdown on the fly */
 function StreamingText({ content, color }: { content: string; color: string }) {

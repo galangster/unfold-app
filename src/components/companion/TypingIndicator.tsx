@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import { ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -67,7 +68,7 @@ function Dot({ delay, color }: { delay: number; color: string }) {
  *         dots begin pulsing immediately on mount
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeIn.duration(200);
+const ENTERING = FadeIn.duration(Duration.normal);
 
 export function TypingIndicator() {
   const { colors } = useTheme();

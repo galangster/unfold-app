@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, type RefObject } from 'react';
 import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet, InteractionManager } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
@@ -228,7 +229,7 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
   if (!targetRect) {
     return (
       <Animated.View
-        entering={FadeIn.duration(300)}
+        entering={FadeIn.duration(Duration.slow)}
         style={styles.overlay}
         pointerEvents="box-none"
       >
@@ -270,8 +271,8 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300)}
-      exiting={FadeOut.duration(200)}
+      entering={FadeIn.duration(Duration.slow)}
+      exiting={FadeOut.duration(Duration.normal)}
       style={styles.overlay}
       pointerEvents="box-none"
     >
@@ -295,8 +296,8 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
       {/* Arrow */}
       <Animated.View
         key={`arrow-${currentStep}`}
-        entering={FadeIn.duration(300).delay(150)}
-        exiting={FadeOut.duration(150)}
+        entering={FadeIn.duration(Duration.slow).delay(150)}
+        exiting={FadeOut.duration(Duration.fast)}
         style={{
           position: 'absolute',
           top: arrowDirection === 'up' ? tooltipTop - ARROW_SIZE : undefined,
@@ -311,8 +312,8 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
       {/* Tooltip card */}
       <Animated.View
         key={`tooltip-${currentStep}`}
-        entering={FadeIn.duration(350).delay(100)}
-        exiting={FadeOut.duration(200)}
+        entering={FadeIn.duration(Duration.slow).delay(100)}
+        exiting={FadeOut.duration(Duration.normal)}
         style={[
           styles.tooltipCard,
           {

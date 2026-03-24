@@ -28,6 +28,7 @@ import {
 } from 'expo-speech-recognition';
 import { MicrophoneIcon, XIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
@@ -259,8 +260,8 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline }: Voic
   // ── Recording state ──────────────────────────────────────
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(150)}
+      entering={FadeIn.duration(Duration.normal)}
+      exiting={FadeOut.duration(Duration.fast)}
       style={[styles.recordingBar, { backgroundColor: colors.inputBackground, borderColor: alpha(accent, 0.25) }]}
     >
       {/* Cancel ✕ */}

@@ -48,6 +48,7 @@ import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { streamDevotionalAudio } from '@/lib/cartesia';
@@ -103,8 +104,8 @@ function SpeedPicker({
       {/* Backdrop to dismiss */}
       <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onClose} />
       <Animated.View
-        entering={FadeIn.duration(150)}
-        exiting={FadeOut.duration(100)}
+        entering={FadeIn.duration(Duration.fast)}
+        exiting={FadeOut.duration(Duration.instant)}
         style={[
           styles.speedPickerContainer,
           {

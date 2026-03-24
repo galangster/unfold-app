@@ -9,6 +9,7 @@ import {
   NoteIcon,
 } from 'phosphor-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -82,7 +83,7 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const extraTagCount = note.tags.length - visibleTags.length;
 
   return (
-    <Animated.View entering={FadeIn.duration(250).delay(30 * index)}>
+    <Animated.View entering={FadeIn.duration(Duration.normal).delay(30 * index)}>
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={handleLongPress}

@@ -24,6 +24,7 @@ import Animated, {
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   useEditorBridge,
@@ -349,8 +350,8 @@ export function NoteEditor({
       <View style={styles.saveIndicatorContainer}>
         {saveState === 'saved' && (
           <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(300)}
+            entering={FadeIn.duration(Duration.normal)}
+            exiting={FadeOut.duration(Duration.slow)}
             style={styles.saveIndicator}
           >
             <CheckIcon size={14} color={colors.textSubtle} weight="bold" />
@@ -385,7 +386,7 @@ export function NoteEditor({
             Uses pointerEvents='none' so taps pass through while the overlay fades. */}
         {!editorReady && (
           <Animated.View
-            exiting={FadeOut.duration(200)}
+            exiting={FadeOut.duration(Duration.normal)}
             pointerEvents="none"
             style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
           />

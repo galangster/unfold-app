@@ -42,6 +42,7 @@ import { format } from 'date-fns';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
@@ -243,7 +244,7 @@ function ProgressFill({
       return;
     }
     if (!isActive) {
-      width.value = withTiming(0, { duration: 200 });
+      width.value = withTiming(0, { duration: Duration.normal });
       return;
     }
     if (duration === 0) {
@@ -347,7 +348,7 @@ const SparkleParticle = React.memo(function SparkleParticle({
     opacity.value = withDelay(
       delay,
       withSequence(
-        withTiming(1, { duration: 200, easing: Easing.out(Easing.ease) }),
+        withTiming(1, { duration: Duration.normal, easing: Easing.out(Easing.ease) }),
         withDelay(300, withTiming(0, { duration: 500, easing: Easing.in(Easing.ease) })),
       ),
     );
@@ -1350,7 +1351,7 @@ export default function UnfoldedScreen() {
       translateX.value = e.translationX;
     })
     .onEnd((e) => {
-      translateX.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) });
+      translateX.value = withTiming(0, { duration: Duration.slow, easing: Easing.out(Easing.cubic) });
       if (e.translationX < -50 && e.velocityX < 0) {
         runOnJS(goNext)();
       } else if (e.translationX > 50 && e.velocityX > 0) {

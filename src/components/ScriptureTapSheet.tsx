@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -152,8 +153,8 @@ export function ScriptureTapSheet({
 
         {/* Sheet */}
         <Animated.View
-          entering={FadeInDown.duration(250)}
-          exiting={FadeOut.duration(150)}
+          entering={FadeInDown.duration(Duration.normal)}
+          exiting={FadeOut.duration(Duration.fast)}
           style={[s.sheet, { backgroundColor: colors.background }]}
         >
           {/* Drag indicator */}
@@ -246,7 +247,7 @@ export function ScriptureTapSheet({
                 {/* AI Commentary */}
                 {commentaryLoading && (
                   <Animated.View
-                    entering={FadeIn.duration(200)}
+                    entering={FadeIn.duration(Duration.normal)}
                     style={[s.commentaryLoading, { backgroundColor: colors.inputBackground }]}
                   >
                     <ActivityIndicator size={12} color={colors.accent} />

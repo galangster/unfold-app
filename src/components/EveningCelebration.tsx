@@ -37,6 +37,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -256,7 +257,7 @@ export function EveningCelebration({
         withTiming(1, { duration: 600 })
       );
     } else {
-      overlayOpacity.value = withTiming(0, { duration: 300 });
+      overlayOpacity.value = withTiming(0, { duration: Duration.slow });
       textOpacity.value = 0;
       textTranslateY.value = 10;
       hintOpacity.value = 0;

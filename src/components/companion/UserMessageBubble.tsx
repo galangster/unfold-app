@@ -6,6 +6,7 @@
  */
 import { View, Text } from 'react-native';
 import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
@@ -19,7 +20,7 @@ import type { CompanionMessage } from '@/lib/companion-chat-store';
  *         duration 200ms, ease-out cubic
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeInDown.duration(200).easing(Easing.out(Easing.cubic));
+const ENTERING = FadeInDown.duration(Duration.normal).easing(Easing.out(Easing.cubic));
 
 interface Props {
   message: CompanionMessage;

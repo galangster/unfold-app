@@ -28,6 +28,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -105,7 +106,7 @@ export function PremiumNudgeCard({
     <>
       <Animated.View
         entering={FadeInDown.duration(500).delay(300)}
-        exiting={FadeOut.duration(300)}
+        exiting={FadeOut.duration(Duration.slow)}
         accessibilityRole="alert"
         accessibilityLabel={`Premium feature suggestion: ${message}`}
       >

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
@@ -42,8 +43,8 @@ export function UndoToast({
 
   return (
     <Animated.View
-      entering={SlideInDown.duration(300)}
-      exiting={SlideOutDown.duration(250)}
+      entering={SlideInDown.duration(Duration.slow)}
+      exiting={SlideOutDown.duration(Duration.normal)}
       style={styles.container}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"

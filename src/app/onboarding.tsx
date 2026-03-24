@@ -40,6 +40,7 @@ import { DarkColors, createThemedColors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -648,7 +649,7 @@ export default function OnboardingScreen() {
   // Handle typewriter animation complete
   const handleTypewriterComplete = () => {
     setShowInput(true);
-    inputOpacity.value = withTiming(1, { duration: 300 });
+    inputOpacity.value = withTiming(1, { duration: Duration.slow });
   };
 
   // Save all onboarding data to the store (without navigating).
@@ -725,7 +726,7 @@ export default function OnboardingScreen() {
     const nextStepId = STEPS[currentIdx + 1].id as StepId;
 
     LayoutAnimation.configureNext({
-      duration: 200,
+      duration: Duration.normal,
       create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
       update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
       delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
@@ -780,7 +781,7 @@ export default function OnboardingScreen() {
         // User selected main option, now enter sub-mode or advance for guided
         if (data.selectedMainOption === 'theme') {
           LayoutAnimation.configureNext({
-            duration: 200,
+            duration: Duration.normal,
             create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
             update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
           });
@@ -788,7 +789,7 @@ export default function OnboardingScreen() {
           return;
         } else if (data.selectedMainOption === 'type') {
           LayoutAnimation.configureNext({
-            duration: 200,
+            duration: Duration.normal,
             create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
             update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
           });
@@ -904,12 +905,12 @@ export default function OnboardingScreen() {
       Keyboard.dismiss();
       
       LayoutAnimation.configureNext({
-        duration: 200,
+        duration: Duration.normal,
         create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
         update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
         delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
       });
-      
+
       setCurrentStepId(prevStepId);
       setShowInput(false);
       inputOpacity.value = 0;
@@ -954,7 +955,7 @@ export default function OnboardingScreen() {
 
       // Advance to discovery
       LayoutAnimation.configureNext({
-        duration: 300,
+        duration: Duration.slow,
         create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
         update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
         delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
@@ -2513,7 +2514,7 @@ export default function OnboardingScreen() {
                     />
                   </View>
                   {showInput && (
-                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['6'] }}>
+                    <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['6'] }}>
                       <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>
                         {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
                           ? "Select up to 3 themes that resonate with where you are."
@@ -2599,7 +2600,7 @@ export default function OnboardingScreen() {
                     )}
                   </View>
                   {showInput && (
-                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['8'] }}>
+                    <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['8'] }}>
                       <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
                     </Animated.View>
                   )}

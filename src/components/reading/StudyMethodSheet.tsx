@@ -284,8 +284,8 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
   useEffect(() => {
     if (visible) {
       translateX.value = 0;
-      opacity.value = withTiming(1, { duration: 200 });
-      scale.value = withTiming(1, { duration: 200 });
+      opacity.value = withTiming(1, { duration: Duration.normal });
+      scale.value = withTiming(1, { duration: Duration.normal });
     }
   }, [visible, opacity, scale, translateX]);
 

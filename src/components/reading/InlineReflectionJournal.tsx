@@ -15,6 +15,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
@@ -218,7 +219,7 @@ export function InlineReflectionJournal({
       {/* Progress indicator */}
       {answeredCount > 0 && (
         <Animated.View
-          entering={FadeIn.duration(300)}
+          entering={FadeIn.duration(Duration.slow)}
           style={{
             alignItems: 'center',
             marginBottom: Spacing['5'],
@@ -334,7 +335,7 @@ function ReflectionQuestionCard({
 
   useEffect(() => {
     borderProgress.value = withTiming(isAnswered ? 1 : 0, {
-      duration: 300,
+      duration: Duration.slow,
       easing: Easing.out(Easing.cubic),
     });
   }, [isAnswered]);
@@ -402,7 +403,7 @@ function ReflectionQuestionCard({
       {/* Expanded: TextInput area */}
       {isExpanded && (
         <Animated.View
-          entering={FadeInDown.duration(250)}
+          entering={FadeInDown.duration(Duration.normal)}
           style={{
             marginLeft: 18,
             marginTop: Spacing['3'],
@@ -464,7 +465,7 @@ function ReflectionQuestionCard({
           accessibilityHint="Tap to edit your response"
         >
           <Animated.View
-            entering={FadeIn.duration(200)}
+            entering={FadeIn.duration(Duration.normal)}
             style={{
               marginLeft: 50,
               marginTop: 6,

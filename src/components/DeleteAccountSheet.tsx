@@ -14,6 +14,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, StyleSheet } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { WarningCircleIcon, TrashIcon } from 'phosphor-react-native';
@@ -185,7 +186,7 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
     >
       <View style={styles.content}>
         {step === 1 ? (
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={FadeIn.duration(Duration.slow)}>
             {/* Warning icon */}
             <View style={styles.iconRow}>
               <View style={[styles.iconContainer, { backgroundColor: `${colors.error}14` }]}>
@@ -243,7 +244,7 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
             </View>
           </Animated.View>
         ) : (
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={FadeIn.duration(Duration.slow)}>
             {/* Title */}
             <Text style={[styles.title, { color: colors.text }]}>
               Type "DELETE" to confirm

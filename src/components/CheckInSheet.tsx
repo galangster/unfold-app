@@ -38,6 +38,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -122,7 +123,7 @@ function MoodStep({
   const [hoveredMood, setHoveredMood] = useState<MoodValue | null>(null);
 
   return (
-    <Animated.View entering={FadeIn.duration(250)} style={styles.stepContent}>
+    <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.stepContent}>
       <Text
         style={[
           styles.stepTitle,
@@ -242,7 +243,7 @@ function QuestionStep({
   }, [typedAnswer, onSelectChip]);
 
   return (
-    <Animated.View entering={FadeIn.duration(250)} style={styles.stepContent}>
+    <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.stepContent}>
       <Text
         style={[
           styles.stepTitle,
@@ -295,7 +296,7 @@ function QuestionStep({
       </View>
 
       {isTyping ? (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.typeOwnContainer}>
+        <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.typeOwnContainer}>
           <TextInput
             ref={inputRef}
             value={typedAnswer}
@@ -398,7 +399,7 @@ function NoteStep({
   }, [onSkip]);
 
   return (
-    <Animated.View entering={FadeIn.duration(250)} style={styles.stepContent}>
+    <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.stepContent}>
       <Text
         style={[
           styles.stepTitle,
@@ -596,9 +597,9 @@ export function CheckInSheet({
 
   useEffect(() => {
     if (visible) {
-      backdropOpacity.value = withTiming(1, { duration: 300 });
+      backdropOpacity.value = withTiming(1, { duration: Duration.slow });
     } else {
-      backdropOpacity.value = withTiming(0, { duration: 200 });
+      backdropOpacity.value = withTiming(0, { duration: Duration.normal });
     }
   }, [visible]);
 
@@ -693,7 +694,7 @@ export function CheckInSheet({
         {visible && (
           <Animated.View
             entering={SlideInDown.duration(400).easing(Easing.out(Easing.cubic))}
-            exiting={SlideOutDown.duration(250)}
+            exiting={SlideOutDown.duration(Duration.normal)}
             style={[
               styles.sheet,
               {

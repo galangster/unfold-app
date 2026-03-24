@@ -156,7 +156,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
 
   return (
     <Animated.View
-      exiting={FadeOut.duration(150)}
+      exiting={FadeOut.duration(Duration.fast)}
       style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}
     >
       {/* Companion icon */}

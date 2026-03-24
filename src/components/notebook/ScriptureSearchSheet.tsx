@@ -372,7 +372,7 @@ export function ScriptureSearchSheet({
 
                 {/* Search state feedback */}
                 {searchState === 'searching' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={sheetStyles.stateContainer}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={sheetStyles.stateContainer}>
                     <ActivityIndicator size="small" color={colors.accent} />
                     <Text style={[sheetStyles.stateText, { color: colors.textMuted }]}>
                       Searching...
@@ -381,7 +381,7 @@ export function ScriptureSearchSheet({
                 )}
 
                 {searchState === 'not-found' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={sheetStyles.stateContainer}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={sheetStyles.stateContainer}>
                     <WarningCircleIcon size={16} color={colors.textHint} weight="light" />
                     <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
                       Verse not found. Try a reference like "John 3:16"
@@ -390,7 +390,7 @@ export function ScriptureSearchSheet({
                 )}
 
                 {searchState === 'error' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={sheetStyles.stateContainer}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={sheetStyles.stateContainer}>
                     <WarningCircleIcon size={16} color={colors.textHint} weight="light" />
                     <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
                       Something went wrong. Please try again.
@@ -401,8 +401,8 @@ export function ScriptureSearchSheet({
                 {/* Verse preview card */}
                 {searchState === 'found' && verseResult && (
                   <Animated.View
-                    entering={FadeIn.duration(300)}
-                    exiting={FadeOut.duration(150)}
+                    entering={FadeIn.duration(Duration.slow)}
+                    exiting={FadeOut.duration(Duration.fast)}
                     style={[
                       sheetStyles.previewCard,
                       {
@@ -423,7 +423,7 @@ export function ScriptureSearchSheet({
 
                 {/* Insert button */}
                 {searchState === 'found' && verseResult && parsedRef && (
-                  <Animated.View entering={FadeIn.duration(200).delay(100)}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal).delay(100)}>
                     <TouchableOpacity
                       onPress={handleInsert}
                       activeOpacity={0.7}
