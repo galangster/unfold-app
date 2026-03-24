@@ -15,7 +15,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -32,8 +32,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, PenNibIcon, GavelIcon } from 'phosphor-react-native';
-import * as WebBrowser from 'expo-web-browser';
-import { useOAuth } from '@clerk/clerk-expo';
 import { continueAsGuest } from '@/lib/clerk';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
@@ -58,7 +56,6 @@ import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
 
-WebBrowser.maybeCompleteAuthSession();
 
 // Types with subject selection
 const TYPES_WITH_SUBJECT_SELECTION = ['book_study', 'character_study'];
@@ -405,16 +402,10 @@ export default function OnboardingScreen() {
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
 
-  // Sign-in step state
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [signInError, setSignInError] = useState<string | null>(null);
-
-  // Track Apple auth data collected during onboarding sign-in step.
-  // This is needed because updateUser() is a no-op when user is null (first-time users),
-  // so auth data from handleOnboardingAppleSignIn would be silently lost.
-  // We store it here and merge it into completeOnboarding's setUser/updateUser call.
+  // Track pending auth data to merge into completeOnboarding's setUser/updateUser call.
   const pendingAuthDataRef = useRef<Partial<UserProfile> | null>(null);
-  
+  const awaitingSignInReturn = useRef(false);
+
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
   
@@ -456,9 +447,6 @@ export default function OnboardingScreen() {
   const inputAnimatedStyle = useAnimatedStyle(() => ({
     opacity: inputOpacity.value,
   }));
-
-  // OAuth hook for Apple sign-in during onboarding
-  const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: 'oauth_apple' });
 
   const ripple1Style = useAnimatedStyle(() => ({
     opacity: Math.max(0, 0.35 - ripple1.value * 0.35),
@@ -521,7 +509,7 @@ export default function OnboardingScreen() {
       }
       
       // Skip sign-in if user is already authenticated with Apple
-      if (step.id === 'signIn' && existingUser?.authProvider === 'apple') {
+      if (step.id === 'signIn' && existingUser?.authProvider && existingUser.authProvider !== 'guest') {
         return false;
       }
 
@@ -744,59 +732,18 @@ export default function OnboardingScreen() {
     inputOpacity.value = 0;
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
-  // Handle Apple Sign In during onboarding (via Clerk OAuth)
-  const handleOnboardingAppleSignIn = useCallback(async () => {
-    if (isSigningIn) return;
-
-    setIsSigningIn(true);
-    setSignInError(null);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
-
-    try {
-      const { createdSessionId, setActive } = await startAppleFlow({
-        redirectUrl: 'unfold://oauth-callback',
-      });
-
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-
-        Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, { auth_provider: 'apple' });
-
-        // useAuth hook will sync userId to Zustand, RevenueCat, Sentry automatically.
-        const authData: Partial<UserProfile> = {
-          hasSeenSignInPrompt: true,
-        };
-        pendingAuthDataRef.current = authData;
-        updateUser(authData);
-
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  // Auto-advance when user returns from sign-in screen
+  useFocusEffect(
+    useCallback(() => {
+      if (awaitingSignInReturn.current) {
+        awaitingSignInReturn.current = false;
         advanceToNextStep();
       }
-    } catch (err: any) {
-      // User cancelled — silent
-      if (err?.errors?.[0]?.code === 'user_cancelled' || err?.message?.includes('cancelled')) {
-        setIsSigningIn(false);
-        return;
-      }
-
-      Analytics.logEvent(AnalyticsEvents.SIGN_IN_ERROR, {
-        auth_provider: 'apple',
-        error_type: err?.errors?.[0]?.code || 'unknown',
-      });
-
-      setSignInError(
-        err?.errors?.[0]?.longMessage ?? 'Unable to sign in. Please try again.'
-      );
-    } finally {
-      setIsSigningIn(false);
-    }
-  }, [isSigningIn, updateUser, advanceToNextStep, startAppleFlow]);
+    }, [advanceToNextStep])
+  );
 
   // Handle skipping sign-in during onboarding (local-only guest mode)
   const handleSkipSignIn = useCallback(async () => {
-    if (isSigningIn) return;
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
 
@@ -813,7 +760,7 @@ export default function OnboardingScreen() {
 
     logger.log('[Onboarding] User skipped sign-in during onboarding');
     advanceToNextStep();
-  }, [isSigningIn, updateUser, existingUser?.signInPromptCount, advanceToNextStep]);
+  }, [updateUser, existingUser?.signInPromptCount, advanceToNextStep]);
 
   // Handle next button press
   const handleNext = () => {
@@ -2319,33 +2266,29 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Sign-in step: optional Apple Sign In
+    // Sign-in step: CTA button to full sign-in screen
     if (step.type === 'signIn') {
-      const screenWidth = Dimensions.get('window').width;
-
-      const benefits = [
-        {
-          icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
-          title: 'Sync across devices',
-          description: 'Pick up where you left off on any device',
-        },
-        {
-          icon: <ShieldIcon size={20} color={colors.accent} weight="light" />,
-          title: 'Secure backup',
-          description: 'Never lose your devotionals or journal',
-        },
-        {
-          icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
-          title: 'Personalized experience',
-          description: 'Unlock features tailored to where you are',
-        },
-      ];
-
       return (
         <View style={{ gap: 32, marginTop: 8 }}>
           {/* Benefits list */}
           <View style={{ gap: 20, paddingHorizontal: 4 }}>
-            {benefits.map((benefit, index) => (
+            {[
+              {
+                icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
+                title: 'Sync across devices',
+                description: 'Pick up where you left off on any device',
+              },
+              {
+                icon: <ShieldIcon size={20} color={colors.accent} weight="light" />,
+                title: 'Secure backup',
+                description: 'Never lose your devotionals or journal',
+              },
+              {
+                icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
+                title: 'Personalized experience',
+                description: 'Unlock features tailored to where you are',
+              },
+            ].map((benefit, index) => (
               <Animated.View
                 key={benefit.title}
                 entering={FadeIn.delay(200 + index * 150).duration(500)}
@@ -2387,44 +2330,26 @@ export default function OnboardingScreen() {
             ))}
           </View>
 
-          {/* Error message */}
-          {signInError && (
-            <Animated.View
-              entering={FadeIn.duration(300)}
-              style={{
-                backgroundColor: '#EF4444',
-                borderRadius: Radius.md,
-                padding: 14,
-              }}
-            >
-              <Text style={{
-                color: '#FFFFFF',
-                fontFamily: FontFamily.ui,
-                fontSize: 14,
-                textAlign: 'center',
-                lineHeight: 20,
-              }}>
-                {signInError}
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* Apple Sign In button (Clerk OAuth) */}
+          {/* Sign in CTA — navigates to full sign-in screen */}
           <Animated.View entering={FadeIn.delay(650).duration(400)}>
             <TouchableOpacity activeOpacity={0.7}
-              onPress={handleOnboardingAppleSignIn}
-              disabled={isSigningIn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                awaitingSignInReturn.current = true;
+                router.push({
+                  pathname: '/(onboarding)/sign-in',
+                  params: { source: 'onboarding' },
+                });
+              }}
               accessibilityRole="button"
-              accessibilityLabel={isSigningIn ? 'Signing in' : 'Sign in with Apple'}
-              accessibilityState={{ disabled: isSigningIn }}
+              accessibilityLabel="Sign in to keep your progress"
               style={{
-                width: screenWidth - 48,
+                width: Dimensions.get('window').width - 48,
                 height: 54,
                 borderRadius: Radius.card,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: colors.text,
-                opacity: isSigningIn ? 0.8 : 1,
               }}
             >
               <Text style={{
@@ -2432,7 +2357,7 @@ export default function OnboardingScreen() {
                 fontSize: 16,
                 color: colors.background,
               }}>
-                {isSigningIn ? 'Signing in...' : 'Sign in with Apple'}
+                Sign in to keep your progress
               </Text>
             </TouchableOpacity>
           </Animated.View>
@@ -2441,15 +2366,12 @@ export default function OnboardingScreen() {
           <Animated.View entering={FadeIn.delay(800).duration(400)}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleSkipSignIn}
-              disabled={isSigningIn}
               accessibilityRole="button"
               accessibilityLabel="Continue without signing in"
-              accessibilityState={{ disabled: isSigningIn }}
               style={{
                 alignItems: 'center',
                 justifyContent: 'center',
                 paddingVertical: 12,
-                opacity: isSigningIn ? 0.4 : 1,
               }}
             >
               <Text style={{
@@ -2473,31 +2395,6 @@ export default function OnboardingScreen() {
               Your privacy matters. We never share your information.
             </Text>
           </Animated.View>
-
-          {/* Loading overlay */}
-          {isSigningIn && (
-            <View style={{
-              position: 'absolute',
-              top: 0,
-              left: -24,
-              right: -24,
-              bottom: -120,
-              backgroundColor: alpha(colors.background, 0.90),
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: Radius.lg,
-            }}>
-              <ActivityIndicator size="large" color={colors.accent} />
-              <Text style={{
-                marginTop: 16,
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 15,
-                color: colors.textMuted,
-              }}>
-                Signing in...
-              </Text>
-            </View>
-          )}
         </View>
       );
     }
