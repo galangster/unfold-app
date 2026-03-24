@@ -37,7 +37,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { Button, Chip } from '@/components/ui';
+import { Button, Card, Chip } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
 // Section Header
@@ -349,6 +349,105 @@ export default function ComponentCatalogScreen() {
             <Chip variant="reference" size="sm" label="Ps 34:18" icon={<BookOpenIcon />} onPress={() => {}} />
           </View>
         </View>
+
+        {/* ============================================================= */}
+        {/* CARD — VARIANTS                                               */}
+        {/* ============================================================= */}
+
+        <SectionTitle title="CARD — VARIANTS" />
+
+        <SubLabel text="Default (elevated surface, shadow)" />
+        <Card variant="default" style={{ marginBottom: Spacing[4] }}>
+          <Text style={[Typography.uiMd, { color: colors.text, marginBottom: Spacing[1] }]}>
+            Morning Reflections
+          </Text>
+          <Text style={[Typography.bodySm, { color: colors.textMuted }]} numberOfLines={2}>
+            Today I'm grateful for the quiet moments before the day begins...
+          </Text>
+        </Card>
+
+        <SubLabel text="Subtle (muted background, no shadow)" />
+        <Card variant="subtle" style={{ marginBottom: Spacing[4] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
+            <FireIcon size={18} weight="light" color={colors.accent} />
+            <Text style={[Typography.uiMd, { color: colors.text }]}>3 Day Streak</Text>
+          </View>
+          <Text style={[Typography.caption, { color: colors.textMuted, marginTop: Spacing[1] }]}>
+            Keep showing up — consistency beats intensity.
+          </Text>
+        </Card>
+
+        <SubLabel text="Accent (tinted background + border)" />
+        <Card variant="accent" style={{ marginBottom: Spacing[4] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
+            <SparkleIcon size={16} weight="light" color={colors.accent} />
+            <Text style={[Typography.uiSm, { color: colors.accent }]}>PREMIUM</Text>
+          </View>
+          <Text style={[Typography.bodySm, { color: colors.text, marginTop: Spacing[1] }]}>
+            Unlock unlimited series, themes, and more.
+          </Text>
+        </Card>
+
+        <SubLabel text="Elevated (strong shadow, no border)" />
+        <Card variant="elevated" style={{ marginBottom: Spacing[4] }}>
+          <Text style={[Typography.uiMd, { color: colors.text, marginBottom: Spacing[1] }]}>
+            Floating Card
+          </Text>
+          <Text style={[Typography.bodySm, { color: colors.textMuted }]}>
+            For toasts, overlays, and floating UI elements.
+          </Text>
+        </Card>
+
+        <SectionTitle title="CARD — PRESSABLE" />
+
+        <SubLabel text="Tap to interact (haptic feedback)" />
+        <Card variant="default" onPress={() => {}} style={{ marginBottom: Spacing[4] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.uiMd, { color: colors.text }]}>Identity in Christ</Text>
+              <Text style={[Typography.caption, { color: colors.textMuted, marginTop: 2 }]}>Day 3 of 14</Text>
+            </View>
+            <Text style={[Typography.caption, { color: colors.accent }]}>Continue</Text>
+          </View>
+        </Card>
+
+        <SectionTitle title="CARD — REAL-WORLD EXAMPLES" />
+
+        <SubLabel text="Note card" />
+        <Card variant="default" onPress={() => {}} style={{ marginBottom: Spacing[4] }}>
+          <Text style={[Typography.uiMd, { color: colors.text, marginBottom: Spacing['0.5'] }]}>
+            Prayer for patience
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[1], marginBottom: Spacing[1] }}>
+            <Chip variant="reference" size="sm" label="James 1:2-4" icon={<BookOpenIcon />} onPress={() => {}} />
+          </View>
+          <Text style={[Typography.bodySm, { color: colors.textMuted }]} numberOfLines={2}>
+            Lord, help me find joy in trials knowing that testing produces perseverance...
+          </Text>
+        </Card>
+
+        <SubLabel text="Premium nudge" />
+        <Card variant="accent" style={{ marginBottom: Spacing[4] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
+            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent + '14', alignItems: 'center', justifyContent: 'center' }}>
+              <SparkleIcon size={18} weight="light" color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[Typography.uiSm, { color: colors.text }]}>Go deeper with Premium</Text>
+              <Text style={[Typography.caption, { color: colors.textMuted }]}>Unlock all study methods</Text>
+            </View>
+          </View>
+        </Card>
+
+        <SubLabel text="Reflection prompt" />
+        <Card variant="accent" padding={14} style={{ marginBottom: Spacing[4] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing[2] }}>
+            <PencilSimpleIcon size={16} weight="light" color={colors.accent} style={{ marginTop: 2 }} />
+            <Text style={[Typography.bodySm, { color: colors.text, flex: 1 }]}>
+              What does it mean to you that God's mercies are new every morning?
+            </Text>
+          </View>
+        </Card>
 
         {/* ============================================================= */}
         {/* TYPOGRAPHY PRESETS                                             */}
