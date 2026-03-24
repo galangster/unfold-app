@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
 import Animated, {
@@ -16,6 +16,7 @@ import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
+import { fetchVerseLocal } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
 
@@ -83,6 +84,17 @@ export function DevotionalContent({
   const { colors, isDark } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const readingFont = useReadingFont();
+
+  // Fetch scripture with verse numbers from local DB (replaces AI-generated text)
+  const [versedScripture, setVersedScripture] = useState<string | null>(null);
+  useEffect(() => {
+    if (!day.scriptureReference) return;
+    fetchVerseLocal(day.scriptureReference).then((result) => {
+      if (result?.text) setVersedScripture(result.text);
+    });
+  }, [day.scriptureReference]);
+
+  const displayScripture = versedScripture ?? day.scriptureText;
 
   // Accent line grow animation -- editorial entrance
   const accentLineWidth = useSharedValue(0);
@@ -213,10 +225,10 @@ export function DevotionalContent({
             color: colors.textMuted,
             lineHeight: fontSizes.scripture * 1.75,
             textAlign: 'left',
-            minHeight: day.scriptureText ? 'auto' : 60,
+            minHeight: displayScripture ? 'auto' : 60,
           }}
         >
-          {day.scriptureText ? `\u201C${preventOrphan(day.scriptureText)}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
+          {displayScripture ? `\u201C${preventOrphan(displayScripture)}\u201D` : `Scripture text not available for ${day.scriptureReference || 'this passage'}.`}
         </Text>
       </View>
 

@@ -63,6 +63,18 @@ const DEFAULT_TRANSLATION = 'web';
 const FETCH_TIMEOUT_MS = 10_000;
 const CACHE_KEY_PREFIX = 'verse';
 const COMMENTARY_CACHE_PREFIX = 'commentary';
+// ---------- Helpers ----------
+
+const SUPERSCRIPT_DIGITS = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'] as const;
+
+/** Convert a number to Unicode superscript characters for inline verse markers. */
+function toSuperscript(n: number): string {
+  return String(n)
+    .split('')
+    .map((d) => SUPERSCRIPT_DIGITS[parseInt(d, 10)]!)
+    .join('');
+}
+
 // ---------- Cache ----------
 
 /**
@@ -175,11 +187,13 @@ export async function fetchVerse(
 
     const data: BibleApiResponse = await response.json();
 
-    // bible-api.com returns the combined text in the `text` field
-    // Trim whitespace and normalize line breaks
-    const cleanText = data.text
-      .replace(/\r\n/g, '\n')
-      .trim();
+    // Build text with inline verse numbers from individual verses
+    // Falls back to combined text field if verses array is missing
+    const cleanText = data.verses?.length
+      ? data.verses
+          .map((v) => `${toSuperscript(v.verse)} ${v.text.trim()}`)
+          .join(' ')
+      : data.text.replace(/\r\n/g, '\n').trim();
 
     if (!cleanText) {
       logger.warn('[BibleAPI] Empty text returned for:', reference);
@@ -242,7 +256,7 @@ export async function fetchVerseLocal(
 
   if (verses.length === 0) return null;
 
-  const text = verses.map((v) => v.text).join(' ');
+  const text = verses.map((v) => `${toSuperscript(v.verse)} ${v.text.trim()}`).join(' ');
   const book = BIBLE_BOOKS.find((b) => b.id === parsed.bookId);
   const bookName = book?.name ?? '';
 
