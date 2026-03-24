@@ -9,11 +9,11 @@ export const Shadow = {
   sm: Platform.select({
     ios: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
+      shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06,
-      shadowRadius: 4,
+      shadowRadius: 10,
     },
-    android: { elevation: 1 },
+    android: { elevation: 2 },
     default: {},
   }),
   md: Platform.select({
@@ -33,17 +33,17 @@ export const Shadow = {
       shadowOpacity: 0.12,
       shadowRadius: 16,
     },
-    android: { elevation: 8 },
+    android: { elevation: 6 },
     default: {},
   }),
   sheet: Platform.select({
     ios: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 16,
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
     },
-    android: { elevation: 12 },
+    android: { elevation: 24 },
     default: {},
   }),
 } as const;

@@ -7,6 +7,7 @@ export const Radius = {
   none: 0,
   sm: 8,
   md: 12,
+  card: 14,
   lg: 16,
   xl: 20,
   '2xl': 24,

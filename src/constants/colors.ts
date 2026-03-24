@@ -34,6 +34,8 @@ export interface ColorTheme {
 
   // Accent (minimal use)
   accent: string;
+  /** Text color guaranteed readable on accent backgrounds. */
+  contrastText?: string;
 
   // Status
   success: string;
@@ -70,6 +72,7 @@ export const DarkColors: ColorTheme = {
 
   // Accent - warm gold (the signature)
   accent: '#C8A55C',
+  contrastText: '#FFFFFF',
 
   // Status
   success: 'rgba(74, 222, 128, 0.9)',
@@ -106,6 +109,7 @@ export const LightColors: ColorTheme = {
 
   // Accent - deeper warm gold for light mode
   accent: '#9A7B3C',
+  contrastText: '#FFFFFF',
 
   // Status
   success: 'rgba(34, 197, 94, 0.9)',
