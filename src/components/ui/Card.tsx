@@ -17,11 +17,13 @@ import {
   TouchableOpacity,
   TouchableOpacityProps,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
+import { Shadow } from '@/constants/shadows';
+import { Radius } from '@/constants/radius';
+import { alpha } from './utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,32 +42,6 @@ interface CardProps extends Omit<ViewProps, 'children'> {
   haptic?: boolean;
   children: React.ReactNode;
 }
-
-// ---------------------------------------------------------------------------
-// Shadow presets (platform-aware)
-// ---------------------------------------------------------------------------
-
-const SHADOW_SM = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-  },
-  android: { elevation: 2 },
-  default: {},
-});
-
-const SHADOW_LG = Platform.select({
-  ios: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-  },
-  android: { elevation: 6 },
-  default: {},
-});
 
 // ---------------------------------------------------------------------------
 // Component
@@ -90,7 +66,7 @@ export function Card({
           backgroundColor: colors.backgroundElevated,
           borderWidth: 1,
           borderColor: colors.border,
-          ...SHADOW_SM,
+          ...Shadow.sm,
         };
       case 'subtle':
         return {
@@ -100,23 +76,23 @@ export function Card({
         };
       case 'accent':
         return {
-          backgroundColor: colors.accent + '14',
+          backgroundColor: alpha(colors.accent, 0.08),
           borderWidth: 1,
-          borderColor: colors.accent + '30',
+          borderColor: alpha(colors.accent, 0.19),
         };
       case 'elevated':
         return {
           backgroundColor: colors.backgroundElevated,
           borderWidth: 0,
           borderColor: 'transparent',
-          ...SHADOW_LG,
+          ...Shadow.lg,
         };
       default:
         return {
           backgroundColor: colors.backgroundElevated,
           borderWidth: 1,
           borderColor: colors.border,
-          ...SHADOW_SM,
+          ...Shadow.sm,
         };
     }
   };
@@ -162,7 +138,7 @@ export function Card({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     overflow: 'hidden',
   },
 });
