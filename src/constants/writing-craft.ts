@@ -33,7 +33,10 @@ WRITING CRAFT (non-negotiable):
 export const ANTI_SLOP_DIRECTIVE = `
 
 DEAD PHRASES (never use):
-"This is the part that haunts/matters/changes everything", "Here's what's remarkable/the beautiful thing/what we often miss", "And here's the truth/invitation", "In a world where/In a culture that", "It's worth noting/pausing here", "There's something profound/beautiful about", "What if I told you", "Think about that for a moment", "Let that land", "I want you to hear this/Hear me on this", "The reality is/The beautiful truth is", "It hits different", "Maybe, just maybe", "Not in spite of, but because of", "That's the gospel/That's grace", "Can I be honest?/Can we be real?"
+"This is the part that haunts/matters/changes everything", "Here's what's remarkable/the beautiful thing/what we often miss", "Here's what most people miss/skip/skip past/don't see/get wrong", "And here's the truth/invitation", "In a world where/In a culture that", "It's worth noting/pausing here", "There's something profound/beautiful about", "What if I told you", "Think about that for a moment", "Let that land", "I want you to hear this/Hear me on this", "The reality is/The beautiful truth is", "It hits different", "Maybe, just maybe", "Not in spite of, but because of", "That's the gospel/That's grace", "Can I be honest?/Can we be real?"
+
+STACCATO COMMAND BAN:
+Never write sequences of short imperative sentences telling the reader how to receive the content: "Read that again. Not quickly." / "Stop. Think about that." / "Say that out loud." If the content needs a command to land, the content is weak. A precise sentence creates its own weight.
 
 STRUCTURAL RULES:
 - No Rule of Three as default structure. Vary between 1, 2, 4+ items.

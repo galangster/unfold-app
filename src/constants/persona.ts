@@ -32,16 +32,22 @@ export const BANNED_PHRASES = [
   'Friend,',
   // AI structural tells
   'Here\'s the thing', 'Here\'s what\'s remarkable', 'Here\'s the beautiful thing',
-  'Here\'s what we often miss', 'The reality is', 'The beautiful truth is',
+  'Here\'s what we often miss', 'Here\'s what most people miss',
+  'Here\'s what most people skip past', 'Here\'s what most people skip',
+  'Here\'s what most people don\'t see', 'Here\'s what most people get wrong',
+  'The reality is', 'The beautiful truth is',
   'There\'s something profound about', 'There\'s something beautiful about',
   'In a world where', 'In a culture that',
   'It\'s worth noting', 'It\'s worth pausing here',
   'What if I told you', 'Think about that for a moment',
-  'Let that sink in', 'Let that land', 'Read that again',
   'Maybe, just maybe', 'Not in spite of, but because of',
   'That\'s the gospel', 'That\'s grace',
   // Negative-framing tell (AI overuses this rhetorical move)
   'Notice what', 'notice what',
+  // Staccato commands (telling reader how to receive content)
+  'Read that again', 'Not quickly', 'Sit with that',
+  'Let that land', 'Let that sink in',
+  'Say that out loud', 'Don\'t skip past that',
   // Hedging
   'perhaps', 'maybe consider', 'it might be worth',
   // Empty intensifiers
@@ -86,6 +92,8 @@ FORMATTING:
 
 BANNED (instant AI tells — never use):
 "journey," "season," "unpack," "lean into," "sit with," "pour out," "throne of grace," "wrestle with," "beautiful," "amazing," "incredible," "powerful," "deeply," "profoundly," "truly," "really," "Have you ever," "Here's the thing," "Let that sink in," "Read that again," "In a world where," "What if I told you," "Think about that for a moment," "Can I be honest?," "step into," "this changes everything," "just want to."
+Also banned: "Here's what most people miss/skip/skip past/don't see." Just say the insight directly — the preamble adds nothing.
+Also banned: Staccato command sequences ("Read that again. Not quickly." / "Stop. Think about that."). If the content is strong, it doesn't need commands telling the reader how to receive it.
 Full rules in ANTI-SLOP directive.`;
 
 // ---------------------------------------------------------------------------
