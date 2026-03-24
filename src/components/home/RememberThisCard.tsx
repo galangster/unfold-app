@@ -11,6 +11,7 @@ import { HighlighterIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore, type HighlightColor } from '@/lib/store';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> = {
@@ -131,7 +132,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
     padding: 16,
     shadowColor: '#000',

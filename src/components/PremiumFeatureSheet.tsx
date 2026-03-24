@@ -34,6 +34,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 
 // ---------------------------------------------------------------------------
 // Feature definitions — each gate point maps to contextual copy + icon
@@ -271,7 +272,7 @@ const pfStyles = StyleSheet.create({
   iconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -293,7 +294,7 @@ const pfStyles = StyleSheet.create({
   },
   ctaButton: {
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     alignItems: 'center',
   },
   ctaText: {

@@ -56,6 +56,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
@@ -457,8 +458,8 @@ const sheetStyles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
     maxHeight: '70%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
@@ -493,7 +494,7 @@ const sheetStyles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 14,
     height: 48,
@@ -527,7 +528,7 @@ const sheetStyles = StyleSheet.create({
   pill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
   },
   pillText: {
     fontFamily: FontFamily.uiMedium,
@@ -547,7 +548,7 @@ const sheetStyles = StyleSheet.create({
   },
   previewCard: {
     borderLeftWidth: 3,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     padding: 16,
     marginBottom: 16,
   },
@@ -568,7 +569,7 @@ const sheetStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   insertButtonText: {
     fontFamily: FontFamily.uiSemiBold,

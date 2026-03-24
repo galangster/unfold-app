@@ -23,6 +23,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 
@@ -81,7 +82,7 @@ function AnimatedChip({
           backgroundColor: colors.inputBackground,
           borderWidth: 1,
           borderColor: alpha(accentColor, 0.20),
-          borderRadius: 20,
+          borderRadius: Radius.xl,
           paddingHorizontal: 14,
           paddingVertical: 8,
         }}

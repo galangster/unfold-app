@@ -12,6 +12,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { ScriptureRefPill } from './ScriptureRefPill';
 import { stripHtml, isHtmlContent } from './NoteEditor';
 
@@ -182,7 +183,7 @@ function formatRelativeDate(dateStr: string): string {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,

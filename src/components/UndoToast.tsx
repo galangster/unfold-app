@@ -3,6 +3,7 @@ import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 
 interface UndoToastProps {
   visible: boolean;
@@ -69,7 +70,7 @@ const styles = StyleSheet.create({
     left: 24,
     right: 24,
     backgroundColor: 'rgba(30, 30, 30, 0.95)',
-    borderRadius: 14,
+    borderRadius: Radius.card,
     paddingVertical: 14,
     paddingHorizontal: 18,
     flexDirection: 'row',

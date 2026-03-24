@@ -36,6 +36,7 @@ import {
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -780,8 +781,8 @@ const styles = StyleSheet.create({
 
   /* Sheet card */
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
     borderWidth: 1,
     borderBottomWidth: 0,
     overflow: 'hidden',
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 2,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     width: 76,
   },
   moodLabel: {
@@ -876,7 +877,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     borderWidth: 1,
   },
   chipText: {
@@ -898,7 +899,7 @@ const styles = StyleSheet.create({
   },
   typeOwnInput: {
     height: 44,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 14,
     fontSize: FontSize.sm,
@@ -907,7 +908,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
   },
   submitTypedText: {
     fontSize: FontSize.sm,
@@ -916,7 +917,7 @@ const styles = StyleSheet.create({
   /* Note step */
   noteInput: {
     height: 100,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingTop: 14,
@@ -940,7 +941,7 @@ const styles = StyleSheet.create({
   doneButton: {
     paddingHorizontal: 28,
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: Radius['2xl'],
   },
   doneButtonText: {
     fontSize: FontSize.sm,

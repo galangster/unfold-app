@@ -13,6 +13,7 @@ import { PlusIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 import type { NoteFolder } from '@/lib/store';
 
 interface FolderChipsProps {
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',

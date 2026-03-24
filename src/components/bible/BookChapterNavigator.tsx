@@ -30,6 +30,7 @@ import {
   getBookColor,
   type BibleBookInfo,
 } from '@/lib/bible-constants';
+import { Radius } from '@/constants/radius';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
 import { getChapterVerseCount } from '@/lib/bible-db';
 import type { BibleTranslation } from '@/lib/bible-db';
@@ -586,7 +587,7 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingVertical: 10,
     paddingHorizontal: 6,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },

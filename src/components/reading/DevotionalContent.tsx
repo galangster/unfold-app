@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
@@ -407,7 +408,7 @@ const dcStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 20,

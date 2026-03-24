@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { BookOpenIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 
 function SeriesCard({
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   seriesCard: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     padding: 14,
     marginBottom: 8,

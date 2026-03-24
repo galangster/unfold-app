@@ -47,6 +47,7 @@ function useBottomTabBarHeightSafe(): number {
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { streamDevotionalAudio } from '@/lib/cartesia';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
@@ -985,8 +986,8 @@ AudioPlayer.displayName = 'AudioPlayer';
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     overflow: 'hidden',
   },
   content: {
@@ -1017,7 +1018,7 @@ const styles = StyleSheet.create({
   speedButton: {
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     flexShrink: 0,
   },
   speedText: {
@@ -1120,7 +1121,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     flexShrink: 0,
   },
   retryButtonText: {
@@ -1132,7 +1133,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 24,
     top: 80,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     paddingVertical: 6,
     minWidth: 120,
     zIndex: 100,

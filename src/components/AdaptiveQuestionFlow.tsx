@@ -13,6 +13,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { useAdaptiveQuestions } from '@/lib/use-adaptive-questions';
 import { TypewriterText } from '@/components/TypewriterText';
 import { StudyContext } from '@/lib/adaptive-questions';
@@ -161,7 +162,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
                 backgroundColor: answer.trim() ? colors.accent : colors.inputBackground,
                 paddingHorizontal: 24,
                 paddingVertical: 12,
-                borderRadius: 24,
+                borderRadius: Radius['2xl'],
                 opacity: answer.trim() ? 1 : 0.5,
                 flexDirection: 'row',
                 alignItems: 'center',

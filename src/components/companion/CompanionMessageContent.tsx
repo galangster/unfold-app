@@ -11,6 +11,7 @@ import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily } from '@/constants/fonts';
 import { StreamingCursor } from './StreamingCursor';
@@ -81,7 +82,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
           <View
             style={{
               backgroundColor: alpha(colors.error, 0.10),
-              borderRadius: 12,
+              borderRadius: Radius.md,
               padding: 12,
             }}
           >

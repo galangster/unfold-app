@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react-native';
 import { logBugError } from '@/lib/bug-logger';
 import { Colors } from '@/constants/colors';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 
 interface Props {
   children: ReactNode;
@@ -151,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.buttonBackground,
     paddingVertical: 16,
     paddingHorizontal: 48,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },

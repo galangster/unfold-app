@@ -24,6 +24,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -164,7 +165,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
             style={{
               width: 48,
               height: 48,
-              borderRadius: 24,
+              borderRadius: Radius['2xl'],
               backgroundColor: alpha(colors.accent, 0.15),
               alignItems: 'center',
               justifyContent: 'center',
@@ -224,7 +225,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
                   backgroundColor: colors.inputBackground,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  borderRadius: 14,
+                  borderRadius: Radius.card,
                   paddingHorizontal: 16,
                   paddingVertical: 14,
                 }}

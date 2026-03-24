@@ -15,6 +15,7 @@ import Animated, {
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { Radius } from '@/constants/radius';
 
 interface StreakDisplayProps {
   size?: 'small' | 'medium' | 'large';
@@ -76,7 +77,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             backgroundColor: colors.inputBackground,
             paddingHorizontal: config.padding,
             paddingVertical: config.padding * 0.6,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             gap: 6,
           }}
         >
@@ -112,7 +113,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
           backgroundColor: isDark ? `${colors.accent}26` : `${colors.accent}1A`,
           paddingHorizontal: config.padding,
           paddingVertical: config.padding * 0.6,
-          borderRadius: 20,
+          borderRadius: Radius.xl,
           gap: 6,
         }}
       >
@@ -153,7 +154,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
             backgroundColor: colors.inputBackground,
             paddingHorizontal: config.padding * 0.8,
             paddingVertical: config.padding * 0.6,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             gap: 4,
           }}
         >

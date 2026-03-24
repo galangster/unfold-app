@@ -13,6 +13,7 @@ import { CheckCircleIcon, PencilSimpleLineIcon, ArrowRightIcon, NotePencilIcon }
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
@@ -276,7 +277,7 @@ export function InlineReflectionJournal({
             gap: 8,
             paddingVertical: 14,
             paddingHorizontal: 24,
-            borderRadius: 12,
+            borderRadius: Radius.md,
             borderWidth: 1,
             borderColor: alpha(colors.accent, 0.25),
             backgroundColor: alpha(colors.accent, 0.03),
@@ -410,7 +411,7 @@ function ReflectionQuestionCard({
           <View
             style={{
               backgroundColor: colors.inputBackground,
-              borderRadius: 12,
+              borderRadius: Radius.md,
               borderWidth: 1,
               borderColor: colors.borderFocused ?? colors.border,
               padding: 14,

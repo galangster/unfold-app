@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
 import type { BibleReaderSettings } from '@/lib/store';
 
@@ -270,10 +271,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 100,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderBottomLeftRadius: Radius.xl,
+    borderBottomRightRadius: Radius.xl,
     marginHorizontal: 8,
     paddingHorizontal: 24,
     paddingTop: 20,
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
   closeButton: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
   },

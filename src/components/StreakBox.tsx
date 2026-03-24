@@ -13,6 +13,7 @@ import Animated, {
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 
 /** Returns motivational micro-copy based on streak length */
 function getStreakMotivation(streak: number): string {
@@ -226,7 +227,7 @@ const styles = StyleSheet.create({
   dayCircle: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   card: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     padding: 20,
   },

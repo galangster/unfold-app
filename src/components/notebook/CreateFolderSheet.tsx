@@ -41,6 +41,7 @@ import { FolderSimplePlusIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { Button, alpha } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
@@ -299,8 +300,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.12,
@@ -336,7 +337,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     marginBottom: 16,
   },
   colorSection: {
@@ -355,6 +356,6 @@ const styles = StyleSheet.create({
   colorCircle: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.card,
   },
 });

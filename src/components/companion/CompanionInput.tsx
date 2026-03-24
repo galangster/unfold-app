@@ -24,6 +24,7 @@ import Animated, {
 import { ArrowUpIcon, StopCircleIcon, MicrophoneIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
+import { Radius } from '@/constants/radius';
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
@@ -170,7 +171,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
               style={{
                 width: 32,
                 height: 32,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 backgroundColor: alpha(colors.error, 0.60),
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -187,7 +188,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
               style={{
                 width: 32,
                 height: 32,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 backgroundColor: colors.buttonBackground,
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -205,7 +206,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
               style={{
                 width: 32,
                 height: 32,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 backgroundColor: colors.accent,
                 alignItems: 'center',
                 justifyContent: 'center',

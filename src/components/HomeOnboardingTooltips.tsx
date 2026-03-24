@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { Radius } from '@/constants/radius';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
   },
   tooltipCard: {
     position: 'absolute',
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
     paddingHorizontal: 18,
     paddingTop: 16,
@@ -465,6 +466,6 @@ const styles = StyleSheet.create({
   nextButton: {
     paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
   },
 });

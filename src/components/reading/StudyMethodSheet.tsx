@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { Radius } from '@/constants/radius';
 import { BIBLE_STUDY_METHODS, type BibleStudyMethodCard } from '@/constants/bible-study-methods';
 
 // ---------------------------------------------------------------------------
@@ -486,7 +487,7 @@ const smStyles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     maxHeight: '85%',
     overflow: 'hidden',
   },
@@ -496,7 +497,7 @@ const smStyles = StyleSheet.create({
     right: 16,
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,

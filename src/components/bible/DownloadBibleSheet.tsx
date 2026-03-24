@@ -4,6 +4,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import type { ColorTheme } from '@/constants/colors';
+import { Radius } from '@/constants/radius';
 
 interface DownloadBibleSheetProps {
   visible: boolean;
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
   downloadButton: {
     paddingHorizontal: 32,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     marginTop: 16,
   },
   downloadButtonText: {
