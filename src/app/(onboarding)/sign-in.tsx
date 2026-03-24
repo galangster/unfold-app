@@ -18,6 +18,7 @@ import { useOAuth } from '@clerk/clerk-expo';
 import { AppleLogoIcon, GoogleLogoIcon, FacebookLogoIcon, CloudIcon, ShieldIcon, SparkleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -290,7 +291,7 @@ export default function SignInScreen() {
             entering={FadeIn.duration(300)}
             style={{
               backgroundColor: colors.error,
-              borderRadius: 12,
+              borderRadius: Radius.md,
               padding: 16,
               marginBottom: 16,
             }}
@@ -392,7 +393,7 @@ export default function SignInScreen() {
                 {
                   width: 48,
                   height: 48,
-                  borderRadius: 24,
+                  borderRadius: Radius['2xl'],
                   borderWidth: 3,
                   borderColor: alpha(colors.accent, 0.19),
                   borderTopColor: colors.accent,
@@ -469,7 +470,7 @@ const styles = StyleSheet.create({
   benefitIcon: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -497,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 52,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     gap: 10,
   },
   appleButton: {

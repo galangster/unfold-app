@@ -43,6 +43,7 @@ import {
   useKeyboard,
 } from '@10play/tentap-editor';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
@@ -1365,7 +1366,7 @@ const styles = StyleSheet.create({
     top: 56,
     right: 16,
     width: 240,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     paddingVertical: 6,
     zIndex: 200,
@@ -1492,7 +1493,7 @@ const styles = StyleSheet.create({
   tagPill: {
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
   },
   tagPillText: {

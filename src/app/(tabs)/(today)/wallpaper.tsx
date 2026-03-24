@@ -17,6 +17,7 @@ import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -264,7 +265,7 @@ export default function WallpaperScreen() {
               style={{
                 width: actualPreviewWidth,
                 height: previewHeight,
-                borderRadius: 24,
+                borderRadius: Radius['2xl'],
                 overflow: 'hidden',
                 borderWidth: 1,
                 borderColor: colors.border,
@@ -454,7 +455,7 @@ export default function WallpaperScreen() {
               style={{
                 backgroundColor: colors.accent,
                 paddingVertical: 14,
-                borderRadius: 12,
+                borderRadius: Radius.md,
                 flexDirection: 'row',
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -492,7 +493,7 @@ export default function WallpaperScreen() {
                 backgroundColor: saved ? colors.text : colors.buttonBackground,
                 paddingVertical: 16,
                 paddingHorizontal: 28,
-                borderRadius: 14,
+                borderRadius: Radius.card,
                 borderWidth: 1,
                 borderColor: saved ? colors.text : colors.border,
               }}
@@ -515,7 +516,7 @@ export default function WallpaperScreen() {
                 backgroundColor: colors.buttonBackground,
                 paddingVertical: 16,
                 paddingHorizontal: 28,
-                borderRadius: 14,
+                borderRadius: Radius.card,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}

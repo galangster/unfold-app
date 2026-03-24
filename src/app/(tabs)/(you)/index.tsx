@@ -18,6 +18,7 @@ import {
   SparkleIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -135,7 +136,7 @@ export default function YouScreen() {
                     backgroundColor: alpha(colors.accent, 0.13),
                     paddingHorizontal: 10,
                     paddingVertical: 4,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                   }}
                 >
                   <CrownIcon size={12} color={colors.accent} weight="fill" />
@@ -303,7 +304,7 @@ export default function YouScreen() {
             <View
               style={{
                 backgroundColor: colors.backgroundElevated,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 // Subtle lift for menu group

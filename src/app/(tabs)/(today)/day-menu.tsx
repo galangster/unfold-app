@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -106,7 +107,7 @@ export default function DayMenuScreen() {
                   : 'transparent',
                 paddingVertical: 16,
                 paddingHorizontal: 16,
-                borderRadius: 14,
+                borderRadius: Radius.card,
                 flexDirection: 'row',
                 alignItems: 'center',
                 marginBottom: 6,
@@ -119,7 +120,7 @@ export default function DayMenuScreen() {
                 style={{
                   width: 28,
                   height: 28,
-                  borderRadius: 14,
+                  borderRadius: Radius.card,
                   backgroundColor: isDayRead ? colors.text : colors.inputBackground,
                   justifyContent: 'center',
                   alignItems: 'center',

@@ -13,6 +13,7 @@ import {
   BookOpenIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, HighlightColor } from '@/lib/store';
 
@@ -169,7 +170,7 @@ export default function SavedScreen() {
                         style={{
                           flexDirection: 'row',
                           backgroundColor: colors.inputBackground,
-                          borderRadius: 14,
+                          borderRadius: Radius.card,
                           marginBottom: 10,
                           overflow: 'hidden',
                         }}
@@ -271,7 +272,7 @@ export default function SavedScreen() {
                       <View
                         style={{
                           backgroundColor: colors.inputBackground,
-                          borderRadius: 14,
+                          borderRadius: Radius.card,
                           padding: 16,
                           marginBottom: 10,
                         }}
@@ -372,7 +373,7 @@ export default function SavedScreen() {
                       <View
                         style={{
                           backgroundColor: colors.inputBackground,
-                          borderRadius: 14,
+                          borderRadius: Radius.card,
                           padding: 16,
                           marginBottom: 10,
                         }}
@@ -500,7 +501,7 @@ function EmptyState({
       entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(300)}
       style={{
         backgroundColor: colors.inputBackground,
-        borderRadius: 14,
+        borderRadius: Radius.card,
         padding: 24,
         alignItems: 'center',
         marginBottom: 10,

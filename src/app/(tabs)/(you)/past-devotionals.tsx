@@ -13,6 +13,7 @@ import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { format } from 'date-fns';
@@ -172,7 +173,7 @@ const segStyles = StyleSheet.create({
     top: 2,
     left: 2,
     height: 30,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -285,7 +286,7 @@ export default function PastDevotionalsScreen() {
       <View
         style={{
           backgroundColor: colors.inputBackground,
-          borderRadius: 16,
+          borderRadius: Radius.lg,
           borderWidth: 1,
           borderColor: colors.border,
           padding: 20,

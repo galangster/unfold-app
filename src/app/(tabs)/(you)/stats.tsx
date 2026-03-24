@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon, CompassIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
 import { useTheme } from '@/lib/theme';
@@ -434,7 +435,7 @@ const statStyles = StyleSheet.create({
   allThemesButton: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
   },
   allThemesText: {
@@ -447,7 +448,7 @@ const statStyles = StyleSheet.create({
     paddingBottom: 100,
   },
   focusedBanner: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -458,7 +459,7 @@ const statStyles = StyleSheet.create({
     fontSize: 12,
   },
   streakHero: {
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     padding: 28,
     alignItems: 'center',
@@ -487,7 +488,7 @@ const statStyles = StyleSheet.create({
     marginBottom: 12,
   },
   favoriteMethodCard: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     padding: 18,
     justifyContent: 'center',
@@ -516,7 +517,7 @@ const statStyles = StyleSheet.create({
     lineHeight: 24,
   },
   statCard: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     padding: 18,
   },

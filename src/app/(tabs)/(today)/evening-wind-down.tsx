@@ -18,6 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { CaretLeftIcon, BookOpenIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
@@ -386,7 +387,7 @@ export default function EveningWindDownScreen() {
                     gap: 8,
                     paddingVertical: 12,
                     paddingHorizontal: 24,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     borderWidth: 1,
                     borderColor: colors.accent,
                   }}
@@ -535,7 +536,7 @@ export default function EveningWindDownScreen() {
                   <View
                     style={{
                       backgroundColor: colors.accent,
-                      borderRadius: 14,
+                      borderRadius: Radius.card,
                       paddingVertical: 16,
                       alignItems: 'center',
                     }}

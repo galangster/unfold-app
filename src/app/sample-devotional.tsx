@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
 import { CaretLeftIcon, ArrowRightIcon } from 'phosphor-react-native';
 
@@ -98,7 +99,7 @@ export default function SampleDevotionalScreen() {
                 flex: 1,
                 marginHorizontal: 24,
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 overflow: 'hidden',
@@ -135,7 +136,7 @@ export default function SampleDevotionalScreen() {
                 <View
                   style={{
                     backgroundColor: isDark ? 'rgba(200, 165, 92, 0.08)' : 'rgba(154, 123, 60, 0.05)',
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     padding: 16,
                     borderLeftWidth: 3,
                     borderLeftColor: colors.accent,
@@ -171,7 +172,7 @@ export default function SampleDevotionalScreen() {
                     style={{
                       backgroundColor: colors.accent,
                       paddingVertical: 16,
-                      borderRadius: 12,
+                      borderRadius: Radius.md,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',

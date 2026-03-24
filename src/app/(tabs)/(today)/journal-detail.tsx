@@ -13,6 +13,7 @@ import {
   CheckCircleIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, SoapResponses } from '@/lib/store';
 import { format } from 'date-fns';
@@ -371,7 +372,7 @@ export default function JournalDetailScreen() {
                         style={{
                           width: 16,
                           height: 16,
-                          borderRadius: 8,
+                          borderRadius: Radius.sm,
                           borderWidth: 1.5,
                           borderColor: colors.textHint,
                           marginTop: 3,

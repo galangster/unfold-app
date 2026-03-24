@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, LifeStage, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import Constants from 'expo-constants';
@@ -485,7 +486,7 @@ export default function SettingsScreen() {
                 <View
                   style={{
                     backgroundColor: colors.buttonBackground,
-                    borderRadius: 16,
+                    borderRadius: Radius.lg,
                     borderWidth: 1,
                     borderColor: colors.border,
                     padding: 20,
@@ -497,7 +498,7 @@ export default function SettingsScreen() {
                     style={{
                       width: 44,
                       height: 44,
-                      borderRadius: 12,
+                      borderRadius: Radius.md,
                       backgroundColor: colors.inputBackground,
                       justifyContent: 'center',
                       alignItems: 'center',
@@ -586,7 +587,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -727,7 +728,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -774,7 +775,7 @@ export default function SettingsScreen() {
                               : colors.buttonBackground,
                           paddingVertical: 8,
                           paddingHorizontal: 14,
-                          borderRadius: 8,
+                          borderRadius: Radius.sm,
                           borderWidth: 1,
                           borderColor: user?.fontSize === size.value ? colors.text : colors.border,
                         }}
@@ -813,7 +814,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -862,7 +863,7 @@ export default function SettingsScreen() {
                               : colors.buttonBackground,
                             paddingVertical: 8,
                             paddingHorizontal: 12,
-                            borderRadius: 8,
+                            borderRadius: Radius.sm,
                             borderWidth: 1,
                             borderColor: isSelected ? colors.text : colors.border,
                             flexDirection: 'row',
@@ -936,7 +937,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -1447,7 +1448,7 @@ export default function SettingsScreen() {
                               style={{
                                 width: 32,
                                 height: 32,
-                                borderRadius: 16,
+                                borderRadius: Radius.lg,
                                 backgroundColor: previewingVoiceId === option.id ? colors.accent : colors.buttonBackground,
                                 justifyContent: 'center',
                                 alignItems: 'center',
@@ -1559,7 +1560,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -1736,7 +1737,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -2301,7 +2302,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 padding: 20,
@@ -2369,7 +2370,7 @@ export default function SettingsScreen() {
             <View
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
                 marginBottom: 24,
@@ -2619,7 +2620,7 @@ export default function SettingsScreen() {
             <TouchableOpacity activeOpacity={0.7} onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
               <View
                 style={{
-                  borderRadius: 12,
+                  borderRadius: Radius.md,
                   paddingVertical: 14,
                   paddingHorizontal: 16,
                   flexDirection: 'row',
@@ -2657,7 +2658,7 @@ export default function SettingsScreen() {
               >
                 <View
                   style={{
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     paddingVertical: 14,
                     paddingHorizontal: 16,
                     flexDirection: 'row',

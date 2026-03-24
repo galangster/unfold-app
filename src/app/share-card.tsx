@@ -31,6 +31,7 @@ import {
 } from '@shopify/react-native-skia';
 import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -558,7 +559,7 @@ const s = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     paddingHorizontal: 28,
     paddingTop: 48,
@@ -637,7 +638,7 @@ const s = StyleSheet.create({
     gap: 8,
     paddingVertical: 15,
     paddingHorizontal: 28,
-    borderRadius: 14,
+    borderRadius: Radius.card,
   },
   saveButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.12)',

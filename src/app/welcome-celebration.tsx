@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
 
 export default function WelcomeCelebrationScreen() {
@@ -62,7 +63,7 @@ export default function WelcomeCelebrationScreen() {
               width: '100%',
               marginTop: 48,
               backgroundColor: darkCard,
-              borderRadius: 16,
+              borderRadius: Radius.lg,
               padding: 24,
               borderWidth: 1,
               borderColor: darkBorder,
@@ -100,7 +101,7 @@ export default function WelcomeCelebrationScreen() {
                   style={{
                     backgroundColor: colors.accent,
                     paddingVertical: 18,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     alignItems: 'center',
                   }}
                 >

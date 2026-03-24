@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
@@ -1070,7 +1071,7 @@ const styles = StyleSheet.create({
   noteSaveButton: {
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
   },
   noteButtonText: {
     fontFamily: FontFamily.uiMedium,
@@ -1079,7 +1080,7 @@ const styles = StyleSheet.create({
   contextRemoveCircle: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1091,7 +1092,7 @@ const styles = StyleSheet.create({
   contextColorDot: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
   },
 
   // Toast
@@ -1100,7 +1101,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', zIndex: 200,
   },
   toastPill: {
-    paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20,
+    paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.xl,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
   },

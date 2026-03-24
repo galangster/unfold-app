@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { MagnifyingGlassIcon, BookmarkSimpleIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
@@ -372,7 +373,7 @@ const styles = StyleSheet.create({
   bookPill: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     minWidth: '30%',
     flexGrow: 1,
     flexBasis: '30%',
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
     padding: 28,
   },
   chapterModal: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 20,
     width: '100%',
     maxHeight: '70%',
