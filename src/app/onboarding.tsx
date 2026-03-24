@@ -1065,7 +1065,7 @@ export default function OnboardingScreen() {
               }}
             >
               <View style={{
-                paddingVertical: 28,
+                paddingVertical: Spacing['7'],
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
               }}>
@@ -1083,7 +1083,7 @@ export default function OnboardingScreen() {
                       Trust, courage, joy, lament, discipline...
                     </Text>
                   </View>
-                  <View style={{ marginTop: 12 }}>
+                  <View style={{ marginTop: Spacing['3'] }}>
                     <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
@@ -1105,7 +1105,7 @@ export default function OnboardingScreen() {
               }}
             >
               <View style={{
-                paddingVertical: 28,
+                paddingVertical: Spacing['7'],
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border,
               }}>
@@ -1123,7 +1123,7 @@ export default function OnboardingScreen() {
                       Book study, character study, psalms, parables...
                     </Text>
                   </View>
-                  <View style={{ marginTop: 12 }}>
+                  <View style={{ marginTop: Spacing['3'] }}>
                     <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
@@ -1145,7 +1145,7 @@ export default function OnboardingScreen() {
                 startDiscoveryPreparation('guided');
               }}
             >
-              <View style={{ paddingVertical: 28 }}>
+              <View style={{ paddingVertical: Spacing['7'] }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
                     width: 56, height: 56, borderRadius: Radius.lg,
@@ -1160,7 +1160,7 @@ export default function OnboardingScreen() {
                       We'll craft something based on what you share
                     </Text>
                   </View>
-                  <View style={{ marginTop: 12 }}>
+                  <View style={{ marginTop: Spacing['3'] }}>
                     <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
@@ -1180,7 +1180,7 @@ export default function OnboardingScreen() {
 
         return (
           <View style={{ flex: 1 }}>
-            <View style={{ marginBottom: 16 }}>
+            <View style={{ marginBottom: Spacing['4'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -1200,9 +1200,9 @@ export default function OnboardingScreen() {
               onScroll={handleListScroll}
               scrollEventThrottle={16}
             >
-              <View style={{ paddingBottom: 200, gap: 24 }}>
+              <View style={{ paddingBottom: 200, gap: Spacing['6'] }}>
                 {Object.entries(themeGroups).map(([groupName, themeIds]) => (
-                  <View key={groupName} style={{ gap: 12 }}>
+                  <View key={groupName} style={{ gap: Spacing['3'] }}>
                     <Text
                       style={{
                         fontFamily: FontFamily.mono,
@@ -1270,7 +1270,7 @@ export default function OnboardingScreen() {
                   height: 60,
                   justifyContent: 'flex-end',
                   alignItems: 'center',
-                  paddingBottom: 8,
+                  paddingBottom: Spacing['2'],
                 }}
               >
                 <LinearGradient
@@ -1304,7 +1304,7 @@ export default function OnboardingScreen() {
         return (
           <View style={{ flex: 1 }}>
             <ScrollView showsVerticalScrollIndicator={false} onScroll={handleListScroll} scrollEventThrottle={16}>
-              <View style={{ gap: 10, paddingBottom: 200 }}>
+              <View style={{ gap: Spacing['2.5'], paddingBottom: 200 }}>
                 {DEVOTIONAL_TYPES.map((type) => {
                   const isSelected = data.selectedType === type.id;
                   const Icon = iconMap[type.id] || <BookOpenIcon size={20} color={colors.textMuted} weight="regular" />;
@@ -1326,13 +1326,13 @@ export default function OnboardingScreen() {
                           <View style={{
                             backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                             paddingHorizontal: 18,
-                            paddingVertical: 16,
+                            paddingVertical: Spacing['4'],
                             borderRadius: Radius.md,
                             borderWidth: 1,
                             borderColor: isSelected ? colors.borderFocused : colors.border,
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: 12,
+                            gap: Spacing['3'],
                           }}>
                             <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: isDark ? 'rgba(200, 165, 92, 0.12)' : 'rgba(154, 123, 60, 0.08)', justifyContent: 'center', alignItems: 'center' }}>
                               {Icon}
@@ -1348,8 +1348,8 @@ export default function OnboardingScreen() {
 
                 <View
                   style={{
-                    marginTop: 24,
-                    padding: 16,
+                    marginTop: Spacing['6'],
+                    padding: Spacing['4'],
                     backgroundColor: colors.inputBackground,
                     borderRadius: Radius.md,
                     borderWidth: 1,
@@ -1413,7 +1413,7 @@ export default function OnboardingScreen() {
                         <View style={{
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                           paddingHorizontal: 18,
-                          paddingVertical: 14,
+                          paddingVertical: Spacing['3.5'],
                           borderRadius: Radius.md,
                           borderWidth: 1,
                           borderColor: isSelected ? colors.borderFocused : colors.border,
@@ -1433,7 +1433,7 @@ export default function OnboardingScreen() {
     // Standard input types
     if (step.type === 'text') {
       return (
-        <View style={{ marginTop: 8 }}>
+        <View style={{ marginTop: Spacing['2'] }}>
           <TextInput
             value={data.name}
             onChangeText={(text) => setData((prev) => ({ ...prev, name: text }))}
@@ -1443,8 +1443,8 @@ export default function OnboardingScreen() {
               fontFamily: FontFamily.body,
               fontSize: FontSize.lg,
               color: colors.text,
-              paddingVertical: 16,
-              paddingHorizontal: 20,
+              paddingVertical: Spacing['4'],
+              paddingHorizontal: Spacing['5'],
               backgroundColor: colors.inputBackground,
               borderRadius: Radius.lg,
               borderWidth: 1,
@@ -1464,9 +1464,9 @@ export default function OnboardingScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleNext}
               style={{
-                marginTop: 20,
+                marginTop: Spacing['5'],
                 backgroundColor: colors.accent,
-                paddingVertical: 16,
+                paddingVertical: Spacing['4'],
                 borderRadius: Radius.card,
                 alignItems: 'center',
               }}
@@ -1499,8 +1499,8 @@ export default function OnboardingScreen() {
             <View style={{
               flexDirection: 'row',
               flexWrap: 'wrap',
-              gap: 8,
-              marginBottom: 16,
+              gap: Spacing['2'],
+              marginBottom: Spacing['4'],
             }}>
               {chips.map((chip) => {
                 const isChipSelected = currentChips.includes(chip);
@@ -1518,8 +1518,8 @@ export default function OnboardingScreen() {
                       });
                     }}
                     style={{
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
+                      paddingHorizontal: Spacing['3.5'],
+                      paddingVertical: Spacing['2'],
                       borderRadius: Radius.xl,
                       backgroundColor: isChipSelected ? alpha(colors.accent, 0.13) : colors.inputBackground,
                       borderWidth: 1,
@@ -1546,7 +1546,7 @@ export default function OnboardingScreen() {
             borderRadius: Radius.xl,
             borderWidth: 1,
             borderColor: colors.border,
-            padding: 20,
+            padding: Spacing['5'],
             minHeight: isDiscoveryStep ? 100 : 200,
           }}>
             <TextInput
@@ -1581,7 +1581,7 @@ export default function OnboardingScreen() {
               fontFamily: FontFamily.body,
               fontSize: 13,
               color: colors.textMuted,
-              marginTop: 10,
+              marginTop: Spacing['2.5'],
               opacity: 0.7,
             }}>
               The more you share, the more personal your devotional becomes.
@@ -1599,7 +1599,7 @@ export default function OnboardingScreen() {
           : step.options || [];
 
       return (
-        <View style={{ gap: 12, marginTop: 8 }}>
+        <View style={{ gap: Spacing['3'], marginTop: Spacing['2'] }}>
           {options.map((option) => {
             const isSelected = data[step.id as keyof OnboardingData] === option.value;
             return (
@@ -1619,7 +1619,7 @@ export default function OnboardingScreen() {
               >
                     <View style={{
                       backgroundColor: colors.inputBackground,
-                      paddingHorizontal: 20,
+                      paddingHorizontal: Spacing['5'],
                       paddingVertical: 18,
                       borderRadius: Radius.lg,
                       borderWidth: 1,
@@ -1645,12 +1645,12 @@ export default function OnboardingScreen() {
     // Mirror-back step: reflect user's answers and commitment button
     if (step.type === 'mirrorBack') {
       return (
-        <View style={{ gap: 24, marginTop: 8 }}>
+        <View style={{ gap: Spacing['6'], marginTop: Spacing['2'] }}>
           {/* Mirror-back reflection */}
           <View style={{
             backgroundColor: colors.inputBackground,
             borderRadius: Radius.xl,
-            padding: 24,
+            padding: Spacing['6'],
             borderWidth: 1,
             borderColor: colors.border,
           }}>
@@ -1680,7 +1680,7 @@ export default function OnboardingScreen() {
             <View style={{
               backgroundColor: colors.accent,
               paddingVertical: 18,
-              paddingHorizontal: 24,
+              paddingHorizontal: Spacing['6'],
               borderRadius: Radius.lg,
               alignItems: 'center',
               shadowColor: colors.accent,
@@ -1723,7 +1723,7 @@ export default function OnboardingScreen() {
       ];
 
       return (
-        <View style={{ gap: 14, marginTop: 0 }}>
+        <View style={{ gap: Spacing['3.5'], marginTop: 0 }}>
           {/* Shield icon header */}
           <Animated.View
             entering={FadeIn.delay(200).duration(600)}
@@ -1740,14 +1740,14 @@ export default function OnboardingScreen() {
               style={{
                 backgroundColor: colors.inputBackground,
                 borderRadius: Radius.card,
-                padding: 14,
+                padding: Spacing['3.5'],
                 borderWidth: 1,
                 borderColor: colors.border,
                 flexDirection: 'row',
-                gap: 12,
+                gap: Spacing['3'],
               }}
             >
-              <View style={{ marginTop: 2 }}>
+              <View style={{ marginTop: Spacing['0.5'] }}>
                 {item.icon}
               </View>
               <View style={{ flex: 1 }}>
@@ -1780,7 +1780,7 @@ export default function OnboardingScreen() {
               color: colors.textSubtle,
               textAlign: 'center',
               lineHeight: 18,
-              paddingHorizontal: 8,
+              paddingHorizontal: Spacing['2'],
             }}
           >
             By continuing, you consent to your responses being processed by these AI services.
@@ -1799,7 +1799,7 @@ export default function OnboardingScreen() {
               <View style={{
                 backgroundColor: colors.accent,
                 paddingVertical: 18,
-                paddingHorizontal: 24,
+                paddingHorizontal: Spacing['6'],
                 borderRadius: Radius.lg,
                 alignItems: 'center',
                 shadowColor: colors.accent,
@@ -1825,11 +1825,11 @@ export default function OnboardingScreen() {
     // Founder's note step: a personal letter from Nick
     if (step.type === 'founderNote') {
       return (
-        <View style={{ marginTop: 16, paddingHorizontal: 4 }}>
+        <View style={{ marginTop: Spacing['4'], paddingHorizontal: Spacing['1'] }}>
           {/* Pen nib icon */}
           <Animated.View
             entering={FadeIn.delay(200).duration(600)}
-            style={{ marginBottom: 24 }}
+            style={{ marginBottom: Spacing['6'] }}
           >
             <PenNibIcon size={32} color={colors.accent} weight="light" />
           </Animated.View>
@@ -1842,13 +1842,13 @@ export default function OnboardingScreen() {
               height: 1.5,
               backgroundColor: colors.accent,
               opacity: 0.4,
-              marginBottom: 28,
+              marginBottom: Spacing['7'],
               borderRadius: 1,
             }}
           />
 
           {/* The note */}
-          <View style={{ gap: 20 }}>
+          <View style={{ gap: Spacing['5'] }}>
             <Animated.Text
               entering={FadeIn.delay(600).duration(700)}
               style={{
@@ -1889,7 +1889,7 @@ export default function OnboardingScreen() {
           {/* Signature */}
           <Animated.View
             entering={FadeIn.delay(1600).duration(800)}
-            style={{ marginTop: 32 }}
+            style={{ marginTop: Spacing['8'] }}
           >
             <Text
               style={{
@@ -1907,7 +1907,7 @@ export default function OnboardingScreen() {
                 height: 1.5,
                 backgroundColor: colors.accent,
                 opacity: 0.5,
-                marginTop: 6,
+                marginTop: Spacing['1.5'],
                 borderRadius: 1,
               }}
             />
@@ -1930,13 +1930,13 @@ export default function OnboardingScreen() {
         { value: 'reflective', label: "Reflective", description: "Looking back, finding meaning" },
       ];
       return (
-        <View style={{ gap: 32 }}>
+        <View style={{ gap: Spacing['8'] }}>
           {/* Faith Background */}
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: Spacing['3'] }}>
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
               Faith
             </Text>
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: Spacing['2'] }}>
               {faithOptions.map((opt) => {
                 const isSelected = data.faithBackground === opt.value;
                 return (
@@ -1947,7 +1947,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
+                      paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -1970,11 +1970,11 @@ export default function OnboardingScreen() {
             </View>
           </View>
           {/* Life Stage */}
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: Spacing['3'] }}>
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
               Season of life
             </Text>
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: Spacing['2'] }}>
               {lifeOptions.map((opt) => {
                 const isSelected = data.lifeStage === opt.value;
                 return (
@@ -1985,7 +1985,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
+                      paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -2024,13 +2024,13 @@ export default function OnboardingScreen() {
         { value: 'theological', label: "Take me deeper", description: "Word origins, cross-references, scholarly insight" },
       ];
       return (
-        <View style={{ gap: 32 }}>
+        <View style={{ gap: Spacing['8'] }}>
           {/* Tone */}
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: Spacing['3'] }}>
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
               Voice
             </Text>
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: Spacing['2'] }}>
               {toneOptions.map((opt) => {
                 const isSelected = data.tone === opt.value;
                 return (
@@ -2040,13 +2040,13 @@ export default function OnboardingScreen() {
                       setData((prev) => ({ ...prev, tone: opt.value }));
                     }}
                     style={{
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
+                      paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flex: 1, marginRight: 12 }}>
+                      <View style={{ flex: 1, marginRight: Spacing['3'] }}>
                         <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
                         <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                         <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: FontSize.xs, color: colors.textSubtle, marginTop: 6 }}>{opt.example}</Text>
@@ -2066,11 +2066,11 @@ export default function OnboardingScreen() {
             </View>
           </View>
           {/* Depth */}
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: Spacing['3'] }}>
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.textMuted, letterSpacing: 1, textTransform: 'uppercase' }}>
               Depth
             </Text>
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: Spacing['2'] }}>
               {depthOptions.map((opt) => {
                 const isSelected = data.depth === opt.value;
                 return (
@@ -2081,7 +2081,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
+                      paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -2110,16 +2110,16 @@ export default function OnboardingScreen() {
     // Companion naming step: simplified — just the name input with orb
     if (step.type === 'companionNaming') {
       return (
-        <View style={{ alignItems: 'center', gap: 24, marginTop: 16 }}>
+        <View style={{ alignItems: 'center', gap: Spacing['6'], marginTop: Spacing['4'] }}>
           <Animated.View
             entering={FadeIn.delay(200).duration(600)}
-            style={{ marginBottom: 8 }}
+            style={{ marginBottom: Spacing['2'] }}
           >
             <CompanionOrb accentColor={colors.accent} size={80} isActive showBadge={false} />
           </Animated.View>
           <Animated.View
             entering={FadeIn.delay(400).duration(500)}
-            style={{ width: '100%', paddingHorizontal: 4 }}
+            style={{ width: '100%', paddingHorizontal: Spacing['1'] }}
           >
             <TextInput
               value={companionNameInput}
@@ -2131,7 +2131,7 @@ export default function OnboardingScreen() {
                 fontSize: FontSize.lg,
                 color: colors.text,
                 height: 54,
-                paddingHorizontal: 20,
+                paddingHorizontal: Spacing['5'],
                 backgroundColor: colors.inputBackground,
                 borderRadius: Radius.lg,
                 borderWidth: 1,
@@ -2147,7 +2147,7 @@ export default function OnboardingScreen() {
               fontSize: FontSize.sm,
               color: colors.textSubtle,
               textAlign: 'center',
-              paddingHorizontal: 20,
+              paddingHorizontal: Spacing['5'],
             }}
           >
             You can always change this later.
@@ -2168,15 +2168,15 @@ export default function OnboardingScreen() {
         { title: 'Deeper personalization', description: 'Your companion learns faster' },
       ];
       return (
-        <View style={{ gap: 16, marginTop: 4 }}>
-          <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: 8 }}>
+        <View style={{ gap: Spacing['4'], marginTop: Spacing['1'] }}>
+          <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: Spacing['2'] }}>
             {features.map((feature, index) => (
               <Animated.View
                 key={feature.title}
                 entering={FadeIn.delay(300 + index * 80).duration(500)}
                 style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 12,
-                  paddingVertical: 10, paddingHorizontal: 14,
+                  flexDirection: 'row', alignItems: 'center', gap: Spacing['3'],
+                  paddingVertical: Spacing['2.5'], paddingHorizontal: Spacing['3.5'],
                   backgroundColor: alpha(colors.accent, 0.04),
                   borderRadius: Radius.md,
                 }}
@@ -2224,7 +2224,7 @@ export default function OnboardingScreen() {
             >
               <View style={{
                 backgroundColor: colors.accent,
-                paddingVertical: 16, paddingHorizontal: 24, borderRadius: Radius.lg,
+                paddingVertical: Spacing['4'], paddingHorizontal: Spacing['6'], borderRadius: Radius.lg,
                 alignItems: 'center',
                 shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.5, shadowRadius: 20, elevation: 8,
@@ -2246,7 +2246,7 @@ export default function OnboardingScreen() {
               fontSize: FontSize.xs,
               color: colors.textSubtle,
               textAlign: 'center',
-              marginTop: 10,
+              marginTop: Spacing['2.5'],
               lineHeight: 18,
             }}>
               After your free trial, {yearlyPrice}/year. Cancel anytime.
@@ -2260,7 +2260,7 @@ export default function OnboardingScreen() {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 completeOnboarding();
               }}
-              style={{ alignItems: 'center', paddingVertical: 8 }}
+              style={{ alignItems: 'center', paddingVertical: Spacing['2'] }}
             >
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>
                 Maybe later
@@ -2274,9 +2274,9 @@ export default function OnboardingScreen() {
     // Sign-in step: CTA button to full sign-in screen
     if (step.type === 'signIn') {
       return (
-        <View style={{ gap: 32, marginTop: 8 }}>
+        <View style={{ gap: Spacing['8'], marginTop: Spacing['2'] }}>
           {/* Benefits list */}
-          <View style={{ gap: 20, paddingHorizontal: 4 }}>
+          <View style={{ gap: Spacing['5'], paddingHorizontal: Spacing['1'] }}>
             {[
               {
                 icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
@@ -2300,7 +2300,7 @@ export default function OnboardingScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 16,
+                  gap: Spacing['4'],
                 }}
               >
                 <View style={{
@@ -2313,7 +2313,7 @@ export default function OnboardingScreen() {
                 }}>
                   {benefit.icon}
                 </View>
-                <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flex: 1, gap: Spacing['0.5'] }}>
                   <Text style={{
                     fontFamily: FontFamily.uiSemiBold,
                     fontSize: 15,
@@ -2376,7 +2376,7 @@ export default function OnboardingScreen() {
               style={{
                 alignItems: 'center',
                 justifyContent: 'center',
-                paddingVertical: 12,
+                paddingVertical: Spacing['3'],
               }}
             >
               <Text style={{
@@ -2412,7 +2412,7 @@ export default function OnboardingScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['4'] }}>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted }} />
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.6 }} />
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textMuted, opacity: 0.3 }} />
@@ -2498,7 +2498,7 @@ export default function OnboardingScreen() {
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {(baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
               <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={60}>
-                <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40 }}>
+                <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'] }}>
                   <View>
                     <TypewriterText
                       text={
@@ -2513,7 +2513,7 @@ export default function OnboardingScreen() {
                     />
                   </View>
                   {showInput && (
-                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 24 }}>
+                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['6'] }}>
                       <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>
                         {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
                           ? "Select up to 3 themes that resonate with where you are."
@@ -2528,7 +2528,7 @@ export default function OnboardingScreen() {
               </KeyboardAwareScrollView>
             ) : (
               <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={60}>
-                <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 120 }}>
+                <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (
                       <>
@@ -2599,7 +2599,7 @@ export default function OnboardingScreen() {
                     )}
                   </View>
                   {showInput && (
-                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 32 }}>
+                    <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['8'] }}>
                       <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
                     </Animated.View>
                   )}
@@ -2618,11 +2618,11 @@ const obStyles = StyleSheet.create({
   themePillContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing['2.5'],
+    paddingHorizontal: Spacing['4'],
     borderRadius: Radius.xl,
     borderWidth: 1.5,
-    gap: 8,
+    gap: Spacing['2'],
   },
   themePillText: {
     fontFamily: FontFamily.uiMedium,
@@ -2634,7 +2634,7 @@ const obStyles = StyleSheet.create({
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 4,
+    marginLeft: Spacing['1'],
   },
   selectionOrderText: {
     fontFamily: FontFamily.uiMedium,

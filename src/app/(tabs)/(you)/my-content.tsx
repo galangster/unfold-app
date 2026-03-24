@@ -16,6 +16,7 @@ import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, Penci
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
 
@@ -155,7 +156,7 @@ export default function MyContentScreen() {
       {/* Tab Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['5'] }}>
         {activeTab === 'journal' && (
-          <Animated.View entering={FadeInRight.duration(300)}>
+          <Animated.View entering={FadeInRight.duration(Duration.slow)}>
             {journalEntries.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}>
                 <View
@@ -281,7 +282,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'highlights' && (
-          <Animated.View entering={FadeInRight.duration(300)}>
+          <Animated.View entering={FadeInRight.duration(Duration.slow)}>
             {highlights.length === 0 ? (
               <EmptyState
                 icon={HighlighterIcon}
@@ -343,7 +344,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'bookmarks' && (
-          <Animated.View entering={FadeInRight.duration(300)}>
+          <Animated.View entering={FadeInRight.duration(Duration.slow)}>
             {bookmarks.length === 0 ? (
               <EmptyState
                 icon={BookmarkSimpleIcon}

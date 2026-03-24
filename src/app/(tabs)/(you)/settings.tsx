@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Linking, Platform, Alert, Tex
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -982,7 +983,7 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
 
                 {expandedPremium === 'colors' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: Spacing['4'], paddingBottom: Spacing['4'] }}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ paddingHorizontal: Spacing['4'], paddingBottom: Spacing['4'] }}>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['3'] }}>
                       {ACCENT_THEMES.map((theme) => {
                         const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
@@ -1088,7 +1089,7 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
 
                 {expandedPremium === 'fonts' && (
-                  <Animated.View entering={FadeIn.duration(200)}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal)}>
                     {READING_FONTS.map((font, index) => {
                       const isSelected = (user?.readingFont ?? 'source-serif') === font.id;
                       return (
@@ -1384,7 +1385,7 @@ export default function SettingsScreen() {
 
                 {/* Voice options */}
                 {expandedPremium === 'voice' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
+                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                     {CARTESIA_VOICES.map((option) => {
                       const isSelected = (user?.preferredVoice ?? '694f9389-aac1-45b6-b726-9d9369183238') === option.id;
                       const isLocked = option.premium && !user?.isPremium;
@@ -1499,7 +1500,7 @@ export default function SettingsScreen() {
 
             {/* Time options (outside the card for cleaner expand) */}
             {showTimeSelector && (
-              <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
+              <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
                 {REMINDER_TIMES.map((time) => (
                   <TouchableOpacity activeOpacity={0.7}
                     key={time.value}
@@ -1623,7 +1624,7 @@ export default function SettingsScreen() {
 
               {/* Translation options */}
               {expandedPreference === 'translation' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                   {!user?.isPremium && (
                     <Text
                       style={{
@@ -1803,7 +1804,7 @@ export default function SettingsScreen() {
 
               {/* Tone options */}
               {expandedPreference === 'tone' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                   {TONE_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.tone === option.value;
                     return (
@@ -1939,7 +1940,7 @@ export default function SettingsScreen() {
 
               {/* Depth options */}
               {expandedPreference === 'depth' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                   {DEPTH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.depth === option.value;
                     return (
@@ -2073,7 +2074,7 @@ export default function SettingsScreen() {
 
               {/* Faith options */}
               {expandedPreference === 'faith' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                   {FAITH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.faithBackground === option.value;
                     return (
@@ -2207,7 +2208,7 @@ export default function SettingsScreen() {
 
               {/* Life stage options */}
               {expandedPreference === 'lifeStage' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                   {LIFE_STAGE_OPTIONS.map((option) => {
                     const isSelected = (user?.writingStyle?.lifeStage ?? 'building') === option.value;
                     return (

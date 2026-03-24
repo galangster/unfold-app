@@ -15,6 +15,7 @@ import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } 
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { format } from 'date-fns';
@@ -477,7 +478,7 @@ export default function PastDevotionalsScreen() {
 
         {filteredDevotionals.length === 0 ? (
           <Animated.View
-            entering={FadeIn.duration(300)}
+            entering={FadeIn.duration(Duration.slow)}
             style={{ alignItems: 'center', paddingTop: 48 }}
           >
             <BookOpenIcon size={36} color={colors.textHint} weight="light" />

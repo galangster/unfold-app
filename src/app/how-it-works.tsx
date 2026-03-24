@@ -282,7 +282,7 @@ function WeekCircleDay({ accent, delay, resetKey }: { accent: string; delay: num
   useEffect(() => {
     fill.value = 0;
     checkScale.value = 0;
-    fill.value = withDelay(delay, withTiming(1, { duration: 350, easing: Easing.out(Easing.quad) }));
+    fill.value = withDelay(delay, withTiming(1, { duration: Duration.slow, easing: Easing.out(Easing.quad) }));
     checkScale.value = withDelay(delay + 250, withSequence(
       withTiming(1.3, { duration: 180, easing: Easing.out(Easing.back(2)) }),
       withTiming(1, { duration: 120 }),
@@ -633,7 +633,7 @@ function BeatingHeart({ accent }: { accent: string }) {
         withTiming(1, { duration: Duration.fast, easing: Easing.out(Easing.quad) }),
         withTiming(0.3, { duration: 120, easing: Easing.in(Easing.quad) }),
         withTiming(0.8, { duration: 130, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 300, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: Duration.slow, easing: Easing.inOut(Easing.ease) }),
         withTiming(0, { duration: 600 }), // rest
       ),
       -1,
@@ -1077,8 +1077,8 @@ export default function HowItWorksScreen() {
           <View style={{ flex: 1 }}>
             <Animated.View
               key={currentPage}
-              entering={FadeIn.duration(250)}
-              exiting={FadeOut.duration(150)}
+              entering={FadeIn.duration(Duration.normal)}
+              exiting={FadeOut.duration(Duration.fast)}
               style={StyleSheet.absoluteFill}
             >
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['10'] }}>

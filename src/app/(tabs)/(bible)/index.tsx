@@ -13,6 +13,7 @@ import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
@@ -230,7 +231,7 @@ export default function BibleHomeScreen() {
           onPress={() => setSelectedBook(null)}
         >
           <Animated.View
-            entering={FadeIn.duration(200)}
+            entering={FadeIn.duration(Duration.normal)}
             style={[styles.chapterModal, {
               backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
             }]}

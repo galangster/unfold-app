@@ -39,6 +39,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteFolder } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -238,7 +239,7 @@ function NotebookEmptyState({ onCreateNote }: NotebookEmptyStateProps) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(300).delay(60)}
+      entering={FadeIn.duration(Duration.slow).delay(60)}
       style={emptyStyles.container}
     >
       <NotepadIcon
@@ -381,7 +382,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   // Animate visibility
   const prevVisible = useRef(visible);
   if (prevVisible.current !== visible) {
-    translateY.value = withTiming(visible ? 0 : 200, { duration: 200 });
+    translateY.value = withTiming(visible ? 0 : 200, { duration: Duration.normal });
     prevVisible.current = visible;
   }
 
@@ -404,7 +405,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200).delay(300)}
+      entering={FadeIn.duration(Duration.normal).delay(300)}
       style={[
         fabStyles.container,
         {
@@ -951,7 +952,7 @@ export default function JournalHubScreen() {
           {/* Search Bar */}
           {showSearch && (
             <Animated.View
-              entering={FadeIn.duration(200)}
+              entering={FadeIn.duration(Duration.normal)}
               style={mainStyles.searchContainer}
             >
               <View
@@ -993,11 +994,11 @@ export default function JournalHubScreen() {
           {/* REFLECTIONS TAB (existing content — unchanged) */}
           {/* ================================================================ */}
           {activeSegment === 'reflections' && (
-            <Animated.View entering={FadeIn.duration(250)}>
+            <Animated.View entering={FadeIn.duration(Duration.normal)}>
               {/* Today's Reflection Card */}
               {currentDevotional && (
                 <Animated.View
-                  entering={FadeIn.duration(300).delay(30)}
+                  entering={FadeIn.duration(Duration.slow).delay(30)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
                 >
                   <TouchableOpacity
@@ -1150,7 +1151,7 @@ export default function JournalHubScreen() {
                 firstUnansweredQuestion &&
                 reflectionQuestions.length > 1 && (
                   <Animated.View
-                    entering={FadeIn.duration(300).delay(60)}
+                    entering={FadeIn.duration(Duration.slow).delay(60)}
                     style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
                   >
                     <TouchableOpacity
@@ -1208,7 +1209,7 @@ export default function JournalHubScreen() {
               {/* Past Entries */}
               {(journalEntries.length > 0 || !currentDevotional) && (
                 <Animated.View
-                  entering={FadeIn.duration(300).delay(90)}
+                  entering={FadeIn.duration(Duration.slow).delay(90)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['7'] }}
                 >
                   {journalEntries.length > 0 && (
@@ -1460,7 +1461,7 @@ export default function JournalHubScreen() {
           {/* NOTEBOOK TAB (new content) */}
           {/* ================================================================ */}
           {activeSegment === 'notebook' && (
-            <Animated.View entering={FadeIn.duration(250)}>
+            <Animated.View entering={FadeIn.duration(Duration.normal)}>
               {/* Folder filter chips */}
               <View style={mainStyles.filterRow}>
                 <FolderChips

@@ -49,8 +49,8 @@ function AnimatedTabIcon({
       dotScale.value = withSpring(1, SPRING_CONFIG);
     } else {
       scale.value = withSpring(1, SPRING_CONFIG);
-      dotOpacity.value = withTiming(0, { duration: 200 });
-      dotScale.value = withTiming(0, { duration: 200 });
+      dotOpacity.value = withTiming(0, { duration: Duration.normal });
+      dotScale.value = withTiming(0, { duration: Duration.normal });
     }
   }, [focused, scale, dotOpacity, dotScale]);
 

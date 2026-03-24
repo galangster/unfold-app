@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet } from 're
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -316,8 +317,8 @@ export default function StreakSettingsScreen() {
             </TouchableOpacity>
             {activeTooltip === 'best' && (
               <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(150)}
+                entering={FadeIn.duration(Duration.normal)}
+                exiting={FadeOut.duration(Duration.fast)}
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
@@ -350,8 +351,8 @@ export default function StreakSettingsScreen() {
             </TouchableOpacity>
             {activeTooltip === 'freezes' && (
               <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(150)}
+                entering={FadeIn.duration(Duration.normal)}
+                exiting={FadeOut.duration(Duration.fast)}
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
@@ -384,8 +385,8 @@ export default function StreakSettingsScreen() {
             </TouchableOpacity>
             {activeTooltip === 'toFreeze' && (
               <Animated.View
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(150)}
+                entering={FadeIn.duration(Duration.normal)}
+                exiting={FadeOut.duration(Duration.fast)}
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>

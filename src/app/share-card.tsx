@@ -32,6 +32,7 @@ import {
 import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -369,7 +370,7 @@ export default function ShareCardScreen() {
       </View>
 
       {/* Card Preview (RN views — just for display, NOT captured) */}
-      <Animated.View entering={FadeIn.duration(350)} style={s.cardWrapper}>
+      <Animated.View entering={FadeIn.duration(Duration.slow)} style={s.cardWrapper}>
         <View style={[s.card, { backgroundColor: activeTheme.bg }]}>
           {/* Verse / quote text */}
           <View style={s.textContainer}>
@@ -433,7 +434,7 @@ export default function ShareCardScreen() {
       </Animated.View>
 
       {/* Theme carousel */}
-      <Animated.View entering={FadeIn.duration(350).delay(100)} style={s.carouselWrapper}>
+      <Animated.View entering={FadeIn.duration(Duration.slow).delay(100)} style={s.carouselWrapper}>
         <FlatList
           data={CARD_THEMES}
           horizontal
@@ -490,7 +491,7 @@ export default function ShareCardScreen() {
 
       {/* Action buttons */}
       <Animated.View
-        entering={FadeInUp.duration(300).delay(200)}
+        entering={FadeInUp.duration(Duration.slow).delay(200)}
         style={[s.actionsWrapper, { paddingBottom: insets.bottom + 16 }]}
       >
         <View style={s.actionsRow}>

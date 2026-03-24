@@ -19,6 +19,7 @@ import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -424,7 +425,7 @@ export default function WallpaperScreen() {
         {/* Upgrade CTA for Free Users */}
         {!isPremium && (
           <Animated.View
-            entering={FadeInUp.duration(300).delay(200)}
+            entering={FadeInUp.duration(Duration.slow).delay(200)}
             style={{
               position: 'absolute',
               bottom: 90 + tabBarHeight,

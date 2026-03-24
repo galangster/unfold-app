@@ -10,6 +10,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -458,7 +459,7 @@ export default function PaywallScreen() {
               return (
                 <Animated.View
                   key={benefit.title}
-                  entering={FadeInDown.duration(350).delay(150 + index * 70)}
+                  entering={FadeInDown.duration(Duration.slow).delay(150 + index * 70)}
                   style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}
                 >
                   <View

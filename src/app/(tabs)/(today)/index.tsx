@@ -212,7 +212,7 @@ function NotificationCard({
   return (
     <Animated.View
       entering={entering(FadeIn.duration(400).delay(delay))}
-      exiting={exiting(FadeOut.duration(300))}
+      exiting={exiting(FadeOut.duration(Duration.slow))}
       style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['3'] }}
     >
       <TouchableOpacity activeOpacity={0.7}
@@ -261,7 +261,7 @@ function BridgeShimmer({ colors }: { colors: ColorTheme }) {
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(300))}
+      entering={entering(FadeIn.duration(Duration.slow))}
       style={homeStyles.shimmerWrapper}
     >
       <View
@@ -1227,7 +1227,7 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                       {showTomorrowLockInfo && (
-                        <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: 10, paddingHorizontal: Spacing['1'] }}>
+                        <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ marginTop: 10, paddingHorizontal: Spacing['1'] }}>
                           <Text
                             style={{
                               fontFamily: FontFamily.body,

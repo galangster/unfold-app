@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -156,7 +157,7 @@ export default function SavedScreen() {
                     entering={
                       hasAnimated.current
                         ? undefined
-                        : FadeIn.delay(itemIndex * 30).duration(300)
+                        : FadeIn.delay(itemIndex * 30).duration(Duration.slow)
                     }
                   >
                     <TouchableOpacity
@@ -259,7 +260,7 @@ export default function SavedScreen() {
                     entering={
                       hasAnimated.current
                         ? undefined
-                        : FadeIn.delay(itemIndex * 30).duration(300)
+                        : FadeIn.delay(itemIndex * 30).duration(Duration.slow)
                     }
                   >
                     <TouchableOpacity
@@ -362,7 +363,7 @@ export default function SavedScreen() {
                     entering={
                       hasAnimated.current
                         ? undefined
-                        : FadeIn.delay(itemIndex * 30).duration(300)
+                        : FadeIn.delay(itemIndex * 30).duration(Duration.slow)
                     }
                   >
                     <TouchableOpacity
@@ -464,7 +465,7 @@ function SectionHeader({
 }) {
   return (
     <Animated.View
-      entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(300)}
+      entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(Duration.slow)}
       style={[{ marginBottom: Spacing['3'] }, style]}
     >
       <Text
@@ -499,7 +500,7 @@ function EmptyState({
 }) {
   return (
     <Animated.View
-      entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(300)}
+      entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(Duration.slow)}
       style={{
         backgroundColor: colors.inputBackground,
         borderRadius: Radius.card,
@@ -551,7 +552,7 @@ function SeeAllLink({
 }) {
   return (
     <Animated.View
-      entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(300)}
+      entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(Duration.slow)}
       style={{ alignItems: 'flex-end', marginBottom: 4 }}
     >
       <TouchableOpacity

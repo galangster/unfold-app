@@ -11,6 +11,7 @@ import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, Not
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -111,7 +112,7 @@ const VerseItem = React.memo(({
   useEffect(() => {
     if (isFlashing) {
       // Fast fade in (200ms), then after holding, fade out over 600ms
-      flashOpacity.value = withTiming(1, { duration: 200, easing: EASE_OUT_QUART }, () => {
+      flashOpacity.value = withTiming(1, { duration: Duration.normal, easing: EASE_OUT_QUART }, () => {
         // After reaching full opacity, hold then fade out
         flashOpacity.value = withDelay(ANIM.flashHold,
           withTiming(0, { duration: ANIM.flashOut, easing: Easing.in(Easing.cubic) }),

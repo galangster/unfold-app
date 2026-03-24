@@ -22,6 +22,7 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord, type ProgressiveMemory } from '@/lib/store';
 import {
@@ -1102,7 +1103,7 @@ export default function GeneratingScreen() {
                 <Animated.Text
                   key={messageIndex}
                   entering={entering(FadeIn.duration(600))}
-                  exiting={exiting(FadeOut.duration(300))}
+                  exiting={exiting(FadeOut.duration(Duration.slow))}
                   style={{
                     fontFamily: FontFamily.bodyItalic,
                     fontSize: 17,

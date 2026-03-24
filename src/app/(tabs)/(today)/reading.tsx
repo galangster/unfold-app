@@ -563,7 +563,7 @@ export default function ReadingScreen() {
           // Rubber-band snap back with subtle haptic
           runOnJS(Haptics.selectionAsync)();
         }
-        translateX.value = withTiming(0, { duration: 200 });
+        translateX.value = withTiming(0, { duration: Duration.normal });
       }),
     [viewingDay, availableDays, handlePrevious, handleNext]
   );
@@ -1449,7 +1449,7 @@ export default function ReadingScreen() {
               {/* Bridge text — personalized transition for Day 2+ */}
               {viewingDay >= 2 && isBridgeLoading && (
                 <Animated.View
-                  entering={FadeIn.duration(200)}
+                  entering={FadeIn.duration(Duration.normal)}
                   style={{
                     marginBottom: Spacing['6'],
                     padding: Spacing['4'],
@@ -1560,8 +1560,8 @@ export default function ReadingScreen() {
               {/* Chevron at top of content area - invites scroll */}
               {showScrollHint && (
                 <Animated.View
-                  entering={FadeIn.duration(300)}
-                  exiting={FadeOut.duration(300)}
+                  entering={FadeIn.duration(Duration.slow)}
+                  exiting={FadeOut.duration(Duration.slow)}
                   style={{
                     alignItems: 'center',
                     marginTop: 20,
@@ -1995,8 +1995,8 @@ export default function ReadingScreen() {
       {/* Premium Toast Notification */}
       {audioToast?.visible && (
         <Animated.View
-          entering={FadeIn.duration(200)}
-          exiting={FadeOut.duration(200)}
+          entering={FadeIn.duration(Duration.normal)}
+          exiting={FadeOut.duration(Duration.normal)}
           style={[
             styles.toastContainer,
             { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
@@ -2032,8 +2032,8 @@ export default function ReadingScreen() {
       {/* Bookmark saved toast */}
       {bookmarkToast && (
         <Animated.View
-          entering={SlideInDown.duration(300)}
-          exiting={SlideOutDown.duration(250)}
+          entering={SlideInDown.duration(Duration.slow)}
+          exiting={SlideOutDown.duration(Duration.normal)}
           style={[
             styles.bookmarkToastContainer,
             { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(40, 40, 40, 0.95)' },
@@ -2090,8 +2090,8 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
     <>
       {/* Overlay */}
       <Animated.View
-        entering={FadeIn.duration(200)}
-        exiting={FadeOut.duration(150)}
+        entering={FadeIn.duration(Duration.normal)}
+        exiting={FadeOut.duration(Duration.fast)}
         style={{
           ...StyleSheet.absoluteFillObject,
           backgroundColor: 'rgba(0,0,0,0.35)',
@@ -2109,7 +2109,7 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
 
       {/* Settings card */}
       <Animated.View
-        entering={FadeIn.duration(250)}
+        entering={FadeIn.duration(Duration.normal)}
         exiting={FadeOut.duration(180)}
         style={{
           position: 'absolute',

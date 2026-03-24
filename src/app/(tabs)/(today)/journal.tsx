@@ -107,10 +107,10 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
 
   useEffect(() => {
     if (isAnswered) {
-      fillProgress.value = withTiming(1, { duration: 300 });
+      fillProgress.value = withTiming(1, { duration: Duration.slow });
       checkScale.value = withDelay(100, withSpring(1, { damping: 25, stiffness: 300, mass: 0.5 }));
     } else {
-      fillProgress.value = withTiming(0, { duration: 200 });
+      fillProgress.value = withTiming(0, { duration: Duration.normal });
       checkScale.value = withTiming(0, { duration: Duration.fast });
     }
   }, [isAnswered, fillProgress, checkScale]);
@@ -775,7 +775,7 @@ Their journal entry:
 
                 {/* Go Deeper button */}
                 {showDeeperButton && (
-                  <Animated.View entering={FadeIn.duration(300)} style={jStyles.deeperButtonWrapper}>
+                  <Animated.View entering={FadeIn.duration(Duration.slow)} style={jStyles.deeperButtonWrapper}>
                     <TouchableOpacity
                       onPress={handleGoDeeper}
                       disabled={loadingDeeper}
@@ -811,7 +811,7 @@ Their journal entry:
 
                 {/* Error state */}
                 {deeperError && (
-                  <Animated.View entering={FadeIn.duration(300)} style={jStyles.errorWrapper}>
+                  <Animated.View entering={FadeIn.duration(Duration.slow)} style={jStyles.errorWrapper}>
                     <TouchableOpacity onPress={handleGoDeeper} activeOpacity={0.6}>
                       <Text style={[jStyles.errorText, { color: colors.textMuted }]}>
                         Couldn't generate prompts. Tap to try again.
@@ -870,7 +870,7 @@ Their journal entry:
 
                           {isExpanded && (
                             <Animated.View
-                              entering={FadeInDown.duration(250)}
+                              entering={FadeInDown.duration(Duration.normal)}
                               style={jStyles.questionInputWrapper}
                             >
                               <View style={[jStyles.questionInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}>
@@ -904,7 +904,7 @@ Their journal entry:
                               accessibilityHint="Tap to edit your response"
                             >
                               <Animated.View
-                                entering={FadeIn.duration(200)}
+                                entering={FadeIn.duration(Duration.normal)}
                                 style={jStyles.questionPreview}
                               >
                                 <Text style={[jStyles.questionPreviewText, { color: colors.textMuted }]} numberOfLines={2}>
@@ -995,7 +995,7 @@ Their journal entry:
                       {/* Expanded input */}
                       {isExpanded && (
                         <Animated.View
-                          entering={FadeInDown.duration(250)}
+                          entering={FadeInDown.duration(Duration.normal)}
                           style={jStyles.soapExpandedWrapper}
                         >
                           <View style={[jStyles.soapInputCard, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.19) }]}>
@@ -1062,7 +1062,7 @@ Their journal entry:
               {prayerRequests.map((prayer) => (
                 <Animated.View
                   key={prayer.id}
-                  entering={FadeIn.duration(300)}
+                  entering={FadeIn.duration(Duration.slow)}
                   style={jStyles.prayerItemWrapper}
                 >
                   <TouchableOpacity
@@ -1104,7 +1104,7 @@ Their journal entry:
 
               {/* Add prayer input */}
               {showPrayerInput ? (
-                <Animated.View entering={FadeIn.duration(200)} style={jStyles.prayerInputMargin}>
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={jStyles.prayerInputMargin}>
                   <View style={[jStyles.prayerInputCard, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.19) }]}>
                     <TextInput
                       ref={prayerInputRef}
@@ -1179,8 +1179,8 @@ Their journal entry:
           >
             <Animated.Text
               key={hasChanges ? 'saving' : justSaved ? 'saved' : 'idle'}
-              entering={FadeIn.duration(300)}
-              exiting={FadeOut.duration(200)}
+              entering={FadeIn.duration(Duration.slow)}
+              exiting={FadeOut.duration(Duration.normal)}
               style={[jStyles.bottomHintText, { color: justSaved ? colors.accent : colors.textHint }]}
             >
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}

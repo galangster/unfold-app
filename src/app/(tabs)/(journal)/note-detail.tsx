@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -922,7 +923,7 @@ export default function NoteDetailScreen() {
         {/* ── More menu dropdown ── */}
         {showMoreMenu && (
           <Animated.View
-            entering={FadeIn.duration(150)}
+            entering={FadeIn.duration(Duration.fast)}
             style={[
               styles.moreMenu,
               {
@@ -1018,8 +1019,8 @@ export default function NoteDetailScreen() {
           )}
           {isEditing && saveState === 'saved' && (
             <Animated.View
-              entering={FadeIn.duration(200)}
-              exiting={FadeOut.duration(300)}
+              entering={FadeIn.duration(Duration.normal)}
+              exiting={FadeOut.duration(Duration.slow)}
               style={styles.saveIndicator}
             >
               <CheckIcon size={14} color={colors.textSubtle} weight="bold" />
@@ -1031,7 +1032,7 @@ export default function NoteDetailScreen() {
         {/* ── Scripture references (read mode only) ── */}
         {!isEditing && liveScriptureRefs.length > 0 && (
           <Animated.View
-            entering={FadeIn.duration(300)}
+            entering={FadeIn.duration(Duration.slow)}
             style={styles.scriptureSection}
           >
             {liveScriptureRefs.map((ref, idx) => (
@@ -1107,7 +1108,7 @@ export default function NoteDetailScreen() {
           {/* Solid overlay hides WebView white flash */}
           {!editorReady && (
             <Animated.View
-              exiting={FadeOut.duration(200)}
+              exiting={FadeOut.duration(Duration.normal)}
               pointerEvents="none"
               style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
             />
@@ -1129,7 +1130,7 @@ export default function NoteDetailScreen() {
         {/* ── Tags section (read mode only) ── */}
         {!isEditing && liveNote && liveNote.tags.length > 0 && (
           <Animated.View
-            entering={FadeIn.duration(300)}
+            entering={FadeIn.duration(Duration.slow)}
             style={styles.tagsSection}
           >
             <Text style={[styles.tagsSectionLabel, { color: colors.textSubtle }]}>

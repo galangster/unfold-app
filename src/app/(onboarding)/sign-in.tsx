@@ -20,6 +20,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration } from '@/constants/animations';
 import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -289,7 +290,7 @@ export default function SignInScreen() {
         {/* Error Message */}
         {error && (
           <Animated.View
-            entering={FadeIn.duration(300)}
+            entering={FadeIn.duration(Duration.slow)}
             style={{
               backgroundColor: colors.error,
               borderRadius: Radius.md,

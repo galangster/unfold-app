@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Duration, Stagger } from '@/constants/animations';
 import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -93,7 +94,7 @@ export default function DayMenuScreen() {
           return (
             <Animated.View
               key={day.dayNumber}
-              entering={FadeInDown.duration(350).delay(Math.min(index * 40, 400))}
+              entering={FadeInDown.duration(Duration.slow).delay(Math.min(index * Stagger.fast, 400))}
             >
             <TouchableOpacity activeOpacity={isLocked ? 1 : 0.7}
               onPress={() => handleSelectDay(day.dayNumber)}

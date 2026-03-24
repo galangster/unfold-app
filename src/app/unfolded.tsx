@@ -41,6 +41,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { format } from 'date-fns';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
@@ -630,7 +631,7 @@ function HookCard({ data, userName }: { data: RecapData; userName: string }) {
   return (
     <View style={s.hookContainer}>
       {/* Subtle label */}
-      <Animated.View style={[nameStyle, { marginBottom: 20 }]}>
+      <Animated.View style={[nameStyle, { marginBottom: Spacing['5'] }]}>
         <Text style={s.hookLabel}>YOUR STORY SO FAR</Text>
       </Animated.View>
 
@@ -1522,14 +1523,14 @@ const s = StyleSheet.create({
 
   // ─── Top bar ───
   topBar: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing['3'],
+    paddingTop: Spacing['2'],
+    paddingBottom: Spacing['2'],
   },
   progressAndClose: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing['2.5'],
   },
   progressContainer: {
     flex: 1,
@@ -1559,7 +1560,7 @@ const s = StyleSheet.create({
   // ─── Card area ───
   cardArea: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
   },
   cardContent: {
     flex: 1,
@@ -1589,7 +1590,7 @@ const s = StyleSheet.create({
   hookLine: {
     height: 1,
     backgroundColor: PALETTE.gold,
-    marginVertical: 24,
+    marginVertical: Spacing['6'],
     alignSelf: 'center',
   },
   hookName: {
@@ -1597,14 +1598,14 @@ const s = StyleSheet.create({
     fontSize: 28,
     color: PALETTE.gold,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   hookDate: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
     color: PALETTE.dimWhite,
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   hookTeaser: {
     fontFamily: FontFamily.bodyItalic,
@@ -1612,7 +1613,7 @@ const s = StyleSheet.create({
     color: PALETTE.mutedWhite,
     textAlign: 'center',
     lineHeight: 24,
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
 
   // ─── Full-screen card layout ───
@@ -1620,14 +1621,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    gap: 6,
+    gap: Spacing['1.5'],
   },
   label: {
     fontFamily: FontFamily.ui,
     fontSize: 10,
     letterSpacing: 5,
-    marginTop: 14,
-    marginBottom: 4,
+    marginTop: Spacing['3.5'],
+    marginBottom: Spacing['1'],
     textAlign: 'center',
     opacity: 0.8,
   },
@@ -1644,7 +1645,7 @@ const s = StyleSheet.create({
     fontSize: FontSize.lg,
     color: PALETTE.mutedWhite,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
     marginTop: -4,
   },
 
@@ -1652,10 +1653,10 @@ const s = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginTop: 4,
+    gap: Spacing['4'],
+    paddingVertical: Spacing['4'],
+    paddingHorizontal: Spacing['5'],
+    marginTop: Spacing['1'],
   },
   statBlock: {
     alignItems: 'center',
@@ -1670,7 +1671,7 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: 11,
     color: PALETTE.dimWhite,
-    marginTop: 2,
+    marginTop: Spacing['0.5'],
   },
   statDivider: {
     width: 1,
@@ -1685,8 +1686,8 @@ const s = StyleSheet.create({
     color: PALETTE.dimWhite,
     textAlign: 'center',
     lineHeight: 22,
-    marginTop: 16,
-    paddingHorizontal: 16,
+    marginTop: Spacing['4'],
+    paddingHorizontal: Spacing['4'],
   },
   quote: {
     fontFamily: FontFamily.bodyItalic,
@@ -1694,8 +1695,8 @@ const s = StyleSheet.create({
     color: 'rgba(255,255,255,0.25)',
     textAlign: 'center',
     lineHeight: 22,
-    marginTop: 20,
-    paddingHorizontal: 16,
+    marginTop: Spacing['5'],
+    paddingHorizontal: Spacing['4'],
     maxWidth: 300,
   },
   emptyText: {
@@ -1704,7 +1705,7 @@ const s = StyleSheet.create({
     color: PALETTE.dimWhite,
     textAlign: 'center',
     lineHeight: 26,
-    marginTop: 16,
+    marginTop: Spacing['4'],
   },
 
   // ─── Archetype Card (3) ───
@@ -1719,8 +1720,8 @@ const s = StyleSheet.create({
     color: PALETTE.gold,
     letterSpacing: -2,
     textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: Spacing['2'],
+    marginBottom: Spacing['3'],
     textShadowColor: 'rgba(200, 165, 92, 0.4)',
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 40,
@@ -1730,7 +1731,7 @@ const s = StyleSheet.create({
     height: 1,
     backgroundColor: PALETTE.gold,
     opacity: 0.4,
-    marginVertical: 16,
+    marginVertical: Spacing['4'],
   },
   archetypeDesc: {
     fontFamily: FontFamily.body,
@@ -1738,14 +1739,14 @@ const s = StyleSheet.create({
     color: PALETTE.mutedWhite,
     textAlign: 'center',
     lineHeight: 28,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     maxWidth: 320,
   },
   narrativePill: {
-    marginTop: 28,
+    marginTop: Spacing['7'],
     backgroundColor: 'rgba(200, 165, 92, 0.08)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing['5'],
+    paddingVertical: Spacing['3'],
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: 'rgba(200, 165, 92, 0.15)',
@@ -1761,13 +1762,13 @@ const s = StyleSheet.create({
   // ─── Scripture Card (4) ───
   featureBlock: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: Spacing['4'],
   },
   featureLabel: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
     color: PALETTE.dimWhite,
-    marginBottom: 4,
+    marginBottom: Spacing['1'],
   },
   featureName: {
     fontFamily: FontFamily.display,
@@ -1778,18 +1779,18 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
     color: 'rgba(255,255,255,0.25)',
-    marginTop: 2,
+    marginTop: Spacing['0.5'],
   },
   barChart: {
     width: '100%',
-    gap: 8,
-    paddingHorizontal: 4,
-    marginTop: 4,
+    gap: Spacing['2'],
+    paddingHorizontal: Spacing['1'],
+    marginTop: Spacing['1'],
   },
   barRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing['2'],
   },
   barLabel: {
     fontFamily: FontFamily.ui,
@@ -1821,11 +1822,11 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 5,
     borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   trendText: {
     fontFamily: FontFamily.uiSemiBold,
@@ -1834,10 +1835,10 @@ const s = StyleSheet.create({
   moodBars: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
+    gap: Spacing['2.5'],
     height: 90,
-    marginVertical: 8,
-    paddingHorizontal: 12,
+    marginVertical: Spacing['2'],
+    paddingHorizontal: Spacing['3'],
   },
   moodCol: {
     flex: 1,
@@ -1868,29 +1869,29 @@ const s = StyleSheet.create({
   // ─── Journal Card (6) ───
   wordBlock: {
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    marginVertical: 12,
+    paddingVertical: Spacing['4'],
+    paddingHorizontal: Spacing['6'],
+    marginVertical: Spacing['3'],
   },
   wordLabel: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
     color: PALETTE.dimWhite,
-    marginTop: 4,
+    marginTop: Spacing['1'],
     textAlign: 'center',
     lineHeight: 18,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing['2'],
   },
 
   // ─── Streak Card (7) ───
   streakBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    gap: Spacing['1.5'],
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['2'],
     borderRadius: Radius.xl,
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
   streakBadgeText: {
     fontFamily: FontFamily.uiMedium,
@@ -1902,15 +1903,15 @@ const s = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
   },
   closingTitle: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['6xl'],
     color: PALETTE.cream,
     letterSpacing: -2,
-    marginTop: 20,
-    marginBottom: 4,
+    marginTop: Spacing['5'],
+    marginBottom: Spacing['1'],
     textAlign: 'center',
     lineHeight: 64,
   },
@@ -1918,14 +1919,14 @@ const s = StyleSheet.create({
     fontFamily: FontFamily.displayItalic,
     fontSize: FontSize['2xl'],
     color: PALETTE.gold,
-    marginBottom: 4,
+    marginBottom: Spacing['1'],
     textAlign: 'center',
   },
   closingLine: {
     width: 40,
     height: 1,
     backgroundColor: PALETTE.gold,
-    marginVertical: 20,
+    marginVertical: Spacing['5'],
     opacity: 0.4,
   },
   closingMessage: {
@@ -1940,10 +1941,10 @@ const s = StyleSheet.create({
   shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing['2'],
     backgroundColor: PALETTE.gold,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
+    paddingHorizontal: Spacing['8'],
+    paddingVertical: Spacing['4'],
     borderRadius: 28,
     shadowColor: PALETTE.gold,
     shadowOffset: { width: 0, height: 6 },
@@ -1970,14 +1971,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    paddingHorizontal: 32,
+    paddingHorizontal: Spacing['8'],
   },
   shareCardLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 10,
     letterSpacing: 5,
     color: PALETTE.dimWhite,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   shareCardTitle: {
     fontFamily: FontFamily.displayItalic,
@@ -1991,19 +1992,19 @@ const s = StyleSheet.create({
     height: 1,
     backgroundColor: PALETTE.gold,
     opacity: 0.5,
-    marginVertical: 16,
+    marginVertical: Spacing['4'],
   },
   shareCardName: {
     fontFamily: FontFamily.display,
     fontSize: 22,
     color: PALETTE.gold,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
   },
   shareCardStats: {
     flexDirection: 'row',
     gap: 28,
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
   },
   shareCardStat: {
     alignItems: 'center',
@@ -2019,14 +2020,14 @@ const s = StyleSheet.create({
     fontSize: 10,
     color: PALETTE.dimWhite,
     letterSpacing: 2,
-    marginTop: 2,
+    marginTop: Spacing['0.5'],
   },
   shareCardArchetype: {
     fontFamily: FontFamily.bodyItalic,
     fontSize: FontSize.base,
     color: PALETTE.mutedWhite,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: Spacing['1'],
   },
   shareCardFooter: {
     position: 'absolute',

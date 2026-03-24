@@ -14,6 +14,7 @@ import { AudioWaveform } from '../components/AudioWaveform';
 import { SparkleBurst } from '../components/SparkleBurst';
 import { FontFamily } from '../constants/fonts';
 import { Spacing } from '../constants/spacing';
+import { Duration } from '../constants/animations';
 
 function ShowcaseContent() {
   const { colors, isDark } = useTheme();
@@ -128,7 +129,7 @@ function ShowcaseContent() {
             ].map(([name, color], index) => (
               <Animated.View 
                 key={name} 
-                entering={FadeIn.duration(300).delay(index * 50)}
+                entering={FadeIn.duration(Duration.slow).delay(index * 50)}
                 style={styles.colorItem}
               >
                 <View style={[styles.colorSwatch, { backgroundColor: color }]} />
