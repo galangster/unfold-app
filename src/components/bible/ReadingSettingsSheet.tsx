@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: FontSize.base,
   },
   closeButton: {
     width: 28,
@@ -316,12 +316,12 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 18,
+    fontSize: FontSize.lg,
     letterSpacing: 0.5,
   },
   sectionTitle: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   },
   fontSizeValue: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 16,
+    fontSize: FontSize.base,
     minWidth: 28,
     textAlign: 'center',
   },
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
   },
   translationLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     letterSpacing: 0.5,
   },
 

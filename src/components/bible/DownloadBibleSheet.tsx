@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import type { ColorTheme } from '@/constants/colors';
 import { Radius } from '@/constants/radius';
 
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     marginTop: 8,
   },
   subtitle: {
@@ -158,6 +158,6 @@ const styles = StyleSheet.create({
   },
   downloadButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: FontSize.base,
   },
 });

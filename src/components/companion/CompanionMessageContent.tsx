@@ -13,7 +13,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { StreamingCursor } from './StreamingCursor';
 import { RichMessageText } from './RichMessageText';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -52,7 +52,7 @@ function StreamingText({ content, color }: { content: string; color: string }) {
     <Text
       style={{
         fontFamily: FontFamily.body,
-        fontSize: 16,
+        fontSize: FontSize.base,
         lineHeight: 27.2,
         color,
       }}
@@ -89,7 +89,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
             <Text
               style={{
                 fontFamily: FontFamily.body,
-                fontSize: 14,
+                fontSize: FontSize.sm,
                 color: colors.error,
                 lineHeight: 20,
               }}

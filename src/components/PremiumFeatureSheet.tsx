@@ -32,7 +32,7 @@ import {
   TextAaIcon,
   ImageIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 
@@ -279,7 +279,7 @@ const pfStyles = StyleSheet.create({
   },
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     textAlign: 'center',
     letterSpacing: -0.5,
     marginBottom: 8,
@@ -299,7 +299,7 @@ const pfStyles = StyleSheet.create({
   },
   ctaText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
+    fontSize: FontSize.base,
     letterSpacing: 0.2,
   },
   reassuranceRow: {
@@ -313,7 +313,7 @@ const pfStyles = StyleSheet.create({
   },
   reassuranceText: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   maybeLaterButton: {
     alignItems: 'center',

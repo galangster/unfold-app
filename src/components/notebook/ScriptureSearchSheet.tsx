@@ -54,7 +54,7 @@ import {
   ArrowRightIcon,
   WarningCircleIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
@@ -486,7 +486,7 @@ const sheetStyles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 18,
+    fontSize: FontSize.lg,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -503,7 +503,7 @@ const sheetStyles = StyleSheet.create({
   input: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 16,
+    fontSize: FontSize.base,
     paddingVertical: 0,
   },
   pillSection: {
@@ -541,7 +541,7 @@ const sheetStyles = StyleSheet.create({
   },
   stateText: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   previewCard: {
     borderLeftWidth: 3,
@@ -570,7 +570,7 @@ const sheetStyles = StyleSheet.create({
   },
   insertButtonText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
+    fontSize: FontSize.base,
     letterSpacing: 0.2,
   },
   insertIcon: {

@@ -18,7 +18,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { WarningCircleIcon, TrashIcon } from 'phosphor-react-native';
 import { MMKV } from 'react-native-mmkv';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 12,
@@ -368,13 +368,13 @@ const styles = StyleSheet.create({
   },
   itemText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
     flex: 1,
   },
   permanentWarning: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
   },
   confirmInput: {
     fontFamily: FontFamily.ui,
-    fontSize: 16,
+    fontSize: FontSize.base,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: Radius.md,
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   },
   confirmDeleteButtonText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
+    fontSize: FontSize.base,
     color: '#FFFFFF',
   },
   backButton: {

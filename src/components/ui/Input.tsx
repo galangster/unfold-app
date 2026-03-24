@@ -24,7 +24,7 @@ import {
 import { XCircleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { alpha, renderIcon } from './utils';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Typography } from '@/constants/typography';
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: FontSize.base,
     padding: 0,
   },
   multilineInput: {

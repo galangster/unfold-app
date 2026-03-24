@@ -38,7 +38,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -327,11 +327,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 18,
+    fontSize: FontSize.lg,
   },
   input: {
     fontFamily: FontFamily.ui,
-    fontSize: 16,
+    fontSize: FontSize.base,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: Radius.md,

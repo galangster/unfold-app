@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BookOpenIcon, CaretRightIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   seriesDayLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginBottom: 10,
   },
   progressTrack: {

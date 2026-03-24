@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 
@@ -85,13 +85,13 @@ const styles = StyleSheet.create({
   },
   message: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: '#FFFFFF',
     flex: 1,
     marginRight: 16,
   },
   undoText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
 });

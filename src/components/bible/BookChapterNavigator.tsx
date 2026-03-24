@@ -20,7 +20,7 @@ import {
   XCircleIcon,
   XIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import {
   BIBLE_BOOKS,
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 18,
+    fontSize: FontSize.lg,
   },
   backButton: {
     padding: 4,
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   searchRef: { fontFamily: FontFamily.uiMedium, fontSize: 13, marginBottom: 3 },
-  searchSnippet: { fontFamily: FontFamily.ui, fontSize: 14, lineHeight: 20, opacity: 0.85 },
+  searchSnippet: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, lineHeight: 20, opacity: 0.85 },
   searchLoadingRow: { paddingVertical: 16, alignItems: 'center' },
 
   // Content area
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
   bookSection: { marginBottom: 16 },
   sectionLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 10,

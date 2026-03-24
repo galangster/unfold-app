@@ -13,7 +13,7 @@ import { View, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
 
 interface Props {
@@ -184,7 +184,7 @@ function InlineText({
     <Text
       style={{
         fontFamily: isBlockquote ? FontFamily.display : FontFamily.body,
-        fontSize: 16,
+        fontSize: FontSize.base,
         lineHeight: isBlockquote ? 26 : 27.2,
         color: colors.text,
         fontStyle: isBlockquote ? 'italic' : 'normal',
@@ -200,7 +200,7 @@ function InlineText({
               accessibilityLabel={`Open ${seg.reference}`}
               style={{
                 fontFamily: FontFamily.uiMedium,
-                fontSize: 14,
+                fontSize: FontSize.sm,
                 color: colors.accent,
                 backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
                 borderRadius: 6,

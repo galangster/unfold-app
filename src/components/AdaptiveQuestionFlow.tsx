@@ -11,7 +11,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { useAdaptiveQuestions } from '@/lib/use-adaptive-questions';
@@ -117,11 +117,11 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
       {/* Subtext */}
       {showInput && (
         <Animated.View entering={FadeIn} style={{ marginBottom: 32 }}>
-          <Text style={{ 
-            fontFamily: FontFamily.body, 
-            fontSize: 16, 
-            color: colors.textMuted, 
-            lineHeight: 24 
+          <Text style={{
+            fontFamily: FontFamily.body,
+            fontSize: FontSize.base,
+            color: colors.textMuted,
+            lineHeight: 24
           }}>
             {currentSubtext}
           </Text>

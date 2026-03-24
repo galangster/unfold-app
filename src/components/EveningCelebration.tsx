@@ -35,7 +35,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     color: 'rgba(245, 240, 235, 0.85)',
     textAlign: 'center',
     letterSpacing: -0.3,

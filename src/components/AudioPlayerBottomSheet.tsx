@@ -46,7 +46,7 @@ function useBottomTabBarHeightSafe(): number {
 }
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { streamDevotionalAudio } from '@/lib/cartesia';
@@ -1013,7 +1013,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   subtitleText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginTop: 2,
   },
   speedButton: {
@@ -1140,7 +1140,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   speedPickerText: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
     fontVariant: ['tabular-nums'],
   },
 });

@@ -509,7 +509,7 @@ function MagicChar({ char, delay, colors }: { char: string; delay: number; color
       style={[
         {
           fontFamily: FontFamily.body,
-          fontSize: 20,
+          fontSize: FontSize.xl,
           color: colors.text,
           lineHeight: 30,
         },
@@ -550,7 +550,7 @@ function CheckInCelebration({ colors, onDismiss }: { colors: ReturnType<typeof u
       <Text
         style={{
           fontFamily: FontFamily.ui,
-          fontSize: 12,
+          fontSize: FontSize.xs,
           color: colors.textHint,
           marginTop: 28,
         }}

@@ -24,7 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 
 const EASE_OUT = Easing.out(Easing.cubic);
@@ -90,7 +90,7 @@ function AnimatedChip({
         <Text
           style={{
             fontFamily: FontFamily.body,
-            fontSize: 14,
+            fontSize: FontSize.sm,
             color: colors.text,
           }}
           numberOfLines={1}

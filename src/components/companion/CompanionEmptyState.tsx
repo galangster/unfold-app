@@ -23,7 +23,7 @@ import {
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
@@ -181,7 +181,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
         <Text
           style={{
             fontFamily: FontFamily.display,
-            fontSize: 24,
+            fontSize: FontSize['2xl'],
             color: colors.text,
             textAlign: 'center',
             maxWidth: 280,
@@ -197,7 +197,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
         <Text
           style={{
             fontFamily: FontFamily.body,
-            fontSize: 16,
+            fontSize: FontSize.base,
             color: colors.textMuted,
             textAlign: 'center',
             maxWidth: 300,
@@ -239,7 +239,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
                 <Text
                   style={{
                     fontFamily: FontFamily.body,
-                    fontSize: 14,
+                    fontSize: FontSize.sm,
                     color: colors.text,
                     flex: 1,
                   }}

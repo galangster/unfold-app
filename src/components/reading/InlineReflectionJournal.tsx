@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CheckCircleIcon, PencilSimpleLineIcon, ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -287,7 +287,7 @@ export function InlineReflectionJournal({
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 14,
+              fontSize: FontSizeTokens.sm,
               color: colors.accent,
             }}
           >

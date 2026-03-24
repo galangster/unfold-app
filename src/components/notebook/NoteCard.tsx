@@ -10,7 +10,7 @@ import {
 } from 'phosphor-react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
   },
   titleRight: {

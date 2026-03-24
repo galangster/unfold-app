@@ -37,7 +37,7 @@ import {
   useBridgeState,
   useKeyboard,
 } from '@10play/tentap-editor';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 
 import { Note } from '@/lib/store';
@@ -681,7 +681,7 @@ const styles = StyleSheet.create({
   },
   titleInput: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     letterSpacing: -0.3,
     paddingHorizontal: 24,
     paddingTop: 16,

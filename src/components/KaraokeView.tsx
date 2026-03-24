@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { XIcon, PlayIcon, PauseIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useReadingFont } from '@/lib/useReadingFont';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: FontSize.base,
     letterSpacing: -0.2,
   },
   headerClose: {
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   controlTime: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontVariant: ['tabular-nums'],
     width: 44,
   },

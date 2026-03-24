@@ -13,7 +13,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { SunIcon, SparkleIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { AccentGlow } from './AccentGlow';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -261,7 +261,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
               entering={entering(FadeIn.delay(400))}
               style={{
                 fontFamily: FontFamily.uiMedium,
-                fontSize: 14,
+                fontSize: FontSize.sm,
                 color: colors.textMuted,
                 marginTop: 6,
               }}

@@ -25,7 +25,7 @@ import { ArrowUpIcon, StopCircleIcon, MicrophoneIcon } from 'phosphor-react-nati
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -152,7 +152,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           style={{
             flex: 1,
             fontFamily: FontFamily.body,
-            fontSize: 16,
+            fontSize: FontSize.base,
             color: colors.text,
             paddingTop: 8,
             paddingBottom: 8,

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { logBugError } from '@/lib/bug-logger';
 import { Colors } from '@/constants/colors';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 
 interface Props {
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     color: Colors.accent,
     marginBottom: 32,
     letterSpacing: 2,
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 20,
+    fontSize: FontSize.xl,
     color: Colors.text,
     marginBottom: 12,
     textAlign: 'center',
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   errorDetail: {
     fontFamily: FontFamily.mono,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: Colors.textSubtle,
     textAlign: 'center',
     marginBottom: 32,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
+    fontSize: FontSize.base,
     color: Colors.text,
   },
 });

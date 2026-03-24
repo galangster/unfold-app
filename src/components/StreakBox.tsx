@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   },
   streakLabel: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   streakCountRow: {
     flexDirection: 'row',
@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   },
   streakUnit: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     marginLeft: 4,
   },
   calendarStrip: {

@@ -5,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -406,7 +406,7 @@ const s = StyleSheet.create({
   },
   commentaryLoadingLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   commentaryCard: {
     padding: 14,
@@ -427,7 +427,7 @@ const s = StyleSheet.create({
   },
   commentaryBody: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 22,
   },
 
@@ -442,7 +442,7 @@ const s = StyleSheet.create({
   },
   readCtaText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
 
   // ─── Error ──────────────────────────────────────

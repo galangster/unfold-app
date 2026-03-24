@@ -19,7 +19,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { XIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
@@ -509,7 +509,7 @@ const smStyles = StyleSheet.create({
   },
   methodTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     letterSpacing: -0.5,
     marginBottom: 10,
     paddingRight: 32,
@@ -578,13 +578,13 @@ const smStyles = StyleSheet.create({
   },
   bulletText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
     flex: 1,
   },
   guideSummary: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 21,
     marginBottom: 16,
   },
@@ -610,7 +610,7 @@ const smStyles = StyleSheet.create({
   },
   stepText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
     flex: 1,
   },

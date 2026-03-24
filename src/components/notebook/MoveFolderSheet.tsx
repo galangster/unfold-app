@@ -55,7 +55,7 @@ import {
   CaretRightIcon,
   CaretLeftIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 18,
+    fontSize: FontSize.lg,
     paddingHorizontal: 28,
     marginBottom: 16,
   },
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     textAlign: 'center',
   },
   breadcrumbRow: {

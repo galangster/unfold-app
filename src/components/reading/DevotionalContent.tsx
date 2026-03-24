@@ -10,7 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
@@ -370,7 +370,7 @@ const dcStyles = StyleSheet.create({
     opacity: 0.2,
   },
   dividerDots: {
-    fontSize: 12,
+    fontSize: FontSizeTokens.xs,
     opacity: 0.35,
     letterSpacing: 6,
     marginHorizontal: 16,

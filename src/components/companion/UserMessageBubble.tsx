@@ -8,7 +8,7 @@ import { View, Text } from 'react-native';
 import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 
 /* ─────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ export function UserMessageBubble({ message }: Props) {
         <Text
           style={{
             fontFamily: FontFamily.body,
-            fontSize: 16,
+            fontSize: FontSize.base,
             lineHeight: 24,
             color: colors.text,
           }}

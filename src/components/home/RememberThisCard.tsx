@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { HighlighterIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -157,11 +157,11 @@ const styles = StyleSheet.create({
   },
   quoteText: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: 16,
+    fontSize: FontSize.base,
     lineHeight: 24,
   },
   source: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
 });
