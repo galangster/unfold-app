@@ -151,10 +151,10 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: C
 // MiniCompanionRing removed — replaced by CompanionOrb (size=28) for visual consistency
 
 // ─── Character reveal for "Unfold" title ─────────────────────────
-const GOLD = '#C8A55C';
 const REVEAL_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 
 const RevealChar = React.memo(({ char, animDelay }: { char: string; animDelay: number }) => {
+  const { colors } = useTheme();
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
 
@@ -169,7 +169,7 @@ const RevealChar = React.memo(({ char, animDelay }: { char: string; animDelay: n
   }));
 
   const textColorStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(colorProgress.value, [0, 1], ['#FFFFFF', GOLD]),
+    color: interpolateColor(colorProgress.value, [0, 1], ['#FFFFFF', colors.accent]),
   }));
 
   return (

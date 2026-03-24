@@ -140,37 +140,39 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
   );
 }
 
-// Icon map for themes and types
-const iconMap: Record<string, React.ReactNode> = {
-  // Themes
-  trust: <FingerprintIcon size={18} color="#C8A55C" weight="regular" />,
-  courage: <FireIcon size={18} color="#C8A55C" weight="regular" />,
-  joy: <SmileyIcon size={18} color="#C8A55C" weight="regular" />,
-  lament: <CloudRainIcon size={18} color="#C8A55C" weight="regular" />,
-  discipline: <CrosshairIcon size={18} color="#C8A55C" weight="regular" />,
-  identity: <FingerprintIcon size={18} color="#C8A55C" weight="regular" />,
-  purpose: <CompassIcon size={18} color="#C8A55C" weight="regular" />,
-  healing: <HeartIcon size={18} color="#C8A55C" weight="regular" />,
-  gratitude: <GiftIcon size={18} color="#C8A55C" weight="regular" />,
-  hope: <SparkleIcon size={18} color="#C8A55C" weight="regular" />,
-  rest: <MoonIcon size={18} color="#C8A55C" weight="regular" />,
-  presence: <EyeIcon size={18} color="#C8A55C" weight="regular" />,
-  conviction: <GavelIcon size={18} color="#C8A55C" weight="regular" />,
-  surrender: <HandIcon size={18} color="#C8A55C" weight="regular" />,
-  justice: <ScalesIcon size={18} color="#C8A55C" weight="regular" />,
-  wonder: <BinocularsIcon size={18} color="#C8A55C" weight="regular" />,
-  // Study types
-  personal_journey: <CompassIcon size={20} color="#C8A55C" weight="regular" />,
-  book_study: <BookOpenIcon size={20} color="#C8A55C" weight="regular" />,
-  character_study: <UsersIcon size={20} color="#C8A55C" weight="regular" />,
-  psalm_journey: <MusicNotesIcon size={20} color="#C8A55C" weight="regular" />,
-  beatitudes: <CrownIcon size={20} color="#C8A55C" weight="regular" />,
-  fruit_of_spirit: <LeafIcon size={20} color="#C8A55C" weight="regular" />,
-  lords_prayer: <ChatCircleIcon size={20} color="#C8A55C" weight="regular" />,
-  names_of_god: <FireIcon size={20} color="#C8A55C" weight="regular" />,
-  seasons: <CalendarIcon size={20} color="#C8A55C" weight="regular" />,
-  parables: <ChatCircleIcon size={20} color="#C8A55C" weight="regular" />,
-};
+// Icon map for themes and types — factory function so accent color is dynamic
+function getIconMap(accent: string): Record<string, React.ReactNode> {
+  return {
+    // Themes
+    trust: <FingerprintIcon size={18} color={accent} weight="regular" />,
+    courage: <FireIcon size={18} color={accent} weight="regular" />,
+    joy: <SmileyIcon size={18} color={accent} weight="regular" />,
+    lament: <CloudRainIcon size={18} color={accent} weight="regular" />,
+    discipline: <CrosshairIcon size={18} color={accent} weight="regular" />,
+    identity: <FingerprintIcon size={18} color={accent} weight="regular" />,
+    purpose: <CompassIcon size={18} color={accent} weight="regular" />,
+    healing: <HeartIcon size={18} color={accent} weight="regular" />,
+    gratitude: <GiftIcon size={18} color={accent} weight="regular" />,
+    hope: <SparkleIcon size={18} color={accent} weight="regular" />,
+    rest: <MoonIcon size={18} color={accent} weight="regular" />,
+    presence: <EyeIcon size={18} color={accent} weight="regular" />,
+    conviction: <GavelIcon size={18} color={accent} weight="regular" />,
+    surrender: <HandIcon size={18} color={accent} weight="regular" />,
+    justice: <ScalesIcon size={18} color={accent} weight="regular" />,
+    wonder: <BinocularsIcon size={18} color={accent} weight="regular" />,
+    // Study types
+    personal_journey: <CompassIcon size={20} color={accent} weight="regular" />,
+    book_study: <BookOpenIcon size={20} color={accent} weight="regular" />,
+    character_study: <UsersIcon size={20} color={accent} weight="regular" />,
+    psalm_journey: <MusicNotesIcon size={20} color={accent} weight="regular" />,
+    beatitudes: <CrownIcon size={20} color={accent} weight="regular" />,
+    fruit_of_spirit: <LeafIcon size={20} color={accent} weight="regular" />,
+    lords_prayer: <ChatCircleIcon size={20} color={accent} weight="regular" />,
+    names_of_god: <FireIcon size={20} color={accent} weight="regular" />,
+    seasons: <CalendarIcon size={20} color={accent} weight="regular" />,
+    parables: <ChatCircleIcon size={20} color={accent} weight="regular" />,
+  };
+}
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
@@ -291,6 +293,8 @@ export default function OnboardingScreen() {
     return createThemedColors(DarkColors, accent);
   }, [accentThemeId]);
   const isDark = true;
+
+  const iconMap = useMemo(() => getIconMap(colors.accent), [colors.accent]);
 
   const existingUser = useUnfoldStore((s) => s.user);
   const setUser = useUnfoldStore((s) => s.setUser);

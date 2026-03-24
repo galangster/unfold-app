@@ -240,7 +240,7 @@ export default function YouScreen() {
                     borderWidth: 1,
                     borderColor: 'rgba(200, 165, 92, 0.2)',
                     backgroundColor: 'rgba(200, 165, 92, 0.06)',
-                    shadowColor: '#C8A55C',
+                    shadowColor: colors.accent,
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.12,
                     shadowRadius: 20,
@@ -256,12 +256,12 @@ export default function YouScreen() {
                   >
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                        <SparkleIcon size={14} color="#C8A55C" weight="fill" />
+                        <SparkleIcon size={14} color={colors.accent} weight="fill" />
                         <Text
                           style={{
                             fontFamily: FontFamily.ui,
                             fontSize: 11,
-                            color: '#C8A55C',
+                            color: colors.accent,
                             letterSpacing: 1.5,
                             textTransform: 'uppercase',
                           }}
@@ -291,7 +291,7 @@ export default function YouScreen() {
                         See your progress in a whole new way
                       </Text>
                     </View>
-                    <CaretRightIcon size={18} color="#C8A55C" weight="bold" />
+                    <CaretRightIcon size={18} color={colors.accent} weight="bold" />
                   </View>
                 </View>
               </TouchableOpacity>

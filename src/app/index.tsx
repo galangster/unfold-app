@@ -13,8 +13,8 @@ import React, { useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
+import { useTheme } from '@/lib/theme';
 
-const GOLD = '#C8A55C';
 const BG = 'transparent';
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 
@@ -26,6 +26,7 @@ const RevealChar = React.memo(({
   char: string;
   animDelay: number;
 }) => {
+  const { colors } = useTheme();
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
 
@@ -55,7 +56,7 @@ const RevealChar = React.memo(({
     color: interpolateColor(
       colorProgress.value,
       [0, 1],
-      ['#FFFFFF', GOLD],
+      ['#FFFFFF', colors.accent],
     ),
   }));
 
@@ -90,6 +91,7 @@ function shuffleOrder(length: number): number[] {
 export default function WelcomeScreen() {
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
+  const { colors } = useTheme();
 
   const iconOpacity = useSharedValue(0);
   const iconScale = useSharedValue(0.92);
@@ -217,7 +219,7 @@ export default function WelcomeScreen() {
         <TouchableOpacity activeOpacity={0.7}
           onPress={handleContinue}
           style={{
-            backgroundColor: GOLD,
+            backgroundColor: colors.accent,
             paddingVertical: 18,
             borderRadius: 28,
             alignItems: 'center',
