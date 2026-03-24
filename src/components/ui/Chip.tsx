@@ -22,6 +22,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { alpha, renderIcon, DISABLED_OPACITY } from './utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,21 +111,21 @@ export function Chip({
     switch (variant) {
       case 'filter':
         return {
-          backgroundColor: selected ? colors.accent + '18' : colors.buttonBackground,
+          backgroundColor: selected ? alpha(colors.accent, 0.09) : colors.buttonBackground,
           borderWidth: 1,
-          borderColor: selected ? colors.accent + '40' : colors.border,
+          borderColor: selected ? alpha(colors.accent, 0.25) : colors.border,
           borderRadius: Radius.lg, // 16 — pill shape
         };
       case 'suggestion':
         return {
           backgroundColor: colors.inputBackground,
           borderWidth: 1,
-          borderColor: colors.accent + '33',
+          borderColor: alpha(colors.accent, 0.20),
           borderRadius: Radius.xl, // 20 — rounder pill
         };
       case 'reference':
         return {
-          backgroundColor: colors.accent + '0D',
+          backgroundColor: alpha(colors.accent, 0.05),
           borderWidth: 0,
           borderColor: 'transparent',
           borderRadius: Radius.sm, // 6 — compact tag
@@ -171,14 +172,7 @@ export function Chip({
 
   // --- Icon sizing ---------------------------------------------------------
 
-  const iconElement = icon
-    ? React.isValidElement(icon)
-      ? React.cloneElement(icon as React.ReactElement<any>, {
-          size: config.iconSize,
-          color: textColor,
-        })
-      : icon
-    : null;
+  const iconElement = renderIcon(icon, { size: config.iconSize, color: textColor });
 
   // --- Render --------------------------------------------------------------
 
@@ -278,7 +272,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   disabled: {
-    opacity: 0.4,
+    opacity: DISABLED_OPACITY,
   },
   colorDot: {
     marginRight: Spacing['1.5'], // 6
