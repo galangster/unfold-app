@@ -22,6 +22,7 @@ import {
   CrossIcon,
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -163,7 +164,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
               width: 48,
               height: 48,
               borderRadius: 24,
-              backgroundColor: colors.accent + '26', // 15%
+              backgroundColor: alpha(colors.accent, 0.15),
               alignItems: 'center',
               justifyContent: 'center',
             }}

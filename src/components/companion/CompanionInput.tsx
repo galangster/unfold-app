@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ArrowUpIcon, StopCircleIcon, MicrophoneIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -169,7 +170,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
                 width: 32,
                 height: 32,
                 borderRadius: 16,
-                backgroundColor: colors.error + '99',
+                backgroundColor: alpha(colors.error, 0.60),
                 alignItems: 'center',
                 justifyContent: 'center',
               }}

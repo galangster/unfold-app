@@ -18,6 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 
 const DOT_SIZE = 6;
 const DOT_GAP = 6;
@@ -81,7 +82,7 @@ export function TypingIndicator() {
           width: 28,
           height: 28,
           borderRadius: 14,
-          backgroundColor: colors.accent + '1F', // 12% opacity
+          backgroundColor: alpha(colors.accent, 0.12),
           alignItems: 'center',
           justifyContent: 'center',
           marginRight: 12,

@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
 
 const EASE_OUT = Easing.out(Easing.cubic);
@@ -78,7 +79,7 @@ function AnimatedChip({
         style={{
           backgroundColor: colors.inputBackground,
           borderWidth: 1,
-          borderColor: accentColor + '33', // 20%
+          borderColor: alpha(accentColor, 0.20),
           borderRadius: 20,
           paddingHorizontal: 14,
           paddingVertical: 8,

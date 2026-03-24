@@ -7,6 +7,7 @@
 import { View, Text } from 'react-native';
 import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 
@@ -33,7 +34,7 @@ export function UserMessageBubble({ message }: Props) {
     >
       <View
         style={{
-          backgroundColor: colors.accent + '26', // 15% opacity
+          backgroundColor: alpha(colors.accent, 0.15),
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
           borderBottomRightRadius: 6,

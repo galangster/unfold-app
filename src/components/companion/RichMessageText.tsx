@@ -12,6 +12,7 @@ import { useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
 
@@ -201,7 +202,7 @@ function InlineText({
                 fontFamily: FontFamily.uiMedium,
                 fontSize: 14,
                 color: colors.accent,
-                backgroundColor: colors.accent + (flashIndex === i ? '4D' : '1A'),
+                backgroundColor: alpha(colors.accent, flashIndex === i ? 0.30 : 0.10),
                 borderRadius: 6,
                 paddingHorizontal: 2,
                 lineHeight: 22,
@@ -283,7 +284,7 @@ export function RichMessageText({ text, onVersePress }: Props) {
               key={i}
               style={{
                 borderLeftWidth: 2,
-                borderLeftColor: colors.accent + '66', // 40%
+                borderLeftColor: alpha(colors.accent, 0.40),
                 paddingLeft: 12,
                 paddingVertical: 4,
                 marginVertical: 4,

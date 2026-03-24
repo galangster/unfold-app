@@ -9,8 +9,9 @@
 import { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
+import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily } from '@/constants/fonts';
 import { StreamingCursor } from './StreamingCursor';
 import { RichMessageText } from './RichMessageText';
@@ -70,18 +71,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
       {/* Icon column — 28px wide + 12px gap = 40px indent */}
       <View style={{ width: 28, marginRight: 12 }}>
         {showIcon && (
-          <View
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 14,
-              backgroundColor: colors.accent + '1F', // 12%
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
-          </View>
+          <CompanionOrb accentColor={colors.accent} size={28} />
         )}
       </View>
 
@@ -90,7 +80,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
         {message.status === 'error' ? (
           <View
             style={{
-              backgroundColor: colors.error + '1A',
+              backgroundColor: alpha(colors.error, 0.10),
               borderRadius: 12,
               padding: 12,
             }}
