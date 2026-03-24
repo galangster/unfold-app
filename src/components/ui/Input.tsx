@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import { XCircleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { alpha, renderIcon } from './utils';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -104,21 +105,17 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 
   const getBorderColor = () => {
     if (error) return colors.error;
-    if (focused) return colors.accent + '40';
+    if (focused) return alpha(colors.accent, 0.25);
     return colors.border;
   };
 
   // --- Icon sizing ---------------------------------------------------------
 
-  const iconElement = icon
-    ? React.isValidElement(icon)
-      ? React.cloneElement(icon as React.ReactElement<any>, {
-          size: 18,
-          color: focused ? colors.accent : colors.textMuted,
-          weight: 'light',
-        })
-      : icon
-    : null;
+  const iconElement = renderIcon(icon, {
+    size: 18,
+    color: focused ? colors.accent : colors.textMuted,
+    weight: 'light',
+  });
 
   const showClear = clearable && value && value.length > 0;
   const charCount = value?.length ?? 0;
