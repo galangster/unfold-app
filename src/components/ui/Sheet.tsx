@@ -30,19 +30,21 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   runOnJS,
-  Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
+import { Shadow } from '@/constants/shadows';
+import { Duration, Ease } from '@/constants/animations';
+import { Radius } from '@/constants/radius';
 
 // ---------------------------------------------------------------------------
 // Animation config
 // ---------------------------------------------------------------------------
 
 const OFFSCREEN = 500;
-const SLIDE_IN = { duration: 340, easing: Easing.out(Easing.cubic) };
-const DISMISS_DURATION = 180;
+const SLIDE_IN = { duration: Duration.slow, easing: Ease.out };
+const DISMISS_DURATION = Duration.fast;
 const SWIPE_THRESHOLD = 80;
 const VELOCITY_THRESHOLD = 500;
 
@@ -74,6 +76,7 @@ export function Sheet({
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(OFFSCREEN);
+  const backdropOpacity = useSharedValue(0);
   const dismissing = useRef(false);
 
   // Slide in when sheet opens
@@ -81,17 +84,20 @@ export function Sheet({
     if (visible) {
       dismissing.current = false;
       translateY.value = OFFSCREEN;
+      backdropOpacity.value = 0;
       translateY.value = withTiming(0, SLIDE_IN);
+      backdropOpacity.value = withTiming(0.4, SLIDE_IN);
     }
-  }, [visible, translateY]);
+  }, [visible, translateY, backdropOpacity]);
 
   const dismissSheet = useCallback(() => {
     if (dismissing.current) return;
     dismissing.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+    backdropOpacity.value = withTiming(0, { duration: DISMISS_DURATION });
     setTimeout(onClose, DISMISS_DURATION);
-  }, [onClose, translateY]);
+  }, [onClose, translateY, backdropOpacity]);
 
   const panGesture = useMemo(
     () =>
@@ -104,16 +110,22 @@ export function Sheet({
         .onEnd((e) => {
           if (e.translationY > SWIPE_THRESHOLD || e.velocityY > VELOCITY_THRESHOLD) {
             translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
+            backdropOpacity.value = withTiming(0, { duration: DISMISS_DURATION });
             runOnJS(dismissSheet)();
           } else {
             translateY.value = withTiming(0, SLIDE_IN);
+            backdropOpacity.value = withTiming(0.4, SLIDE_IN);
           }
         }),
-    [dismissSheet, translateY],
+    [dismissSheet, translateY, backdropOpacity],
   );
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
+  }));
+
+  const backdropAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: `rgba(0, 0, 0, ${backdropOpacity.value})`,
   }));
 
   return (
@@ -130,11 +142,13 @@ export function Sheet({
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           {/* Backdrop — tap to dismiss */}
-          <TouchableOpacity
-            style={styles.dismissArea}
-            activeOpacity={1}
-            onPress={dismissSheet}
-          />
+          <Animated.View style={[styles.dismissArea, backdropAnimatedStyle]}>
+            <TouchableOpacity
+              style={styles.dismissArea}
+              activeOpacity={1}
+              onPress={dismissSheet}
+            />
+          </Animated.View>
 
           {/* Sheet surface */}
           <GestureDetector gesture={panGesture}>
@@ -178,13 +192,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 24,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
+    ...Shadow.sheet,
   },
   handleRow: {
     alignItems: 'center',
