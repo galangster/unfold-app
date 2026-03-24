@@ -121,6 +121,7 @@
           ]
         }
       ],
+      "./plugins/withRemoveAppGroups",
       [
         "@sentry/react-native",
         {
