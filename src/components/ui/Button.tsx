@@ -18,6 +18,7 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Typography } from '@/constants/typography';
+import { renderIcon, DISABLED_OPACITY } from './utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -149,18 +150,18 @@ export function Button({
     switch (variant) {
       case 'primary':
         // White text on accent — works for both dark/light since accent is mid-tone
-        return '#FFFFFF';
+        return colors.contrastText ?? '#FFFFFF';
       case 'secondary':
         return colors.text;
       case 'ghost':
         return colors.accent;
       case 'destructive':
         if (destructiveStyle === 'ghost') return colors.error;
-        return '#FFFFFF';
+        return colors.contrastText ?? '#FFFFFF';
       case 'icon':
         return colors.text;
       default:
-        return '#FFFFFF';
+        return colors.contrastText ?? '#FFFFFF';
     }
   };
 
@@ -181,14 +182,7 @@ export function Button({
 
   // --- Icon sizing -------------------------------------------------------
 
-  const iconElement = icon
-    ? React.isValidElement(icon)
-      ? React.cloneElement(icon as React.ReactElement<any>, {
-          size: sizeConfig.iconSize,
-          color: textColor,
-        })
-      : icon
-    : null;
+  const iconElement = renderIcon(icon, { size: sizeConfig.iconSize, color: textColor });
 
   // --- Render ------------------------------------------------------------
 
@@ -280,7 +274,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   disabled: {
-    opacity: 0.4,
+    opacity: DISABLED_OPACITY,
   },
   iconLeft: {
     marginRight: Spacing[2], // 8px
