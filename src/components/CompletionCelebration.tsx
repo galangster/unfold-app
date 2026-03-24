@@ -276,7 +276,7 @@ export function CompletionCelebration({
       size: Math.random() * 4.5 + 2,
       delay: 200 + Math.random() * 700,
       drift: Math.random() * 80,
-      isAccent: Math.random() > 0.35,
+      isAccent: Math.random() > 0.65,
     }));
   }, [visible]);
 
@@ -334,7 +334,7 @@ export function CompletionCelebration({
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
-    backgroundColor: 'rgba(8, 8, 8, 0.96)',
+    backgroundColor: colors.backgroundPure,
   }));
 
   const titleStyle = useAnimatedStyle(() => ({
@@ -357,7 +357,7 @@ export function CompletionCelebration({
 
   if (!visible) return null;
 
-  const title = type === 'series' ? 'Series\nComplete' : 'Day\nComplete';
+  const title = type === 'series' ? 'Series Complete' : 'Day Complete';
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
@@ -385,7 +385,7 @@ export function CompletionCelebration({
               delay={m.delay}
               drift={m.drift}
               accentColor={colors.accent}
-              textColor="rgba(245, 240, 235, 0.7)"
+              textColor="rgba(255, 255, 255, 0.85)"
               isAccent={m.isAccent}
             />
           ))}
