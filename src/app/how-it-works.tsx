@@ -27,6 +27,7 @@ import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-r
 import { FontFamily } from '@/constants/fonts';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
+import { alpha } from '@/components/ui';
 import { CompanionOrb } from '@/components/CompanionOrb';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -785,7 +786,7 @@ function StackedCards({ accent }: { accent: string }) {
     <View style={{ width: 160, height: 160, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[card, { opacity: 0.15 }, s1]} />
       <Animated.View style={[card, { opacity: 0.3 }, s2]} />
-      <Animated.View style={[card, { opacity: 0.45, backgroundColor: accent + '0D' }, s3]} />
+      <Animated.View style={[card, { opacity: 0.45, backgroundColor: alpha(accent, 0.05) }, s3]} />
     </View>
   );
 }

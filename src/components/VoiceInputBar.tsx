@@ -29,6 +29,7 @@ import {
 import { MicrophoneIcon, XIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 
 /* ─────────────────────────────────────────────────────────
  * ANIMATION STORYBOARD
@@ -246,7 +247,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline }: Voic
         accessibilityLabel="Tap to speak"
         style={inline ? styles.micButtonInline : styles.micButton}
       >
-        <View style={[styles.micInner, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
+        <View style={[styles.micInner, { backgroundColor: alpha(accent, 0.09), borderColor: alpha(accent, 0.19) }]}>
           <MicrophoneIcon size={18} color={accent} weight="light" />
         </View>
       </TouchableOpacity>
@@ -258,7 +259,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline }: Voic
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(150)}
-      style={[styles.recordingBar, { backgroundColor: colors.inputBackground, borderColor: accent + '40' }]}
+      style={[styles.recordingBar, { backgroundColor: colors.inputBackground, borderColor: alpha(accent, 0.25) }]}
     >
       {/* Cancel ✕ */}
       <TouchableOpacity
