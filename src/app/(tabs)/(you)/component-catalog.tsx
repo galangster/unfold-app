@@ -37,7 +37,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { Button, Card, Chip, Input } from '@/components/ui';
+import { Button, Card, Chip, Input, Sheet } from '@/components/ui';
 import { MagnifyingGlassIcon } from 'phosphor-react-native';
 
 // ---------------------------------------------------------------------------
@@ -77,6 +77,8 @@ export default function ComponentCatalogScreen() {
   const [inputLabeled, setInputLabeled] = useState('');
   const [inputError, setInputError] = useState('too short');
   const [inputMultiline, setInputMultiline] = useState('');
+  const [sheetBasic, setSheetBasic] = useState(false);
+  const [sheetForm, setSheetForm] = useState(false);
 
   const handleLoadingDemo = () => {
     setLoadingDemo(true);
@@ -542,6 +544,56 @@ export default function ComponentCatalogScreen() {
           />
           <Chip variant="reference" label="Romans 8:28" icon={<BookOpenIcon />} onPress={() => {}} />
         </Card>
+
+        {/* ============================================================= */}
+        {/* SHEET — BOTTOM SHEET                                          */}
+        {/* ============================================================= */}
+
+        <SectionTitle title="SHEET — BOTTOM SHEET" />
+
+        <SubLabel text="Basic sheet (tap to open)" />
+        <View style={styles.row}>
+          <Button variant="secondary" label="Open Sheet" onPress={() => setSheetBasic(true)} />
+        </View>
+
+        <SubLabel text="Form sheet (tap to open)" />
+        <View style={styles.row}>
+          <Button variant="secondary" label="Open Form Sheet" onPress={() => setSheetForm(true)} />
+        </View>
+
+        {/* Basic Sheet */}
+        <Sheet visible={sheetBasic} onClose={() => setSheetBasic(false)}>
+          <Text style={[Typography.displaySm, { color: colors.text, marginBottom: Spacing[3] }]}>
+            Basic Sheet
+          </Text>
+          <Text style={[Typography.bodyMd, { color: colors.textMuted, marginBottom: Spacing[6] }]}>
+            Swipe down or tap the backdrop to dismiss. The sheet slides up with a 340ms ease-out cubic animation and dismisses in 180ms.
+          </Text>
+          <Button variant="primary" label="Got it" fullWidth onPress={() => setSheetBasic(false)} />
+        </Sheet>
+
+        {/* Form Sheet */}
+        <Sheet visible={sheetForm} onClose={() => setSheetForm(false)}>
+          <Text style={[Typography.displaySm, { color: colors.text, marginBottom: Spacing[3] }]}>
+            Create Folder
+          </Text>
+          <Input
+            label="FOLDER NAME"
+            placeholder="e.g. Morning Prayers"
+            value=""
+            onChangeText={() => {}}
+            maxLength={40}
+            wrapperStyle={{ marginBottom: Spacing[4] }}
+          />
+          <View style={{ flexDirection: 'row', gap: Spacing[3] }}>
+            <View style={{ flex: 1 }}>
+              <Button variant="ghost" label="Cancel" fullWidth onPress={() => setSheetForm(false)} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button variant="primary" label="Create" fullWidth onPress={() => setSheetForm(false)} />
+            </View>
+          </View>
+        </Sheet>
 
         {/* ============================================================= */}
         {/* TYPOGRAPHY PRESETS                                             */}
