@@ -26,20 +26,18 @@ import {
 } from '@/lib/notifications';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
-import { CARTESIA_VOICES } from '@/lib/cartesia';
+import { TTS_VOICES } from '@/lib/tts-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
 import { useAuth } from '@/hooks/useAuth';
 
 /** Bundled voice samples — Psalm 23:1 read by each voice. Instant playback, zero network. */
 const VOICE_SAMPLES: Record<string, any> = {
-  '694f9389-aac1-45b6-b726-9d9369183238': require('@/assets/audio/voice-samples/katie.mp3'),
-  '03496517-369a-4db1-8236-3d3ae459ddf7': require('@/assets/audio/voice-samples/elena.mp3'),
-  '1463a4e1-56a1-4b41-b257-728d56e93605': require('@/assets/audio/voice-samples/marcus.mp3'),
-  '00967b2f-88a6-4a31-8153-110a92134b9f': require('@/assets/audio/voice-samples/sophia.mp3'),
-  '3246e36c-ac8c-418d-83cd-4eaad5a3b887': require('@/assets/audio/voice-samples/david.mp3'),
-  '15a9cd88-84b0-4a8b-95f2-5d583b54c72e': require('@/assets/audio/voice-samples/grace.mp3'),
-  'a924b0e6-9253-4711-8fc3-5cb8e0188c94': require('@/assets/audio/voice-samples/michael.mp3'),
+  'emily': require('@/assets/audio/voice-samples/katie.mp3'),
+  'ariana': require('@/assets/audio/voice-samples/elena.mp3'),
+  'james': require('@/assets/audio/voice-samples/marcus.mp3'),
+  'george': require('@/assets/audio/voice-samples/david.mp3'),
+  'jasper': require('@/assets/audio/voice-samples/grace.mp3'),
 };
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
@@ -1370,7 +1368,7 @@ export default function SettingsScreen() {
                         marginTop: Spacing['0.5'],
                       }}
                     >
-                      {CARTESIA_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Katie'}
+                      {TTS_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Katie'}
                     </Text>
                   </View>
                   <CaretDownIcon
@@ -1386,8 +1384,8 @@ export default function SettingsScreen() {
                 {/* Voice options */}
                 {expandedPremium === 'voice' && (
                   <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
-                    {CARTESIA_VOICES.map((option) => {
-                      const isSelected = (user?.preferredVoice ?? '694f9389-aac1-45b6-b726-9d9369183238') === option.id;
+                    {TTS_VOICES.map((option) => {
+                      const isSelected = (user?.preferredVoice ?? 'emily') === option.id;
                       const isLocked = option.premium && !user?.isPremium;
                       return (
                         <TouchableOpacity activeOpacity={0.7}

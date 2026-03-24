@@ -48,8 +48,8 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   // Go Deeper journal prompts: 15 per hour
   'go-deeper': { maxRequests: 15, windowMs: 60 * 60 * 1000 },
 
-  // Text-to-speech: 30 per hour
-  'tts': { maxRequests: 30, windowMs: 60 * 60 * 1000 },
+  // Text-to-speech: 10 per hour
+  'tts': { maxRequests: 10, windowMs: 60 * 60 * 1000 },
 };
 
 const RATE_LIMIT_STORAGE_KEY = '@unfold_rate_limits';

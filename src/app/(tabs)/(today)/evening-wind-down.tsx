@@ -25,7 +25,7 @@ import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
 import { generateExamen, type ExamenPrayer } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
-import { streamDevotionalAudio } from '@/lib/cartesia';
+import { streamDevotionalAudio } from '@/lib/tts-service';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { cancelAndRescheduleEveningForTomorrow } from '@/lib/notifications';
 import { EveningCelebration } from '@/components/EveningCelebration';
