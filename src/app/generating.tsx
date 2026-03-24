@@ -869,7 +869,7 @@ export default function GeneratingScreen() {
       user?.authProvider === 'guest';
 
     if (shouldShowSignIn) {
-      router.replace('/(onboarding)/sign-in');
+      router.replace('/(onboarding)/sign-in?source=generating');
     } else {
       router.replace('/(tabs)/(today)');
     }
