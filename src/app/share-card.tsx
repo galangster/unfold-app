@@ -32,6 +32,7 @@ import {
 import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -545,11 +546,11 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing['5'],
     paddingBottom: 4,
   },
   closeButton: {
-    padding: 12,
+    padding: Spacing['3'],
   },
   cardWrapper: {
     flex: 1,
@@ -561,9 +562,9 @@ const s = StyleSheet.create({
     height: CARD_HEIGHT,
     borderRadius: Radius.lg,
     overflow: 'hidden',
-    paddingHorizontal: 28,
+    paddingHorizontal: Spacing['7'],
     paddingTop: 48,
-    paddingBottom: 28,
+    paddingBottom: Spacing['7'],
     justifyContent: 'space-between',
     // Subtle border so dark themes don't disappear into the backdrop
     borderWidth: 1,
@@ -577,7 +578,7 @@ const s = StyleSheet.create({
     height: 1,
     width: 48,
     alignSelf: 'center',
-    marginVertical: 16,
+    marginVertical: Spacing['4'],
   },
   refContainer: {
     alignItems: 'center',
@@ -592,12 +593,12 @@ const s = StyleSheet.create({
     opacity: 0.4,
   },
   carouselWrapper: {
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingTop: Spacing['5'],
+    paddingBottom: Spacing['4'],
   },
   carouselContent: {
-    paddingHorizontal: 24,
-    gap: 16,
+    paddingHorizontal: Spacing['6'],
+    gap: Spacing['4'],
   },
   themeItem: {
     alignItems: 'center',
@@ -624,20 +625,20 @@ const s = StyleSheet.create({
     letterSpacing: 0.2,
   },
   actionsWrapper: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
   },
   actionsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
+    gap: Spacing['3'],
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Spacing['2'],
     paddingVertical: 15,
-    paddingHorizontal: 28,
+    paddingHorizontal: Spacing['7'],
     borderRadius: Radius.card,
   },
   saveButton: {

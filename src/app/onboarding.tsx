@@ -39,6 +39,7 @@ import { useTheme } from '@/lib/theme';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -1048,7 +1049,7 @@ export default function OnboardingScreen() {
         const selectedMode = data.selectedMainOption;
         
         return (
-          <View style={{ gap: 0 }}>
+          <View style={{ gap: Spacing['0'] }}>
             {/* Theme/Topic option */}
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {

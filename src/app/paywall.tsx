@@ -9,6 +9,7 @@ import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLine
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -411,12 +412,12 @@ export default function PaywallScreen() {
       {/* ─── Scrollable content ─── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: Spacing['6'] }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingHorizontal: 28, paddingTop: insets.top + 16 }}>
+        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top + 16 }}>
           {/* Unfold icon + close button row */}
-          <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+          <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
             <Image
               source={require('@/app/icon-paywall-light.png')}
               style={{ width: 28, height: 28, tintColor: colors.accent, opacity: 0.8 }}
@@ -451,7 +452,7 @@ export default function PaywallScreen() {
           </Animated.View>
 
           {/* ─── Feature benefit rows ─── */}
-          <View style={{ marginTop: 24, gap: 18 }}>
+          <View style={{ marginTop: Spacing['6'], gap: 18 }}>
             {premiumBenefits.map((benefit, index) => {
               const Icon = benefit.icon;
               return (
@@ -504,7 +505,7 @@ export default function PaywallScreen() {
           </View>
 
           {/* ─── Free vs Premium comparison ─── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={{ marginTop: 28 }}>
+          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={{ marginTop: Spacing['7'] }}>
             {/* Column headers */}
             <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
               <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
@@ -560,7 +561,7 @@ export default function PaywallScreen() {
 
           {/* ─── Trial timeline (when eligible) ─── */}
           {isTrialEligible && (
-            <Animated.View entering={FadeInDown.duration(400).delay(700)} style={{ marginTop: 28 }}>
+            <Animated.View entering={FadeInDown.duration(400).delay(700)} style={{ marginTop: Spacing['7'] }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8 }}>
                 {/* Today */}
                 <View style={{ alignItems: 'center', flex: 1 }}>
@@ -603,14 +604,14 @@ export default function PaywallScreen() {
       {/* ─── Sticky footer: plans + CTA + legal ─── */}
       <View
         style={{
-          paddingHorizontal: 28,
+          paddingHorizontal: Spacing['7'],
           paddingTop: 14,
           paddingBottom: Math.max(insets.bottom, 16) + 4,
           backgroundColor: colors.background,
         }}
       >
         {/* Plan selection — stacked full-width cards */}
-        <View style={{ gap: 8, marginBottom: 14 }}>
+        <View style={{ gap: Spacing['2'], marginBottom: 14 }}>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => {
@@ -720,7 +721,7 @@ export default function PaywallScreen() {
           style={{
             backgroundColor: colors.accent,
             paddingVertical: 17,
-            paddingHorizontal: 32,
+            paddingHorizontal: Spacing['8'],
             borderRadius: 28,
             alignItems: 'center',
             justifyContent: 'center',
@@ -729,7 +730,7 @@ export default function PaywallScreen() {
           }}
         >
           {(isPurchasing || isLoadingOfferings) ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
               <ActivityIndicator color={colors.background} size="small" />
               {isLoadingOfferings && !isPurchasing && (
                 <Text

@@ -19,6 +19,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
@@ -212,7 +213,7 @@ function NotificationCard({
     <Animated.View
       entering={entering(FadeIn.duration(400).delay(delay))}
       exiting={exiting(FadeOut.duration(300))}
-      style={{ paddingHorizontal: 24, marginTop: 12 }}
+      style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['3'] }}
     >
       <TouchableOpacity activeOpacity={0.7}
         onPress={onPress}
@@ -647,9 +648,9 @@ export default function HomeScreen() {
         {/* Ambient embers for cinematic feel */}
         <GoldEmberField density="low" active style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
             {/* Character-by-character "Unfold" reveal */}
-            <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', marginBottom: Spacing['5'] }}>
               {titleChars.map((char, i) => (
                 <RevealChar key={`c-${i}`} char={char} animDelay={charDelays[i]} />
               ))}
@@ -678,7 +679,7 @@ export default function HomeScreen() {
                 <View
                   style={{
                     paddingVertical: 18,
-                    paddingHorizontal: 48,
+                    paddingHorizontal: Spacing['12'],
                     borderRadius: 28,
                     backgroundColor: colors.accent,
                     shadowColor: colors.accent,
@@ -767,9 +768,9 @@ export default function HomeScreen() {
           <Animated.View
             entering={entering(FadeIn.duration(400))}
             style={{
-              paddingHorizontal: 24,
-              paddingTop: 20,
-              paddingBottom: 12,
+              paddingHorizontal: Spacing['6'],
+              paddingTop: Spacing['5'],
+              paddingBottom: Spacing['3'],
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'flex-start',
@@ -800,7 +801,7 @@ export default function HomeScreen() {
                 <StreakDisplay compact hideDayLabel />
               </View>
             </View>
-            <View style={{ marginTop: 4 }}>
+            <View style={{ marginTop: Spacing['1'] }}>
               <ProfileAvatar
                 size={38}
                 onPress={() => router.push('/(tabs)/(you)')}
@@ -845,7 +846,7 @@ export default function HomeScreen() {
           {shouldShowResumeCard && resumeContext && resumeDevotional && (
             <Animated.View
               entering={entering(FadeIn.duration(400).delay(80))}
-              style={{ paddingHorizontal: 24, marginTop: 16 }}
+              style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleResume}
@@ -858,7 +859,7 @@ export default function HomeScreen() {
                     borderRadius: Radius.card,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    padding: 16,
+                    padding: Spacing['4'],
                     // Light elevation for resume card
                     ...Shadow.sm,
                   }}
@@ -884,7 +885,7 @@ export default function HomeScreen() {
                       fontFamily: FontFamily.body,
                       fontSize: 15,
                       color: colors.text,
-                      marginBottom: 4,
+                      marginBottom: Spacing['1'],
                     }}
                   >
                     {resumeDevotional.title} · Day {resumeContext.dayNumber}
@@ -909,7 +910,7 @@ export default function HomeScreen() {
           <View ref={journeyCardRef} collapsable={false}>
           <Animated.View
             entering={entering(FadeIn.delay(100).duration(400))}
-            style={[{ paddingHorizontal: 24, marginTop: 20 }, journeyCardAnimStyle]}
+            style={[{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }, journeyCardAnimStyle]}
           >
             {isJourneyComplete ? (
               <TouchableOpacity activeOpacity={0.7}
@@ -932,7 +933,7 @@ export default function HomeScreen() {
                     borderRadius: Radius.lg,
                     borderWidth: 1,
                     borderColor: alpha(colors.accent, 0.09),
-                    padding: 28,
+                    padding: Spacing['7'],
                     alignItems: 'center',
                     backgroundColor: colors.backgroundElevated,
                     // Hero card elevation
@@ -948,7 +949,7 @@ export default function HomeScreen() {
                       width: 32,
                       height: 1.5,
                       backgroundColor: colors.accent,
-                      marginBottom: 24,
+                      marginBottom: Spacing['6'],
                       borderRadius: 1,
                     }}
                   />
@@ -959,7 +960,7 @@ export default function HomeScreen() {
                       fontSize: 28,
                       color: colors.text,
                       textAlign: 'center',
-                      marginBottom: 8,
+                      marginBottom: Spacing['2'],
                     }}
                   >
                     Start a New Series
@@ -972,8 +973,8 @@ export default function HomeScreen() {
                       color: colors.textMuted,
                       textAlign: 'center',
                       lineHeight: 23,
-                      marginBottom: 28,
-                      paddingHorizontal: 8,
+                      marginBottom: Spacing['7'],
+                      paddingHorizontal: Spacing['2'],
                     }}
                   >
                     Continue with a new{'\n'}personalized devotional series.
@@ -1029,7 +1030,7 @@ export default function HomeScreen() {
                     borderRadius: Radius.xl,
                     borderWidth: 1,
                     borderColor: alpha(colors.accent, 0.09),
-                    padding: 24,
+                    padding: Spacing['6'],
                     backgroundColor: colors.backgroundElevated,
                     // Hero card — strongest elevation in the hierarchy
                     shadowColor: colors.accent,
@@ -1040,7 +1041,7 @@ export default function HomeScreen() {
                   }}
                 >
                   {/* Series label + day pill */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
@@ -1061,7 +1062,7 @@ export default function HomeScreen() {
                         borderRadius: Radius.xl,
                         flexDirection: 'row',
                         alignItems: 'center',
-                        marginLeft: 12,
+                        marginLeft: Spacing['3'],
                       }}
                     >
                       <Text
@@ -1086,7 +1087,7 @@ export default function HomeScreen() {
                           fontSize: FontSize['3xl'],
                           color: colors.text,
                           lineHeight: 38,
-                          marginBottom: 8,
+                          marginBottom: Spacing['2'],
                           letterSpacing: -0.3,
                         }}
                       >
@@ -1130,12 +1131,12 @@ export default function HomeScreen() {
 
                       {/* Today's approach — subtle method hint */}
                       {currentDayData.studyMethod && BIBLE_STUDY_METHODS[currentDayData.studyMethod] && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['5'] }}>
                           <View
                             style={{
                               backgroundColor: alpha(colors.accent, 0.07),
                               paddingHorizontal: 10,
-                              paddingVertical: 4,
+                              paddingVertical: Spacing['1'],
                               borderRadius: 6,
                             }}
                           >
@@ -1155,7 +1156,7 @@ export default function HomeScreen() {
                       )}
                     </>
                   ) : isPreparingCurrentDay ? (
-                    <View style={{ alignItems: 'center', paddingVertical: 12, marginBottom: 20 }}>
+                    <View style={{ alignItems: 'center', paddingVertical: Spacing['3'], marginBottom: Spacing['5'] }}>
                       <ActivityIndicator color={colors.accent} size="small" style={{ marginBottom: 10 }} />
                       <Text
                         style={{
@@ -1172,7 +1173,7 @@ export default function HomeScreen() {
                   ) : null}
 
                   {/* Progress section */}
-                  <View style={{ marginBottom: 24 }}>
+                  <View style={{ marginBottom: Spacing['6'] }}>
                     <AnimatedProgressBar progress={progressPercent} colors={colors} />
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
                       <Text
@@ -1210,7 +1211,7 @@ export default function HomeScreen() {
                           borderColor: colors.border,
                           flexDirection: 'row',
                           justifyContent: 'center',
-                          gap: 8,
+                          gap: Spacing['2'],
                         }}
                       >
                         <LockSimpleIcon size={15} color={colors.textMuted} weight="light" />
@@ -1226,7 +1227,7 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                       {showTomorrowLockInfo && (
-                        <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: 10, paddingHorizontal: 4 }}>
+                        <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: 10, paddingHorizontal: Spacing['1'] }}>
                           <Text
                             style={{
                               fontFamily: FontFamily.body,
@@ -1276,7 +1277,7 @@ export default function HomeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Start a new series"
                     style={{
-                      marginTop: 12,
+                      marginTop: Spacing['3'],
                       opacity: 1,
                     }}
                   >
@@ -1314,7 +1315,7 @@ export default function HomeScreen() {
           {showDay1Review && (
             <Animated.View
               entering={entering(FadeIn.duration(400).delay(200))}
-              style={{ paddingHorizontal: 24, marginTop: 20 }}
+              style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
             >
               <View
                 style={{
@@ -1322,7 +1323,7 @@ export default function HomeScreen() {
                   borderRadius: Radius.lg,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  padding: 20,
+                  padding: Spacing['5'],
                   // Light elevation for secondary card
                   ...Shadow.sm,
                 }}
@@ -1332,7 +1333,7 @@ export default function HomeScreen() {
                     fontFamily: FontFamily.display,
                     fontSize: FontSize.lg,
                     color: colors.text,
-                    marginBottom: 4,
+                    marginBottom: Spacing['1'],
                   }}
                 >
                   How's this feeling so far?
@@ -1342,13 +1343,13 @@ export default function HomeScreen() {
                     fontFamily: FontFamily.body,
                     fontSize: 13,
                     color: colors.textSubtle,
-                    marginBottom: 16,
+                    marginBottom: Spacing['4'],
                   }}
                 >
                   Your honest take helps us get better.
                 </Text>
 
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: Spacing['2'] }}>
                   <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('love')}
                     style={{
@@ -1357,7 +1358,7 @@ export default function HomeScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      paddingVertical: 12,
+                      paddingVertical: Spacing['3'],
                       paddingHorizontal: 10,
                       borderRadius: Radius.md,
                       backgroundColor: colors.buttonBackground,
@@ -1377,7 +1378,7 @@ export default function HomeScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      paddingVertical: 12,
+                      paddingVertical: Spacing['3'],
                       paddingHorizontal: 10,
                       borderRadius: Radius.md,
                       backgroundColor: colors.buttonBackground,
@@ -1397,7 +1398,7 @@ export default function HomeScreen() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      paddingVertical: 12,
+                      paddingVertical: Spacing['3'],
                       paddingHorizontal: 10,
                       borderRadius: Radius.md,
                       backgroundColor: colors.buttonBackground,
@@ -1417,7 +1418,7 @@ export default function HomeScreen() {
           <View ref={streakBoxRef} collapsable={false}>
           <Animated.View
             entering={entering(FadeIn.delay(200).duration(400))}
-            style={{ paddingHorizontal: 24, marginTop: 24 }}
+            style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['6'] }}
           >
             <StreakBox
               streakCount={streakCurrent}
@@ -1428,7 +1429,7 @@ export default function HomeScreen() {
 
           {/* Premium Nudge Card — contextual, inline upsell */}
           {premiumNudge && (
-            <View style={{ paddingHorizontal: 24, marginTop: 16 }}>
+            <View style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}>
               <PremiumNudgeCard
                 type={premiumNudge.type}
                 message={premiumNudge.message}
@@ -1499,15 +1500,15 @@ const homeStyles = StyleSheet.create({
   },
   notificationCard: {
     borderRadius: Radius.card,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    paddingRight: 12,
+    paddingVertical: Spacing['4'],
+    paddingHorizontal: Spacing['4'],
+    paddingRight: Spacing['3'],
     flexDirection: 'row',
     alignItems: 'center',
     ...Shadow.sm,
   },
   notificationOrb: {
-    marginRight: 12,
+    marginRight: Spacing['3'],
   },
   notificationMessage: {
     fontFamily: FontFamily.body,
@@ -1515,11 +1516,11 @@ const homeStyles = StyleSheet.create({
     lineHeight: 20,
   },
   notificationChevron: {
-    marginLeft: 8,
+    marginLeft: Spacing['2'],
   },
   shimmerWrapper: {
-    paddingHorizontal: 24,
-    marginTop: 16,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['4'],
   },
   shimmerCard: {
     borderRadius: Radius.card,
@@ -1539,8 +1540,8 @@ const homeStyles = StyleSheet.create({
     borderRadius: 5,
   },
   bridgeWrapper: {
-    paddingHorizontal: 24,
-    marginTop: 16,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['4'],
   },
   bridgeRow: {
     flexDirection: 'row',
@@ -1553,7 +1554,7 @@ const homeStyles = StyleSheet.create({
   bridgeBubble: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    paddingVertical: 12,
+    paddingVertical: Spacing['3'],
     paddingHorizontal: 14,
   },
   bridgeText: {

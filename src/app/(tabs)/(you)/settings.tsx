@@ -7,6 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore, FontSize as FontSizePreference, WritingTone, ContentDepth, FaithBackground, LifeStage, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import Constants from 'expo-constants';
@@ -442,7 +443,7 @@ export default function SettingsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -452,7 +453,7 @@ export default function SettingsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
             accessibilityHint="Return to the previous screen"
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -462,7 +463,7 @@ export default function SettingsScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
-              marginLeft: 8,
+              marginLeft: Spacing['2'],
             }}
           >
             Settings
@@ -470,7 +471,7 @@ export default function SettingsScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['6'], paddingBottom: Spacing['10'] }}
           showsVerticalScrollIndicator={false}
         >
           {/* Premium section */}
@@ -481,7 +482,7 @@ export default function SettingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Upgrade to Premium"
                 accessibilityHint="Unlock unlimited devotionals and more premium features"
-                style={{ marginBottom: 24 }}
+                style={{ marginBottom: Spacing['6'] }}
               >
                 <View
                   style={{
@@ -489,7 +490,7 @@ export default function SettingsScreen() {
                     borderRadius: Radius.lg,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    padding: 20,
+                    padding: Spacing['5'],
                     flexDirection: 'row',
                     alignItems: 'center',
                   }}
@@ -506,13 +507,13 @@ export default function SettingsScreen() {
                   >
                     <CrownIcon size={22} color={colors.text} weight="light" />
                   </View>
-                  <View style={{ marginLeft: 16, flex: 1 }}>
+                  <View style={{ marginLeft: Spacing['4'], flex: 1 }}>
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
                         fontSize: FontSize.base,
                         color: colors.text,
-                        marginBottom: 2,
+                        marginBottom: Spacing['0.5'],
                       }}
                     >
                       Upgrade to Premium
@@ -534,7 +535,7 @@ export default function SettingsScreen() {
 
           {/* Profile section */}
           <Animated.View entering={FadeInDown.duration(400).delay(50)}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -590,7 +591,7 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
               {/* Name */}
@@ -598,7 +599,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                 }}
@@ -623,8 +624,8 @@ export default function SettingsScreen() {
                         fontFamily: FontFamily.uiMedium,
                         fontSize: 15,
                         color: colors.text,
-                        marginTop: 2,
-                        padding: 0,
+                        marginTop: Spacing['0.5'],
+                        padding: Spacing['0'],
                       }}
                       autoCapitalize="words"
                       placeholder="Your name"
@@ -636,7 +637,7 @@ export default function SettingsScreen() {
                         fontFamily: FontFamily.uiMedium,
                         fontSize: 15,
                         color: colors.text,
-                        marginTop: 2,
+                        marginTop: Spacing['0.5'],
                       }}
                     >
                       {user?.name || 'Not set'}
@@ -648,7 +649,7 @@ export default function SettingsScreen() {
               {/* About Me */}
               <View
                 style={{
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <Text
@@ -656,7 +657,7 @@ export default function SettingsScreen() {
                     fontFamily: FontFamily.ui,
                     fontSize: FontSize.xs,
                     color: colors.textMuted,
-                    marginBottom: 6,
+                    marginBottom: Spacing['1.5'],
                   }}
                 >
                   About you
@@ -675,7 +676,7 @@ export default function SettingsScreen() {
                       color: colors.text,
                       lineHeight: 20,
                       minHeight: 80,
-                      padding: 0,
+                      padding: Spacing['0'],
                     }}
                     placeholder="Tell us about yourself..."
                     placeholderTextColor={colors.textHint}
@@ -701,9 +702,9 @@ export default function SettingsScreen() {
                 fontFamily: FontFamily.body,
                 fontSize: FontSize.xs,
                 color: colors.textHint,
-                marginTop: -16,
-                marginBottom: 24,
-                paddingHorizontal: 4,
+                marginTop: -Spacing['4'],
+                marginBottom: Spacing['6'],
+                paddingHorizontal: Spacing['1'],
                 lineHeight: 18,
               }}
             >
@@ -719,7 +720,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Reading
@@ -731,14 +732,14 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <Text
@@ -764,7 +765,7 @@ export default function SettingsScreen() {
                       accessibilityHint={`Set reading font size to ${size.label}`}
                       accessibilityState={{ selected: user?.fontSize === size.value }}
                       style={{
-                        marginLeft: index > 0 ? 8 : 0,
+                        marginLeft: index > 0 ? Spacing['2'] : 0,
                       }}
                     >
                       <View
@@ -773,8 +774,8 @@ export default function SettingsScreen() {
                             user?.fontSize === size.value
                               ? colors.text
                               : colors.buttonBackground,
-                          paddingVertical: 8,
-                          paddingHorizontal: 14,
+                          paddingVertical: Spacing['2'],
+                          paddingHorizontal: Spacing['3.5'],
                           borderRadius: Radius.sm,
                           borderWidth: 1,
                           borderColor: user?.fontSize === size.value ? colors.text : colors.border,
@@ -805,7 +806,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Appearance
@@ -817,14 +818,14 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <Text
@@ -853,7 +854,7 @@ export default function SettingsScreen() {
                         accessibilityHint={`Switch to ${option.label.toLowerCase()} mode`}
                         accessibilityState={{ selected: isSelected }}
                         style={{
-                          marginLeft: index > 0 ? 8 : 0,
+                          marginLeft: index > 0 ? Spacing['2'] : 0,
                         }}
                       >
                         <View
@@ -861,8 +862,8 @@ export default function SettingsScreen() {
                             backgroundColor: isSelected
                               ? colors.text
                               : colors.buttonBackground,
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
+                            paddingVertical: Spacing['2'],
+                            paddingHorizontal: Spacing['3'],
                             borderRadius: Radius.sm,
                             borderWidth: 1,
                             borderColor: isSelected ? colors.text : colors.border,
@@ -880,7 +881,7 @@ export default function SettingsScreen() {
                               fontFamily: FontFamily.uiMedium,
                               fontSize: FontSize.xs,
                               color: isSelected ? colors.background : colors.text,
-                              marginLeft: 6,
+                              marginLeft: Spacing['1.5'],
                             }}
                           >
                             {option.label}
@@ -896,7 +897,7 @@ export default function SettingsScreen() {
 
           {/* Premium Customization section */}
           <Animated.View entering={FadeInDown.duration(400).delay(157)}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['3'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -912,9 +913,9 @@ export default function SettingsScreen() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    marginLeft: 8,
+                    marginLeft: Spacing['2'],
                     backgroundColor: colors.buttonBackground,
-                    paddingHorizontal: 8,
+                    paddingHorizontal: Spacing['2'],
                     paddingVertical: 3,
                     borderRadius: 6,
                   }}
@@ -925,7 +926,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: 10,
                       color: colors.textSubtle,
-                      marginLeft: 4,
+                      marginLeft: Spacing['1'],
                     }}
                   >
                     Upgrade
@@ -940,7 +941,7 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
                 opacity: user?.isPremium ? 1 : 0.7,
               }}
             >
@@ -955,10 +956,10 @@ export default function SettingsScreen() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: 16,
+                    padding: Spacing['4'],
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2.5'] }}>
                     <PaletteIcon size={18} color={colors.text} weight="light" />
                     <Text
                       style={{
@@ -981,8 +982,8 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
 
                 {expandedPremium === 'colors' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                  <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: Spacing['4'], paddingBottom: Spacing['4'] }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['3'] }}>
                       {ACCENT_THEMES.map((theme) => {
                         const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
                         const swatchColor = isDark ? theme.dark : theme.light;
@@ -1024,7 +1025,7 @@ export default function SettingsScreen() {
                                 fontFamily: FontFamily.ui,
                                 fontSize: 11,
                                 color: isSelected ? colors.text : colors.textMuted,
-                                marginTop: 6,
+                                marginTop: Spacing['1.5'],
                               }}
                             >
                               {theme.name}
@@ -1048,12 +1049,12 @@ export default function SettingsScreen() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: 16,
+                    padding: Spacing['4'],
                     borderBottomWidth: expandedPremium === 'fonts' ? 1 : 0,
                     borderBottomColor: colors.border,
                   }}
                 >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2.5'] }}>
                     <TextAaIcon size={18} color={colors.text} weight="light" />
                     <Text
                       style={{
@@ -1065,7 +1066,7 @@ export default function SettingsScreen() {
                       Reading Font
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
@@ -1106,7 +1107,7 @@ export default function SettingsScreen() {
                             flexDirection: 'row',
                             alignItems: 'center',
                             paddingVertical: 13,
-                            paddingHorizontal: 16,
+                            paddingHorizontal: Spacing['4'],
                             borderBottomWidth: index < READING_FONTS.length - 1 ? 1 : 0,
                             borderBottomColor: colors.border,
                             backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
@@ -1118,7 +1119,7 @@ export default function SettingsScreen() {
                                 fontFamily: font.regular,
                                 fontSize: 17,
                                 color: colors.text,
-                                marginBottom: 2,
+                                marginBottom: Spacing['0.5'],
                               }}
                             >
                               {font.name}
@@ -1145,7 +1146,7 @@ export default function SettingsScreen() {
 
               {/* Notifications subsection */}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
-                <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 }}>
+                <View style={{ paddingHorizontal: Spacing['4'], paddingTop: Spacing['4'], paddingBottom: Spacing['1'] }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
@@ -1167,7 +1168,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     paddingVertical: 13,
-                    paddingHorizontal: 16,
+                    paddingHorizontal: Spacing['4'],
                     borderBottomWidth: notificationsEnabled && user?.isPremium ? 1 : 0,
                     borderBottomColor: colors.border,
                   }}
@@ -1203,7 +1204,7 @@ export default function SettingsScreen() {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       paddingVertical: 13,
-                      paddingHorizontal: 16,
+                      paddingHorizontal: Spacing['4'],
                     }}
                   >
                     <Text
@@ -1239,7 +1240,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     paddingVertical: 13,
-                    paddingHorizontal: 16,
+                    paddingHorizontal: Spacing['4'],
                     borderTopWidth: 1,
                     borderTopColor: colors.border,
                   }}
@@ -1259,7 +1260,7 @@ export default function SettingsScreen() {
                         fontFamily: FontFamily.ui,
                         fontSize: FontSize.xs,
                         color: colors.textMuted,
-                        marginTop: 2,
+                        marginTop: Spacing['0.5'],
                       }}
                     >
                       12:30 PM
@@ -1288,7 +1289,7 @@ export default function SettingsScreen() {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     paddingVertical: 13,
-                    paddingHorizontal: 16,
+                    paddingHorizontal: Spacing['4'],
                     borderTopWidth: 1,
                     borderTopColor: colors.border,
                   }}
@@ -1308,7 +1309,7 @@ export default function SettingsScreen() {
                         fontFamily: FontFamily.ui,
                         fontSize: FontSize.xs,
                         color: colors.textMuted,
-                        marginTop: 2,
+                        marginTop: Spacing['0.5'],
                       }}
                     >
                       8:30 PM
@@ -1335,7 +1336,7 @@ export default function SettingsScreen() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 16,
+                    padding: Spacing['4'],
                   }}
                 >
                   <View
@@ -1350,7 +1351,7 @@ export default function SettingsScreen() {
                   >
                     <PlayIcon size={18} color={colors.text} weight="fill" />
                   </View>
-                  <View style={{ marginLeft: 14, flex: 1 }}>
+                  <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
@@ -1365,7 +1366,7 @@ export default function SettingsScreen() {
                         fontFamily: FontFamily.ui,
                         fontSize: FontSize.xs,
                         color: colors.textMuted,
-                        marginTop: 2,
+                        marginTop: Spacing['0.5'],
                       }}
                     >
                       {CARTESIA_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Katie'}
@@ -1383,7 +1384,7 @@ export default function SettingsScreen() {
 
                 {/* Voice options */}
                 {expandedPremium === 'voice' && (
-                  <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                  <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
                     {CARTESIA_VOICES.map((option) => {
                       const isSelected = (user?.preferredVoice ?? '694f9389-aac1-45b6-b726-9d9369183238') === option.id;
                       const isLocked = option.premium && !user?.isPremium;
@@ -1401,17 +1402,17 @@ export default function SettingsScreen() {
                           }}
                           style={{
                             backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                            paddingVertical: 12,
-                            paddingHorizontal: 12,
+                            paddingVertical: Spacing['3'],
+                            paddingHorizontal: Spacing['3'],
                             borderRadius: 10,
                             flexDirection: 'row',
                             alignItems: 'center',
-                            marginBottom: 4,
+                            marginBottom: Spacing['1'],
                             opacity: isLocked ? 0.6 : 1,
                           }}
                         >
                           <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
                               <Text
                                 style={{
                                   fontFamily: FontFamily.uiMedium,
@@ -1430,7 +1431,7 @@ export default function SettingsScreen() {
                                 fontFamily: FontFamily.ui,
                                 fontSize: FontSize.xs,
                                 color: colors.textMuted,
-                                marginTop: 2,
+                                marginTop: Spacing['0.5'],
                               }}
                             >
                               {option.description}
@@ -1452,7 +1453,7 @@ export default function SettingsScreen() {
                                 backgroundColor: previewingVoiceId === option.id ? colors.accent : colors.buttonBackground,
                                 justifyContent: 'center',
                                 alignItems: 'center',
-                                marginRight: 10,
+                                marginRight: Spacing['2.5'],
                               }}
                               accessibilityRole="button"
                               accessibilityLabel={`Preview ${option.name} voice`}
@@ -1498,7 +1499,7 @@ export default function SettingsScreen() {
 
             {/* Time options (outside the card for cleaner expand) */}
             {showTimeSelector && (
-              <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: -16, marginBottom: 24 }}>
+              <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
                 {REMINDER_TIMES.map((time) => (
                   <TouchableOpacity activeOpacity={0.7}
                     key={time.value}
@@ -1510,8 +1511,8 @@ export default function SettingsScreen() {
                           user?.reminderTime === time.value
                             ? colors.buttonBackgroundPressed
                             : 'transparent',
-                        paddingVertical: 14,
-                        paddingHorizontal: 16,
+                        paddingVertical: Spacing['3.5'],
+                        paddingHorizontal: Spacing['4'],
                         borderRadius: 10,
                         flexDirection: 'row',
                         justifyContent: 'space-between',
@@ -1551,7 +1552,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Bible Translation
@@ -1563,7 +1564,7 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
               <TouchableOpacity activeOpacity={0.7}
@@ -1574,7 +1575,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <View
@@ -1589,7 +1590,7 @@ export default function SettingsScreen() {
                 >
                   <BookIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -1604,7 +1605,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     {BIBLE_TRANSLATIONS.find((t) => t.value === user?.bibleTranslation)?.label ?? 'WEB'}
@@ -1622,15 +1623,15 @@ export default function SettingsScreen() {
 
               {/* Translation options */}
               {expandedPreference === 'translation' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
                   {!user?.isPremium && (
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
                         fontSize: FontSize.xs,
                         color: colors.textMuted,
-                        marginBottom: 10,
-                        paddingHorizontal: 4,
+                        marginBottom: Spacing['2.5'],
+                        paddingHorizontal: Spacing['1'],
                         lineHeight: 17,
                       }}
                     >
@@ -1654,12 +1655,12 @@ export default function SettingsScreen() {
                         }}
                         style={{
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
                           borderRadius: 10,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginBottom: 4,
+                          marginBottom: Spacing['1'],
                           opacity: isLocked ? 0.6 : 1,
                         }}
                       >
@@ -1683,7 +1684,7 @@ export default function SettingsScreen() {
                               fontFamily: FontFamily.ui,
                               fontSize: FontSize.xs,
                               color: colors.textMuted,
-                              marginTop: 2,
+                              marginTop: Spacing['0.5'],
                             }}
                           >
                             {option.description}
@@ -1728,7 +1729,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Writing Style
@@ -1740,7 +1741,7 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
           {/* Tone preference */}
@@ -1752,7 +1753,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                 }}
@@ -1769,7 +1770,7 @@ export default function SettingsScreen() {
                 >
                   <ChatDotsIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -1784,7 +1785,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     {TONE_OPTIONS.find((o) => o.value === user?.writingStyle?.tone)?.label ?? 'Like a friend'}
@@ -1802,7 +1803,7 @@ export default function SettingsScreen() {
 
               {/* Tone options */}
               {expandedPreference === 'tone' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
                   {TONE_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.tone === option.value;
                     return (
@@ -1821,12 +1822,12 @@ export default function SettingsScreen() {
                         }}
                         style={{
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
                           borderRadius: 10,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginBottom: 4,
+                          marginBottom: Spacing['1'],
                         }}
                       >
                         <View style={{ flex: 1 }}>
@@ -1844,7 +1845,7 @@ export default function SettingsScreen() {
                               fontFamily: FontFamily.ui,
                               fontSize: FontSize.xs,
                               color: colors.textMuted,
-                              marginTop: 2,
+                              marginTop: Spacing['0.5'],
                             }}
                           >
                             {option.description}
@@ -1888,7 +1889,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                 }}
@@ -1905,7 +1906,7 @@ export default function SettingsScreen() {
                 >
                   <StackIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -1920,7 +1921,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     {DEPTH_OPTIONS.find((o) => o.value === user?.writingStyle?.depth)?.label ?? 'A good balance'}
@@ -1938,7 +1939,7 @@ export default function SettingsScreen() {
 
               {/* Depth options */}
               {expandedPreference === 'depth' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
                   {DEPTH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.depth === option.value;
                     return (
@@ -1957,12 +1958,12 @@ export default function SettingsScreen() {
                         }}
                         style={{
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
                           borderRadius: 10,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginBottom: 4,
+                          marginBottom: Spacing['1'],
                         }}
                       >
                         <View style={{ flex: 1 }}>
@@ -1980,7 +1981,7 @@ export default function SettingsScreen() {
                               fontFamily: FontFamily.ui,
                               fontSize: FontSize.xs,
                               color: colors.textMuted,
-                              marginTop: 2,
+                              marginTop: Spacing['0.5'],
                             }}
                           >
                             {option.description}
@@ -2024,7 +2025,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <View
@@ -2039,7 +2040,7 @@ export default function SettingsScreen() {
                 >
                   <CompassIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -2054,7 +2055,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     {FAITH_OPTIONS.find((o) => o.value === user?.writingStyle?.faithBackground)?.label ?? "I'm growing"}
@@ -2072,7 +2073,7 @@ export default function SettingsScreen() {
 
               {/* Faith options */}
               {expandedPreference === 'faith' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
                   {FAITH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.faithBackground === option.value;
                     return (
@@ -2091,12 +2092,12 @@ export default function SettingsScreen() {
                         }}
                         style={{
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
                           borderRadius: 10,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginBottom: 4,
+                          marginBottom: Spacing['1'],
                         }}
                       >
                         <View style={{ flex: 1 }}>
@@ -2114,7 +2115,7 @@ export default function SettingsScreen() {
                               fontFamily: FontFamily.ui,
                               fontSize: FontSize.xs,
                               color: colors.textMuted,
-                              marginTop: 2,
+                              marginTop: Spacing['0.5'],
                             }}
                           >
                             {option.description}
@@ -2158,7 +2159,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <View
@@ -2173,7 +2174,7 @@ export default function SettingsScreen() {
                 >
                   <HourglassIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -2188,7 +2189,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     {LIFE_STAGE_OPTIONS.find((o) => o.value === user?.writingStyle?.lifeStage)?.label ?? "I'm building my life"}
@@ -2206,7 +2207,7 @@ export default function SettingsScreen() {
 
               {/* Life stage options */}
               {expandedPreference === 'lifeStage' && (
-                <Animated.View entering={FadeIn.duration(200)} style={{ padding: 8 }}>
+                <Animated.View entering={FadeIn.duration(200)} style={{ padding: Spacing['2'] }}>
                   {LIFE_STAGE_OPTIONS.map((option) => {
                     const isSelected = (user?.writingStyle?.lifeStage ?? 'building') === option.value;
                     return (
@@ -2226,12 +2227,12 @@ export default function SettingsScreen() {
                         }}
                         style={{
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                          paddingVertical: 12,
-                          paddingHorizontal: 12,
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
                           borderRadius: 10,
                           flexDirection: 'row',
                           alignItems: 'center',
-                          marginBottom: 4,
+                          marginBottom: Spacing['1'],
                         }}
                       >
                         <View style={{ flex: 1 }}>
@@ -2249,7 +2250,7 @@ export default function SettingsScreen() {
                               fontFamily: FontFamily.ui,
                               fontSize: FontSize.xs,
                               color: colors.textMuted,
-                              marginTop: 2,
+                              marginTop: Spacing['0.5'],
                             }}
                           >
                             {option.description}
@@ -2293,7 +2294,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Your Privacy
@@ -2305,8 +2306,8 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                padding: 20,
-                marginBottom: 24,
+                padding: Spacing['5'],
+                marginBottom: Spacing['6'],
               }}
             >
               <Text
@@ -2314,7 +2315,7 @@ export default function SettingsScreen() {
                   fontFamily: FontFamily.uiMedium,
                   fontSize: 15,
                   color: colors.text,
-                  marginBottom: 12,
+                  marginBottom: Spacing['3'],
                 }}
               >
                 Your data stays yours
@@ -2325,7 +2326,7 @@ export default function SettingsScreen() {
                   fontSize: FontSize.sm,
                   color: colors.textMuted,
                   lineHeight: 22,
-                  marginBottom: 8,
+                  marginBottom: Spacing['2'],
                 }}
               >
                 Your journal entries, reflections, and personal story stay on your device.
@@ -2336,7 +2337,7 @@ export default function SettingsScreen() {
                   fontSize: FontSize.sm,
                   color: colors.textMuted,
                   lineHeight: 22,
-                  marginBottom: 8,
+                  marginBottom: Spacing['2'],
                 }}
               >
                 We never train AI models on your private writing.
@@ -2361,7 +2362,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Support
@@ -2373,7 +2374,7 @@ export default function SettingsScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
               {user?.isPremium && (
@@ -2385,7 +2386,7 @@ export default function SettingsScreen() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    padding: 16,
+                    padding: Spacing['4'],
                     borderBottomWidth: 1,
                     borderBottomColor: colors.border,
                   }}
@@ -2402,7 +2403,7 @@ export default function SettingsScreen() {
                   >
                     <CreditCardIcon size={18} color={colors.text} weight="light" />
                   </View>
-                  <View style={{ marginLeft: 14, flex: 1 }}>
+                  <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
@@ -2424,7 +2425,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                   opacity: isExportingData ? 0.6 : 1,
@@ -2446,7 +2447,7 @@ export default function SettingsScreen() {
                     <ChatDotsIcon size={18} color={colors.text} weight="light" />
                   )}
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -2461,7 +2462,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     {isExportingData ? 'Please wait...' : 'Send diagnostics report'}
@@ -2474,7 +2475,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                 }}
@@ -2491,7 +2492,7 @@ export default function SettingsScreen() {
                 >
                   <StarIcon size={18} color={colors.text} weight="fill" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -2506,7 +2507,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: FontSize.xs,
                       color: colors.textMuted,
-                      marginTop: 2,
+                      marginTop: Spacing['0.5'],
                     }}
                   >
                     Leave a review
@@ -2521,7 +2522,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                   borderBottomWidth: 1,
                   borderBottomColor: colors.border,
                 }}
@@ -2538,7 +2539,7 @@ export default function SettingsScreen() {
                 >
                   <LockIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -2558,7 +2559,7 @@ export default function SettingsScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  padding: 16,
+                  padding: Spacing['4'],
                 }}
               >
                 <View
@@ -2573,7 +2574,7 @@ export default function SettingsScreen() {
                 >
                   <BookIcon size={18} color={colors.text} weight="light" />
                 </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -2594,8 +2595,8 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textSubtle,
                 textAlign: 'center',
-                marginTop: 12,
-                paddingHorizontal: 16,
+                marginTop: Spacing['3'],
+                paddingHorizontal: Spacing['4'],
                 lineHeight: 17,
               }}
             >
@@ -2611,7 +2612,7 @@ export default function SettingsScreen() {
                 fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Data
@@ -2621,8 +2622,8 @@ export default function SettingsScreen() {
               <View
                 style={{
                   borderRadius: Radius.md,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
+                  paddingVertical: Spacing['3.5'],
+                  paddingHorizontal: Spacing['4'],
                   flexDirection: 'row',
                   alignItems: 'center',
                   opacity: isDeletingAccount ? 0.6 : 1,
@@ -2638,7 +2639,7 @@ export default function SettingsScreen() {
                     fontFamily: FontFamily.ui,
                     fontSize: 15,
                     color: colors.error,
-                    marginLeft: 12,
+                    marginLeft: Spacing['3'],
                   }}
                 >
                   {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
@@ -2659,8 +2660,8 @@ export default function SettingsScreen() {
                 <View
                   style={{
                     borderRadius: Radius.md,
-                    paddingVertical: 14,
-                    paddingHorizontal: 16,
+                    paddingVertical: Spacing['3.5'],
+                    paddingHorizontal: Spacing['4'],
                     flexDirection: 'row',
                     alignItems: 'center',
                   }}
@@ -2671,7 +2672,7 @@ export default function SettingsScreen() {
                       fontFamily: FontFamily.ui,
                       fontSize: 15,
                       color: colors.error,
-                      marginLeft: 12,
+                      marginLeft: Spacing['3'],
                     }}
                   >
                     Delete account
@@ -2684,7 +2685,7 @@ export default function SettingsScreen() {
           {/* App info */}
           <Animated.View
             entering={FadeIn.duration(400).delay(300)}
-            style={{ marginTop: 48, alignItems: 'center' }}
+            style={{ marginTop: Spacing['12'], alignItems: 'center' }}
           >
             <Text
               style={{
@@ -2700,7 +2701,7 @@ export default function SettingsScreen() {
                 fontFamily: FontFamily.ui,
                 fontSize: FontSize.xs,
                 color: colors.textHint,
-                marginTop: 4,
+                marginTop: Spacing['1'],
               }}
             >
               Version 1.0.0
@@ -2709,7 +2710,7 @@ export default function SettingsScreen() {
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => router.push('/(tabs)/(you)/component-catalog')}
-                style={{ marginTop: 12 }}
+                style={{ marginTop: Spacing['3'] }}
               >
                 <Text
                   style={{

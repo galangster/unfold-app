@@ -14,6 +14,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, SoapResponses } from '@/lib/store';
 import { format } from 'date-fns';
@@ -61,8 +62,8 @@ function SoapSectionDisplay({
 }) {
   if (!value.trim()) return null;
   return (
-    <View style={{ marginBottom: 24 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+    <View style={{ marginBottom: Spacing['6'] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: 10 }}>
         {icon}
         <Text
           style={{
@@ -82,7 +83,7 @@ function SoapSectionDisplay({
           fontSize: FontSize.base,
           color: colors.text,
           lineHeight: 26,
-          paddingLeft: 4,
+          paddingLeft: Spacing['1'],
         }}
       >
         {value}
@@ -126,7 +127,7 @@ export default function JournalDetailScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -134,7 +135,7 @@ export default function JournalDetailScreen() {
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.6}
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -144,7 +145,7 @@ export default function JournalDetailScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
-              marginLeft: 8,
+              marginLeft: Spacing['2'],
             }}
           >
             Journal Entry
@@ -153,8 +154,8 @@ export default function JournalDetailScreen() {
           {isSoap && (
             <View
               style={{
-                marginLeft: 8,
-                paddingHorizontal: 8,
+                marginLeft: Spacing['2'],
+                paddingHorizontal: Spacing['2'],
                 paddingVertical: 2,
                 borderRadius: 4,
                 backgroundColor: alpha(colors.accent, 0.08),
@@ -175,12 +176,12 @@ export default function JournalDetailScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['6'], paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeIn.duration(400)}>
             {/* Meta info */}
-            <View style={{ marginBottom: 24 }}>
+            <View style={{ marginBottom: Spacing['6'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.mono,
@@ -188,7 +189,7 @@ export default function JournalDetailScreen() {
                   color: colors.textHint,
                   letterSpacing: 1,
                   textTransform: 'uppercase',
-                  marginBottom: 8,
+                  marginBottom: Spacing['2'],
                 }}
               >
                 Day {entry.dayNumber} · {entryDate}
@@ -199,7 +200,7 @@ export default function JournalDetailScreen() {
                   fontFamily: FontFamily.display,
                   fontSize: FontSize['2xl'],
                   color: colors.text,
-                  marginBottom: 4,
+                  marginBottom: Spacing['1'],
                 }}
               >
                 {devotional?.title ?? 'Journal Entry'}
@@ -224,7 +225,7 @@ export default function JournalDetailScreen() {
                 width: 40,
                 height: 1,
                 backgroundColor: colors.border,
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             />
 
@@ -244,7 +245,7 @@ export default function JournalDetailScreen() {
 
             {/* SOAP Responses */}
             {hasSoapContent && entry.soapResponses && (
-              <View style={{ marginTop: entry.content.trim().length > 0 ? 32 : 0 }}>
+              <View style={{ marginTop: entry.content.trim().length > 0 ? Spacing['8'] : 0 }}>
                 <SoapSectionDisplay
                   soapKey="scripture"
                   label="Scripture"
@@ -278,9 +279,9 @@ export default function JournalDetailScreen() {
 
             {/* Question Responses */}
             {entry.questionResponses && entry.questionResponses.length > 0 && (
-              <View style={{ marginTop: entry.content.trim().length > 0 || hasSoapContent ? 32 : 0 }}>
+              <View style={{ marginTop: entry.content.trim().length > 0 || hasSoapContent ? Spacing['8'] : 0 }}>
                 {(entry.content.trim().length > 0 || hasSoapContent) && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['5'] }}>
                     <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
                     <Text
                       style={{
@@ -303,8 +304,8 @@ export default function JournalDetailScreen() {
                     <View
                       key={qr.question}
                       style={{
-                        marginBottom: 24,
-                        paddingLeft: 16,
+                        marginBottom: Spacing['6'],
+                        paddingLeft: Spacing['4'],
                         borderLeftWidth: 2,
                         borderLeftColor: alpha(colors.accent, 0.31),
                       }}
@@ -315,7 +316,7 @@ export default function JournalDetailScreen() {
                           fontSize: FontSize.sm,
                           color: colors.textMuted,
                           lineHeight: 22,
-                          marginBottom: 8,
+                          marginBottom: Spacing['2'],
                         }}
                       >
                         {qr.question}
@@ -337,8 +338,8 @@ export default function JournalDetailScreen() {
 
             {/* Prayer Requests */}
             {entry.prayerRequests && entry.prayerRequests.length > 0 && (
-              <View style={{ marginTop: 32 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+              <View style={{ marginTop: Spacing['8'] }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['5'] }}>
                   <HandsPrayingIcon size={14} color={colors.accent} weight="light" />
                   <Text
                     style={{
@@ -362,7 +363,7 @@ export default function JournalDetailScreen() {
                       alignItems: 'flex-start',
                       gap: 10,
                       marginBottom: 14,
-                      paddingLeft: 4,
+                      paddingLeft: Spacing['1'],
                     }}
                   >
                     {prayer.isAnswered ? (
@@ -397,7 +398,7 @@ export default function JournalDetailScreen() {
                             fontFamily: FontFamily.ui,
                             fontSize: 11,
                             color: colors.accent,
-                            marginTop: 4,
+                            marginTop: Spacing['1'],
                           }}
                         >
                           Answered {format(new Date(prayer.answeredAt), 'MMM d, yyyy')}

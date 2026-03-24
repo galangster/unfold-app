@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Duration, Spring } from '@/constants/animations';
+import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
@@ -74,7 +75,7 @@ function AnimatedTabIcon({
             height: 4,
             borderRadius: 2,
             backgroundColor: accentColor,
-            marginTop: 4,
+            marginTop: Spacing['1'],
           },
           dotAnimStyle,
         ]}
@@ -163,9 +164,9 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
       <View
         style={{
           flexDirection: 'row',
-          paddingTop: 8,
+          paddingTop: Spacing['2'],
           paddingBottom: Math.max(insets.bottom, 8),
-          paddingHorizontal: 24,
+          paddingHorizontal: Spacing['6'],
           backgroundColor: Platform.OS === 'ios'
             ? 'transparent'
             : isDark

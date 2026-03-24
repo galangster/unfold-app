@@ -10,6 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -730,7 +731,7 @@ export default function BibleReaderScreen() {
         showsVerticalScrollIndicator={false}
       >
         {!isDbReady ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
             <DownloadBibleSheet
               visible
               onComplete={() => {}}
@@ -967,7 +968,7 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 8,
+    paddingHorizontal: Spacing['4'], paddingVertical: Spacing['2'],
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
@@ -977,30 +978,30 @@ const styles = StyleSheet.create({
   translationBadge: { height: 44, justifyContent: 'center', alignItems: 'center' },
   translationText: {
     fontFamily: FontFamily.uiMedium, fontSize: 11, letterSpacing: 0.5,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, overflow: 'hidden',
+    paddingHorizontal: Spacing['2'], paddingVertical: Spacing['1'], borderRadius: 4, overflow: 'hidden',
   },
 
   // Verses
-  versesContent: { paddingHorizontal: 32 },
+  versesContent: { paddingHorizontal: Spacing['8'] },
   loadingContainer: { paddingTop: 60, alignItems: 'center' },
-  verseRow: { paddingVertical: 8 },
+  verseRow: { paddingVertical: Spacing['2'] },
 
   // Section headings
   sectionHeading: {
     fontStyle: 'italic',
     marginTop: 28,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
     opacity: 0.85,
   },
 
   // End of chapter
   endMarker: { alignItems: 'center', marginTop: 40, marginBottom: 20 },
   endOrnament: { fontFamily: FontFamily.ui, fontSize: FontSize.xl, letterSpacing: 6 },
-  nextChapterPrompt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 16 },
+  nextChapterPrompt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing['1'], paddingVertical: Spacing['4'] },
   nextChapterText: { fontFamily: FontFamily.ui, fontSize: 14 },
   crossBookPrompt: { alignItems: 'center' },
   crossBookSubtitle: { fontFamily: FontFamily.ui, fontSize: FontSize.xs, marginTop: 2 },
-  endOfBibleContainer: { alignItems: 'center', paddingVertical: 16 },
+  endOfBibleContainer: { alignItems: 'center', paddingVertical: Spacing['4'] },
   endOfBibleText: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, fontStyle: 'italic' },
 
   // Context bar — full-width bottom bar that replaces tab bar
@@ -1018,21 +1019,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: Spacing['1'],
   },
   contextIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingTop: 8,
-    paddingHorizontal: 24,
+    paddingTop: Spacing['2'],
+    paddingHorizontal: Spacing['6'],
   },
   contextIconButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
-    gap: 4,
+    gap: Spacing['1'],
   },
   contextIconLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -1042,8 +1043,8 @@ const styles = StyleSheet.create({
   },
   // Note input mode
   noteInputRow: {
-    padding: 12,
-    paddingHorizontal: 16,
+    padding: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
   },
   noteInput: {
     fontFamily: FontFamily.ui,
@@ -1062,12 +1063,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   noteCancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['2'],
   },
   noteSaveButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing['5'],
+    paddingVertical: Spacing['2'],
     borderRadius: Radius.sm,
   },
   noteButtonText: {
@@ -1098,7 +1099,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', zIndex: 200,
   },
   toastPill: {
-    paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.xl,
+    paddingHorizontal: Spacing['5'], paddingVertical: 10, borderRadius: Radius.xl,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
   },

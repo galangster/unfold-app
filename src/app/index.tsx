@@ -12,6 +12,7 @@ import Animated, {
 import React, { useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 
@@ -172,9 +173,9 @@ export default function WelcomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
         {/* Icon — fades in before title */}
-        <Animated.View style={[{ marginBottom: 28 }, iconStyle]}>
+        <Animated.View style={[{ marginBottom: Spacing['7'] }, iconStyle]}>
           <Image
             source={require('../../assets/icon-paywall.png')}
             style={{ width: 56, height: 56 }}
@@ -183,7 +184,7 @@ export default function WelcomeScreen() {
         </Animated.View>
 
         {/* Title — each character pre-rendered, fades in shuffled order */}
-        <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', marginBottom: Spacing['5'] }}>
           {titleChars.map((char, i) => (
             <RevealChar
               key={`c-${i}`}
@@ -212,7 +213,7 @@ export default function WelcomeScreen() {
       {/* Continue button — fades in after the text */}
       <Animated.View
         style={[
-          { paddingHorizontal: 24, paddingBottom: 64 },
+          { paddingHorizontal: Spacing['6'], paddingBottom: 64 },
           buttonStyle,
         ]}
       >

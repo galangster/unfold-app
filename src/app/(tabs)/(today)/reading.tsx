@@ -28,6 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -1059,7 +1060,7 @@ export default function ReadingScreen() {
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
           {/* Back header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1069,7 +1070,7 @@ export default function ReadingScreen() {
               accessibilityRole="button"
               accessibilityLabel="Go back"
               accessibilityHint="Return to home screen"
-              style={{ padding: 8 }}
+              style={{ padding: Spacing['2'] }}
             >
               <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
             </TouchableOpacity>
@@ -1135,7 +1136,7 @@ export default function ReadingScreen() {
               <ActivityIndicator
                 color={colors.accent}
                 size="large"
-                style={{ marginTop: 24 }}
+                style={{ marginTop: Spacing['6'] }}
               />
             )}
 
@@ -1146,7 +1147,7 @@ export default function ReadingScreen() {
                   fontSize: 13,
                   color: colors.error,
                   textAlign: 'center',
-                  marginTop: 12,
+                  marginTop: Spacing['3'],
                 }}
               >
                 {retryError}
@@ -1156,7 +1157,7 @@ export default function ReadingScreen() {
 
           {/* Bottom buttons - always visible, fixed at bottom */}
           {!isRetrying && (
-            <View style={{ paddingHorizontal: 28, paddingBottom: 20, gap: 12 }}>
+            <View style={{ paddingHorizontal: Spacing['7'], paddingBottom: Spacing['5'], gap: Spacing['3'] }}>
               {/* Generate button - primary CTA, hardcoded colors */}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleRetryGeneration}
@@ -1201,7 +1202,7 @@ export default function ReadingScreen() {
                   accessibilityHint="Return to the last available day"
                   style={{
                     backgroundColor: retryCtaButtonBg,
-                    paddingVertical: 16,
+                    paddingVertical: Spacing['4'],
                     borderRadius: Radius.card,
                     borderWidth: 1,
                     borderColor: retryCtaButtonBorder,
@@ -1239,7 +1240,7 @@ export default function ReadingScreen() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  paddingHorizontal: 16,
+                  paddingHorizontal: Spacing['4'],
                   paddingVertical: 10,
                 }}
               >
@@ -1343,7 +1344,7 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Open journal"
                   accessibilityHint="Write a reflection about today's reading"
-                  style={{ padding: 8 }}
+                  style={{ padding: Spacing['2'] }}
                 >
                   <BookOpenIcon
                     size={22}
@@ -1362,7 +1363,7 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Reading settings"
                   accessibilityHint="Adjust font size and reading font"
-                  style={{ padding: 8 }}
+                  style={{ padding: Spacing['2'] }}
                 >
                   <TextAaIcon size={22} color={colors.text} weight="light" />
                 </TouchableOpacity>
@@ -1400,7 +1401,7 @@ export default function ReadingScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Listen to devotional"
                   accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
-                  style={{ padding: 8 }}
+                  style={{ padding: Spacing['2'] }}
                 >
                   <PlayIcon
                     size={22}
@@ -1434,8 +1435,8 @@ export default function ReadingScreen() {
             <KeyboardAwareScrollView
               style={{ flex: 1 }}
               contentContainerStyle={{
-                paddingHorizontal: 24,
-                paddingTop: 40,
+                paddingHorizontal: Spacing['6'],
+                paddingTop: Spacing['10'],
                 paddingBottom: 300,
               }}
               showsVerticalScrollIndicator={false}
@@ -1450,8 +1451,8 @@ export default function ReadingScreen() {
                 <Animated.View
                   entering={FadeIn.duration(200)}
                   style={{
-                    marginBottom: 24,
-                    padding: 16,
+                    marginBottom: Spacing['6'],
+                    padding: Spacing['4'],
                     borderRadius: Radius.md,
                     backgroundColor: colors.inputBackground,
                     borderWidth: 1,
@@ -1459,7 +1460,7 @@ export default function ReadingScreen() {
                   }}
                 >
                   {/* Shimmer skeleton lines */}
-                  <View style={{ gap: 8 }}>
+                  <View style={{ gap: Spacing['2'] }}>
                     <ShimmerBar bg={colors.buttonBackground} width="90%" delay={0} />
                     <ShimmerBar bg={colors.buttonBackground} width="75%" delay={120} />
                     <ShimmerBar bg={colors.buttonBackground} width="60%" delay={240} />
@@ -1470,7 +1471,7 @@ export default function ReadingScreen() {
                 <Animated.View
                   style={[
                     {
-                      marginBottom: 24,
+                      marginBottom: Spacing['6'],
                       flexDirection: 'row',
                       alignItems: 'flex-start',
                       gap: 10,
@@ -1484,7 +1485,7 @@ export default function ReadingScreen() {
                   <View
                     style={{
                       flex: 1,
-                      paddingVertical: 12,
+                      paddingVertical: Spacing['3'],
                       paddingHorizontal: 14,
                       borderRadius: Radius.lg,
                       backgroundColor: alpha(colors.accent, 0.06),
@@ -1585,7 +1586,7 @@ export default function ReadingScreen() {
                 }}
               >
                 <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
-                <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: 16 }}>
+                <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: Spacing['4'] }}>
                   {'···'}
                 </Text>
                 <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
@@ -1594,12 +1595,12 @@ export default function ReadingScreen() {
               {/* Complete button + Share button row */}
               <Animated.View
                 entering={FadeIn.delay(200).duration(400)}
-                style={[{ marginTop: 32, paddingHorizontal: 24 }, completeButtonAnimStyle]}
+                style={[{ marginTop: Spacing['8'], paddingHorizontal: Spacing['6'] }, completeButtonAnimStyle]}
               >
                 <View
                   style={{
                     flexDirection: 'row',
-                    gap: 12,
+                    gap: Spacing['3'],
                     alignItems: 'center',
                   }}
                 >
@@ -1628,11 +1629,11 @@ export default function ReadingScreen() {
                       accessibilityLabel={isCompleted ? 'Day completed' : (isLastDay ? 'Complete Series' : 'Complete Day')}
                       style={{
                         paddingVertical: 18,
-                        paddingHorizontal: 32,
+                        paddingHorizontal: Spacing['8'],
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexDirection: 'row',
-                        gap: 8,
+                        gap: Spacing['2'],
                       }}
                     >
                       {isCompleted && (
@@ -1679,7 +1680,7 @@ export default function ReadingScreen() {
 
                   {/* Show retry banner if devotional is incomplete - more days expected than available */}
                   {showIncompleteJourneyRetry && (
-                    <View style={{ marginTop: 28, alignItems: 'center', paddingHorizontal: 20 }}>
+                    <View style={{ marginTop: 28, alignItems: 'center', paddingHorizontal: Spacing['5'] }}>
                       <Text
                         style={{
                           fontFamily: FontFamily.body,
@@ -1687,7 +1688,7 @@ export default function ReadingScreen() {
                           color: colors.textMuted,
                           textAlign: 'center',
                           lineHeight: 22,
-                          marginBottom: (isWaitingForConnection || autoRetrySecondsLeft !== null) ? 8 : 20,
+                          marginBottom: (isWaitingForConnection || autoRetrySecondsLeft !== null) ? Spacing['2'] : Spacing['5'],
                         }}
                       >
                         More days are on the way for this series.
@@ -1699,7 +1700,7 @@ export default function ReadingScreen() {
                             fontSize: FontSize.xs,
                             color: colors.textSubtle,
                             textAlign: 'center',
-                            marginBottom: 16,
+                            marginBottom: Spacing['4'],
                           }}
                         >
                           Waiting for connection… we'll retry automatically when you're back online.
@@ -1712,14 +1713,14 @@ export default function ReadingScreen() {
                             fontSize: FontSize.xs,
                             color: colors.textSubtle,
                             textAlign: 'center',
-                            marginBottom: 16,
+                            marginBottom: Spacing['4'],
                           }}
                         >
                           Retrying in {autoRetrySecondsLeft}s{autoRetryAttempt > 0 ? ` · attempt ${autoRetryAttempt}/${AUTO_RETRY_MAX_ATTEMPTS}` : ''}
                         </Text>
                       )}
                       {isGeneratingMore ? (
-                          <View style={{ alignItems: 'center', gap: 12 }}>
+                          <View style={{ alignItems: 'center', gap: Spacing['3'] }}>
                             <ActivityIndicator color={colors.accent} size="large" />
                             <Text
                               style={{
@@ -1736,8 +1737,8 @@ export default function ReadingScreen() {
                             onPress={handleGenerateMore}
                             style={{
                               backgroundColor: retryCtaButtonBg,
-                              paddingVertical: 16,
-                              paddingHorizontal: 32,
+                              paddingVertical: Spacing['4'],
+                              paddingHorizontal: Spacing['8'],
                               borderRadius: Radius.card,
                               borderWidth: 1,
                               borderColor: retryCtaButtonBorder,
@@ -1769,8 +1770,8 @@ export default function ReadingScreen() {
                             }}
                             style={{
                               backgroundColor: retryCtaButtonBg,
-                              paddingVertical: 16,
-                              paddingHorizontal: 32,
+                              paddingVertical: Spacing['4'],
+                              paddingHorizontal: Spacing['8'],
                               borderRadius: Radius.card,
                               borderWidth: 1,
                               borderColor: retryCtaButtonBorder,
@@ -1801,16 +1802,16 @@ export default function ReadingScreen() {
                     <Animated.View
                       entering={FadeIn.delay(300).duration(400)}
                       style={{
-                        marginTop: 32,
+                        marginTop: Spacing['8'],
                         paddingVertical: 18,
-                        paddingHorizontal: 20,
+                        paddingHorizontal: Spacing['5'],
                         borderRadius: Radius.card,
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
                         borderColor: alpha(colors.accent, 0.33),
                       }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: 10 }}>
                         <SunHorizonIcon size={18} color={colors.accent} weight="light" />
                         <Text
                           style={{
@@ -1830,7 +1831,7 @@ export default function ReadingScreen() {
                           fontSize: FontSize.xl,
                           color: colors.text,
                           lineHeight: 26,
-                          marginBottom: 8,
+                          marginBottom: Spacing['2'],
                         }}
                         numberOfLines={2}
                       >
@@ -1855,9 +1856,9 @@ export default function ReadingScreen() {
                     <Animated.View
                       entering={FadeIn.delay(300).duration(400)}
                       style={{
-                        marginTop: 32,
+                        marginTop: Spacing['8'],
                         paddingVertical: 18,
-                        paddingHorizontal: 20,
+                        paddingHorizontal: Spacing['5'],
                         borderRadius: Radius.card,
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
@@ -1865,7 +1866,7 @@ export default function ReadingScreen() {
                         alignItems: 'center',
                       }}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'], marginBottom: Spacing['3'] }}>
                         <SunHorizonIcon size={18} color={colors.accent} weight="light" />
                         <Text
                           style={{
@@ -1917,24 +1918,24 @@ export default function ReadingScreen() {
 
       {/* Phase 5: Continuation Prompt */}
       <Modal visible={showContinuationPrompt} transparent animationType="fade" statusBarTranslucent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-          <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: Radius.xl, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
-            <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: 12, letterSpacing: -0.5 }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+          <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: Radius.xl, padding: Spacing['7'], width: '100%', maxWidth: 340, alignItems: 'center' }}>
+            <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'], letterSpacing: -0.5 }}>
               Your series{'\n'}could continue
             </Text>
-            <View style={{ width: 32, height: 1.5, backgroundColor: colors.accent, marginBottom: 16, borderRadius: 1 }} />
-            <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 }}>
+            <View style={{ width: 32, height: 1.5, backgroundColor: colors.accent, marginBottom: Spacing['4'], borderRadius: 1 }} />
+            <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>
               {continuationReason}
             </Text>
             {extensionError && (
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E55', textAlign: 'center', marginBottom: 12 }}>
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E55', textAlign: 'center', marginBottom: Spacing['3'] }}>
                 Something went wrong. Try again?
               </Text>
             )}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleContinueJourney}
-              style={{ backgroundColor: colors.accent, borderRadius: Radius.card, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12, opacity: isExtendingArc ? 0.7 : 1 }}
+              style={{ backgroundColor: colors.accent, borderRadius: Radius.card, paddingVertical: 14, paddingHorizontal: Spacing['8'], width: '100%', alignItems: 'center', marginBottom: Spacing['3'], opacity: isExtendingArc ? 0.7 : 1 }}
               disabled={isExtendingArc}
               accessibilityRole="button"
               accessibilityLabel="Continue your series"
@@ -2123,20 +2124,20 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
           shadowOpacity: isDark ? 0.4 : 0.12,
           shadowRadius: 20,
           elevation: 12,
-          paddingBottom: 20,
+          paddingBottom: Spacing['5'],
         }}
       >
         {/* Handle */}
-        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 8 }}>
+        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: Spacing['2'] }}>
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }} />
         </View>
 
         {/* Font Size */}
-        <View style={{ paddingHorizontal: 20, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
+        <View style={{ paddingHorizontal: Spacing['5'], paddingVertical: Spacing['3'], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
             Font Size
           </Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: Spacing['2'] }}>
             {FONT_SIZE_OPTIONS.map((opt) => {
               const isActive = currentFontSize === opt.value;
               return (
@@ -2171,11 +2172,11 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
         </View>
 
         {/* Reading Font */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
+        <View style={{ paddingHorizontal: Spacing['5'], paddingTop: Spacing['3'] }}>
           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
             Reading Font
           </Text>
-          <View style={{ gap: 6 }}>
+          <View style={{ gap: Spacing['1.5'] }}>
             {READING_FONTS.map((font) => {
               const isActive = currentReadingFont === font.id;
               const isLocked = font.id !== 'source-serif' && !isPremium;
@@ -2230,7 +2231,7 @@ const styles = StyleSheet.create({
     left: '10%',
     right: '10%',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2253,7 +2254,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing['2.5'],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,

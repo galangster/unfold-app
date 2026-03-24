@@ -44,6 +44,7 @@ import {
 } from '@10play/tentap-editor';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
@@ -1340,7 +1341,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
   },
   headerButton: {
     width: 40,
@@ -1351,11 +1352,11 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing['1'],
   },
   actionButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: Spacing['2'],
+    paddingVertical: Spacing['2'],
   },
   actionText: {
     fontFamily: FontFamily.uiMedium,
@@ -1368,7 +1369,7 @@ const styles = StyleSheet.create({
     width: 240,
     borderRadius: Radius.md,
     borderWidth: 1,
-    paddingVertical: 6,
+    paddingVertical: Spacing['1.5'],
     zIndex: 200,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -1378,9 +1379,9 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    gap: Spacing['2.5'],
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
   },
   menuItemText: {
     fontFamily: FontFamily.ui,
@@ -1388,8 +1389,8 @@ const styles = StyleSheet.create({
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
-    marginVertical: 4,
+    marginHorizontal: Spacing['4'],
+    marginVertical: Spacing['1'],
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -1407,10 +1408,10 @@ const styles = StyleSheet.create({
   metadataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 24,
-    marginTop: 8,
-    marginBottom: 4,
+    gap: Spacing['1.5'],
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['2'],
+    marginBottom: Spacing['1'],
   },
   metadataDot: {
     fontFamily: FontFamily.mono,
@@ -1428,21 +1429,21 @@ const styles = StyleSheet.create({
   saveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: Spacing['1'],
   },
   saveText: {
     fontFamily: FontFamily.ui,
     fontSize: 11,
   },
   scriptureSection: {
-    paddingHorizontal: 24,
-    marginTop: 8,
-    marginBottom: 4,
-    gap: 8,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['2'],
+    marginBottom: Spacing['1'],
+    gap: Spacing['2'],
   },
   scriptureCard: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: Spacing['3.5'],
+    paddingVertical: Spacing['2.5'],
     borderRadius: 10,
     borderLeftWidth: 2.5,
   },
@@ -1450,9 +1451,9 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
     letterSpacing: -0.3,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['4'],
+    paddingBottom: Spacing['3'],
   },
   titleInputReadOnly: {
     // Make the disabled TextInput look like a regular Text
@@ -1462,36 +1463,36 @@ const styles = StyleSheet.create({
     width: 40,
     height: 1.5,
     borderRadius: 1,
-    marginHorizontal: 24,
-    marginBottom: 4,
+    marginHorizontal: Spacing['6'],
+    marginBottom: Spacing['1'],
   },
   editorContainer: {
     flex: 1,
     position: 'relative',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing['5'],
   },
   richText: {
     flex: 1,
   },
   tagsSection: {
-    paddingHorizontal: 24,
-    marginTop: 8,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['2'],
+    paddingBottom: Spacing['6'],
   },
   tagsSectionLabel: {
     fontFamily: FontFamily.mono,
     fontSize: 10,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   tagsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: Spacing['2'],
   },
   tagPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 5,
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -1502,12 +1503,12 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingBottom: Platform.OS === 'ios' ? 4 : 0,
+    paddingBottom: Platform.OS === 'ios' ? Spacing['1'] : Spacing['0'],
   },
   toolbarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: Spacing['1.5'],
     height: 44,
   },
   toolbarButton: {

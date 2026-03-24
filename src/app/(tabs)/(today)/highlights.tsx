@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, HighlighterIcon, BookOpenIcon, QuotesIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
 
@@ -72,11 +73,11 @@ export default function HighlightsScreen() {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
+          paddingHorizontal: Spacing['4'],
+          paddingVertical: Spacing['3'],
         }}
       >
-        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }} accessibilityLabel="Go back" accessibilityRole="button">
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: Spacing['2'] }} accessibilityLabel="Go back" accessibilityRole="button">
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </TouchableOpacity>
         <Text
@@ -84,7 +85,7 @@ export default function HighlightsScreen() {
             fontFamily: FontFamily.uiSemiBold,
             fontSize: 17,
             color: colors.text,
-            marginLeft: 12,
+            marginLeft: Spacing['3'],
           }}
         >
           My Highlights
@@ -95,9 +96,9 @@ export default function HighlightsScreen() {
         // Empty state with breathing icon
         <HighlightsEmptyState colors={colors} />
       ) : (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['6'] }}>
           {/* Stats */}
-          <Animated.View entering={FadeIn} style={{ marginBottom: 24 }}>
+          <Animated.View entering={FadeIn} style={{ marginBottom: Spacing['6'] }}>
             <Text
               style={{
                 fontFamily: FontFamily.ui,
@@ -105,7 +106,7 @@ export default function HighlightsScreen() {
                 color: colors.textMuted,
                 textTransform: 'uppercase',
                 letterSpacing: 1,
-                marginBottom: 8,
+                marginBottom: Spacing['2'],
               }}
             >
               {totalHighlights} highlight{totalHighlights !== 1 ? 's' : ''}
@@ -118,11 +119,11 @@ export default function HighlightsScreen() {
               key={devotionalId}
               entering={FadeIn.delay(index * 100)}
               style={{
-                marginBottom: 24,
+                marginBottom: Spacing['6'],
               }}
             >
               {/* Devotional Title */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['3'], gap: Spacing['2'] }}>
                 <BookOpenIcon size={16} color={colors.accent} weight="light" />
                 <Text
                   style={{
@@ -143,12 +144,12 @@ export default function HighlightsScreen() {
                   style={{
                     backgroundColor: colors.inputBackground,
                     borderRadius: Radius.md,
-                    padding: 16,
-                    marginBottom: 12,
+                    padding: Spacing['4'],
+                    marginBottom: Spacing['3'],
                   }}
                 >
                   {/* Color indicator and day */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['2'], gap: Spacing['2'] }}>
                     <View
                       style={{
                         width: 12,
@@ -178,7 +179,7 @@ export default function HighlightsScreen() {
                   </View>
 
                   {/* Highlighted text */}
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: Spacing['2'] }}>
                     <QuotesIcon size={14} color={colors.accent} weight="light" style={{ marginTop: 2, opacity: 0.6 }} />
                     <Text
                       style={{
@@ -220,9 +221,9 @@ function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>[
   return (
     <Animated.View
       entering={FadeIn.duration(600)}
-      style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}
+      style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing['10'] }}
     >
-      <Animated.View style={[{ marginBottom: 16 }, iconPulseStyle]}>
+      <Animated.View style={[{ marginBottom: Spacing['4'] }, iconPulseStyle]}>
         <HighlighterIcon size={48} color={colors.textMuted} weight="light" style={{ opacity: 0.5 }} />
       </Animated.View>
       <Text
@@ -231,7 +232,7 @@ function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>[
           fontSize: FontSize['2xl'],
           color: colors.text,
           textAlign: 'center',
-          marginBottom: 8,
+          marginBottom: Spacing['2'],
         }}
       >
         No highlights yet

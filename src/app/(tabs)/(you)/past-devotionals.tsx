@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { format } from 'date-fns';
@@ -289,8 +290,8 @@ export default function PastDevotionalsScreen() {
           borderRadius: Radius.lg,
           borderWidth: 1,
           borderColor: colors.border,
-          padding: 20,
-          marginBottom: 12,
+          padding: Spacing['5'],
+          marginBottom: Spacing['3'],
         }}
       >
         {/* Top row: date + download circle */}
@@ -344,7 +345,7 @@ export default function PastDevotionalsScreen() {
               fontSize: 22,
               color: colors.text,
               lineHeight: 28,
-              marginBottom: 12,
+              marginBottom: Spacing['3'],
             }}
           >
             {item.title}
@@ -355,7 +356,7 @@ export default function PastDevotionalsScreen() {
               height: 2,
               backgroundColor: colors.border,
               borderRadius: 1,
-              marginBottom: 8,
+              marginBottom: Spacing['2'],
             }}
           >
             <View
@@ -388,14 +389,14 @@ export default function PastDevotionalsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.back();
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={{ padding: 8 }}
+              style={{ padding: Spacing['2'] }}
               accessibilityLabel="Go back"
               accessibilityRole="button"
             >
@@ -407,7 +408,7 @@ export default function PastDevotionalsScreen() {
                 fontFamily: FontFamily.uiMedium,
                 fontSize: FontSize.base,
                 color: colors.text,
-                marginLeft: 8,
+                marginLeft: Spacing['2'],
               }}
             >
               Past Series
@@ -425,7 +426,7 @@ export default function PastDevotionalsScreen() {
                 fontSize: FontSize.base,
                 color: colors.textMuted,
                 textAlign: 'center',
-                marginTop: 16,
+                marginTop: Spacing['4'],
               }}
             >
               No devotionals yet
@@ -443,14 +444,14 @@ export default function PastDevotionalsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
@@ -462,7 +463,7 @@ export default function PastDevotionalsScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
-              marginLeft: 8,
+              marginLeft: Spacing['2'],
             }}
           >
             Past Series
@@ -470,7 +471,7 @@ export default function PastDevotionalsScreen() {
         </View>
 
         {/* Segmented Control */}
-        <View style={{ paddingHorizontal: 24, marginBottom: 16 }}>
+        <View style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['4'] }}>
           <SegmentedControl activeTab={activeTab} onTabChange={setActiveTab} />
         </View>
 
@@ -486,7 +487,7 @@ export default function PastDevotionalsScreen() {
                 fontSize: 15,
                 color: colors.textMuted,
                 textAlign: 'center',
-                marginTop: 12,
+                marginTop: Spacing['3'],
               }}
             >
               {emptyLabel}
@@ -497,7 +498,7 @@ export default function PastDevotionalsScreen() {
             data={filteredDevotionals}
             renderItem={renderItem as any}
             keyExtractor={(item: Devotional) => item.id}
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 4, paddingBottom: 100 } as any}
+            contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['1'], paddingBottom: 100 } as any}
             showsVerticalScrollIndicator={false}
           />
         )}

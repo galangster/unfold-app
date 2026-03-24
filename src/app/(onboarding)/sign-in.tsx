@@ -19,6 +19,7 @@ import { AppleLogoIcon, GoogleLogoIcon, FacebookLogoIcon, CloudIcon, ShieldIcon,
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -292,8 +293,8 @@ export default function SignInScreen() {
             style={{
               backgroundColor: colors.error,
               borderRadius: Radius.md,
-              padding: 16,
-              marginBottom: 16,
+              padding: Spacing['4'],
+              marginBottom: Spacing['4'],
             }}
           >
             <Text
@@ -403,7 +404,7 @@ export default function SignInScreen() {
             />
             <Text
               style={{
-                marginTop: 16,
+                marginTop: Spacing['4'],
                 fontFamily: FontFamily.uiMedium,
                 fontSize: 15,
                 color: colors.textSubtle,
@@ -424,9 +425,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing['7'],
+    paddingTop: Spacing['5'],
+    paddingBottom: Spacing['6'],
     justifyContent: 'space-between',
   },
   header: {
@@ -436,36 +437,36 @@ const styles = StyleSheet.create({
     width: 40,
     height: 3,
     borderRadius: 2,
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
     opacity: 0.8,
   },
   eyebrow: {
     fontSize: 13,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   title: {
     fontSize: FontSize['4xl'],
     textAlign: 'center',
     letterSpacing: -0.5,
     lineHeight: 44,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   subtitle: {
     fontSize: FontSize.base,
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing['2'],
   },
   benefitsContainer: {
-    gap: 20,
-    paddingHorizontal: 8,
+    gap: Spacing['5'],
+    paddingHorizontal: Spacing['2'],
   },
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: Spacing['4'],
   },
   benefitIcon: {
     width: 48,
@@ -515,7 +516,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
   },
   guestLink: {
-    paddingVertical: 16,
+    paddingVertical: Spacing['4'],
     alignItems: 'center',
   },
   guestLinkText: {

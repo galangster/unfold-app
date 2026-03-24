@@ -12,6 +12,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
+import { Spacing } from '@/constants/spacing';
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
@@ -81,9 +82,9 @@ export default function BibleHomeScreen() {
     }
 
     return (
-      <View style={{ marginBottom: 28 }}>
+      <View style={{ marginBottom: Spacing['7'] }}>
         {groups.map((group) => (
-          <View key={group.category} style={{ marginBottom: 16 }}>
+          <View key={group.category} style={{ marginBottom: Spacing['4'] }}>
             <Text style={[styles.categoryLabel, { color: getBookColor(group.books[0].id, isDark) }]}>
               {CATEGORY_LABELS[group.category]}
             </Text>
@@ -291,9 +292,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['2'],
+    paddingBottom: Spacing['3'],
   },
   title: {
     fontSize: FontSize['3xl'],
@@ -308,28 +309,28 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 24,
+    marginHorizontal: Spacing['6'],
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: 10,
-    gap: 8,
-    marginBottom: 20,
+    gap: Spacing['2'],
+    marginBottom: Spacing['5'],
   },
   searchPlaceholder: {
     fontFamily: FontFamily.ui,
     fontSize: 15,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
   },
   continueCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     paddingVertical: 14,
     borderRadius: 10,
-    marginBottom: 28,
+    marginBottom: Spacing['7'],
   },
   continueLeft: {
     flexDirection: 'row',
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
     marginTop: 4,
   },
   categoryLabel: {
@@ -371,7 +372,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bookPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 10,
     borderRadius: Radius.sm,
     minWidth: '30%',
@@ -389,11 +390,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 28,
+    padding: Spacing['7'],
   },
   chapterModal: {
     borderRadius: Radius.lg,
-    padding: 20,
+    padding: Spacing['5'],
     width: '100%',
     maxHeight: '70%',
     shadowColor: '#000',
@@ -406,7 +407,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   chapterModalTitle: {
     fontSize: 22,

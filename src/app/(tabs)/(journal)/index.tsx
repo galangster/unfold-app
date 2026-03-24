@@ -37,6 +37,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteFolder } from '@/lib/store';
@@ -197,7 +198,7 @@ const segStyles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 2,
+    padding: Spacing['0.5'],
     position: 'relative',
   },
   indicator: {
@@ -311,22 +312,22 @@ function NotebookEmptyState({ onCreateNote }: NotebookEmptyStateProps) {
 const emptyStyles = StyleSheet.create({
   container: {
     borderRadius: Radius.lg,
-    padding: 32,
+    padding: Spacing['8'],
     alignItems: 'center',
   },
   headline: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
     textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: Spacing['4'],
+    marginBottom: Spacing['2'],
   },
   description: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
   },
   ghostCard: {
     width: '100%',
@@ -342,14 +343,14 @@ const emptyStyles = StyleSheet.create({
   ghostLine: {
     height: 10,
     borderRadius: 5,
-    marginBottom: 10,
+    marginBottom: Spacing['2.5'],
   },
   ctaButton: {
     borderRadius: Radius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    paddingVertical: Spacing['3.5'],
+    paddingHorizontal: Spacing['6'],
     alignSelf: 'center',
-    marginTop: 24,
+    marginTop: Spacing['6'],
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -928,7 +929,7 @@ export default function JournalHubScreen() {
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 activeOpacity={0.6}
-                style={{ padding: 8 }}
+                style={{ padding: Spacing['2'] }}
               >
                 {showSearch ? (
                   <XIcon
@@ -997,7 +998,7 @@ export default function JournalHubScreen() {
               {currentDevotional && (
                 <Animated.View
                   entering={FadeIn.duration(300).delay(30)}
-                  style={{ paddingHorizontal: 24, marginTop: 20 }}
+                  style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
                 >
                   <TouchableOpacity
                     onPress={handleWriteToday}
@@ -1014,7 +1015,7 @@ export default function JournalHubScreen() {
                       style={{
                         backgroundColor: alpha(colors.accent, 0.05),
                         borderRadius: Radius.xl,
-                        padding: 24,
+                        padding: Spacing['6'],
                         borderWidth: 1,
                         borderColor: alpha(colors.accent, 0.07),
                         shadowColor: colors.accent,
@@ -1029,14 +1030,14 @@ export default function JournalHubScreen() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          marginBottom: 12,
+                          marginBottom: Spacing['3'],
                         }}
                       >
                         <View
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            gap: 8,
+                            gap: Spacing['2'],
                           }}
                         >
                           {isAllReflectionsDone && hasExistingEntry ? (
@@ -1085,7 +1086,7 @@ export default function JournalHubScreen() {
                           fontSize: FontSize.xl,
                           color: colors.text,
                           letterSpacing: -0.3,
-                          marginBottom: 6,
+                          marginBottom: Spacing['1.5'],
                         }}
                         numberOfLines={2}
                       >
@@ -1099,7 +1100,7 @@ export default function JournalHubScreen() {
                             fontFamily: FontFamily.bodyItalic,
                             fontSize: 13,
                             color: colors.textMuted,
-                            marginBottom: firstUnansweredQuestion ? 14 : 0,
+                            marginBottom: firstUnansweredQuestion ? Spacing['3.5'] : 0,
                           }}
                         >
                           {currentDayData.scriptureReference}
@@ -1126,7 +1127,7 @@ export default function JournalHubScreen() {
                           height: 2,
                           backgroundColor: colors.border,
                           borderRadius: 1,
-                          marginTop: 16,
+                          marginTop: Spacing['4'],
                           overflow: 'hidden',
                         }}
                       >
@@ -1150,7 +1151,7 @@ export default function JournalHubScreen() {
                 reflectionQuestions.length > 1 && (
                   <Animated.View
                     entering={FadeIn.duration(300).delay(60)}
-                    style={{ paddingHorizontal: 24, marginTop: 16 }}
+                    style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
                   >
                     <TouchableOpacity
                       onPress={() =>
@@ -1162,9 +1163,9 @@ export default function JournalHubScreen() {
                         style={{
                           flexDirection: 'row',
                           alignItems: 'center',
-                          gap: 10,
-                          paddingVertical: 12,
-                          paddingHorizontal: 16,
+                          gap: Spacing['2.5'],
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['4'],
                           backgroundColor: colors.inputBackground,
                           borderRadius: Radius.md,
                           ...Shadow.sm,
@@ -1208,7 +1209,7 @@ export default function JournalHubScreen() {
               {(journalEntries.length > 0 || !currentDevotional) && (
                 <Animated.View
                   entering={FadeIn.duration(300).delay(90)}
-                  style={{ paddingHorizontal: 24, marginTop: 28 }}
+                  style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['7'] }}
                 >
                   {journalEntries.length > 0 && (
                     <Text
@@ -1217,7 +1218,7 @@ export default function JournalHubScreen() {
                         fontSize: 11,
                         color: colors.textSubtle,
                         letterSpacing: 1,
-                        marginBottom: 16,
+                        marginBottom: Spacing['4'],
                       }}
                     >
                       YOUR SERIES
@@ -1228,7 +1229,7 @@ export default function JournalHubScreen() {
                     <View
                       style={{
                         borderRadius: Radius.lg,
-                        padding: 32,
+                        padding: Spacing['8'],
                         alignItems: 'center',
                       }}
                     >
@@ -1238,7 +1239,7 @@ export default function JournalHubScreen() {
                           fontSize: FontSize['2xl'],
                           color: colors.text,
                           textAlign: 'center',
-                          marginBottom: 8,
+                          marginBottom: Spacing['2'],
                         }}
                       >
                         Your story is unfolding.
@@ -1250,7 +1251,7 @@ export default function JournalHubScreen() {
                           color: colors.textMuted,
                           textAlign: 'center',
                           lineHeight: 22,
-                          marginBottom: 24,
+                          marginBottom: Spacing['6'],
                         }}
                       >
                         Each day's reflection becomes a letter{'\n'}to your
@@ -1274,7 +1275,7 @@ export default function JournalHubScreen() {
                             width: '70%',
                             backgroundColor: colors.border,
                             borderRadius: 5,
-                            marginBottom: 10,
+                            marginBottom: Spacing['2.5'],
                           }}
                         />
                         <View
@@ -1283,7 +1284,7 @@ export default function JournalHubScreen() {
                             width: '90%',
                             backgroundColor: colors.border,
                             borderRadius: 5,
-                            marginBottom: 10,
+                            marginBottom: Spacing['2.5'],
                           }}
                         />
                         <View
@@ -1300,7 +1301,7 @@ export default function JournalHubScreen() {
                     <View
                       style={{
                         borderRadius: Radius.lg,
-                        padding: 24,
+                        padding: Spacing['6'],
                         alignItems: 'center',
                       }}
                     >
@@ -1348,8 +1349,8 @@ export default function JournalHubScreen() {
                             style={{
                               backgroundColor: colors.backgroundElevated,
                               borderRadius: Radius.card,
-                              padding: 16,
-                              marginBottom: 10,
+                              padding: Spacing['4'],
+                              marginBottom: Spacing['2.5'],
                               borderWidth: 1,
                               borderColor: colors.border,
                               ...Shadow.sm,
@@ -1360,7 +1361,7 @@ export default function JournalHubScreen() {
                                 flexDirection: 'row',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                marginBottom: 6,
+                                marginBottom: Spacing['1.5'],
                               }}
                             >
                               <Text
@@ -1379,7 +1380,7 @@ export default function JournalHubScreen() {
                                   fontFamily: FontFamily.ui,
                                   fontSize: 11,
                                   color: colors.textSubtle,
-                                  marginLeft: 8,
+                                  marginLeft: Spacing['2'],
                                 }}
                               >
                                 {formatRelativeDate(entry.updatedAt)}
@@ -1403,8 +1404,8 @@ export default function JournalHubScreen() {
                                 style={{
                                   flexDirection: 'row',
                                   alignItems: 'center',
-                                  gap: 8,
-                                  marginTop: 8,
+                                  gap: Spacing['2'],
+                                  marginTop: Spacing['2'],
                                 }}
                               >
                                 {devotional && (
@@ -1486,7 +1487,7 @@ export default function JournalHubScreen() {
               {/* Notes list or empty state */}
               {filteredNotes.length === 0 ? (
                 !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
-                  <View style={{ paddingHorizontal: 24 }}>
+                  <View style={{ paddingHorizontal: Spacing['6'] }}>
                     <NotebookEmptyState onCreateNote={handleCreateNote} />
                   </View>
                 ) : (
@@ -1609,9 +1610,9 @@ export default function JournalHubScreen() {
 
 const mainStyles = StyleSheet.create({
   headerRow: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['4'],
+    paddingBottom: Spacing['2'],
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1622,16 +1623,16 @@ const mainStyles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   searchContainer: {
-    paddingHorizontal: 24,
-    marginTop: 4,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['1'],
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
+    paddingHorizontal: Spacing['3.5'],
+    paddingVertical: Spacing['2.5'],
+    gap: Spacing['2.5'],
     borderWidth: 1,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -1642,25 +1643,25 @@ const mainStyles = StyleSheet.create({
     flex: 1,
     fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
-    padding: 0,
-    paddingVertical: 4,
+    padding: Spacing['0'],
+    paddingVertical: Spacing['1'],
   },
   segmentContainer: {
-    paddingHorizontal: 24,
-    marginTop: 16,
-    marginBottom: 16,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['4'],
+    marginBottom: Spacing['4'],
   },
   filterRow: {
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   notesListContainer: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
   },
   noResultsContainer: {
     borderRadius: Radius.lg,
-    padding: 24,
+    padding: Spacing['6'],
     alignItems: 'center',
-    marginHorizontal: 24,
+    marginHorizontal: Spacing['6'],
   },
   noResultsText: {
     fontFamily: FontFamily.body,

@@ -19,6 +19,7 @@ import { useAudioPlayer } from 'expo-audio';
 import { CaretLeftIcon, BookOpenIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
@@ -92,8 +93,8 @@ function MovementCard({
     <Animated.View
       entering={FadeInDown.duration(600).delay(200 + index * 150)}
       style={{
-        marginBottom: 32,
-        paddingLeft: 20,
+        marginBottom: Spacing['8'],
+        paddingLeft: Spacing['5'],
         borderLeftWidth: 1.5,
         borderLeftColor: accentColor + '30',
       }}
@@ -105,7 +106,7 @@ function MovementCard({
           color: accentColor,
           letterSpacing: 1.5,
           textTransform: 'uppercase',
-          marginBottom: 8,
+          marginBottom: Spacing['2'],
           opacity: 0.7,
         }}
       >
@@ -278,8 +279,8 @@ export default function EveningWindDownScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingHorizontal: Spacing['4'],
+            paddingVertical: Spacing['3'],
           }}
         >
           <TouchableOpacity activeOpacity={0.7}
@@ -288,7 +289,7 @@ export default function EveningWindDownScreen() {
               router.back();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
@@ -306,11 +307,11 @@ export default function EveningWindDownScreen() {
             entering={FadeIn.duration(1000)}
             style={{
               alignItems: 'center',
-              paddingTop: 24,
-              paddingBottom: 32,
+              paddingTop: Spacing['6'],
+              paddingBottom: Spacing['8'],
             }}
           >
-            <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center', marginBottom: 24 }}>
+            <View style={{ width: 120, height: 120, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing['6'] }}>
               <MoonRipples color={colors.accent} />
               <MoonIcon size={40} color={colors.accent} weight="light" />
             </View>
@@ -321,7 +322,7 @@ export default function EveningWindDownScreen() {
                 fontSize: 32,
                 color: colors.text,
                 letterSpacing: -0.5,
-                marginBottom: 8,
+                marginBottom: Spacing['2'],
               }}
             >
               Evening Wind-Down
@@ -339,7 +340,7 @@ export default function EveningWindDownScreen() {
           </Animated.View>
 
           {/* Unified content: Prayer → Scripture → Done */}
-          <View style={{ paddingHorizontal: 28 }}>
+          <View style={{ paddingHorizontal: Spacing['7'] }}>
             {/* === EVENING PRAYER SECTION === */}
             {loading ? (
               <Animated.View
@@ -352,7 +353,7 @@ export default function EveningWindDownScreen() {
                     fontFamily: FontFamily.bodyItalic,
                     fontSize: FontSize.sm,
                     color: colors.textSubtle,
-                    marginTop: 16,
+                    marginTop: Spacing['4'],
                     opacity: 0.7,
                   }}
                 >
@@ -371,7 +372,7 @@ export default function EveningWindDownScreen() {
                     color: colors.textMuted,
                     textAlign: 'center',
                     lineHeight: 23,
-                    marginBottom: 20,
+                    marginBottom: Spacing['5'],
                   }}
                 >
                   Couldn't prepare your prayer right now.{'\n'}Check your connection and try again.
@@ -384,9 +385,9 @@ export default function EveningWindDownScreen() {
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 8,
-                    paddingVertical: 12,
-                    paddingHorizontal: 24,
+                    gap: Spacing['2'],
+                    paddingVertical: Spacing['3'],
+                    paddingHorizontal: Spacing['6'],
                     borderRadius: Radius.md,
                     borderWidth: 1,
                     borderColor: colors.accent,
@@ -416,7 +417,7 @@ export default function EveningWindDownScreen() {
                     width: 24,
                     height: 1,
                     backgroundColor: colors.accent,
-                    marginBottom: 32,
+                    marginBottom: Spacing['8'],
                     opacity: 0.4,
                     borderRadius: 1,
                   }}
@@ -436,8 +437,8 @@ export default function EveningWindDownScreen() {
                   entering={FadeIn.duration(600).delay(1000)}
                   style={{
                     alignItems: 'center',
-                    paddingTop: 8,
-                    paddingBottom: 16,
+                    paddingTop: Spacing['2'],
+                    paddingBottom: Spacing['4'],
                   }}
                 >
                   <Text
@@ -476,7 +477,7 @@ export default function EveningWindDownScreen() {
                   style={{
                     height: 1,
                     backgroundColor: colors.border,
-                    marginVertical: 28,
+                    marginVertical: Spacing['7'],
                     opacity: 0.5,
                   }}
                 />
@@ -488,7 +489,7 @@ export default function EveningWindDownScreen() {
                     color: colors.accent,
                     letterSpacing: 1.5,
                     textTransform: 'uppercase',
-                    marginBottom: 20,
+                    marginBottom: Spacing['5'],
                     opacity: 0.7,
                   }}
                 >
@@ -503,7 +504,7 @@ export default function EveningWindDownScreen() {
                         fontFamily: FontFamily.bodyItalic,
                         fontSize: FontSize.sm,
                         color: colors.textSubtle,
-                        marginTop: 12,
+                        marginTop: Spacing['3'],
                         opacity: 0.7,
                       }}
                     >
@@ -517,7 +518,7 @@ export default function EveningWindDownScreen() {
                       fontSize: 19,
                       color: colors.text,
                       lineHeight: 32,
-                      marginBottom: 24,
+                      marginBottom: Spacing['6'],
                       opacity: 0.9,
                     }}
                   >
@@ -529,7 +530,7 @@ export default function EveningWindDownScreen() {
 
             {/* === DONE BUTTON === */}
             {(examen || scriptureText) && (
-              <Animated.View entering={FadeIn.duration(400).delay(1200)} style={{ marginTop: 16, marginBottom: 8 }}>
+              <Animated.View entering={FadeIn.duration(400).delay(1200)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleShowCelebration}
                 >
@@ -537,7 +538,7 @@ export default function EveningWindDownScreen() {
                     style={{
                       backgroundColor: colors.accent,
                       borderRadius: Radius.card,
-                      paddingVertical: 16,
+                      paddingVertical: Spacing['4'],
                       alignItems: 'center',
                     }}
                   >

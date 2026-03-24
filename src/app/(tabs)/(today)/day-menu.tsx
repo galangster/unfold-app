@@ -7,6 +7,7 @@ import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -48,7 +49,7 @@ export default function DayMenuScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       {/* Header */}
-      <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: 32, paddingTop: 20, paddingBottom: 20 }}>
+      <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: Spacing['8'], paddingTop: Spacing['5'], paddingBottom: Spacing['5'] }}>
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
@@ -71,7 +72,7 @@ export default function DayMenuScreen() {
             fontSize: FontSize['2xl'],
             color: colors.text,
             textAlign: 'left',
-            marginTop: 12,
+            marginTop: Spacing['3'],
           }}
         >
           Select a Day
@@ -81,7 +82,7 @@ export default function DayMenuScreen() {
       {/* Day List */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+        contentContainerStyle={{ paddingHorizontal: Spacing['5'], paddingBottom: Spacing['5'] }}
         showsVerticalScrollIndicator={false}
       >
         {devotional.days.map((day, index) => {
@@ -105,8 +106,8 @@ export default function DayMenuScreen() {
                   : pressedDay === day.dayNumber
                   ? colors.glassBackground
                   : 'transparent',
-                paddingVertical: 16,
-                paddingHorizontal: 16,
+                paddingVertical: Spacing['4'],
+                paddingHorizontal: Spacing['4'],
                 borderRadius: Radius.card,
                 flexDirection: 'row',
                 alignItems: 'center',

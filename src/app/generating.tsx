@@ -21,6 +21,7 @@ import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord, type ProgressiveMemory } from '@/lib/store';
 import {
@@ -957,8 +958,8 @@ export default function GeneratingScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
-            <Animated.View entering={entering(FadeIn.duration(600).delay(100))} style={{ marginBottom: 28 }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['7'] }}>
+            <Animated.View entering={entering(FadeIn.duration(600).delay(100))} style={{ marginBottom: Spacing['7'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
@@ -994,8 +995,8 @@ export default function GeneratingScreen() {
                 width: 40,
                 height: 2,
                 backgroundColor: colors.accent,
-                marginTop: 40,
-                marginBottom: 40,
+                marginTop: Spacing['10'],
+                marginBottom: Spacing['10'],
                 borderRadius: 1,
               }}
             />
@@ -1014,7 +1015,7 @@ export default function GeneratingScreen() {
             </Animated.Text>
           </View>
 
-          <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
+          <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['4'] }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleBeginReading}
               disabled={isNavigating}
@@ -1053,8 +1054,8 @@ export default function GeneratingScreen() {
             flexGrow: 1,
             justifyContent: 'center',
             alignItems: 'center',
-            paddingHorizontal: 32,
-            paddingBottom: 40,
+            paddingHorizontal: Spacing['8'],
+            paddingBottom: Spacing['10'],
           }}
           showsVerticalScrollIndicator={false}
         >
@@ -1083,7 +1084,7 @@ export default function GeneratingScreen() {
 
           {/* Rotating contemplative message — swapped for reconnecting msg when auto-retrying */}
           {!canStartReading && (
-            <View style={{ height: 28, justifyContent: 'center', marginBottom: 12 }}>
+            <View style={{ height: 28, justifyContent: 'center', marginBottom: Spacing['3'] }}>
               {isReconnecting ? (
                 <Animated.Text
                   key="reconnecting"
@@ -1119,7 +1120,7 @@ export default function GeneratingScreen() {
           {currentSeriesTitle && (canStartReading || isProgressiveMode) && (
             <Animated.View
               entering={entering(FadeIn.duration(800))}
-              style={{ alignItems: 'center', marginBottom: 12 }}
+              style={{ alignItems: 'center', marginBottom: Spacing['3'] }}
             >
               <Text
                 style={{
@@ -1158,13 +1159,13 @@ export default function GeneratingScreen() {
 
           {/* Start reading early — batch mode only (progressive goes straight to complete) */}
           {canStartReading && isGenerating && !isProgressiveMode && (
-            <View style={{ width: '100%', alignItems: 'center', marginTop: 48 }}>
+            <View style={{ width: '100%', alignItems: 'center', marginTop: Spacing['12'] }}>
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleStartReadingEarly}
                 style={{
                   backgroundColor: colors.accent,
                   paddingVertical: 18,
-                  paddingHorizontal: 48,
+                  paddingHorizontal: Spacing['12'],
                   borderRadius: 28,
                 }}
               >
@@ -1185,7 +1186,7 @@ export default function GeneratingScreen() {
                   fontFamily: FontFamily.body,
                   fontSize: 13,
                   color: colors.textSubtle,
-                  marginTop: 16,
+                  marginTop: Spacing['4'],
                   textAlign: 'center',
                   lineHeight: 18,
                 }}
@@ -1213,8 +1214,8 @@ export default function GeneratingScreen() {
                   borderWidth: 1,
                   borderColor: colors.border,
                   borderRadius: Radius.lg,
-                  paddingVertical: 16,
-                  paddingHorizontal: 20,
+                  paddingVertical: Spacing['4'],
+                  paddingHorizontal: Spacing['5'],
                   width: '100%',
                 }}
               >
@@ -1255,13 +1256,13 @@ export default function GeneratingScreen() {
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
+              <View style={{ flexDirection: 'row', gap: Spacing['3'], marginTop: 14 }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleRequestNotifications}
                   style={{
                     backgroundColor: colors.buttonBackground,
-                    paddingVertical: 12,
-                    paddingHorizontal: 24,
+                    paddingVertical: Spacing['3'],
+                    paddingHorizontal: Spacing['6'],
                     borderRadius: Radius.full,
                   }}
                 >
@@ -1279,8 +1280,8 @@ export default function GeneratingScreen() {
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleDismissNotificationPrompt}
                   style={{
-                    paddingVertical: 12,
-                    paddingHorizontal: 20,
+                    paddingVertical: Spacing['3'],
+                    paddingHorizontal: Spacing['5'],
                     borderRadius: Radius.full,
                     borderWidth: 1,
                     borderColor: colors.border,
@@ -1306,10 +1307,10 @@ export default function GeneratingScreen() {
             <Animated.View
               entering={entering(FadeIn.duration(400))}
               style={{
-                marginTop: 40,
+                marginTop: Spacing['10'],
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: 16,
+                paddingHorizontal: Spacing['4'],
                 paddingVertical: 10,
                 backgroundColor: colors.inputBackground,
                 borderRadius: Radius.xl,
@@ -1323,7 +1324,7 @@ export default function GeneratingScreen() {
                   fontFamily: FontFamily.ui,
                   fontSize: 13,
                   color: colors.textMuted,
-                  marginLeft: 8,
+                  marginLeft: Spacing['2'],
                 }}
               >
                 {"We\u2019ll let you know when it\u2019s\u00A0ready"}
@@ -1335,7 +1336,7 @@ export default function GeneratingScreen() {
           {notificationPermission === 'granted' && !hasAskedPermission && !canStartReading && (
             <Animated.View
               entering={entering(FadeIn.duration(600).delay(4000))}
-              style={{ marginTop: 40 }}
+              style={{ marginTop: Spacing['10'] }}
             >
               <Text
                 style={{
@@ -1357,7 +1358,7 @@ export default function GeneratingScreen() {
             <Animated.View
               entering={entering(FadeIn.duration(800))}
               style={{
-                marginTop: 48,
+                marginTop: Spacing['12'],
                 width: '100%',
                 alignItems: 'center',
               }}
@@ -1367,14 +1368,14 @@ export default function GeneratingScreen() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginBottom: 16,
+                  marginBottom: Spacing['4'],
                 }}
               >
                 <BookOpenTextIcon
                   size={16}
                   color={colors.accent}
                   weight="light"
-                  style={{ marginRight: 8 }}
+                  style={{ marginRight: Spacing['2'] }}
                 />
                 <Text
                   style={{
@@ -1396,7 +1397,7 @@ export default function GeneratingScreen() {
                   borderRadius: Radius.lg,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  padding: 24,
+                  padding: Spacing['6'],
                 }}
               >
                 {/* Scripture reference */}
@@ -1407,7 +1408,7 @@ export default function GeneratingScreen() {
                     color: colors.accent,
                     letterSpacing: 1.5,
                     textTransform: 'uppercase',
-                    marginBottom: 8,
+                    marginBottom: Spacing['2'],
                   }}
                 >
                   {SAMPLE_PREVIEW.scripture}
@@ -1419,7 +1420,7 @@ export default function GeneratingScreen() {
                     fontFamily: FontFamily.display,
                     fontSize: 22,
                     color: colors.text,
-                    marginBottom: 16,
+                    marginBottom: Spacing['4'],
                     lineHeight: 30,
                   }}
                 >
@@ -1431,7 +1432,7 @@ export default function GeneratingScreen() {
                   style={{
                     height: 1,
                     backgroundColor: colors.border,
-                    marginBottom: 16,
+                    marginBottom: Spacing['4'],
                   }}
                 />
 
@@ -1444,7 +1445,7 @@ export default function GeneratingScreen() {
                       fontSize: 15,
                       color: colors.text,
                       lineHeight: 24,
-                      marginBottom: index < SAMPLE_PREVIEW.paragraphs.length - 1 ? 12 : 20,
+                      marginBottom: index < SAMPLE_PREVIEW.paragraphs.length - 1 ? Spacing['3'] : Spacing['5'],
                       opacity: 0.9,
                     }}
                   >
@@ -1457,7 +1458,7 @@ export default function GeneratingScreen() {
                   style={{
                     backgroundColor: 'rgba(200, 165, 92, 0.06)',
                     borderRadius: Radius.md,
-                    padding: 16,
+                    padding: Spacing['4'],
                     borderLeftWidth: 3,
                     borderLeftColor: colors.accent,
                   }}
@@ -1469,7 +1470,7 @@ export default function GeneratingScreen() {
                       color: colors.accent,
                       letterSpacing: 1.5,
                       textTransform: 'uppercase',
-                      marginBottom: 8,
+                      marginBottom: Spacing['2'],
                     }}
                   >
                     REFLECT
@@ -1495,7 +1496,7 @@ export default function GeneratingScreen() {
                   fontSize: 13,
                   color: colors.textSubtle,
                   textAlign: 'center',
-                  marginTop: 16,
+                  marginTop: Spacing['4'],
                   lineHeight: 20,
                 }}
               >
@@ -1519,7 +1520,7 @@ const genStyles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: Spacing['8'],
   },
   errorIcon: {
     width: 64,
@@ -1530,7 +1531,7 @@ const genStyles = StyleSheet.create({
     borderColor: 'rgba(200, 165, 92, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: Spacing['7'],
   },
   errorIconText: {
     fontSize: 28,
@@ -1539,19 +1540,19 @@ const genStyles = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: 28,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   errorMessage: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.base,
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: Spacing['10'],
     lineHeight: 24,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing['2'],
   },
   retryButton: {
     paddingVertical: 18,
-    paddingHorizontal: 48,
+    paddingHorizontal: Spacing['12'],
     borderRadius: Radius.full,
   },
   retryButtonText: {
@@ -1559,8 +1560,8 @@ const genStyles = StyleSheet.create({
     fontSize: FontSize.base,
   },
   startOverButton: {
-    paddingVertical: 16,
-    marginTop: 8,
+    paddingVertical: Spacing['4'],
+    marginTop: Spacing['2'],
   },
   startOverText: {
     fontFamily: FontFamily.ui,
@@ -1571,7 +1572,7 @@ const genStyles = StyleSheet.create({
     height: 200,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: Spacing['12'],
   },
   rippleRing: {
     position: 'absolute',
@@ -1586,8 +1587,8 @@ const genStyles = StyleSheet.create({
   },
   progressDotsRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginTop: 20,
+    gap: Spacing['1.5'],
+    marginTop: Spacing['5'],
     alignItems: 'center',
   },
   progressDotReady: {

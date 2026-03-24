@@ -36,6 +36,7 @@ import { SuggestionChips } from '@/components/companion/SuggestionChips';
 import { TypingIndicator } from '@/components/companion/TypingIndicator';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { alpha } from '@/components/ui';
+import { Spacing } from '@/constants/spacing';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
@@ -253,8 +254,8 @@ export default function CompanionScreen() {
               windowSize={11}
               removeClippedSubviews
               contentContainerStyle={{
-                paddingBottom: 8,
-                paddingTop: 8,
+                paddingBottom: Spacing['2'],
+                paddingTop: Spacing['2'],
               }}
               ListHeaderComponent={
                 <>
@@ -280,11 +281,11 @@ export default function CompanionScreen() {
             {error && (
               <View
                 style={{
-                  marginHorizontal: 16,
-                  marginBottom: 8,
+                  marginHorizontal: Spacing['4'],
+                  marginBottom: Spacing['2'],
                   backgroundColor: alpha(colors.error, 0.10),
                   borderRadius: Radius.md,
-                  padding: 12,
+                  padding: Spacing['3'],
                 }}
               >
                 <Text

@@ -6,6 +6,7 @@ import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import { CaretLeftIcon, ArrowRightIcon } from 'phosphor-react-native';
 
@@ -76,16 +77,16 @@ export default function SampleDevotionalScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24, paddingTop: 16, height: 60 }}>
-          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8, marginLeft: -8 }} accessibilityLabel="Go back" accessibilityRole="button">
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['6'], paddingTop: Spacing['4'], height: 60 }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: Spacing['2'], marginLeft: -8 }} accessibilityLabel="Go back" accessibilityRole="button">
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
         </View>
 
         {showContent && (
           <>
-            <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: 32, marginBottom: 16 }}>
-              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: 8 }}>
+            <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: Spacing['8'], marginBottom: Spacing['4'] }}>
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: Spacing['2'] }}>
                 YOUR FIRST DEVOTIONAL
               </Text>
               <Text style={{ fontFamily: FontFamily.display, fontSize: FontSize['2xl'], color: colors.text }}>
@@ -97,7 +98,7 @@ export default function SampleDevotionalScreen() {
               entering={FadeInUp.duration(500).delay(200)}
               style={{
                 flex: 1,
-                marginHorizontal: 24,
+                marginHorizontal: Spacing['6'],
                 backgroundColor: colors.inputBackground,
                 borderRadius: Radius.lg,
                 borderWidth: 1,
@@ -105,12 +106,12 @@ export default function SampleDevotionalScreen() {
                 overflow: 'hidden',
               }}
             >
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24 }}>
-                <Text style={{ fontFamily: FontFamily.display, fontSize: 22, color: colors.text, marginBottom: 12 }}>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: Spacing['6'] }}>
+                <Text style={{ fontFamily: FontFamily.display, fontSize: 22, color: colors.text, marginBottom: Spacing['3'] }}>
                   {sample.title}
                 </Text>
 
-                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: 8 }}>
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: Spacing['2'] }}>
                   {sample.scripture}
                 </Text>
 
@@ -120,16 +121,16 @@ export default function SampleDevotionalScreen() {
                     fontSize: FontSize.sm,
                     color: colors.textMuted,
                     lineHeight: 22,
-                    marginBottom: 20,
+                    marginBottom: Spacing['5'],
                     fontStyle: 'italic',
                   }}
                 >
                   "{sample.passage}"
                 </Text>
 
-                <View style={{ height: 1, backgroundColor: colors.border, marginBottom: 20 }} />
+                <View style={{ height: 1, backgroundColor: colors.border, marginBottom: Spacing['5'] }} />
 
-                <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.text, lineHeight: 24, marginBottom: 20 }}>
+                <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.text, lineHeight: 24, marginBottom: Spacing['5'] }}>
                   {sample.reflection}
                 </Text>
 
@@ -137,12 +138,12 @@ export default function SampleDevotionalScreen() {
                   style={{
                     backgroundColor: isDark ? 'rgba(200, 165, 92, 0.08)' : 'rgba(154, 123, 60, 0.05)',
                     borderRadius: Radius.md,
-                    padding: 16,
+                    padding: Spacing['4'],
                     borderLeftWidth: 3,
                     borderLeftColor: colors.accent,
                   }}
                 >
-                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.accent, marginBottom: 8 }}>
+                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.accent, marginBottom: Spacing['2'] }}>
                     PRAYER
                   </Text>
                   <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: FontSize.sm, color: colors.textMuted, lineHeight: 22 }}>
@@ -154,14 +155,14 @@ export default function SampleDevotionalScreen() {
               </ScrollView>
             </Animated.View>
 
-            <Animated.View entering={FadeIn.duration(400).delay(400)} style={{ paddingHorizontal: 24, paddingBottom: 24, paddingTop: 16 }}>
+            <Animated.View entering={FadeIn.duration(400).delay(400)} style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'], paddingTop: Spacing['4'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.body,
                   fontSize: FontSize.sm,
                   color: colors.textMuted,
                   textAlign: 'center',
-                  marginBottom: 16,
+                  marginBottom: Spacing['4'],
                 }}
               >
                 Every devotional is written just for you, based on what you share.
@@ -171,12 +172,12 @@ export default function SampleDevotionalScreen() {
                   <View
                     style={{
                       backgroundColor: colors.accent,
-                      paddingVertical: 16,
+                      paddingVertical: Spacing['4'],
                       borderRadius: Radius.md,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 8,
+                      gap: Spacing['2'],
                     }}
                   >
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.background }}>

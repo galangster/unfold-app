@@ -29,6 +29,7 @@ import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { alpha } from '@/components/ui';
+import { Spacing } from '@/constants/spacing';
 
 interface MenuItem {
   icon: typeof GearIcon;
@@ -108,9 +109,9 @@ export default function YouScreen() {
           <Animated.View
             entering={FadeIn.duration(700)}
             style={{
-              paddingHorizontal: 24,
-              paddingTop: 16,
-              paddingBottom: 24,
+              paddingHorizontal: Spacing['6'],
+              paddingTop: Spacing['4'],
+              paddingBottom: Spacing['6'],
               alignItems: 'center',
             }}
           >
@@ -126,17 +127,17 @@ export default function YouScreen() {
             >
               {user?.name ?? 'You'}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['3'], marginTop: Spacing['2'] }}>
               <StreakDisplay compact hideDayLabel />
               {isPremium && (
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: Spacing['1'],
                     backgroundColor: alpha(colors.accent, 0.13),
                     paddingHorizontal: 10,
-                    paddingVertical: 4,
+                    paddingVertical: Spacing['1'],
                     borderRadius: Radius.md,
                   }}
                 >
@@ -158,7 +159,7 @@ export default function YouScreen() {
           {/* Upgrade card (non-premium only) */}
           {!isPremium && (
             <View
-              style={{ paddingHorizontal: 24, marginBottom: 20 }}
+              style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['5'] }}
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
@@ -224,7 +225,7 @@ export default function YouScreen() {
           {/* Unfolded — year-in-review recap (hidden for polish) */}
           {false && devotionals.length > 0 && (
             <View
-              style={{ paddingHorizontal: 24, marginBottom: 20 }}
+              style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['5'] }}
             >
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
@@ -300,7 +301,7 @@ export default function YouScreen() {
 
           {/* Menu Items — grouped card */}
           <View
-            style={{ paddingHorizontal: 24 }}
+            style={{ paddingHorizontal: Spacing['6'] }}
           >
             <View
               style={{
@@ -327,7 +328,7 @@ export default function YouScreen() {
                       flexDirection: 'row',
                       alignItems: 'center',
                       paddingVertical: 14,
-                      paddingHorizontal: 16,
+                      paddingHorizontal: Spacing['4'],
                       borderBottomWidth: index < menuItems.length - 1 ? 1 : 0,
                       borderBottomColor: colors.border,
                     }}

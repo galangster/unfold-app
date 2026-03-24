@@ -8,6 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import type { BibleHighlight, BibleHighlightColor } from '@/lib/store';
@@ -154,25 +155,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     paddingVertical: 10,
   },
   backButton: {
-    padding: 4,
+    padding: Spacing['1'],
   },
   title: {
     fontSize: 17,
   },
   filterRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    gap: 8,
+    paddingHorizontal: Spacing['4'],
+    paddingBottom: Spacing['3'],
+    gap: Spacing['2'],
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 6,
     borderRadius: Radius.xl,
     gap: 6,
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   colorBar: {
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     height: '100%',
     minHeight: 40,
     borderRadius: 2,
-    marginRight: 12,
+    marginRight: Spacing['3'],
   },
   highlightContent: {
     flex: 1,
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   highlightRef: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 13,
-    marginBottom: 4,
+    marginBottom: Spacing['1'],
   },
   highlightText: {
     fontFamily: FontFamily.body,
@@ -220,8 +221,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   deleteButton: {
-    padding: 8,
-    marginLeft: 8,
+    padding: Spacing['2'],
+    marginLeft: Spacing['2'],
   },
   emptyState: {
     flex: 1,
@@ -234,6 +235,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: 15,
     textAlign: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: Spacing['10'],
   },
 });

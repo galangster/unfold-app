@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -19,14 +20,14 @@ export default function SavedPassagesScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -35,7 +36,7 @@ export default function SavedPassagesScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
-              marginLeft: 8,
+              marginLeft: Spacing['2'],
             }}
           >
             Saved Passages
@@ -51,7 +52,7 @@ export default function SavedPassagesScreen() {
                 fontSize: FontSize.base,
                 color: colors.textMuted,
                 textAlign: 'center',
-                marginTop: 16,
+                marginTop: Spacing['4'],
                 lineHeight: 24,
               }}
             >
@@ -60,7 +61,7 @@ export default function SavedPassagesScreen() {
           </View>
         ) : (
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 100 }}
+            contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['2'], paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
           >
             {bookmarks.map((bookmark, index) => (
@@ -74,12 +75,12 @@ export default function SavedPassagesScreen() {
                     borderRadius: Radius.lg,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    padding: 20,
-                    marginBottom: 12,
+                    padding: Spacing['5'],
+                    marginBottom: Spacing['3'],
                   }}
                 >
                   {/* Header row */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{
@@ -99,7 +100,7 @@ export default function SavedPassagesScreen() {
                         removeBookmark(bookmark.id);
                       }}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={{ padding: 4 }}
+                      style={{ padding: Spacing['1'] }}
                     >
                       <TrashIcon size={16} color={colors.textHint} weight="light" />
                     </TouchableOpacity>

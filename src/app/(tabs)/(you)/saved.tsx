@@ -14,6 +14,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, HighlightColor } from '@/lib/store';
 
@@ -94,15 +95,15 @@ export default function SavedScreen() {
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingHorizontal: Spacing['4'],
+            paddingVertical: Spacing['3'],
           }}
         >
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleBack}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
@@ -113,7 +114,7 @@ export default function SavedScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
-              marginLeft: 8,
+              marginLeft: Spacing['2'],
             }}
           >
             Your Library
@@ -122,8 +123,8 @@ export default function SavedScreen() {
 
         <ScrollView
           contentContainerStyle={{
-            paddingHorizontal: 24,
-            paddingTop: 8,
+            paddingHorizontal: Spacing['6'],
+            paddingTop: Spacing['2'],
             paddingBottom: insets.bottom + 100,
           }}
           showsVerticalScrollIndicator={false}
@@ -185,14 +186,14 @@ export default function SavedScreen() {
                               ],
                           }}
                         />
-                        <View style={{ flex: 1, padding: 16 }}>
+                        <View style={{ flex: 1, padding: Spacing['4'] }}>
                           <Text
                             style={{
                               fontFamily: FontFamily.displayItalic,
                               fontSize: 15,
                               color: colors.text,
                               lineHeight: 22,
-                              marginBottom: 8,
+                              marginBottom: Spacing['2'],
                             }}
                             numberOfLines={3}
                           >
@@ -273,7 +274,7 @@ export default function SavedScreen() {
                         style={{
                           backgroundColor: colors.inputBackground,
                           borderRadius: Radius.card,
-                          padding: 16,
+                          padding: Spacing['4'],
                           marginBottom: 10,
                         }}
                       >
@@ -293,7 +294,7 @@ export default function SavedScreen() {
                             fontSize: FontSize.sm,
                             color: colors.textMuted,
                             lineHeight: 20,
-                            marginBottom: 8,
+                            marginBottom: Spacing['2'],
                           }}
                           numberOfLines={2}
                         >
@@ -374,7 +375,7 @@ export default function SavedScreen() {
                         style={{
                           backgroundColor: colors.inputBackground,
                           borderRadius: Radius.card,
-                          padding: 16,
+                          padding: Spacing['4'],
                           marginBottom: 10,
                         }}
                       >
@@ -396,7 +397,7 @@ export default function SavedScreen() {
                             height: 3,
                             backgroundColor: colors.border,
                             borderRadius: 2,
-                            marginBottom: 8,
+                            marginBottom: Spacing['2'],
                           }}
                         >
                           <View
@@ -464,7 +465,7 @@ function SectionHeader({
   return (
     <Animated.View
       entering={hasAnimated.current ? undefined : FadeIn.delay(index * 30).duration(300)}
-      style={[{ marginBottom: 14 }, style]}
+      style={[{ marginBottom: Spacing['3'] }, style]}
     >
       <Text
         style={{
@@ -502,12 +503,12 @@ function EmptyState({
       style={{
         backgroundColor: colors.inputBackground,
         borderRadius: Radius.card,
-        padding: 24,
+        padding: Spacing['6'],
         alignItems: 'center',
         marginBottom: 10,
       }}
     >
-      <View style={{ marginBottom: 12, opacity: 0.6 }}>{icon}</View>
+      <View style={{ marginBottom: Spacing['3'], opacity: 0.6 }}>{icon}</View>
       <Text
         style={{
           fontFamily: FontFamily.body,
@@ -515,7 +516,7 @@ function EmptyState({
           color: colors.textMuted,
           textAlign: 'center',
           lineHeight: 20,
-          marginBottom: 4,
+          marginBottom: Spacing['1'],
         }}
       >
         {title}
@@ -557,7 +558,7 @@ function SeeAllLink({
         activeOpacity={0.7}
         onPress={onPress}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: Spacing['1'] }}
         accessibilityLabel={`${label}`}
         accessibilityRole="button"
       >

@@ -16,6 +16,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -439,26 +440,26 @@ const ssStyles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
   },
   backButton: {
-    padding: 8,
+    padding: Spacing['2'],
   },
   headerTitle: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 17,
-    marginLeft: 12,
+    marginLeft: Spacing['3'],
   },
   scrollContent: {
-    padding: 24,
+    padding: Spacing['6'],
     paddingBottom: 100,
   },
   tierCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    padding: 24,
-    marginBottom: 24,
+    padding: Spacing['6'],
+    marginBottom: Spacing['6'],
     overflow: 'hidden',
   },
   tierTopRow: {
@@ -469,7 +470,7 @@ const ssStyles = StyleSheet.create({
   tierLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing['3'],
   },
   tierIconCircle: {
     width: 48,
@@ -503,7 +504,7 @@ const ssStyles = StyleSheet.create({
     marginTop: -2,
   },
   progressSection: {
-    marginTop: 20,
+    marginTop: Spacing['5'],
   },
   progressTrack: {
     height: 4,
@@ -524,7 +525,7 @@ const ssStyles = StyleSheet.create({
     fontSize: 11,
   },
   legendarySection: {
-    marginTop: 16,
+    marginTop: Spacing['4'],
   },
   legendaryText: {
     fontFamily: FontFamily.uiMedium,
@@ -534,13 +535,13 @@ const ssStyles = StyleSheet.create({
   lastReadText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
-    marginTop: 12,
+    marginTop: Spacing['3'],
     textAlign: 'center',
   },
   tierRoadmapRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 24,
+    gap: Spacing['2'],
+    marginBottom: Spacing['6'],
   },
   tierRoadmapItem: {
     flex: 1,
@@ -559,18 +560,18 @@ const ssStyles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+    gap: Spacing['3'],
+    marginBottom: Spacing['6'],
   },
   statButton: {
     borderRadius: Radius.md,
-    padding: 16,
+    padding: Spacing['4'],
     alignItems: 'center',
   },
   statValue: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize['2xl'],
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
   statLabel: {
     fontFamily: FontFamily.ui,
@@ -579,8 +580,8 @@ const ssStyles = StyleSheet.create({
   tooltipBubble: {
     borderWidth: 1,
     borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
+    padding: Spacing['3'],
+    marginTop: Spacing['2'],
   },
   tooltipText: {
     fontFamily: FontFamily.ui,
@@ -589,7 +590,7 @@ const ssStyles = StyleSheet.create({
   },
   amnestyCard: {
     borderRadius: Radius.lg,
-    padding: 20,
+    padding: Spacing['5'],
   },
   amnestyRow: {
     flexDirection: 'row',
@@ -609,12 +610,12 @@ const ssStyles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: 24,
-    padding: 16,
+    marginTop: Spacing['6'],
+    padding: Spacing['4'],
     borderRadius: Radius.md,
   },
   infoIcon: {
-    marginRight: 12,
+    marginRight: Spacing['3'],
     marginTop: 2,
   },
   infoText: {

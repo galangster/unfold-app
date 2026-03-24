@@ -13,6 +13,7 @@ import Animated, {
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 
 export default function WelcomeCelebrationScreen() {
@@ -34,7 +35,7 @@ export default function WelcomeCelebrationScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: darkBg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
           <Animated.View entering={FadeIn.duration(600)} style={{ alignItems: 'center' }}>
             <View
               style={{
@@ -44,7 +45,7 @@ export default function WelcomeCelebrationScreen() {
                 backgroundColor: colors.accent,
                 justifyContent: 'center',
                 alignItems: 'center',
-                marginBottom: 32,
+                marginBottom: Spacing['8'],
               }}
             >
               <Text style={{ fontSize: 40 }}>✓</Text>
@@ -52,7 +53,7 @@ export default function WelcomeCelebrationScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.duration(500).delay(200)} style={{ alignItems: 'center' }}>
-            <Text style={{ fontFamily: FontFamily.display, fontSize: 32, color: darkText, marginBottom: 8 }}>
+            <Text style={{ fontFamily: FontFamily.display, fontSize: 32, color: darkText, marginBottom: Spacing['2'] }}>
               Welcome, {name}
             </Text>
           </Animated.View>
@@ -64,12 +65,12 @@ export default function WelcomeCelebrationScreen() {
               marginTop: 48,
               backgroundColor: darkCard,
               borderRadius: Radius.lg,
-              padding: 24,
+              padding: Spacing['6'],
               borderWidth: 1,
               borderColor: darkBorder,
             }}
           >
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: 16 }}>
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: Spacing['4'] }}>
               WHAT HAPPENS NEXT
             </Text>
 
@@ -78,14 +79,14 @@ export default function WelcomeCelebrationScreen() {
               'Every morning, fresh words for exactly where you are', 
               'Build a transformative habit, one day at a time', 
             ].map((text) => (
-              <View key={text} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <View key={text} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['3'] }}>
                 <View
                   style={{
                     width: 6,
                     height: 6,
                     borderRadius: 3,
                     backgroundColor: colors.accent,
-                    marginRight: 12,
+                    marginRight: Spacing['3'],
                   }}
                 />
                 <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: darkText }}>
@@ -95,7 +96,7 @@ export default function WelcomeCelebrationScreen() {
             ))}
           </Animated.View>
 
-          <Animated.View entering={FadeInUp.duration(500).delay(600)} style={{ width: '100%', marginTop: 32 }}>
+          <Animated.View entering={FadeInUp.duration(500).delay(600)} style={{ width: '100%', marginTop: Spacing['8'] }}>
             <TouchableOpacity activeOpacity={0.7} onPress={handleContinue}>
                 <View
                   style={{

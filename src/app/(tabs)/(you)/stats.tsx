@@ -8,6 +8,7 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon, CompassIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
 import { useTheme } from '@/lib/theme';
@@ -412,8 +413,8 @@ const statStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
   },
   headerLeft: {
     flexDirection: 'row',
@@ -421,7 +422,7 @@ const statStyles = StyleSheet.create({
     flex: 1,
   },
   backButton: {
-    padding: 8,
+    padding: Spacing['2'],
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
@@ -430,7 +431,7 @@ const statStyles = StyleSheet.create({
   headerTitle: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.base,
-    marginLeft: 8,
+    marginLeft: Spacing['2'],
   },
   allThemesButton: {
     paddingHorizontal: 10,
@@ -443,8 +444,8 @@ const statStyles = StyleSheet.create({
     fontSize: FontSize.xs,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['4'],
     paddingBottom: 100,
   },
   focusedBanner: {
@@ -461,14 +462,14 @@ const statStyles = StyleSheet.create({
   streakHero: {
     borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: 28,
+    padding: Spacing['7'],
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
   },
   streakNumber: {
     fontFamily: FontFamily.display,
     fontSize: 56,
-    marginTop: 8,
+    marginTop: Spacing['2'],
     letterSpacing: -2,
   },
   streakLabel: {
@@ -479,13 +480,13 @@ const statStyles = StyleSheet.create({
   bestStreak: {
     fontFamily: FontFamily.mono,
     fontSize: 11,
-    marginTop: 12,
+    marginTop: Spacing['3'],
     letterSpacing: 0.5,
   },
   gridRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    gap: Spacing['3'],
+    marginBottom: Spacing['3'],
   },
   favoriteMethodCard: {
     borderRadius: Radius.lg,
@@ -496,7 +497,7 @@ const statStyles = StyleSheet.create({
   favoriteMethodName: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.sm,
-    marginTop: 10,
+    marginTop: Spacing['2'],
   },
   favoriteMethodLabel: {
     fontFamily: FontFamily.ui,
@@ -504,11 +505,11 @@ const statStyles = StyleSheet.create({
     marginTop: 2,
   },
   spacer: {
-    height: 12,
+    height: Spacing['3'],
   },
   quoteBlock: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
+    paddingVertical: Spacing['5'],
+    paddingHorizontal: Spacing['5'],
     borderLeftWidth: 2,
   },
   quoteText: {
@@ -524,7 +525,7 @@ const statStyles = StyleSheet.create({
   statCardValue: {
     fontFamily: FontFamily.display,
     fontSize: 28,
-    marginTop: 10,
+    marginTop: Spacing['2'],
     letterSpacing: -1,
   },
   statCardLabel: {

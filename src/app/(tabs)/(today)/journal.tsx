@@ -43,6 +43,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
@@ -1138,8 +1139,8 @@ Their journal entry:
                       hitSlop={8}
                       style={{
                         backgroundColor: newPrayerText.trim() ? colors.accent : alpha(colors.accent, 0.25),
-                        paddingHorizontal: 20,
-                        paddingVertical: 8,
+                        paddingHorizontal: Spacing['5'],
+                        paddingVertical: Spacing['2'],
                         borderRadius: Radius.lg,
                         opacity: newPrayerText.trim() ? 1 : 0.5,
                       }}
@@ -1204,11 +1205,11 @@ const jStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
   },
   headerButton: {
-    padding: 8,
+    padding: Spacing['2'],
   },
   dayLabel: {
     fontFamily: FontFamily.mono,
@@ -1217,13 +1218,13 @@ const jStyles = StyleSheet.create({
   },
   modeSelector: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 8,
+    paddingHorizontal: Spacing['6'],
+    marginBottom: Spacing['2'],
     gap: 0,
   },
   modeTab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing['2'],
+    paddingHorizontal: Spacing['4'],
     borderBottomWidth: 2,
   },
   modeTabText: {
@@ -1232,13 +1233,13 @@ const jStyles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['6'],
     paddingBottom: 120,
   },
   scriptureAnchor: {
-    marginBottom: 24,
-    paddingLeft: 12,
+    marginBottom: Spacing['6'],
+    paddingLeft: Spacing['3'],
     borderLeftWidth: 2,
     borderRadius: 1,
   },
@@ -1250,12 +1251,12 @@ const jStyles = StyleSheet.create({
   freewriteTitle: {
     fontFamily: FontFamily.display,
     fontSize: 28,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   freewriteSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
-    marginBottom: 32,
+    marginBottom: Spacing['8'],
   },
   freewriteInput: {
     minHeight: 160,
@@ -1265,15 +1266,15 @@ const jStyles = StyleSheet.create({
     paddingTop: 0,
   },
   deeperButtonWrapper: {
-    marginTop: 24,
+    marginTop: Spacing['6'],
   },
   deeperButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: Spacing['2'],
     paddingVertical: 14,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
     borderRadius: Radius.md,
     borderWidth: 1,
     backgroundColor: 'transparent',
@@ -1284,7 +1285,7 @@ const jStyles = StyleSheet.create({
     fontSize: FontSize.sm,
   },
   errorWrapper: {
-    marginTop: 24,
+    marginTop: Spacing['6'],
     alignItems: 'center',
   },
   errorText: {
@@ -1293,20 +1294,20 @@ const jStyles = StyleSheet.create({
     textAlign: 'center',
   },
   deeperPromptsSection: {
-    marginTop: 32,
-    marginBottom: 32,
+    marginTop: Spacing['8'],
+    marginBottom: Spacing['8'],
   },
   deeperAccentLine: {
     width: 24,
     height: 1.5,
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
     borderRadius: 1,
   },
   deeperHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   deeperLabel: {
     fontFamily: FontFamily.mono,
@@ -1358,7 +1359,7 @@ const jStyles = StyleSheet.create({
     padding: 0,
   },
   questionPreview: {
-    marginLeft: 40,
+    marginLeft: Spacing['10'],
     marginTop: 6,
   },
   questionPreviewText: {
@@ -1374,12 +1375,12 @@ const jStyles = StyleSheet.create({
   soapSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   soapProgressRow: {
     flexDirection: 'row',
-    gap: 4,
-    marginBottom: 28,
+    gap: Spacing['1'],
+    marginBottom: Spacing['7'],
   },
   soapProgressBar: {
     flex: 1,
@@ -1389,7 +1390,7 @@ const jStyles = StyleSheet.create({
   soapSectionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: Spacing['3'],
     paddingHorizontal: 14,
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -1400,7 +1401,7 @@ const jStyles = StyleSheet.create({
     borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: Spacing['3'],
   },
   soapLetterText: {
     fontFamily: FontFamily.uiMedium,
@@ -1440,11 +1441,11 @@ const jStyles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 6,
     marginLeft: 54,
-    marginRight: 8,
+    marginRight: Spacing['2'],
   },
   soapCompleteWrapper: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: Spacing['4'],
   },
   soapCompleteText: {
     fontFamily: FontFamily.ui,
@@ -1454,7 +1455,7 @@ const jStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   prayerDividerLine: {
     flex: 1,
@@ -1465,10 +1466,10 @@ const jStyles = StyleSheet.create({
     flex: 1,
     height: 0.5,
     opacity: 0.15,
-    marginLeft: 12,
+    marginLeft: Spacing['3'],
   },
   prayerDividerIcon: {
-    marginHorizontal: 12,
+    marginHorizontal: Spacing['3'],
   },
   prayerDividerLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -1485,7 +1486,7 @@ const jStyles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     borderRadius: 10,
     borderWidth: 1,
   },
@@ -1508,7 +1509,7 @@ const jStyles = StyleSheet.create({
   prayerInputCard: {
     borderRadius: Radius.md,
     borderWidth: 1,
-    padding: 12,
+    padding: Spacing['3'],
   },
   prayerTextInput: {
     flex: 1,
@@ -1527,7 +1528,7 @@ const jStyles = StyleSheet.create({
   },
   prayerCancelButton: {
     alignSelf: 'center',
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
   prayerCancelText: {
     fontFamily: FontFamily.ui,
@@ -1537,17 +1538,17 @@ const jStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    marginTop: 4,
+    gap: Spacing['1.5'],
+    paddingVertical: Spacing['3'],
+    marginTop: Spacing['1'],
   },
   addPrayerText: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
   },
   bottomHint: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing['6'],
+    paddingBottom: Spacing['6'],
     alignItems: 'center',
   },
   bottomHintText: {

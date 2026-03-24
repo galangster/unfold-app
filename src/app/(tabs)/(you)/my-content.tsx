@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
 
@@ -62,14 +63,14 @@ export default function MyContentScreen() {
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingVertical: 12,
+          paddingHorizontal: Spacing['5'],
+          paddingVertical: Spacing['3'],
         }}
       >
-        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: 8 }} accessibilityLabel="Go back" accessibilityRole="button">
+        <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: Spacing['2'] }} accessibilityLabel="Go back" accessibilityRole="button">
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </TouchableOpacity>
-        <View style={{ marginLeft: 12 }}>
+        <View style={{ marginLeft: Spacing['3'] }}>
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
@@ -86,8 +87,8 @@ export default function MyContentScreen() {
       <View
         style={{
           flexDirection: 'row',
-          paddingHorizontal: 20,
-          paddingBottom: 16,
+          paddingHorizontal: Spacing['5'],
+          paddingBottom: Spacing['4'],
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}
@@ -101,7 +102,7 @@ export default function MyContentScreen() {
               style={{
                 flex: 1,
                 alignItems: 'center',
-                paddingVertical: 12,
+                paddingVertical: Spacing['3'],
               }}
             >
               <View
@@ -110,7 +111,7 @@ export default function MyContentScreen() {
                   alignItems: 'center',
                   gap: 6,
                   paddingHorizontal: 10,
-                  paddingVertical: 8,
+                  paddingVertical: Spacing['2'],
                   borderRadius: Radius.xl,
                   backgroundColor: isActive ? colors.inputBackground : 'transparent',
                 }}
@@ -132,7 +133,7 @@ export default function MyContentScreen() {
                     backgroundColor: isActive ? colors.accent : colors.border,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    paddingHorizontal: 4,
+                    paddingHorizontal: Spacing['1'],
                   }}
                 >
                   <Text
@@ -152,11 +153,11 @@ export default function MyContentScreen() {
       </View>
 
       {/* Tab Content */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['5'] }}>
         {activeTab === 'journal' && (
           <Animated.View entering={FadeInRight.duration(300)}>
             {journalEntries.length === 0 ? (
-              <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}>
+              <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}>
                 <View
                   style={{
                     width: 64,
@@ -165,7 +166,7 @@ export default function MyContentScreen() {
                     backgroundColor: colors.inputBackground,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginBottom: 20,
+                    marginBottom: Spacing['5'],
                   }}
                 >
                   <PencilLineIcon size={28} color={colors.textMuted} weight="light" />
@@ -175,7 +176,7 @@ export default function MyContentScreen() {
                     fontFamily: FontFamily.display,
                     fontSize: 22,
                     color: colors.text,
-                    marginBottom: 8,
+                    marginBottom: Spacing['2'],
                     textAlign: 'center',
                   }}
                 >
@@ -188,7 +189,7 @@ export default function MyContentScreen() {
                     color: colors.textMuted,
                     textAlign: 'center',
                     lineHeight: 22,
-                    marginBottom: 24,
+                    marginBottom: Spacing['6'],
                   }}
                 >
                   Reflect on your readings to capture your thoughts.
@@ -220,7 +221,7 @@ export default function MyContentScreen() {
                     opacity: 1,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 8,
+                    gap: Spacing['2'],
                   }}
                 >
                   <Text
@@ -247,12 +248,12 @@ export default function MyContentScreen() {
                     style={{
                       backgroundColor: colors.inputBackground,
                       borderRadius: Radius.lg,
-                      padding: 20,
-                      marginBottom: 12,
+                      padding: Spacing['5'],
+                      marginBottom: Spacing['3'],
                       opacity: 1,
                     }}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['2'], gap: Spacing['2'] }}>
                       <BookOpenIcon size={14} color={colors.accent} weight="light" />
                       <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                         {devotional?.title || 'Untitled Series'}
@@ -316,12 +317,12 @@ export default function MyContentScreen() {
                         fontSize: FontSize.base,
                         color: colors.text,
                         lineHeight: 24,
-                        marginBottom: 12,
+                        marginBottom: Spacing['3'],
                       }}
                     >
                       "{highlight.highlightedText}"
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
                       <View
                         style={{
                           width: 8,
@@ -366,8 +367,8 @@ export default function MyContentScreen() {
                     style={{
                       backgroundColor: colors.inputBackground,
                       borderRadius: Radius.lg,
-                      padding: 20,
-                      marginBottom: 12,
+                      padding: Spacing['5'],
+                      marginBottom: Spacing['3'],
                       opacity: 1,
                     }}
                   >
@@ -375,8 +376,8 @@ export default function MyContentScreen() {
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        marginBottom: 8,
-                        gap: 8,
+                        marginBottom: Spacing['2'],
+                        gap: Spacing['2'],
                       }}
                     >
                       <BookmarkSimpleIcon size={14} color={colors.accent} weight="fill" />
@@ -433,7 +434,7 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
   return (
     <Animated.View
       entering={FadeIn.duration(600)}
-      style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 }}
+      style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}
     >
       <Animated.View
         style={[
@@ -444,7 +445,7 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
             backgroundColor: colors.inputBackground,
             alignItems: 'center',
             justifyContent: 'center',
-            marginBottom: 20,
+            marginBottom: Spacing['5'],
           },
           iconPulseStyle,
         ]}
@@ -456,7 +457,7 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
           fontFamily: FontFamily.display,
           fontSize: 22,
           color: colors.text,
-          marginBottom: 8,
+          marginBottom: Spacing['2'],
           textAlign: 'center',
         }}
       >

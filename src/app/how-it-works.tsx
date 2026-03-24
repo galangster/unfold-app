@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
@@ -1063,7 +1064,7 @@ export default function HowItWorksScreen() {
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 24, paddingTop: 8, height: 44 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: Spacing['6'], paddingTop: Spacing['2'], height: 44 }}>
           <TouchableOpacity activeOpacity={0.7} onPress={handleSkip} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.textMuted }}>
               Skip
@@ -1080,7 +1081,7 @@ export default function HowItWorksScreen() {
               exiting={FadeOut.duration(150)}
               style={StyleSheet.absoluteFill}
             >
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 }}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['10'] }}>
                 {page.type === 'companion' ? (
                   <View style={{ alignItems: 'center', gap: 36 }}>
                     <CompanionOrb accentColor={colors.accent} size={120} isActive />
@@ -1124,9 +1125,9 @@ export default function HowItWorksScreen() {
         </GestureDetector>
 
         {/* Bottom: page dots + continue button */}
-        <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
+        <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'] }}>
           {/* Page dots */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginBottom: 24 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}>
             {PAGES.map((_, index) => (
               <View
                 key={index}
@@ -1144,7 +1145,7 @@ export default function HowItWorksScreen() {
           <TouchableOpacity activeOpacity={0.7} onPress={handleContinue}>
             <View
               style={{
-                paddingVertical: 16,
+                paddingVertical: Spacing['4'],
                 borderRadius: Radius.md,
                 alignItems: 'center',
                 backgroundColor: colors.accent,

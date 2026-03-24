@@ -18,6 +18,7 @@ import { captureRef } from 'react-native-view-shot';
 import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -238,15 +239,15 @@ export default function WallpaperScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingHorizontal: Spacing['4'],
+            paddingVertical: Spacing['3'],
           }}
         >
           <TouchableOpacity
             activeOpacity={0.6}
             onPress={handleClose}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{ padding: 12 }}
+            style={{ padding: Spacing['3'] }}
             accessibilityLabel="Close wallpaper"
             accessibilityRole="button"
           >
@@ -259,7 +260,7 @@ export default function WallpaperScreen() {
         </View>
 
         {/* Preview */}
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing['8'] }}>
           <Animated.View entering={FadeIn.duration(400)}>
             <View
               style={{
@@ -280,7 +281,7 @@ export default function WallpaperScreen() {
                   backgroundColor: activeStyle.bg,
                   justifyContent: 'center',
                   alignItems: 'center',
-                  paddingHorizontal: 32,
+                  paddingHorizontal: Spacing['8'],
                 }}
               >
                 <Text
@@ -336,7 +337,7 @@ export default function WallpaperScreen() {
               pagingEnabled
               snapToAlignment="center"
               decelerationRate="fast"
-              contentContainerStyle={{ paddingHorizontal: 24, gap: 12 }}
+              contentContainerStyle={{ paddingHorizontal: Spacing['6'], gap: Spacing['3'] }}
               renderItem={({ item: style }) => {
                 const isLocked = style.premium && !isPremium;
                 const isActive = selectedStyle === style.id;
@@ -402,7 +403,7 @@ export default function WallpaperScreen() {
               flexDirection: 'row',
               justifyContent: 'center',
               gap: 6,
-              marginTop: 12,
+              marginTop: Spacing['3'],
             }}
           >
             {wallpaperStyles.map((style) => (
@@ -429,8 +430,8 @@ export default function WallpaperScreen() {
               bottom: 90 + tabBarHeight,
               left: 0,
               right: 0,
-              paddingHorizontal: 24,
-              paddingVertical: 16,
+              paddingHorizontal: Spacing['6'],
+              paddingVertical: Spacing['4'],
               backgroundColor: colors.background,
               borderTopWidth: 1,
               borderTopColor: colors.border,
@@ -442,7 +443,7 @@ export default function WallpaperScreen() {
                 fontSize: 13,
                 color: colors.textMuted,
                 textAlign: 'center',
-                marginBottom: 12,
+                marginBottom: Spacing['3'],
               }}
             >
               Unlock all {wallpaperStyles.filter((s) => s.premium).length} premium styles
@@ -459,7 +460,7 @@ export default function WallpaperScreen() {
                 flexDirection: 'row',
                 justifyContent: 'center',
                 alignItems: 'center',
-                gap: 8,
+                gap: Spacing['2'],
               }}
             >
               <CrownIcon size={16} color={colors.background} weight="light" />
@@ -482,17 +483,17 @@ export default function WallpaperScreen() {
           style={{
             flexDirection: 'row',
             justifyContent: 'center',
-            paddingBottom: 24 + tabBarHeight,
-            paddingHorizontal: 24,
-            gap: 16,
+            paddingBottom: Spacing['6'] + tabBarHeight,
+            paddingHorizontal: Spacing['6'],
+            gap: Spacing['4'],
           }}
         >
           <TouchableOpacity activeOpacity={0.7} onPress={handleSave} disabled={saving} style={{ opacity: saving && !saved ? 0.5 : 1 }} accessibilityLabel={saved ? 'Saved' : 'Save wallpaper'} accessibilityRole="button" accessibilityState={{ disabled: saving }}>
             <View
               style={{
                 backgroundColor: saved ? colors.text : colors.buttonBackground,
-                paddingVertical: 16,
-                paddingHorizontal: 28,
+                paddingVertical: Spacing['4'],
+                paddingHorizontal: Spacing['7'],
                 borderRadius: Radius.card,
                 borderWidth: 1,
                 borderColor: saved ? colors.text : colors.border,
@@ -514,8 +515,8 @@ export default function WallpaperScreen() {
             <View
               style={{
                 backgroundColor: colors.buttonBackground,
-                paddingVertical: 16,
-                paddingHorizontal: 28,
+                paddingVertical: Spacing['4'],
+                paddingHorizontal: Spacing['7'],
                 borderRadius: Radius.card,
                 borderWidth: 1,
                 borderColor: colors.border,

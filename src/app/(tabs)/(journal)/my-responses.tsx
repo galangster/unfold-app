@@ -7,6 +7,7 @@ import { CaretLeftIcon, CaretRightIcon, PencilLineIcon } from 'phosphor-react-na
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { format } from 'date-fns';
@@ -43,14 +44,14 @@ export default function MyResponsesScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
           <TouchableOpacity activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.back();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ padding: 8 }}
+            style={{ padding: Spacing['2'] }}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
@@ -60,7 +61,7 @@ export default function MyResponsesScreen() {
               fontFamily: FontFamily.uiMedium,
               fontSize: FontSize.base,
               color: colors.text,
-              marginLeft: 8,
+              marginLeft: Spacing['2'],
             }}
           >
             My Responses
@@ -68,7 +69,7 @@ export default function MyResponsesScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
+          contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['4'], paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
           {journalEntries.length === 0 ? (
@@ -83,7 +84,7 @@ export default function MyResponsesScreen() {
                   fontSize: FontSize.base,
                   color: colors.textMuted,
                   textAlign: 'center',
-                  marginTop: 16,
+                  marginTop: Spacing['4'],
                 }}
               >
                 No journal entries yet
@@ -94,7 +95,7 @@ export default function MyResponsesScreen() {
                   fontSize: FontSize.sm,
                   color: colors.textHint,
                   textAlign: 'center',
-                  marginTop: 8,
+                  marginTop: Spacing['2'],
                 }}
               >
                 Your reflections will appear here
@@ -123,12 +124,12 @@ export default function MyResponsesScreen() {
                           borderRadius: Radius.lg,
                           borderWidth: 1,
                           borderColor: colors.border,
-                          padding: 20,
-                          marginBottom: 12,
+                          padding: Spacing['5'],
+                          marginBottom: Spacing['3'],
                           overflow: 'hidden',
                         }}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
                           <Text
                             style={{
                               fontFamily: FontFamily.mono,
@@ -156,7 +157,7 @@ export default function MyResponsesScreen() {
                             fontFamily: FontFamily.ui,
                             fontSize: 13,
                             color: colors.textSubtle,
-                            marginBottom: 12,
+                            marginBottom: Spacing['3'],
                           }}
                           numberOfLines={1}
                         >
@@ -192,7 +193,7 @@ export default function MyResponsesScreen() {
 
                         {/* Tap to read more indicator */}
                         {isLongContent && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: Spacing['2'] }}>
                             <Text
                               style={{
                                 fontFamily: FontFamily.ui,

@@ -13,6 +13,7 @@ import { StreakDisplay } from '../components/StreakDisplay';
 import { AudioWaveform } from '../components/AudioWaveform';
 import { SparkleBurst } from '../components/SparkleBurst';
 import { FontFamily } from '../constants/fonts';
+import { Spacing } from '../constants/spacing';
 
 function ShowcaseContent() {
   const { colors, isDark } = useTheme();
@@ -157,12 +158,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 24,
+    padding: Spacing['6'],
   },
   header: {
     fontSize: 36,
     fontWeight: '400',
-    marginBottom: 4,
+    marginBottom: Spacing['1'],
     textAlign: 'center',
     letterSpacing: -0.5,
   },
@@ -170,29 +171,29 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: Spacing['8'],
     opacity: 0.7,
   },
   section: {
-    marginBottom: 28,
+    marginBottom: Spacing['7'],
   },
   sectionTitle: {
     fontSize: 13,
     fontFamily: FontFamily.uiSemiBold,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
     opacity: 0.6,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   sectionContent: {
-    padding: 20,
+    padding: Spacing['5'],
     borderRadius: 16,
   },
   centerContent: {
     alignItems: 'center',
   },
   triggerButton: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
     paddingVertical: 14,
     borderRadius: 12,
     shadowColor: '#000',
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
   colorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: Spacing['4'],
   },
   colorItem: {
     alignItems: 'center',
@@ -224,7 +225,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 12,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,

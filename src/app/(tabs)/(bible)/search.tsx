@@ -6,6 +6,7 @@ import { FlashList } from '@shopify/flash-list';
 import { CaretLeftIcon, MagnifyingGlassIcon, XCircleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleSearch, type BibleSearchResultWithMeta } from '@/hooks/useBibleSearch';
@@ -110,21 +111,21 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['2'],
+    gap: Spacing['2'],
   },
   backButton: {
-    padding: 4,
+    padding: Spacing['1'],
   },
   searchInput: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 10,
     borderRadius: Radius.md,
-    gap: 8,
+    gap: Spacing['2'],
   },
   input: {
     flex: 1,
@@ -143,7 +144,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   resultItem: {
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing['5'],
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
