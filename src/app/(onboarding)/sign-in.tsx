@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useSharedValue,
@@ -70,6 +70,7 @@ function BenefitItem({ icon, title, description, delay, colors }: BenefitItemPro
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { source } = useLocalSearchParams<{ source?: string }>();
   const { colors: themeColors } = useTheme();
   const colors = {
     ...themeColors,
@@ -147,6 +148,14 @@ export default function SignInScreen() {
     transform: [{ rotate: `${loadingRotation.value}deg` }],
   }));
 
+  const navigateAfterAuth = useCallback(() => {
+    if (source === 'onboarding') {
+      router.back();
+    } else {
+      router.replace('/(tabs)/(today)');
+    }
+  }, [source, router]);
+
   const handleOAuthSignIn = useCallback(
     async (
       startFlow: typeof startAppleFlow,
@@ -175,13 +184,13 @@ export default function SignInScreen() {
           updateUser({ hasSeenSignInPrompt: true });
 
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          router.replace('/(tabs)/(today)');
+          navigateAfterAuth();
         }
       } catch (err: any) {
         logger.error(`[SignIn] ${providerName} OAuth error:`, err);
 
         if (err?.errors?.[0]?.code === 'session_exists') {
-          router.replace('/(tabs)/(today)');
+          navigateAfterAuth();
           return;
         }
 
@@ -207,7 +216,7 @@ export default function SignInScreen() {
         setIsSigningIn(false);
       }
     },
-    [isSigningIn, router, updateUser],
+    [isSigningIn, navigateAfterAuth, updateUser],
   );
 
   const handleGuestMode = useCallback(() => {
@@ -222,8 +231,8 @@ export default function SignInScreen() {
     });
 
     logger.log('[SignIn] Continued as guest');
-    router.replace('/(tabs)/(today)');
-  }, [router, updateUser, userProfile?.signInPromptCount]);
+    navigateAfterAuth();
+  }, [navigateAfterAuth, updateUser, userProfile?.signInPromptCount]);
 
   const benefits: Omit<BenefitItemProps, 'colors' | 'delay'>[] = [
     {
