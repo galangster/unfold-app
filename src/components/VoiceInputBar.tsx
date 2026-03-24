@@ -28,6 +28,7 @@ import {
 } from 'expo-speech-recognition';
 import { MicrophoneIcon, XIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,

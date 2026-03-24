@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
@@ -310,8 +311,8 @@ const s = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
     maxHeight: '65%',
   },
 
@@ -365,7 +366,7 @@ const s = StyleSheet.create({
   iconBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -400,7 +401,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     marginBottom: 16,
   },
   commentaryLoadingLabel: {
@@ -409,7 +410,7 @@ const s = StyleSheet.create({
   },
   commentaryCard: {
     padding: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     marginBottom: 16,
   },
   commentaryHeaderRow: {
@@ -437,7 +438,7 @@ const s = StyleSheet.create({
     gap: 10,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   readCtaText: {
     fontFamily: FontFamily.uiMedium,

@@ -27,6 +27,7 @@ import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, C
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
 import type { FontSize } from '@/lib/store';
@@ -1164,7 +1165,7 @@ export default function ReadingScreen() {
                 style={{
                   backgroundColor: retryCtaButtonBg,
                   paddingVertical: 18,
-                  borderRadius: 14,
+                  borderRadius: Radius.card,
                   borderWidth: 1,
                   borderColor: retryCtaButtonBorder,
                   flexDirection: 'row',
@@ -1199,7 +1200,7 @@ export default function ReadingScreen() {
                   style={{
                     backgroundColor: retryCtaButtonBg,
                     paddingVertical: 16,
-                    borderRadius: 14,
+                    borderRadius: Radius.card,
                     borderWidth: 1,
                     borderColor: retryCtaButtonBorder,
                     alignItems: 'center',
@@ -1449,7 +1450,7 @@ export default function ReadingScreen() {
                   style={{
                     marginBottom: 24,
                     padding: 16,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     backgroundColor: colors.inputBackground,
                     borderWidth: 1,
                     borderColor: colors.border,
@@ -1483,7 +1484,7 @@ export default function ReadingScreen() {
                       flex: 1,
                       paddingVertical: 12,
                       paddingHorizontal: 14,
-                      borderRadius: 16,
+                      borderRadius: Radius.lg,
                       backgroundColor: alpha(colors.accent, 0.06),
                       borderWidth: 1,
                       borderColor: alpha(colors.accent, 0.13),
@@ -1735,7 +1736,7 @@ export default function ReadingScreen() {
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: 16,
                               paddingHorizontal: 32,
-                              borderRadius: 14,
+                              borderRadius: Radius.card,
                               borderWidth: 1,
                               borderColor: retryCtaButtonBorder,
                               flexDirection: 'row',
@@ -1768,7 +1769,7 @@ export default function ReadingScreen() {
                               backgroundColor: retryCtaButtonBg,
                               paddingVertical: 16,
                               paddingHorizontal: 32,
-                              borderRadius: 14,
+                              borderRadius: Radius.card,
                               borderWidth: 1,
                               borderColor: retryCtaButtonBorder,
                               flexDirection: 'row',
@@ -1801,7 +1802,7 @@ export default function ReadingScreen() {
                         marginTop: 32,
                         paddingVertical: 18,
                         paddingHorizontal: 20,
-                        borderRadius: 14,
+                        borderRadius: Radius.card,
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
                         borderColor: alpha(colors.accent, 0.33),
@@ -1855,7 +1856,7 @@ export default function ReadingScreen() {
                         marginTop: 32,
                         paddingVertical: 18,
                         paddingHorizontal: 20,
-                        borderRadius: 14,
+                        borderRadius: Radius.card,
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
                         borderColor: colors.border,
@@ -1915,7 +1916,7 @@ export default function ReadingScreen() {
       {/* Phase 5: Continuation Prompt */}
       <Modal visible={showContinuationPrompt} transparent animationType="fade" statusBarTranslucent>
         <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-          <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: 20, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
+          <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: Radius.xl, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' }}>
             <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: 12, letterSpacing: -0.5 }}>
               Your series{'\n'}could continue
             </Text>
@@ -1931,7 +1932,7 @@ export default function ReadingScreen() {
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleContinueJourney}
-              style={{ backgroundColor: colors.accent, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12, opacity: isExtendingArc ? 0.7 : 1 }}
+              style={{ backgroundColor: colors.accent, borderRadius: Radius.card, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center', marginBottom: 12, opacity: isExtendingArc ? 0.7 : 1 }}
               disabled={isExtendingArc}
               accessibilityRole="button"
               accessibilityLabel="Continue your series"
@@ -2113,7 +2114,7 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
           right: 12,
           bottom: 100,
           zIndex: 100,
-          borderRadius: 20,
+          borderRadius: Radius.xl,
           backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -4 },
@@ -2228,7 +2229,7 @@ const styles = StyleSheet.create({
     right: '10%',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -2249,7 +2250,7 @@ const styles = StyleSheet.create({
     bottom: 100,
     left: 24,
     right: 24,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     paddingVertical: 14,
     paddingHorizontal: 18,
     flexDirection: 'row',

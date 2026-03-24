@@ -27,6 +27,7 @@ import {
   SparkleIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import type { NudgeType } from '@/lib/nudges';
@@ -123,7 +124,7 @@ export function PremiumNudgeCard({
                     marginHorizontal: 0,
                   }
                 : {
-                    borderRadius: 14,
+                    borderRadius: Radius.card,
                     borderWidth: 1,
                   }),
             },

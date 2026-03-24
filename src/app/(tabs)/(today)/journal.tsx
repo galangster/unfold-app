@@ -42,6 +42,7 @@ import {
   PlusIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -1138,7 +1139,7 @@ Their journal entry:
                         backgroundColor: newPrayerText.trim() ? colors.accent : alpha(colors.accent, 0.25),
                         paddingHorizontal: 20,
                         paddingVertical: 8,
-                        borderRadius: 16,
+                        borderRadius: Radius.lg,
                         opacity: newPrayerText.trim() ? 1 : 0.5,
                       }}
                       accessibilityLabel="Add prayer"
@@ -1272,7 +1273,7 @@ const jStyles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     backgroundColor: 'transparent',
     alignSelf: 'center',
@@ -1344,7 +1345,7 @@ const jStyles = StyleSheet.create({
     borderLeftColor: 'transparent',
   },
   questionInputCard: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     padding: 14,
   },
@@ -1389,13 +1390,13 @@ const jStyles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
   },
   soapLetterBadge: {
     width: 28,
     height: 28,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -1415,7 +1416,7 @@ const jStyles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   soapInputCard: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     padding: 14,
   },
@@ -1504,7 +1505,7 @@ const jStyles = StyleSheet.create({
     marginTop: 4,
   },
   prayerInputCard: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     padding: 12,
   },
@@ -1519,7 +1520,7 @@ const jStyles = StyleSheet.create({
   prayerSubmitButton: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },

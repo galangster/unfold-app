@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { WarningCircleIcon, TrashIcon } from 'phosphor-react-native';
 import { MMKV } from 'react-native-mmkv';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useUser, useClerk } from '@clerk/clerk-expo';
@@ -173,8 +174,8 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
       backdropComponent={renderBackdrop}
       backgroundStyle={{
         backgroundColor: colors.inputBackground,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
+        borderTopLeftRadius: Radius['2xl'],
+        borderTopRightRadius: Radius['2xl'],
       }}
       handleIndicatorStyle={{
         backgroundColor: colors.border,
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -384,7 +385,7 @@ const styles = StyleSheet.create({
   cancelButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     alignItems: 'center',
   },
   cancelButtonText: {
@@ -394,7 +395,7 @@ const styles = StyleSheet.create({
   deleteButton: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     alignItems: 'center',
   },
   deleteButtonText: {
@@ -407,14 +408,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     textAlign: 'center',
     letterSpacing: 2,
     marginBottom: 16,
   },
   confirmDeleteButton: {
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: Radius.card,
     alignItems: 'center',
     marginBottom: 12,
   },

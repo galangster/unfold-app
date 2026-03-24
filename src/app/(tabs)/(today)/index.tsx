@@ -18,6 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
@@ -852,7 +853,7 @@ export default function HomeScreen() {
                 <View
                   style={{
                     backgroundColor: colors.inputBackground,
-                    borderRadius: 14,
+                    borderRadius: Radius.card,
                     borderWidth: 1,
                     borderColor: colors.border,
                     padding: 16,
@@ -924,13 +925,13 @@ export default function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Start a new series"
                 style={{
-                  borderRadius: 20,
+                  borderRadius: Radius.xl,
                   overflow: 'hidden',
                 }}
               >
                 <View
                   style={{
-                    borderRadius: 16,
+                    borderRadius: Radius.lg,
                     borderWidth: 1,
                     borderColor: alpha(colors.accent, 0.09),
                     padding: 28,
@@ -985,7 +986,7 @@ export default function HomeScreen() {
                       backgroundColor: colors.accent,
                       paddingVertical: 15,
                       paddingHorizontal: 36,
-                      borderRadius: 12,
+                      borderRadius: Radius.md,
                     }}
                   >
                     <Text
@@ -1020,14 +1021,14 @@ export default function HomeScreen() {
                   : `Continue ${currentDevotional.title}, day ${currentDevotional.currentDay} of ${currentDevotional.totalDays}`
                 }
                 style={{
-                  borderRadius: 20,
+                  borderRadius: Radius.xl,
                   overflow: 'hidden',
                   opacity: isPreparingCurrentDay ? 0.85 : 1,
                 }}
               >
                 <View
                   style={{
-                    borderRadius: 20,
+                    borderRadius: Radius.xl,
                     borderWidth: 1,
                     borderColor: alpha(colors.accent, 0.09),
                     padding: 24,
@@ -1059,7 +1060,7 @@ export default function HomeScreen() {
                         backgroundColor: colors.buttonBackground,
                         paddingVertical: 5,
                         paddingHorizontal: 10,
-                        borderRadius: 20,
+                        borderRadius: Radius.xl,
                         flexDirection: 'row',
                         alignItems: 'center',
                         marginLeft: 12,
@@ -1205,7 +1206,7 @@ export default function HomeScreen() {
                         style={{
                           backgroundColor: colors.buttonBackground,
                           paddingVertical: 15,
-                          borderRadius: 12,
+                          borderRadius: Radius.md,
                           alignItems: 'center',
                           borderWidth: 1,
                           borderColor: colors.border,
@@ -1247,13 +1248,13 @@ export default function HomeScreen() {
                       color={colors.accent}
                       intensity="medium"
                       active={!isJourneyComplete}
-                      style={{ borderRadius: 12 }}
+                      style={{ borderRadius: Radius.md }}
                     >
                       <View
                         style={{
                           backgroundColor: colors.accent,
                           paddingVertical: 15,
-                          borderRadius: 12,
+                          borderRadius: Radius.md,
                           alignItems: 'center',
                         }}
                       >
@@ -1320,7 +1321,7 @@ export default function HomeScreen() {
               <View
                 style={{
                   backgroundColor: colors.inputBackground,
-                  borderRadius: 16,
+                  borderRadius: Radius.lg,
                   borderWidth: 1,
                   borderColor: colors.border,
                   padding: 20,
@@ -1364,7 +1365,7 @@ export default function HomeScreen() {
                       gap: 6,
                       paddingVertical: 12,
                       paddingHorizontal: 10,
-                      borderRadius: 12,
+                      borderRadius: Radius.md,
                       backgroundColor: colors.buttonBackground,
                     }}
                   >
@@ -1384,7 +1385,7 @@ export default function HomeScreen() {
                       gap: 6,
                       paddingVertical: 12,
                       paddingHorizontal: 10,
-                      borderRadius: 12,
+                      borderRadius: Radius.md,
                       backgroundColor: colors.buttonBackground,
                     }}
                   >
@@ -1404,7 +1405,7 @@ export default function HomeScreen() {
                       gap: 6,
                       paddingVertical: 12,
                       paddingHorizontal: 10,
-                      borderRadius: 12,
+                      borderRadius: Radius.md,
                       backgroundColor: colors.buttonBackground,
                     }}
                   >
@@ -1503,7 +1504,7 @@ const homeStyles = StyleSheet.create({
     flex: 1,
   },
   notificationCard: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     paddingVertical: 16,
     paddingHorizontal: 16,
     paddingRight: 12,
@@ -1531,7 +1532,7 @@ const homeStyles = StyleSheet.create({
     marginTop: 16,
   },
   shimmerCard: {
-    borderRadius: 14,
+    borderRadius: Radius.card,
     borderWidth: 1,
     padding: 18,
     shadowColor: '#000',
@@ -1564,7 +1565,7 @@ const homeStyles = StyleSheet.create({
     marginTop: 10,
   },
   bridgeBubble: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     paddingVertical: 12,
     paddingHorizontal: 14,
