@@ -37,7 +37,8 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { Button, Card, Chip } from '@/components/ui';
+import { Button, Card, Chip, Input } from '@/components/ui';
+import { MagnifyingGlassIcon } from 'phosphor-react-native';
 
 // ---------------------------------------------------------------------------
 // Section Header
@@ -71,6 +72,11 @@ export default function ComponentCatalogScreen() {
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['All Notes']));
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [inputBasic, setInputBasic] = useState('');
+  const [inputSearch, setInputSearch] = useState('');
+  const [inputLabeled, setInputLabeled] = useState('');
+  const [inputError, setInputError] = useState('too short');
+  const [inputMultiline, setInputMultiline] = useState('');
 
   const handleLoadingDemo = () => {
     setLoadingDemo(true);
@@ -447,6 +453,94 @@ export default function ComponentCatalogScreen() {
               What does it mean to you that God's mercies are new every morning?
             </Text>
           </View>
+        </Card>
+
+        {/* ============================================================= */}
+        {/* INPUT — VARIANTS                                              */}
+        {/* ============================================================= */}
+
+        <SectionTitle title="INPUT — BASIC" />
+
+        <SubLabel text="Default single-line" />
+        <Input
+          placeholder="Folder name"
+          value={inputBasic}
+          onChangeText={setInputBasic}
+          maxLength={40}
+          showCount
+          wrapperStyle={{ marginBottom: Spacing[4] }}
+        />
+
+        <SubLabel text="With search icon + clearable" />
+        <Input
+          placeholder="Search lessons..."
+          icon={<MagnifyingGlassIcon />}
+          clearable
+          value={inputSearch}
+          onChangeText={setInputSearch}
+          wrapperStyle={{ marginBottom: Spacing[4] }}
+        />
+
+        <SubLabel text="With label" />
+        <Input
+          label="DISPLAY NAME"
+          placeholder="Your name"
+          value={inputLabeled}
+          onChangeText={setInputLabeled}
+          autoCapitalize="words"
+          wrapperStyle={{ marginBottom: Spacing[4] }}
+        />
+
+        <SubLabel text="Error state" />
+        <Input
+          label="PASSWORD"
+          placeholder="Enter password"
+          value={inputError}
+          onChangeText={setInputError}
+          error="Must be at least 8 characters"
+          secureTextEntry
+          wrapperStyle={{ marginBottom: Spacing[4] }}
+        />
+
+        <SectionTitle title="INPUT — MULTILINE" />
+
+        <SubLabel text="Auto-growing textarea with character count" />
+        <Input
+          placeholder="Write your reflection..."
+          multiline
+          value={inputMultiline}
+          onChangeText={setInputMultiline}
+          maxLength={500}
+          showCount
+          wrapperStyle={{ marginBottom: Spacing[4] }}
+        />
+
+        <SectionTitle title="INPUT — REAL-WORLD EXAMPLES" />
+
+        <SubLabel text="Create folder dialog" />
+        <Card variant="default" style={{ marginBottom: Spacing[4] }}>
+          <Input
+            placeholder="Folder name"
+            value=""
+            onChangeText={() => {}}
+            maxLength={40}
+            autoCapitalize="sentences"
+            wrapperStyle={{ marginBottom: Spacing[3] }}
+          />
+          <Button variant="primary" size="lg" label="Create" fullWidth onPress={() => {}} />
+        </Card>
+
+        <SubLabel text="Search with results" />
+        <Card variant="default" style={{ marginBottom: Spacing[4] }}>
+          <Input
+            icon={<MagnifyingGlassIcon />}
+            clearable
+            placeholder="Search scripture..."
+            value="Romans 8"
+            onChangeText={() => {}}
+            wrapperStyle={{ marginBottom: Spacing[3] }}
+          />
+          <Chip variant="reference" label="Romans 8:28" icon={<BookOpenIcon />} onPress={() => {}} />
         </Card>
 
         {/* ============================================================= */}
