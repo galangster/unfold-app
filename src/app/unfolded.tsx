@@ -39,7 +39,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { format } from 'date-fns';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -1601,14 +1601,14 @@ const s = StyleSheet.create({
   },
   hookDate: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: PALETTE.dimWhite,
     textAlign: 'center',
     marginBottom: 16,
   },
   hookTeaser: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: 16,
+    fontSize: FontSize.base,
     color: PALETTE.mutedWhite,
     textAlign: 'center',
     lineHeight: 24,
@@ -1641,7 +1641,7 @@ const s = StyleSheet.create({
   },
   heroUnit: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: 18,
+    fontSize: FontSize.lg,
     color: PALETTE.mutedWhite,
     textAlign: 'center',
     marginBottom: 24,
@@ -1681,7 +1681,7 @@ const s = StyleSheet.create({
   // Insight + quote
   insight: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: PALETTE.dimWhite,
     textAlign: 'center',
     lineHeight: 22,
@@ -1690,7 +1690,7 @@ const s = StyleSheet.create({
   },
   quote: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: 'rgba(255,255,255,0.25)',
     textAlign: 'center',
     lineHeight: 22,
@@ -1765,7 +1765,7 @@ const s = StyleSheet.create({
   },
   featureLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: PALETTE.dimWhite,
     marginBottom: 4,
   },
@@ -1776,7 +1776,7 @@ const s = StyleSheet.create({
   },
   featureCount: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: 'rgba(255,255,255,0.25)',
     marginTop: 2,
   },
@@ -1793,7 +1793,7 @@ const s = StyleSheet.create({
   },
   barLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: PALETTE.mutedWhite,
     width: 72,
     textAlign: 'right',
@@ -1829,7 +1829,7 @@ const s = StyleSheet.create({
   },
   trendText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   moodBars: {
     flexDirection: 'row',
@@ -1874,7 +1874,7 @@ const s = StyleSheet.create({
   },
   wordLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     color: PALETTE.dimWhite,
     marginTop: 4,
     textAlign: 'center',
@@ -1906,7 +1906,7 @@ const s = StyleSheet.create({
   },
   closingTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 60,
+    fontSize: FontSize['6xl'],
     color: PALETTE.cream,
     letterSpacing: -2,
     marginTop: 20,
@@ -1916,7 +1916,7 @@ const s = StyleSheet.create({
   },
   closingName: {
     fontFamily: FontFamily.displayItalic,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     color: PALETTE.gold,
     marginBottom: 4,
     textAlign: 'center',
@@ -2010,7 +2010,7 @@ const s = StyleSheet.create({
   },
   shareCardStatNum: {
     fontFamily: FontFamily.display,
-    fontSize: 36,
+    fontSize: FontSize['4xl'],
     color: PALETTE.cream,
     letterSpacing: -1,
   },
@@ -2023,7 +2023,7 @@ const s = StyleSheet.create({
   },
   shareCardArchetype: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: 16,
+    fontSize: FontSize.base,
     color: PALETTE.mutedWhite,
     textAlign: 'center',
     marginTop: 4,
@@ -2034,7 +2034,7 @@ const s = StyleSheet.create({
   },
   shareCardFooterText: {
     fontFamily: FontFamily.display,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: 'rgba(255,255,255,0.2)',
     letterSpacing: 3,
   },

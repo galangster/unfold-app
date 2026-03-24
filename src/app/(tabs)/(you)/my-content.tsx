@@ -13,7 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
@@ -73,7 +73,7 @@ export default function MyContentScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
             }}
           >
@@ -257,7 +257,7 @@ export default function MyContentScreen() {
                       <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
                         {devotional?.title || 'Untitled Series'}
                       </Text>
-                      <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                      <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
                         · Day {entry.dayNumber}
                       </Text>
                     </View>
@@ -313,7 +313,7 @@ export default function MyContentScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.bodyItalic,
-                        fontSize: 16,
+                        fontSize: FontSize.base,
                         color: colors.text,
                         lineHeight: 24,
                         marginBottom: 12,
@@ -330,7 +330,7 @@ export default function MyContentScreen() {
                           backgroundColor: HIGHLIGHT_COLORS[highlight.color || 'yellow'][isDark ? 'dark' : 'light'],
                         }}
                       />
-                      <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                      <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
                         {devotional?.title} · Day {highlight.dayNumber}
                       </Text>
                     </View>
@@ -383,7 +383,7 @@ export default function MyContentScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.mono,
-                          fontSize: 12,
+                          fontSize: FontSize.xs,
                           color: colors.accent,
                           letterSpacing: 0.5,
                         }}

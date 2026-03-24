@@ -42,7 +42,7 @@ import {
   useBridgeState,
   useKeyboard,
 } from '@10play/tentap-editor';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
@@ -1359,7 +1359,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 16,
+    fontSize: FontSize.base,
   },
   moreMenu: {
     position: 'absolute',
@@ -1384,7 +1384,7 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   menuDivider: {
     height: StyleSheet.hairlineWidth,
@@ -1448,7 +1448,7 @@ const styles = StyleSheet.create({
   },
   titleInput: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     letterSpacing: -0.3,
     paddingHorizontal: 24,
     paddingTop: 16,
@@ -1498,7 +1498,7 @@ const styles = StyleSheet.create({
   },
   tagPillText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   toolbar: {
     borderTopWidth: StyleSheet.hairlineWidth,

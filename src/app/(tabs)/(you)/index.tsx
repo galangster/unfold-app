@@ -17,7 +17,7 @@ import {
   CrownIcon,
   SparkleIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
@@ -207,7 +207,7 @@ export default function YouScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.body,
-                        fontSize: 14,
+                        fontSize: FontSize.sm,
                         color: colors.background,
                         opacity: 0.85,
                         lineHeight: 20,

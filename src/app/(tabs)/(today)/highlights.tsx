@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, HighlighterIcon, BookOpenIcon, QuotesIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
@@ -160,7 +160,7 @@ export default function HighlightsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
-                        fontSize: 12,
+                        fontSize: FontSize.xs,
                         color: colors.textMuted,
                       }}
                     >
@@ -228,7 +228,7 @@ function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>[
       <Text
         style={{
           fontFamily: FontFamily.display,
-          fontSize: 24,
+          fontSize: FontSize['2xl'],
           color: colors.text,
           textAlign: 'center',
           marginBottom: 8,

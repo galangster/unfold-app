@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -52,7 +52,7 @@ export default function DayMenuScreen() {
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
-            fontSize: 12,
+            fontSize: FontSize.xs,
             color: colors.textSubtle,
             textTransform: 'uppercase',
             letterSpacing: 1.2,
@@ -68,7 +68,7 @@ export default function DayMenuScreen() {
         <Text
           style={{
             fontFamily: FontFamily.display,
-            fontSize: 24,
+            fontSize: FontSize['2xl'],
             color: colors.text,
             textAlign: 'left',
             marginTop: 12,
@@ -135,7 +135,7 @@ export default function DayMenuScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.mono,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textSubtle,
                     }}
                   >
@@ -148,7 +148,7 @@ export default function DayMenuScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.ui,
-                    fontSize: 12,
+                    fontSize: FontSize.xs,
                     color: colors.textSubtle,
                     marginBottom: 2,
                     textTransform: 'uppercase',
@@ -160,7 +160,7 @@ export default function DayMenuScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.uiMedium,
-                    fontSize: 16,
+                    fontSize: FontSize.base,
                     color: isLocked ? colors.textMuted : colors.text,
                   }}
                   numberOfLines={1}

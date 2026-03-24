@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import React, { useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 
@@ -197,7 +197,7 @@ export default function WelcomeScreen() {
           style={[
             {
               fontFamily: FontFamily.bodyItalic,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: 'rgba(200, 165, 92, 0.7)',
               textAlign: 'center',
               lineHeight: 24,

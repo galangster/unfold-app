@@ -37,7 +37,7 @@ import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
 import { DarkColors, createThemedColors } from '@/constants/colors';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
@@ -1077,13 +1077,13 @@ export default function OnboardingScreen() {
                     <HeartIcon size={26} color={colors.accent} weight="light" />
                   </View>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A theme or topic</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xl, color: colors.text, letterSpacing: -0.3 }}>A theme or topic</Text>
                     <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
                       Trust, courage, joy, lament, discipline...
                     </Text>
                   </View>
                   <View style={{ marginTop: 12 }}>
-                    <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                    <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
               </View>
@@ -1117,13 +1117,13 @@ export default function OnboardingScreen() {
                     <BookOpenIcon size={26} color={colors.accent} weight="light" />
                   </View>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>A style of study</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xl, color: colors.text, letterSpacing: -0.3 }}>A style of study</Text>
                     <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
                       Book study, character study, psalms, parables...
                     </Text>
                   </View>
                   <View style={{ marginTop: 12 }}>
-                    <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                    <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
               </View>
@@ -1154,13 +1154,13 @@ export default function OnboardingScreen() {
                     <MagicWandIcon size={26} color={colors.accent} weight="light" />
                   </View>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 20, color: colors.text, letterSpacing: -0.3 }}>Just guide me</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xl, color: colors.text, letterSpacing: -0.3 }}>Just guide me</Text>
                     <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, marginTop: 8, lineHeight: 22 }}>
                       We'll craft something based on what you share
                     </Text>
                   </View>
                   <View style={{ marginTop: 12 }}>
-                    <Text style={{ fontFamily: FontFamily.mono, fontSize: 18, color: colors.accent }}>→</Text>
+                    <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
               </View>
@@ -1358,7 +1358,7 @@ export default function OnboardingScreen() {
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <CrownIcon size={18} color={colors.textMuted} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.textMuted }}>More study types coming soon</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.textMuted }}>More study types coming soon</Text>
                   </View>
                 </View>
               </View>
@@ -1417,7 +1417,7 @@ export default function OnboardingScreen() {
                           borderWidth: 1,
                           borderColor: isSelected ? colors.borderFocused : colors.border,
                         }}>
-                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{subject.name}</Text>
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{subject.name}</Text>
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 3, lineHeight: 18 }}>{subject.description}</Text>
                         </View>
                   </TouchableOpacity>
@@ -1440,7 +1440,7 @@ export default function OnboardingScreen() {
             placeholderTextColor={colors.textMuted}
             style={{
               fontFamily: FontFamily.body,
-              fontSize: 18,
+              fontSize: FontSize.lg,
               color: colors.text,
               paddingVertical: 16,
               paddingHorizontal: 20,
@@ -1472,7 +1472,7 @@ export default function OnboardingScreen() {
             >
               <Text style={{
                 fontFamily: FontFamily.uiMedium,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: colors.background,
                 letterSpacing: 0.2,
               }}>
@@ -1527,7 +1527,7 @@ export default function OnboardingScreen() {
                   >
                     <Text style={{
                       fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: isChipSelected ? colors.text : colors.textMuted,
                     }}>
                       {chip}
@@ -1628,7 +1628,7 @@ export default function OnboardingScreen() {
                       justifyContent: 'space-between',
                     }}>
                       <View>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{option.label}</Text>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{option.label}</Text>
                         {'description' in option && option.description && (
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{option.description}</Text>
                         )}
@@ -1655,7 +1655,7 @@ export default function OnboardingScreen() {
           }}>
             <Text style={{
               fontFamily: FontFamily.displayItalic,
-              fontSize: 20,
+              fontSize: FontSize.xl,
               color: colors.text,
               lineHeight: 32,
             }}>
@@ -1690,7 +1690,7 @@ export default function OnboardingScreen() {
             }}>
               <Text style={{
                 fontFamily: FontFamily.uiSemiBold,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: '#FFFFFF',
               }}>
                 Let's get started
@@ -1752,7 +1752,7 @@ export default function OnboardingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={{
                   fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.text,
                   marginBottom: 3,
                 }}>
@@ -1809,7 +1809,7 @@ export default function OnboardingScreen() {
               }}>
                 <Text style={{
                   fontFamily: FontFamily.uiSemiBold,
-                  fontSize: 16,
+                  fontSize: FontSize.base,
                   color: '#FFFFFF',
                 }}>
                   I understand, let's continue
@@ -1952,7 +1952,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                     </View>
                     <View style={{
@@ -1990,7 +1990,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                     </View>
                     <View style={{
@@ -2046,9 +2046,9 @@ export default function OnboardingScreen() {
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <View style={{ flex: 1, marginRight: 12 }}>
-                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                        <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
                         <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
-                        <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 12, color: colors.textSubtle, marginTop: 6 }}>{opt.example}</Text>
+                        <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: FontSize.xs, color: colors.textSubtle, marginTop: 6 }}>{opt.example}</Text>
                       </View>
                       <View style={{
                         width: 20, height: 20, borderRadius: 10, borderWidth: 2,
@@ -2086,7 +2086,7 @@ export default function OnboardingScreen() {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>{opt.label}</Text>
+                      <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{opt.label}</Text>
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{opt.description}</Text>
                     </View>
                     <View style={{
@@ -2127,7 +2127,7 @@ export default function OnboardingScreen() {
               placeholderTextColor={colors.textMuted}
               style={{
                 fontFamily: FontFamily.body,
-                fontSize: 18,
+                fontSize: FontSize.lg,
                 color: colors.text,
                 height: 54,
                 paddingHorizontal: 20,
@@ -2143,7 +2143,7 @@ export default function OnboardingScreen() {
             entering={FadeIn.delay(600).duration(500)}
             style={{
               fontFamily: FontFamily.ui,
-              fontSize: 14,
+              fontSize: FontSize.sm,
               color: colors.textSubtle,
               textAlign: 'center',
               paddingHorizontal: 20,
@@ -2232,7 +2232,7 @@ export default function OnboardingScreen() {
                 {trialPurchaseMutation.isPending ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#FFFFFF' }}>
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: FontSize.base, color: '#FFFFFF' }}>
                     Start {yearlyTrialDuration} free trial
                   </Text>
                 )}
@@ -2242,7 +2242,7 @@ export default function OnboardingScreen() {
             {/* Billing terms */}
             <Text style={{
               fontFamily: FontFamily.ui,
-              fontSize: 12,
+              fontSize: FontSize.xs,
               color: colors.textSubtle,
               textAlign: 'center',
               marginTop: 10,
@@ -2358,7 +2358,7 @@ export default function OnboardingScreen() {
             >
               <Text style={{
                 fontFamily: FontFamily.uiSemiBold,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: colors.background,
               }}>
                 Sign in to keep your progress
@@ -2392,7 +2392,7 @@ export default function OnboardingScreen() {
           <Animated.View entering={FadeIn.delay(900).duration(400)}>
             <Text style={{
               fontFamily: FontFamily.ui,
-              fontSize: 12,
+              fontSize: FontSize.xs,
               color: colors.textSubtle,
               textAlign: 'center',
             }}>
@@ -2433,7 +2433,7 @@ export default function OnboardingScreen() {
   if (!step) {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontFamily: FontFamily.body, fontSize: 14, color: colors.textMuted }}>Loading next question…</Text>
+        <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textMuted }}>Loading next question…</Text>
       </View>
     );
   }
@@ -2476,7 +2476,7 @@ export default function OnboardingScreen() {
               >
                 <Text style={{ 
                   fontFamily: FontFamily.uiMedium, 
-                  fontSize: 14, 
+                  fontSize: FontSize.sm, 
                   color: colors.text
                 }}>
                   {isLastStep ? 'Create' : 'Continue'}
@@ -2513,7 +2513,7 @@ export default function OnboardingScreen() {
                   </View>
                   {showInput && (
                     <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 24 }}>
-                      <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>
+                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>
                         {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
                           ? "Select up to 3 themes that resonate with where you are."
                           : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
@@ -2599,7 +2599,7 @@ export default function OnboardingScreen() {
                   </View>
                   {showInput && (
                     <Animated.View entering={FadeIn.duration(300)} style={{ marginTop: 12, marginBottom: 32 }}>
-                      <Text style={{ fontFamily: FontFamily.body, fontSize: 16, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
+                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
                     </Animated.View>
                   )}
                   {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
@@ -2625,7 +2625,7 @@ const obStyles = StyleSheet.create({
   },
   themePillText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   selectionOrderBadge: {
     width: 18,

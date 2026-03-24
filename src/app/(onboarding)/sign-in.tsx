@@ -17,7 +17,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useOAuth } from '@clerk/clerk-expo';
 import { AppleLogoIcon, GoogleLogoIcon, FacebookLogoIcon, CloudIcon, ShieldIcon, SparkleIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
@@ -300,7 +300,7 @@ export default function SignInScreen() {
               style={{
                 color: '#FFFFFF',
                 fontFamily: FontFamily.ui,
-                fontSize: 14,
+                fontSize: FontSize.sm,
                 textAlign: 'center',
                 lineHeight: 20,
               }}
@@ -446,14 +446,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    fontSize: 36,
+    fontSize: FontSize['4xl'],
     textAlign: 'center',
     letterSpacing: -0.5,
     lineHeight: 44,
     marginBottom: 16,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: FontSize.base,
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 8,
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   },
   oauthButtonText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
+    fontSize: FontSize.base,
   },
   guestLink: {
     paddingVertical: 16,
@@ -520,13 +520,13 @@ const styles = StyleSheet.create({
   },
   guestLinkText: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   privacyContainer: {
     alignItems: 'center',
   },
   privacyText: {
-    fontSize: 12,
+    fontSize: FontSize.xs,
     textAlign: 'center',
   },
 });

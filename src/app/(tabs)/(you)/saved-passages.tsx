@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -33,7 +33,7 @@ export default function SavedPassagesScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
               marginLeft: 8,
             }}
@@ -48,7 +48,7 @@ export default function SavedPassagesScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.body,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: colors.textMuted,
                 textAlign: 'center',
                 marginTop: 16,
@@ -132,7 +132,7 @@ export default function SavedPassagesScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
-                        fontSize: 12,
+                        fontSize: FontSize.xs,
                         color: colors.textSubtle,
                       }}
                       numberOfLines={1}

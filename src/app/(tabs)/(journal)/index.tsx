@@ -35,7 +35,7 @@ import {
   PlusIcon,
   NotepadIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
@@ -220,7 +220,7 @@ const segStyles = StyleSheet.create({
     zIndex: 1,
   },
   segmentText: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
 });
 
@@ -316,7 +316,7 @@ const emptyStyles = StyleSheet.create({
   },
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     textAlign: 'center',
     marginTop: 16,
     marginBottom: 8,
@@ -1070,7 +1070,7 @@ export default function JournalHubScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.ui,
-                            fontSize: 12,
+                            fontSize: FontSize.xs,
                             color: colors.textSubtle,
                           }}
                         >
@@ -1082,7 +1082,7 @@ export default function JournalHubScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: 20,
+                          fontSize: FontSize.xl,
                           color: colors.text,
                           letterSpacing: -0.3,
                           marginBottom: 6,
@@ -1110,7 +1110,7 @@ export default function JournalHubScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.bodyItalic,
-                            fontSize: 14,
+                            fontSize: FontSize.sm,
                             color: colors.text,
                             lineHeight: 21,
                             opacity: 0.7,
@@ -1192,7 +1192,7 @@ export default function JournalHubScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.accent,
                             }}
                           >
@@ -1235,7 +1235,7 @@ export default function JournalHubScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: 24,
+                          fontSize: FontSize['2xl'],
                           color: colors.text,
                           textAlign: 'center',
                           marginBottom: 8,
@@ -1366,7 +1366,7 @@ export default function JournalHubScreen() {
                               <Text
                                 style={{
                                   fontFamily: FontFamily.uiMedium,
-                                  fontSize: 14,
+                                  fontSize: FontSize.sm,
                                   color: colors.text,
                                   flex: 1,
                                 }}
@@ -1641,7 +1641,7 @@ const mainStyles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     padding: 0,
     paddingVertical: 4,
   },

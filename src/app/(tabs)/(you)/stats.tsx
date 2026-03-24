@@ -6,7 +6,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon, CompassIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
@@ -429,7 +429,7 @@ const statStyles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 16,
+    fontSize: FontSize.base,
     marginLeft: 8,
   },
   allThemesButton: {
@@ -440,7 +440,7 @@ const statStyles = StyleSheet.create({
   },
   allThemesText: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -456,7 +456,7 @@ const statStyles = StyleSheet.create({
   },
   focusedBannerText: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   streakHero: {
     borderRadius: Radius.xl,
@@ -473,7 +473,7 @@ const statStyles = StyleSheet.create({
   },
   streakLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     marginTop: -4,
   },
   bestStreak: {
@@ -495,12 +495,12 @@ const statStyles = StyleSheet.create({
   },
   favoriteMethodName: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     marginTop: 10,
   },
   favoriteMethodLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginTop: 2,
   },
   spacer: {
@@ -529,7 +529,7 @@ const statStyles = StyleSheet.create({
   },
   statCardLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginTop: 2,
   },
 });

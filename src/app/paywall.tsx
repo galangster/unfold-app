@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon, StackIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
@@ -507,7 +507,7 @@ export default function PaywallScreen() {
           <Animated.View entering={FadeInDown.duration(400).delay(600)} style={{ marginTop: 28 }}>
             {/* Column headers */}
             <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
-              <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: 12, color: colors.textSubtle }}>
+              <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
               </Text>
               <Text style={{ width: 70, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center', letterSpacing: 0.5 }}>
                 FREE
@@ -540,7 +540,7 @@ export default function PaywallScreen() {
                       ? <CheckIcon size={15} color={colors.textMuted} weight="bold" />
                       : <XCircleIcon size={15} color={colors.textSubtle} weight="light" />
                   ) : (
-                    <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                    <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
                       {row.free}
                     </Text>
                   )}
@@ -549,7 +549,7 @@ export default function PaywallScreen() {
                   {typeof row.premium === 'boolean' ? (
                     <CheckIcon size={15} color={colors.accent} weight="bold" />
                   ) : (
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.accent }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent }}>
                       {row.premium}
                     </Text>
                   )}
@@ -795,7 +795,7 @@ export default function PaywallScreen() {
             hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             style={{ padding: 6, opacity: isPurchasing ? 0.5 : 1 }}
           >
-            <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+            <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
               Restore
             </Text>
           </TouchableOpacity>
@@ -808,7 +808,7 @@ export default function PaywallScreen() {
                 hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 style={{ padding: 6 }}
               >
-                <Text style={{ fontFamily: FontFamily.ui, fontSize: 12, color: colors.textMuted }}>
+                <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
                   Maybe later
                 </Text>
               </TouchableOpacity>

@@ -14,7 +14,7 @@ import {
   CalendarIcon,
   InfoIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -486,7 +486,7 @@ const ssStyles = StyleSheet.create({
   },
   tierName: {
     fontFamily: FontFamily.display,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     marginTop: 1,
   },
   streakCountRight: {
@@ -499,7 +499,7 @@ const ssStyles = StyleSheet.create({
   },
   streakCountUnit: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginTop: -2,
   },
   progressSection: {
@@ -533,7 +533,7 @@ const ssStyles = StyleSheet.create({
   },
   lastReadText: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     marginTop: 12,
     textAlign: 'center',
   },
@@ -569,12 +569,12 @@ const ssStyles = StyleSheet.create({
   },
   statValue: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 24,
+    fontSize: FontSize['2xl'],
     marginTop: 8,
   },
   statLabel: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   tooltipBubble: {
     borderWidth: 1,
@@ -584,7 +584,7 @@ const ssStyles = StyleSheet.create({
   },
   tooltipText: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     lineHeight: 17,
   },
   amnestyCard: {
@@ -598,7 +598,7 @@ const ssStyles = StyleSheet.create({
   },
   amnestyTitle: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
+    fontSize: FontSize.base,
   },
   amnestyDescription: {
     fontFamily: FontFamily.ui,

@@ -12,7 +12,7 @@ import {
   BookmarkSimpleIcon,
   BookOpenIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, HighlightColor } from '@/lib/store';
@@ -111,7 +111,7 @@ export default function SavedScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
               marginLeft: 8,
             }}
@@ -201,7 +201,7 @@ export default function SavedScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.textSubtle,
                             }}
                             numberOfLines={1}
@@ -280,7 +280,7 @@ export default function SavedScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.display,
-                            fontSize: 18,
+                            fontSize: FontSize.lg,
                             color: colors.text,
                             marginBottom: 6,
                           }}
@@ -290,7 +290,7 @@ export default function SavedScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.body,
-                            fontSize: 14,
+                            fontSize: FontSize.sm,
                             color: colors.textMuted,
                             lineHeight: 20,
                             marginBottom: 8,
@@ -302,7 +302,7 @@ export default function SavedScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.ui,
-                            fontSize: 12,
+                            fontSize: FontSize.xs,
                             color: colors.textSubtle,
                           }}
                           numberOfLines={1}
@@ -381,7 +381,7 @@ export default function SavedScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.display,
-                            fontSize: 18,
+                            fontSize: FontSize.lg,
                             color: colors.text,
                             lineHeight: 24,
                             marginBottom: 10,
@@ -511,7 +511,7 @@ function EmptyState({
       <Text
         style={{
           fontFamily: FontFamily.body,
-          fontSize: 14,
+          fontSize: FontSize.sm,
           color: colors.textMuted,
           textAlign: 'center',
           lineHeight: 20,

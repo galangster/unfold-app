@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
 import { CaretLeftIcon, ArrowRightIcon } from 'phosphor-react-native';
@@ -88,7 +88,7 @@ export default function SampleDevotionalScreen() {
               <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: 8 }}>
                 YOUR FIRST DEVOTIONAL
               </Text>
-              <Text style={{ fontFamily: FontFamily.display, fontSize: 24, color: colors.text }}>
+              <Text style={{ fontFamily: FontFamily.display, fontSize: FontSize['2xl'], color: colors.text }}>
                 This is how Unfold speaks to you.
               </Text>
             </Animated.View>
@@ -117,7 +117,7 @@ export default function SampleDevotionalScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.mono,
-                    fontSize: 14,
+                    fontSize: FontSize.sm,
                     color: colors.textMuted,
                     lineHeight: 22,
                     marginBottom: 20,
@@ -145,7 +145,7 @@ export default function SampleDevotionalScreen() {
                   <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.accent, marginBottom: 8 }}>
                     PRAYER
                   </Text>
-                  <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 14, color: colors.textMuted, lineHeight: 22 }}>
+                  <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: FontSize.sm, color: colors.textMuted, lineHeight: 22 }}>
                     {sample.prayer}
                   </Text>
                 </View>
@@ -158,7 +158,7 @@ export default function SampleDevotionalScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.body,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.textMuted,
                   textAlign: 'center',
                   marginBottom: 16,
@@ -179,7 +179,7 @@ export default function SampleDevotionalScreen() {
                       gap: 8,
                     }}
                   >
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.background }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.background }}>
                       Continue Setup
                     </Text>
                     <ArrowRightIcon size={18} color={colors.background} weight="light" />

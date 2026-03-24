@@ -24,7 +24,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { DarkColors, createThemedColors } from '@/constants/colors';
@@ -964,7 +964,7 @@ function AnimatedBody({ text, color, pageKey }: { text: string; color: string; p
       style={[
         {
           fontFamily: FontFamily.body,
-          fontSize: 16,
+          fontSize: FontSize.base,
           color,
           textAlign: 'center',
           lineHeight: 24,
@@ -1153,7 +1153,7 @@ export default function HowItWorksScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
-                  fontSize: 16,
+                  fontSize: FontSize.base,
                   color: colors.background,
                   letterSpacing: 0.3,
                 }}

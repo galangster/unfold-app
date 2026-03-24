@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { CaretLeftIcon, BookOpenIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
@@ -350,7 +350,7 @@ export default function EveningWindDownScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.bodyItalic,
-                    fontSize: 14,
+                    fontSize: FontSize.sm,
                     color: colors.textSubtle,
                     marginTop: 16,
                     opacity: 0.7,
@@ -398,7 +398,7 @@ export default function EveningWindDownScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.accent,
                       lineHeight: 16,
                     }}
@@ -501,7 +501,7 @@ export default function EveningWindDownScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.bodyItalic,
-                        fontSize: 14,
+                        fontSize: FontSize.sm,
                         color: colors.textSubtle,
                         marginTop: 12,
                         opacity: 0.7,

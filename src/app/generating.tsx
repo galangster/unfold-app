@@ -19,7 +19,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord, type ProgressiveMemory } from '@/lib/store';
@@ -1004,7 +1004,7 @@ export default function GeneratingScreen() {
               entering={entering(FadeIn.duration(600).delay(1000))}
               style={{
                 fontFamily: FontFamily.bodyItalic,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: colors.textSubtle,
                 textAlign: 'center',
                 lineHeight: 24,
@@ -1124,7 +1124,7 @@ export default function GeneratingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: 30,
+                  fontSize: FontSize['3xl'],
                   color: colors.text,
                   textAlign: 'center',
                   lineHeight: 40,
@@ -1268,7 +1268,7 @@ export default function GeneratingScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.background,
                     }}
                   >
@@ -1290,7 +1290,7 @@ export default function GeneratingScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.textMuted,
                     }}
                   >
@@ -1340,7 +1340,7 @@ export default function GeneratingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.bodyItalic,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.textSubtle,
                   textAlign: 'center',
                   lineHeight: 21,
@@ -1403,7 +1403,7 @@ export default function GeneratingScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.uiMedium,
-                    fontSize: 12,
+                    fontSize: FontSize.xs,
                     color: colors.accent,
                     letterSpacing: 1.5,
                     textTransform: 'uppercase',
@@ -1477,7 +1477,7 @@ export default function GeneratingScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.bodyItalic,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.textMuted,
                       lineHeight: 22,
                     }}
@@ -1543,7 +1543,7 @@ const genStyles = StyleSheet.create({
   },
   errorMessage: {
     fontFamily: FontFamily.body,
-    fontSize: 16,
+    fontSize: FontSize.base,
     textAlign: 'center',
     marginBottom: 40,
     lineHeight: 24,
@@ -1556,7 +1556,7 @@ const genStyles = StyleSheet.create({
   },
   retryButtonText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 16,
+    fontSize: FontSize.base,
   },
   startOverButton: {
     paddingVertical: 16,
@@ -1564,7 +1564,7 @@ const genStyles = StyleSheet.create({
   },
   startOverText: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   rippleContainer: {
     width: 200,

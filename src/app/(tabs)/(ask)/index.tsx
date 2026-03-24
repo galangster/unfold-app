@@ -21,7 +21,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -290,7 +290,7 @@ export default function CompanionScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.body,
-                    fontSize: 14,
+                    fontSize: FontSize.sm,
                     color: colors.error,
                     textAlign: 'center',
                   }}

@@ -8,7 +8,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
@@ -995,13 +995,13 @@ const styles = StyleSheet.create({
 
   // End of chapter
   endMarker: { alignItems: 'center', marginTop: 40, marginBottom: 20 },
-  endOrnament: { fontFamily: FontFamily.ui, fontSize: 20, letterSpacing: 6 },
+  endOrnament: { fontFamily: FontFamily.ui, fontSize: FontSize.xl, letterSpacing: 6 },
   nextChapterPrompt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 16 },
   nextChapterText: { fontFamily: FontFamily.ui, fontSize: 14 },
   crossBookPrompt: { alignItems: 'center' },
-  crossBookSubtitle: { fontFamily: FontFamily.ui, fontSize: 12, marginTop: 2 },
+  crossBookSubtitle: { fontFamily: FontFamily.ui, fontSize: FontSize.xs, marginTop: 2 },
   endOfBibleContainer: { alignItems: 'center', paddingVertical: 16 },
-  endOfBibleText: { fontFamily: FontFamily.ui, fontSize: 14, fontStyle: 'italic' },
+  endOfBibleText: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, fontStyle: 'italic' },
 
   // Context bar — full-width bottom bar that replaces tab bar
   contextBarFull: {
@@ -1072,7 +1072,7 @@ const styles = StyleSheet.create({
   },
   noteButtonText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   contextRemoveCircle: {
     width: 24,

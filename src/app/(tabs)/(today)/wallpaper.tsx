@@ -16,7 +16,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { captureRef } from 'react-native-view-shot';
 import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
@@ -252,7 +252,7 @@ export default function WallpaperScreen() {
           >
             <XIcon size={22} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
-          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 16, color: colors.text }}>
+          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>
             Share Quote
           </Text>
           <View style={{ width: 38 }} />

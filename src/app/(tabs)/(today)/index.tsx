@@ -17,7 +17,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
@@ -659,7 +659,7 @@ export default function HomeScreen() {
               entering={entering(FadeIn.duration(800).delay(titleEndTime))}
               style={{
                 fontFamily: FontFamily.bodyItalic,
-                fontSize: 18,
+                fontSize: FontSize.lg,
                 color: 'rgba(200, 165, 92, 0.7)',
                 textAlign: 'center',
                 lineHeight: 28,
@@ -894,7 +894,7 @@ export default function HomeScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textSubtle,
                     }}
                   >
@@ -1083,7 +1083,7 @@ export default function HomeScreen() {
                         sharedTransitionTag={`devotional-title-${currentDevotional.id}-${currentDevotional.currentDay}`}
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: 30,
+                          fontSize: FontSize['3xl'],
                           color: colors.text,
                           lineHeight: 38,
                           marginBottom: 8,
@@ -1098,7 +1098,7 @@ export default function HomeScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.bodyItalic,
-                            fontSize: 14,
+                            fontSize: FontSize.sm,
                             color: colors.textMuted,
                             lineHeight: 22,
                             marginBottom: currentDayData.studyMethod ? 12 : 20,
@@ -1178,7 +1178,7 @@ export default function HomeScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.ui,
-                          fontSize: 12,
+                          fontSize: FontSize.xs,
                           color: colors.textSubtle,
                         }}
                       >
@@ -1187,7 +1187,7 @@ export default function HomeScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.uiSemiBold,
-                          fontSize: 12,
+                          fontSize: FontSize.xs,
                           color: colors.accent,
                           opacity: 0.9,
                         }}
@@ -1330,7 +1330,7 @@ export default function HomeScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.display,
-                    fontSize: 18,
+                    fontSize: FontSize.lg,
                     color: colors.text,
                     marginBottom: 4,
                   }}
@@ -1511,7 +1511,7 @@ const homeStyles = StyleSheet.create({
   },
   notificationMessage: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
   },
   notificationChevron: {
@@ -1558,7 +1558,7 @@ const homeStyles = StyleSheet.create({
   },
   bridgeText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 22,
   },
 });

@@ -12,7 +12,7 @@ import {
   HandsPrayingIcon,
   CheckCircleIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, SoapResponses } from '@/lib/store';
@@ -67,7 +67,7 @@ function SoapSectionDisplay({
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
-            fontSize: 12,
+            fontSize: FontSize.xs,
             color: colors.accent,
             letterSpacing: 1,
             textTransform: 'uppercase',
@@ -79,7 +79,7 @@ function SoapSectionDisplay({
       <Text
         style={{
           fontFamily: FontFamily.body,
-          fontSize: 16,
+          fontSize: FontSize.base,
           color: colors.text,
           lineHeight: 26,
           paddingLeft: 4,
@@ -142,7 +142,7 @@ export default function JournalDetailScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
               marginLeft: 8,
             }}
@@ -197,7 +197,7 @@ export default function JournalDetailScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.display,
-                  fontSize: 24,
+                  fontSize: FontSize['2xl'],
                   color: colors.text,
                   marginBottom: 4,
                 }}
@@ -209,7 +209,7 @@ export default function JournalDetailScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.ui,
-                    fontSize: 14,
+                    fontSize: FontSize.sm,
                     color: colors.textSubtle,
                   }}
                 >
@@ -312,7 +312,7 @@ export default function JournalDetailScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.bodyItalic,
-                          fontSize: 14,
+                          fontSize: FontSize.sm,
                           color: colors.textMuted,
                           lineHeight: 22,
                           marginBottom: 8,
@@ -323,7 +323,7 @@ export default function JournalDetailScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.body,
-                          fontSize: 16,
+                          fontSize: FontSize.base,
                           color: colors.text,
                           lineHeight: 26,
                         }}

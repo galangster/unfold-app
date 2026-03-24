@@ -5,7 +5,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, PencilLineIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -58,7 +58,7 @@ export default function MyResponsesScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
               marginLeft: 8,
             }}
@@ -80,7 +80,7 @@ export default function MyResponsesScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.body,
-                  fontSize: 16,
+                  fontSize: FontSize.base,
                   color: colors.textMuted,
                   textAlign: 'center',
                   marginTop: 16,
@@ -91,7 +91,7 @@ export default function MyResponsesScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.body,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.textHint,
                   textAlign: 'center',
                   marginTop: 8,
@@ -196,7 +196,7 @@ export default function MyResponsesScreen() {
                             <Text
                               style={{
                                 fontFamily: FontFamily.ui,
-                                fontSize: 12,
+                                fontSize: FontSize.xs,
                                 color: colors.textSubtle,
                                 marginRight: 4,
                               }}

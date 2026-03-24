@@ -6,7 +6,7 @@ import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   highlightItem: {
     flexDirection: 'row',
@@ -210,12 +210,12 @@ const styles = StyleSheet.create({
   },
   highlightText: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 21,
   },
   highlightNote: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     fontStyle: 'italic',
     marginTop: 4,
   },

@@ -12,7 +12,7 @@ import Animated, {
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
@@ -188,7 +188,7 @@ const segStyles = StyleSheet.create({
     zIndex: 1,
   },
   segmentText: {
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
 });
 
@@ -405,7 +405,7 @@ export default function PastDevotionalsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.uiMedium,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: colors.text,
                 marginLeft: 8,
               }}
@@ -422,7 +422,7 @@ export default function PastDevotionalsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.body,
-                fontSize: 16,
+                fontSize: FontSize.base,
                 color: colors.textMuted,
                 textAlign: 'center',
                 marginTop: 16,
@@ -460,7 +460,7 @@ export default function PastDevotionalsScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
               marginLeft: 8,
             }}

@@ -5,9 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { useUnfoldStore, FontSize, WritingTone, ContentDepth, FaithBackground, LifeStage, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
+import { useUnfoldStore, FontSize as FontSizePreference, WritingTone, ContentDepth, FaithBackground, LifeStage, BIBLE_TRANSLATIONS, BibleTranslation, ThemeMode, ACCENT_THEMES, AccentThemeId, READING_FONTS, ReadingFontId } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
@@ -50,7 +50,7 @@ const REMINDER_TIMES = [
   { value: '9:00 PM', label: 'Night' },
 ];
 
-const FONT_SIZES: { value: FontSize; label: string }[] = [
+const FONT_SIZES: { value: FontSizePreference; label: string }[] = [
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
   { value: 'large', label: 'Large' },
@@ -460,7 +460,7 @@ export default function SettingsScreen() {
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: 16,
+              fontSize: FontSize.base,
               color: colors.text,
               marginLeft: 8,
             }}
@@ -510,7 +510,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.uiMedium,
-                        fontSize: 16,
+                        fontSize: FontSize.base,
                         color: colors.text,
                         marginBottom: 2,
                       }}
@@ -538,7 +538,7 @@ export default function SettingsScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 12,
+                  fontSize: FontSize.xs,
                   color: colors.textHint,
                   letterSpacing: 1,
                 }}
@@ -607,7 +607,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                     }}
                   >
@@ -654,7 +654,7 @@ export default function SettingsScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.ui,
-                    fontSize: 12,
+                    fontSize: FontSize.xs,
                     color: colors.textMuted,
                     marginBottom: 6,
                   }}
@@ -671,7 +671,7 @@ export default function SettingsScreen() {
                     accessibilityHint="Tell us about yourself, who you are, and what matters to you"
                     style={{
                       fontFamily: FontFamily.body,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.text,
                       lineHeight: 20,
                       minHeight: 80,
@@ -684,7 +684,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.body,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.text,
                       lineHeight: 20,
                     }}
@@ -699,7 +699,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.body,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 marginTop: -16,
                 marginBottom: 24,
@@ -716,7 +716,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -802,7 +802,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -878,7 +878,7 @@ export default function SettingsScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.uiMedium,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: isSelected ? colors.background : colors.text,
                               marginLeft: 6,
                             }}
@@ -900,7 +900,7 @@ export default function SettingsScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 12,
+                  fontSize: FontSize.xs,
                   color: colors.textHint,
                   letterSpacing: 1,
                 }}
@@ -1126,7 +1126,7 @@ export default function SettingsScreen() {
                             <Text
                               style={{
                                 fontFamily: FontFamily.ui,
-                                fontSize: 12,
+                                fontSize: FontSize.xs,
                                 color: colors.textMuted,
                               }}
                             >
@@ -1149,7 +1149,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: colors.text,
                     }}
                   >
@@ -1184,7 +1184,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: (user?.isPremium ? notificationsEnabled : false) ? colors.text : colors.textMuted,
                     }}
                   >
@@ -1218,7 +1218,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
-                        fontSize: 14,
+                        fontSize: FontSize.sm,
                         color: colors.textMuted,
                       }}
                     >
@@ -1257,7 +1257,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
-                        fontSize: 12,
+                        fontSize: FontSize.xs,
                         color: colors.textMuted,
                         marginTop: 2,
                       }}
@@ -1268,7 +1268,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: middayCheckInEnabled ? colors.text : colors.textMuted,
                     }}
                   >
@@ -1306,7 +1306,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
-                        fontSize: 12,
+                        fontSize: FontSize.xs,
                         color: colors.textMuted,
                         marginTop: 2,
                       }}
@@ -1317,7 +1317,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
-                      fontSize: 14,
+                      fontSize: FontSize.sm,
                       color: eveningWindDownEnabled ? colors.text : colors.textMuted,
                     }}
                   >
@@ -1363,7 +1363,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
-                        fontSize: 12,
+                        fontSize: FontSize.xs,
                         color: colors.textMuted,
                         marginTop: 2,
                       }}
@@ -1428,7 +1428,7 @@ export default function SettingsScreen() {
                             <Text
                               style={{
                                 fontFamily: FontFamily.ui,
-                                fontSize: 12,
+                                fontSize: FontSize.xs,
                                 color: colors.textMuted,
                                 marginTop: 2,
                               }}
@@ -1548,7 +1548,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -1602,7 +1602,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -1627,7 +1627,7 @@ export default function SettingsScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
-                        fontSize: 12,
+                        fontSize: FontSize.xs,
                         color: colors.textMuted,
                         marginBottom: 10,
                         paddingHorizontal: 4,
@@ -1681,7 +1681,7 @@ export default function SettingsScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.textMuted,
                               marginTop: 2,
                             }}
@@ -1725,7 +1725,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -1782,7 +1782,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -1842,7 +1842,7 @@ export default function SettingsScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.textMuted,
                               marginTop: 2,
                             }}
@@ -1918,7 +1918,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -1978,7 +1978,7 @@ export default function SettingsScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.textMuted,
                               marginTop: 2,
                             }}
@@ -2052,7 +2052,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -2112,7 +2112,7 @@ export default function SettingsScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.textMuted,
                               marginTop: 2,
                             }}
@@ -2186,7 +2186,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -2247,7 +2247,7 @@ export default function SettingsScreen() {
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
-                              fontSize: 12,
+                              fontSize: FontSize.xs,
                               color: colors.textMuted,
                               marginTop: 2,
                             }}
@@ -2290,7 +2290,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -2322,7 +2322,7 @@ export default function SettingsScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.body,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.textMuted,
                   lineHeight: 22,
                   marginBottom: 8,
@@ -2333,7 +2333,7 @@ export default function SettingsScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.body,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.textMuted,
                   lineHeight: 22,
                   marginBottom: 8,
@@ -2344,7 +2344,7 @@ export default function SettingsScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.body,
-                  fontSize: 14,
+                  fontSize: FontSize.sm,
                   color: colors.textMuted,
                   lineHeight: 22,
                 }}
@@ -2358,7 +2358,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -2459,7 +2459,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -2504,7 +2504,7 @@ export default function SettingsScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textMuted,
                       marginTop: 2,
                     }}
@@ -2591,7 +2591,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textSubtle,
                 textAlign: 'center',
                 marginTop: 12,
@@ -2608,7 +2608,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 letterSpacing: 1,
                 marginBottom: 12,
@@ -2689,7 +2689,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.display,
-                fontSize: 24,
+                fontSize: FontSize['2xl'],
                 color: colors.textHint,
               }}
             >
@@ -2698,7 +2698,7 @@ export default function SettingsScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.ui,
-                fontSize: 12,
+                fontSize: FontSize.xs,
                 color: colors.textHint,
                 marginTop: 4,
               }}
@@ -2714,7 +2714,7 @@ export default function SettingsScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.uiMedium,
-                    fontSize: 12,
+                    fontSize: FontSize.xs,
                     color: colors.accent,
                   }}
                 >

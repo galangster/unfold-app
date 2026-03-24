@@ -26,13 +26,13 @@ import * as Haptics from 'expo-haptics';
 import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
-import type { FontSize } from '@/lib/store';
+import type { FontSize as FontSizePreference } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { triggerNextDayGeneration, evaluateSeriesExtension, generateArcExtension } from '@/lib/progressive-generation';
@@ -1107,7 +1107,7 @@ export default function ReadingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 12,
+                  fontSize: FontSize.xs,
                   color: colors.textSubtle,
                   textAlign: 'center',
                   marginTop: 10,
@@ -1121,7 +1121,7 @@ export default function ReadingScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 12,
+                  fontSize: FontSize.xs,
                   color: colors.textSubtle,
                   textAlign: 'center',
                   marginTop: 10,
@@ -1181,7 +1181,7 @@ export default function ReadingScreen() {
                 <Text
                   style={{
                     fontFamily: FontFamily.uiSemiBold,
-                    fontSize: 16,
+                    fontSize: FontSize.base,
                     color: btnText,
                   }}
                 >
@@ -1278,7 +1278,7 @@ export default function ReadingScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.display,
-                      fontSize: 18,
+                      fontSize: FontSize.lg,
                       color: colors.text,
                       letterSpacing: 0.5,
                     }}
@@ -1288,7 +1288,7 @@ export default function ReadingScreen() {
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
-                      fontSize: 12,
+                      fontSize: FontSize.xs,
                       color: colors.textHint,
                     }}
                   >
@@ -1495,7 +1495,7 @@ export default function ReadingScreen() {
                     <Text
                       style={{
                         fontFamily: FontFamily.body,
-                        fontSize: 14,
+                        fontSize: FontSize.sm,
                         lineHeight: 22,
                         color: colors.text,
                       }}
@@ -1585,7 +1585,7 @@ export default function ReadingScreen() {
                 }}
               >
                 <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
-                <Text style={{ fontSize: 12, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: 16 }}>
+                <Text style={{ fontSize: FontSize.xs, color: colors.textMuted, opacity: 0.25, letterSpacing: 6, marginHorizontal: 16 }}>
                   {'···'}
                 </Text>
                 <View style={{ flex: 1, height: 0.5, backgroundColor: colors.textMuted, opacity: 0.15 }} />
@@ -1683,7 +1683,7 @@ export default function ReadingScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.body,
-                          fontSize: 14,
+                          fontSize: FontSize.sm,
                           color: colors.textMuted,
                           textAlign: 'center',
                           lineHeight: 22,
@@ -1696,7 +1696,7 @@ export default function ReadingScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.ui,
-                            fontSize: 12,
+                            fontSize: FontSize.xs,
                             color: colors.textSubtle,
                             textAlign: 'center',
                             marginBottom: 16,
@@ -1709,7 +1709,7 @@ export default function ReadingScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.ui,
-                            fontSize: 12,
+                            fontSize: FontSize.xs,
                             color: colors.textSubtle,
                             textAlign: 'center',
                             marginBottom: 16,
@@ -1724,7 +1724,7 @@ export default function ReadingScreen() {
                             <Text
                               style={{
                                 fontFamily: FontFamily.ui,
-                                fontSize: 14,
+                                fontSize: FontSize.sm,
                                 color: colors.textMuted,
                               }}
                             >
@@ -1815,7 +1815,7 @@ export default function ReadingScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.uiMedium,
-                            fontSize: 12,
+                            fontSize: FontSize.xs,
                             color: colors.accent,
                             letterSpacing: 1,
                             textTransform: 'uppercase',
@@ -1827,7 +1827,7 @@ export default function ReadingScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: 20,
+                          fontSize: FontSize.xl,
                           color: colors.text,
                           lineHeight: 26,
                           marginBottom: 8,
@@ -1839,7 +1839,7 @@ export default function ReadingScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.body,
-                          fontSize: 14,
+                          fontSize: FontSize.sm,
                           color: colors.textMuted,
                           lineHeight: 21,
                         }}
@@ -1870,7 +1870,7 @@ export default function ReadingScreen() {
                         <Text
                           style={{
                             fontFamily: FontFamily.uiMedium,
-                            fontSize: 12,
+                            fontSize: FontSize.xs,
                             color: colors.accent,
                             letterSpacing: 1,
                             textTransform: 'uppercase',
@@ -1883,7 +1883,7 @@ export default function ReadingScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.bodyItalic,
-                          fontSize: 14,
+                          fontSize: FontSize.sm,
                           color: colors.textMuted,
                           textAlign: 'center',
                           lineHeight: 21,
@@ -1943,7 +1943,7 @@ export default function ReadingScreen() {
               {isExtendingArc ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: '#fff' }}>
+                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: FontSize.base, color: '#fff' }}>
                   {extensionError ? 'Retry' : `Keep Going \u00B7 ${continuationDays} more days`}
                 </Text>
               )}
@@ -1963,7 +1963,7 @@ export default function ReadingScreen() {
               accessibilityLabel="Dismiss continuation prompt"
               accessibilityState={{ disabled: isExtendingArc }}
             >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 14, color: colors.textMuted }}>
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
                 I'm good for now
               </Text>
             </TouchableOpacity>
@@ -2069,7 +2069,7 @@ export default function ReadingScreen() {
 
 /* ─── Devotional Reading Settings Sheet ─── */
 
-const FONT_SIZE_OPTIONS: Array<{ label: string; value: FontSize }> = [
+const FONT_SIZE_OPTIONS: Array<{ label: string; value: FontSizePreference }> = [
   { label: 'Small', value: 'small' },
   { label: 'Medium', value: 'medium' },
   { label: 'Large', value: 'large' },
@@ -2159,7 +2159,7 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
                 >
                   <Text style={{
                     fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
-                    fontSize: 14,
+                    fontSize: FontSize.sm,
                     color: isActive ? colors.text : colors.textHint,
                   }}>
                     {opt.label}
@@ -2203,7 +2203,7 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
                 >
                   <Text style={{
                     fontFamily: font.regular,
-                    fontSize: 16,
+                    fontSize: FontSize.base,
                     color: isActive ? colors.text : colors.textMuted,
                   }}>
                     {font.name}
@@ -2263,12 +2263,12 @@ const styles = StyleSheet.create({
   },
   bookmarkToastText: {
     fontFamily: FontFamily.ui,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     color: '#FFFFFF',
     flex: 1,
   },
   bookmarkToastLink: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
 });

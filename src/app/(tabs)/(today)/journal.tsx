@@ -41,7 +41,7 @@ import {
   PencilSimpleIcon,
   PlusIcon,
 } from 'phosphor-react-native';
-import { FontFamily } from '@/constants/fonts';
+import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -1212,7 +1212,7 @@ const jStyles = StyleSheet.create({
   },
   dayLabel: {
     fontFamily: FontFamily.mono,
-    fontSize: 12,
+    fontSize: FontSize.xs,
     letterSpacing: 1,
   },
   modeSelector: {
@@ -1244,7 +1244,7 @@ const jStyles = StyleSheet.create({
   },
   scriptureAnchorText: {
     fontFamily: FontFamily.bodyItalic,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 20,
   },
   freewriteTitle: {
@@ -1260,7 +1260,7 @@ const jStyles = StyleSheet.create({
   freewriteInput: {
     minHeight: 160,
     fontFamily: FontFamily.mono,
-    fontSize: 16,
+    fontSize: FontSize.base,
     lineHeight: 26,
     paddingTop: 0,
   },
@@ -1281,7 +1281,7 @@ const jStyles = StyleSheet.create({
   },
   deeperButtonText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   errorWrapper: {
     marginTop: 24,
@@ -1317,7 +1317,7 @@ const jStyles = StyleSheet.create({
   },
   deeperProgress: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   questionItem: {
     marginBottom: 14,
@@ -1373,7 +1373,7 @@ const jStyles = StyleSheet.create({
   },
   soapSubtitle: {
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     marginBottom: 8,
   },
   soapProgressRow: {
@@ -1404,7 +1404,7 @@ const jStyles = StyleSheet.create({
   },
   soapLetterText: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 14,
+    fontSize: FontSize.sm,
   },
   soapSectionLabel: {
     flex: 1,
@@ -1493,7 +1493,7 @@ const jStyles = StyleSheet.create({
   prayerText: {
     flex: 1,
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 21,
   },
   prayerAnsweredLabel: {
@@ -1514,7 +1514,7 @@ const jStyles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     fontFamily: FontFamily.body,
-    fontSize: 14,
+    fontSize: FontSize.sm,
     lineHeight: 21,
     padding: 0,
   },
@@ -1531,7 +1531,7 @@ const jStyles = StyleSheet.create({
   },
   prayerCancelText: {
     fontFamily: FontFamily.ui,
-    fontSize: 12,
+    fontSize: FontSize.xs,
   },
   addPrayerButton: {
     flexDirection: 'row',
