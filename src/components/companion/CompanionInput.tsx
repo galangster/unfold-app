@@ -25,6 +25,7 @@ import { ArrowUpIcon, StopCircleIcon, MicrophoneIcon } from 'phosphor-react-nati
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
 const PLACEHOLDERS = [
@@ -60,7 +61,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     sendScale.value = withTiming(0.9, { duration: 50 }, () => {
-      sendScale.value = withTiming(1, { duration: 100 });
+      sendScale.value = withTiming(1, { duration: Duration.instant });
     });
 
     const trimmed = text.trim();

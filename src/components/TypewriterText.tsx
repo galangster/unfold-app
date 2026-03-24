@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import type { TextStyle } from 'react-native';
 
@@ -47,7 +48,7 @@ const MagicalChar = React.memo(({
 
     // Fade + rise
     opacity.value = withTiming(1, {
-      duration: 100,
+      duration: Duration.instant,
       easing: Easing.out(Easing.cubic),
     });
     translateY.value = withTiming(0, {

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
-import { HouseIcon, BookBookmarkIcon, ChatCircleDotsIcon, BookOpenIcon, UserIcon } from 'phosphor-react-native';
+import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, CircleNotchIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Duration, Spring } from '@/constants/animations';
 import { useUIState } from '@/lib/ui-state';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
@@ -21,7 +22,7 @@ type TabBarProps = {
   navigation: { emit: (event: any) => any; navigate: (...args: any[]) => void };
 };
 
-const SPRING_CONFIG = { damping: 22, stiffness: 200, mass: 0.6 };
+const SPRING_CONFIG = Spring.snappy;
 
 /** Animated wrapper for each tab icon -- handles scale spring + dot indicator */
 function AnimatedTabIcon({
@@ -111,10 +112,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
         // Was instant-hidden, now showing via slide → slide up from bottom
         translateY.value = 100;
         opacity.value = 1;
-        translateY.value = withTiming(0, { duration: 250 });
+        translateY.value = withTiming(0, { duration: Duration.normal });
       } else {
         opacity.value = 1;
-        translateY.value = withTiming(tabBarHidden ? 100 : 0, { duration: 250 });
+        translateY.value = withTiming(tabBarHidden ? 100 : 0, { duration: Duration.normal });
       }
     }
     lastModeRef.current = tabBarHideMode;
@@ -190,7 +191,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
                 : route.name === '(bible)'
                   ? 'Bible'
                   : route.name === '(ask)'
-                    ? 'Ask'
+                    ? 'Companion'
                     : route.name === '(journal)'
                       ? 'Journal'
                       : 'You';
@@ -227,7 +228,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               case '(bible)':
                 return <BookBookmarkIcon {...iconProps} />;
               case '(ask)':
-                return <ChatCircleDotsIcon {...iconProps} />;
+                return <CircleNotchIcon {...iconProps} />;
               case '(journal)':
                 return <BookOpenIcon {...iconProps} />;
               case '(you)':
@@ -304,7 +305,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="(ask)"
         options={{
-          title: 'Ask',
+          title: 'Companion',
         }}
       />
       <Tabs.Screen

@@ -118,8 +118,12 @@ export function NoteEditor({
       : legacyMarkdownToHtml(initialNote.content)
     : '<p></p>';
 
+  // IMPORTANT: avoidIosKeyboard is FALSE because we manage keyboard padding
+  // ourselves (accounting for the custom toolbar height). The library's internal
+  // padding logic does NOT know about our toolbar and would set paddingBottom to
+  // just keyboardHeight+10, causing text to scroll behind the toolbar after ~12 lines.
   const editor = useEditorBridge({
-    avoidIosKeyboard: true,
+    avoidIosKeyboard: false,
     autofocus: false,
     initialContent,
     theme: {
@@ -158,7 +162,7 @@ export function NoteEditor({
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Inject CSS + scroll behavior fix once editor is ready
+  // Inject CSS once editor is ready
   useEffect(() => {
     if (!editorState.isReady) return;
     editor.injectCSS(buildEditorCSS(colors));
@@ -166,47 +170,24 @@ export function NoteEditor({
     setTimeout(() => {
       setEditorReady(true);
     }, 120);
-    // Override TipTap's scrollIntoView so cursor stays in place until it
-    // nears the bottom of the viewport (Notion-style). By default TipTap
-    // scrolls the cursor to the top on every Enter press.
-    editor.injectJS(`
-      (function() {
-        var origScroll = Element.prototype.scrollIntoView;
-        Element.prototype.scrollIntoView = function(opts) {
-          if (typeof opts === 'object') {
-            opts.block = 'nearest';
-          } else {
-            opts = { block: 'nearest', behavior: 'smooth' };
-          }
-          origScroll.call(this, opts);
-        };
-        // Also override scrollIntoViewIfNeeded (WebKit-specific)
-        if (Element.prototype.scrollIntoViewIfNeeded) {
-          var origIfNeeded = Element.prototype.scrollIntoViewIfNeeded;
-          Element.prototype.scrollIntoViewIfNeeded = function(center) {
-            origIfNeeded.call(this, false);
-          };
-        }
-      })();
-    `);
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Adjust scroll threshold when keyboard + toolbar are both visible.
-  // tentap-editor internally sets ProseMirror paddingBottom to keyboardHeight + 10,
-  // but our custom toolbar (48px) sits above the keyboard and occludes content.
-  // We inject extra padding so the cursor is never hidden behind the toolbar.
+  // Manage keyboard padding ourselves since avoidIosKeyboard is false.
+  // We account for the custom toolbar (48px) that sits above the keyboard.
+  // Without this, text scrolls behind the toolbar after ~12 lines.
   const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
   useEffect(() => {
     if (!editorState.isReady) return;
     if (isKeyboardUp && keyboardHeight > 0) {
-      const extraPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 10;
+      // Toolbar sits above the keyboard, so total occlusion is keyboard + toolbar
+      const totalPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
         (function() {
           var doc = document.querySelector('.ProseMirror');
-          if (doc) doc.style.paddingBottom = '${extraPadding}px';
+          if (doc) doc.style.paddingBottom = '${totalPadding}px';
         })();
       `);
-      editor.updateScrollThresholdAndMargin(extraPadding);
+      editor.updateScrollThresholdAndMargin(totalPadding);
     } else {
       editor.injectJS(`
         (function() {

@@ -755,10 +755,16 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Devotional actions
       addDevotional: (devotional) =>
-        set((state) => ({
-          devotionals: [devotional, ...state.devotionals],
-          currentDevotionalId: devotional.id,
-        })),
+        set((state) => {
+          // Prevent duplicate entries with the same ID
+          if (state.devotionals.some((d) => d.id === devotional.id)) {
+            return { currentDevotionalId: devotional.id };
+          }
+          return {
+            devotionals: [devotional, ...state.devotionals],
+            currentDevotionalId: devotional.id,
+          };
+        }),
 
       updateDevotionalDays: (devotionalId, days, title) =>
         set((state) => ({

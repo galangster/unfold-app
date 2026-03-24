@@ -74,10 +74,20 @@ export function YourSeriesSection() {
 
   if (devotionals.length === 0) return null;
 
-  // Sort by createdAt descending, take the 2 most recent
-  const recentSeries = [...devotionals]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 2);
+  // Deduplicate by series title — keep the one with most progress (highest currentDay).
+  // This prevents showing the same series twice when multiple devotionals share a title.
+  const uniqueSeries = Object.values(
+    devotionals.reduce<Record<string, Devotional>>((acc, d) => {
+      if (!acc[d.title] || d.currentDay > acc[d.title].currentDay) {
+        acc[d.title] = d;
+      }
+      return acc;
+    }, {}),
+  );
+
+  // Sort by createdAt descending — show all unique series on home
+  const recentSeries = uniqueSeries
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const handleSeriesPress = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -104,7 +114,7 @@ export function YourSeriesSection() {
           </Text>
         </View>
 
-        {devotionals.length > 2 && (
+        {uniqueSeries.length > 4 && (
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleSeeAll}

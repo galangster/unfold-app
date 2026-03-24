@@ -24,6 +24,7 @@ import {
   CheckIcon,
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { Duration } from '@/constants/animations';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { Share } from 'react-native';
 
@@ -59,7 +60,7 @@ function ActionButton({
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: 150, easing: EASE_OUT }));
+    opacity.value = withDelay(delay, withTiming(1, { duration: Duration.fast, easing: EASE_OUT }));
   }, [delay, opacity]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));

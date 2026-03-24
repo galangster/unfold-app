@@ -26,6 +26,7 @@ import * as Haptics from 'expo-haptics';
 import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration } from '@/constants/animations';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
 import { alpha } from '@/components/ui';
@@ -186,9 +187,9 @@ function PencilWriting({ accent }: { accent: string }) {
     progress.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 1600, easing: Easing.out(Easing.quad) }),      // write line 1
-        withTiming(1.15, { duration: 250 }),                                       // hop down
+        withTiming(1.15, { duration: Duration.normal }),                              // hop down
         withTiming(2.15, { duration: 1400, easing: Easing.out(Easing.quad) }),    // write line 2
-        withTiming(2.3, { duration: 250 }),                                        // hop down
+        withTiming(2.3, { duration: Duration.normal }),                               // hop down
         withTiming(3.3, { duration: 1000, easing: Easing.out(Easing.quad) }),     // write line 3
         withTiming(3.8, { duration: 800 }),                                        // pause before restart
       ),
@@ -628,7 +629,7 @@ function BeatingHeart({ accent }: { accent: string }) {
     // Realistic heartbeat: quick double-pump, then rest
     beat.value = withRepeat(
       withSequence(
-        withTiming(1, { duration: 150, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: Duration.fast, easing: Easing.out(Easing.quad) }),
         withTiming(0.3, { duration: 120, easing: Easing.in(Easing.quad) }),
         withTiming(0.8, { duration: 130, easing: Easing.out(Easing.quad) }),
         withTiming(0, { duration: 300, easing: Easing.inOut(Easing.ease) }),

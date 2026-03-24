@@ -28,6 +28,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
 import type { FontSize } from '@/lib/store';
@@ -467,7 +468,7 @@ export default function ReadingScreen() {
       contentOpacity.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) }, () => {
         runOnJS(setViewingDay)(day);
       });
-      contentOpacity.value = withDelay(140, withTiming(1, { duration: 250, easing: Easing.in(Easing.ease) }));
+      contentOpacity.value = withDelay(140, withTiming(1, { duration: Duration.normal, easing: Easing.in(Easing.ease) }));
     }
   }, [availableDays, contentOpacity]);
 

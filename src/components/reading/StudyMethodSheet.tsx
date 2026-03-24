@@ -20,6 +20,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { XIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { BIBLE_STUDY_METHODS, type BibleStudyMethodCard } from '@/constants/bible-study-methods';
 
@@ -318,7 +319,7 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
           if (Math.abs(e.translationX) > SWIPE_THRESHOLD) {
             dismissWithSwipe(e.translationX);
           } else {
-            translateX.value = withTiming(0, { duration: 150 });
+            translateX.value = withTiming(0, { duration: Duration.fast });
           }
         }),
     [translateX, dismissWithSwipe],

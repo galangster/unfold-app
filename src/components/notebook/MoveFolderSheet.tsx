@@ -56,6 +56,7 @@ import {
   CaretLeftIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import type { NoteFolder } from '@/lib/store';
@@ -65,7 +66,7 @@ import type { NoteFolder } from '@/lib/store';
 // ---------------------------------------------------------------------------
 
 const OFFSCREEN = 500;
-const SLIDE_IN = { duration: 340, easing: Easing.out(Easing.cubic) };
+const SLIDE_IN = { duration: Duration.slow, easing: Easing.out(Easing.cubic) };
 const DISMISS_DURATION = 180;
 const SWIPE_THRESHOLD = 80;
 const VELOCITY_THRESHOLD = 500;
@@ -541,8 +542,8 @@ function DraggableFolderRow({
           }
         })
         .onEnd(() => {
-          dragOffsetY.value = withTiming(0, { duration: 150 });
-          rowScale.value = withTiming(1, { duration: 150 });
+          dragOffsetY.value = withTiming(0, { duration: Duration.fast });
+          rowScale.value = withTiming(1, { duration: Duration.fast });
           runOnJS(onDragEnd)();
         }),
     [folder.id, onSwap, onDragStart, onDragEnd, dragOffsetY, rowScale],

@@ -19,6 +19,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { ColorTheme } from '@/constants/colors';
@@ -920,7 +921,7 @@ export default function HomeScreen() {
                   journeyCardScale.value = withTiming(0.98, { duration: 120 });
                 }}
                 onPressOut={() => {
-                  journeyCardScale.value = withTiming(1, { duration: 150 });
+                  journeyCardScale.value = withTiming(1, { duration: Duration.fast });
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Start a new series"
@@ -1013,7 +1014,7 @@ export default function HomeScreen() {
                   if (!isPreparingCurrentDay) journeyCardScale.value = withTiming(0.98, { duration: 120 });
                 }}
                 onPressOut={() => {
-                  journeyCardScale.value = withTiming(1, { duration: 150 });
+                  journeyCardScale.value = withTiming(1, { duration: Duration.fast });
                 }}
                 accessibilityRole="button"
                 accessibilityLabel={isPreparingCurrentDay

@@ -43,6 +43,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -109,7 +110,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
       checkScale.value = withDelay(100, withSpring(1, { damping: 25, stiffness: 300, mass: 0.5 }));
     } else {
       fillProgress.value = withTiming(0, { duration: 200 });
-      checkScale.value = withTiming(0, { duration: 150 });
+      checkScale.value = withTiming(0, { duration: Duration.fast });
     }
   }, [isAnswered, fillProgress, checkScale]);
 

@@ -103,11 +103,6 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
           sheetSlideStyle,
         ]}
       >
-        {/* Drag handle */}
-        <View style={styles.handleRow}>
-          <View style={[styles.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
-        </View>
-
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.headerTitle, { color: colors.text, fontFamily: FontFamily.uiMedium }]}>
@@ -281,21 +276,12 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 20,
     marginHorizontal: 8,
     paddingHorizontal: 24,
+    paddingTop: 20,
     paddingBottom: 20,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 12,
-  },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 8,
-  },
-  handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',

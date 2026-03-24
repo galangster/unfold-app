@@ -24,6 +24,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 
 const EASE_OUT = Easing.out(Easing.cubic);
@@ -109,8 +110,8 @@ function FadeSlideIn({
   const y = useSharedValue(translateY);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: 250, easing: EASE_OUT }));
-    y.value = withDelay(delay, withTiming(0, { duration: 250, easing: EASE_OUT }));
+    opacity.value = withDelay(delay, withTiming(1, { duration: Duration.normal, easing: EASE_OUT }));
+    y.value = withDelay(delay, withTiming(0, { duration: Duration.normal, easing: EASE_OUT }));
   }, [delay, opacity, y, translateY]);
 
   const style = useAnimatedStyle(() => ({

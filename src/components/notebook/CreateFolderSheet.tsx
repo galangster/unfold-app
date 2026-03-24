@@ -39,6 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Button, alpha } from '@/components/ui';
 
@@ -47,7 +48,7 @@ import { Button, alpha } from '@/components/ui';
 // ---------------------------------------------------------------------------
 
 const OFFSCREEN = 500;
-const SLIDE_IN = { duration: 340, easing: Easing.out(Easing.cubic) };
+const SLIDE_IN = { duration: Duration.slow, easing: Easing.out(Easing.cubic) };
 const DISMISS_DURATION = 180;
 const SWIPE_THRESHOLD = 80;
 const VELOCITY_THRESHOLD = 500;

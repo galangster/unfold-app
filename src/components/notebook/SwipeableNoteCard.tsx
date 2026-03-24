@@ -16,6 +16,7 @@ import {
   TrashIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { NoteCard } from './NoteCard';
 import type { Note } from '@/lib/store';
@@ -25,7 +26,7 @@ const TOTAL_ACTIONS_WIDTH = ACTION_WIDTH * 3;
 const SNAP_THRESHOLD = TOTAL_ACTIONS_WIDTH * 0.35;
 
 const EASE_OUT = Easing.out(Easing.cubic);
-const TIMING_CONFIG = { duration: 250, easing: EASE_OUT };
+const TIMING_CONFIG = { duration: Duration.normal, easing: EASE_OUT };
 
 interface SwipeableNoteCardProps {
   note: Note;
