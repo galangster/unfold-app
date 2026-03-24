@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import { Radius } from '@/constants/radius';
 
@@ -103,7 +104,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 8,
+          gap: Spacing['2'],
         }}
       >
         <View

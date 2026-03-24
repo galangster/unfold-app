@@ -7,6 +7,7 @@ import { BookOpenIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 
 function SeriesCard({
@@ -148,14 +149,14 @@ export function YourSeriesSection() {
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 24,
-    marginTop: 20,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['5'],
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   headerLeft: {
     flexDirection: 'row',
@@ -181,7 +182,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     padding: 14,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   seriesTitle: {
     fontFamily: FontFamily.display,

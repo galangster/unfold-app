@@ -13,6 +13,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore, type HighlightColor } from '@/lib/store';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> = {
@@ -129,13 +130,13 @@ export function RememberThisCard() {
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 24,
-    marginTop: 16,
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['4'],
   },
   card: {
     borderRadius: Radius.card,
     borderWidth: 1,
-    padding: 16,
+    padding: Spacing['4'],
     ...Shadow.sm,
   },
   labelRow: {
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
   },
   quoteBlock: {
     borderLeftWidth: 3,
-    paddingLeft: 12,
+    paddingLeft: Spacing['3'],
     marginBottom: 10,
   },
   quoteText: {

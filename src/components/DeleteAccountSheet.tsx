@@ -20,6 +20,7 @@ import { WarningCircleIcon, TrashIcon } from 'phosphor-react-native';
 import { MMKV } from 'react-native-mmkv';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useUser, useClerk } from '@clerk/clerk-expo';
@@ -323,12 +324,12 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
 const styles = StyleSheet.create({
   content: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 8,
+    paddingHorizontal: Spacing['7'],
+    paddingTop: Spacing['2'],
   },
   iconRow: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   iconContainer: {
     width: 56,
@@ -342,23 +343,23 @@ const styles = StyleSheet.create({
     fontSize: 22,
     textAlign: 'center',
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   subtitle: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   itemList: {
-    marginBottom: 12,
-    paddingHorizontal: 8,
+    marginBottom: Spacing['3'],
+    paddingHorizontal: Spacing['2'],
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   bullet: {
     width: 5,
@@ -376,11 +377,11 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   buttonGroup: {
     flexDirection: 'row',
-    gap: 12,
+    gap: Spacing['3'],
   },
   cancelButton: {
     flex: 1,
@@ -406,18 +407,18 @@ const styles = StyleSheet.create({
   confirmInput: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.base,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     paddingVertical: 14,
     borderRadius: Radius.md,
     textAlign: 'center',
     letterSpacing: 2,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   confirmDeleteButton: {
-    paddingVertical: 16,
+    paddingVertical: Spacing['4'],
     borderRadius: Radius.card,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   confirmDeleteButtonText: {
     fontFamily: FontFamily.uiSemiBold,
@@ -426,7 +427,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: Spacing['2'],
   },
   backButtonText: {
     fontFamily: FontFamily.ui,

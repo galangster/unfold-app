@@ -6,6 +6,7 @@ import { MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import type { BibleReaderSettings } from '@/lib/store';
 
@@ -276,9 +277,9 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: Radius.xl,
     borderBottomRightRadius: Radius.xl,
     marginHorizontal: 8,
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 20,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['5'],
+    paddingBottom: Spacing['5'],
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   headerTitle: {
     fontSize: FontSize.base,
@@ -353,7 +354,7 @@ const styles = StyleSheet.create({
   // Segmented controls
   segmentedRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing['2'],
   },
   segmentButton: {
     flex: 1,
@@ -368,7 +369,7 @@ const styles = StyleSheet.create({
 
   // Translation
   translationButton: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',

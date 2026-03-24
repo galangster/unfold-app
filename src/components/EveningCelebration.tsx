@@ -36,6 +36,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 48,
+    paddingHorizontal: Spacing['12'],
   },
   messageText: {
     fontFamily: FontFamily.uiMedium,

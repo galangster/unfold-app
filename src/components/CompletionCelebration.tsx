@@ -15,6 +15,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -386,7 +387,7 @@ export function CompletionCelebration({
               flex: 1,
               justifyContent: 'center',
               alignItems: 'center',
-              paddingHorizontal: 48,
+              paddingHorizontal: Spacing['12'],
             }}
           >
             {/* Top accent line */}
@@ -395,7 +396,7 @@ export function CompletionCelebration({
                 {
                   height: 1.5,
                   backgroundColor: colors.accent,
-                  marginBottom: 36,
+                  marginBottom: Spacing['9'],
                   borderRadius: 1,
                 },
                 lineStyle,
@@ -419,7 +420,7 @@ export function CompletionCelebration({
             </Animated.View>
 
             {/* Subtitle */}
-            <Animated.View style={[{ marginTop: 20 }, subtitleStyle]}>
+            <Animated.View style={[{ marginTop: Spacing['5'] }, subtitleStyle]}>
               <Text
                 style={{
                   fontFamily: FontFamily.bodyItalic,
@@ -439,7 +440,7 @@ export function CompletionCelebration({
                 {
                   height: 1.5,
                   backgroundColor: colors.accent,
-                  marginTop: 36,
+                  marginTop: Spacing['9'],
                   borderRadius: 1,
                 },
                 lineStyle,

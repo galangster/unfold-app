@@ -37,6 +37,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -803,8 +804,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['2'],
     paddingBottom: 4,
   },
   closeButton: {
@@ -829,8 +830,8 @@ const styles = StyleSheet.create({
   /* Step content */
   stepContainer: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['2'],
   },
   stepContent: {
     flex: 1,
@@ -842,7 +843,7 @@ const styles = StyleSheet.create({
   },
   stepSubtitle: {
     fontSize: FontSize.sm,
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
   },
 
   /* Mood row — wraps into 2 rows of 4 */
@@ -850,7 +851,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-evenly',
-    paddingTop: 8,
+    paddingTop: Spacing['2'],
     rowGap: 6,
   },
   moodItem: {
@@ -863,7 +864,7 @@ const styles = StyleSheet.create({
   },
   moodLabel: {
     fontSize: FontSize.xs,
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
 
   /* Chips */
@@ -871,8 +872,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginTop: 16,
-    marginBottom: 20,
+    marginTop: Spacing['4'],
+    marginBottom: Spacing['5'],
   },
   chip: {
     paddingHorizontal: 18,
@@ -888,8 +889,8 @@ const styles = StyleSheet.create({
   typeOwnButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
+    gap: Spacing['2'],
+    paddingVertical: Spacing['2'],
   },
   typeOwnText: {
     fontSize: FontSize.sm,
@@ -906,7 +907,7 @@ const styles = StyleSheet.create({
   },
   submitTypedButton: {
     alignSelf: 'flex-end',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing['5'],
     paddingVertical: 10,
     borderRadius: Radius.xl,
   },
@@ -919,7 +920,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: Radius.card,
     borderWidth: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     paddingTop: 14,
     paddingBottom: 14,
     fontSize: FontSize.sm,
@@ -929,18 +930,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 16,
+    marginTop: Spacing['4'],
   },
   skipButton: {
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
   },
   skipText: {
     fontSize: FontSize.sm,
   },
   doneButton: {
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    paddingHorizontal: Spacing['7'],
+    paddingVertical: Spacing['3'],
     borderRadius: Radius['2xl'],
   },
   doneButtonText: {

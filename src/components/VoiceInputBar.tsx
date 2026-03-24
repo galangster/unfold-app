@@ -29,6 +29,7 @@ import {
 import { MicrophoneIcon, XIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 
@@ -307,7 +308,7 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline }: Voic
 const styles = StyleSheet.create({
   micButton: {
     alignSelf: 'flex-end',
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
   micButtonInline: {
     position: 'absolute',
@@ -328,9 +329,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: Radius.lg,
     borderWidth: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 10,
-    gap: 12,
+    gap: Spacing['3'],
   },
   waveformArea: {
     flex: 1,

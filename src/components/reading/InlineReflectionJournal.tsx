@@ -14,6 +14,7 @@ import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
@@ -186,14 +187,14 @@ export function InlineReflectionJournal({
   }, [questions, getResponse]);
 
   return (
-    <View style={{ marginTop: 48 }}>
+    <View style={{ marginTop: Spacing['12'] }}>
       {/* Header */}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: 28,
+          marginBottom: Spacing['7'],
         }}
       >
         <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.4 }} />
@@ -220,7 +221,7 @@ export function InlineReflectionJournal({
           entering={FadeIn.duration(300)}
           style={{
             alignItems: 'center',
-            marginBottom: 20,
+            marginBottom: Spacing['5'],
           }}
         >
           <Text
@@ -263,7 +264,7 @@ export function InlineReflectionJournal({
       {/* Continue in Journal CTA */}
       <Animated.View
         entering={FadeIn.duration(400).delay(questions.length * 100 + 200)}
-        style={{ marginTop: 20, alignItems: 'center' }}
+        style={{ marginTop: Spacing['5'], alignItems: 'center' }}
       >
         <TouchableOpacity
           activeOpacity={0.6}
@@ -274,9 +275,9 @@ export function InlineReflectionJournal({
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
+            gap: Spacing['2'],
             paddingVertical: 14,
-            paddingHorizontal: 24,
+            paddingHorizontal: Spacing['6'],
             borderRadius: Radius.md,
             borderWidth: 1,
             borderColor: alpha(colors.accent, 0.25),
@@ -345,7 +346,7 @@ function ReflectionQuestionCard({
   return (
     <Animated.View
       entering={FadeInDown.duration(400).delay(index * 120)}
-      style={{ marginBottom: isExpanded ? 24 : 16 }}
+      style={{ marginBottom: isExpanded ? Spacing['6'] : Spacing['4'] }}
     >
       {/* Question — tappable */}
       <TouchableOpacity
@@ -370,7 +371,7 @@ function ReflectionQuestionCard({
           ]}
         >
           {/* Status icon */}
-          <View style={{ marginTop: 3, marginRight: 12, width: 18 }}>
+          <View style={{ marginTop: 3, marginRight: Spacing['3'], width: 18 }}>
             {isAnswered ? (
               <CheckCircleIcon size={16} color={colors.accent} weight="fill" />
             ) : (
@@ -404,7 +405,7 @@ function ReflectionQuestionCard({
           entering={FadeInDown.duration(250)}
           style={{
             marginLeft: 18,
-            marginTop: 12,
+            marginTop: Spacing['3'],
             paddingLeft: 30,
           }}
         >
@@ -444,7 +445,7 @@ function ReflectionQuestionCard({
               fontFamily: FontFamily.ui,
               fontSize: 11,
               color: colors.textHint,
-              marginTop: 8,
+              marginTop: Spacing['2'],
               textAlign: 'right',
             }}
           >
@@ -467,7 +468,7 @@ function ReflectionQuestionCard({
             style={{
               marginLeft: 50,
               marginTop: 6,
-              paddingRight: 16,
+              paddingRight: Spacing['4'],
             }}
           >
             <Text

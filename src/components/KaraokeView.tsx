@@ -14,6 +14,7 @@ import { XIcon, PlayIcon, PauseIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { useReadingFont } from '@/lib/useReadingFont';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -299,8 +300,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingHorizontal: Spacing['6'],
+    paddingBottom: Spacing['4'],
   },
   headerTitleArea: {
     flex: 1,
@@ -322,27 +323,27 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 16,
+    marginLeft: Spacing['4'],
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 28,
-    paddingTop: 40,
+    paddingHorizontal: Spacing['7'],
+    paddingTop: Spacing['10'],
   },
   scriptureLabel: {
     fontSize: 11,
     letterSpacing: 1.5,
     textTransform: 'uppercase',
     opacity: 0.7,
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   sectionDivider: {
     width: 28,
     height: 1.5,
     borderRadius: 1,
-    marginVertical: 32,
+    marginVertical: Spacing['8'],
     opacity: 0.4,
   },
   sentenceText: {
@@ -352,8 +353,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
-    paddingTop: 16,
+    gap: Spacing['6'],
+    paddingTop: Spacing['4'],
     borderTopWidth: 1,
   },
   controlTime: {

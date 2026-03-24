@@ -25,6 +25,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 
 const EASE_OUT = Easing.out(Easing.cubic);
@@ -84,7 +85,7 @@ function AnimatedChip({
           borderColor: alpha(accentColor, 0.20),
           borderRadius: Radius.xl,
           paddingHorizontal: 14,
-          paddingVertical: 8,
+          paddingVertical: Spacing['2'],
         }}
       >
         <Text
@@ -108,14 +109,14 @@ export function SuggestionChips({ suggestions, onSelect, visible }: Props) {
   if (!visible || suggestions.length === 0) return null;
 
   return (
-    <View style={{ paddingVertical: 8 }}>
+    <View style={{ paddingVertical: Spacing['2'] }}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{
           paddingLeft: 56, // aligned with companion text (16 + 28 + 12)
-          paddingRight: 16,
-          gap: 8,
+          paddingRight: Spacing['4'],
+          gap: Spacing['2'],
         }}
         style={{ flexGrow: 0 }}
       >

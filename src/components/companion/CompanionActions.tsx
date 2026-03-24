@@ -25,6 +25,7 @@ import {
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { Duration } from '@/constants/animations';
+import { Spacing } from '@/constants/spacing';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { Share } from 'react-native';
 
@@ -118,8 +119,8 @@ export function CompanionActions({ messageId, content, feedback, visible }: Prop
       style={{
         flexDirection: 'row',
         paddingLeft: 56, // 16 + 28 + 12 = companion text indent
-        gap: 16,
-        marginTop: 8,
+        gap: Spacing['4'],
+        marginTop: Spacing['2'],
       }}
     >
       <ActionButton

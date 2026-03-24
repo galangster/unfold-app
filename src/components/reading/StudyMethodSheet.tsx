@@ -21,6 +21,7 @@ import { XIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { BIBLE_STUDY_METHODS, type BibleStudyMethodCard } from '@/constants/bible-study-methods';
@@ -484,7 +485,7 @@ const smStyles = StyleSheet.create({
   cardContainer: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
   },
   card: {
     borderRadius: Radius.xl,
@@ -503,22 +504,22 @@ const smStyles = StyleSheet.create({
     zIndex: 10,
   },
   scrollContent: {
-    paddingHorizontal: 28,
-    paddingTop: 28,
-    paddingBottom: 32,
+    paddingHorizontal: Spacing['7'],
+    paddingTop: Spacing['7'],
+    paddingBottom: Spacing['8'],
   },
   methodTitle: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
     letterSpacing: -0.5,
     marginBottom: 10,
-    paddingRight: 32,
+    paddingRight: Spacing['8'],
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   dotsRow: {
     flexDirection: 'row',
@@ -550,11 +551,11 @@ const smStyles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   sectionLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -586,15 +587,15 @@ const smStyles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
     lineHeight: 21,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   stepsList: {
-    gap: 12,
+    gap: Spacing['3'],
   },
   numberedRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: Spacing['3'],
   },
   stepNumber: {
     width: 22,

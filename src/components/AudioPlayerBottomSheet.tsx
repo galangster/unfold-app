@@ -47,6 +47,7 @@ function useBottomTabBarHeightSafe(): number {
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { streamDevotionalAudio } from '@/lib/cartesia';
@@ -993,17 +994,17 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['4'],
+    paddingBottom: Spacing['6'],
     justifyContent: 'space-between',
   },
   /* Title row */
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 24,
+    gap: Spacing['3'],
+    marginBottom: Spacing['6'],
   },
   titleTextContainer: {
     flex: 1,
@@ -1017,7 +1018,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   speedButton: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 5,
     borderRadius: Radius.md,
     flexShrink: 0,
@@ -1028,7 +1029,7 @@ const styles = StyleSheet.create({
   },
   /* Progress section */
   progressSection: {
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   progressBarHitArea: {
     height: 28,
@@ -1067,8 +1068,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 32,
-    marginBottom: 16,
+    gap: Spacing['8'],
+    marginBottom: Spacing['4'],
   },
   skipButton: {
     alignItems: 'center',
@@ -1101,7 +1102,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing['3'],
   },
   errorText: {
     flex: 1,
@@ -1113,7 +1114,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: Spacing['2'],
     borderRadius: Radius.xl,
     flexShrink: 0,
   },
@@ -1135,9 +1136,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     paddingVertical: 10,
-    gap: 12,
+    gap: Spacing['3'],
   },
   speedPickerText: {
     fontSize: FontSize.sm,

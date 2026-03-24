@@ -26,6 +26,7 @@ import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
+import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 
 const EASE_OUT = Easing.out(Easing.cubic);
@@ -156,11 +157,11 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
   return (
     <Animated.View
       exiting={FadeOut.duration(150)}
-      style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}
+      style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}
     >
       {/* Companion icon */}
       <FadeSlideIn delay={0} translateY={0}>
-        <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ alignItems: 'center', marginBottom: Spacing['4'] }}>
           <View
             style={{
               width: 48,
@@ -202,7 +203,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
             textAlign: 'center',
             maxWidth: 300,
             alignSelf: 'center',
-            marginTop: 12,
+            marginTop: Spacing['3'],
             lineHeight: 24,
           }}
         >
@@ -211,7 +212,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
       </FadeSlideIn>
 
       {/* Starter cards */}
-      <View style={{ marginTop: 32, gap: 10 }}>
+      <View style={{ marginTop: Spacing['8'], gap: 10 }}>
         {cards.map((card, i) => {
           const Icon = card.icon;
           return (
@@ -226,7 +227,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
                   borderWidth: 1,
                   borderColor: colors.border,
                   borderRadius: Radius.card,
-                  paddingHorizontal: 16,
+                  paddingHorizontal: Spacing['4'],
                   paddingVertical: 14,
                 }}
               >
@@ -234,7 +235,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
                   size={20}
                   color={colors.accent}
                   weight="light"
-                  style={{ marginRight: 12 }}
+                  style={{ marginRight: Spacing['3'] }}
                 />
                 <Text
                   style={{

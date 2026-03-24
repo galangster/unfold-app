@@ -5,6 +5,7 @@ import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from 'phosphor-reac
 import { FontFamily, FontSize } from '@/constants/fonts';
 import type { ColorTheme } from '@/constants/colors';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 
 interface DownloadBibleSheetProps {
   visible: boolean;
@@ -94,15 +95,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: Spacing['10'],
   },
   content: {
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing['3'],
   },
   title: {
     fontSize: FontSize['2xl'],
-    marginTop: 8,
+    marginTop: Spacing['2'],
   },
   subtitle: {
     fontFamily: FontFamily.ui,
@@ -132,8 +133,8 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     width: '100%',
-    marginTop: 16,
-    gap: 8,
+    marginTop: Spacing['4'],
+    gap: Spacing['2'],
     alignItems: 'center',
   },
   progressBar: {
@@ -151,10 +152,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   downloadButton: {
-    paddingHorizontal: 32,
+    paddingHorizontal: Spacing['8'],
     paddingVertical: 14,
     borderRadius: Radius.card,
-    marginTop: 16,
+    marginTop: Spacing['4'],
   },
   downloadButtonText: {
     color: '#FFFFFF',

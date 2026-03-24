@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 
@@ -248,18 +249,18 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    padding: 20,
+    padding: Spacing['5'],
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing['3'],
   },
   streakLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -282,7 +283,7 @@ const styles = StyleSheet.create({
   calendarStrip: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    paddingTop: Spacing['2'],
     borderTopWidth: 1,
   },
   motivationText: {

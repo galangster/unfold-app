@@ -7,6 +7,7 @@
 import { View, Text } from 'react-native';
 import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
+import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -30,7 +31,7 @@ export function UserMessageBubble({ message }: Props) {
   return (
     <Animated.View
       entering={ENTERING}
-      style={{ alignItems: 'flex-end', paddingRight: 16, paddingLeft: 60 }}
+      style={{ alignItems: 'flex-end', paddingRight: Spacing['4'], paddingLeft: 60 }}
     >
       <View
         style={{

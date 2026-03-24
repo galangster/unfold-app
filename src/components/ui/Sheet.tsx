@@ -35,6 +35,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { Shadow } from '@/constants/shadows';
+import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 
@@ -198,8 +199,8 @@ const styles = StyleSheet.create({
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handleBar: {
     width: 36,
@@ -207,6 +208,6 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   content: {
-    paddingTop: 8,
+    paddingTop: Spacing['2'],
   },
 });

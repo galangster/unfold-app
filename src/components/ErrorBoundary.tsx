@@ -5,6 +5,7 @@ import { logBugError } from '@/lib/bug-logger';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 
 interface Props {
   children: ReactNode;
@@ -98,7 +99,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: Spacing['6'],
   },
   content: {
     width: '100%',
@@ -109,7 +110,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
     color: Colors.accent,
-    marginBottom: 32,
+    marginBottom: Spacing['8'],
     letterSpacing: 2,
   },
   iconContainer: {
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: Spacing['6'],
   },
   icon: {
     fontSize: 28,
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.xl,
     color: Colors.text,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
     textAlign: 'center',
   },
   message: {
@@ -138,20 +139,20 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   errorDetail: {
     fontFamily: FontFamily.mono,
     fontSize: FontSize.xs,
     color: Colors.textSubtle,
     textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 16,
+    marginBottom: Spacing['8'],
+    paddingHorizontal: Spacing['4'],
   },
   button: {
     backgroundColor: Colors.buttonBackground,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
+    paddingVertical: Spacing['4'],
+    paddingHorizontal: Spacing['12'],
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.border,

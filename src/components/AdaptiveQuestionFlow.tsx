@@ -12,6 +12,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { useAdaptiveQuestions } from '@/lib/use-adaptive-questions';
@@ -69,8 +70,8 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
   return (
     <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bottomOffset={20}>
       {/* Progress indicator */}
-      <View style={{ marginBottom: 24 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+      <View style={{ marginBottom: Spacing['6'] }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['2'] }}>
           <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
             Our conversation
           </Text>
@@ -96,7 +97,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
               fontFamily: FontFamily.body, 
               fontSize: 13, 
               color: colors.textMuted,
-              marginTop: 8,
+              marginTop: Spacing['2'],
               fontStyle: 'italic',
             }}
           >
@@ -106,7 +107,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
       </View>
 
       {/* Question */}
-      <View style={{ marginBottom: 16 }}>
+      <View style={{ marginBottom: Spacing['4'] }}>
         <TypewriterText
           text={currentQuestion}
           onComplete={handleTypewriterComplete}
@@ -116,7 +117,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
 
       {/* Subtext */}
       {showInput && (
-        <Animated.View entering={FadeIn} style={{ marginBottom: 32 }}>
+        <Animated.View entering={FadeIn} style={{ marginBottom: Spacing['8'] }}>
           <Text style={{
             fontFamily: FontFamily.body,
             fontSize: FontSize.base,
@@ -151,7 +152,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
           />
 
           {/* Submit button */}
-          <View style={{ marginTop: 24, alignItems: 'flex-end' }}>
+          <View style={{ marginTop: Spacing['6'], alignItems: 'flex-end' }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleSubmit}
               disabled={!answer.trim() || isLoading}
@@ -160,13 +161,13 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
               accessibilityState={{ disabled: !answer.trim() || isLoading }}
               style={{
                 backgroundColor: answer.trim() ? colors.accent : colors.inputBackground,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
+                paddingHorizontal: Spacing['6'],
+                paddingVertical: Spacing['3'],
                 borderRadius: Radius['2xl'],
                 opacity: answer.trim() ? 1 : 0.5,
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 8,
+                gap: Spacing['2'],
               }}
             >
               {isLoading ? (
@@ -191,14 +192,14 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
       {shouldGenerateNow && (
         <Animated.View 
           entering={FadeIn}
-          style={{ 
-            flex: 1, 
-            justifyContent: 'center', 
+          style={{
+            flex: 1,
+            justifyContent: 'center',
             alignItems: 'center',
-            gap: 16,
+            gap: Spacing['4'],
           }}
         >
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: Spacing['2'] }}>
             {[0, 1, 2].map((i) => (
               <View
                 key={i}

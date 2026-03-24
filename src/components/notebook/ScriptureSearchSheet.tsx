@@ -58,6 +58,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Duration } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
@@ -466,8 +467,8 @@ const sheetStyles = StyleSheet.create({
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handleBar: {
     width: 36,
@@ -475,14 +476,14 @@ const sheetStyles = StyleSheet.create({
     borderRadius: 2.5,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
     paddingTop: 4,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
+    gap: Spacing['2'],
+    marginBottom: Spacing['4'],
   },
   headerTitle: {
     fontFamily: FontFamily.uiSemiBold,
@@ -495,7 +496,7 @@ const sheetStyles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 14,
     height: 48,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   inputIcon: {
     marginRight: 10,
@@ -507,23 +508,23 @@ const sheetStyles = StyleSheet.create({
     paddingVertical: 0,
   },
   pillSection: {
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   pillLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   pillScroll: {
     flexGrow: 0,
   },
   pillRow: {
-    gap: 8,
+    gap: Spacing['2'],
   },
   pill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 6,
     borderRadius: Radius.sm,
   },
@@ -535,8 +536,8 @@ const sheetStyles = StyleSheet.create({
   stateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 16,
+    gap: Spacing['2'],
+    paddingVertical: Spacing['4'],
     justifyContent: 'center',
   },
   stateText: {
@@ -546,8 +547,8 @@ const sheetStyles = StyleSheet.create({
   previewCard: {
     borderLeftWidth: 3,
     borderRadius: Radius.sm,
-    padding: 16,
-    marginBottom: 16,
+    padding: Spacing['4'],
+    marginBottom: Spacing['4'],
   },
   previewText: {
     fontFamily: FontFamily.body,

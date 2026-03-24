@@ -31,6 +31,7 @@ import {
   type BibleBookInfo,
 } from '@/lib/bible-constants';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useBibleSearch } from '@/hooks/useBibleSearch';
 import { getChapterVerseCount } from '@/lib/bible-db';
 import type { BibleTranslation } from '@/lib/bible-db';
@@ -561,7 +562,7 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 100,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
   },
 
   // Header
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 4,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
   },
   headerLeft: {
     flexDirection: 'row',
@@ -596,14 +597,14 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderRadius: 10,
-    marginBottom: 12,
+    marginBottom: Spacing['3'],
     position: 'relative',
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: Spacing['2'],
     zIndex: 1,
   },
   tabLabel: {
@@ -617,10 +618,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing['3'],
     paddingVertical: 10,
-    marginBottom: 12,
-    gap: 8,
+    marginBottom: Spacing['3'],
+    gap: Spacing['2'],
   },
   searchInput: {
     flex: 1,
@@ -630,12 +631,12 @@ const styles = StyleSheet.create({
   },
 
   // Suggestions
-  suggestionsContainer: { marginBottom: 12 },
+  suggestionsContainer: { marginBottom: Spacing['3'] },
   suggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['3'],
     borderRadius: 10,
     marginBottom: 4,
   },
@@ -650,15 +651,15 @@ const styles = StyleSheet.create({
   },
   searchRef: { fontFamily: FontFamily.uiMedium, fontSize: 13, marginBottom: 3 },
   searchSnippet: { fontFamily: FontFamily.ui, fontSize: FontSize.sm, lineHeight: 20, opacity: 0.85 },
-  searchLoadingRow: { paddingVertical: 16, alignItems: 'center' },
+  searchLoadingRow: { paddingVertical: Spacing['4'], alignItems: 'center' },
 
   // Content area
   contentArea: { flex: 1 },
-  scrollContent: { paddingBottom: 16 },
+  scrollContent: { paddingBottom: Spacing['4'] },
   loadingContainer: { paddingTop: 60, alignItems: 'center' },
 
   // Book sections
-  bookSection: { marginBottom: 16 },
+  bookSection: { marginBottom: Spacing['4'] },
   sectionLabel: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
@@ -692,7 +693,7 @@ const styles = StyleSheet.create({
   numberChip: {
     minWidth: '12%',
     flexGrow: 1,
-    paddingVertical: 12,
+    paddingVertical: Spacing['3'],
     paddingHorizontal: 4,
     borderRadius: 10,
     alignItems: 'center',

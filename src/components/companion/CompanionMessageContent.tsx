@@ -12,6 +12,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { StreamingCursor } from './StreamingCursor';
@@ -68,22 +69,22 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
   const isComplete = message.status === 'complete';
 
   return (
-    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 16 }}>
+    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
       {/* Icon column — 28px wide + 12px gap = 40px indent */}
-      <View style={{ width: 28, marginRight: 12 }}>
+      <View style={{ width: 28, marginRight: Spacing['3'] }}>
         {showIcon && (
           <CompanionOrb accentColor={colors.accent} size={28} />
         )}
       </View>
 
       {/* Content */}
-      <View style={{ flex: 1, paddingRight: 24 }}>
+      <View style={{ flex: 1, paddingRight: Spacing['6'] }}>
         {message.status === 'error' ? (
           <View
             style={{
               backgroundColor: alpha(colors.error, 0.10),
               borderRadius: Radius.md,
-              padding: 12,
+              padding: Spacing['3'],
             }}
           >
             <Text

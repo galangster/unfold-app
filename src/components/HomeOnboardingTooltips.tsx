@@ -8,6 +8,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
+import { Spacing } from '@/constants/spacing';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.card,
     borderWidth: 1,
     paddingHorizontal: 18,
-    paddingTop: 16,
+    paddingTop: Spacing['4'],
     paddingBottom: 14,
     ...Shadow.lg,
   },
@@ -454,15 +455,15 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing['3'],
   },
   skipButton: {
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: Spacing['2'],
   },
   nextButton: {
     paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: Spacing['2'],
     borderRadius: Radius.sm,
   },
 });

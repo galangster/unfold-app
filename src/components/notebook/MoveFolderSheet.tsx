@@ -56,6 +56,7 @@ import {
   CaretLeftIcon,
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -672,8 +673,8 @@ const styles = StyleSheet.create({
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handleBar: {
     width: 36,
@@ -681,26 +682,26 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   content: {
-    paddingTop: 8,
+    paddingTop: Spacing['2'],
   },
   title: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.lg,
-    paddingHorizontal: 28,
-    marginBottom: 16,
+    paddingHorizontal: Spacing['7'],
+    marginBottom: Spacing['4'],
   },
   list: {
     flexGrow: 0,
   },
   listContent: {
-    paddingHorizontal: 12,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   folderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
     paddingVertical: 14,
     borderRadius: 10,
   },
@@ -725,12 +726,12 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
+    marginHorizontal: Spacing['4'],
     marginVertical: 4,
   },
   emptyState: {
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing['6'],
+    paddingHorizontal: Spacing['4'],
     alignItems: 'center',
   },
   emptyText: {
@@ -741,8 +742,8 @@ const styles = StyleSheet.create({
   breadcrumbRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingBottom: 12,
+    paddingHorizontal: Spacing['7'],
+    paddingBottom: Spacing['3'],
   },
   backButton: {
     flexDirection: 'row',

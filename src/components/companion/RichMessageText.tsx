@@ -14,6 +14,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { parseScriptureReferences, type ScriptureRef } from '@/lib/scripture-parser';
 
 interface Props {
@@ -285,7 +286,7 @@ export function RichMessageText({ text, onVersePress }: Props) {
               style={{
                 borderLeftWidth: 2,
                 borderLeftColor: alpha(colors.accent, 0.40),
-                paddingLeft: 12,
+                paddingLeft: Spacing['3'],
                 paddingVertical: 4,
                 marginVertical: 4,
               }}
@@ -300,7 +301,7 @@ export function RichMessageText({ text, onVersePress }: Props) {
         }
 
         return (
-          <View key={i} style={i > 0 ? { marginTop: 12 } : undefined}>
+          <View key={i} style={i > 0 ? { marginTop: Spacing['3'] } : undefined}>
             <InlineText text={block.content} onVersePress={onVersePress} />
           </View>
         );

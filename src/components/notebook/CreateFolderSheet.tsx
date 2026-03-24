@@ -43,6 +43,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { Button, alpha } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
@@ -307,8 +308,8 @@ const styles = StyleSheet.create({
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handleBar: {
     width: 36,
@@ -316,14 +317,14 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   content: {
-    paddingHorizontal: 28,
-    paddingTop: 8,
+    paddingHorizontal: Spacing['7'],
+    paddingTop: Spacing['2'],
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   title: {
     fontFamily: FontFamily.uiSemiBold,
@@ -332,13 +333,13 @@ const styles = StyleSheet.create({
   input: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.base,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     paddingVertical: 14,
     borderRadius: Radius.md,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   colorSection: {
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
   },
   colorLabel: {
     fontFamily: FontFamily.mono,

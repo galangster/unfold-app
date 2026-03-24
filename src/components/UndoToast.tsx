@@ -4,6 +4,7 @@ import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 
 interface UndoToastProps {
   visible: boolean;
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: '#FFFFFF',
     flex: 1,
-    marginRight: 16,
+    marginRight: Spacing['4'],
   },
   undoText: {
     fontFamily: FontFamily.uiMedium,

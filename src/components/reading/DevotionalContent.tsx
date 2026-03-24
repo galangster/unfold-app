@@ -13,6 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
+import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
@@ -361,8 +362,8 @@ const dcStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 40,
-    paddingHorizontal: 40,
+    marginVertical: Spacing['10'],
+    paddingHorizontal: Spacing['10'],
   },
   dividerLine: {
     flex: 1,
@@ -373,13 +374,13 @@ const dcStyles = StyleSheet.create({
     fontSize: FontSizeTokens.xs,
     opacity: 0.35,
     letterSpacing: 6,
-    marginHorizontal: 16,
+    marginHorizontal: Spacing['4'],
   },
   ornamentalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: Spacing['7'],
   },
   ornamentalLine: {
     width: 32,
@@ -397,7 +398,7 @@ const dcStyles = StyleSheet.create({
   },
   dayTitle: {
     fontFamily: FontFamily.display,
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
     letterSpacing: -0.5,
   },
   accentLine: {
@@ -410,8 +411,8 @@ const dcStyles = StyleSheet.create({
     justifyContent: 'space-between',
     borderRadius: Radius.sm,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 20,
+    paddingHorizontal: Spacing['3'],
+    marginBottom: Spacing['5'],
   },
   methodName: {
     fontFamily: FontFamily.mono,
@@ -424,8 +425,8 @@ const dcStyles = StyleSheet.create({
     borderLeftWidth: 2.5,
     paddingLeft: 18,
     paddingRight: 14,
-    paddingVertical: 16,
-    marginBottom: 8,
+    paddingVertical: Spacing['4'],
+    marginBottom: Spacing['2'],
     borderRadius: 4,
     borderTopLeftRadius: 0,
     borderBottomLeftRadius: 0,
@@ -434,7 +435,7 @@ const dcStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
-    gap: 10,
+    gap: Spacing['2.5'],
   },
   scriptureRef: {
     fontFamily: FontFamily.uiMedium,
@@ -451,7 +452,7 @@ const dcStyles = StyleSheet.create({
   crossRefHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   crossRefLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -461,7 +462,7 @@ const dcStyles = StyleSheet.create({
     marginLeft: 10,
   },
   crossRefItem: {
-    marginBottom: 20,
+    marginBottom: Spacing['5'],
     paddingLeft: 4,
   },
   crossRefReference: {
@@ -472,9 +473,9 @@ const dcStyles = StyleSheet.create({
     opacity: 0.7,
   },
   reflectionItem: {
-    marginBottom: 24,
-    paddingLeft: 20,
-    paddingRight: 8,
+    marginBottom: Spacing['6'],
+    paddingLeft: Spacing['5'],
+    paddingRight: Spacing['2'],
   },
   reflectionRow: {
     flexDirection: 'row',
@@ -483,11 +484,11 @@ const dcStyles = StyleSheet.create({
   reflectionNumber: {
     fontFamily: FontFamily.display,
     opacity: 0.5,
-    marginRight: 12,
+    marginRight: Spacing['3'],
     marginTop: 1,
     minWidth: 16,
   },
   prayerSection: {
-    marginTop: 48,
+    marginTop: Spacing['12'],
   },
 });

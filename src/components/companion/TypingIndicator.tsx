@@ -20,6 +20,7 @@ import { ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 
 const DOT_SIZE = 6;
 const DOT_GAP = 6;
@@ -76,7 +77,7 @@ export function TypingIndicator() {
   }, []);
 
   return (
-    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: 16 }}>
+    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
       {/* Companion icon */}
       <View
         style={{
@@ -86,7 +87,7 @@ export function TypingIndicator() {
           backgroundColor: alpha(colors.accent, 0.12),
           alignItems: 'center',
           justifyContent: 'center',
-          marginRight: 12,
+          marginRight: Spacing['3'],
         }}
       >
         <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
@@ -98,7 +99,7 @@ export function TypingIndicator() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: DOT_GAP,
-          paddingTop: 8,
+          paddingTop: Spacing['2'],
         }}
       >
         <Dot delay={0} color={colors.textSubtle} />

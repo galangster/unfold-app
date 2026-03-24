@@ -14,6 +14,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import type { NoteFolder } from '@/lib/store';
 
 interface FolderChipsProps {
@@ -303,8 +304,8 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    gap: 8,
+    paddingHorizontal: Spacing['6'],
+    gap: Spacing['2'],
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -335,8 +336,8 @@ const styles = StyleSheet.create({
   breadcrumbRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 8,
+    paddingHorizontal: Spacing['6'],
+    paddingBottom: Spacing['2'],
     gap: 4,
   },
   breadcrumbSegment: {

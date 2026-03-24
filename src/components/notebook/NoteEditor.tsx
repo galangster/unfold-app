@@ -38,6 +38,7 @@ import {
   useKeyboard,
 } from '@10play/tentap-editor';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 
 import { Note } from '@/lib/store';
@@ -667,7 +668,7 @@ const styles = StyleSheet.create({
     height: 20,
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing['6'],
     marginTop: 4,
   },
   saveIndicator: {
@@ -683,19 +684,19 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
     letterSpacing: -0.3,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['4'],
+    paddingBottom: Spacing['3'],
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 24,
+    marginHorizontal: Spacing['6'],
     marginBottom: 4,
   },
   editorContainer: {
     flex: 1,
     position: 'relative',
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing['5'],
   },
   richText: {
     flex: 1,

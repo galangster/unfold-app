@@ -14,6 +14,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
+import { Spacing } from '@/constants/spacing';
 import { ScriptureRefPill } from './ScriptureRefPill';
 import { stripHtml, isHtmlContent } from './NoteEditor';
 
@@ -185,7 +186,7 @@ function formatRelativeDate(dateStr: string): string {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.card,
-    padding: 16,
+    padding: Spacing['4'],
     marginBottom: 10,
     borderWidth: 1,
     // Card shadow (matches existing journal entry cards)
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
   },
   titleContent: {
     flex: 1,
-    marginRight: 8,
+    marginRight: Spacing['2'],
   },
   title: {
     fontFamily: FontFamily.uiMedium,
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
   titleRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing['2'],
   },
   scriptureRow: {
     marginBottom: 6,
@@ -218,12 +219,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 19,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   metadataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing['2'],
     flexWrap: 'wrap',
   },
   metadataText: {

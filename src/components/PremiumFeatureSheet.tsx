@@ -35,6 +35,7 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 
 // ---------------------------------------------------------------------------
 // Feature definitions — each gate point maps to contextual copy + icon
@@ -263,8 +264,8 @@ const pfStyles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 8,
+    paddingHorizontal: Spacing['7'],
+    paddingTop: Spacing['2'],
   },
   centerContent: {
     alignItems: 'center',
@@ -275,25 +276,25 @@ const pfStyles = StyleSheet.create({
     borderRadius: Radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   headline: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
     textAlign: 'center',
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: Spacing['2'],
   },
   description: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 8,
+    marginBottom: Spacing['6'],
+    paddingHorizontal: Spacing['2'],
   },
   ctaButton: {
-    paddingVertical: 16,
+    paddingVertical: Spacing['4'],
     borderRadius: Radius.card,
     alignItems: 'center',
   },
@@ -306,7 +307,7 @@ const pfStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: Spacing['3'],
   },
   shieldIcon: {
     marginRight: 5,
@@ -317,8 +318,8 @@ const pfStyles = StyleSheet.create({
   },
   maybeLaterButton: {
     alignItems: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
+    marginTop: Spacing['3'],
+    paddingVertical: Spacing['2'],
   },
   maybeLaterText: {
     fontFamily: FontFamily.ui,

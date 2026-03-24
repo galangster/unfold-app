@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
@@ -332,15 +333,15 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingHorizontal: Spacing['5'],
+    paddingTop: Spacing['2'],
     paddingBottom: 14,
   },
   headerLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing['2'],
   },
   reference: {
     fontFamily: FontFamily.uiSemiBold,
@@ -361,7 +362,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginLeft: 8,
+    marginLeft: Spacing['2'],
   },
   iconBtn: {
     width: 32,
@@ -373,21 +374,21 @@ const s = StyleSheet.create({
 
   // ─── Scroll ─────────────────────────────────────
   scroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: Spacing['5'],
   },
   scrollContent: {
-    paddingBottom: 48,
+    paddingBottom: Spacing['12'],
   },
   loadingWrap: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: Spacing['10'],
   },
 
   // ─── Verse ──────────────────────────────────────
   verseBlock: {
     borderLeftWidth: 2,
-    paddingLeft: 16,
-    marginBottom: 20,
+    paddingLeft: Spacing['4'],
+    marginBottom: Spacing['5'],
   },
   verseText: {
     fontFamily: FontFamily.body,
@@ -399,10 +400,10 @@ const s = StyleSheet.create({
   commentaryLoading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing['2'],
     padding: 14,
     borderRadius: Radius.md,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   commentaryLoadingLabel: {
     fontFamily: FontFamily.ui,
@@ -411,7 +412,7 @@ const s = StyleSheet.create({
   commentaryCard: {
     padding: 14,
     borderRadius: Radius.md,
-    marginBottom: 16,
+    marginBottom: Spacing['4'],
   },
   commentaryHeaderRow: {
     flexDirection: 'row',
@@ -437,7 +438,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
     borderRadius: Radius.md,
   },
   readCtaText: {

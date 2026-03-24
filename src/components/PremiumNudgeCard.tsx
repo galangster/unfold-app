@@ -28,6 +28,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import type { NudgeType } from '@/lib/nudges';
@@ -210,12 +211,12 @@ export function PremiumNudgeCard({
 const styles = StyleSheet.create({
   container: {
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: Spacing['3'],
   },
   iconContainer: {
     width: 34,

@@ -15,6 +15,7 @@ import Animated, {
 import { SunIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Spacing } from '@/constants/spacing';
 import { AccentGlow } from './AccentGlow';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -237,7 +238,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
             {/* Radiating sparkle particles */}
             <View style={{ position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
               {sparkleParticles}
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <View style={{ flexDirection: 'row', gap: Spacing['2'], alignItems: 'center' }}>
                 <SparkleIcon size={40} color={colors.accent} weight="light" />
                 <SunIcon size={fireSize} color={colors.accent} weight="fill" />
                 <SparkleIcon size={40} color={colors.accent} weight="light" />
@@ -250,7 +251,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
                   fontFamily: FontFamily.display,
                   fontSize: 32 + (milestoneScale - 1) * 20,
                   color: colors.accent,
-                  marginTop: 16,
+                  marginTop: Spacing['4'],
                   textAlign: 'center',
                 }}
               >
@@ -278,7 +279,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
                 fontFamily: FontFamily.display,
                 fontSize: 28,
                 color: colors.accent,
-                marginTop: 12,
+                marginTop: Spacing['3'],
               }}
             >
               +1

@@ -26,6 +26,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -100,8 +101,8 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           backgroundColor: colors.backgroundElevated,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
-          paddingHorizontal: 8,
-          paddingVertical: 8,
+          paddingHorizontal: Spacing['2'],
+          paddingVertical: Spacing['2'],
         }}
       >
         <VoiceInputBar
@@ -119,8 +120,8 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
         backgroundColor: colors.backgroundElevated,
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
-        paddingHorizontal: 8,
-        paddingVertical: 8,
+        paddingHorizontal: Spacing['2'],
+        paddingVertical: Spacing['2'],
       }}
     >
       <View
@@ -131,7 +132,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
           borderWidth: 1,
           borderColor: colors.border,
           borderRadius: 22,
-          paddingLeft: 16,
+          paddingLeft: Spacing['4'],
           paddingRight: 6,
           paddingVertical: 4,
           minHeight: 44,
@@ -154,8 +155,8 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
             fontFamily: FontFamily.body,
             fontSize: FontSize.base,
             color: colors.text,
-            paddingTop: 8,
-            paddingBottom: 8,
+            paddingTop: Spacing['2'],
+            paddingBottom: Spacing['2'],
             maxHeight: 120,
           }}
         />

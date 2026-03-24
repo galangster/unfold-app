@@ -12,6 +12,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
+import { Spacing } from '@/constants/spacing';
 
 interface AudioWaveformProps {
   isPlaying: boolean;
@@ -226,7 +227,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: 40,
     gap: 3,
-    paddingHorizontal: 16,
+    paddingHorizontal: Spacing['4'],
   },
   bar: {
     borderRadius: 2,
