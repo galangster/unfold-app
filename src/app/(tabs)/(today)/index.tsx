@@ -19,6 +19,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { Duration } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
@@ -859,11 +860,7 @@ export default function HomeScreen() {
                     borderColor: colors.border,
                     padding: 16,
                     // Light elevation for resume card
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 8,
-                    elevation: 2,
+                    ...Shadow.sm,
                   }}
                 >
                   <Text
@@ -1327,11 +1324,7 @@ export default function HomeScreen() {
                   borderColor: colors.border,
                   padding: 20,
                   // Light elevation for secondary card
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 8,
-                  elevation: 2,
+                  ...Shadow.sm,
                 }}
               >
                 <Text
@@ -1511,11 +1504,7 @@ const homeStyles = StyleSheet.create({
     paddingRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    ...Shadow.sm,
   },
   notificationOrb: {
     marginRight: 12,
@@ -1536,11 +1525,7 @@ const homeStyles = StyleSheet.create({
     borderRadius: Radius.card,
     borderWidth: 1,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    ...Shadow.sm,
   },
   shimmerLine1: {
     height: 10,

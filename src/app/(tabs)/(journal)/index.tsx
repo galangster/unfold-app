@@ -37,6 +37,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteFolder } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -1166,11 +1167,7 @@ export default function JournalHubScreen() {
                           paddingHorizontal: 16,
                           backgroundColor: colors.inputBackground,
                           borderRadius: Radius.md,
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 1 },
-                          shadowOpacity: 0.04,
-                          shadowRadius: 6,
-                          elevation: 1,
+                          ...Shadow.sm,
                         }}
                       >
                         <ArrowBendDownRightIcon
@@ -1268,11 +1265,7 @@ export default function JournalHubScreen() {
                           opacity: 0.5,
                           borderWidth: 1,
                           borderColor: colors.border,
-                          shadowColor: '#000',
-                          shadowOffset: { width: 0, height: 2 },
-                          shadowOpacity: 0.04,
-                          shadowRadius: 8,
-                          elevation: 1,
+                          ...Shadow.sm,
                         }}
                       >
                         <View
@@ -1359,11 +1352,7 @@ export default function JournalHubScreen() {
                               marginBottom: 10,
                               borderWidth: 1,
                               borderColor: colors.border,
-                              shadowColor: '#000',
-                              shadowOffset: { width: 0, height: 2 },
-                              shadowOpacity: 0.06,
-                              shadowRadius: 10,
-                              elevation: 2,
+                              ...Shadow.sm,
                             }}
                           >
                             <View

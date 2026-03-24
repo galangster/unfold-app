@@ -23,6 +23,7 @@ import Animated, {
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { useCompanionChat } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -325,11 +326,7 @@ export default function CompanionScreen() {
                     borderColor: colors.border,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.15,
-                    shadowRadius: 4,
-                    elevation: 4,
+                    ...Shadow.sm,
                   }}
                 >
                   <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />

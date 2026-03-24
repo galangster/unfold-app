@@ -10,6 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
@@ -1010,11 +1011,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 50,
     borderTopWidth: StyleSheet.hairlineWidth,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 8,
+    ...Shadow.sheet,
   },
   contextRow: {
     flexDirection: 'row',

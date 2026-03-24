@@ -19,6 +19,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
@@ -308,11 +309,7 @@ export default function YouScreen() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 // Subtle lift for menu group
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.06,
-                shadowRadius: 10,
-                elevation: 2,
+                ...Shadow.sm,
                 overflow: 'hidden',
               }}
             >
