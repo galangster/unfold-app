@@ -40,6 +40,7 @@ import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { Button } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
 // Animation config
@@ -266,25 +267,15 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                 </View>
 
                 {/* Create button */}
-                <TouchableOpacity
-                  onPress={handleCreate}
+                <Button
+                  variant="primary"
+                  size="lg"
+                  label="Create"
+                  fullWidth
                   disabled={!isCreateEnabled}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.createButton,
-                    {
-                      backgroundColor: isCreateEnabled ? colors.accent : colors.border,
-                      opacity: isCreateEnabled ? 1 : 0.5,
-                    },
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create folder"
-                  accessibilityState={{ disabled: !isCreateEnabled }}
-                >
-                  <Text style={[styles.createButtonText, { color: colors.backgroundElevated }]}>
-                    Create
-                  </Text>
-                </TouchableOpacity>
+                  onPress={handleCreate}
+                  haptic={false}
+                />
               </View>
             </Animated.View>
           </GestureDetector>
@@ -365,15 +356,5 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-  },
-  createButton: {
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  createButtonText: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 16,
-    letterSpacing: 0.2,
   },
 });
