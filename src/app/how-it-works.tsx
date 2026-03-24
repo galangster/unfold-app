@@ -25,6 +25,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
 import { alpha } from '@/components/ui';
@@ -776,7 +777,7 @@ function StackedCards({ accent }: { accent: string }) {
   const card = {
     width: 80,
     height: 100,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
     borderColor: accent,
     position: 'absolute' as const,
@@ -1143,7 +1144,7 @@ export default function HowItWorksScreen() {
             <View
               style={{
                 paddingVertical: 16,
-                borderRadius: 12,
+                borderRadius: Radius.md,
                 alignItems: 'center',
                 backgroundColor: colors.accent,
               }}

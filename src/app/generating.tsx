@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { BellIcon, BookOpenTextIcon } from 'phosphor-react-native';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, DevotionalDay, Devotional, SeriesPersonaRecord, type ProgressiveMemory } from '@/lib/store';
 import {
@@ -598,6 +599,7 @@ export default function GeneratingScreen() {
             progressiveMemory: { fullDays: [], summaries: [], narrative: null },
           };
           addDevotional(progressiveDevotional);
+          devotionalAddedToStore = true;
 
           // Step 4: Generate Day 1 (~10-15s via Claude Sonnet)
           void logBugEvent('generation', 'progressive-day1-start', { devotionalId });
@@ -1210,7 +1212,7 @@ export default function GeneratingScreen() {
                   backgroundColor: colors.inputBackground,
                   borderWidth: 1,
                   borderColor: colors.border,
-                  borderRadius: 16,
+                  borderRadius: Radius.lg,
                   paddingVertical: 16,
                   paddingHorizontal: 20,
                   width: '100%',
@@ -1260,7 +1262,7 @@ export default function GeneratingScreen() {
                     backgroundColor: colors.buttonBackground,
                     paddingVertical: 12,
                     paddingHorizontal: 24,
-                    borderRadius: 999,
+                    borderRadius: Radius.full,
                   }}
                 >
                   <Text
@@ -1279,7 +1281,7 @@ export default function GeneratingScreen() {
                   style={{
                     paddingVertical: 12,
                     paddingHorizontal: 20,
-                    borderRadius: 999,
+                    borderRadius: Radius.full,
                     borderWidth: 1,
                     borderColor: colors.border,
                     backgroundColor: 'transparent',
@@ -1310,7 +1312,7 @@ export default function GeneratingScreen() {
                 paddingHorizontal: 16,
                 paddingVertical: 10,
                 backgroundColor: colors.inputBackground,
-                borderRadius: 20,
+                borderRadius: Radius.xl,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}
@@ -1391,7 +1393,7 @@ export default function GeneratingScreen() {
                 style={{
                   width: '100%',
                   backgroundColor: colors.cardBackground,
-                  borderRadius: 16,
+                  borderRadius: Radius.lg,
                   borderWidth: 1,
                   borderColor: colors.border,
                   padding: 24,
@@ -1454,7 +1456,7 @@ export default function GeneratingScreen() {
                 <View
                   style={{
                     backgroundColor: 'rgba(200, 165, 92, 0.06)',
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     padding: 16,
                     borderLeftWidth: 3,
                     borderLeftColor: colors.accent,
@@ -1550,7 +1552,7 @@ const genStyles = StyleSheet.create({
   retryButton: {
     paddingVertical: 18,
     paddingHorizontal: 48,
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
   retryButtonText: {
     fontFamily: FontFamily.uiMedium,

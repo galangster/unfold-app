@@ -36,6 +36,7 @@ import {
   NotepadIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteFolder } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -203,7 +204,7 @@ const segStyles = StyleSheet.create({
     top: 2,
     left: 2,
     height: 30,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -308,7 +309,7 @@ function NotebookEmptyState({ onCreateNote }: NotebookEmptyStateProps) {
 
 const emptyStyles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 32,
     alignItems: 'center',
   },
@@ -328,7 +329,7 @@ const emptyStyles = StyleSheet.create({
   },
   ghostCard: {
     width: '100%',
-    borderRadius: 14,
+    borderRadius: Radius.card,
     padding: 18,
     opacity: 0.4,
     borderWidth: 1,
@@ -343,7 +344,7 @@ const emptyStyles = StyleSheet.create({
     marginBottom: 10,
   },
   ctaButton: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingVertical: 14,
     paddingHorizontal: 24,
     alignSelf: 'center',
@@ -1011,7 +1012,7 @@ export default function JournalHubScreen() {
                     <View
                       style={{
                         backgroundColor: alpha(colors.accent, 0.05),
-                        borderRadius: 20,
+                        borderRadius: Radius.xl,
                         padding: 24,
                         borderWidth: 1,
                         borderColor: alpha(colors.accent, 0.07),
@@ -1164,7 +1165,7 @@ export default function JournalHubScreen() {
                           paddingVertical: 12,
                           paddingHorizontal: 16,
                           backgroundColor: colors.inputBackground,
-                          borderRadius: 12,
+                          borderRadius: Radius.md,
                           shadowColor: '#000',
                           shadowOffset: { width: 0, height: 1 },
                           shadowOpacity: 0.04,
@@ -1229,7 +1230,7 @@ export default function JournalHubScreen() {
                   {journalEntries.length === 0 ? (
                     <View
                       style={{
-                        borderRadius: 16,
+                        borderRadius: Radius.lg,
                         padding: 32,
                         alignItems: 'center',
                       }}
@@ -1262,7 +1263,7 @@ export default function JournalHubScreen() {
                         style={{
                           width: '100%',
                           backgroundColor: colors.backgroundElevated,
-                          borderRadius: 14,
+                          borderRadius: Radius.card,
                           padding: 18,
                           opacity: 0.5,
                           borderWidth: 1,
@@ -1305,7 +1306,7 @@ export default function JournalHubScreen() {
                   ) : filteredEntries.length === 0 && searchQuery ? (
                     <View
                       style={{
-                        borderRadius: 16,
+                        borderRadius: Radius.lg,
                         padding: 24,
                         alignItems: 'center',
                       }}
@@ -1353,7 +1354,7 @@ export default function JournalHubScreen() {
                           <View
                             style={{
                               backgroundColor: colors.backgroundElevated,
-                              borderRadius: 14,
+                              borderRadius: Radius.card,
                               padding: 16,
                               marginBottom: 10,
                               borderWidth: 1,
@@ -1638,7 +1639,7 @@ const mainStyles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 10,
@@ -1667,7 +1668,7 @@ const mainStyles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   noResultsContainer: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 24,
     alignItems: 'center',
     marginHorizontal: 24,

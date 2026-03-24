@@ -40,6 +40,7 @@ import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -1118,7 +1119,7 @@ export default function OnboardingScreen() {
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
-                    width: 56, height: 56, borderRadius: 16,
+                    width: 56, height: 56, borderRadius: Radius.lg,
                     backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
                     justifyContent: 'center', alignItems: 'center',
                   }}>
@@ -1158,7 +1159,7 @@ export default function OnboardingScreen() {
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
-                    width: 56, height: 56, borderRadius: 16,
+                    width: 56, height: 56, borderRadius: Radius.lg,
                     backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
                     justifyContent: 'center', alignItems: 'center',
                   }}>
@@ -1195,7 +1196,7 @@ export default function OnboardingScreen() {
               <View style={{ paddingVertical: 28 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 16 }}>
                   <View style={{
-                    width: 56, height: 56, borderRadius: 16,
+                    width: 56, height: 56, borderRadius: Radius.lg,
                     backgroundColor: isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)',
                     justifyContent: 'center', alignItems: 'center',
                   }}>
@@ -1374,7 +1375,7 @@ export default function OnboardingScreen() {
                             backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                             paddingHorizontal: 18,
                             paddingVertical: 16,
-                            borderRadius: 12,
+                            borderRadius: Radius.md,
                             borderWidth: 1,
                             borderColor: isSelected ? colors.borderFocused : colors.border,
                             flexDirection: 'row',
@@ -1398,7 +1399,7 @@ export default function OnboardingScreen() {
                     marginTop: 24,
                     padding: 16,
                     backgroundColor: colors.inputBackground,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     borderWidth: 1,
                     borderColor: colors.border,
                     opacity: 0.7,
@@ -1461,7 +1462,7 @@ export default function OnboardingScreen() {
                           backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                           paddingHorizontal: 18,
                           paddingVertical: 14,
-                          borderRadius: 12,
+                          borderRadius: Radius.md,
                           borderWidth: 1,
                           borderColor: isSelected ? colors.borderFocused : colors.border,
                         }}>
@@ -1493,7 +1494,7 @@ export default function OnboardingScreen() {
               paddingVertical: 16,
               paddingHorizontal: 20,
               backgroundColor: colors.inputBackground,
-              borderRadius: 16,
+              borderRadius: Radius.lg,
               borderWidth: 1,
               borderColor: colors.border,
             }}
@@ -1514,7 +1515,7 @@ export default function OnboardingScreen() {
                 marginTop: 20,
                 backgroundColor: colors.accent,
                 paddingVertical: 16,
-                borderRadius: 14,
+                borderRadius: Radius.card,
                 alignItems: 'center',
               }}
             >
@@ -1567,7 +1568,7 @@ export default function OnboardingScreen() {
                     style={{
                       paddingHorizontal: 14,
                       paddingVertical: 8,
-                      borderRadius: 20,
+                      borderRadius: Radius.xl,
                       backgroundColor: isChipSelected ? alpha(colors.accent, 0.13) : colors.inputBackground,
                       borderWidth: 1,
                       borderColor: isChipSelected ? alpha(colors.accent, 0.40) : colors.border,
@@ -1590,7 +1591,7 @@ export default function OnboardingScreen() {
           <View style={{
             flex: isDiscoveryStep ? undefined : 1,
             backgroundColor: colors.inputBackground,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             borderWidth: 1,
             borderColor: colors.border,
             padding: 20,
@@ -1668,7 +1669,7 @@ export default function OnboardingScreen() {
                       backgroundColor: colors.inputBackground,
                       paddingHorizontal: 20,
                       paddingVertical: 18,
-                      borderRadius: 16,
+                      borderRadius: Radius.lg,
                       borderWidth: 1,
                       borderColor: colors.border,
                       flexDirection: 'row',
@@ -1696,7 +1697,7 @@ export default function OnboardingScreen() {
           {/* Mirror-back reflection */}
           <View style={{
             backgroundColor: colors.inputBackground,
-            borderRadius: 20,
+            borderRadius: Radius.xl,
             padding: 24,
             borderWidth: 1,
             borderColor: colors.border,
@@ -1728,7 +1729,7 @@ export default function OnboardingScreen() {
               backgroundColor: colors.accent,
               paddingVertical: 18,
               paddingHorizontal: 24,
-              borderRadius: 16,
+              borderRadius: Radius.lg,
               alignItems: 'center',
               shadowColor: colors.accent,
               shadowOffset: { width: 0, height: 0 },
@@ -1786,7 +1787,7 @@ export default function OnboardingScreen() {
               entering={FadeIn.delay(400 + index * 150).duration(500)}
               style={{
                 backgroundColor: colors.inputBackground,
-                borderRadius: 14,
+                borderRadius: Radius.card,
                 padding: 14,
                 borderWidth: 1,
                 borderColor: colors.border,
@@ -1847,7 +1848,7 @@ export default function OnboardingScreen() {
                 backgroundColor: colors.accent,
                 paddingVertical: 18,
                 paddingHorizontal: 24,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 alignItems: 'center',
                 shadowColor: colors.accent,
                 shadowOffset: { width: 0, height: 0 },
@@ -1994,7 +1995,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -2032,7 +2033,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -2087,7 +2088,7 @@ export default function OnboardingScreen() {
                       setData((prev) => ({ ...prev, tone: opt.value }));
                     }}
                     style={{
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -2128,7 +2129,7 @@ export default function OnboardingScreen() {
                     }}
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: 14,
+                      paddingVertical: 16, paddingHorizontal: 18, borderRadius: Radius.card,
                       backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
@@ -2180,7 +2181,7 @@ export default function OnboardingScreen() {
                 height: 54,
                 paddingHorizontal: 20,
                 backgroundColor: colors.inputBackground,
-                borderRadius: 16,
+                borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
               }}
@@ -2225,7 +2226,7 @@ export default function OnboardingScreen() {
                   flexDirection: 'row', alignItems: 'center', gap: 12,
                   paddingVertical: 10, paddingHorizontal: 14,
                   backgroundColor: alpha(colors.accent, 0.04),
-                  borderRadius: 12,
+                  borderRadius: Radius.md,
                 }}
               >
                 <View style={{
@@ -2271,7 +2272,7 @@ export default function OnboardingScreen() {
             >
               <View style={{
                 backgroundColor: colors.accent,
-                paddingVertical: 16, paddingHorizontal: 24, borderRadius: 16,
+                paddingVertical: 16, paddingHorizontal: 24, borderRadius: Radius.lg,
                 alignItems: 'center',
                 shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.5, shadowRadius: 20, elevation: 8,
@@ -2357,7 +2358,7 @@ export default function OnboardingScreen() {
                 <View style={{
                   width: 44,
                   height: 44,
-                  borderRadius: 12,
+                  borderRadius: Radius.md,
                   backgroundColor: colors.inputBackground,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -2392,7 +2393,7 @@ export default function OnboardingScreen() {
               entering={FadeIn.duration(300)}
               style={{
                 backgroundColor: '#EF4444',
-                borderRadius: 12,
+                borderRadius: Radius.md,
                 padding: 14,
               }}
             >
@@ -2419,7 +2420,7 @@ export default function OnboardingScreen() {
               style={{
                 width: screenWidth - 48,
                 height: 54,
-                borderRadius: 14,
+                borderRadius: Radius.card,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: colors.text,
@@ -2484,7 +2485,7 @@ export default function OnboardingScreen() {
               backgroundColor: alpha(colors.background, 0.90),
               justifyContent: 'center',
               alignItems: 'center',
-              borderRadius: 16,
+              borderRadius: Radius.lg,
             }}>
               <ActivityIndicator size="large" color={colors.accent} />
               <Text style={{
@@ -2717,7 +2718,7 @@ const obStyles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     borderWidth: 1.5,
     gap: 8,
   },

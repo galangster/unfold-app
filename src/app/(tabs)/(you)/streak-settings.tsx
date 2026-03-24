@@ -15,6 +15,7 @@ import {
   InfoIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -454,7 +455,7 @@ const ssStyles = StyleSheet.create({
     paddingBottom: 100,
   },
   tierCard: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     padding: 24,
     marginBottom: 24,
@@ -473,7 +474,7 @@ const ssStyles = StyleSheet.create({
   tierIconCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: Radius['2xl'],
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -562,7 +563,7 @@ const ssStyles = StyleSheet.create({
     marginBottom: 24,
   },
   statButton: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     padding: 16,
     alignItems: 'center',
   },
@@ -587,7 +588,7 @@ const ssStyles = StyleSheet.create({
     lineHeight: 17,
   },
   amnestyCard: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 20,
   },
   amnestyRow: {
@@ -610,7 +611,7 @@ const ssStyles = StyleSheet.create({
     alignItems: 'flex-start',
     marginTop: 24,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
   infoIcon: {
     marginRight: 12,

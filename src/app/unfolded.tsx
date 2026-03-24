@@ -40,6 +40,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { format } from 'date-fns';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { computeRecapData, type RecapData } from '@/lib/recap-stats';
@@ -1745,7 +1746,7 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(200, 165, 92, 0.08)',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: 'rgba(200, 165, 92, 0.15)',
   },
@@ -1822,7 +1823,7 @@ const s = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     backgroundColor: 'rgba(255,255,255,0.04)',
     marginBottom: 16,
   },
@@ -1888,7 +1889,7 @@ const s = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     marginTop: 8,
   },
   streakBadgeText: {

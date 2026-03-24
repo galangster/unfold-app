@@ -5,9 +5,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, ShareNetworkIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon } from 'phosphor-react-native';
+import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon, StackIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -359,10 +360,10 @@ export default function PaywallScreen() {
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
 
   // Pull real prices from RevenueCat packages, fall back to hardcoded defaults
-  const monthlyPrice = monthlyPackage?.product.priceString ?? '$5.99';
-  const yearlyPrice = yearlyPackage?.product.priceString ?? '$49.99';
-  const monthlyRaw = monthlyPackage?.product.price ?? 5.99;
-  const yearlyRaw = yearlyPackage?.product.price ?? 49.99;
+  const monthlyPrice = monthlyPackage?.product.priceString ?? '$8.99';
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '$74.99';
+  const monthlyRaw = monthlyPackage?.product.price ?? 8.99;
+  const yearlyRaw = yearlyPackage?.product.price ?? 74.99;
   // Extract currency symbol from locale-aware priceString (e.g., "$" from "$49.99", "€" from "49,99 €")
   const currencySymbol = (yearlyPrice.replace(/[\d.,\s]/g, '').trim()) || '$';
   const perMonthFromYearly = `${currencySymbol}${(yearlyRaw / 12).toFixed(2)}`;
@@ -388,7 +389,9 @@ export default function PaywallScreen() {
     { icon: BookOpenTextIcon, title: '32 study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
     { icon: InfinityIcon, title: 'Unlimited series', desc: 'Always shaped by your story and where you are now' },
     { icon: PencilLineIcon, title: 'Full note-taking suite', desc: 'Rich-text journal with folders, favorites, and scripture linking' },
-    { icon: ShareNetworkIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
+    { icon: CircleNotchIcon, title: 'AI Companion', desc: 'Ask questions about faith, scripture, and your devotional' },
+    { icon: FilePdfIcon, title: 'Beautiful PDF exports', desc: 'Export your devotionals to share or print' },
+    { icon: StackIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
   ];
 
   // Free vs premium comparison rows
@@ -399,6 +402,8 @@ export default function PaywallScreen() {
     { label: 'Audio narration', free: false, premium: true },
     { label: 'Journal prompts', free: false, premium: true },
     { label: 'Share card styles', free: '2', premium: 'All' },
+    { label: 'AI Companion', free: false, premium: true },
+    { label: 'PDF exports', free: false, premium: true },
   ];
 
   return (
@@ -559,7 +564,7 @@ export default function PaywallScreen() {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8 }}>
                 {/* Today */}
                 <View style={{ alignItems: 'center', flex: 1 }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent}20`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: `${colors.accent}20`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                     <CheckIcon size={16} color={colors.accent} weight="bold" />
                   </View>
                   <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Today</Text>
@@ -571,7 +576,7 @@ export default function PaywallScreen() {
                 </View>
                 {/* Reminder */}
                 <View style={{ alignItems: 'center', flex: 1 }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                     <BellIcon size={16} color={colors.textMuted} weight="light" />
                   </View>
                   <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) - 2 || 12}</Text>
@@ -583,7 +588,7 @@ export default function PaywallScreen() {
                 </View>
                 {/* Charge */}
                 <View style={{ alignItems: 'center', flex: 1 }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: Radius.lg, backgroundColor: `${colors.accent}12`, justifyContent: 'center', alignItems: 'center', marginBottom: 8 }}>
                     <CreditCardIcon size={16} color={colors.textMuted} weight="light" />
                   </View>
                   <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.text, marginBottom: 2 }}>Day {parseInt(selectedTrialDuration) || 14}</Text>
@@ -621,7 +626,7 @@ export default function PaywallScreen() {
               justifyContent: 'space-between',
               paddingVertical: 14,
               paddingHorizontal: 18,
-              borderRadius: 12,
+              borderRadius: Radius.md,
               backgroundColor: selectedPlan === 'yearly' ? `${colors.accent}18` : 'rgba(255,255,255,0.04)',
               borderWidth: 1.5,
               borderColor: selectedPlan === 'yearly' ? colors.accent : 'rgba(255,255,255,0.15)',
@@ -671,7 +676,7 @@ export default function PaywallScreen() {
               justifyContent: 'space-between',
               paddingVertical: 14,
               paddingHorizontal: 18,
-              borderRadius: 12,
+              borderRadius: Radius.md,
               backgroundColor: selectedPlan === 'monthly' ? `${colors.accent}18` : 'rgba(255,255,255,0.04)',
               borderWidth: 1.5,
               borderColor: selectedPlan === 'monthly' ? colors.accent : 'rgba(255,255,255,0.15)',
@@ -874,7 +879,7 @@ export default function PaywallScreen() {
           <View
             style={{
               backgroundColor: colors.inputBackground,
-              borderRadius: 16,
+              borderRadius: Radius.lg,
               padding: 28,
               alignItems: 'center',
             }}

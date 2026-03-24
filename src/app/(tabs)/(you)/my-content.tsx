@@ -14,6 +14,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
 
@@ -110,7 +111,7 @@ export default function MyContentScreen() {
                   gap: 6,
                   paddingHorizontal: 10,
                   paddingVertical: 8,
-                  borderRadius: 20,
+                  borderRadius: Radius.xl,
                   backgroundColor: isActive ? colors.inputBackground : 'transparent',
                 }}
               >
@@ -212,7 +213,7 @@ export default function MyContentScreen() {
                   style={{
                     paddingVertical: 14,
                     paddingHorizontal: 24,
-                    borderRadius: 12,
+                    borderRadius: Radius.md,
                     borderWidth: 1.5,
                     borderColor: colors.accent,
                     backgroundColor: 'transparent',
@@ -245,7 +246,7 @@ export default function MyContentScreen() {
                     })}
                     style={{
                       backgroundColor: colors.inputBackground,
-                      borderRadius: 16,
+                      borderRadius: Radius.lg,
                       padding: 20,
                       marginBottom: 12,
                       opacity: 1,
@@ -301,7 +302,7 @@ export default function MyContentScreen() {
                     })}
                     style={{
                       backgroundColor: colors.inputBackground,
-                      borderRadius: 16,
+                      borderRadius: Radius.lg,
                       padding: 20,
                       marginBottom: 12,
                       opacity: 1,
@@ -364,7 +365,7 @@ export default function MyContentScreen() {
                     })}
                     style={{
                       backgroundColor: colors.inputBackground,
-                      borderRadius: 16,
+                      borderRadius: Radius.lg,
                       padding: 20,
                       marginBottom: 12,
                       opacity: 1,
