@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import BottomSheet from '@gorhom/bottom-sheet';
 import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,10 +45,10 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { createReviewPromptManager } from '@/lib/review-prompt';
-import { AudioPlayer } from '@/components/AudioPlayerBottomSheet';
+import { AudioPlayerBar } from '@/components/AudioPlayerBar';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { referenceToRoute } from '@/lib/bible-constants';
-import { getDefaultVoice, prefetchDevotionalAudio } from '@/lib/cartesia';
+import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
@@ -187,7 +186,7 @@ export default function ReadingScreen() {
   const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
-  const audioPlayerRef = useRef<BottomSheet>(null);
+  const [audioUri, setAudioUri] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
@@ -217,7 +216,6 @@ export default function ReadingScreen() {
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const continuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -305,7 +303,6 @@ export default function ReadingScreen() {
       mountedRef.current = false;
       if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
-      if (audioExpandTimerRef.current) clearTimeout(audioExpandTimerRef.current);
       if (bookmarkToastTimerRef.current) clearTimeout(bookmarkToastTimerRef.current);
     };
   }, []);
@@ -430,6 +427,7 @@ export default function ReadingScreen() {
 
   // Stop audio and close player when navigating between days
   useEffect(() => {
+    setAudioUri(null);
     if (isAudioPlayerVisible) {
       setIsAudioPlayerVisible(false);
       endReadingSession();
@@ -510,11 +508,51 @@ export default function ReadingScreen() {
     // Haptic removed — DevotionalContent handles it (Medium weight)
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, bookmarks, addBookmark, removeBookmark]);
 
+  const handlePlayAudio = useCallback(async () => {
+    if (!isPremium) {
+      setPremiumFeature('audio');
+      setShowPremiumSheet(true);
+      return;
+    }
+    if (!currentDayData) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsAudioPlayerVisible(true);
+
+    // Track audio usage for premium nudge + widget bridge
+    useUnfoldStore.getState().setHasUsedAudio();
+    startReadingSession({
+      devotionalTitle: currentDevotional?.title ?? 'Unfold',
+      dayTitle: currentDayData?.title ?? 'Reading',
+      dayNumber: viewingDay,
+      totalDays: totalDays,
+      totalMinutes: user?.readingDuration ?? 5,
+      isListening: true,
+    });
+
+    // If we already have the URI (from prefetch), just show the bar
+    if (audioUri) return;
+
+    try {
+      const voiceId = user?.preferredVoice || getDefaultVoice();
+      const fullText = `${currentDayData.scriptureReference}.\n${currentDayData.scriptureText}\n\n${currentDayData.bodyText}`;
+      const result = await streamDevotionalAudio(fullText, voiceId);
+      setAudioUri(result.audioUrl);
+    } catch (e) {
+      logger.error('[Reading] Failed to load audio:', e);
+    }
+  }, [isPremium, currentDayData, currentDevotional, audioUri, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration]);
+
   const handleStudyMethodPress = useCallback((methodId: string) => {
-    audioPlayerRef.current?.close(); // dismiss audio player first
+    // dismiss audio player first
+    if (isAudioPlayerVisible) {
+      setIsAudioPlayerVisible(false);
+      setAudioUri(null);
+      endReadingSession();
+    }
     setSelectedStudyMethod(methodId);
     setStudyMethodVisible(true);
-  }, []);
+  }, [isAudioPlayerVisible]);
 
   const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string; color?: string }) => {
     if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
@@ -1370,33 +1408,7 @@ export default function ReadingScreen() {
 
                 {/* Audio Player Button */}
                 <TouchableOpacity activeOpacity={0.7}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    if (!isPremium) {
-                      setPremiumFeature('audio');
-                      setShowPremiumSheet(true);
-                      return;
-                    }
-                    if (!isAudioPlayerVisible) {
-                      setIsAudioPlayerVisible(true);
-                      // Track that user has used audio (for premium nudge system)
-                      useUnfoldStore.getState().setHasUsedAudio();
-                      startReadingSession({
-                        devotionalTitle: currentDevotional?.title ?? 'Unfold',
-                        dayTitle: currentDayData?.title ?? 'Reading',
-                        dayNumber: viewingDay,
-                        totalDays: totalDays,
-                        totalMinutes: user?.readingDuration ?? 5,
-                        isListening: true,
-                      });
-                      if (audioExpandTimerRef.current) clearTimeout(audioExpandTimerRef.current);
-                      audioExpandTimerRef.current = setTimeout(() => {
-                        if (mountedRef.current) audioPlayerRef.current?.expand();
-                      }, 50);
-                    } else {
-                      audioPlayerRef.current?.expand();
-                    }
-                  }}
+                  onPress={handlePlayAudio}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
                   accessibilityLabel="Listen to devotional"
@@ -1974,19 +1986,13 @@ export default function ReadingScreen() {
 
       {/* Share: now navigates to /share-card route */}
 
-      {/* Audio Player Bottom Sheet */}
-      {isPremium && isAudioPlayerVisible && currentDayData && (
-        <AudioPlayer
-          ref={audioPlayerRef}
-          title={currentDayData.title}
-          subtitle={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
-          content={currentDayData.bodyText}
-          scriptureReference={currentDayData.scriptureReference}
-          scriptureText={currentDayData.scriptureText}
-          voiceId={user?.preferredVoice || getDefaultVoice()}
-          isPremium={isPremium}
+      {/* Audio Player Bar */}
+      {isPremium && isAudioPlayerVisible && (
+        <AudioPlayerBar
+          audioUri={audioUri}
           onClose={() => {
             setIsAudioPlayerVisible(false);
+            setAudioUri(null);
             endReadingSession();
           }}
         />
