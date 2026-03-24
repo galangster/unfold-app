@@ -169,11 +169,12 @@ export function DevotionalWebView({
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
 
-        // Position toolbar below selection (fixed positioning = viewport-relative)
-        let top = rect.bottom + 10;
+        // Position toolbar well below selection to avoid the native iOS
+        // callout menu (Copy/Look Up/Share) which appears above/over selection
+        let top = rect.bottom + 20;
 
-        // If toolbar would go off bottom, position above selection
-        if (top > window.innerHeight - 60) top = rect.top - 60;
+        // If toolbar would go off bottom, position above selection (above native callout too)
+        if (top > window.innerHeight - 60) top = rect.top - 70;
         // Clamp to visible area
         if (top < 10) top = 10;
 
@@ -226,66 +227,80 @@ export function DevotionalWebView({
         setTimeout(checkSelection, 150);
       });
 
-      // Prevent toolbar touches from clearing the selection
+      // Prevent toolbar touches from clearing the selection.
+      // Use pointer-events CSS + touchstart only on the toolbar container
+      // (not preventDefault which kills child touchend on iOS WebViews).
       toolbar.addEventListener('touchstart', function(e) {
+        e.stopPropagation();
+      }, { passive: true });
+
+      // Handle color button taps via BOTH touchend and click for reliability.
+      // On iOS WebViews, touchend can be swallowed when the native selection
+      // callout is present, so we also listen for click as a fallback.
+      function handleColorTap(btn, e) {
         e.preventDefault();
         e.stopPropagation();
-      }, { passive: false });
 
-      // Handle color button taps via touchend (more reliable than click on iOS)
-      document.querySelectorAll('.color-btn').forEach(function(btn) {
-        btn.addEventListener('touchend', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
+        var color = btn.dataset.color;
+        if (!selectedText || !window.rangyHighlighter) return;
 
-          var color = btn.dataset.color;
-          if (!selectedText || !window.rangyHighlighter) return;
+        // Haptic feedback for color tap
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'HAPTIC_IMPACT'
+        }));
 
-          // Haptic feedback for color tap
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'HAPTIC_IMPACT'
-          }));
+        var context = '';
+        if (selectionRange) {
+          var container = selectionRange.commonAncestorContainer;
+          var element = container.nodeType === 3 ? container.parentElement : container;
+          context = element && element.textContent ? element.textContent.substring(0, 150) : '';
+        }
 
-          var context = '';
+        var highlightApplied = false;
+        var serializedHighlight = '';
+
+        try {
+          var selection = window.getSelection();
           if (selectionRange) {
-            var container = selectionRange.commonAncestorContainer;
-            var element = container.nodeType === 3 ? container.parentElement : container;
-            context = element && element.textContent ? element.textContent.substring(0, 150) : '';
-          }
-
-          var highlightApplied = false;
-          var serializedHighlight = '';
-
-          try {
-            var selection = window.getSelection();
             selection.removeAllRanges();
             selection.addRange(selectionRange);
-
-            window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
-            highlightApplied = true;
-            serializedHighlight = window.rangyHighlighter.serialize();
-          } catch (err) {
-            console.log('Highlight failed:', err);
           }
 
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'QUOTE_SELECTED',
-            text: selectedText,
-            context: context,
-            highlightApplied: highlightApplied,
-            serializedRange: serializedHighlight,
-            color: color
-          }));
+          window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
+          highlightApplied = true;
+          serializedHighlight = window.rangyHighlighter.serialize();
+        } catch (err) {
+          console.log('Highlight failed:', err);
+        }
 
-          window.getSelection().removeAllRanges();
-          hideToolbar();
-          selectedText = '';
-        });
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'QUOTE_SELECTED',
+          text: selectedText,
+          context: context,
+          highlightApplied: highlightApplied,
+          serializedRange: serializedHighlight,
+          color: color
+        }));
 
-        // Prevent click from interfering
-        btn.addEventListener('click', function(e) {
+        window.getSelection().removeAllRanges();
+        hideToolbar();
+        selectedText = '';
+      }
+
+      document.querySelectorAll('.color-btn').forEach(function(btn) {
+        // Prevent touchstart from dismissing the selection
+        btn.addEventListener('touchstart', function(e) {
           e.preventDefault();
           e.stopPropagation();
+        }, { passive: false });
+
+        btn.addEventListener('touchend', function(e) {
+          handleColorTap(btn, e);
+        });
+
+        // Click fallback — critical on iOS where native callout can swallow touchend
+        btn.addEventListener('click', function(e) {
+          handleColorTap(btn, e);
         });
       });
 

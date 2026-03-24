@@ -55,7 +55,7 @@ export default function DayMenuScreen() {
             color: colors.textSubtle,
             textTransform: 'uppercase',
             letterSpacing: 1.2,
-            textAlign: 'center',
+            textAlign: 'left',
             lineHeight: 18,
           }}
           numberOfLines={2}
@@ -69,7 +69,7 @@ export default function DayMenuScreen() {
             fontFamily: FontFamily.display,
             fontSize: 24,
             color: colors.text,
-            textAlign: 'center',
+            textAlign: 'left',
             marginTop: 12,
           }}
         >

@@ -550,14 +550,25 @@ export default function JournalHubScreen() {
     );
   }, [currentDevotional, journalEntries]);
 
-  const answeredQuestions = useMemo(() => {
-    if (!todayEntry?.questionResponses) return new Set<string>();
-    return new Set(
-      todayEntry.questionResponses
-        .filter((qr) => qr.response.trim().length > 0)
-        .map((qr) => qr.question),
-    );
+  // Count answered reflections — counts ALL non-empty question responses,
+  // not just those matching the original reflectionQuestions strings
+  // (Go Deeper may generate AI follow-up questions with different text)
+  const answeredReflectionCount = useMemo(() => {
+    if (!todayEntry?.questionResponses) return 0;
+    return todayEntry.questionResponses.filter(
+      (qr) => qr.response.trim().length > 0,
+    ).length;
   }, [todayEntry]);
+
+  const remainingReflections = useMemo(() => {
+    if (!reflectionQuestions.length) return 0;
+    return Math.max(0, reflectionQuestions.length - answeredReflectionCount);
+  }, [reflectionQuestions, answeredReflectionCount]);
+
+  const isAllReflectionsDone = useMemo(() => {
+    if (!reflectionQuestions.length) return false;
+    return answeredReflectionCount >= reflectionQuestions.length;
+  }, [reflectionQuestions, answeredReflectionCount]);
 
   const hasExistingEntry = useMemo(() => {
     if (!currentDevotional) return false;
@@ -570,13 +581,23 @@ export default function JournalHubScreen() {
 
   const firstUnansweredQuestion = useMemo(() => {
     if (!reflectionQuestions.length) return null;
+    // If the user has answered at least as many questions as there are
+    // reflection questions, consider them all done
+    if (answeredReflectionCount >= reflectionQuestions.length) return null;
+    // Find the first original question that isn't yet answered by exact match
+    // (for the preview text on the card)
+    const answeredQuestionTexts = new Set(
+      (todayEntry?.questionResponses ?? [])
+        .filter((qr) => qr.response.trim().length > 0)
+        .map((qr) => qr.question),
+    );
     for (let i = 0; i < reflectionQuestions.length; i++) {
-      if (!answeredQuestions.has(reflectionQuestions[i])) {
+      if (!answeredQuestionTexts.has(reflectionQuestions[i])) {
         return { question: reflectionQuestions[i], index: i };
       }
     }
     return null;
-  }, [reflectionQuestions, answeredQuestions]);
+  }, [reflectionQuestions, answeredReflectionCount, todayEntry]);
 
   // ---- Notebook data ----
   const filteredNotes = useMemo(() => {
@@ -1015,11 +1036,19 @@ export default function JournalHubScreen() {
                             gap: 8,
                           }}
                         >
-                          <PencilLineIcon
-                            size={16}
-                            color={colors.accent}
-                            weight="light"
-                          />
+                          {isAllReflectionsDone && hasExistingEntry ? (
+                            <CheckCircleIcon
+                              size={16}
+                              color={colors.accent}
+                              weight="fill"
+                            />
+                          ) : (
+                            <PencilLineIcon
+                              size={16}
+                              color={colors.accent}
+                              weight="light"
+                            />
+                          )}
                           <Text
                             style={{
                               fontFamily: FontFamily.mono,
@@ -1028,7 +1057,11 @@ export default function JournalHubScreen() {
                               letterSpacing: 1,
                             }}
                           >
-                            {hasExistingEntry ? 'CONTINUE' : 'REFLECT'}
+                            {isAllReflectionsDone && hasExistingEntry
+                              ? 'COMPLETED'
+                              : hasExistingEntry
+                                ? 'CONTINUE'
+                                : 'REFLECT'}
                           </Text>
                         </View>
                         <Text
@@ -1151,15 +1184,12 @@ export default function JournalHubScreen() {
                             color: colors.textMuted,
                           }}
                         >
-                          {reflectionQuestions.length - answeredQuestions.size}{' '}
+                          {remainingReflections}{' '}
                           more reflection
-                          {reflectionQuestions.length - answeredQuestions.size !==
-                          1
-                            ? 's'
-                            : ''}{' '}
+                          {remainingReflections !== 1 ? 's' : ''}{' '}
                           to explore
                         </Text>
-                        {answeredQuestions.size > 0 && (
+                        {answeredReflectionCount > 0 && (
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,
@@ -1167,7 +1197,7 @@ export default function JournalHubScreen() {
                               color: colors.accent,
                             }}
                           >
-                            {answeredQuestions.size}/{reflectionQuestions.length}
+                            {answeredReflectionCount}/{reflectionQuestions.length}
                           </Text>
                         )}
                       </View>
@@ -1622,6 +1652,7 @@ const mainStyles = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: 14,
     padding: 0,
+    paddingVertical: 4,
   },
   segmentContainer: {
     paddingHorizontal: 24,

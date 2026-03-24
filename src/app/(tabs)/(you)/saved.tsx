@@ -138,7 +138,7 @@ export default function SavedScreen() {
           {recentHighlights.length === 0 ? (
             <EmptyState
               icon={<HighlighterIcon size={28} color={colors.textHint} weight="light" />}
-              title="Your highlighted passages will appear here."
+              title="Your highlights will appear here."
               subtitle="Try long-pressing any passage while reading to highlight it."
               colors={colors}
               hasAnimated={hasAnimated}

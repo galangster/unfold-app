@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Alert,
   AccessibilityInfo,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -109,9 +110,9 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
       width: auto;
       max-width: 100vw;
       overflow-x: hidden;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
       word-wrap: break-word;
-      word-break: break-word;
+      word-break: break-all;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
       min-height: 100%;
@@ -121,10 +122,11 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
     }
     .ProseMirror {
       overflow-anchor: none;
-      overflow-wrap: break-word;
+      overflow-wrap: anywhere;
       word-wrap: break-word;
-      word-break: break-word;
+      word-break: break-all;
       max-width: 100%;
+      overflow-x: hidden;
     }
     .tiptap { scroll-padding-bottom: 60vh; }
     p { margin: 0 0 4px 0; }
@@ -203,6 +205,7 @@ export default function NoteDetailScreen() {
   const updateNote = useUnfoldStore((s) => s.updateNote);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
   const folders = useUnfoldStore((s) => s.folders);
+  const addFolder = useUnfoldStore((s) => s.addFolder);
   const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
 
   // Find existing note
@@ -513,11 +516,11 @@ export default function NoteDetailScreen() {
     }, 100);
   }, [editor, colors]);
 
-  // Double-tap on editor body enters edit mode
-  const doubleTapGesture = useMemo(
+  // Single-tap on editor body enters edit mode
+  const singleTapGesture = useMemo(
     () =>
       Gesture.Tap()
-        .numberOfTaps(2)
+        .numberOfTaps(1)
         .onEnd(() => {
           if (!isEditingRef.current) {
             runOnJS(handleEdit)();
@@ -693,6 +696,31 @@ export default function NoteDetailScreen() {
     [ensureNoteSaved, moveNoteToFolder],
   );
 
+  const handleCreateFolderFromSheet = useCallback(() => {
+    Alert.prompt(
+      'New Folder',
+      'Enter a name for the new folder.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Create',
+          onPress: async (name?: string) => {
+            const trimmed = name?.trim();
+            if (!trimmed) return;
+            const folderId = addFolder(trimmed);
+            // Move the note into the newly created folder
+            const id = await ensureNoteSaved();
+            moveNoteToFolder(id, folderId);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'default',
+    );
+  }, [addFolder, ensureNoteSaved, moveNoteToFolder]);
+
 
   /* ───── Scripture actions ───── */
 
@@ -711,27 +739,29 @@ export default function NoteDetailScreen() {
         text: data.text,
       });
 
-      setScriptureRefs((prev) => {
-        const exists = prev.some(
-          (r) =>
-            r.bookId === data.scriptureRef.bookId &&
-            r.chapter === data.scriptureRef.chapter &&
-            r.verse === data.scriptureRef.verse &&
-            r.verseEnd === data.scriptureRef.verseEnd,
-        );
-        if (exists) return prev;
-        const updated = [...prev, data.scriptureRef];
+      // Check for duplicate before updating state — avoids calling
+      // updateNote inside the setScriptureRefs updater, which would
+      // trigger a Zustand store mutation during React's render phase
+      const exists = scriptureRefs.some(
+        (r) =>
+          r.bookId === data.scriptureRef.bookId &&
+          r.chapter === data.scriptureRef.chapter &&
+          r.verse === data.scriptureRef.verse &&
+          r.verseEnd === data.scriptureRef.verseEnd,
+      );
+
+      if (!exists) {
+        const updated = [...scriptureRefs, data.scriptureRef];
+        setScriptureRefs(updated);
 
         if (noteId) {
           updateNote(noteId, { scriptureRefs: updated });
         }
-
-        return updated;
-      });
+      }
 
       setShowScriptureSheet(false);
     },
-    [noteId, updateNote],
+    [noteId, updateNote, scriptureRefs],
   );
 
 
@@ -1066,7 +1096,7 @@ export default function NoteDetailScreen() {
         />
 
         {/* ── TipTap rich text body ── */}
-        <GestureDetector gesture={doubleTapGesture}>
+        <GestureDetector gesture={singleTapGesture}>
           <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
             <RichText
               editor={editor}
@@ -1240,6 +1270,7 @@ export default function NoteDetailScreen() {
         folders={folders}
         currentFolderId={liveNote?.folderId ?? existingNote?.folderId}
         onSelect={handleMoveFolderSelect}
+        onCreateFolder={handleCreateFolderFromSheet}
       />
     </View>
   );

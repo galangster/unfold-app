@@ -31,7 +31,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, PenNibIcon, GavelIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, PenNibIcon, GavelIcon } from 'phosphor-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useOAuth } from '@clerk/clerk-expo';
 import { continueAsGuest } from '@/lib/clerk';
@@ -2549,6 +2549,16 @@ export default function OnboardingScreen() {
                 accessibilityRole="button"
               >
                 <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+              </TouchableOpacity>
+            ) : existingUser?.hasCompletedOnboarding ? (
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => router.back()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+              >
+                <XIcon size={24} color={colors.textMuted} weight="light" />
               </TouchableOpacity>
             ) : (
               <View style={{ width: 40, height: 40 }} />

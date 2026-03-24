@@ -830,7 +830,7 @@ export default function BibleReaderScreen() {
             {
               backgroundColor: isDark ? 'rgba(28, 28, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)',
               paddingBottom: showNoteInput && keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8),
-              bottom: showNoteInput && keyboardHeight > 0 ? keyboardHeight - insets.bottom : 0,
+              bottom: showNoteInput && keyboardHeight > 0 ? keyboardHeight - insets.bottom + 12 : 0,
               borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
             },
             contextBarSlideStyle,

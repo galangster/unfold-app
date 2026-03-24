@@ -23,7 +23,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { HouseIcon, BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily } from '@/constants/fonts';
@@ -69,6 +69,8 @@ function isTransientGenerationError(message: string): boolean {
     'aborted',
     '503',
     '502',
+    'rate limit',
+    '429',
   ].some((token) => normalized.includes(token));
 }
 
@@ -591,11 +593,6 @@ export default function ReadingScreen() {
     });
   }, [currentDevotionalId, currentDevotional, currentDayData?.title, viewingDay, router, setResumeContext]);
 
-  const handleGoHome = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/(today)');
-  }, [router]);
-
   // Memoized scroll handler — tracks progress bar + scroll hint visibility
   const handleScroll = useCallback((e: {
     nativeEvent: {
@@ -912,10 +909,8 @@ export default function ReadingScreen() {
         return;
       }
 
-      // Allow re-attempts for this day-count checkpoint.
-      delete autoBackgroundKickoffRef.current[devotionalId];
-
       if (!isOnline) {
+        delete autoBackgroundKickoffRef.current[devotionalId];
         setIsWaitingForConnection(true);
         setAutoRetryNextAt(null);
         setAutoRetrySecondsLeft(null);
@@ -923,10 +918,14 @@ export default function ReadingScreen() {
       }
 
       if (!result.retriable) {
+        // Keep the ref so the guard prevents re-entry on next effect cycle
         setAutoRetryNextAt(null);
         setAutoRetrySecondsLeft(null);
         return;
       }
+
+      // Allow re-attempts for retriable errors only
+      delete autoBackgroundKickoffRef.current[devotionalId];
 
       const attempts = (autoRetryAttemptsRef.current[devotionalId] ?? 0) + 1;
       autoRetryAttemptsRef.current[devotionalId] = attempts;
@@ -1232,19 +1231,7 @@ export default function ReadingScreen() {
                   paddingVertical: 10,
                 }}
               >
-              {/* Home button */}
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleGoHome}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Go home"
-                accessibilityHint="Returns to the home screen"
-                style={{ padding: 8 }}
-              >
-                <HouseIcon size={22} color={colors.text} weight="light" />
-              </TouchableOpacity>
-
-              {/* Day indicator -- editorial serif typography */}
+              {/* Day indicator -- editorial serif typography, left-aligned */}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1270,9 +1257,9 @@ export default function ReadingScreen() {
               >
                 {/* Left Chevron */}
                 {viewingDay > 1 ? (
-                  <CaretLeftIcon size={14} color={colors.textSubtle} weight="light" />
+                  <CaretLeftIcon size={18} color={colors.text} weight="regular" />
                 ) : (
-                  <View style={{ width: 14 }} />
+                  <View style={{ width: 18 }} />
                 )}
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1321,9 +1308,9 @@ export default function ReadingScreen() {
 
                 {/* Right Chevron */}
                 {viewingDay < availableDays ? (
-                  <CaretRightIcon size={14} color={colors.textSubtle} weight="light" />
+                  <CaretRightIcon size={18} color={colors.text} weight="regular" />
                 ) : (
-                  <View style={{ width: 14 }} />
+                  <View style={{ width: 18 }} />
                 )}
               </TouchableOpacity>
 
