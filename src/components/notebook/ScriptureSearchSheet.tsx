@@ -56,6 +56,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { fetchVerseLocal, fetchVerse, type VerseResult } from '@/lib/bible-api';
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { referenceToRoute } from '@/lib/bible-constants';
@@ -304,7 +305,7 @@ export function ScriptureSearchSheet({
                     sheetStyles.inputContainer,
                     {
                       backgroundColor: colors.background,
-                      borderColor: query.trim() ? colors.accent + '40' : colors.border,
+                      borderColor: query.trim() ? alpha(colors.accent, 0.25) : colors.border,
                     },
                   ]}
                 >
@@ -348,7 +349,7 @@ export function ScriptureSearchSheet({
                           activeOpacity={0.7}
                           style={[
                             sheetStyles.pill,
-                            { backgroundColor: colors.accent + '0D' },
+                            { backgroundColor: alpha(colors.accent, 0.05) },
                           ]}
                           accessibilityRole="button"
                           accessibilityLabel={`Insert ${ref.reference}`}
@@ -485,9 +486,8 @@ const sheetStyles = StyleSheet.create({
     marginBottom: 16,
   },
   headerTitle: {
-    fontFamily: FontFamily.display,
-    fontSize: 20,
-    letterSpacing: -0.3,
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 18,
   },
   inputContainer: {
     flexDirection: 'row',

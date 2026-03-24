@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { CameraIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
 import { useCallback } from 'react';
 
@@ -123,7 +124,7 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: profilePicture ? 'transparent' : colors.accent + '20',
+          backgroundColor: profilePicture ? 'transparent' : alpha(colors.accent, 0.13),
           justifyContent: 'center',
           alignItems: 'center',
           overflow: 'hidden',

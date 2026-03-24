@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 import { HighlighterIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { useUnfoldStore, type HighlightColor } from '@/lib/store';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> = {
@@ -73,7 +74,7 @@ export function RememberThisCard() {
             styles.card,
             {
               backgroundColor: colors.inputBackground,
-              borderColor: colors.accent + '40',
+              borderColor: alpha(colors.accent, 0.25),
             },
           ]}
         >
@@ -157,7 +158,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   quoteText: {
-    fontFamily: FontFamily.displayItalic,
+    fontFamily: FontFamily.bodyItalic,
     fontSize: 16,
     lineHeight: 24,
   },

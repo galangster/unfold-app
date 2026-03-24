@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { CheckCircleIcon, PencilSimpleLineIcon, ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
@@ -277,8 +278,8 @@ export function InlineReflectionJournal({
             paddingHorizontal: 24,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: colors.accent + '40',
-            backgroundColor: colors.accent + '08',
+            borderColor: alpha(colors.accent, 0.25),
+            backgroundColor: alpha(colors.accent, 0.03),
           }}
         >
           <NotePencilIcon size={16} color={colors.accent} weight="light" />
@@ -337,7 +338,7 @@ function ReflectionQuestionCard({
   }, [isAnswered]);
 
   const borderStyle = useAnimatedStyle(() => ({
-    borderLeftColor: borderProgress.value > 0.5 ? colors.accent : colors.border + '60',
+    borderLeftColor: borderProgress.value > 0.5 ? colors.accent : alpha(colors.border, 0.38),
   }));
 
   return (

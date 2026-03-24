@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { PlusIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import type { NoteFolder } from '@/lib/store';
 
 interface FolderChipsProps {
@@ -236,11 +237,11 @@ function FolderChip({ folderId, folder, label, color, isActive, hasChildren, onP
   }, [folder, onLongPress, hasChildren, onDrillIn]);
 
   const pillBg = isActive
-    ? colors.accent + '18'
+    ? alpha(colors.accent, 0.09)
     : colors.buttonBackground;
 
   const pillBorder = isActive
-    ? colors.accent + '40'
+    ? alpha(colors.accent, 0.25)
     : colors.border;
 
   const pillTextColor = isActive ? colors.accent : colors.textMuted;

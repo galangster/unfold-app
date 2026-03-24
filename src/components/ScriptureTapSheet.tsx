@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
 import { fetchVerse, fetchVerseLocal, fetchCommentary, type VerseResult } from '@/lib/bible-api';
 import { BIBLE_BOOKS } from '@/lib/bible-constants';
@@ -145,7 +146,7 @@ export function ScriptureTapSheet({
     >
       <View style={s.container}>
         {/* Backdrop */}
-        <Pressable onPress={onClose} style={s.backdrop} />
+        <TouchableOpacity activeOpacity={1} onPress={onClose} style={s.backdrop} />
 
         {/* Sheet */}
         <Animated.View
@@ -165,7 +166,7 @@ export function ScriptureTapSheet({
                 {reference}
               </Text>
               {verse && (
-                <View style={[s.translationPill, { backgroundColor: colors.accent + '1A' }]}>
+                <View style={[s.translationPill, { backgroundColor: alpha(colors.accent, 0.10) }]}>
                   <Text style={[s.translationPillText, { color: colors.accent }]}>
                     {verse.translation.toUpperCase()}
                   </Text>
@@ -180,7 +181,7 @@ export function ScriptureTapSheet({
                   activeOpacity={0.6}
                   onPress={handleCopy}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[s.iconBtn, { backgroundColor: copied ? colors.accent + '1A' : 'transparent' }]}
+                  style={[s.iconBtn, { backgroundColor: copied ? alpha(colors.accent, 0.10) : 'transparent' }]}
                 >
                   {copied ? (
                     <CheckIcon size={16} color={colors.accent} weight="bold" />
@@ -196,7 +197,7 @@ export function ScriptureTapSheet({
                   activeOpacity={0.6}
                   onPress={handleBookmark}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[s.iconBtn, { backgroundColor: saved ? colors.accent + '1A' : 'transparent' }]}
+                  style={[s.iconBtn, { backgroundColor: saved ? alpha(colors.accent, 0.10) : 'transparent' }]}
                 >
                   <BookmarkSimpleIcon
                     size={16}
@@ -234,7 +235,7 @@ export function ScriptureTapSheet({
             ) : verse ? (
               <>
                 {/* Verse text — accent left border for visual identity */}
-                <View style={[s.verseBlock, { borderLeftColor: colors.accent + '40' }]}>
+                <View style={[s.verseBlock, { borderLeftColor: alpha(colors.accent, 0.25) }]}>
                   <Text style={[s.verseText, { color: colors.text }]}>
                     {verse.text}
                   </Text>
@@ -274,7 +275,7 @@ export function ScriptureTapSheet({
                   <TouchableOpacity
                     activeOpacity={0.7}
                     onPress={handleReadInBible}
-                    style={[s.readCta, { backgroundColor: colors.accent + '12' }]}
+                    style={[s.readCta, { backgroundColor: alpha(colors.accent, 0.07) }]}
                   >
                     <BookOpenIcon size={16} color={colors.accent} weight="light" />
                     <Text style={[s.readCtaText, { color: colors.accent }]}>

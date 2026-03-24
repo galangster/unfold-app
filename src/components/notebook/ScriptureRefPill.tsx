@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { referenceToRoute } from '@/lib/bible-constants';
 
 import { ScriptureRef } from '@/lib/store';
@@ -61,7 +62,7 @@ export function ScriptureRefPill({ reference, style, size = 'compact' }: Scriptu
       style={[
         styles.container,
         {
-          backgroundColor: colors.accent + '0D', // 5% accent tint
+          backgroundColor: alpha(colors.accent, 0.05), // 5% accent tint
           paddingHorizontal: paddingH,
           paddingVertical: paddingV,
         },

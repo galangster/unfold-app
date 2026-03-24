@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 
 /** Returns motivational micro-copy based on streak length */
 function getStreakMotivation(streak: number): string {
@@ -136,7 +137,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             styles.card,
             {
               backgroundColor: colors.inputBackground,
-              borderColor: streakCount > 0 ? colors.accent + '15' : colors.border,
+              borderColor: streakCount > 0 ? alpha(colors.accent, 0.08) : colors.border,
               shadowColor: streakCount > 0 ? colors.accent : '#000',
               shadowOffset: { width: 0, height: streakCount > 0 ? 3 : 2 },
               shadowOpacity: streakCount > 0 ? 0.12 : 0.05,

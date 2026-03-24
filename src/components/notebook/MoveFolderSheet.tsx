@@ -57,6 +57,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import type { NoteFolder } from '@/lib/store';
 
 // ---------------------------------------------------------------------------
@@ -323,7 +324,7 @@ export function MoveFolderSheet({
                     style={[
                       styles.folderRow,
                       {
-                        backgroundColor: !currentFolderId ? colors.accent + '0A' : 'transparent',
+                        backgroundColor: !currentFolderId ? alpha(colors.accent, 0.04) : 'transparent',
                       },
                     ]}
                   >
@@ -360,7 +361,7 @@ export function MoveFolderSheet({
                     style={[
                       styles.folderRow,
                       {
-                        backgroundColor: !currentFolderId ? colors.accent + '0A' : 'transparent',
+                        backgroundColor: !currentFolderId ? alpha(colors.accent, 0.04) : 'transparent',
                       },
                     ]}
                   >
@@ -569,7 +570,7 @@ function DraggableFolderRow({
             backgroundColor: isDragging
               ? colors.backgroundElevated
               : isSelected
-                ? colors.accent + '0A'
+                ? alpha(colors.accent, 0.04)
                 : 'transparent',
             shadowColor: isDragging ? '#000' : 'transparent',
             shadowOffset: { width: 0, height: isDragging ? 2 : 0 },
@@ -685,9 +686,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   title: {
-    fontFamily: FontFamily.display,
-    fontSize: 20,
-    letterSpacing: -0.3,
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 18,
     paddingHorizontal: 28,
     marginBottom: 16,
   },

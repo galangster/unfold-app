@@ -40,7 +40,7 @@ import * as Haptics from 'expo-haptics';
 import { FolderSimplePlusIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
-import { Button } from '@/components/ui';
+import { Button, alpha } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
 // Animation config
@@ -216,7 +216,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                     {
                       color: colors.text,
                       backgroundColor: colors.background,
-                      borderColor: folderName.trim() ? colors.accent + '40' : colors.border,
+                      borderColor: folderName.trim() ? alpha(colors.accent, 0.25) : colors.border,
                       borderWidth: 1,
                     },
                   ]}
@@ -327,9 +327,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontFamily: FontFamily.display,
-    fontSize: 20,
-    letterSpacing: -0.3,
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 18,
   },
   input: {
     fontFamily: FontFamily.ui,
