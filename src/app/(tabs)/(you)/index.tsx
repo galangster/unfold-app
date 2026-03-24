@@ -26,6 +26,7 @@ import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
+import { alpha } from '@/components/ui';
 
 interface MenuItem {
   icon: typeof GearIcon;
@@ -131,7 +132,7 @@ export default function YouScreen() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 4,
-                    backgroundColor: colors.accent + '20',
+                    backgroundColor: alpha(colors.accent, 0.13),
                     paddingHorizontal: 10,
                     paddingVertical: 4,
                     borderRadius: 12,
@@ -177,7 +178,7 @@ export default function YouScreen() {
                   }}
                 >
                   <LinearGradient
-                    colors={[colors.accent, colors.accent + 'CC']}
+                    colors={[colors.accent, alpha(colors.accent, 0.80)]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={{
@@ -199,7 +200,7 @@ export default function YouScreen() {
                           Upgrade to Premium
                         </Text>
                       </View>
-                      <SparkleIcon size={16} color={colors.background + 'AA'} weight="fill" />
+                      <SparkleIcon size={16} color={alpha(colors.background, 0.67)} weight="fill" />
                     </View>
                     <Text
                       style={{
@@ -338,7 +339,7 @@ export default function YouScreen() {
                         width: 36,
                         height: 36,
                         borderRadius: 10,
-                        backgroundColor: colors.accent + '10',
+                        backgroundColor: alpha(colors.accent, 0.06),
                         alignItems: 'center',
                         justifyContent: 'center',
                         marginRight: 14,

@@ -50,6 +50,7 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
+import { alpha } from '@/components/ui';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -733,7 +734,7 @@ Their journal entry:
             {/* Scripture anchor — connects the blank page to today's content */}
             {currentDay && (
               <Animated.View entering={FadeIn.duration(400)}>
-                <View style={[jStyles.scriptureAnchor, { borderLeftColor: colors.accent + '40' }]}>
+                <View style={[jStyles.scriptureAnchor, { borderLeftColor: alpha(colors.accent, 0.25) }]}>
                   <Text style={[jStyles.scriptureAnchorText, { color: colors.textMuted }]}>
                     {currentDay.title}
                     {currentDay.scriptureReference ? ` — ${currentDay.scriptureReference}` : ''}
@@ -958,20 +959,20 @@ Their journal entry:
                           jStyles.soapSectionButton,
                           {
                             backgroundColor: isExpanded
-                              ? colors.accent + '0A'
+                              ? alpha(colors.accent, 0.04)
                               : hasContent
-                              ? colors.accent + '06'
+                              ? alpha(colors.accent, 0.02)
                               : 'transparent',
                             borderColor: isExpanded
-                              ? colors.accent + '30'
+                              ? alpha(colors.accent, 0.19)
                               : hasContent
-                              ? colors.accent + '15'
-                              : colors.border + '60',
+                              ? alpha(colors.accent, 0.08)
+                              : alpha(colors.border, 0.38),
                           },
                         ]}
                       >
                         {/* Letter badge */}
-                        <View style={[jStyles.soapLetterBadge, { backgroundColor: hasContent ? colors.accent : colors.border + '80' }]}>
+                        <View style={[jStyles.soapLetterBadge, { backgroundColor: hasContent ? colors.accent : alpha(colors.border, 0.50) }]}>
                           <Text style={[jStyles.soapLetterText, { color: hasContent ? '#fff' : colors.textSubtle }]}>
                             {section.letter}
                           </Text>
@@ -994,7 +995,7 @@ Their journal entry:
                           entering={FadeInDown.duration(250)}
                           style={jStyles.soapExpandedWrapper}
                         >
-                          <View style={[jStyles.soapInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.accent + '30' }]}>
+                          <View style={[jStyles.soapInputCard, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.19) }]}>
                             <TextInput
                               ref={(ref) => { soapInputRefs.current.set(section.key, ref); }}
                               value={soapValues[section.key]}
@@ -1068,8 +1069,8 @@ Their journal entry:
                     style={[
                       jStyles.prayerItemButton,
                       {
-                        backgroundColor: prayer.isAnswered ? colors.accent + '0D' : 'transparent',
-                        borderColor: prayer.isAnswered ? colors.accent + '30' : colors.border + '60',
+                        backgroundColor: prayer.isAnswered ? alpha(colors.accent, 0.05) : 'transparent',
+                        borderColor: prayer.isAnswered ? alpha(colors.accent, 0.19) : alpha(colors.border, 0.38),
                       },
                     ]}
                   >
@@ -1101,7 +1102,7 @@ Their journal entry:
               {/* Add prayer input */}
               {showPrayerInput ? (
                 <Animated.View entering={FadeIn.duration(200)} style={jStyles.prayerInputMargin}>
-                  <View style={[jStyles.prayerInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.accent + '30' }]}>
+                  <View style={[jStyles.prayerInputCard, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.19) }]}>
                     <TextInput
                       ref={prayerInputRef}
                       value={newPrayerText}
@@ -1134,7 +1135,7 @@ Their journal entry:
                       disabled={!newPrayerText.trim()}
                       hitSlop={8}
                       style={{
-                        backgroundColor: newPrayerText.trim() ? colors.accent : colors.accent + '40',
+                        backgroundColor: newPrayerText.trim() ? colors.accent : alpha(colors.accent, 0.25),
                         paddingHorizontal: 20,
                         paddingVertical: 8,
                         borderRadius: 16,

@@ -50,6 +50,7 @@ import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widge
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
+import { alpha } from '@/components/ui';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -167,7 +168,15 @@ export default function ReadingScreen() {
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
 
-  const [viewingDay, setViewingDay] = useState(() => requestedDayNumber ?? currentDevotional?.currentDay ?? 1);
+  const [viewingDay, setViewingDay] = useState(() => {
+    if (requestedDayNumber) return requestedDayNumber;
+    if (!currentDevotional) return 1;
+    const target = currentDevotional.currentDay;
+    // If the target day has content, use it
+    if (currentDevotional.days.some((d) => d.dayNumber === target)) return target;
+    // Otherwise fall back to the last available day (so users can re-read, not hit a dead-end)
+    return currentDevotional.days.length > 0 ? currentDevotional.days.length : 1;
+  });
   // shareModalOpen removed — share now navigates to /share-card route
   const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
@@ -1074,7 +1083,7 @@ export default function ReadingScreen() {
                 marginBottom: 14,
               }}
             >
-              {isRetrying ? 'Writing...' : 'Not quite ready'}
+              {isRetrying ? 'Writing...' : 'Still being written'}
             </Text>
 
             <Text
@@ -1285,7 +1294,7 @@ export default function ReadingScreen() {
                   {viewingDay === currentDevotional.currentDay && (
                     <View
                       style={{
-                        backgroundColor: colors.accent + '20',
+                        backgroundColor: alpha(colors.accent, 0.13),
                         paddingHorizontal: 6,
                         paddingVertical: 2,
                         borderRadius: 4,
@@ -1475,9 +1484,9 @@ export default function ReadingScreen() {
                       paddingVertical: 12,
                       paddingHorizontal: 14,
                       borderRadius: 16,
-                      backgroundColor: colors.accent + '10',
+                      backgroundColor: alpha(colors.accent, 0.06),
                       borderWidth: 1,
-                      borderColor: colors.accent + '20',
+                      borderColor: alpha(colors.accent, 0.13),
                     }}
                   >
                     <Text
@@ -1678,7 +1687,7 @@ export default function ReadingScreen() {
                           marginBottom: (isWaitingForConnection || autoRetrySecondsLeft !== null) ? 8 : 20,
                         }}
                       >
-                        Your series has more days that haven't been written yet.
+                        More days are on the way for this series.
                       </Text>
                       {isWaitingForConnection && !isGeneratingMore && (
                         <Text
@@ -1795,7 +1804,7 @@ export default function ReadingScreen() {
                         borderRadius: 14,
                         backgroundColor: colors.inputBackground,
                         borderWidth: 1,
-                        borderColor: colors.accent + '55',
+                        borderColor: alpha(colors.accent, 0.33),
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>

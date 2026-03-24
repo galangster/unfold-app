@@ -16,6 +16,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, SoapResponses } from '@/lib/store';
 import { format } from 'date-fns';
+import { alpha } from '@/components/ui';
 
 const SOAP_LABELS: { key: keyof SoapResponses; label: string; description: string; icon: React.ReactNode }[] = [
   {
@@ -155,7 +156,7 @@ export default function JournalDetailScreen() {
                 paddingHorizontal: 8,
                 paddingVertical: 2,
                 borderRadius: 4,
-                backgroundColor: colors.accent + '15',
+                backgroundColor: alpha(colors.accent, 0.08),
               }}
             >
               <Text
@@ -304,7 +305,7 @@ export default function JournalDetailScreen() {
                         marginBottom: 24,
                         paddingLeft: 16,
                         borderLeftWidth: 2,
-                        borderLeftColor: colors.accent + '50',
+                        borderLeftColor: alpha(colors.accent, 0.31),
                       }}
                     >
                       <Text

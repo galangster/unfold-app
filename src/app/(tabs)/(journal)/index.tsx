@@ -47,6 +47,7 @@ import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
 import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
+import { alpha } from '@/components/ui';
 
 type Segment = 'reflections' | 'notebook';
 
@@ -1009,11 +1010,11 @@ export default function JournalHubScreen() {
                   >
                     <View
                       style={{
-                        backgroundColor: colors.accent + '0D',
+                        backgroundColor: alpha(colors.accent, 0.05),
                         borderRadius: 20,
                         padding: 24,
                         borderWidth: 1,
-                        borderColor: colors.accent + '12',
+                        borderColor: alpha(colors.accent, 0.07),
                         shadowColor: colors.accent,
                         shadowOffset: { width: 0, height: 3 },
                         shadowOpacity: 0.08,

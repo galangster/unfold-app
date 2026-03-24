@@ -22,6 +22,7 @@ import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
+import { alpha } from '@/components/ui';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -371,7 +372,7 @@ export default function SignInScreen() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: colors.background + 'E6',
+            backgroundColor: alpha(colors.background, 0.90),
             justifyContent: 'center',
             alignItems: 'center',
           }}
@@ -384,7 +385,7 @@ export default function SignInScreen() {
                   height: 48,
                   borderRadius: 24,
                   borderWidth: 3,
-                  borderColor: colors.accent + '30',
+                  borderColor: alpha(colors.accent, 0.19),
                   borderTopColor: colors.accent,
                 },
                 spinnerStyle,

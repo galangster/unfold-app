@@ -55,6 +55,7 @@ import {
 import { getOfferings, purchasePackage, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { alpha } from '@/components/ui';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -1567,9 +1568,9 @@ export default function OnboardingScreen() {
                       paddingHorizontal: 14,
                       paddingVertical: 8,
                       borderRadius: 20,
-                      backgroundColor: isChipSelected ? colors.accent + '22' : colors.inputBackground,
+                      backgroundColor: isChipSelected ? alpha(colors.accent, 0.13) : colors.inputBackground,
                       borderWidth: 1,
-                      borderColor: isChipSelected ? colors.accent + '66' : colors.border,
+                      borderColor: isChipSelected ? alpha(colors.accent, 0.40) : colors.border,
                     }}
                   >
                     <Text style={{
@@ -2223,7 +2224,7 @@ export default function OnboardingScreen() {
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 12,
                   paddingVertical: 10, paddingHorizontal: 14,
-                  backgroundColor: colors.accent + '0A',
+                  backgroundColor: alpha(colors.accent, 0.04),
                   borderRadius: 12,
                 }}
               >
@@ -2480,7 +2481,7 @@ export default function OnboardingScreen() {
               left: -24,
               right: -24,
               bottom: -120,
-              backgroundColor: colors.background + 'E6',
+              backgroundColor: alpha(colors.background, 0.90),
               justifyContent: 'center',
               alignItems: 'center',
               borderRadius: 16,

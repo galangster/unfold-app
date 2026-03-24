@@ -47,6 +47,7 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { YourSeriesSection } from '@/components/home/YourSeriesSection';
+import { alpha } from '@/components/ui';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -214,7 +215,7 @@ function NotificationCard({
         onPress={onPress}
       >
         <View
-          style={[homeStyles.notificationCard, { backgroundColor: accentColor + '0D' }]}
+          style={[homeStyles.notificationCard, { backgroundColor: alpha(accentColor, 0.05) }]}
         >
           {/* Companion orb */}
           <View style={homeStyles.notificationOrb}>
@@ -291,7 +292,7 @@ function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme })
           <View
             style={[
               homeStyles.bridgeBubble,
-              { backgroundColor: colors.accent + '10', borderColor: colors.accent + '20' },
+              { backgroundColor: alpha(colors.accent, 0.06), borderColor: alpha(colors.accent, 0.13) },
             ]}
           >
             <Text style={[homeStyles.bridgeText, { color: colors.text }]}>
@@ -931,7 +932,7 @@ export default function HomeScreen() {
                   style={{
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: colors.accent + '18',
+                    borderColor: alpha(colors.accent, 0.09),
                     padding: 28,
                     alignItems: 'center',
                     backgroundColor: colors.backgroundElevated,
@@ -1028,7 +1029,7 @@ export default function HomeScreen() {
                   style={{
                     borderRadius: 20,
                     borderWidth: 1,
-                    borderColor: colors.accent + '18',
+                    borderColor: alpha(colors.accent, 0.09),
                     padding: 24,
                     backgroundColor: colors.backgroundElevated,
                     // Hero card — strongest elevation in the hierarchy
@@ -1133,7 +1134,7 @@ export default function HomeScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}>
                           <View
                             style={{
-                              backgroundColor: colors.accent + '12',
+                              backgroundColor: alpha(colors.accent, 0.07),
                               paddingHorizontal: 10,
                               paddingVertical: 4,
                               borderRadius: 6,

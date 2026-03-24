@@ -37,7 +37,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { Button, Card, Chip, Input, Sheet } from '@/components/ui';
+import { Button, Card, Chip, Input, Sheet, alpha } from '@/components/ui';
 import { MagnifyingGlassIcon } from 'phosphor-react-native';
 
 // ---------------------------------------------------------------------------
@@ -437,7 +437,7 @@ export default function ComponentCatalogScreen() {
         <SubLabel text="Premium nudge" />
         <Card variant="accent" style={{ marginBottom: Spacing[4] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[3] }}>
-            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent + '14', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: alpha(colors.accent, 0.08), alignItems: 'center', justifyContent: 'center' }}>
               <SparkleIcon size={18} weight="light" color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>

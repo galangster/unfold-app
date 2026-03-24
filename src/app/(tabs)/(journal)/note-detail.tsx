@@ -9,10 +9,9 @@ import {
   Alert,
   AccessibilityInfo,
 } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -51,6 +50,7 @@ import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { isHtmlContent } from '@/components/notebook/NoteEditor';
 import { logger } from '@/lib/logger';
+import { alpha } from '@/components/ui';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -268,8 +268,12 @@ export default function NoteDetailScreen() {
 
   /* ───── TipTap editor bridge ───── */
 
+  // IMPORTANT: avoidIosKeyboard is FALSE because we manage keyboard padding
+  // ourselves (accounting for the custom toolbar height). The library's internal
+  // padding logic does NOT know about our toolbar and would set paddingBottom to
+  // just keyboardHeight+10, causing text to scroll behind the toolbar after ~12 lines.
   const editor = useEditorBridge({
-    avoidIosKeyboard: true,
+    avoidIosKeyboard: false,
     autofocus: false,
     editable: shouldStartEditing,
     initialContent,
@@ -315,7 +319,7 @@ export default function NoteDetailScreen() {
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Inject CSS + scroll behavior fix once editor is ready
+  // Inject CSS once editor is ready
   useEffect(() => {
     if (!editorState.isReady) return;
     editor.injectCSS(buildEditorCSS(colors, isEditing));
@@ -323,26 +327,6 @@ export default function NoteDetailScreen() {
     setTimeout(() => {
       setEditorReady(true);
     }, 120);
-    // Override TipTap's scrollIntoView (Notion-style cursor behavior)
-    editor.injectJS(`
-      (function() {
-        var origScroll = Element.prototype.scrollIntoView;
-        Element.prototype.scrollIntoView = function(opts) {
-          if (typeof opts === 'object') {
-            opts.block = 'nearest';
-          } else {
-            opts = { block: 'nearest', behavior: 'smooth' };
-          }
-          origScroll.call(this, opts);
-        };
-        if (Element.prototype.scrollIntoViewIfNeeded) {
-          var origIfNeeded = Element.prototype.scrollIntoViewIfNeeded;
-          Element.prototype.scrollIntoViewIfNeeded = function(center) {
-            origIfNeeded.call(this, false);
-          };
-        }
-      })();
-    `);
 
     // If new note, auto-focus the editor after it's ready
     if (shouldStartEditing && isNewNote) {
@@ -352,22 +336,32 @@ export default function NoteDetailScreen() {
     }
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Adjust scroll threshold when keyboard + toolbar are both visible.
-  // tentap-editor internally sets ProseMirror paddingBottom to keyboardHeight + 10,
-  // but our custom toolbar (48px) sits above the keyboard and occludes content.
-  // We inject extra padding so the cursor is never hidden behind the toolbar.
+  // Manage keyboard padding ourselves since avoidIosKeyboard is false.
+  // We account for the custom toolbar (48px) that sits above the keyboard.
+  // Without this, text scrolls behind the toolbar after ~12 lines.
   const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
   useEffect(() => {
     if (!editorState.isReady) return;
     if (isEditing && isKeyboardUp && keyboardHeight > 0) {
-      const extraPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 10;
+      // Toolbar sits above the keyboard, so total occlusion is keyboard + toolbar
+      const totalPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
         (function() {
           var doc = document.querySelector('.ProseMirror');
-          if (doc) doc.style.paddingBottom = '${extraPadding}px';
+          if (doc) doc.style.paddingBottom = '${totalPadding}px';
         })();
       `);
-      editor.updateScrollThresholdAndMargin(extraPadding);
+      editor.updateScrollThresholdAndMargin(totalPadding);
+    } else if (isKeyboardUp && keyboardHeight > 0) {
+      // Read mode with keyboard (e.g., search) — just keyboard padding
+      const padding = keyboardHeight + 10;
+      editor.injectJS(`
+        (function() {
+          var doc = document.querySelector('.ProseMirror');
+          if (doc) doc.style.paddingBottom = '${padding}px';
+        })();
+      `);
+      editor.updateScrollThresholdAndMargin(padding);
     } else {
       editor.injectJS(`
         (function() {
@@ -516,18 +510,6 @@ export default function NoteDetailScreen() {
     }, 100);
   }, [editor, colors]);
 
-  // Single-tap on editor body enters edit mode
-  const singleTapGesture = useMemo(
-    () =>
-      Gesture.Tap()
-        .numberOfTaps(1)
-        .onEnd(() => {
-          if (!isEditingRef.current) {
-            runOnJS(handleEdit)();
-          }
-        }),
-    [handleEdit],
-  );
 
   const handleDone = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1056,7 +1038,7 @@ export default function NoteDetailScreen() {
                 style={[
                   styles.scriptureCard,
                   {
-                    backgroundColor: colors.accent + '08',
+                    backgroundColor: alpha(colors.accent, 0.03),
                     borderLeftColor: colors.accent,
                   },
                 ]}
@@ -1068,23 +1050,42 @@ export default function NoteDetailScreen() {
         )}
 
         {/* ── Title ── */}
-        <TextInput
-          value={title}
-          onChangeText={handleTitleChange}
-          placeholder="Title"
-          placeholderTextColor={colors.textHint}
-          editable={isEditing}
-          style={[
-            styles.titleInput,
-            { color: colors.text },
-            !isEditing && styles.titleInputReadOnly,
-          ]}
-          returnKeyType="next"
-          onSubmitEditing={() => editor.focus('end')}
-          blurOnSubmit={false}
-          maxLength={200}
-          accessibilityLabel="Note title"
-        />
+        {isEditing ? (
+          <TextInput
+            value={title}
+            onChangeText={handleTitleChange}
+            placeholder="Title"
+            placeholderTextColor={colors.textHint}
+            editable
+            style={[
+              styles.titleInput,
+              { color: colors.text },
+            ]}
+            returnKeyType="next"
+            onSubmitEditing={() => editor.focus('end')}
+            blurOnSubmit={false}
+            maxLength={200}
+            accessibilityLabel="Note title"
+          />
+        ) : (
+          <TouchableOpacity
+            onPress={handleEdit}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Tap to edit note title"
+          >
+            <Text
+              style={[
+                styles.titleInput,
+                styles.titleInputReadOnly,
+                { color: title ? colors.text : colors.textHint },
+              ]}
+              numberOfLines={3}
+            >
+              {title || 'Title'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* ── Accent divider ── */}
         <View
@@ -1096,22 +1097,32 @@ export default function NoteDetailScreen() {
         />
 
         {/* ── TipTap rich text body ── */}
-        <GestureDetector gesture={singleTapGesture}>
-          <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
-            <RichText
-              editor={editor}
-              style={[styles.richText, { backgroundColor: colors.background }]}
+        <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
+          <RichText
+            editor={editor}
+            style={[styles.richText, { backgroundColor: colors.background }]}
+          />
+          {/* Solid overlay hides WebView white flash */}
+          {!editorReady && (
+            <Animated.View
+              exiting={FadeOut.duration(200)}
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
             />
-            {/* Solid overlay hides WebView white flash */}
-            {!editorReady && (
-              <Animated.View
-                exiting={FadeOut.duration(200)}
-                pointerEvents="none"
-                style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
-              />
-            )}
-          </View>
-        </GestureDetector>
+          )}
+          {/* Tap-to-edit overlay — covers WebView in read mode so taps enter edit mode.
+              WebView swallows all touches, so GestureDetector cannot intercept taps.
+              This transparent overlay sits above the WebView and captures taps instead. */}
+          {!isEditing && editorReady && (
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={handleEdit}
+              accessibilityRole="button"
+              accessibilityLabel="Tap to edit note"
+            />
+          )}
+        </View>
 
         {/* ── Tags section (read mode only) ── */}
         {!isEditing && liveNote && liveNote.tags.length > 0 && (
@@ -1129,8 +1140,8 @@ export default function NoteDetailScreen() {
                   style={[
                     styles.tagPill,
                     {
-                      backgroundColor: colors.accent + '15',
-                      borderColor: colors.accent + '33',
+                      backgroundColor: alpha(colors.accent, 0.08),
+                      borderColor: alpha(colors.accent, 0.20),
                     },
                   ]}
                 >

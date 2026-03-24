@@ -33,6 +33,7 @@ import { CompanionActions } from '@/components/companion/CompanionActions';
 import { SuggestionChips } from '@/components/companion/SuggestionChips';
 import { TypingIndicator } from '@/components/companion/TypingIndicator';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
+import { alpha } from '@/components/ui';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
@@ -279,7 +280,7 @@ export default function CompanionScreen() {
                 style={{
                   marginHorizontal: 16,
                   marginBottom: 8,
-                  backgroundColor: colors.error + '1A',
+                  backgroundColor: alpha(colors.error, 0.10),
                   borderRadius: 12,
                   padding: 12,
                 }}
