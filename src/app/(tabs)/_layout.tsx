@@ -15,6 +15,7 @@ import { FontFamily } from '@/constants/fonts';
 import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
+import { useAudioPlayerState } from '@/lib/audio-player-state';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -90,6 +91,10 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
   const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
+
+  // Audio player auto-collapse: minibar/halfsheet → pill on tab switch
+  const playerTier = useAudioPlayerState((s) => s.playerTier);
+  const setPlayerTier = useAudioPlayerState((s) => s.setTier);
 
   // Slide channel (scroll-based) and instant channel (verse selection)
   const translateY = useSharedValue(0);
@@ -206,6 +211,11 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
 
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name, route.params);
+
+              // Auto-collapse audio player to pill on tab switch
+              if (playerTier === 'minibar' || playerTier === 'halfsheet') {
+                setPlayerTier('pill');
+              }
             }
           };
 
