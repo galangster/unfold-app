@@ -21,6 +21,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GlowBackground } from '@/components/GlowBackground';
+import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
+import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -107,6 +109,9 @@ function RootLayoutNav() {
 
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
+  // Initialize global audio player session (configures audio mode, sets up singleton)
+  useGlobalAudioPlayer();
+
   // Register navigation container with Sentry for screen tracking
   useEffect(() => {
     if (ref) {
@@ -172,6 +177,7 @@ function RootLayoutNav() {
           }}
         />
         </Stack>
+        <AudioPlayerOverlay />
       </View>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </NavigationThemeProvider>
