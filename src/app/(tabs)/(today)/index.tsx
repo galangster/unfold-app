@@ -507,24 +507,28 @@ export default function HomeScreen() {
           />
 
           {/* Zone 2: Context Slot */}
-          <ContextSlot
-            slotType={slotType}
-            colors={colors}
-            onMiddayPress={handleCheckIn}
-            middayMessage={middayMessage}
-            onEveningPress={handleEveningWindDown}
-            eveningMessage={eveningMessage}
-            bridgeText={validBridgeText}
-            resumeProps={resumeProps}
-          />
+          <Animated.View entering={entering(FadeIn.duration(280).delay(80))}>
+            <ContextSlot
+              slotType={slotType}
+              colors={colors}
+              onMiddayPress={handleCheckIn}
+              middayMessage={middayMessage}
+              onEveningPress={handleEveningWindDown}
+              eveningMessage={eveningMessage}
+              bridgeText={validBridgeText}
+              resumeProps={resumeProps}
+            />
+          </Animated.View>
 
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
 
           {/* Zone 3: Hero Devotional */}
-          <View ref={journeyCardRef} collapsable={false}>
-            <DevotionalCard state={devotionalState} />
-          </View>
+          <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
+            <View ref={journeyCardRef} collapsable={false}>
+              <DevotionalCard state={devotionalState} scrollY={scrollY} />
+            </View>
+          </Animated.View>
 
           {/* Zone 4: Quick Actions */}
           <QuickActionsRow
