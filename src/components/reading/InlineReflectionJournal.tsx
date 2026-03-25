@@ -340,8 +340,9 @@ function ReflectionQuestionCard({
     });
   }, [isAnswered]);
 
+  const borderInactive = alpha(colors.border, 0.38);
   const borderStyle = useAnimatedStyle(() => ({
-    borderLeftColor: borderProgress.value > 0.5 ? colors.accent : alpha(colors.border, 0.38),
+    borderLeftColor: borderProgress.value > 0.5 ? colors.accent : borderInactive,
   }));
 
   return (

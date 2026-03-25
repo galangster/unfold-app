@@ -32,12 +32,14 @@ function getTimeOfDay(): 'morning' | 'afternoon' | 'evening' {
 
 function buildCompanionContext(
   userName: string | null,
+  companionName: string | null,
   devotional: { title?: string; currentDay?: number; totalDays?: number } | null,
   streakDays: number
 ) {
   const memory = getCompanionMemory();
   return {
     userName: userName ?? undefined,
+    companionName: companionName ?? undefined,
     devotionalTitle: devotional?.title ?? undefined,
     devotionalDay: devotional?.currentDay ?? undefined,
     devotionalTotal: devotional?.totalDays ?? undefined,
@@ -242,6 +244,7 @@ export function useCompanionChat() {
 
   // Phase 4: Gather user context
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
+  const companionName = useUnfoldStore((s) => s.companionName);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const streakDays = useUnfoldStore((s) => s.streakCurrent);
@@ -305,6 +308,7 @@ export function useCompanionChat() {
 
         const companionContext = buildCompanionContext(
           userName,
+          companionName,
           currentDevotional,
           streakDays ?? 0
         );
@@ -421,6 +425,7 @@ export function useCompanionChat() {
       addMessage,
       updateMessage,
       userName,
+      companionName,
       currentDevotional,
       streakDays,
       conversationId,

@@ -642,6 +642,24 @@ export default function HomeScreen() {
   }, [titleChars, charOrder]);
   const titleEndTime = useMemo(() => Math.max(...charDelays) + 700, [charDelays]);
 
+  const daysCompleted = currentDevotional ? currentDevotional.days.filter(d => d.isRead).length : 0;
+  const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
+  const currentDayData = currentDevotional?.days.find(d => d.dayNumber === currentDevotional.currentDay) ?? null;
+
+  // Content-aware check-in messages — reference today's devotional when available
+  const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
+    title: currentDayData.title,
+    scriptureReference: currentDayData.scriptureReference,
+    quotableLine: currentDayData.quotableLine,
+    checkInQuestion: currentDayData.checkInQuestion,
+  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, currentDayData?.checkInQuestion]);
+
+  const eveningMessage = useMemo(() => getContentAwareEveningMessage(currentDayData ? {
+    title: currentDayData.title,
+    scriptureReference: currentDayData.scriptureReference,
+    quotableLine: currentDayData.quotableLine,
+  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine]);
+
   if (!currentDevotional) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -707,23 +725,8 @@ export default function HomeScreen() {
     );
   }
 
-  const daysCompleted = currentDevotional.days.filter(d => d.isRead).length;
-  const progressPercent = (daysCompleted / currentDevotional.totalDays) * 100;
-  const currentDayData = currentDevotional.days.find(d => d.dayNumber === currentDevotional.currentDay);
-
-  // Content-aware check-in messages — reference today's devotional when available
-  const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
-    title: currentDayData.title,
-    scriptureReference: currentDayData.scriptureReference,
-    quotableLine: currentDayData.quotableLine,
-    checkInQuestion: currentDayData.checkInQuestion,
-  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine, currentDayData?.checkInQuestion]);
-
-  const eveningMessage = useMemo(() => getContentAwareEveningMessage(currentDayData ? {
-    title: currentDayData.title,
-    scriptureReference: currentDayData.scriptureReference,
-    quotableLine: currentDayData.quotableLine,
-  } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine]);
+  // daysCompleted, progressPercent, currentDayData, middayMessage, eveningMessage
+  // are declared above the early return to satisfy Rules of Hooks
 
   const isJourneyComplete = daysCompleted === currentDevotional.totalDays;
   const isFirstDay = currentDevotional.currentDay === 1 && daysCompleted === 0;

@@ -1644,7 +1644,7 @@ export const useUnfoldStore = create<UnfoldState>()(
         if (version < 5) {
           try {
             if (state.user && typeof state.user === 'object' && !state.user.preferredVoice) {
-              state.user.preferredVoice = '694f9389-aac1-45b6-b726-9d9369183238'; // Katie
+              state.user.preferredVoice = 'arman';
             }
           } catch (err) {
             console.error('[store] Migration v4→5 failed:', err);
@@ -1850,18 +1850,23 @@ export const useUnfoldStore = create<UnfoldState>()(
         if (version < 25) {
           try {
             const voiceMap: Record<string, string> = {
-              '694f9389-aac1-45b6-b726-9d9369183238': 'emily',   // Katie → Emily
-              '03496517-369a-4db1-8236-3d3ae459ddf7': 'ariana',  // Elena → Ariana
-              '1463a4e1-56a1-4b41-b257-728d56e93605': 'james',   // Marcus → James
-              '3246e36c-ac8c-418d-83cd-4eaad5a3b887': 'george',  // David → George
-              '15a9cd88-84b0-4a8b-95f2-5d583b54c72e': 'jasper',  // Grace → Jasper
+              '694f9389-aac1-45b6-b726-9d9369183238': 'arman',   // Katie → Arman
+              '03496517-369a-4db1-8236-3d3ae459ddf7': 'jasmine', // Elena → Jasmine
+              '1463a4e1-56a1-4b41-b257-728d56e93605': 'arman',   // Marcus → Arman
+              '3246e36c-ac8c-418d-83cd-4eaad5a3b887': 'arman',   // David → Arman
+              '15a9cd88-84b0-4a8b-95f2-5d583b54c72e': 'jasmine', // Grace → Jasmine
+              'emily': 'arman',
+              'george': 'arman',
+              'jasper': 'arman',
+              'ariana': 'jasmine',
+              'james': 'arman',
             };
             if (state.user && typeof state.user === 'object') {
               const oldVoice = state.user.preferredVoice;
               if (oldVoice && voiceMap[oldVoice]) {
                 state.user.preferredVoice = voiceMap[oldVoice];
-              } else if (!oldVoice || !['emily', 'george', 'jasper', 'ariana', 'james'].includes(oldVoice)) {
-                state.user.preferredVoice = 'emily';
+              } else if (!oldVoice || !['arman', 'jasmine'].includes(oldVoice)) {
+                state.user.preferredVoice = 'arman';
               }
               // Flag for cache cleanup — picked up by tts-service on first use
               (state as any)._needsTtsCacheCleanup = true;

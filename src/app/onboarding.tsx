@@ -57,6 +57,8 @@ import { getOfferings, purchasePackage, isRevenueCatEnabled } from '@/lib/revenu
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
+import { SignInSheet } from '@/components/SignInSheet';
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 
 
 // Types with subject selection
@@ -354,6 +356,10 @@ export default function OnboardingScreen() {
   const trialPurchaseMutation = useMutation({
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
   });
+
+  // Sign-in sheet for guest users trying to generate
+  const { isSignedIn } = useClerkAuth();
+  const [showSignInSheet, setShowSignInSheet] = useState(false);
 
   // Adaptive-question endpoint is now public (no auth required) — no early auth needed.
 
@@ -698,7 +704,7 @@ export default function OnboardingScreen() {
         themeMode: 'dark',
         accentTheme: 'gold',
         readingFont: 'source-serif',
-        preferredVoice: '694f9389-aac1-45b6-b726-9d9369183238',
+        preferredVoice: 'arman',
         ...(data.selectedThemes.length > 0 ? { selectedTheme: data.selectedThemes[0] } : {}),
         ...(data.selectedType ? { selectedType: data.selectedType } : {}),
         ...(data.selectedStudySubject ? { selectedStudySubject: data.selectedStudySubject } : {}),
@@ -708,11 +714,19 @@ export default function OnboardingScreen() {
   }, [data, existingUser, updateUser, setUser, purchasedDuringOnboarding]);
 
   // Complete onboarding: save data + navigate to generating screen
-  const completeOnboarding = useCallback(() => {
+  const proceedToGeneration = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     saveOnboardingData();
     router.replace('/generating');
   }, [router, saveOnboardingData]);
+
+  const completeOnboarding = useCallback(() => {
+    if (!isSignedIn) {
+      setShowSignInSheet(true);
+      return;
+    }
+    proceedToGeneration();
+  }, [isSignedIn, proceedToGeneration]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -1506,7 +1520,7 @@ export default function OnboardingScreen() {
               {chips.map((chip) => {
                 const isChipSelected = currentChips.includes(chip);
                 return (
-                  <TouchableOpacity activeOpacity={0.7}
+                  <TouchableOpacity activeOpacity={1}
                     key={chip}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -2611,6 +2625,15 @@ export default function OnboardingScreen() {
           </View>
         </View>
       </SafeAreaView>
+
+      <SignInSheet
+        visible={showSignInSheet}
+        onClose={() => setShowSignInSheet(false)}
+        onSignedIn={() => {
+          setShowSignInSheet(false);
+          proceedToGeneration();
+        }}
+      />
     </View>
   );
 }

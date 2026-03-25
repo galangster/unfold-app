@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, AppState } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -92,6 +92,23 @@ export default function SignInScreen() {
 
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isSigningInRef = useRef(false);
+
+  // Reset stuck signing-in state when app returns to foreground
+  // (handles case where OAuth sheet X button doesn't resolve the promise)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && isSigningInRef.current) {
+        setTimeout(() => {
+          if (isSigningInRef.current) {
+            isSigningInRef.current = false;
+            setIsSigningIn(false);
+          }
+        }, 1000);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // Clerk OAuth hooks
   const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: 'oauth_apple' });
@@ -166,6 +183,7 @@ export default function SignInScreen() {
     ) => {
       if (isSigningIn) return;
       setIsSigningIn(true);
+      isSigningInRef.current = true;
       setError(null);
 
       try {
@@ -200,7 +218,8 @@ export default function SignInScreen() {
         // User cancelled — silent
         if (
           err?.errors?.[0]?.code === 'user_cancelled' ||
-          err?.message?.includes('cancelled')
+          err?.message?.includes('cancelled') ||
+          err?.message?.includes('canceled')
         ) {
           setIsSigningIn(false);
           return;
@@ -217,6 +236,7 @@ export default function SignInScreen() {
         );
       } finally {
         setIsSigningIn(false);
+        isSigningInRef.current = false;
       }
     },
     [isSigningIn, navigateAfterAuth, updateUser],
@@ -321,8 +341,8 @@ export default function SignInScreen() {
               activeOpacity={0.8}
               disabled={isSigningIn}
             >
-              <AppleLogoIcon size={20} color="#FFFFFF" weight="fill" />
-              <Text style={[styles.oauthButtonText, { color: '#FFFFFF' }]}>
+              <AppleLogoIcon size={20} color="#1F1F1F" weight="fill" />
+              <Text style={[styles.oauthButtonText, { color: '#1F1F1F' }]}>
                 Sign in with Apple
               </Text>
             </TouchableOpacity>
@@ -427,7 +447,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing['7'],
-    paddingTop: Spacing['5'],
+    paddingTop: Spacing['16'],
     paddingBottom: Spacing['6'],
     justifyContent: 'space-between',
   },
@@ -504,7 +524,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   appleButton: {
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   googleButton: {
     backgroundColor: '#FFFFFF',

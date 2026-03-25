@@ -17,10 +17,7 @@ import Animated, {
   withDelay,
 } from 'react-native-reanimated';
 import { Duration } from '@/constants/animations';
-import { ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
-import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 
 const DOT_SIZE = 6;
@@ -79,20 +76,8 @@ export function TypingIndicator() {
 
   return (
     <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
-      {/* Companion icon */}
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: Radius.card,
-          backgroundColor: alpha(colors.accent, 0.12),
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginRight: Spacing['3'],
-        }}
-      >
-        <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
-      </View>
+      {/* Icon column spacer — matches CompanionMessageContent layout (28px + 12px gap) */}
+      <View style={{ width: 28, marginRight: Spacing['3'] }} />
 
       {/* Three dots */}
       <View
