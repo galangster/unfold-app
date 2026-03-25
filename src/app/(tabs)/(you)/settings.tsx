@@ -33,11 +33,9 @@ import { useAuth } from '@/hooks/useAuth';
 
 /** Bundled voice samples — Psalm 23:1 read by each voice. Instant playback, zero network. */
 const VOICE_SAMPLES: Record<string, any> = {
-  'emily': require('@/assets/audio/voice-samples/katie.mp3'),
-  'ariana': require('@/assets/audio/voice-samples/elena.mp3'),
-  'james': require('@/assets/audio/voice-samples/marcus.mp3'),
-  'george': require('@/assets/audio/voice-samples/david.mp3'),
-  'jasper': require('@/assets/audio/voice-samples/grace.mp3'),
+  'caleb': require('@/assets/audio/voice-samples/caleb.mp3'),
+  'grace': require('@/assets/audio/voice-samples/grace.mp3'),
+  'eli': require('@/assets/audio/voice-samples/eli.mp3'),
 };
 
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
@@ -1368,7 +1366,7 @@ export default function SettingsScreen() {
                         marginTop: Spacing['0.5'],
                       }}
                     >
-                      {TTS_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Katie'}
+                      {TTS_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Caleb'}
                     </Text>
                   </View>
                   <CaretDownIcon
@@ -1385,7 +1383,7 @@ export default function SettingsScreen() {
                 {expandedPremium === 'voice' && (
                   <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                     {TTS_VOICES.map((option) => {
-                      const isSelected = (user?.preferredVoice ?? 'emily') === option.id;
+                      const isSelected = (user?.preferredVoice ?? 'caleb') === option.id;
                       const isLocked = option.premium && !user?.isPremium;
                       return (
                         <TouchableOpacity activeOpacity={0.7}
