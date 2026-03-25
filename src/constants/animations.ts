@@ -35,3 +35,26 @@ export const Stagger = {
   normal: 80,
   slow: 120,
 } as const;
+
+// Duration-based spring configs — critically-damped only (no bounce)
+export const SpringConfig = {
+  /** Button press, micro-interactions */
+  quick: { duration: 150, dampingRatio: 1 },
+  /** Card transitions, standard UI */
+  standard: { duration: 280, dampingRatio: 1 },
+  /** Sheets, modals, large elements */
+  smooth: { duration: 340, dampingRatio: 1 },
+} as const;
+
+// Ambient art timing constants
+export const AmbientTiming = {
+  /** Shader breathing cycle (ms) */
+  breathCycle: 5000,
+  /** Full ring rotation (ms) */
+  ringRotation: 60000,
+  /** Particle float duration range */
+  particleMin: 7000,
+  particleMax: 12000,
+  /** Time loop total (ms) — 10 minutes */
+  timeLoop: 600000,
+} as const;

@@ -88,14 +88,14 @@ export const LightColors: ColorTheme = {
 
   // Text hierarchy - warm dark tones
   text: '#1C1710',
-  textMuted: 'rgba(28, 23, 16, 0.62)',
+  textMuted: 'rgba(28, 23, 16, 0.68)',
   textSubtle: 'rgba(28, 23, 16, 0.42)',
   textHint: 'rgba(28, 23, 16, 0.3)',
 
   // Interactive elements
   inputBackground: 'rgba(28, 23, 16, 0.04)',
   inputBackgroundFocused: 'rgba(28, 23, 16, 0.06)',
-  buttonBackground: 'rgba(28, 23, 16, 0.05)',
+  buttonBackground: 'rgba(28, 23, 16, 0.08)',
   buttonBackgroundPressed: 'rgba(28, 23, 16, 0.1)',
 
   // Borders
