@@ -1,43 +1,24 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  withRepeat,
-  withSequence,
-  interpolate,
-  interpolateColor,
-  cancelAnimation,
-  Easing,
-} from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
-import { Duration } from '@/constants/animations';
-import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
-import { ColorTheme } from '@/constants/colors';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
-import { PlusIcon, SunIcon, MoonIcon, CloudIcon, ChatCircleDotsIcon, HeartIcon, HandIcon, XIcon, CaretRightIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
-import { StreakDisplay } from '@/components/StreakDisplay';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
-import { CompanionOrb } from '@/components/CompanionOrb';
-import { AccentGlow } from '@/components/AccentGlow';
 import { GoldEmberField } from '@/components/GoldEmberField';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
@@ -48,11 +29,18 @@ import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
-import { YourSeriesSection } from '@/components/home/YourSeriesSection';
-import { alpha } from '@/components/ui';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
+
+// Zone components
+import { getContextSlotType } from '@/lib/context-slot-priority';
+import { computeDevotionalState } from '@/components/home/compute-devotional-state';
+import { DevotionalCard } from '@/components/home/DevotionalCard';
+import { ContextSlot } from '@/components/home/ContextSlot';
+import { GreetingRow } from '@/components/home/GreetingRow';
+import { QuickActionsRow } from '@/components/home/QuickActionsRow';
+import { SeriesCarousel } from '@/components/home/SeriesCarousel';
+import { CompactStreakRow } from '@/components/home/CompactStreakRow';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -62,15 +50,6 @@ function getTimeOfDay(): TimeOfDay {
   if (hour >= 12 && hour < 17) return 'afternoon';
   if (hour >= 17 && hour < 22) return 'evening';
   return 'night';
-}
-
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 5) return 'Still awake?';
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  if (hour < 21) return 'Good evening';
-  return 'Wind down';
 }
 
 function formatResumeRelativeTime(iso?: string): string {
@@ -85,237 +64,10 @@ function formatResumeRelativeTime(iso?: string): string {
   return `Saved ${days}d ago`;
 }
 
-// Animated progress bar component with shimmer glow
-function AnimatedProgressBar({ progress, colors }: { progress: number; colors: ColorTheme }) {
-  const { reducedMotion } = useAccessibleAnimation();
-  const animatedProgress = useSharedValue(0);
-  const shimmer = useSharedValue(0);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (reducedMotion) {
-        // Show progress immediately, skip shimmer
-        animatedProgress.value = progress;
-        return;
-      }
-      const timer = setTimeout(() => {
-        animatedProgress.value = withTiming(progress, {
-          duration: 900,
-          easing: Easing.out(Easing.cubic),
-        });
-
-        shimmer.value = withDelay(
-          1200,
-          withRepeat(
-            withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-            -1,
-            false
-          )
-        );
-      }, 400);
-
-      return () => clearTimeout(timer);
-    }, [progress, animatedProgress, shimmer, reducedMotion])
-  );
-
-  const barStyle = useAnimatedStyle(() => ({
-    width: `${animatedProgress.value}%`,
-  }));
-
-  const shimmerStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      shimmer.value,
-      [0, 0.3, 0.5, 0.7, 1],
-      [0, 0, 0.4, 0, 0]
-    );
-    const translateX = interpolate(
-      shimmer.value,
-      [0, 1],
-      [-40, 200]
-    );
-    return {
-      opacity,
-      transform: [{ translateX }],
-    };
-  });
-
-  return (
-    <View style={[homeStyles.progressTrack, { backgroundColor: colors.border }]}>
-      <Animated.View
-        style={[homeStyles.progressFill, { backgroundColor: colors.accent }, barStyle]}
-      >
-        <Animated.View style={[homeStyles.progressShimmer, shimmerStyle]} />
-      </Animated.View>
-    </View>
-  );
-}
-
-// MiniCompanionRing removed — replaced by CompanionOrb (size=28) for visual consistency
-
-// ─── Character reveal for "Unfold" title ─────────────────────────
-const REVEAL_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
-
-const RevealChar = React.memo(({ char, animDelay }: { char: string; animDelay: number }) => {
-  const { colors } = useTheme();
-  const opacity = useSharedValue(0);
-  const colorProgress = useSharedValue(0);
-
-  useEffect(() => {
-    opacity.value = withDelay(animDelay, withTiming(1, { duration: 600, easing: REVEAL_EASE }));
-    colorProgress.value = withDelay(animDelay, withTiming(1, { duration: 1200, easing: Easing.out(Easing.cubic) }));
-    return () => { cancelAnimation(opacity); cancelAnimation(colorProgress); };
-  }, [animDelay]);
-
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
-  const textColorStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(colorProgress.value, [0, 1], ['#FFFFFF', colors.accent]),
-  }));
-
-  return (
-    <Animated.View style={containerStyle}>
-      <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 56, letterSpacing: -1.5 }, textColorStyle]}>
-        {char}
-      </Animated.Text>
-    </Animated.View>
-  );
-});
-
-function shuffleRevealOrder(length: number): number[] {
-  const indices = Array.from({ length }, (_, i) => i);
-  for (let i = length - 1; i > 0; i--) {
-    const j = Math.floor((Math.sin(i * 7919 + 104729) * 0.5 + 0.5) * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  return indices;
-}
-
-// Swipeable notification card — shared by midday check-in and evening wind-down
-function NotificationCard({
-  colors,
-  onPress,
-  message,
-  icon,
-  accentColor,
-  delay = 150,
-}: {
-  colors: ColorTheme;
-  onPress: () => void;
-  message: string;
-  icon: React.ReactNode;
-  accentColor: string;
-  delay?: number;
-}) {
-  const { entering, exiting } = useAccessibleAnimation();
-
-  return (
-    <Animated.View
-      entering={entering(FadeIn.duration(400).delay(delay))}
-      exiting={exiting(FadeOut.duration(Duration.slow))}
-      style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['3'] }}
-    >
-      <TouchableOpacity activeOpacity={0.7}
-        onPress={onPress}
-      >
-        <View
-          style={[homeStyles.notificationCard, { backgroundColor: alpha(accentColor, 0.05) }]}
-        >
-          {/* Companion orb */}
-          <View style={homeStyles.notificationOrb}>
-            <CompanionOrb accentColor={accentColor} size={28} />
-          </View>
-
-          {/* Message text */}
-          <View style={homeStyles.flex1}>
-            <Text style={[homeStyles.notificationMessage, { color: colors.text }]}>
-              {message}
-            </Text>
-          </View>
-
-          {/* Action chevron */}
-          <CaretRightIcon size={16} color={colors.textSubtle} weight="light" style={homeStyles.notificationChevron} />
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// Skeleton shimmer for loading bridge
-function BridgeShimmer({ colors }: { colors: ColorTheme }) {
-  const { reducedMotion, entering } = useAccessibleAnimation();
-  const shimmer = useSharedValue(0);
-
-  useEffect(() => {
-    if (reducedMotion) return;
-    shimmer.value = withRepeat(
-      withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, [shimmer, reducedMotion]);
-
-  const shimmerStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(shimmer.value, [0, 0.5, 1], [0.3, 0.6, 0.3]),
-  }));
-
-  return (
-    <Animated.View
-      entering={entering(FadeIn.duration(Duration.slow))}
-      style={homeStyles.shimmerWrapper}
-    >
-      <View
-        style={[homeStyles.shimmerCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-      >
-        <Animated.View style={shimmerStyle}>
-          <View style={[homeStyles.shimmerLine1, { backgroundColor: colors.border }]} />
-          <View style={[homeStyles.shimmerLine2, { backgroundColor: colors.border }]} />
-        </Animated.View>
-      </View>
-    </Animated.View>
-  );
-}
-
-// Daily Bridge card — personalized transition from yesterday to today
-// Styled consistently with CompanionTooltip — clean bubble, regular font
-function DailyBridgeCard({ text, colors }: { text: string; colors: ColorTheme }) {
-  const { entering } = useAccessibleAnimation();
-  return (
-    <Animated.View
-      entering={entering(FadeIn.duration(600))}
-      style={homeStyles.bridgeWrapper}
-    >
-      <View style={homeStyles.bridgeRow}>
-        {/* Mini companion orb */}
-        <View style={homeStyles.bridgeOrbContainer}>
-          <CompanionOrb accentColor={colors.accent} size={24} />
-        </View>
-
-        {/* Message bubble */}
-        <View style={homeStyles.flex1}>
-          <View
-            style={[
-              homeStyles.bridgeBubble,
-              { backgroundColor: alpha(colors.accent, 0.06), borderColor: alpha(colors.accent, 0.13) },
-            ]}
-          >
-            <Text style={[homeStyles.bridgeText, { color: colors.text }]}>
-              {text}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </Animated.View>
-  );
-}
-
-// EveningWindDownCard removed — now uses shared NotificationCard component
-
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { entering, exiting } = useAccessibleAnimation();
+  const { entering } = useAccessibleAnimation();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -329,8 +81,6 @@ export default function HomeScreen() {
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
-  // dismissedMiddayCardDate/dismissedEveningCardDate removed — cards now expire by time window
-
 
   // Refs for onboarding spotlight targets
   const journeyCardRef = useRef<View>(null);
@@ -344,7 +94,6 @@ export default function HomeScreen() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
-  const [showTomorrowLockInfo, setShowTomorrowLockInfo] = useState(false);
 
   // Update time of day every minute
   useEffect(() => {
@@ -402,7 +151,7 @@ export default function HomeScreen() {
     return dev.days.some((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === today);
   }, [currentDevotionalId, devotionals]);
 
-  // Streak celebration: show once when hasReadToday flips from false→true
+  // Streak celebration: show once when hasReadToday flips from false->true
   const [showCelebration, setShowCelebration] = useState(false);
   const prevHasReadToday = React.useRef(hasReadToday);
   useEffect(() => {
@@ -442,9 +191,6 @@ export default function HomeScreen() {
     triggerNextDayGeneration(currentDevotional.id, currentDay - 1)
       .finally(() => setIsPreparingCurrentDay(false));
   }, [currentDevotional]);
-
-  // Content-aware messages are computed after currentDayData is available (line ~698)
-  // See middayMessage / eveningMessage below
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
@@ -488,6 +234,7 @@ export default function HomeScreen() {
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
     retry: 1,
   });
+
   const resumeDevotional = useMemo(() => {
     if (!resumeContext?.devotionalId) return null;
     return devotionals.find((d) => d.id === resumeContext.devotionalId) ?? null;
@@ -521,12 +268,6 @@ export default function HomeScreen() {
     }
     return 'Today';
   };
-
-  // Button press micro-interaction — spring scale
-  const journeyCardScale = useSharedValue(1);
-  const journeyCardAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: journeyCardScale.value }],
-  }));
 
   const handleContinueReading = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -593,7 +334,6 @@ export default function HomeScreen() {
     setShowCheckInSheet(false);
   };
 
-
   const handleEveningWindDown = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/(today)/evening-wind-down');
@@ -615,7 +355,7 @@ export default function HomeScreen() {
     : undefined;
 
   // Time-aware card visibility — cards appear during their window and expire naturally
-  // Midday: 12pm–5pm (afternoon)  |  Evening: 5pm–11:30pm
+  // Midday: 12pm-5pm (afternoon)  |  Evening: 5pm-11:30pm
   const currentHour = new Date().getHours();
   const currentMinute = new Date().getMinutes();
   const showCheckInCard =
@@ -644,16 +384,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Empty state — animated welcome with character reveal + embers
-  const titleChars = useMemo(() => 'Unfold'.split(''), []);
-  const charOrder = useMemo(() => shuffleRevealOrder(titleChars.length), [titleChars.length]);
-  const charDelays = useMemo(() => {
-    const baseDelay = 500;
-    const stagger = 200;
-    return titleChars.map((_, i) => baseDelay + charOrder[i] * stagger);
-  }, [titleChars, charOrder]);
-  const titleEndTime = useMemo(() => Math.max(...charDelays) + 700, [charDelays]);
-
   const daysCompleted = currentDevotional ? currentDevotional.days.filter(d => d.isRead).length : 0;
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
   const currentDayData = currentDevotional?.days.find(d => d.dayNumber === currentDevotional.currentDay) ?? null;
@@ -672,92 +402,26 @@ export default function HomeScreen() {
     quotableLine: currentDayData.quotableLine,
   } : null), [currentDayData?.title, currentDayData?.scriptureReference, currentDayData?.quotableLine]);
 
-  if (!currentDevotional) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
-        {/* Ambient embers for cinematic feel */}
-        <GoldEmberField density="low" active style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
-        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
-            {/* Character-by-character "Unfold" reveal */}
-            <View style={{ flexDirection: 'row', marginBottom: Spacing['5'] }}>
-              {titleChars.map((char, i) => (
-                <RevealChar key={`c-${i}`} char={char} animDelay={charDelays[i]} />
-              ))}
-            </View>
+  // --- Derived state for zone components ---
 
-            <Animated.Text
-              entering={entering(FadeIn.duration(800).delay(titleEndTime))}
-              style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: FontSize.lg,
-                color: 'rgba(200, 165, 92, 0.7)',
-                textAlign: 'center',
-                lineHeight: 28,
-                marginBottom: 56,
-              }}
-            >
-              The world's most personal{'\n'}Bible studies.
-            </Animated.Text>
-
-            <Animated.View entering={entering(FadeIn.duration(600).delay(titleEndTime + 400))}>
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleCreateNew}
-                accessibilityRole="button"
-                accessibilityLabel="Begin your first devotional"
-              >
-                <View
-                  style={{
-                    paddingVertical: 18,
-                    paddingHorizontal: Spacing['12'],
-                    borderRadius: 28,
-                    backgroundColor: colors.accent,
-                    shadowColor: colors.accent,
-                    shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.3,
-                    shadowRadius: 12,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 17,
-                      color: colors.background,
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    Begin Your First Devotional
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-        </SafeAreaView>
-      </View>
-    );
-  }
-
-  // daysCompleted, progressPercent, currentDayData, middayMessage, eveningMessage
-  // are declared above the early return to satisfy Rules of Hooks
-
-  const isJourneyComplete = daysCompleted === currentDevotional.totalDays;
-  const isFirstDay = currentDevotional.currentDay === 1 && daysCompleted === 0;
-  const isLastDay = currentDevotional.currentDay === currentDevotional.totalDays;
+  const isJourneyComplete = currentDevotional ? daysCompleted === currentDevotional.totalDays : false;
+  const isFirstDay = currentDevotional ? currentDevotional.currentDay === 1 && daysCompleted === 0 : false;
+  const isLastDay = currentDevotional ? currentDevotional.currentDay === currentDevotional.totalDays : false;
   const showDay1Review = daysCompleted >= 1 && !hasSeenDay1Review && !isJourneyComplete;
 
   // True when today's reading is done and the card is previewing tomorrow's content
-  const isTomorrow = !isJourneyComplete && getReadingDayLabel() === 'Tomorrow';
+  const isTomorrow = currentDevotional ? !isJourneyComplete && getReadingDayLabel() === 'Tomorrow' : false;
 
   // Extract a teaser sentence from tomorrow's bodyText to surface on the home card
-  const homeTomorrowTeaser = (() => {
+  const homeTomorrowTeaser = useMemo(() => {
     if (!isTomorrow || !currentDayData?.bodyText) return null;
     const stripped = currentDayData.bodyText
       .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
       .replace(/^---$/gm, '')
       .trim();
     const firstSentence = stripped.match(/^.+?[.!?]/s);
-    return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '…';
-  })();
+    return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
+  }, [isTomorrow, currentDayData?.bodyText]);
 
   const getCtaText = () => {
     if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
@@ -769,658 +433,151 @@ export default function HomeScreen() {
     return 'Continue Reading';
   };
 
+  // Compute context slot type
+  const validBridgeText = bridgeText && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) ? bridgeText : undefined;
+  const slotType = getContextSlotType({
+    hasResumeContext: shouldShowResumeCard,
+    currentHour,
+    currentMinute,
+    hasDevotional: !!currentDevotional,
+    hasReadToday,
+    hasMiddayCheckIn: !!todayCheckIn,
+    hasEveningCheckIn: !!todayEveningCheckIn,
+    hasBridgeText: !!validBridgeText,
+    isBridgeLoading: bridgeLoading && !!bridgeInput,
+    hasBridgeInput: !!bridgeInput,
+  });
+
+  // Compute resume props for context slot
+  const resumeProps = shouldShowResumeCard && resumeContext && resumeDevotional ? {
+    onPress: handleResume,
+    label: resumeContext.route === 'journal'
+      ? (resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber)?.isRead
+        ? `Add to Day ${resumeContext.dayNumber}`
+        : 'Resume your reflection')
+      : 'Resume where you left off',
+    title: `${resumeDevotional.title} · Day ${resumeContext.dayNumber}${resumeContext.dayTitle ? `: ${resumeContext.dayTitle}` : ''}`,
+    timeAgo: formatResumeRelativeTime(resumeContext.touchedAt),
+  } : undefined;
+
+  // Compute devotional card state
+  const devotionalState = computeDevotionalState({
+    currentDevotional: currentDevotional ?? null,
+    currentDayData,
+    hasReadToday,
+    isJourneyComplete,
+    isPreparing: isPreparingCurrentDay || (!currentDayData && !!currentDevotional),
+    daysCompleted,
+    totalDays: currentDevotional?.totalDays ?? 0,
+    progress: progressPercent,
+    tomorrowTeaser: homeTomorrowTeaser,
+    onContinue: handleContinueReading,
+    onCreateNew: handleCreateNew,
+    ctaText: getCtaText(),
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Embers — reward for completing today's reading */}
-        {hasReadToday && <GoldEmberField streakLevel={streakCurrent} />}
+        {hasReadToday && currentDevotional && <GoldEmberField streakLevel={streakCurrent} />}
+        {/* Ambient embers for cinematic feel (empty state) */}
+        {!currentDevotional && <GoldEmberField density="low" active style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />}
 
         <ScrollView
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header — greeting + avatar */}
-          <Animated.View
-            entering={entering(FadeIn.duration(400))}
-            style={{
-              paddingHorizontal: Spacing['6'],
-              paddingTop: Spacing['5'],
-              paddingBottom: Spacing['3'],
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.bodyItalic,
-                  fontSize: 15,
-                  color: colors.textSubtle,
-                  marginBottom: 6,
-                }}
-              >
-                {getGreeting()}
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: 34,
-                    color: colors.text,
-                    letterSpacing: -0.5,
-                  }}
-                >
-                  {user?.name}
-                </Text>
-                <StreakDisplay compact hideDayLabel />
-              </View>
-            </View>
-            <View style={{ marginTop: Spacing['1'] }}>
-              <ProfileAvatar
-                size={38}
-                onPress={() => router.push('/(tabs)/(you)')}
-              />
-            </View>
-          </Animated.View>
+          {/* Zone 1: Greeting */}
+          <GreetingRow
+            userName={user?.name}
+            onAvatarPress={() => router.push('/(tabs)/(you)')}
+          />
 
-          {/* Daily Bridge — personalized transition from yesterday */}
-          {bridgeLoading && bridgeInput && (
-            <BridgeShimmer colors={colors} />
-          )}
-          {bridgeText && !bridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
-            <DailyBridgeCard text={bridgeText} colors={colors} />
-          )}
+          {/* Zone 2: Context Slot */}
+          <ContextSlot
+            slotType={slotType}
+            colors={colors}
+            onMiddayPress={handleCheckIn}
+            middayMessage={middayMessage}
+            onEveningPress={handleEveningWindDown}
+            eveningMessage={eveningMessage}
+            bridgeText={validBridgeText}
+            resumeProps={resumeProps}
+          />
 
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
 
-          {/* Notification cards — above journey card */}
-          {showCheckInCard && (
-            <NotificationCard
-              colors={colors}
-              onPress={handleCheckIn}
-              message={middayMessage}
-              icon={<ChatCircleDotsIcon size={16} color={colors.textSubtle} weight="light" />}
-              accentColor={colors.accent}
-              delay={150}
-            />
-          )}
-          {showEveningCard && (
-            <NotificationCard
-              colors={colors}
-              onPress={handleEveningWindDown}
-              message={eveningMessage}
-              icon={<MoonIcon size={16} color={colors.textSubtle} weight="light" />}
-              accentColor={colors.accent}
-              delay={200}
-            />
-          )}
-
-          {/* Resume card */}
-          {shouldShowResumeCard && resumeContext && resumeDevotional && (
-            <Animated.View
-              entering={entering(FadeIn.duration(400).delay(80))}
-              style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
-            >
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleResume}
-                accessibilityRole="button"
-                accessibilityLabel={`Resume ${resumeDevotional.title} day ${resumeContext.dayNumber}`}
-              >
-                <View
-                  style={{
-                    backgroundColor: colors.inputBackground,
-                    borderRadius: Radius.card,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    padding: Spacing['4'],
-                    // Light elevation for resume card
-                    ...Shadow.sm,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: 13,
-                      color: colors.accent,
-                      marginBottom: 6,
-                    }}
-                  >
-                    {resumeContext.route === 'journal'
-                      ? (resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber)?.isRead
-                        ? `Add to Day ${resumeContext.dayNumber}`
-                        : 'Resume your reflection')
-                      : 'Resume where you left off'}
-                  </Text>
-
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 15,
-                      color: colors.text,
-                      marginBottom: Spacing['1'],
-                    }}
-                  >
-                    {resumeDevotional.title} · Day {resumeContext.dayNumber}
-                    {resumeContext.dayTitle ? `: ${resumeContext.dayTitle}` : ''}
-                  </Text>
-
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.xs,
-                      color: colors.textSubtle,
-                    }}
-                  >
-                    {formatResumeRelativeTime(resumeContext.touchedAt)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
-          )}
-
-          {/* Main Journey Card */}
+          {/* Zone 3: Hero Devotional */}
           <View ref={journeyCardRef} collapsable={false}>
-          <Animated.View
-            entering={entering(FadeIn.delay(100).duration(400))}
-            style={[{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }, journeyCardAnimStyle]}
-          >
-            {isJourneyComplete ? (
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleCreateNew}
-                onPressIn={() => {
-                  journeyCardScale.value = withTiming(0.98, { duration: 120 });
-                }}
-                onPressOut={() => {
-                  journeyCardScale.value = withTiming(1, { duration: Duration.fast });
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Start a new series"
-                style={{
-                  borderRadius: Radius.xl,
-                  overflow: 'hidden',
-                }}
-              >
-                <View
-                  style={{
-                    borderRadius: Radius.lg,
-                    borderWidth: 1,
-                    borderColor: alpha(colors.accent, 0.09),
-                    padding: Spacing['7'],
-                    alignItems: 'center',
-                    backgroundColor: colors.backgroundElevated,
-                    // Hero card elevation
-                    shadowColor: colors.accent,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 16,
-                    elevation: 4,
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 32,
-                      height: 1.5,
-                      backgroundColor: colors.accent,
-                      marginBottom: Spacing['6'],
-                      borderRadius: 1,
-                    }}
-                  />
-
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.display,
-                      fontSize: 28,
-                      color: colors.text,
-                      textAlign: 'center',
-                      marginBottom: Spacing['2'],
-                    }}
-                  >
-                    Start a New Series
-                  </Text>
-
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: 15,
-                      color: colors.textMuted,
-                      textAlign: 'center',
-                      lineHeight: 23,
-                      marginBottom: Spacing['7'],
-                      paddingHorizontal: Spacing['2'],
-                    }}
-                  >
-                    Continue with a new{'\n'}personalized devotional series.
-                  </Text>
-
-                  <View
-                    style={{
-                      backgroundColor: colors.accent,
-                      paddingVertical: 15,
-                      paddingHorizontal: 36,
-                      borderRadius: Radius.md,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: 15,
-                        color: colors.background,
-                        letterSpacing: 0.3,
-                      }}
-                    >
-                      Create Series
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={isPreparingCurrentDay ? undefined : (isTomorrow ? () => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setShowTomorrowLockInfo(v => !v);
-                } : handleContinueReading)}
-                disabled={isPreparingCurrentDay}
-                onPressIn={() => {
-                  if (!isPreparingCurrentDay) journeyCardScale.value = withTiming(0.98, { duration: 120 });
-                }}
-                onPressOut={() => {
-                  journeyCardScale.value = withTiming(1, { duration: Duration.fast });
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={isPreparingCurrentDay
-                  ? 'Preparing your reading, please wait'
-                  : `Continue ${currentDevotional.title}, day ${currentDevotional.currentDay} of ${currentDevotional.totalDays}`
-                }
-                style={{
-                  borderRadius: Radius.xl,
-                  overflow: 'hidden',
-                  opacity: isPreparingCurrentDay ? 0.85 : 1,
-                }}
-              >
-                <View
-                  style={{
-                    borderRadius: Radius.xl,
-                    borderWidth: 1,
-                    borderColor: alpha(colors.accent, 0.09),
-                    padding: Spacing['6'],
-                    backgroundColor: colors.backgroundElevated,
-                    // Hero card — strongest elevation in the hierarchy
-                    shadowColor: colors.accent,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 16,
-                    elevation: 4,
-                  }}
-                >
-                  {/* Series label + day pill */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: 13,
-                        color: colors.textSubtle,
-                        flex: 1,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {currentDevotional.title}
-                    </Text>
-
-                    <View
-                      style={{
-                        backgroundColor: colors.buttonBackground,
-                        paddingVertical: 5,
-                        paddingHorizontal: 10,
-                        borderRadius: Radius.xl,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        marginLeft: Spacing['3'],
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 11,
-                          color: colors.textMuted,
-                          letterSpacing: 0.3,
-                        }}
-                      >
-                        {getReadingDayLabel()} · Day {currentDevotional.currentDay}/{currentDevotional.totalDays}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {currentDayData ? (
-                    <>
-                      <Text
-                        sharedTransitionTag={`devotional-title-${currentDevotional.id}-${currentDevotional.currentDay}`}
-                        style={{
-                          fontFamily: FontFamily.display,
-                          fontSize: FontSize['3xl'],
-                          color: colors.text,
-                          lineHeight: 38,
-                          marginBottom: Spacing['2'],
-                          letterSpacing: -0.3,
-                        }}
-                      >
-                        {currentDayData.title}
-                      </Text>
-
-                      {/* Scripture teaser — draws the reader in */}
-                      {currentDayData.scriptureReference && (
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.bodyItalic,
-                            fontSize: FontSize.sm,
-                            color: colors.textMuted,
-                            lineHeight: 22,
-                            marginBottom: currentDayData.studyMethod ? 12 : 20,
-                            opacity: 0.8,
-                          }}
-                          numberOfLines={2}
-                        >
-                          {currentDayData.scriptureReference}
-                          {currentDayData.scriptureText ? ` — "${currentDayData.scriptureText.slice(0, 80).trim()}..."` : ''}
-                        </Text>
-                      )}
-
-                      {/* Tomorrow teaser — first hook sentence from next day's content */}
-                      {isTomorrow && homeTomorrowTeaser && (
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.body,
-                            fontSize: 13,
-                            color: colors.textMuted,
-                            lineHeight: 20,
-                            marginBottom: 14,
-                            opacity: 0.72,
-                          }}
-                          numberOfLines={3}
-                        >
-                          {homeTomorrowTeaser}
-                        </Text>
-                      )}
-
-                      {/* Today's approach — subtle method hint */}
-                      {currentDayData.studyMethod && BIBLE_STUDY_METHODS[currentDayData.studyMethod] && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['5'] }}>
-                          <View
-                            style={{
-                              backgroundColor: alpha(colors.accent, 0.07),
-                              paddingHorizontal: 10,
-                              paddingVertical: Spacing['1'],
-                              borderRadius: 6,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontFamily: FontFamily.mono,
-                                fontSize: 10,
-                                color: colors.accent,
-                                letterSpacing: 0.8,
-                                textTransform: 'uppercase',
-                              }}
-                            >
-                              {BIBLE_STUDY_METHODS[currentDayData.studyMethod].name}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-                    </>
-                  ) : isPreparingCurrentDay ? (
-                    <View style={{ alignItems: 'center', paddingVertical: Spacing['3'], marginBottom: Spacing['5'] }}>
-                      <ActivityIndicator color={colors.accent} size="small" style={{ marginBottom: 10 }} />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.bodyItalic,
-                          fontSize: 15,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                          lineHeight: 22,
-                        }}
-                      >
-                        {'Preparing today\u2019s reading\u2026'}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  {/* Progress section */}
-                  <View style={{ marginBottom: Spacing['6'] }}>
-                    <AnimatedProgressBar progress={progressPercent} colors={colors} />
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: FontSize.xs,
-                          color: colors.textSubtle,
-                        }}
-                      >
-                        {daysCompleted} of {currentDevotional.totalDays} completed
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiSemiBold,
-                          fontSize: FontSize.xs,
-                          color: colors.accent,
-                          opacity: 0.9,
-                        }}
-                      >
-                        {Math.round(progressPercent)}%
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* CTA Button */}
-                  {isTomorrow ? (
-                    <>
-                      <View
-                        style={{
-                          backgroundColor: colors.buttonBackground,
-                          paddingVertical: 15,
-                          borderRadius: Radius.md,
-                          alignItems: 'center',
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                          flexDirection: 'row',
-                          justifyContent: 'center',
-                          gap: Spacing['2'],
-                        }}
-                      >
-                        <LockSimpleIcon size={15} color={colors.textMuted} weight="light" />
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: 15,
-                            color: colors.textMuted,
-                            letterSpacing: 0.3,
-                          }}
-                        >
-                          Unlocks Tomorrow
-                        </Text>
-                      </View>
-                      {showTomorrowLockInfo && (
-                        <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ marginTop: 10, paddingHorizontal: Spacing['1'] }}>
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.body,
-                              fontSize: 13,
-                              color: colors.textSubtle,
-                              textAlign: 'center',
-                              lineHeight: 20,
-                            }}
-                          >
-                            Give today a chance to sink in.{'\n'}Come back tomorrow — it'll be worth it.
-                          </Text>
-                        </Animated.View>
-                      )}
-                    </>
-                  ) : (
-                    <AccentGlow
-                      color={colors.accent}
-                      intensity="medium"
-                      active={!isJourneyComplete}
-                      style={{ borderRadius: Radius.md }}
-                    >
-                      <View
-                        style={{
-                          backgroundColor: colors.accent,
-                          paddingVertical: 15,
-                          borderRadius: Radius.md,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: FontFamily.uiMedium,
-                            fontSize: 15,
-                            color: colors.background,
-                            letterSpacing: 0.3,
-                          }}
-                        >
-                          {getCtaText()}
-                        </Text>
-                      </View>
-                    </AccentGlow>
-                  )}
-
-                  {/* New Journey - Secondary Action */}
-                  <TouchableOpacity activeOpacity={0.7}
-                    onPress={handleCreateNew}
-                    accessibilityRole="button"
-                    accessibilityLabel="Start a new series"
-                    style={{
-                      marginTop: Spacing['3'],
-                      opacity: 1,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        paddingVertical: 10,
-                      }}
-                    >
-                      <PlusIcon size={14} color={colors.textSubtle} weight="light" />
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 13,
-                          color: colors.textSubtle,
-                        }}
-                      >
-                        New Series
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            )}
-          </Animated.View>
+            <DevotionalCard state={devotionalState} />
           </View>
 
-          {/* Your Series — recent devotional series */}
-          <YourSeriesSection />
+          {/* Zone 4: Quick Actions */}
+          <QuickActionsRow
+            onJournalPress={() => router.push('/(tabs)/(journal)')}
+            onCompanionPress={() => router.push('/(tabs)/(ask)')}
+            onBiblePress={() => router.push('/bible')}
+          />
+
+          {/* Zone 5: Series Carousel */}
+          <SeriesCarousel />
 
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
             <Animated.View
               entering={entering(FadeIn.duration(400).delay(200))}
-              style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
+              style={styles.day1ReviewWrapper}
             >
               <View
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderRadius: Radius.lg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  padding: Spacing['5'],
-                  // Light elevation for secondary card
-                  ...Shadow.sm,
-                }}
+                style={[
+                  styles.day1ReviewCard,
+                  {
+                    backgroundColor: colors.inputBackground,
+                    borderColor: colors.border,
+                    ...Shadow.sm,
+                  },
+                ]}
               >
                 <Text
-                  style={{
-                    fontFamily: FontFamily.display,
-                    fontSize: FontSize.lg,
-                    color: colors.text,
-                    marginBottom: Spacing['1'],
-                  }}
+                  style={[styles.day1ReviewTitle, { color: colors.text }]}
                 >
                   How's this feeling so far?
                 </Text>
                 <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: 13,
-                    color: colors.textSubtle,
-                    marginBottom: Spacing['4'],
-                  }}
+                  style={[styles.day1ReviewSubtitle, { color: colors.textSubtle }]}
                 >
                   Your honest take helps us get better.
                 </Text>
 
-                <View style={{ flexDirection: 'row', gap: Spacing['2'] }}>
+                <View style={styles.day1ReviewOptions}>
                   <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('love')}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      paddingVertical: Spacing['3'],
-                      paddingHorizontal: 10,
-                      borderRadius: Radius.md,
-                      backgroundColor: colors.buttonBackground,
-                    }}
+                    style={[styles.day1ReviewOption, { backgroundColor: colors.buttonBackground }]}
                   >
                     <HeartIcon size={16} color={colors.accent} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
+                    <Text style={[styles.day1ReviewOptionText, { color: colors.text }]}>
                       Love it
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('okay')}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      paddingVertical: Spacing['3'],
-                      paddingHorizontal: 10,
-                      borderRadius: Radius.md,
-                      backgroundColor: colors.buttonBackground,
-                    }}
+                    style={[styles.day1ReviewOption, { backgroundColor: colors.buttonBackground }]}
                   >
                     <HandIcon size={16} color={colors.textMuted} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
+                    <Text style={[styles.day1ReviewOptionText, { color: colors.text }]}>
                       It's okay
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity activeOpacity={0.7}
                     onPress={() => handleDay1ReviewOption('not-for-me')}
-                    style={{
-                      flex: 1,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      paddingVertical: Spacing['3'],
-                      paddingHorizontal: 10,
-                      borderRadius: Radius.md,
-                      backgroundColor: colors.buttonBackground,
-                    }}
+                    style={[styles.day1ReviewOption, { backgroundColor: colors.buttonBackground }]}
                   >
                     <XIcon size={16} color={colors.textMuted} weight="light" />
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.text }}>
+                    <Text style={[styles.day1ReviewOptionText, { color: colors.text }]}>
                       Not for me
                     </Text>
                   </TouchableOpacity>
@@ -1429,22 +586,22 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {/* Streak Box */}
+          {/* Zone 6: Streak */}
           <View ref={streakBoxRef} collapsable={false}>
-          <Animated.View
-            entering={entering(FadeIn.delay(200).duration(400))}
-            style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['6'] }}
-          >
-            <StreakBox
-              streakCount={streakCurrent}
-              onPress={() => router.push('/(tabs)/(you)/streak-settings')}
-            />
-          </Animated.View>
+            <Animated.View
+              entering={entering(FadeIn.delay(200).duration(400))}
+              style={styles.streakWrapper}
+            >
+              <StreakBox
+                streakCount={streakCurrent}
+                onPress={() => router.push('/(tabs)/(you)/streak-settings')}
+              />
+            </Animated.View>
           </View>
 
           {/* Premium Nudge Card — contextual, inline upsell */}
           {premiumNudge && (
-            <View style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}>
+            <View style={styles.premiumNudgeWrapper}>
               <PremiumNudgeCard
                 type={premiumNudge.type}
                 message={premiumNudge.message}
@@ -1470,8 +627,6 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* CompanionCheckInSheet removed — companion surfaces via contextual notification cards */}
-
       <PremiumFeatureSheet
         visible={showPremiumSheet}
         onClose={() => setShowPremiumSheet(false)}
@@ -1492,89 +647,50 @@ export default function HomeScreen() {
   );
 }
 
-const homeStyles = StyleSheet.create({
-  progressTrack: {
-    height: 3,
-    borderRadius: 1.5,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 1.5,
-    overflow: 'hidden',
-  },
-  progressShimmer: {
-    position: 'absolute',
-    top: -1,
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  flex1: {
-    flex: 1,
-  },
-  notificationCard: {
-    borderRadius: Radius.card,
-    paddingVertical: Spacing['4'],
-    paddingHorizontal: Spacing['4'],
-    paddingRight: Spacing['3'],
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...Shadow.sm,
-  },
-  notificationOrb: {
-    marginRight: Spacing['3'],
-  },
-  notificationMessage: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.sm,
-    lineHeight: 20,
-  },
-  notificationChevron: {
-    marginLeft: Spacing['2'],
-  },
-  shimmerWrapper: {
+const styles = StyleSheet.create({
+  day1ReviewWrapper: {
     paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['4'],
+    marginTop: Spacing['5'],
   },
-  shimmerCard: {
-    borderRadius: Radius.card,
-    borderWidth: 1,
-    padding: 18,
-    ...Shadow.sm,
-  },
-  shimmerLine1: {
-    height: 10,
-    width: '85%',
-    borderRadius: 5,
-    marginBottom: 10,
-  },
-  shimmerLine2: {
-    height: 10,
-    width: '65%',
-    borderRadius: 5,
-  },
-  bridgeWrapper: {
-    paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['4'],
-  },
-  bridgeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  bridgeOrbContainer: {
-    marginTop: 10,
-  },
-  bridgeBubble: {
+  day1ReviewCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: 14,
+    padding: Spacing['5'],
   },
-  bridgeText: {
+  day1ReviewTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: FontSize.lg,
+    marginBottom: Spacing['1'],
+  },
+  day1ReviewSubtitle: {
     fontFamily: FontFamily.body,
-    fontSize: FontSize.sm,
-    lineHeight: 22,
+    fontSize: 13,
+    marginBottom: Spacing['4'],
+  },
+  day1ReviewOptions: {
+    flexDirection: 'row',
+    gap: Spacing['2'],
+  },
+  day1ReviewOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: 10,
+    borderRadius: Radius.md,
+  },
+  day1ReviewOptionText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 13,
+  },
+  streakWrapper: {
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['6'],
+  },
+  premiumNudgeWrapper: {
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['4'],
   },
 });
