@@ -22,8 +22,8 @@ export const concentricRingsSource = Skia.RuntimeEffect.Make(`
     // Breathing modulation (5-second cycle)
     float breath = sin(iTime * 0.4) * 0.3 + 0.7;
 
-    // Combine with very low opacity
-    half alpha = half((ring1 * 0.03 + ring2 * 0.02 + ring3 * 0.015) * breath);
+    // Combine — clearly visible ambient glow
+    half alpha = half((ring1 * 0.25 + ring2 * 0.18 + ring3 * 0.12) * breath);
     return half4(accentColor * alpha, alpha);
   }
 `)!;

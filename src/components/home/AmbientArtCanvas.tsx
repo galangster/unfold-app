@@ -128,8 +128,9 @@ export function AmbientArtCanvas({ streakLevel, hasReadToday, scrollY }: Props) 
   );
 
   // --- Shader opacity based on theme ---
-  const ringsOpacity = isDark ? 0.03 : 0.02;
-  const noiseOpacity = isDark ? 0.02 : 0.01;
+  // Shaders handle their own alpha internally; these control theme-level scaling
+  const ringsOpacity = isDark ? 1.0 : 0.7;
+  const noiseOpacity = isDark ? 1.0 : 0.6;
 
   // --- Scroll fade: opacity decreases as user scrolls down ---
   // 1.0 at top, 0.3 at 400px scroll

@@ -46,7 +46,7 @@ export const organicNoiseSource = Skia.RuntimeEffect.Make(`
     float2 q = float2(fbm(uv * 3.0 + t), fbm(uv * 3.0 + float2(5.2, 1.3) + t));
     float f = fbm(uv * 3.0 + q * 1.5);
 
-    half alpha = half(f * 0.025); // 2.5% max opacity
+    half alpha = half(f * 0.15); // 15% max opacity
     return half4(accentColor * alpha, alpha);
   }
 `)!;
