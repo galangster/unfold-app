@@ -1990,6 +1990,7 @@ export default function ReadingScreen() {
       {isPremium && isAudioPlayerVisible && (
         <AudioPlayerBar
           audioUri={audioUri}
+          title={currentDayData?.title}
           onClose={() => {
             setIsAudioPlayerVisible(false);
             setAudioUri(null);

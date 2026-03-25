@@ -1,25 +1,28 @@
 /**
- * AudioPlayerBar — Floating bar audio player.
- * Glass-effect bar at bottom of reading screen.
- * Controls: skip -10s, play/pause, skip +10s, time, speed cycle.
+ * AudioPlayerBar — Floating mini-player.
+ * 2-row layout: progress bar + [title/time | play | speed + close]
+ * Glass blur effect with shadow elevation.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
-import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, XIcon } from 'phosphor-react-native';
+import { PlayIcon, PauseIcon, XIcon } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
+import { Shadow } from '@/constants/shadows';
 import { alpha } from '@/components/ui';
 import { logger } from '@/lib/logger';
 
 const SPEED_OPTIONS = [1, 1.25, 1.5, 2, 0.75] as const;
+// Retained for future expanded player state
 const SKIP_SECONDS = 10;
 
 interface AudioPlayerBarProps {
@@ -27,6 +30,7 @@ interface AudioPlayerBarProps {
   onClose?: () => void;
   /** Auto-play when audioUri becomes available */
   autoPlay?: boolean;
+  title?: string;
 }
 
 function formatTime(seconds: number): string {
@@ -36,9 +40,47 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlayerBarProps) {
-  const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
+/** Loading state — shown while audio downloads. No useAudioPlayer call. */
+function AudioPlayerLoading({ onClose, colors, bottomOffset, title, isDark }: {
+  onClose?: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+  bottomOffset: number;
+  title?: string;
+  isDark: boolean;
+}) {
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(Duration.slow)}
+      exiting={FadeOutDown.duration(Duration.normal)}
+      style={[styles.container, Shadow.lg, { bottom: bottomOffset, borderColor: alpha(colors.border, 0.3) }]}
+    >
+      <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+      <View style={styles.controls}>
+        <View style={styles.titleSection}>
+          <Text numberOfLines={1} style={[styles.titleText, { color: colors.text }]}>
+            {title || 'Loading audio...'}
+          </Text>
+          <Text style={[styles.timeText, { color: colors.textMuted }]}>Preparing...</Text>
+        </View>
+        <ActivityIndicator size="small" color={colors.accent} />
+        <TouchableOpacity onPress={() => onClose?.()} accessibilityLabel="Close audio player" style={styles.closeButton}>
+          <XIcon size={18} color={colors.textMuted} weight="light" />
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+}
+
+/** Active player — only mounted when audioUri is a real string. */
+function AudioPlayerActive({ audioUri, onClose, autoPlay, colors, bottomOffset, title, isDark }: {
+  audioUri: string;
+  onClose?: () => void;
+  autoPlay: boolean;
+  colors: ReturnType<typeof useTheme>['colors'];
+  bottomOffset: number;
+  title?: string;
+  isDark: boolean;
+}) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -46,6 +88,7 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
   const [hasStarted, setHasStarted] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // useAudioPlayer is ONLY called with a real URI — never null
   const player = useAudioPlayer(audioUri);
 
   // Configure audio mode for silent switch
@@ -55,10 +98,9 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
 
   // Auto-play when player is ready
   useEffect(() => {
-    if (!player || !audioUri) return;
+    if (!player) return;
 
     if (autoPlay && !hasStarted) {
-      // Small delay to let player initialize
       const timeout = setTimeout(() => {
         try {
           player.play();
@@ -70,9 +112,9 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
       }, 100);
       return () => clearTimeout(timeout);
     }
-  }, [player, audioUri, autoPlay, hasStarted]);
+  }, [player, autoPlay, hasStarted]);
 
-  // Poll time at 1s interval (not 50ms)
+  // Poll time at 1s interval
   useEffect(() => {
     if (!player) return;
 
@@ -81,7 +123,6 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
         setCurrentTime(player.currentTime ?? 0);
         setDuration(player.duration ?? 0);
 
-        // Detect playback completion
         if (player.duration > 0 && player.currentTime >= player.duration - 0.5) {
           setIsPlaying(false);
         }
@@ -117,6 +158,7 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
     }
   }, [player, isPlaying]);
 
+  // Kept for future use
   const handleSkip = useCallback(async (seconds: number) => {
     if (!player) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -147,35 +189,6 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
     onClose?.();
   }, [player, onClose]);
 
-  // Loading state: bar is visible but audio hasn't downloaded yet
-  if (!audioUri) {
-    return (
-      <Animated.View
-        entering={FadeInDown.duration(Duration.slow)}
-        exiting={FadeOutDown.duration(Duration.normal)}
-        style={[
-          styles.container,
-          {
-            bottom: insets.bottom + Spacing['2'],
-            backgroundColor: alpha(colors.background, 0.95),
-            borderColor: alpha(colors.border, 0.5),
-          },
-        ]}
-      >
-        <View style={styles.controls}>
-          <ActivityIndicator size="small" color={colors.accent} />
-          <Text style={[styles.timeText, { color: colors.textMuted, marginLeft: Spacing['2'] }]}>
-            Loading audio...
-          </Text>
-          <View style={{ flex: 1 }} />
-          <TouchableOpacity onPress={() => onClose?.()} accessibilityLabel="Close audio player" style={styles.skipButton}>
-            <XIcon size={16} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    );
-  }
-
   const progress = duration > 0 ? currentTime / duration : 0;
   const speed = SPEED_OPTIONS[speedIndex];
 
@@ -183,85 +196,78 @@ export function AudioPlayerBar({ audioUri, onClose, autoPlay = true }: AudioPlay
     <Animated.View
       entering={FadeInDown.duration(Duration.slow)}
       exiting={FadeOutDown.duration(Duration.normal)}
-      style={[
-        styles.container,
-        {
-          bottom: insets.bottom + Spacing['2'],
-          backgroundColor: alpha(colors.background, 0.95),
-          borderColor: alpha(colors.border, 0.5),
-        },
-      ]}
+      style={[styles.container, Shadow.lg, { bottom: bottomOffset, borderColor: alpha(colors.border, 0.3) }]}
     >
-      {/* Progress bar along top edge */}
-      <View style={[styles.progressTrack, { backgroundColor: alpha(colors.text, 0.08) }]}>
-        <View
-          style={[
-            styles.progressFill,
-            { width: `${progress * 100}%` as any, backgroundColor: colors.accent },
-          ]}
-        />
+      <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+
+      <View style={[styles.progressTrack, { backgroundColor: alpha(colors.text, 0.1) }]}>
+        <View style={[styles.progressFill, { width: `${progress * 100}%` as any /* RN doesn't type percentage strings */, backgroundColor: colors.accent }]} />
       </View>
 
-      {/* Controls row */}
       <View style={styles.controls}>
-        {/* Skip back */}
-        <TouchableOpacity
-          onPress={() => handleSkip(-SKIP_SECONDS)}
-          accessibilityLabel="Skip back 10 seconds"
-          style={styles.skipButton}
-        >
-          <SkipBackIcon size={18} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
+        <View style={styles.titleSection}>
+          <Text numberOfLines={1} style={[styles.titleText, { color: colors.text }]}>
+            {title || 'Listening...'}
+          </Text>
+          <Text style={[styles.timeText, { color: colors.textMuted }]}>
+            {formatTime(currentTime)} / {formatTime(duration)}
+          </Text>
+        </View>
 
-        {/* Play/Pause */}
         <TouchableOpacity
           onPress={handlePlayPause}
           accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
           style={[styles.playButton, { backgroundColor: colors.accent }]}
         >
-          {isPlaying ? (
-            <PauseIcon size={18} color={colors.background} weight="fill" />
-          ) : (
-            <PlayIcon size={18} color={colors.background} weight="fill" />
-          )}
+          {isPlaying
+            ? <PauseIcon size={22} color={colors.background} weight="fill" />
+            : <PlayIcon size={22} color={colors.background} weight="fill" />
+          }
         </TouchableOpacity>
 
-        {/* Skip forward */}
-        <TouchableOpacity
-          onPress={() => handleSkip(SKIP_SECONDS)}
-          accessibilityLabel="Skip forward 10 seconds"
-          style={styles.skipButton}
-        >
-          <SkipForwardIcon size={18} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
-
-        {/* Spacer */}
-        <View style={{ flex: 1 }} />
-
-        {/* Time display */}
-        <Text style={[styles.timeText, { color: colors.textMuted }]}>
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </Text>
-
-        {/* Speed pill */}
-        <TouchableOpacity
-          onPress={handleSpeedCycle}
-          accessibilityLabel={`Playback speed ${speed}x`}
-          style={[styles.speedPill, { backgroundColor: alpha(colors.text, 0.06) }]}
-        >
-          <Text style={[styles.speedText, { color: colors.textMuted }]}>{speed}x</Text>
-        </TouchableOpacity>
-
-        {/* Close button */}
-        <TouchableOpacity
-          onPress={handleClose}
-          accessibilityLabel="Close audio player"
-          style={styles.skipButton}
-        >
-          <XIcon size={16} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
+        <View style={styles.secondaryControls}>
+          <TouchableOpacity
+            onPress={handleSpeedCycle}
+            accessibilityLabel={`Playback speed ${speed}x`}
+            style={[styles.speedPill, { backgroundColor: alpha(colors.text, 0.08) }]}
+          >
+            <Text style={[styles.speedText, { color: colors.textMuted }]}>{speed}x</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleClose}
+            accessibilityLabel="Close audio player"
+            style={styles.closeButton}
+          >
+            <XIcon size={18} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        </View>
       </View>
     </Animated.View>
+  );
+}
+
+const TAB_BAR_CONTENT_HEIGHT = 56;
+
+/** Public wrapper — routes to loading or active player. useAudioPlayer is never called with null. */
+export function AudioPlayerBar({ audioUri, onClose, autoPlay = true, title }: AudioPlayerBarProps) {
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomOffset = TAB_BAR_CONTENT_HEIGHT + insets.bottom + Spacing['2'];
+
+  if (!audioUri) {
+    return <AudioPlayerLoading onClose={onClose} colors={colors} bottomOffset={bottomOffset} title={title} isDark={isDark} />;
+  }
+
+  return (
+    <AudioPlayerActive
+      audioUri={audioUri}
+      onClose={onClose}
+      autoPlay={autoPlay}
+      colors={colors}
+      bottomOffset={bottomOffset}
+      title={title}
+      isDark={isDark}
+    />
   );
 }
 
@@ -270,48 +276,37 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: Spacing['3'],
     right: Spacing['3'],
-    borderRadius: Radius.card,
-    borderWidth: 1,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
-  progressTrack: {
-    height: 2,
-    width: '100%',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 1,
-  },
+  progressTrack: { height: 4, width: '100%' },
+  progressFill: { height: '100%', borderRadius: 2 },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing['4'],
-    paddingVertical: Spacing['3'],
-    gap: Spacing['2.5'],
+    paddingVertical: Spacing['4'],
+    gap: Spacing['3'],
   },
-  skipButton: {
-    padding: Spacing['1'],
-  },
+  titleSection: { flex: 1, gap: Spacing['0.5'] },
+  titleText: { fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm },
+  timeText: { fontFamily: FontFamily.ui, fontSize: FontSize.xs },
   playButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timeText: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-  },
+  secondaryControls: { flexDirection: 'row', alignItems: 'center', gap: Spacing['1'] },
   speedPill: {
-    paddingHorizontal: Spacing['2'],
-    paddingVertical: Spacing['1'],
+    paddingHorizontal: Spacing['2.5'],
+    paddingVertical: Spacing['1.5'],
     borderRadius: Radius.sm,
   },
-  speedText: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-  },
+  speedText: { fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs },
+  closeButton: { padding: Spacing['2'] },
 });
 
 export default AudioPlayerBar;
