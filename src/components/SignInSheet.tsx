@@ -86,9 +86,22 @@ export function SignInSheet({ visible, onClose, onSignedIn }: SignInSheetProps) 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         Analytics.logEvent(AnalyticsEvents.SIGN_IN_APPLE_TAPPED);
 
-        const { createdSessionId, setActive } = await startFlow({
+        // Warm up the browser to prevent hangs
+        await WebBrowser.warmUpAsync().catch(() => {});
+
+        // Race the OAuth flow against a timeout to prevent app freeze
+        const OAUTH_TIMEOUT = 60_000;
+        const flowPromise = startFlow({
           redirectUrl: 'unfold://oauth-callback',
         });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('oauth_timeout')), OAUTH_TIMEOUT),
+        );
+
+        const { createdSessionId, setActive } = await Promise.race([
+          flowPromise,
+          timeoutPromise,
+        ]);
 
         if (createdSessionId && setActive) {
           await setActive({ session: createdSessionId });
@@ -116,6 +129,12 @@ export function SignInSheet({ visible, onClose, onSignedIn }: SignInSheetProps) 
         ) {
           setIsSigningIn(false);
           isSigningInRef.current = false;
+          return;
+        }
+
+        if (err?.message === 'oauth_timeout') {
+          setError('Sign-in took too long. Please try again.');
+          WebBrowser.coolDownAsync().catch(() => {});
           return;
         }
 

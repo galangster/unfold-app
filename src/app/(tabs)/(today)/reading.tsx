@@ -1045,34 +1045,47 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       try {
-        const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
-        const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
-        const allDays = await continueGeneratingDays(
-          fixedDevotional,
-          {
-            spiritualSeeking: user.spiritualSeeking ?? '',
-            readingDuration: user.readingDuration,
-            bibleTranslation: user.bibleTranslation ?? 'WEB',
-          },
-          (day) => {
-            const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
-            if (current) {
-              const updated = [...current.days];
-              if (!updated.some((d) => d.dayNumber === day.dayNumber)) {
-                updated.push(day);
-                updateDevotionalDays(currentDevotional.id, updated);
+        // Progressive mode: use progressive generation (memory-aware, one day at a time)
+        if (currentDevotional.generationMode === 'progressive') {
+          const completedDay = viewingDay - 1;
+          const result = await triggerNextDayGeneration(currentDevotionalId!, completedDay);
+          if (!result) {
+            throw new Error('Progressive generation returned null');
+          }
+          void logBugEvent('reading-generation', 'manual-retry-progressive-success', {
+            viewingDay,
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          // Batch mode: generate all remaining days
+          const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength, viewingDay);
+          const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
+          const allDays = await continueGeneratingDays(
+            fixedDevotional,
+            {
+              spiritualSeeking: user.spiritualSeeking ?? '',
+              readingDuration: user.readingDuration,
+              bibleTranslation: user.bibleTranslation ?? 'WEB',
+            },
+            (day) => {
+              const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
+              if (current) {
+                const updated = [...current.days];
+                if (!updated.some((d) => d.dayNumber === day.dayNumber)) {
+                  updated.push(day);
+                  updateDevotionalDays(currentDevotional.id, updated);
+                }
               }
             }
-          }
-        );
-        updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
-        void logBugEvent('reading-generation', 'manual-retry-success', {
-          viewingDay,
-          totalDaysAfterRetry: allDays.length,
-        });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          );
+          updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
+          void logBugEvent('reading-generation', 'manual-retry-success', {
+            viewingDay,
+            totalDaysAfterRetry: allDays.length,
+          });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
         // After generation, the store update triggers re-render automatically
-        // No need to force re-render — currentDayData will update via useMemo
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Something went wrong';
         logger.error('[Reading] Retry generation failed:', msg);

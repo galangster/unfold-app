@@ -96,10 +96,14 @@ interface VoiceInputBarProps {
   accentColor?: string;
   /** Place mic icon inside the input card (absolute bottom-right) instead of below it */
   inline?: boolean;
+  /** Start recording immediately on mount (skip idle mic button state) */
+  autoStart?: boolean;
+  /** Called when recording is cancelled — lets parent exit voice mode */
+  onCancel?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────
-export function VoiceInputBar({ value, onChangeText, accentColor, inline }: VoiceInputBarProps) {
+export function VoiceInputBar({ value, onChangeText, accentColor, inline, autoStart, onCancel }: VoiceInputBarProps) {
   const { colors } = useTheme();
   const accent = accentColor ?? colors.accent;
 
@@ -225,13 +229,23 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline }: Voic
     }, 1000);
   }, [doCommit]);
 
+  // ── Auto-start on mount (when rendered from CompanionInput voice mode) ──
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && !isRecordingRef.current) {
+      autoStartedRef.current = true;
+      startRecording();
+    }
+  }, [autoStart, startRecording]);
+
   // ── Cancel ───────────────────────────────────────────────
   const cancelRecording = useCallback(() => {
     userStoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     resetRecordingState();
-  }, [resetRecordingState]);
+    onCancel?.();
+  }, [resetRecordingState, onCancel]);
 
   // ── Accept ───────────────────────────────────────────────
   const acceptRecording = useCallback(() => {
@@ -242,6 +256,9 @@ export function VoiceInputBar({ value, onChangeText, accentColor, inline }: Voic
 
   // ── Idle state ───────────────────────────────────────────
   if (!isRecording) {
+    // When auto-started from parent (CompanionInput), don't show idle mic — parent handles that
+    if (autoStart) return null;
+
     return (
       <TouchableOpacity
         onPress={startRecording}

@@ -93,27 +93,6 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
     transform: [{ scale: sendScale.value }],
   }));
 
-  // Voice recording mode — replace entire input bar
-  if (isVoiceMode) {
-    return (
-      <View
-        style={{
-          backgroundColor: colors.backgroundElevated,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: colors.border,
-          paddingHorizontal: Spacing['2'],
-          paddingVertical: Spacing['2'],
-        }}
-      >
-        <VoiceInputBar
-          value={text}
-          onChangeText={handleVoiceText}
-          accentColor={colors.accent}
-        />
-      </View>
-    );
-  }
-
   return (
     <View
       style={{
@@ -124,6 +103,18 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
         paddingVertical: Spacing['2'],
       }}
     >
+      {/* Voice recording bar — shown above the text input, not replacing it */}
+      {isVoiceMode && (
+        <View style={{ marginBottom: Spacing['2'] }}>
+          <VoiceInputBar
+            value={text}
+            onChangeText={handleVoiceText}
+            accentColor={colors.accent}
+            autoStart
+            onCancel={() => setIsVoiceMode(false)}
+          />
+        </View>
+      )}
       <View
         style={{
           flexDirection: 'row',
