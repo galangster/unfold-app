@@ -14,16 +14,63 @@ const MEMORY_KEY = 'companion-conversation-memory';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface PrayerRequest {
+interface TimestampedEntry {
   text: string;
   addedAt: number;
 }
 
+interface PrayerRequest {
+  text: string;
+  addedAt: number;
+  resolvedAt?: number;
+}
+
 interface CompanionMemory {
-  topics: string[];
-  versesMentioned: string[];
-  prayerRequests: (string | PrayerRequest)[];  // supports legacy string format
+  topics: (string | TimestampedEntry)[];              // supports legacy string format
+  versesMentioned: (string | TimestampedEntry)[];     // supports legacy string format
+  prayerRequests: (string | PrayerRequest)[];         // supports legacy string format
   lastUpdated: number;
+}
+
+// ── Entry helpers (backward-compat with plain strings) ────────────────────────
+
+function normalizeEntry(entry: string | TimestampedEntry): TimestampedEntry {
+  if (typeof entry === 'string') return { text: entry, addedAt: Date.now() };
+  return entry;
+}
+
+function entryText(entry: string | TimestampedEntry): string {
+  return typeof entry === 'string' ? entry : entry.text;
+}
+
+// ── Pruning ───────────────────────────────────────────────────────────────────
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Remove topics and verses older than 30 days.
+ * Prayer requests without a `resolvedAt` are kept regardless of age.
+ */
+export function pruneExpiredMemory(): void {
+  const memory = getCompanionMemory();
+  if (!memory) return;
+
+  const cutoff = Date.now() - THIRTY_DAYS_MS;
+
+  const pruned: CompanionMemory = {
+    topics: memory.topics
+      .map(normalizeEntry)
+      .filter(t => t.addedAt > cutoff),
+    versesMentioned: memory.versesMentioned
+      .map(normalizeEntry)
+      .filter(v => v.addedAt > cutoff),
+    prayerRequests: memory.prayerRequests
+      .map(p => typeof p === 'string' ? { text: p, addedAt: Date.now() } as PrayerRequest : p)
+      .filter(p => p.addedAt > cutoff || !p.resolvedAt),  // Keep unresolved prayers
+    lastUpdated: Date.now(),
+  };
+
+  mmkvStorage.setItem(MEMORY_KEY, JSON.stringify(pruned));
 }
 
 // ── Topic keywords ─────────────────────────────────────────────────────────────
@@ -70,13 +117,17 @@ export function updateCompanionMemory(
 
   // Extract verse references from all messages
   const versePattern = /\[([A-Z1-3][a-z]+ \d+:\d+(?:-\d+)?)\]/g;
-  const newVerses: string[] = [];
+  const existingVerseTexts = existing.versesMentioned.map(entryText);
+  const newVerses: TimestampedEntry[] = [];
   for (const msg of messages) {
     let match;
     while ((match = versePattern.exec(msg.content)) !== null) {
       const ref = match[1];
-      if (!existing.versesMentioned.includes(ref) && !newVerses.includes(ref)) {
-        newVerses.push(ref);
+      if (
+        !existingVerseTexts.includes(ref) &&
+        !newVerses.some(v => v.text === ref)
+      ) {
+        newVerses.push({ text: ref, addedAt: Date.now() });
       }
     }
   }
@@ -86,13 +137,14 @@ export function updateCompanionMemory(
     .filter((m) => m.role === 'user')
     .map((m) => m.content.toLowerCase());
 
-  const newTopics: string[] = [];
+  const existingTopicTexts = existing.topics.map(entryText);
+  const newTopics: TimestampedEntry[] = [];
   for (const keyword of TOPIC_KEYWORDS) {
     if (
       userTexts.some((text) => text.includes(keyword)) &&
-      !existing.topics.includes(keyword)
+      !existingTopicTexts.includes(keyword)
     ) {
-      newTopics.push(keyword);
+      newTopics.push({ text: keyword, addedAt: Date.now() });
     }
   }
 
@@ -128,6 +180,15 @@ export function updateCompanionMemory(
   };
 
   mmkvStorage.setItem(MEMORY_KEY, JSON.stringify(updated));
+}
+
+/**
+ * Returns plain string array of current topics (for conversation summaries).
+ */
+export function getTopicTags(): string[] {
+  const memory = getCompanionMemory();
+  if (!memory) return [];
+  return memory.topics.map(entryText);
 }
 
 /**

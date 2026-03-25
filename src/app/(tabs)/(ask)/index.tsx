@@ -13,7 +13,12 @@ import {
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CaretDownIcon, GearSixIcon } from 'phosphor-react-native';
+import {
+  CaretDownIcon,
+  PlusCircleIcon,
+  ClockCounterClockwiseIcon,
+} from 'phosphor-react-native';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -26,7 +31,9 @@ import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { useCompanionChat } from '@/lib/use-companion-chat';
-import type { CompanionMessage } from '@/lib/companion-chat-store';
+import type { CompanionMessage, Conversation } from '@/lib/companion-chat-store';
+import { ConversationHistorySheet } from '@/components/companion/ConversationHistorySheet';
+import { ArchivedConversationView } from '@/components/companion/ArchivedConversationView';
 import { CompanionEmptyState } from '@/components/companion/CompanionEmptyState';
 import { CompanionInput } from '@/components/companion/CompanionInput';
 import { UserMessageBubble } from '@/components/companion/UserMessageBubble';
@@ -120,7 +127,12 @@ export default function CompanionScreen() {
     error,
     sendMessage,
     stopGeneration,
+    startNewConversation,
   } = useCompanionChat();
+
+  // Conversation history state
+  const [showHistory, setShowHistory] = useState(false);
+  const [viewingArchived, setViewingArchived] = useState<Conversation | null>(null);
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -216,21 +228,45 @@ export default function CompanionScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
     >
-      {/* Header — companion orb */}
+      {/* Header — new conversation / orb / history */}
       <View
         style={{
           paddingTop: insets.top + 4,
           paddingBottom: 8,
-          paddingHorizontal: 16,
+          paddingHorizontal: Spacing['4'],
+          flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
         }}
       >
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            startNewConversation();
+          }}
+          hitSlop={8}
+          activeOpacity={0.7}
+          accessibilityLabel="New conversation"
+          accessibilityRole="button"
+        >
+          <PlusCircleIcon size={24} color={colors.textMuted} weight="light" />
+        </TouchableOpacity>
+
         <CompanionOrb
           accentColor={colors.accent}
           size={32}
           isActive={isStreaming}
         />
+
+        <TouchableOpacity
+          onPress={() => setShowHistory(true)}
+          hitSlop={8}
+          activeOpacity={0.7}
+          accessibilityLabel="Conversation history"
+          accessibilityRole="button"
+        >
+          <ClockCounterClockwiseIcon size={24} color={colors.textMuted} weight="light" />
+        </TouchableOpacity>
       </View>
 
       {/* Messages or empty state */}
@@ -356,6 +392,36 @@ export default function CompanionScreen() {
         onClose={handleVerseClose}
         reference={verseSheetRef ?? ''}
       />
+
+      {/* Conversation History Sheet */}
+      <ConversationHistorySheet
+        visible={showHistory}
+        onClose={() => setShowHistory(false)}
+        onSelectConversation={(conv) => {
+          setShowHistory(false);
+          setViewingArchived(conv);
+        }}
+      />
+
+      {/* Archived Conversation Viewer — full screen overlay */}
+      {viewingArchived && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: colors.background,
+            zIndex: 100,
+          }}
+        >
+          <ArchivedConversationView
+            conversation={viewingArchived}
+            onClose={() => setViewingArchived(null)}
+          />
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }

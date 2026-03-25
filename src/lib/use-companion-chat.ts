@@ -6,9 +6,10 @@
  *           time of day, mood history, conversation memory).
  * Phase 5: Graceful fallback to non-streaming if SSE fails.
  */
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   useCompanionChatStore,
+  selectActiveMessages,
   CompanionMessage,
 } from './companion-chat-store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
@@ -17,6 +18,7 @@ import { logger } from '@/lib/logger';
 import {
   updateCompanionMemory,
   getCompanionMemory,
+  pruneExpiredMemory,
 } from './companion-memory';
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
@@ -47,8 +49,8 @@ function buildCompanionContext(
     timeOfDay: getTimeOfDay(),
     conversationMemory: memory
       ? {
-          topics: memory.topics,
-          versesMentioned: memory.versesMentioned,
+          topics: memory.topics.map(t => typeof t === 'string' ? t : t.text),
+          versesMentioned: memory.versesMentioned.map(v => typeof v === 'string' ? v : v.text),
           prayerRequests: memory.prayerRequests.map((p) =>
             typeof p === 'string' ? p : p.text
           ),
@@ -228,11 +230,12 @@ async function fallbackNonStreaming(
 // ── Hook ───────────────────────────────────────────────────────────────────────
 
 export function useCompanionChat() {
-  const messages = useCompanionChatStore((s) => s.messages);
+  const messages = useCompanionChatStore(selectActiveMessages);
   const addMessage = useCompanionChatStore((s) => s.addMessage);
   const updateMessage = useCompanionChatStore((s) => s.updateMessage);
-  const clearConversation = useCompanionChatStore((s) => s.clearConversation);
-  const conversationId = useCompanionChatStore((s) => s.conversationId);
+  const startNewConversation = useCompanionChatStore((s) => s.startNewConversation);
+  const checkAndArchiveStale = useCompanionChatStore((s) => s.checkAndArchiveStale);
+  const activeConversationId = useCompanionChatStore((s) => s.activeConversationId);
 
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -253,11 +256,26 @@ export function useCompanionChat() {
     ? devotionals.find((d) => d.id === currentDevotionalId) ?? null
     : null;
 
+  // Auto-archive stale conversations (>24h inactive) on mount
+  useEffect(() => {
+    checkAndArchiveStale();
+  }, [checkAndArchiveStale]);
+
+  // Prune expired memory entries (>30 days old) on mount
+  useEffect(() => {
+    pruneExpiredMemory();
+  }, []);
+
   // ── Send message ───────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || isStreaming) return;
+
+      // Ensure an active conversation exists before sending
+      if (!useCompanionChatStore.getState().activeConversationId) {
+        useCompanionChatStore.getState().startNewConversation();
+      }
 
       setError(null);
       setSuggestions([]);
@@ -292,7 +310,7 @@ export function useCompanionChat() {
 
       try {
         // Build conversation context (last 10 messages)
-        const currentMessages = useCompanionChatStore.getState().messages;
+        const currentMessages = selectActiveMessages(useCompanionChatStore.getState());
         const recentMessages = currentMessages
           .filter((m) => m.status === 'sent' || m.status === 'complete')
           .slice(-10)
@@ -326,7 +344,7 @@ export function useCompanionChat() {
             JSON.stringify({
               messages: chatMessages,
               model: 'claude-haiku-4-5-20251001',
-              conversationId,
+              conversationId: useCompanionChatStore.getState().activeConversationId,
               context: companionContext,
             }),
             abortController.signal,
@@ -390,7 +408,7 @@ export function useCompanionChat() {
         }
 
         // Phase 4: Update conversation memory
-        const finalMessages = useCompanionChatStore.getState().messages;
+        const finalMessages = selectActiveMessages(useCompanionChatStore.getState());
         const completedMessages = finalMessages
           .filter((m) => m.status === 'sent' || m.status === 'complete')
           .map((m) => ({ role: m.role, content: m.content }));
@@ -400,9 +418,8 @@ export function useCompanionChat() {
       } catch (err: any) {
         if (err.name === 'AbortError') {
           // User stopped — keep whatever was revealed
-          const current = useCompanionChatStore
-            .getState()
-            .messages.find((m) => m.id === companionId);
+          const current = selectActiveMessages(useCompanionChatStore.getState())
+            .find((m) => m.id === companionId);
           updateMessage(companionId, {
             status: current?.content ? 'complete' : 'error',
           });
@@ -428,7 +445,7 @@ export function useCompanionChat() {
       companionName,
       currentDevotional,
       streakDays,
-      conversationId,
+      activeConversationId,
     ]
   );
 
@@ -446,6 +463,6 @@ export function useCompanionChat() {
     error,
     sendMessage,
     stopGeneration,
-    clearConversation,
+    startNewConversation,
   };
 }
