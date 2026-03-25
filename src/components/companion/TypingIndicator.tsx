@@ -19,6 +19,7 @@ import Animated, {
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
+import { CompanionOrb } from '@/components/CompanionOrb';
 
 const DOT_SIZE = 6;
 const DOT_GAP = 6;
@@ -75,9 +76,10 @@ export function TypingIndicator() {
   }, []);
 
   return (
-    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
-      {/* Icon column spacer — matches CompanionMessageContent layout (28px + 12px gap) */}
-      <View style={{ width: 28, marginRight: Spacing['3'] }} />
+    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}>
+      {/* Companion orb — same size as in CompanionMessageContent */}
+      <CompanionOrb accentColor={colors.accent} size={28} />
+      <View style={{ width: Spacing['3'] }} />
 
       {/* Three dots */}
       <View
@@ -85,7 +87,6 @@ export function TypingIndicator() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: DOT_GAP,
-          paddingTop: Spacing['2'],
         }}
       >
         <Dot delay={0} color={colors.textSubtle} />

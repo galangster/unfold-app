@@ -16,7 +16,6 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily, FontSize } from '@/constants/fonts';
-import { StreamingCursor } from './StreamingCursor';
 import { RichMessageText } from './RichMessageText';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 
@@ -106,14 +105,9 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
             onVersePress={onVersePress}
           />
         ) : (
-          // Streaming or pending — lightly stripped text with cursor
+          // Streaming or pending — lightly stripped text (typing dots handle indicator)
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <StreamingText content={message.content} color={colors.text} />
-            {isStreaming && message.status === 'streaming' && (
-              <View style={{ marginBottom: 4 }}>
-                <StreamingCursor />
-              </View>
-            )}
           </View>
         )}
       </View>

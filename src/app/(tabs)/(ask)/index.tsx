@@ -80,6 +80,9 @@ const MessageItem = React.memo(function MessageItem({
   const isThisStreaming = isStreaming && item.status === 'streaming';
   const showActions = item.status === 'complete' && isLastMessage;
 
+  // Skip rendering empty streaming messages — TypingIndicator handles that state
+  if (isThisStreaming && !item.content) return null;
+
   return (
     <View style={gapStyle}>
       <CompanionMessageContent
