@@ -540,6 +540,7 @@ export default function ReadingScreen() {
       });
     } catch (e) {
       logger.error('[Reading] Failed to load audio:', e);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   }, [isPremium, currentDayData, currentDevotional, currentDevotionalId, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration, startAudio]);
 

@@ -207,38 +207,45 @@ export function useGlobalAudioPlayer() {
       // Update store first (sets tier to minibar, isLoading, etc.)
       useAudioPlayerState.getState().startAudio(uri, metadata);
 
-      // Get or create the singleton player
-      const player = getOrCreatePlayer();
-
-      // Attach status listener (idempotent — removes old first)
-      attachStatusListener(player);
-
-      // Replace source and play
-      player.replace({ uri });
-      player.shouldCorrectPitch = true;
-
-      // Restore speed from store
-      const speed = useAudioPlayerState.getState().playbackSpeed;
-      if (speed !== 1) {
-        player.setPlaybackRate(speed, 'medium');
-      }
-
-      player.play();
-
-      // Lock screen controls
       try {
-        player.setActiveForLockScreen(true, {
-          title: metadata.title,
-          artist: metadata.seriesTitle,
-        }, {
-          showSeekForward: true,
-          showSeekBackward: true,
-        });
-      } catch (e) {
-        logger.warn('[AudioPlayer] Lock screen setup failed', e);
-      }
+        // Get or create the singleton player
+        const player = getOrCreatePlayer();
 
-      logger.log('[AudioPlayer] startAudio:', metadata.title);
+        // Attach status listener (idempotent — removes old first)
+        attachStatusListener(player);
+
+        // Replace source and play
+        player.replace({ uri });
+        player.shouldCorrectPitch = true;
+
+        // Restore speed from store
+        const speed = useAudioPlayerState.getState().playbackSpeed;
+        if (speed !== 1) {
+          player.setPlaybackRate(speed, 'medium');
+        }
+
+        player.play();
+
+        // Lock screen controls
+        try {
+          player.setActiveForLockScreen(true, {
+            title: metadata.title,
+            artist: metadata.seriesTitle,
+          }, {
+            showSeekForward: true,
+            showSeekBackward: true,
+          });
+        } catch (e) {
+          logger.warn('[AudioPlayer] Lock screen setup failed', e);
+        }
+
+        logger.log('[AudioPlayer] startAudio:', metadata.title);
+      } catch (e) {
+        logger.error('[AudioPlayer] startAudio FAILED — stopping to prevent freeze:', e);
+        // Reset state so the UI doesn't get stuck in loading
+        useAudioPlayerState.getState().stopAudio();
+        destroyPlayer();
+      }
     },
     [],
   );
@@ -264,13 +271,17 @@ export function useGlobalAudioPlayer() {
     const player = globalPlayer;
     if (!player) return;
 
-    const { isPlaying } = useAudioPlayerState.getState();
-    if (isPlaying) {
-      player.pause();
-    } else {
-      player.play();
+    try {
+      const { isPlaying } = useAudioPlayerState.getState();
+      if (isPlaying) {
+        player.pause();
+      } else {
+        player.play();
+      }
+      // State syncs via the playbackStatusUpdate listener
+    } catch (e) {
+      logger.error('[AudioPlayer] togglePlayPause failed:', e);
     }
-    // State syncs via the playbackStatusUpdate listener
   }, []);
 
   const seekTo = useCallback(async (time: number) => {

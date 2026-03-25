@@ -108,11 +108,22 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     const fetchStart = Date.now();
 
     // Step 1: POST to generate audio — returns { downloadId }
-    const genResponse = await fetch(TTS_PROXY_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ text, voiceId: safeVoiceId }),
-    });
+    // 30s timeout prevents app from hanging on unresponsive backend
+    const TTS_TIMEOUT = 30_000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TTS_TIMEOUT);
+
+    let genResponse: Response;
+    try {
+      genResponse = await fetch(TTS_PROXY_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text, voiceId: safeVoiceId }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!genResponse.ok) {
       const errBody = await genResponse.text().catch(() => '');
