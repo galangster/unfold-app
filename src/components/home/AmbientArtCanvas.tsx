@@ -10,9 +10,12 @@ import {
   LinearGradient,
   vec,
 } from '@shopify/react-native-skia';
-import {
+import Animated, {
   useSharedValue,
   useDerivedValue,
+  useAnimatedStyle,
+  useAnimatedSensor,
+  SensorType,
   withRepeat,
   withTiming,
   Easing,
@@ -136,6 +139,20 @@ export function AmbientArtCanvas({ streakLevel, hasReadToday, scrollY }: Props) 
     return 1 - progress * 0.7;
   });
 
+  // --- Device tilt parallax ---
+  const sensor = useAnimatedSensor(SensorType.ROTATION, { interval: 16 });
+
+  const tiltStyle = useAnimatedStyle(() => {
+    'worklet';
+    const { roll, pitch } = sensor.sensor.value;
+    return {
+      transform: [
+        { translateX: roll * 6 },
+        { translateY: pitch * 6 },
+      ],
+    };
+  });
+
   // --- Shader uniforms ---
   const ringsUniforms = useDerivedValue(() => ({
     iTime: time.value,
@@ -154,48 +171,50 @@ export function AmbientArtCanvas({ streakLevel, hasReadToday, scrollY }: Props) 
 
   return (
     <>
-      {/* Layer 0a: Skia shaders */}
-      <Canvas
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-        accessibilityElementsHidden
-      >
-        <Group opacity={scrollOpacity}>
-          {/* Edge fade mask: transparent at top/bottom, opaque in middle */}
-          <Mask
-            mode="alpha"
-            mask={
-              <Rect x={0} y={0} width={SCREEN_WIDTH} height={SCREEN_HEIGHT}>
-                <LinearGradient
-                  start={vec(0, 0)}
-                  end={vec(0, SCREEN_HEIGHT)}
-                  colors={[
-                    'transparent',
-                    'white',
-                    'white',
-                    'transparent',
-                  ]}
-                  positions={[0, 0.08, 0.85, 1]}
-                />
-              </Rect>
-            }
-          >
-            {/* Concentric rings shader */}
-            <Group opacity={ringsOpacity}>
-              <Fill>
-                <Shader source={concentricRingsSource} uniforms={ringsUniforms} />
-              </Fill>
-            </Group>
+      {/* Layer 0a: Skia shaders with device-tilt parallax */}
+      <Animated.View style={[StyleSheet.absoluteFill, tiltStyle]} pointerEvents="none">
+        <Canvas
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+          accessibilityElementsHidden
+        >
+          <Group opacity={scrollOpacity}>
+            {/* Edge fade mask: transparent at top/bottom, opaque in middle */}
+            <Mask
+              mode="alpha"
+              mask={
+                <Rect x={0} y={0} width={SCREEN_WIDTH} height={SCREEN_HEIGHT}>
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(0, SCREEN_HEIGHT)}
+                    colors={[
+                      'transparent',
+                      'white',
+                      'white',
+                      'transparent',
+                    ]}
+                    positions={[0, 0.08, 0.85, 1]}
+                  />
+                </Rect>
+              }
+            >
+              {/* Concentric rings shader */}
+              <Group opacity={ringsOpacity}>
+                <Fill>
+                  <Shader source={concentricRingsSource} uniforms={ringsUniforms} />
+                </Fill>
+              </Group>
 
-            {/* Organic noise shader */}
-            <Group opacity={noiseOpacity}>
-              <Fill>
-                <Shader source={organicNoiseSource} uniforms={noiseUniforms} />
-              </Fill>
-            </Group>
-          </Mask>
-        </Group>
-      </Canvas>
+              {/* Organic noise shader */}
+              <Group opacity={noiseOpacity}>
+                <Fill>
+                  <Shader source={organicNoiseSource} uniforms={noiseUniforms} />
+                </Fill>
+              </Group>
+            </Mask>
+          </Group>
+        </Canvas>
+      </Animated.View>
 
       {/* Layer 0b: Ember particles — only when today's reading is complete */}
       {hasReadToday && (
