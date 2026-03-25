@@ -18,7 +18,7 @@ import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
-import { fetchVerseLocal } from '@/lib/bible-api';
+import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
 
@@ -87,12 +87,24 @@ export function DevotionalContent({
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const readingFont = useReadingFont();
 
-  // Fetch scripture with verse numbers from local DB (replaces AI-generated text)
+  // Fetch scripture with verse numbers from local DB, fallback to remote API
   const [versedScripture, setVersedScripture] = useState<string | null>(null);
   useEffect(() => {
     if (!day.scriptureReference) return;
-    fetchVerseLocal(day.scriptureReference).then((result) => {
-      if (result?.text) setVersedScripture(result.text);
+    fetchVerseLocal(day.scriptureReference).then(async (result) => {
+      if (result?.text) {
+        setVersedScripture(result.text);
+      } else {
+        // Fallback to remote API when Bible DB not downloaded
+        try {
+          const remote = await fetchVerse(day.scriptureReference, 'web');
+          if (remote?.text) setVersedScripture(remote.text);
+        } catch {
+          // Silently fall back to AI text
+        }
+      }
+    }).catch(() => {
+      // Silently fall back to AI text
     });
   }, [day.scriptureReference]);
 

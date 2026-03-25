@@ -52,6 +52,7 @@ import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { YourSeriesSection } from '@/components/home/YourSeriesSection';
 import { alpha } from '@/components/ui';
+import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 
 type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
 
@@ -351,6 +352,17 @@ export default function HomeScreen() {
       setTimeOfDay(getTimeOfDay());
     }, 60000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Silently download Bible DB in background if not yet ready
+  const bibleDbTriggered = useRef(false);
+  useEffect(() => {
+    if (bibleDbTriggered.current) return;
+    const { status } = getBibleDbStatus();
+    if (status === 'ready' || status === 'downloading') return;
+    bibleDbTriggered.current = true;
+    // Fire-and-forget — no UI, no progress indicators
+    downloadBibleDb().catch(() => {});
   }, []);
 
   // Check premium status from RevenueCat

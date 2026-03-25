@@ -238,8 +238,10 @@ export function DevotionalWebView({
       // On iOS WebViews, touchend can be swallowed when the native selection
       // callout is present, so we also listen for click as a fallback.
       function handleColorTap(btn, e) {
-        e.preventDefault();
-        e.stopPropagation();
+        // Safe event suppression — e may be a passive touchstart event
+        // where preventDefault() throws, so wrap in try/catch.
+        try { e.preventDefault(); } catch(_) {}
+        try { e.stopPropagation(); } catch(_) {}
 
         var color = btn.dataset.color;
         if (!selectedText || !window.rangyHighlighter) return;
@@ -288,19 +290,40 @@ export function DevotionalWebView({
       }
 
       document.querySelectorAll('.color-btn').forEach(function(btn) {
-        // Prevent touchstart from dismissing the selection
+        var handled = false;
+
+        // touchstart: stop propagation to keep selection alive, but do NOT
+        // preventDefault — that kills the click event which is our primary
+        // handler on iOS WKWebView. Save color as a backup for the setTimeout
+        // fallback in case both touchend and click get swallowed.
         btn.addEventListener('touchstart', function(e) {
-          e.preventDefault();
           e.stopPropagation();
-        }, { passive: false });
+          handled = false;
+          var pendingColor = btn.dataset.color;
+          // Ultimate fallback: if neither touchend nor click fires within
+          // 200ms, trigger handleColorTap directly.
+          setTimeout(function() {
+            if (!handled && pendingColor) {
+              handled = true;
+              handleColorTap(btn, e);
+            }
+          }, 200);
+        }, { passive: true });
 
         btn.addEventListener('touchend', function(e) {
-          handleColorTap(btn, e);
+          if (!handled) {
+            handled = true;
+            handleColorTap(btn, e);
+          }
         });
 
-        // Click fallback — critical on iOS where native callout can swallow touchend
+        // click is the PRIMARY handler — most reliable on iOS WKWebView
+        // since touchend can be swallowed by native selection callout dismissal.
         btn.addEventListener('click', function(e) {
-          handleColorTap(btn, e);
+          if (!handled) {
+            handled = true;
+            handleColorTap(btn, e);
+          }
         });
       });
 
