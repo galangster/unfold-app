@@ -1366,7 +1366,7 @@ export default function SettingsScreen() {
                         marginTop: Spacing['0.5'],
                       }}
                     >
-                      {TTS_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Caleb'}
+                      {TTS_VOICES.find((v) => v.id === user?.preferredVoice)?.name ?? 'Grace'}
                     </Text>
                   </View>
                   <CaretDownIcon
@@ -1383,7 +1383,7 @@ export default function SettingsScreen() {
                 {expandedPremium === 'voice' && (
                   <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
                     {TTS_VOICES.map((option) => {
-                      const isSelected = (user?.preferredVoice ?? 'caleb') === option.id;
+                      const isSelected = (user?.preferredVoice ?? 'grace') === option.id;
                       const isLocked = option.premium && !user?.isPremium;
                       return (
                         <TouchableOpacity activeOpacity={0.7}

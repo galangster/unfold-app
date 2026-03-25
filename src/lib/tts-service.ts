@@ -23,8 +23,8 @@ export interface VoiceOption {
 }
 
 export const TTS_VOICES = [
-  { id: 'caleb', name: 'Caleb', description: 'Warm, pastoral male voice', premium: false },
   { id: 'grace', name: 'Grace', description: 'Gentle, reflective female voice', premium: false },
+  { id: 'caleb', name: 'Caleb', description: 'Warm, pastoral male voice', premium: false },
   { id: 'eli', name: 'Eli', description: 'Wise, authoritative mentor voice', premium: false },
 ] as const;
 
@@ -41,7 +41,7 @@ function resolveVoiceId(voiceId: string): string {
   return isValid ? mapped : TTS_VOICES[0].id;
 }
 
-const DEFAULT_VOICE_ID = 'caleb';
+const DEFAULT_VOICE_ID = 'grace';
 
 /** Returns the default voice. Also validates any stored voice ID. */
 export function getDefaultVoice(isPremium: boolean = false): string {
