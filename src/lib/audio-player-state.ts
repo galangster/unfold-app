@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { mmkvStorage } from './mmkv-storage';
 
 export type PlayerTier = 'hidden' | 'pill' | 'minibar' | 'halfsheet';
 
@@ -56,32 +58,54 @@ const INITIAL_STATE = {
   playerTier: 'hidden' as PlayerTier,
 };
 
-export const useAudioPlayerState = create<AudioPlayerState>((set, get) => ({
-  ...INITIAL_STATE,
+export const useAudioPlayerState = create<AudioPlayerState>()(
+  persist(
+    (set, get) => ({
+      ...INITIAL_STATE,
 
-  startAudio: (uri, metadata) => set({
-    audioUri: uri,
-    title: metadata.title,
-    seriesTitle: metadata.seriesTitle,
-    devotionalId: metadata.devotionalId,
-    dayNumber: metadata.dayNumber,
-    playerTier: 'minibar',
-    isLoading: true,
-    isPlaying: false,
-    isCompleted: false,
-    currentTime: 0,
-    duration: 0,
-  }),
+      startAudio: (uri, metadata) => set({
+        audioUri: uri,
+        title: metadata.title,
+        seriesTitle: metadata.seriesTitle,
+        devotionalId: metadata.devotionalId,
+        dayNumber: metadata.dayNumber,
+        playerTier: 'minibar',
+        isLoading: true,
+        isPlaying: false,
+        isCompleted: false,
+        currentTime: 0,
+        duration: 0,
+      }),
 
-  stopAudio: () => set(INITIAL_STATE),
+      stopAudio: () => set(INITIAL_STATE),
 
-  setTier: (tier) => set({ playerTier: tier }),
+      setTier: (tier) => set({ playerTier: tier }),
 
-  seekTo: (time) => set({ currentTime: time }),
+      seekTo: (time) => set({ currentTime: time }),
 
-  setSpeed: (speed) => set({ playbackSpeed: speed }),
+      setSpeed: (speed) => set({ playbackSpeed: speed }),
 
-  setCompleted: (completed) => set({ isCompleted: completed }),
+      setCompleted: (completed) => set({ isCompleted: completed }),
 
-  updatePlaybackState: (update) => set(update),
-}));
+      updatePlaybackState: (update) => set(update),
+    }),
+    {
+      name: 'audio-player-state',
+      storage: createJSONStorage(() => mmkvStorage),
+      partialize: (state) => ({
+        // Persist fields needed for app-restart restoration
+        audioUri: state.audioUri,
+        duration: state.duration,
+        playbackSpeed: state.playbackSpeed,
+        title: state.title,
+        seriesTitle: state.seriesTitle,
+        devotionalId: state.devotionalId,
+        dayNumber: state.dayNumber,
+        // NOTE: currentTime is NOT auto-persisted to avoid excessive MMKV writes.
+        // The hook explicitly writes currentTime on pause, stop, and every 5s.
+        // playerTier persists as 'pill' (collapsed) if audio was active, 'hidden' if not
+        playerTier: state.playerTier !== 'hidden' ? ('pill' as PlayerTier) : ('hidden' as PlayerTier),
+      }),
+    },
+  ),
+);
