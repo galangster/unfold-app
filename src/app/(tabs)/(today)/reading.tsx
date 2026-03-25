@@ -45,7 +45,8 @@ import { CompletionCelebration } from '@/components/CompletionCelebration';
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
 import { StudyMethodSheet } from '@/components/reading/StudyMethodSheet';
 import { createReviewPromptManager } from '@/lib/review-prompt';
-import { AudioPlayerBar } from '@/components/AudioPlayerBar';
+import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
+import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { referenceToRoute } from '@/lib/bible-constants';
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio } from '@/lib/tts-service';
@@ -161,6 +162,7 @@ export default function ReadingScreen() {
   const recordStreakRead = useUnfoldStore((s) => s.recordStreakRead);
 
   const isPremium = user?.isPremium ?? false;
+  const { startAudio, stopAudio } = useGlobalAudioPlayer();
 
   // Premium nudge system (audio teaser on reading screen)
   const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
@@ -181,12 +183,10 @@ export default function ReadingScreen() {
     return currentDevotional.days.length > 0 ? currentDevotional.days.length : 1;
   });
   // shareModalOpen removed — share now navigates to /share-card route
-  const [isAudioPlayerVisible, setIsAudioPlayerVisible] = useState(false);
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
   const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
-  const [audioUri, setAudioUri] = useState<string | null>(null);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
@@ -425,14 +425,13 @@ export default function ReadingScreen() {
     setIsCompleted(isDayCompleted);
   }, [viewingDay, isDayCompleted]);
 
-  // Stop audio and close player when navigating between days
+  // Stop audio when navigating between days
   useEffect(() => {
-    setAudioUri(null);
-    if (isAudioPlayerVisible) {
-      setIsAudioPlayerVisible(false);
-      endReadingSession();
+    const audioDevotionalId = useAudioPlayerState.getState().devotionalId;
+    if (audioDevotionalId) {
+      stopAudio();
     }
-  }, [viewingDay]);
+  }, [viewingDay, stopAudio]);
 
   // Respect deep-linked day number (used by Resume card)
   useEffect(() => {
@@ -517,7 +516,6 @@ export default function ReadingScreen() {
     if (!currentDayData) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setIsAudioPlayerVisible(true);
 
     // Track audio usage for premium nudge + widget bridge
     useUnfoldStore.getState().setHasUsedAudio();
@@ -530,29 +528,26 @@ export default function ReadingScreen() {
       isListening: true,
     });
 
-    // If we already have the URI (from prefetch), just show the bar
-    if (audioUri) return;
-
     try {
       const voiceId = user?.preferredVoice || getDefaultVoice();
       const fullText = `${currentDayData.scriptureReference}.\n${currentDayData.scriptureText}\n\n${currentDayData.bodyText}`;
       const result = await streamDevotionalAudio(fullText, voiceId);
-      setAudioUri(result.audioUrl);
+      startAudio(result.audioUrl, {
+        title: currentDayData?.title ?? 'Devotional',
+        seriesTitle: currentDevotional?.title ?? '',
+        devotionalId: currentDevotionalId ?? '',
+        dayNumber: viewingDay,
+      });
     } catch (e) {
       logger.error('[Reading] Failed to load audio:', e);
     }
-  }, [isPremium, currentDayData, currentDevotional, audioUri, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration]);
+  }, [isPremium, currentDayData, currentDevotional, currentDevotionalId, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration, startAudio]);
 
   const handleStudyMethodPress = useCallback((methodId: string) => {
-    // dismiss audio player first
-    if (isAudioPlayerVisible) {
-      setIsAudioPlayerVisible(false);
-      setAudioUri(null);
-      endReadingSession();
-    }
+    // Audio continues playing behind the study method sheet (spec requirement)
     setSelectedStudyMethod(methodId);
     setStudyMethodVisible(true);
-  }, [isAudioPlayerVisible]);
+  }, []);
 
   const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string; color?: string }) => {
     if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
@@ -1986,18 +1981,7 @@ export default function ReadingScreen() {
 
       {/* Share: now navigates to /share-card route */}
 
-      {/* Audio Player Bar */}
-      {isPremium && isAudioPlayerVisible && (
-        <AudioPlayerBar
-          audioUri={audioUri}
-          title={currentDayData?.title}
-          onClose={() => {
-            setIsAudioPlayerVisible(false);
-            setAudioUri(null);
-            endReadingSession();
-          }}
-        />
-      )}
+      {/* Audio player now rendered by AudioPlayerOverlay in root layout */}
 
       {/* Premium Toast Notification */}
       {audioToast?.visible && (
