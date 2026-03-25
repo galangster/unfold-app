@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -19,7 +19,7 @@ import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
-import { GoldEmberField } from '@/components/GoldEmberField';
+import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { triggerNextDayGeneration } from '@/lib/progressive-generation';
@@ -90,6 +90,14 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
+
+  // Scroll tracking for AmbientArtCanvas fade
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -478,13 +486,17 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* Embers — reward for completing today's reading */}
-        {hasReadToday && currentDevotional && <GoldEmberField streakLevel={streakCurrent} />}
-        {/* Ambient embers for cinematic feel (empty state) */}
-        {!currentDevotional && <GoldEmberField density="low" active style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />}
+      {/* Layer 0: Ambient art — Skia shaders + ember particles */}
+      <AmbientArtCanvas
+        streakLevel={streakCurrent}
+        hasReadToday={hasReadToday}
+        scrollY={scrollY}
+      />
 
-        <ScrollView
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <Animated.ScrollView
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
@@ -612,7 +624,7 @@ export default function HomeScreen() {
               />
             </View>
           )}
-        </ScrollView>
+        </Animated.ScrollView>
       </SafeAreaView>
 
       {currentDevotional && (
