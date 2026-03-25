@@ -54,7 +54,7 @@ const FEATURES: Record<string, FeatureConfig> = {
   voice: {
     icon: SpeakerHighIcon,
     headline: 'Listen your way',
-    description: 'Choose from 7 unique voices to narrate your devotional. Find the one that speaks to you.',
+    description: 'Choose from 3 unique voices to narrate your devotional. Find the one that speaks to you.',
     cta: 'Try free for 7 days',
   },
   series: {

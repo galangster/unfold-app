@@ -93,15 +93,15 @@ export const LightColors: ColorTheme = {
   textHint: 'rgba(28, 23, 16, 0.3)',
 
   // Interactive elements
-  inputBackground: 'rgba(28, 23, 16, 0.04)',
-  inputBackgroundFocused: 'rgba(28, 23, 16, 0.06)',
-  buttonBackground: 'rgba(28, 23, 16, 0.08)',
-  buttonBackgroundPressed: 'rgba(28, 23, 16, 0.1)',
+  inputBackground: 'rgba(28, 23, 16, 0.06)',
+  inputBackgroundFocused: 'rgba(28, 23, 16, 0.09)',
+  buttonBackground: 'rgba(28, 23, 16, 0.10)',
+  buttonBackgroundPressed: 'rgba(28, 23, 16, 0.14)',
 
   // Borders
-  border: 'rgba(28, 23, 16, 0.07)',
-  borderFocused: 'rgba(28, 23, 16, 0.14)',
-  borderStrong: 'rgba(28, 23, 16, 0.2)',
+  border: 'rgba(28, 23, 16, 0.10)',
+  borderFocused: 'rgba(28, 23, 16, 0.18)',
+  borderStrong: 'rgba(28, 23, 16, 0.25)',
 
   // Glass effect
   glassBackground: 'rgba(255, 255, 255, 0.9)',

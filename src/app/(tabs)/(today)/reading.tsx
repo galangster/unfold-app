@@ -1301,32 +1301,15 @@ export default function ReadingScreen() {
                   gap: 10,
                 }}
               >
-                {/* Left Chevron */}
-                {viewingDay > 1 ? (
-                  <CaretLeftIcon size={18} color={colors.text} weight="regular" />
-                ) : (
-                  <View style={{ width: 18 }} />
-                )}
-
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text
                     style={{
-                      fontFamily: FontFamily.display,
+                      fontFamily: FontFamily.uiMedium,
                       fontSize: FontSize.lg,
                       color: colors.text,
-                      letterSpacing: 0.5,
                     }}
                   >
-                    Day {viewingDay}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.xs,
-                      color: colors.textHint,
-                    }}
-                  >
-                    of {currentDevotional.totalDays}
+                    Day {viewingDay} of {currentDevotional.totalDays}
                   </Text>
                   {viewingDay === currentDevotional.currentDay && (
                     <View

@@ -1621,32 +1621,24 @@ export default function SettingsScreen() {
               {/* Translation options */}
               {expandedPreference === 'translation' && (
                 <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
-                  {!user?.isPremium && (
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: FontSize.xs,
-                        color: colors.textMuted,
-                        marginBottom: Spacing['2.5'],
-                        paddingHorizontal: Spacing['1'],
-                        lineHeight: 17,
-                      }}
-                    >
-                      Licensed translations — we pay for each one so you can read them here. Included with Premium.
-                    </Text>
-                  )}
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textMuted,
+                      marginBottom: Spacing['2.5'],
+                      paddingHorizontal: Spacing['1'],
+                      lineHeight: 17,
+                    }}
+                  >
+                    Licensed translations such as the NIV, ESV, NLT, and NASB are available and we are currently talking to the licensors.
+                  </Text>
                   {BIBLE_TRANSLATIONS.map((option) => {
                     const isSelected = (user?.bibleTranslation ?? 'WEB') === option.value;
-                    const isLocked = option.premium && !user?.isPremium;
                     return (
                       <TouchableOpacity activeOpacity={0.7}
                         key={option.value}
                         onPress={() => {
-                          if (isLocked) {
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                            setPremiumFeature('translation');
-                            return;
-                          }
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           updateUser({ bibleTranslation: option.value });
                         }}
@@ -1658,24 +1650,18 @@ export default function SettingsScreen() {
                           flexDirection: 'row',
                           alignItems: 'center',
                           marginBottom: Spacing['1'],
-                          opacity: isLocked ? 0.6 : 1,
                         }}
                       >
                         <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <Text
-                              style={{
-                                fontFamily: FontFamily.uiMedium,
-                                fontSize: 15,
-                                color: colors.text,
-                              }}
-                            >
-                              {option.label}
-                            </Text>
-                            {option.premium && !user?.isPremium && (
-                              <LockIcon size={14} color={colors.textMuted} weight="light" />
-                            )}
-                          </View>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.uiMedium,
+                              fontSize: 15,
+                              color: colors.text,
+                            }}
+                          >
+                            {option.label}
+                          </Text>
                           <Text
                             style={{
                               fontFamily: FontFamily.ui,

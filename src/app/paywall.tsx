@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon, StackIcon } from 'phosphor-react-native';
+import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -386,14 +386,14 @@ export default function PaywallScreen() {
 
   // Concrete premium benefits — title + description, not vague labels
   const premiumBenefits = [
-    { icon: SpeakerHighIcon, title: 'Listen hands-free', desc: '7 narration voices for your commute or quiet time' },
+    { icon: SpeakerHighIcon, title: 'Listen hands-free', desc: '3 narration voices for your commute or quiet time' },
     { icon: PaletteIcon, title: '7 reading themes', desc: 'Premium fonts and colors designed for focus' },
     { icon: BookOpenTextIcon, title: '32 study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
     { icon: InfinityIcon, title: 'Unlimited series', desc: 'Always shaped by your story and where you are now' },
     { icon: PencilLineIcon, title: 'Full note-taking suite', desc: 'Rich-text journal with folders, favorites, and scripture linking' },
     { icon: CircleNotchIcon, title: 'AI Companion', desc: 'Ask questions about faith, scripture, and your devotional' },
     { icon: FilePdfIcon, title: 'Beautiful PDF exports', desc: 'Export your devotionals to share or print' },
-    { icon: StackIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
+    { icon: InfinityIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
   ];
 
   // Free vs premium comparison rows
