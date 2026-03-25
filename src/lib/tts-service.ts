@@ -1,10 +1,11 @@
 /**
- * TTS Service — Smallest.ai via Railway backend proxy.
- * Binary download, filesystem cache, in-flight dedup.
- * Drop-in replacement for cartesia.ts — same public API signatures.
+ * TTS Service — Fish Audio via Railway backend proxy.
+ * Two-step native download: POST to generate → GET to download natively.
+ * Audio data never touches the JS thread — no freeze.
  */
 
 import { File, Paths, Directory } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
 import { getAuthHeaders, RAILWAY_BACKEND_URL } from '@/lib/api-config';
@@ -13,7 +14,6 @@ import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 const TTS_PROXY_URL = `${RAILWAY_BACKEND_URL}/api/tts`;
 
 // ─── Voice catalog ────────────────────────────────────────────
-// NOTE: Voice IDs are placeholders — audition and update before shipping.
 
 export interface VoiceOption {
   id: string;
@@ -22,21 +22,33 @@ export interface VoiceOption {
   premium: boolean;
 }
 
-export const TTS_VOICES: VoiceOption[] = [
-  { id: 'emily', name: 'Emily', description: 'Warm, contemplative — perfect for devotionals', premium: false },
-  { id: 'george', name: 'George', description: 'Calm, authoritative male voice', premium: true },
-  { id: 'jasper', name: 'Jasper', description: 'Warm, pastoral presence', premium: true },
-  { id: 'ariana', name: 'Ariana', description: 'Gentle, nurturing voice', premium: true },
-  { id: 'james', name: 'James', description: 'Deep, pastoral male voice', premium: true },
-];
+export const TTS_VOICES = [
+  { id: 'caleb', name: 'Caleb', description: 'Warm, pastoral male voice', premium: false },
+  { id: 'grace', name: 'Grace', description: 'Gentle, reflective female voice', premium: false },
+  { id: 'eli', name: 'Eli', description: 'Wise, authoritative mentor voice', premium: false },
+] as const;
 
-const DEFAULT_VOICE_ID = 'emily';
+// Map legacy Smallest.ai voice IDs to new Fish Audio voice IDs
+const LEGACY_VOICE_MAP: Record<string, string> = {
+  'arman': 'caleb',
+  'jasmine': 'grace',
+};
 
+/** Resolve a voice ID, mapping legacy IDs to current ones */
+function resolveVoiceId(voiceId: string): string {
+  const mapped = LEGACY_VOICE_MAP[voiceId] || voiceId;
+  const isValid = TTS_VOICES.some(v => v.id === mapped);
+  return isValid ? mapped : TTS_VOICES[0].id;
+}
+
+const DEFAULT_VOICE_ID = 'caleb';
+
+/** Returns the default voice. Also validates any stored voice ID. */
 export function getDefaultVoice(isPremium: boolean = false): string {
   return DEFAULT_VOICE_ID;
 }
 
-export function getAvailableVoices(isPremium: boolean = false): VoiceOption[] {
+export function getAvailableVoices(isPremium: boolean = false): readonly VoiceOption[] {
   if (isPremium) return TTS_VOICES;
   return TTS_VOICES.filter(v => !v.premium);
 }
@@ -45,7 +57,7 @@ export function getAvailableVoices(isPremium: boolean = false): VoiceOption[] {
 
 /** Deterministic cache key from text + voiceId (djb2 + sdbm dual hash). */
 function hashKey(text: string, voiceId: string): string {
-  const input = `v5:${voiceId}:${text}`;
+  const input = `v8:${voiceId}:${text}`;
   let h1 = 5381;
   let h2 = 0;
   for (let i = 0; i < input.length; i++) {
@@ -57,7 +69,7 @@ function hashKey(text: string, voiceId: string): string {
 }
 
 function getCacheFile(key: string): File {
-  return new File(Paths.cache, `tts_${key}.wav`);
+  return new File(Paths.cache, `tts_${key}.mp3`);
 }
 
 function isCached(key: string): boolean {
@@ -70,7 +82,6 @@ export async function clearAudioCache(): Promise<void> {
   try {
     const cacheDir = new Directory(Paths.cache);
     if (cacheDir.exists) {
-      // Directory.list() returns (Directory | File)[] — filter for File instances
       const entries = cacheDir.list();
       for (const entry of entries) {
         if (entry instanceof File && entry.uri.includes('tts_') && (entry.uri.endsWith('.wav') || entry.uri.endsWith('.mp3'))) {
@@ -83,38 +94,56 @@ export async function clearAudioCache(): Promise<void> {
   }
 }
 
-// ─── Download ─────────────────────────────────────────────────
+// ─── Download (two-step: POST generate → GET native download) ─
 
 const inFlightRequests = new Map<string, Promise<{ audioUrl: string }>>();
 
 async function downloadAudio(text: string, voiceId: string, key: string): Promise<{ audioUrl: string }> {
   const cachedFile = getCacheFile(key);
-  logger.log(`[TTS] downloadAudio START — textLen=${text.length}, voiceId=${voiceId}`);
+  const safeVoiceId = resolveVoiceId(voiceId);
+  logger.log(`[TTS] downloadAudio START — textLen=${text.length}, voiceId=${safeVoiceId}`);
 
   try {
     const headers = await getAuthHeaders();
     const fetchStart = Date.now();
 
-    const response = await fetch(TTS_PROXY_URL, {
+    // Step 1: POST to generate audio — returns { downloadId }
+    const genResponse = await fetch(TTS_PROXY_URL, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ text, voiceId }),
+      body: JSON.stringify({ text, voiceId: safeVoiceId }),
     });
 
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => '');
-      throw new Error(`TTS proxy error: ${response.status} ${errBody.slice(0, 200)}`);
+    if (!genResponse.ok) {
+      const errBody = await genResponse.text().catch(() => '');
+      throw new Error(`TTS proxy error: ${genResponse.status} ${errBody.slice(0, 200)}`);
     }
 
-    // Read binary response and write to cache using modern File API
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    cachedFile.write(bytes);
+    const { downloadId } = await genResponse.json();
+    if (!downloadId) {
+      throw new Error('TTS proxy returned no downloadId');
+    }
 
-    logger.log(`[TTS] ✅ cached — ${bytes.length} bytes, ${Date.now() - fetchStart}ms`);
+    logger.log(`[TTS] generation complete — downloadId=${downloadId}, ${Date.now() - fetchStart}ms`);
+
+    // Step 2: Native download — audio data never enters JS thread
+    const downloadUrl = `${TTS_PROXY_URL}/${downloadId}`;
+    const downloadResult = await FileSystem.downloadAsync(
+      downloadUrl,
+      cachedFile.uri,
+      { headers }
+    );
+
+    if (downloadResult.status !== 200) {
+      throw new Error(`TTS download failed: HTTP ${downloadResult.status}`);
+    }
+
+    const fileInfo = await FileSystem.getInfoAsync(cachedFile.uri);
+    const fileSize = fileInfo.exists ? (fileInfo as any).size ?? 0 : 0;
+    logger.log(`[TTS] cached — ${fileSize} bytes, ${Date.now() - fetchStart}ms total`);
     return { audioUrl: cachedFile.uri };
   } catch (error) {
-    logger.log(`[TTS] ❌ downloadAudio ERROR:`, error);
+    logger.log(`[TTS] downloadAudio ERROR:`, error);
     throw error;
   } finally {
     inFlightRequests.delete(key);
@@ -133,7 +162,8 @@ export async function streamDevotionalAudio(
   voiceId: string = DEFAULT_VOICE_ID,
 ): Promise<{ audioUrl: string }> {
   try {
-    const key = hashKey(text, voiceId);
+    const resolvedVoice = resolveVoiceId(voiceId || getDefaultVoice());
+    const key = hashKey(text, resolvedVoice);
     logger.log(`[TTS] streamDevotionalAudio — key=${key}, textLen=${text.length}`);
 
     // Return cached audio if available
@@ -165,7 +195,7 @@ export async function streamDevotionalAudio(
       }
     }
 
-    const promise = downloadAudio(text, voiceId, key).then(async (result) => {
+    const promise = downloadAudio(text, resolvedVoice, key).then(async (result) => {
       await incrementRateLimit('tts');
       return result;
     });
@@ -185,13 +215,14 @@ export function prefetchDevotionalAudio(
   text: string,
   voiceId: string = DEFAULT_VOICE_ID,
 ): void {
-  const key = hashKey(text, voiceId);
+  const resolvedVoice = resolveVoiceId(voiceId || getDefaultVoice());
+  const key = hashKey(text, resolvedVoice);
 
   // Skip if cached or already downloading
   if (isCached(key)) return;
   if (inFlightRequests.has(key)) return;
 
-  const promise = downloadAudio(text, voiceId, key);
+  const promise = downloadAudio(text, resolvedVoice, key);
   inFlightRequests.set(key, promise);
   promise.catch(() => { /* Silently fail — user hasn't tapped play yet */ });
 }
