@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useRef, type RefObject } from 'react';
-import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet, InteractionManager } from 'react-native';
+import { useState, useCallback, type RefObject } from 'react';
+import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Duration } from '@/constants/animations';
 import Svg, { Path } from 'react-native-svg';
@@ -15,7 +16,7 @@ import { Spacing } from '@/constants/spacing';
 // Types
 // ---------------------------------------------------------------------------
 
-interface TargetRect {
+export interface TargetRect {
   x: number;
   y: number;
   width: number;
@@ -30,6 +31,13 @@ interface TooltipStep {
   placement: 'below' | 'above';
 }
 
+/** Layout rects captured via onLayout in the parent ScrollView */
+export interface OnboardingLayoutRects {
+  reading: TargetRect | null;
+  streak: TargetRect | null;
+}
+
+// Keep for backward compat
 export interface OnboardingTargets {
   reading: RefObject<View | null>;
   streak: RefObject<View | null>;
@@ -67,10 +75,8 @@ function buildMaskPath(
   screenH: number,
   rect: TargetRect,
 ): string {
-  // Outer rect (full screen)
   const outer = `M0,0 H${screenW} V${screenH} H0 Z`;
 
-  // Inner rounded rect (the hole) — slightly larger than the target
   const x = rect.x - SPOTLIGHT_PADDING;
   const y = rect.y - SPOTLIGHT_PADDING;
   const w = rect.width + SPOTLIGHT_PADDING * 2;
@@ -136,67 +142,29 @@ function Arrow({ direction, color }: { direction: 'up' | 'down'; color: string }
 // Main component
 // ---------------------------------------------------------------------------
 
-export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets }) {
+const TAB_BAR_HEIGHT = 49;
+const TOOLTIP_ESTIMATED_HEIGHT = 110;
+
+interface HomeOnboardingTooltipsProps {
+  /** @deprecated — refs don't work in Animated.ScrollView on Fabric */
+  targets?: OnboardingTargets;
+  /** Pre-measured layout rects from onLayout in the parent screen */
+  layoutRects?: OnboardingLayoutRects;
+  /** Offset to convert ScrollView-content y to screen-absolute y (safe area top) */
+  yOffset?: number;
+}
+
+export function HomeOnboardingTooltips({ layoutRects, yOffset = 0 }: HomeOnboardingTooltipsProps) {
   const { colors, isDark } = useTheme();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
-  const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
 
-  // Measure the current step's target element
   const step = TOOLTIP_STEPS[currentStep];
-  const retryCountRef = useRef(0);
-  const MAX_RETRIES = 8;
-
-  useEffect(() => {
-    if (hasSeenHomeTooltips || !isVisible) return;
-    if (!step || !targets) return;
-
-    const ref = targets[step.targetKey];
-    if (!ref?.current) return;
-
-    let cancelled = false;
-    retryCountRef.current = 0;
-
-    // Attempt to measure the target view. Retries with increasing delay
-    // because views inside a ScrollView with entering animations may not
-    // have valid layout dimensions on the first attempt.
-    function attemptMeasure() {
-      if (cancelled) return;
-
-      const node = ref.current;
-      if (!node) return;
-
-      node.measureInWindow((x, y, width, height) => {
-        if (cancelled) return;
-
-        if (width > 0 && height > 0) {
-          setTargetRect({ x, y, width, height });
-        } else if (retryCountRef.current < MAX_RETRIES) {
-          retryCountRef.current += 1;
-          // Exponential backoff: 200, 400, 600, 800...
-          const delay = 200 * retryCountRef.current;
-          timerId = setTimeout(attemptMeasure, delay);
-        }
-      });
-    }
-
-    // Wait for all animations/interactions to complete, then start measuring
-    let timerId: ReturnType<typeof setTimeout> | undefined;
-    const handle = InteractionManager.runAfterInteractions(() => {
-      // Extra 500ms for entering animations (FadeIn.delay(100/200).duration(400))
-      timerId = setTimeout(attemptMeasure, 500);
-    });
-
-    return () => {
-      cancelled = true;
-      handle.cancel();
-      if (timerId) clearTimeout(timerId);
-    };
-  }, [currentStep, isVisible, hasSeenHomeTooltips, step, targets]);
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
@@ -206,7 +174,6 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
   const handleNext = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentStep < TOOLTIP_STEPS.length - 1) {
-      setTargetRect(null); // Clear rect so it re-measures for next step
       setCurrentStep((prev) => prev + 1);
     } else {
       dismiss();
@@ -221,11 +188,19 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
   // Don't render if already seen, dismissed, or step out of bounds
   if (hasSeenHomeTooltips || !isVisible || !step) return null;
 
+  // Get the target rect for the current step from layout rects
+  const rawRect = layoutRects?.[step.targetKey] ?? null;
+
+  // Apply yOffset to convert from ScrollView-content-relative to screen-absolute
+  const targetRect: TargetRect | null = rawRect
+    ? { ...rawRect, y: rawRect.y + yOffset }
+    : null;
+
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
   const tooltipBg = isDark ? colors.inputBackground : colors.background;
   const tooltipBorder = colors.border;
 
-  // While waiting for measurement, show just the backdrop
+  // While waiting for layout data, show just the backdrop
   if (!targetRect) {
     return (
       <Animated.View
@@ -245,28 +220,31 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
   }
 
   // Calculate tooltip position
-  const GAP = 12; // gap between spotlight edge and tooltip
+  const GAP = 12;
   const TOOLTIP_MARGIN_H = 24;
   const spotlightBottom = targetRect.y + targetRect.height + SPOTLIGHT_PADDING;
   const spotlightTop = targetRect.y - SPOTLIGHT_PADDING;
+
+  const maxTooltipTop = screenH - TAB_BAR_HEIGHT - insets.bottom - TOOLTIP_ESTIMATED_HEIGHT;
 
   let tooltipTop: number;
   let arrowDirection: 'up' | 'down';
 
   if (step.placement === 'below') {
-    tooltipTop = spotlightBottom + GAP;
-    arrowDirection = 'up';
+    const candidateTop = spotlightBottom + GAP;
+    if (candidateTop > maxTooltipTop) {
+      tooltipTop = spotlightTop - GAP - TOOLTIP_ESTIMATED_HEIGHT;
+      arrowDirection = 'down';
+    } else {
+      tooltipTop = candidateTop;
+      arrowDirection = 'up';
+    }
   } else {
-    // We'll calculate from the bottom of the tooltip, but we need to estimate height first
-    // Tooltip is roughly 80-100px tall. Place it above the spotlight.
-    tooltipTop = spotlightTop - GAP - 90;
+    tooltipTop = spotlightTop - GAP - TOOLTIP_ESTIMATED_HEIGHT;
     arrowDirection = 'down';
   }
 
-  // Arrow horizontal position — center it on the target
   const arrowLeft = targetRect.x + targetRect.width / 2 - ARROW_SIZE;
-
-  // SVG mask path
   const maskPath = buildMaskPath(screenW, screenH, targetRect);
 
   return (
@@ -276,7 +254,6 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
       style={styles.overlay}
       pointerEvents="box-none"
     >
-      {/* SVG spotlight mask — dark everywhere except the target */}
       <TouchableOpacity
         activeOpacity={1}
         onPress={handleOverlayPress}
@@ -301,7 +278,7 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
         style={{
           position: 'absolute',
           top: arrowDirection === 'up' ? tooltipTop - ARROW_SIZE : undefined,
-          bottom: arrowDirection === 'down' ? screenH - tooltipTop - 90 - ARROW_SIZE : undefined,
+          bottom: arrowDirection === 'down' ? screenH - tooltipTop - TOOLTIP_ESTIMATED_HEIGHT - ARROW_SIZE : undefined,
           left: arrowLeft,
         }}
         pointerEvents="none"
@@ -326,7 +303,6 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
         ]}
         pointerEvents="box-none"
       >
-        {/* Title + message */}
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
@@ -350,9 +326,7 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
           {step.message}
         </Text>
 
-        {/* Bottom row: dots + actions */}
         <View style={styles.bottomRow}>
-          {/* Step dots */}
           <View style={styles.dotsRow}>
             {TOOLTIP_STEPS.map((_, index) => (
               <View
@@ -373,7 +347,6 @@ export function HomeOnboardingTooltips({ targets }: { targets: OnboardingTargets
             ))}
           </View>
 
-          {/* Actions */}
           <View style={styles.actionsRow}>
             {!isLastStep && (
               <TouchableOpacity

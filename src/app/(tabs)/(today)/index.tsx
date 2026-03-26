@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
 import { StreakBox } from '@/components/StreakBox';
-import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
+import { HomeOnboardingTooltips, type TargetRect } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
@@ -38,7 +38,7 @@ import { computeDevotionalState } from '@/components/home/compute-devotional-sta
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { ContextSlot } from '@/components/home/ContextSlot';
 import { GreetingRow } from '@/components/home/GreetingRow';
-import { QuickActionsRow } from '@/components/home/QuickActionsRow';
+import { BentoGrid } from '@/components/home/BentoGrid';
 import { SeriesCarousel } from '@/components/home/SeriesCarousel';
 import { CompactStreakRow } from '@/components/home/CompactStreakRow';
 
@@ -82,14 +82,29 @@ export default function HomeScreen() {
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
-  // Refs for onboarding spotlight targets
-  const journeyCardRef = useRef<View>(null);
-  const streakBoxRef = useRef<View>(null);
-  const onboardingTargets = useMemo(
-    () => ({ reading: journeyCardRef, streak: streakBoxRef }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  // Safe area insets for tooltip y-offset calculation
+  const insets = useSafeAreaInsets();
+
+  // Tooltip target rects — captured via onLayout on non-animated wrapper Views
+  // that are direct children of the ScrollView content container.
+  // Refs don't work inside Animated.ScrollView on RN 0.83 / Fabric,
+  // so we use onLayout + safe area offset instead.
+  const [readingRect, setReadingRect] = useState<TargetRect | null>(null);
+  const [streakRect, setStreakRect] = useState<TargetRect | null>(null);
+
+  const onReadingLayout = useCallback((e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
+    const { x, y, width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setReadingRect({ x, y, width, height });
+    }
+  }, []);
+
+  const onStreakLayout = useCallback((e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
+    const { x, y, width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setStreakRect({ x, y, width, height });
+    }
+  }, []);
 
   // Scroll tracking for AmbientArtCanvas fade
   const scrollY = useSharedValue(0);
@@ -524,18 +539,11 @@ export default function HomeScreen() {
           <RememberThisCard />
 
           {/* Zone 3: Hero Devotional */}
-          <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
-            <View ref={journeyCardRef} collapsable={false}>
+          <View onLayout={onReadingLayout} collapsable={false}>
+            <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
               <DevotionalCard state={devotionalState} scrollY={scrollY} />
-            </View>
-          </Animated.View>
-
-          {/* Zone 4: Quick Actions */}
-          <QuickActionsRow
-            onJournalPress={() => router.push('/(tabs)/(journal)')}
-            onCompanionPress={() => router.push('/(tabs)/(ask)')}
-            onBiblePress={() => router.push('/bible')}
-          />
+            </Animated.View>
+          </View>
 
           {/* Zone 5: Series Carousel */}
           <SeriesCarousel />
@@ -603,7 +611,7 @@ export default function HomeScreen() {
           )}
 
           {/* Zone 6: Streak */}
-          <View ref={streakBoxRef} collapsable={false}>
+          <View onLayout={onStreakLayout} collapsable={false}>
             <Animated.View
               entering={entering(FadeIn.delay(200).duration(400))}
               style={styles.streakWrapper}
@@ -614,6 +622,9 @@ export default function HomeScreen() {
               />
             </Animated.View>
           </View>
+
+          {/* Zone 7: Bento Grid */}
+          <BentoGrid />
 
           {/* Premium Nudge Card — contextual, inline upsell */}
           {premiumNudge && (
@@ -658,7 +669,10 @@ export default function HomeScreen() {
       )}
 
       {/* First-time onboarding tooltips — shown once, persisted in store */}
-      <HomeOnboardingTooltips targets={onboardingTargets} />
+      <HomeOnboardingTooltips
+        layoutRects={{ reading: readingRect, streak: streakRect }}
+        yOffset={insets.top}
+      />
     </View>
   );
 }

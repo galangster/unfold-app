@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -29,6 +29,7 @@ const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; d
 
 export default function SavedScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const highlights = useUnfoldStore((s) => s.highlights);
@@ -65,7 +66,11 @@ export default function SavedScreen() {
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    if (from === 'home') {
+      router.navigate('/(tabs)/(today)');
+    } else {
+      router.back();
+    }
   };
 
   const handleJumpToSource = (devotionalId: string, dayNumber: number) => {

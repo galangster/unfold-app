@@ -86,11 +86,23 @@ function sanitizeBridgeText(text: string): string {
   cleaned = cleaned.replace(/\bdamn\b/gi, '');
   cleaned = cleaned.replace(/\bfreaking\b/gi, 'really');
   cleaned = cleaned.replace(/\bhell of a\b/gi, 'a real');
+  // Capitalize "God" — never lowercase in theological context
+  cleaned = sanitizeGodCapitalization(cleaned);
   // Clean up double spaces or awkward punctuation from replacements
   cleaned = cleaned.replace(/,\s*,/g, ',');
   cleaned = cleaned.replace(/\s{2,}/g, ' ');
   cleaned = cleaned.replace(/,\s*\./g, '.');
   return cleaned.trim();
+}
+
+/**
+ * Ensure "god" is always capitalized to "God" in theological context.
+ * Exported so other services can use the same safety net.
+ */
+export function sanitizeGodCapitalization(text: string): string {
+  // Replace standalone lowercase "god" with "God"
+  // Preserves compound words like "godly", "godmother", "demigod"
+  return text.replace(/\bgod\b/g, 'God');
 }
 
 function setCachedBridge(cacheKey: string, text: string): void {

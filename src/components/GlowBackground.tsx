@@ -17,6 +17,7 @@ import Animated, {
   withTiming,
   withSequence,
   withDelay,
+  cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
@@ -62,6 +63,7 @@ function GlowOrb({ config, index, color, intensity }: { config: OrbConfig; index
       ),
       -1,
     );
+    return () => { cancelAnimation(tx); cancelAnimation(ty); };
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -154,6 +156,7 @@ const Ember = React.memo(function Ember({ config, color, intensity }: { config: 
         -1,
       ),
     );
+    return () => { cancelAnimation(ty); cancelAnimation(tx); cancelAnimation(opacity); };
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({

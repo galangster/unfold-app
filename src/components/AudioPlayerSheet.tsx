@@ -1,11 +1,16 @@
 /**
- * AudioPlayerSheet -- Tier 3 half-sheet audio player.
+ * AudioPlayerSheet — Compact bottom sheet audio player.
  *
- * Uses @gorhom/bottom-sheet v5 at 48% snap height.
+ * Uses @gorhom/bottom-sheet v5 at 35% snap height.
  * Reads all state from the global Zustand store (no props).
- * Draggable scrubber via Gesture.Pan(), skip +/-10s, play/pause, speed cycling.
  *
- * Swipe down to close -> collapses back to minibar tier.
+ * Layout (top → bottom):
+ *   Title + speed pill (same row)
+ *   Series subtitle
+ *   Scrubber + time labels
+ *   Skip back / Play-Pause / Skip forward (centered)
+ *
+ * Swipe down to close → collapses to pill tier (audio continues).
  */
 
 import React, { useRef, useCallback, useState } from 'react';
@@ -19,12 +24,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  PlayIcon,
-  PauseIcon,
-  ClockCounterClockwiseIcon,
-  ClockClockwiseIcon,
-} from 'phosphor-react-native';
+import { PlayIcon, PauseIcon, ArrowCounterClockwiseIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
 
 import { useTheme } from '@/lib/theme';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
@@ -40,10 +40,9 @@ import { alpha } from '@/components/ui';
 // Constants
 // ---------------------------------------------------------------------------
 
-const SNAP_POINTS = ['48%'];
-const PLAY_BUTTON_SIZE = 64;
-const SKIP_ICON_SIZE = 28;
-const SCRUBBER_THUMB_SIZE = 16;
+const SNAP_POINTS = ['28%'];
+const PLAY_BUTTON_SIZE = 56;
+const SCRUBBER_THUMB_SIZE = 14;
 const SCRUBBER_TRACK_HEIGHT = Spacing['1']; // 4px
 
 // ---------------------------------------------------------------------------
@@ -64,7 +63,7 @@ function formatTime(seconds: number): string {
 export function AudioPlayerSheet() {
   const { colors } = useTheme();
   const sheetRef = useRef<BottomSheet>(null);
-  const { togglePlayPause, skip, cycleSpeed, seekTo } = useGlobalAudioPlayer();
+  const { togglePlayPause, cycleSpeed, seekTo, skip } = useGlobalAudioPlayer();
 
   // Zustand selectors
   const isPlaying = useAudioPlayerState((s) => s.isPlaying);
@@ -84,10 +83,6 @@ export function AudioPlayerSheet() {
 
   // -- Derived values --
   const progress = duration > 0 ? currentTime / duration : 0;
-
-  // When not scrubbing, display the real playback position
-  // When scrubbing, display the scrub position
-  const displayProgress = isScrubbing.value ? scrubPosition.value : progress;
   const displayTime = isScrubbing.value
     ? scrubPosition.value * duration
     : currentTime;
@@ -96,8 +91,7 @@ export function AudioPlayerSheet() {
   const handleSheetChange = useCallback(
     (index: number) => {
       if (index === -1) {
-        // Sheet closed via pan-down -> collapse to minibar
-        setTier('minibar');
+        setTier('pill');
       }
     },
     [setTier],
@@ -109,6 +103,11 @@ export function AudioPlayerSheet() {
     togglePlayPause();
   }, [togglePlayPause]);
 
+  const handleCycleSpeed = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    cycleSpeed();
+  }, [cycleSpeed]);
+
   const handleSkipBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     skip(-10);
@@ -119,11 +118,6 @@ export function AudioPlayerSheet() {
     skip(10);
   }, [skip]);
 
-  const handleCycleSpeed = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    cycleSpeed();
-  }, [cycleSpeed]);
-
   const handleTrackLayout = useCallback(
     (e: { nativeEvent: { layout: { width: number } } }) => {
       setTrackWidth(e.nativeEvent.layout.width);
@@ -131,7 +125,6 @@ export function AudioPlayerSheet() {
     [],
   );
 
-  // -- JS callbacks for worklet bridge --
   const handleSeek = useCallback(
     (normalizedPosition: number) => {
       const seekTime = Math.max(0, Math.min(normalizedPosition, 1)) * duration;
@@ -148,7 +141,6 @@ export function AudioPlayerSheet() {
   const scrubGesture = Gesture.Pan()
     .onStart((e) => {
       isScrubbing.value = true;
-      // Set initial position from touch location
       if (trackWidth > 0) {
         scrubPosition.value = Math.max(0, Math.min(e.x / trackWidth, 1));
       }
@@ -190,7 +182,9 @@ export function AudioPlayerSheet() {
     <BottomSheet
       ref={sheetRef}
       snapPoints={SNAP_POINTS}
+      enableDynamicSizing={false}
       enablePanDownToClose
+      enableOverDrag={false}
       onChange={handleSheetChange}
       handleIndicatorStyle={{
         backgroundColor: alpha(colors.text, 0.2),
@@ -210,23 +204,41 @@ export function AudioPlayerSheet() {
       }}
     >
       <BottomSheetView style={styles.content}>
-        {/* Title + Series Name */}
-        <View style={styles.header}>
-          <Text
-            numberOfLines={1}
-            style={[styles.titleText, { color: colors.text }]}
-            accessibilityRole="header"
-          >
-            {title ?? 'Listening...'}
-          </Text>
-          {seriesTitle ? (
+        {/* Header row: Title + Speed pill */}
+        <View style={styles.headerRow}>
+          <View style={styles.titleGroup}>
             <Text
               numberOfLines={1}
-              style={[styles.seriesText, { color: colors.textMuted }]}
+              style={[styles.titleText, { color: colors.text }]}
+              accessibilityRole="header"
             >
-              {seriesTitle}
+              {title ?? 'Listening...'}
             </Text>
-          ) : null}
+            {seriesTitle ? (
+              <Text
+                numberOfLines={1}
+                style={[styles.seriesText, { color: colors.textMuted }]}
+              >
+                {seriesTitle}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Speed Pill — top right, aligned with title */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={handleCycleSpeed}
+            style={[
+              styles.speedPill,
+              { backgroundColor: alpha(colors.text, 0.08) },
+            ]}
+            accessibilityLabel={`Playback speed ${playbackSpeed}x. Double tap to change.`}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.speedText, { color: colors.text }]}>
+              {playbackSpeed}x
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Scrubber */}
@@ -239,14 +251,12 @@ export function AudioPlayerSheet() {
               accessibilityLabel={`Playback position. ${formatTime(displayTime)} of ${formatTime(duration)}`}
               accessibilityHint="Drag to seek"
             >
-              {/* Track background */}
               <View
                 style={[
                   styles.scrubberTrack,
                   { backgroundColor: alpha(colors.text, 0.1) },
                 ]}
               >
-                {/* Fill */}
                 <Animated.View
                   style={[
                     styles.scrubberFill,
@@ -255,8 +265,6 @@ export function AudioPlayerSheet() {
                   ]}
                 />
               </View>
-
-              {/* Thumb (visible only while scrubbing) */}
               <Animated.View
                 style={[
                   styles.scrubberThumb,
@@ -278,25 +286,23 @@ export function AudioPlayerSheet() {
           </View>
         </View>
 
-        {/* Transport Controls */}
+        {/* Controls — perfectly centered */}
         <View style={styles.controlsRow}>
           {/* Skip Back 10s */}
           <TouchableOpacity
+            activeOpacity={1}
             onPress={handleSkipBack}
             style={styles.skipButton}
             accessibilityLabel="Skip back 10 seconds"
             accessibilityRole="button"
           >
-            <ClockCounterClockwiseIcon
-              size={SKIP_ICON_SIZE}
-              color={colors.text}
-              weight="light"
-            />
+            <ArrowCounterClockwiseIcon size={28} color={colors.text} weight="regular" />
             <Text style={[styles.skipLabel, { color: colors.text }]}>10</Text>
           </TouchableOpacity>
 
           {/* Play / Pause */}
           <TouchableOpacity
+            activeOpacity={1}
             onPress={handlePlayPause}
             style={[styles.playButton, { backgroundColor: colors.accent }]}
             accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
@@ -304,13 +310,13 @@ export function AudioPlayerSheet() {
           >
             {isPlaying ? (
               <PauseIcon
-                size={28}
+                size={26}
                 color={colors.backgroundElevated}
                 weight="fill"
               />
             ) : (
               <PlayIcon
-                size={28}
+                size={26}
                 color={colors.backgroundElevated}
                 weight="fill"
               />
@@ -319,34 +325,14 @@ export function AudioPlayerSheet() {
 
           {/* Skip Forward 10s */}
           <TouchableOpacity
+            activeOpacity={1}
             onPress={handleSkipForward}
             style={styles.skipButton}
             accessibilityLabel="Skip forward 10 seconds"
             accessibilityRole="button"
           >
-            <ClockClockwiseIcon
-              size={SKIP_ICON_SIZE}
-              color={colors.text}
-              weight="light"
-            />
+            <ArrowClockwiseIcon size={28} color={colors.text} weight="regular" />
             <Text style={[styles.skipLabel, { color: colors.text }]}>10</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Speed Pill */}
-        <View style={styles.speedRow}>
-          <TouchableOpacity
-            onPress={handleCycleSpeed}
-            style={[
-              styles.speedPill,
-              { backgroundColor: alpha(colors.text, 0.08) },
-            ]}
-            accessibilityLabel={`Playback speed ${playbackSpeed}x. Double tap to change.`}
-            accessibilityRole="button"
-          >
-            <Text style={[styles.speedText, { color: colors.textMuted }]}>
-              {playbackSpeed}x
-            </Text>
           </TouchableOpacity>
         </View>
       </BottomSheetView>
@@ -364,31 +350,45 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['2'],
-    paddingBottom: Spacing['8'],
+    paddingTop: Spacing['1'],
+    paddingBottom: Spacing['6'],
   },
   // -- Header --
-  header: {
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing['1'],
-    marginBottom: Spacing['6'],
+    justifyContent: 'space-between',
+    marginBottom: Spacing['3'],
+  },
+  titleGroup: {
+    flex: 1,
+    marginRight: Spacing['3'],
+    gap: 2,
   },
   titleText: {
     fontFamily: FontFamily.uiSemiBold,
-    fontSize: FontSize.lg,
-    textAlign: 'center',
+    fontSize: FontSize.base,
   },
   seriesText: {
     fontFamily: FontFamily.ui,
-    fontSize: FontSize.sm,
-    textAlign: 'center',
+    fontSize: FontSize.xs,
+  },
+  // -- Speed --
+  speedPill: {
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['1.5'],
+    borderRadius: Radius.full,
+  },
+  speedText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.xs,
   },
   // -- Scrubber --
   scrubberSection: {
-    marginBottom: Spacing['6'],
+    marginBottom: Spacing['4'],
   },
   scrubberTouchArea: {
-    height: Spacing['8'], // 32px touch target (oversized for accessibility)
+    height: Spacing['8'],
     justifyContent: 'center',
   },
   scrubberTrack: {
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: Spacing['1'],
+    marginTop: Spacing['0.5'],
   },
   timeText: {
     fontFamily: FontFamily.ui,
@@ -421,21 +421,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing['8'],
-    marginBottom: Spacing['6'],
+    gap: Spacing['5'],
   },
   skipButton: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   skipLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
     position: 'absolute',
-    // Centered on the icon
-    textAlign: 'center',
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 9,
+    lineHeight: 10,
   },
   playButton: {
     width: PLAY_BUTTON_SIZE,
@@ -443,19 +441,6 @@ const styles = StyleSheet.create({
     borderRadius: PLAY_BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // -- Speed --
-  speedRow: {
-    alignItems: 'center',
-  },
-  speedPill: {
-    paddingHorizontal: Spacing['4'],
-    paddingVertical: Spacing['2'],
-    borderRadius: Radius.full,
-  },
-  speedText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.sm,
   },
 });
 

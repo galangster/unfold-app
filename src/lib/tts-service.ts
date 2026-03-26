@@ -72,9 +72,12 @@ function getCacheFile(key: string): File {
   return new File(Paths.cache, `tts_${key}.mp3`);
 }
 
+/** Minimum valid MP3 size — an error response (JSON) is typically < 1KB */
+const MIN_AUDIO_FILE_SIZE = 1024;
+
 function isCached(key: string): boolean {
   const file = getCacheFile(key);
-  return file.exists && file.size > 0;
+  return file.exists && file.size > MIN_AUDIO_FILE_SIZE;
 }
 
 /** Clear entire TTS cache directory. */
@@ -108,8 +111,8 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     const fetchStart = Date.now();
 
     // Step 1: POST to generate audio — returns { downloadId }
-    // 30s timeout prevents app from hanging on unresponsive backend
-    const TTS_TIMEOUT = 30_000;
+    // 60s timeout — Fish Audio S2 Pro can take 25-40s for long devotionals
+    const TTS_TIMEOUT = 60_000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TTS_TIMEOUT);
 
@@ -138,13 +141,12 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     logger.log(`[TTS] generation complete — downloadId=${downloadId}, ${Date.now() - fetchStart}ms`);
 
     // Step 2: Native download — audio data never enters JS thread
-    // 30s download timeout prevents hanging on slow/stalled connections
+    // Uses public download endpoint (downloadId is opaque UUID, no auth needed)
     const DOWNLOAD_TIMEOUT = 30_000;
-    const downloadUrl = `${TTS_PROXY_URL}/${downloadId}`;
+    const downloadUrl = `${RAILWAY_BACKEND_URL}/api/tts-download/${downloadId}`;
     const downloadPromise = FileSystem.downloadAsync(
       downloadUrl,
       cachedFile.uri,
-      { headers }
     );
     const downloadResult = await Promise.race([
       downloadPromise,
@@ -159,8 +161,10 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
 
     const fileInfo = await FileSystem.getInfoAsync(cachedFile.uri);
     const fileSize = fileInfo.exists ? (fileInfo as any).size ?? 0 : 0;
-    if (!fileInfo.exists || fileSize === 0) {
-      throw new Error('TTS download produced empty file');
+    if (!fileInfo.exists || fileSize < MIN_AUDIO_FILE_SIZE) {
+      // Delete the invalid file so it's not served from cache
+      try { cachedFile.delete(); } catch { /* ignore */ }
+      throw new Error(`TTS download produced invalid file (${fileSize} bytes)`);
     }
     logger.log(`[TTS] cached — ${fileSize} bytes, ${Date.now() - fetchStart}ms total`);
     return { audioUrl: cachedFile.uri };

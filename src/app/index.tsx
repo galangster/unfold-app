@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -91,6 +91,7 @@ function shuffleOrder(length: number): number[] {
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { signedOut } = useLocalSearchParams<{ signedOut?: string }>();
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
 
@@ -124,8 +125,8 @@ export default function WelcomeScreen() {
   }, [user, router]);
 
   useEffect(() => {
-    // Returning users skip the welcome animation
-    if (user?.hasCompletedOnboarding) {
+    // Returning users skip the welcome animation (unless they just signed out)
+    if (user?.hasCompletedOnboarding && !signedOut) {
       router.replace('/(tabs)/(today)');
       return;
     }

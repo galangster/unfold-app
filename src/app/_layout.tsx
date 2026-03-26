@@ -20,9 +20,10 @@ import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { GlowBackground } from '@/components/GlowBackground';
+// GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
+// blocking touch events and causing audio playback freezes. See GlowBackground.tsx for details.
+// import { GlowBackground } from '@/components/GlowBackground';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
-import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -109,9 +110,6 @@ function RootLayoutNav() {
 
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
-  // Initialize global audio player session (configures audio mode, sets up singleton)
-  useGlobalAudioPlayer();
-
   // Register navigation container with Sentry for screen tracking
   useEffect(() => {
     if (ref) {
@@ -133,7 +131,7 @@ function RootLayoutNav() {
   return (
     <NavigationThemeProvider value={navigationTheme}>
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <GlowBackground color={colors.accent} intensity={0.6} emberCount={14} />
+        {/* GlowBackground disabled — infinite Reanimated animations block JS thread */}
         <Stack
           screenOptions={{
             headerShown: false,

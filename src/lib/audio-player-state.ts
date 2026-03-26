@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from './mmkv-storage';
 
-export type PlayerTier = 'hidden' | 'pill' | 'minibar' | 'halfsheet';
+export type PlayerTier = 'hidden' | 'pill' | 'sheet';
 
 export interface DevotionalAudioMetadata {
   title: string;
@@ -69,7 +69,7 @@ export const useAudioPlayerState = create<AudioPlayerState>()(
         seriesTitle: metadata.seriesTitle,
         devotionalId: metadata.devotionalId,
         dayNumber: metadata.dayNumber,
-        playerTier: 'minibar',
+        playerTier: 'sheet',
         isLoading: true,
         isPlaying: false,
         isCompleted: false,
@@ -103,8 +103,9 @@ export const useAudioPlayerState = create<AudioPlayerState>()(
         dayNumber: state.dayNumber,
         // NOTE: currentTime is NOT auto-persisted to avoid excessive MMKV writes.
         // The hook explicitly writes currentTime on pause, stop, and every 5s.
-        // playerTier persists as 'pill' (collapsed) if audio was active, 'hidden' if not
-        playerTier: state.playerTier !== 'hidden' ? ('pill' as PlayerTier) : ('hidden' as PlayerTier),
+        // playerTier always persists as 'hidden' — the native audio player singleton
+        // doesn't survive app restarts, so restoring to 'pill' creates stale UI state.
+        playerTier: 'hidden' as PlayerTier,
       }),
     },
   ),

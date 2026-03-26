@@ -1670,10 +1670,10 @@ export default function OnboardingScreen() {
             borderColor: colors.border,
           }}>
             <Text style={{
-              fontFamily: FontFamily.displayItalic,
-              fontSize: FontSize.xl,
+              fontFamily: FontFamily.body,
+              fontSize: FontSize.lg,
               color: colors.text,
-              lineHeight: 32,
+              lineHeight: 28,
             }}>
               {mirrorBackText}
             </Text>

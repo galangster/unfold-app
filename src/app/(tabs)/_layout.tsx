@@ -92,7 +92,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
   const tabBarHideMode = useUIState((s) => s.tabBarHideMode);
 
-  // Audio player auto-collapse: minibar/halfsheet → pill on tab switch
+  // Audio player auto-collapse: sheet → pill on tab switch
   const playerTier = useAudioPlayerState((s) => s.playerTier);
   const setPlayerTier = useAudioPlayerState((s) => s.setTier);
 
@@ -213,7 +213,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               navigation.navigate(route.name, route.params);
 
               // Auto-collapse audio player to pill on tab switch
-              if (playerTier === 'minibar' || playerTier === 'halfsheet') {
+              if (playerTier === 'sheet') {
                 setPlayerTier('pill');
               }
             }

@@ -336,6 +336,11 @@ export async function scheduleMiddayCheckIn(): Promise<string | null> {
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) return null;
 
+  // Use custom time from store (default 12:30)
+  const store = useUnfoldStore.getState();
+  const timeStr = store.middayCheckInTime || '12:30';
+  const [hour, minute] = timeStr.split(':').map(Number);
+
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_IDS.MIDDAY_CHECKIN,
@@ -347,12 +352,12 @@ export async function scheduleMiddayCheckIn(): Promise<string | null> {
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 12,
-        minute: 30,
+        hour,
+        minute,
       },
     });
 
-    logger.log('[Notifications] Midday check-in scheduled for 12:30 PM');
+    logger.log(`[Notifications] Midday check-in scheduled for ${hour}:${minute.toString().padStart(2, '0')}`);
     return identifier;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule midday check-in:', error);
@@ -372,11 +377,13 @@ export async function cancelAndRescheduleMiddayForTomorrow(): Promise<void> {
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) return;
 
-  // Schedule a one-shot for tomorrow at 12:30 PM, then on app foreground
-  // the useCheckInNotifications hook will re-establish the daily trigger
+  // Schedule a one-shot for tomorrow at the user's configured time
+  const store = useUnfoldStore.getState();
+  const timeStr = store.middayCheckInTime || '12:30';
+  const [hour, minute] = timeStr.split(':').map(Number);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(12, 30, 0, 0);
+  tomorrow.setHours(hour, minute, 0, 0);
 
   try {
     await Notifications.scheduleNotificationAsync({
@@ -393,7 +400,7 @@ export async function cancelAndRescheduleMiddayForTomorrow(): Promise<void> {
       },
     });
 
-    logger.log('[Notifications] Midday check-in rescheduled for tomorrow 12:30 PM');
+    logger.log(`[Notifications] Midday check-in rescheduled for tomorrow ${hour}:${minute.toString().padStart(2, '0')}`);
   } catch (error) {
     logger.error('[Notifications] Failed to reschedule midday for tomorrow:', error);
     // Fall back to daily trigger so notifications don't stop permanently
@@ -412,6 +419,11 @@ export async function scheduleEveningWindDown(): Promise<string | null> {
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) return null;
 
+  // Use custom time from store (default 20:30)
+  const store = useUnfoldStore.getState();
+  const timeStr = store.eveningWindDownTime || '20:30';
+  const [hour, minute] = timeStr.split(':').map(Number);
+
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_IDS.EVENING_WINDDOWN,
@@ -423,12 +435,12 @@ export async function scheduleEveningWindDown(): Promise<string | null> {
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: 20,
-        minute: 30,
+        hour,
+        minute,
       },
     });
 
-    logger.log('[Notifications] Evening wind-down scheduled for 8:30 PM');
+    logger.log(`[Notifications] Evening wind-down scheduled for ${hour}:${minute.toString().padStart(2, '0')}`);
     return identifier;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule evening wind-down:', error);
@@ -456,9 +468,13 @@ export async function cancelAndRescheduleEveningForTomorrow(): Promise<void> {
   const hasPermission = await areNotificationsEnabled();
   if (!hasPermission) return;
 
+  // Use custom time from store (default 20:30)
+  const store = useUnfoldStore.getState();
+  const timeStr = store.eveningWindDownTime || '20:30';
+  const [evHour, evMinute] = timeStr.split(':').map(Number);
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(20, 30, 0, 0);
+  tomorrow.setHours(evHour, evMinute, 0, 0);
 
   try {
     await Notifications.scheduleNotificationAsync({

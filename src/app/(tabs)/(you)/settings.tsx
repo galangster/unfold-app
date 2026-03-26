@@ -66,6 +66,13 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof SunIcon }[]
   { value: 'system', label: 'System', icon: MonitorIcon },
 ];
 
+function formatCheckInTime(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
+}
+
 const TONE_OPTIONS: { value: WritingTone; label: string; description: string }[] = [
   { value: 'warm', label: 'Like a friend', description: 'Gentle, encouraging, and personal' },
   { value: 'direct', label: 'Straight to the point', description: 'Clear, practical, and actionable' },
@@ -100,6 +107,8 @@ export default function SettingsScreen() {
   const eveningWindDownEnabled = useUnfoldStore((s) => s.eveningWindDownEnabled);
   const setMiddayCheckInEnabled = useUnfoldStore((s) => s.setMiddayCheckInEnabled);
   const setEveningWindDownEnabled = useUnfoldStore((s) => s.setEveningWindDownEnabled);
+  const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
+  const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
   const { colors, isDark } = useTheme();
   const { isAuthenticated, isAnonymous, email, authProvider } = useAuth();
   const { signOut } = useClerk();
@@ -114,24 +123,39 @@ export default function SettingsScreen() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const handleSignOut = useCallback(async () => {
-    try {
-      setIsSigningOut(true);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await signOut();
-      updateUser({
-        authUserId: null,
-        authProvider: 'guest',
-        authEmail: null,
-        authDisplayName: null,
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      logger.error('[Settings] Sign out error:', err);
-      Alert.alert('Error', 'Could not sign out. Please try again.');
-    } finally {
-      setIsSigningOut(false);
-    }
-  }, [signOut, updateUser]);
+    Alert.alert(
+      'Sign out?',
+      'Your devotionals and data will remain on this device. You can sign back in anytime.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsSigningOut(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await signOut();
+              updateUser({
+                authUserId: null,
+                authProvider: 'guest',
+                authEmail: null,
+                authDisplayName: null,
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              // Navigate to splash screen so user sees they're signed out
+              router.replace({ pathname: '/', params: { signedOut: '1' } });
+            } catch (err) {
+              logger.error('[Settings] Sign out error:', err);
+              Alert.alert('Error', 'Could not sign out. Please try again.');
+            } finally {
+              setIsSigningOut(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [signOut, updateUser, router]);
 
   const handleSettingsOAuth = useCallback(async (
     startFlow: typeof startAppleFlow,
@@ -1306,13 +1330,8 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Midday check-in toggle */}
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Midday check-in"
-                  accessibilityHint={middayCheckInEnabled ? "Turn off midday check-in notifications" : "Turn on midday check-in notifications"}
-                  accessibilityState={{ selected: middayCheckInEnabled }}
+                {/* Midday check-in — toggle + schedule */}
+                <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -1323,7 +1342,14 @@ export default function SettingsScreen() {
                     borderTopColor: colors.border,
                   }}
                 >
-                  <View>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'midday' } });
+                    }}
+                    style={{ flex: 1 }}
+                  >
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
@@ -1341,27 +1367,28 @@ export default function SettingsScreen() {
                         marginTop: Spacing['0.5'],
                       }}
                     >
-                      12:30 PM
+                      {formatCheckInTime(middayCheckInTime)}
                     </Text>
-                  </View>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: FontSize.sm,
-                      color: middayCheckInEnabled ? colors.text : colors.textMuted,
-                    }}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    {middayCheckInEnabled ? 'On' : 'Off'}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: FontSize.sm,
+                        color: middayCheckInEnabled ? colors.text : colors.textMuted,
+                      }}
+                    >
+                      {middayCheckInEnabled ? 'On' : 'Off'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
-                {/* Evening wind-down toggle */}
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Evening wind-down"
-                  accessibilityHint={eveningWindDownEnabled ? "Turn off evening wind-down notifications" : "Turn on evening wind-down notifications"}
-                  accessibilityState={{ selected: eveningWindDownEnabled }}
+                {/* Evening wind-down — toggle + schedule */}
+                <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -1372,7 +1399,14 @@ export default function SettingsScreen() {
                     borderTopColor: colors.border,
                   }}
                 >
-                  <View>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'evening' } });
+                    }}
+                    style={{ flex: 1 }}
+                  >
                     <Text
                       style={{
                         fontFamily: FontFamily.ui,
@@ -1390,19 +1424,25 @@ export default function SettingsScreen() {
                         marginTop: Spacing['0.5'],
                       }}
                     >
-                      8:30 PM
+                      {formatCheckInTime(eveningWindDownTime)}
                     </Text>
-                  </View>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: FontSize.sm,
-                      color: eveningWindDownEnabled ? colors.text : colors.textMuted,
-                    }}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    {eveningWindDownEnabled ? 'On' : 'Off'}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: FontSize.sm,
+                        color: eveningWindDownEnabled ? colors.text : colors.textMuted,
+                      }}
+                    >
+                      {eveningWindDownEnabled ? 'On' : 'Off'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               {/* Voice subsection - Moved into Premium */}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
@@ -2652,20 +2692,6 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* AI provider disclosure */}
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: FontSize.xs,
-                color: colors.textSubtle,
-                textAlign: 'center',
-                marginTop: Spacing['3'],
-                paddingHorizontal: Spacing['4'],
-                lineHeight: 17,
-              }}
-            >
-              Devotionals generated by Grok (xAI). Audio by Smallest.ai.
-            </Text>
           </Animated.View>
 
           {/* Account section */}
@@ -3038,23 +3064,6 @@ export default function SettingsScreen() {
             >
               Version 1.0.0
             </Text>
-            {__DEV__ && (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => router.push('/(tabs)/(you)/component-catalog')}
-                style={{ marginTop: Spacing['3'] }}
-              >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.uiMedium,
-                    fontSize: FontSize.xs,
-                    color: colors.accent,
-                  }}
-                >
-                  Component Catalog
-                </Text>
-              </TouchableOpacity>
-            )}
           </Animated.View>
         </ScrollView>
       </SafeAreaView>

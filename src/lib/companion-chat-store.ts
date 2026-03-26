@@ -78,8 +78,9 @@ function generateSummary(conversation: Conversation): string {
 export const selectActiveConversation = (s: CompanionChatState): Conversation | null =>
   s.conversations.find(c => c.id === s.activeConversationId) ?? null;
 
+const EMPTY_MESSAGES: CompanionMessage[] = [];
 export const selectActiveMessages = (s: CompanionChatState): CompanionMessage[] =>
-  s.conversations.find(c => c.id === s.activeConversationId)?.messages ?? [];
+  s.conversations.find(c => c.id === s.activeConversationId)?.messages ?? EMPTY_MESSAGES;
 
 export const selectArchivedConversations = (s: CompanionChatState): Conversation[] =>
   s.conversations.filter(c => c.archived && c.messages.length > 0);

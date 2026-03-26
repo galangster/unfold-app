@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, LayoutChangeEvent } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -200,6 +200,7 @@ const segStyles = StyleSheet.create({
 
 export default function PastDevotionalsScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { colors } = useTheme();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
@@ -394,7 +395,11 @@ export default function PastDevotionalsScreen() {
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.back();
+                if (from === 'home') {
+                  router.navigate('/(tabs)/(today)');
+                } else {
+                  router.back();
+                }
               }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: Spacing['2'] }}

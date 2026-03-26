@@ -10,8 +10,7 @@
  *   - Call from any component to access actions (startAudio, stopAudio, etc.)
  */
 
-import { useEffect, useCallback, useRef } from 'react';
-import { InteractionManager } from 'react-native';
+import { useCallback } from 'react';
 import {
   createAudioPlayer,
   setAudioModeAsync,
@@ -39,7 +38,7 @@ const SPEED_OPTIONS = [1, 1.25, 1.5, 2, 0.75] as const;
  * After didJustFinish fires we walk backwards through the display tiers
  * with Duration.normal (250ms) between each step before final dismiss.
  */
-const COMPLETION_CASCADE: PlayerTier[] = ['halfsheet', 'minibar', 'pill'];
+const COMPLETION_CASCADE: PlayerTier[] = ['sheet', 'pill'];
 
 /** How long to show "Completed" state before auto-dismiss (ms). */
 const COMPLETED_DISPLAY_MS = 3_000;
@@ -52,6 +51,8 @@ let globalPlayer: AudioPlayer | null = null;
 let statusSubscription: EventSubscription | null = null;
 /** Watchdog timer — resets state if playback doesn't start within timeout */
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+/** Track whether the audio session has been configured (lazy init). */
+let audioSessionConfigured = false;
 
 /**
  * Tear down the singleton: remove listener, release native resources, null out.
@@ -93,7 +94,7 @@ function clearCascadeTimers(): void {
 }
 
 /**
- * Walks the player tier down through halfsheet -> minibar -> pill -> completed -> hidden.
+ * Walks the player tier down through sheet -> pill -> completed -> hidden.
  * Each transition uses Duration.normal (250ms) between tiers.
  */
 function runCompletionCascade(): void {
@@ -158,9 +159,11 @@ function attachStatusListener(player: AudioPlayer): void {
       duration: status.duration,
     });
 
-    // Completion: didJustFinish fires once when audio ends
-    if (status.didJustFinish && !store.isCompleted) {
-      logger.log('[AudioPlayer] Playback finished — starting completion cascade');
+    // Completion: run cascade to gracefully dismiss the player UI,
+    // then destroy the native player to prevent CoreMedia spin loops.
+    if (status.didJustFinish) {
+      logger.log('[AudioPlayer] Playback finished — running completion cascade');
+      store.updatePlaybackState({ currentTime: 0, isPlaying: false });
       runCompletionCascade();
     }
   });
@@ -170,32 +173,27 @@ function attachStatusListener(player: AudioPlayer): void {
 // Hook
 // ---------------------------------------------------------------------------
 
+/**
+ * Configure the AVAudioSession lazily — only when audio playback is actually
+ * requested. This avoids a synchronous JSI call on the JS thread during screen
+ * mount, which could block the thread for non-premium users who never play audio.
+ */
+async function ensureAudioSession(): Promise<void> {
+  if (audioSessionConfigured) return;
+  try {
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      interruptionMode: 'doNotMix',
+    });
+    audioSessionConfigured = true;
+    logger.log('[AudioPlayer] Audio session configured (lazy)');
+  } catch (e) {
+    logger.error('[AudioPlayer] Failed to configure audio session', e);
+  }
+}
+
 export function useGlobalAudioPlayer() {
-  const mountedRef = useRef(true);
-
-  // Configure audio session once on first mount
-  useEffect(() => {
-    mountedRef.current = true;
-
-    (async () => {
-      try {
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          shouldPlayInBackground: true,
-          interruptionMode: 'doNotMix',
-        });
-        logger.log('[AudioPlayer] Audio session configured');
-      } catch (e) {
-        logger.error('[AudioPlayer] Failed to configure audio session', e);
-      }
-    })();
-
-    return () => {
-      mountedRef.current = false;
-      // Do NOT destroy on unmount — the player is a singleton that persists
-      // across component trees. It only dies on explicit stopAudio() or cascade end.
-    };
-  }, []);
 
   // ------ Actions ------
 
@@ -203,23 +201,28 @@ export function useGlobalAudioPlayer() {
     (uri: string, metadata: DevotionalAudioMetadata) => {
       clearCascadeTimers();
 
-      // Update store first (sets tier to minibar, isLoading, etc.)
+      // Update store first (sets tier to sheet, isLoading, etc.)
       useAudioPlayerState.getState().startAudio(uri, metadata);
 
       logger.log('[AudioPlayer] startAudio: deferring native ops for', metadata.title);
 
-      // CRITICAL: Defer native audio operations to avoid blocking the JS thread.
-      // expo-audio's replace()/play()/createAudioPlayer() are synchronous JSI calls
-      // that can block the thread during audio file loading/decoding.
-      // Using InteractionManager ensures the UI shows the loading state first.
-      InteractionManager.runAfterInteractions(() => {
+      // CRITICAL: Use setTimeout(0) to fully yield the JS thread before heavy native ops.
+      // InteractionManager.runAfterInteractions can still block because
+      // createAudioPlayer() / play() are synchronous JSI calls.
+      // setTimeout(0) ensures React has time to commit the loading state to screen first.
+      setTimeout(async () => {
         try {
-          // Destroy any existing player — create fresh each time to avoid
-          // the replace() call which can deadlock the JS thread.
+          // Lazily configure the audio session on first playback
+          await ensureAudioSession();
+
+          // Yield again before the heaviest call
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+          // Destroy any existing player
           destroyPlayer();
 
-          // Create new player WITH the source instead of null+replace().
-          // This lets the native layer start async loading immediately.
+          // createAudioPlayer is a synchronous JSI call — but with the UI
+          // already showing the loading state, the brief block is acceptable.
           globalPlayer = createAudioPlayer({ uri }, { updateInterval: 250 });
           logger.log('[AudioPlayer] Created player with source');
 
@@ -233,9 +236,8 @@ export function useGlobalAudioPlayer() {
             globalPlayer.setPlaybackRate(speed, 'medium');
           }
 
-          // Defer play() to next tick — gives the native player one frame
-          // to initialize before we ask it to start playback.
-          setTimeout(() => {
+          // Defer play() to next frame — gives native player time to initialize
+          requestAnimationFrame(() => {
             if (!globalPlayer) return;
             try {
               globalPlayer.play();
@@ -245,20 +247,23 @@ export function useGlobalAudioPlayer() {
               useAudioPlayerState.getState().stopAudio();
               destroyPlayer();
             }
-          }, 50);
+          });
 
-          // Lock screen controls
-          try {
-            globalPlayer.setActiveForLockScreen(true, {
-              title: metadata.title,
-              artist: metadata.seriesTitle,
-            }, {
-              showSeekForward: true,
-              showSeekBackward: true,
-            });
-          } catch (e) {
-            logger.warn('[AudioPlayer] Lock screen setup failed', e);
-          }
+          // Lock screen controls — defer to avoid blocking
+          setTimeout(() => {
+            if (!globalPlayer) return;
+            try {
+              globalPlayer.setActiveForLockScreen(true, {
+                title: metadata.title,
+                artist: metadata.seriesTitle,
+              }, {
+                showSeekForward: true,
+                showSeekBackward: true,
+              });
+            } catch (e) {
+              logger.warn('[AudioPlayer] Lock screen setup failed', e);
+            }
+          }, 100);
 
           // Watchdog: if not playing within 10s, reset to prevent stuck state
           watchdogTimer = setTimeout(() => {
@@ -275,7 +280,7 @@ export function useGlobalAudioPlayer() {
           useAudioPlayerState.getState().stopAudio();
           destroyPlayer();
         }
-      });
+      }, 0);
     },
     [],
   );

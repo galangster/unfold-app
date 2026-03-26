@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -32,9 +32,10 @@ type Tab = 'journal' | 'highlights' | 'bookmarks';
 
 export default function MyContentScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { colors, isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>('journal');
-  
+
   const highlights = useUnfoldStore((s) => s.highlights);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
@@ -43,7 +44,11 @@ export default function MyContentScreen() {
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    if (from === 'home') {
+      router.navigate('/(tabs)/(today)');
+    } else {
+      router.back();
+    }
   };
 
   const handleTabPress = (tab: Tab) => {

@@ -660,6 +660,18 @@ interface UnfoldState {
   setMiddayCheckInEnabled: (enabled: boolean) => void;
   setEveningWindDownEnabled: (enabled: boolean) => void;
 
+  // Custom check-in times (HH:mm format, e.g. "12:30")
+  // Default time used when customByDay is false or a day has no override
+  middayCheckInTime: string;
+  eveningWindDownTime: string;
+  // Per-day overrides: { Mon: "13:00", Sat: null (skip) } — null = skip that day
+  middayCheckInByDay: Record<string, string | null> | null;
+  eveningWindDownByDay: Record<string, string | null> | null;
+  setMiddayCheckInTime: (time: string) => void;
+  setEveningWindDownTime: (time: string) => void;
+  setMiddayCheckInByDay: (schedule: Record<string, string | null> | null) => void;
+  setEveningWindDownByDay: (schedule: Record<string, string | null> | null) => void;
+
   // AI data consent (App Store Guideline 5.1.2(i))
   hasConsentedToAI: boolean;
   setHasConsentedToAI: (consented: boolean) => void;
@@ -718,9 +730,13 @@ const initialState = {
   streakJustReset: false,
   justCompletedSeriesTitle: null as string | null,
   hasUsedAudio: false,
-  // Check-in notification toggles
+  // Check-in notification toggles & custom times
   middayCheckInEnabled: true,
   eveningWindDownEnabled: true,
+  middayCheckInTime: '12:30',
+  eveningWindDownTime: '20:30',
+  middayCheckInByDay: null,
+  eveningWindDownByDay: null,
   // AI data consent
   hasConsentedToAI: false,
   // Notebook
@@ -1274,9 +1290,13 @@ export const useUnfoldStore = create<UnfoldState>()(
       clearJustCompletedSeriesTitle: () => set({ justCompletedSeriesTitle: null }),
       setHasUsedAudio: () => set({ hasUsedAudio: true }),
 
-      // Check-in notification toggles
+      // Check-in notification toggles & custom times
       setMiddayCheckInEnabled: (enabled) => set({ middayCheckInEnabled: enabled }),
       setEveningWindDownEnabled: (enabled) => set({ eveningWindDownEnabled: enabled }),
+      setMiddayCheckInTime: (time) => set({ middayCheckInTime: time }),
+      setEveningWindDownTime: (time) => set({ eveningWindDownTime: time }),
+      setMiddayCheckInByDay: (schedule) => set({ middayCheckInByDay: schedule }),
+      setEveningWindDownByDay: (schedule) => set({ eveningWindDownByDay: schedule }),
 
       // AI data consent
       setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
@@ -1592,7 +1612,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 25, // Increment when state structure changes
+      version: 26, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1870,6 +1890,18 @@ export const useUnfoldStore = create<UnfoldState>()(
             }
           } catch (err) {
             console.error('[store] Migration v24→25 failed:', err);
+          }
+        }
+
+        // Migration from version 25 to 26: Add custom check-in times
+        if (version < 26) {
+          try {
+            (state as any).middayCheckInTime = (state as any).middayCheckInTime ?? '12:30';
+            (state as any).eveningWindDownTime = (state as any).eveningWindDownTime ?? '20:30';
+            (state as any).middayCheckInByDay = (state as any).middayCheckInByDay ?? null;
+            (state as any).eveningWindDownByDay = (state as any).eveningWindDownByDay ?? null;
+          } catch (err) {
+            console.error('[store] Migration v25→26 failed:', err);
           }
         }
 

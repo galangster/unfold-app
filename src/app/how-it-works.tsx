@@ -30,7 +30,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
-import { alpha } from '@/components/ui';
+
 import { CompanionOrb } from '@/components/CompanionOrb';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -40,7 +40,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface FeatureCard {
   headline: string;
   body: string;
-  animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'stack' | 'lines' | 'glow' | 'rings' | 'pencil' | 'heartbeat' | 'weekCircles' | 'network' | 'openBook' | 'pulseLine';
+  animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'infinity' | 'lines' | 'glow' | 'rings' | 'pencil' | 'heartbeat' | 'weekCircles' | 'network' | 'openBook' | 'pulseLine';
 }
 
 type Page =
@@ -110,7 +110,7 @@ const PAGES: Page[] = [
     card: {
       headline: 'Everything in one place',
       body: 'Bible. Devotionals. Notes. Audio. No more switching between three apps to do your quiet time.',
-      animation: 'stack',
+      animation: 'infinity',
     },
   },
 ];
@@ -744,52 +744,117 @@ function PulseCircle({ accent }: { accent: string }) {
   );
 }
 
-function StackedCards({ accent }: { accent: string }) {
-  const shift = useSharedValue(0);
+// Pre-compute infinity (lemniscate) path points once
+const INFINITY_NUM_POINTS = 48;
+const INFINITY_SCALE = 60;
+const INFINITY_POINTS: { x: number; y: number }[] = [];
+for (let i = 0; i < INFINITY_NUM_POINTS; i++) {
+  const t = (i / INFINITY_NUM_POINTS) * Math.PI * 2;
+  const denom = 1 + Math.sin(t) * Math.sin(t);
+  INFINITY_POINTS.push({
+    x: (INFINITY_SCALE * Math.cos(t)) / denom,
+    y: (INFINITY_SCALE * Math.sin(t) * Math.cos(t)) / denom,
+  });
+}
+
+function InfinityDot({ accent, x, y, index, total, trace }: {
+  accent: string; x: number; y: number; index: number; total: number;
+  trace: { value: number };
+}) {
+  const style = useAnimatedStyle(() => {
+    // trace.value is 0..1, representing the glow position along the path
+    const tracePos = trace.value * total;
+    // Wrap-aware distance so the glow smoothly crosses the loop point
+    let dist = Math.abs(index - tracePos);
+    if (dist > total / 2) dist = total - dist;
+    // Glow falloff: bright near trace, dim far away
+    const glow = interpolate(dist, [0, 4, 10, total / 2], [1, 0.6, 0.2, 0.08], 'clamp');
+    return {
+      opacity: glow,
+      transform: [{ scale: interpolate(glow, [0.08, 0.6, 1], [0.5, 0.8, 1.3]) }],
+    };
+  });
+
+  return (
+    <Animated.View style={[{
+      position: 'absolute',
+      left: 90 + x - 3,
+      top: 90 + y - 3,
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: accent,
+    }, style]} />
+  );
+}
+
+function InfinityIcon({ accent }: { accent: string }) {
+  const trace = useSharedValue(0);
+  const breathe = useSharedValue(0);
 
   useEffect(() => {
-    shift.value = withRepeat(
-      withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+    // Continuous path trace — smooth loop, no bounce
+    trace.value = withRepeat(
+      withTiming(1, { duration: 4000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      false,
+    );
+    // Gentle breathing scale
+    breathe.value = withRepeat(
+      withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
   }, []);
 
-  const s1 = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: interpolate(shift.value, [0, 1], [-8, 8]) },
-      { translateY: interpolate(shift.value, [0, 1], [4, -4]) },
-      { rotate: `${interpolate(shift.value, [0, 1], [-2, 2])}deg` },
-    ],
-  }));
-  const s2 = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: interpolate(shift.value, [0, 1], [4, -4]) },
-      { translateY: interpolate(shift.value, [0, 1], [-3, 3]) },
-      { rotate: `${interpolate(shift.value, [0, 1], [1, -1])}deg` },
-    ],
-  }));
-  const s3 = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: interpolate(shift.value, [0, 1], [-2, 2]) },
-      { translateY: interpolate(shift.value, [0, 1], [2, -2]) },
-    ],
+  const containerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(breathe.value, [0, 1], [0.95, 1.05]) }],
   }));
 
-  const card = {
-    width: 80,
-    height: 100,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: accent,
-    position: 'absolute' as const,
-  };
+  // Glow dot — larger, follows the exact trace position
+  const glowStyle = useAnimatedStyle(() => {
+    const idx = trace.value * INFINITY_NUM_POINTS;
+    const floor = Math.floor(idx) % INFINITY_NUM_POINTS;
+    const ceil = (floor + 1) % INFINITY_NUM_POINTS;
+    const frac = idx - Math.floor(idx);
+    const gx = INFINITY_POINTS[floor].x * (1 - frac) + INFINITY_POINTS[ceil].x * frac;
+    const gy = INFINITY_POINTS[floor].y * (1 - frac) + INFINITY_POINTS[ceil].y * frac;
+    return {
+      opacity: 0.25,
+      transform: [
+        { translateX: 90 + gx - 16 },
+        { translateY: 90 + gy - 16 },
+        { scale: interpolate(breathe.value, [0, 1], [0.8, 1.2]) },
+      ],
+    };
+  });
 
   return (
-    <View style={{ width: 160, height: 160, alignItems: 'center', justifyContent: 'center' }}>
-      <Animated.View style={[card, { opacity: 0.15 }, s1]} />
-      <Animated.View style={[card, { opacity: 0.3 }, s2]} />
-      <Animated.View style={[card, { opacity: 0.45, backgroundColor: alpha(accent, 0.05) }, s3]} />
+    <View style={{ width: 180, height: 180, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={containerStyle}>
+        <View style={{ width: 180, height: 180 }}>
+          {/* Soft glow that follows the trace point */}
+          <Animated.View style={[{
+            position: 'absolute',
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: accent,
+          }, glowStyle]} />
+          {/* Path dots */}
+          {INFINITY_POINTS.map((pt, i) => (
+            <InfinityDot
+              key={i}
+              accent={accent}
+              x={pt.x}
+              y={pt.y}
+              index={i}
+              total={INFINITY_NUM_POINTS}
+              trace={trace}
+            />
+          ))}
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -990,7 +1055,7 @@ function CardAnimation({ type, accent }: { type: string; accent: string }) {
     case 'orb': return <CompanionOrb accentColor={accent} size={96} isActive />;
     case 'waveform': return <WaveformBars accent={accent} />;
     case 'pulse': return <PulseCircle accent={accent} />;
-    case 'stack': return <StackedCards accent={accent} />;
+    case 'infinity': return <InfinityIcon accent={accent} />;
     case 'lines': return <SlidingLines accent={accent} />;
     case 'glow': return <GlowCircle accent={accent} />;
     case 'rings': return <ExpandingRings accent={accent} />;

@@ -1,0 +1,94 @@
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
+import { BookmarksSimpleIcon, FolderIcon, UserCircleIcon } from 'phosphor-react-native';
+import { FontFamily, FontSize } from '@/constants/fonts';
+import { Spacing } from '@/constants/spacing';
+import { Radius } from '@/constants/radius';
+import { useTheme } from '@/lib/theme';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+
+export function BentoGrid() {
+  const { colors } = useTheme();
+  const router = useRouter();
+  const { entering } = useAccessibleAnimation();
+
+  const items = [
+    {
+      label: 'Past Series',
+      icon: BookmarksSimpleIcon,
+      pathname: '/(tabs)/(you)/past-devotionals',
+    },
+    {
+      label: 'Your Library',
+      icon: FolderIcon,
+      pathname: '/(tabs)/(you)/saved',
+    },
+    {
+      label: 'My Content',
+      icon: UserCircleIcon,
+      pathname: '/(tabs)/(you)/my-content',
+    },
+  ];
+
+  return (
+    <Animated.View
+      entering={entering(FadeIn.duration(400).delay(150))}
+      style={styles.container}
+    >
+      <View style={styles.row}>
+        {items.map((item) => (
+          <TouchableOpacity
+            key={item.label}
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push({ pathname: item.pathname as any, params: { from: 'home' } });
+            }}
+            style={[
+              styles.box,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <item.icon size={20} color={colors.textMuted} weight="light" />
+            <Text
+              style={[styles.label, { color: colors.text }]}
+              numberOfLines={1}
+            >
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: Spacing['6'],
+    marginTop: Spacing['4'],
+  },
+  row: {
+    flexDirection: 'row',
+    gap: Spacing['2'],
+  },
+  box: {
+    flex: 1,
+    paddingVertical: Spacing['4'],
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing['2'],
+  },
+  label: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.xs,
+  },
+});

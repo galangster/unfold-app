@@ -150,6 +150,7 @@ export default function CompanionScreen() {
 
   // Scroll-to-bottom visibility
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const showScrollButtonRef = useRef(false);
   const scrollButtonOpacity = useSharedValue(0);
 
   const scrollButtonStyle = useAnimatedStyle(() => ({
@@ -160,7 +161,8 @@ export default function CompanionScreen() {
     (event: any) => {
       const offsetY = event.nativeEvent.contentOffset.y;
       const shouldShow = offsetY > 300;
-      if (shouldShow !== showScrollButton) {
+      if (shouldShow !== showScrollButtonRef.current) {
+        showScrollButtonRef.current = shouldShow;
         setShowScrollButton(shouldShow);
         scrollButtonOpacity.value = withTiming(shouldShow ? 1 : 0, {
           duration: shouldShow ? 200 : 150,
@@ -168,7 +170,7 @@ export default function CompanionScreen() {
         });
       }
     },
-    [showScrollButton, scrollButtonOpacity]
+    [scrollButtonOpacity]
   );
 
   const scrollToBottom = useCallback(() => {

@@ -115,23 +115,28 @@ export function startReadingSession(params: {
   totalMinutes: number;
   isListening: boolean;
 }): void {
-  try {
-    // End existing session if any
-    if (activeReadingSession) {
-      activeReadingSession.end('immediate').catch(() => {});
-      activeReadingSession = null;
+  // Defer to next tick — Live Activity .start() is a synchronous native JSI call
+  // that can block the JS thread (especially on simulator). Running it async
+  // prevents it from freezing the UI.
+  setTimeout(() => {
+    try {
+      // End existing session if any
+      if (activeReadingSession) {
+        activeReadingSession.end('immediate').catch(() => {});
+        activeReadingSession = null;
+      }
+
+      const state = useUnfoldStore.getState();
+
+      activeReadingSession = UnfoldReadingSessionActivity.start({
+        ...params,
+        elapsedMinutes: 0,
+        streakCount: state.streakCurrent,
+      });
+    } catch (error) {
+      logger.log('[Widgets] startReadingSession error:', error);
     }
-
-    const state = useUnfoldStore.getState();
-
-    activeReadingSession = UnfoldReadingSessionActivity.start({
-      ...params,
-      elapsedMinutes: 0,
-      streakCount: state.streakCurrent,
-    });
-  } catch (error) {
-    logger.log('[Widgets] startReadingSession error:', error);
-  }
+  }, 0);
 }
 
 /**

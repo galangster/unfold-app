@@ -1,14 +1,21 @@
 /**
  * AudioPlayerPill — Tier 1 minimal floating indicator.
  *
- * Small pill that hovers above the tab bar on all tabs.
- * Shows a pulsing accent dot + truncated title + play/pause toggle.
- * Tap to expand to minibar. Swipe left/right to dismiss.
- * Shows "Completed" text when playback finishes (no dot in that state).
+ * Small pill that hovers above the tab bar on all screens.
+ * Two touch zones:
+ *   Body (dot + title) → tap to expand to sheet
+ *   Play/pause icon    → tap to toggle playback
+ * Swipe left/right to dismiss and stop audio.
+ *
+ * Position adapts:
+ *   Tab bar visible   → pill sits above tab bar
+ *   Tab bar hidden    → pill drops to safe area (animated)
+ *
+ * Visibility controlled by AudioPlayerOverlay (hides on companion, keyboard).
  */
 
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeOutDown,
@@ -26,6 +33,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useTheme } from '@/lib/theme';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
+import { useUIState } from '@/lib/ui-state';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -42,6 +50,7 @@ const TAB_BAR_CONTENT_HEIGHT = 56;
 const SWIPE_DISMISS_THRESHOLD = 80;
 const DOT_SIZE = 8;
 const ICON_SIZE = 16;
+const ICON_HIT_SIZE = 36;
 const MAX_TITLE_WIDTH = 160;
 
 // ---------------------------------------------------------------------------
@@ -83,7 +92,7 @@ export function AudioPlayerPill() {
     opacity: dotOpacity.value,
   }));
 
-  // -- Swipe dismiss gesture --
+  // -- Swipe dismiss gesture (horizontal pan on entire pill) --
   const translateX = useSharedValue(0);
 
   const handleDismiss = useCallback(() => {
@@ -93,7 +102,7 @@ export function AudioPlayerPill() {
 
   const handleExpand = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTier('minibar');
+    setTier('sheet');
   }, [setTier]);
 
   const handleToggle = useCallback(() => {
@@ -114,13 +123,6 @@ export function AudioPlayerPill() {
       }
     });
 
-  const tapGesture = Gesture.Tap().onEnd(() => {
-    runOnJS(handleExpand)();
-  });
-
-  // Compose: pan takes priority, tap fires if no pan
-  const composedGesture = Gesture.Race(panGesture, tapGesture);
-
   const swipeAnimatedStyle = useAnimatedStyle(() => {
     const absX = Math.abs(translateX.value);
     const opacity = absX > 0 ? Math.max(0, 1 - absX / (SWIPE_DISMISS_THRESHOLD * 1.5)) : 1;
@@ -130,8 +132,22 @@ export function AudioPlayerPill() {
     };
   });
 
-  // -- Bottom offset --
-  const bottomOffset = TAB_BAR_CONTENT_HEIGHT + insets.bottom + Spacing['2'];
+  // -- Bottom offset — tracks tab bar visibility --
+  const tabBarHidden = useUIState((s) => s.tabBarHidden);
+  const bottomWithTabBar = TAB_BAR_CONTENT_HEIGHT + insets.bottom + Spacing['2'];
+  const bottomWithoutTabBar = insets.bottom + Spacing['2'];
+
+  const animatedBottom = useSharedValue(bottomWithTabBar);
+  React.useEffect(() => {
+    animatedBottom.value = withTiming(
+      tabBarHidden ? bottomWithoutTabBar : bottomWithTabBar,
+      { duration: Duration.normal },
+    );
+  }, [tabBarHidden, bottomWithTabBar, bottomWithoutTabBar, animatedBottom]);
+
+  const bottomStyle = useAnimatedStyle(() => ({
+    bottom: animatedBottom.value,
+  }));
 
   // -- Accessibility actions --
   const onAccessibilityAction = useCallback(
@@ -140,12 +156,15 @@ export function AudioPlayerPill() {
         case 'activate':
           handleExpand();
           break;
+        case 'togglePlayback':
+          handleToggle();
+          break;
         case 'stop':
           handleDismiss();
           break;
       }
     },
-    [handleExpand, handleDismiss],
+    [handleExpand, handleToggle, handleDismiss],
   );
 
   const displayTitle = isCompleted ? 'Completed' : (title ?? 'Playing...');
@@ -154,9 +173,9 @@ export function AudioPlayerPill() {
     <Animated.View
       entering={FadeInDown.duration(Duration.normal)}
       exiting={FadeOutDown.duration(Duration.normal)}
-      style={[styles.wrapper, { bottom: bottomOffset }]}
+      style={[styles.wrapper, bottomStyle]}
     >
-      <GestureDetector gesture={composedGesture}>
+      <GestureDetector gesture={panGesture}>
         <Animated.View
           style={[
             styles.pill,
@@ -168,51 +187,60 @@ export function AudioPlayerPill() {
             swipeAnimatedStyle,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={`Audio playing: ${title ?? 'unknown'}. Tap to expand. Swipe to stop.`}
+          accessibilityLabel={`Audio: ${title ?? 'unknown'}. ${isPlaying ? 'Playing' : 'Paused'}. Tap title to expand. Swipe to stop.`}
           accessibilityActions={[
             { name: 'activate', label: 'Expand player' },
+            { name: 'togglePlayback', label: isPlaying ? 'Pause' : 'Play' },
             { name: 'stop', label: 'Stop playback' },
           ]}
           onAccessibilityAction={onAccessibilityAction}
         >
-          {/* Pulsing dot — hidden when completed */}
-          {!isCompleted && (
-            <Animated.View
-              style={[
-                styles.dot,
-                { backgroundColor: colors.accent },
-                dotAnimatedStyle,
-              ]}
-            />
-          )}
-
-          {/* Title */}
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.title,
-              {
-                color: isCompleted ? colors.textMuted : colors.text,
-                maxWidth: MAX_TITLE_WIDTH,
-              },
-            ]}
+          {/* Body — tap to expand to sheet */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleExpand}
+            style={styles.bodyTouchable}
           >
-            {displayTitle}
-          </Text>
+            {/* Pulsing dot — hidden when completed */}
+            {!isCompleted && (
+              <Animated.View
+                style={[
+                  styles.dot,
+                  { backgroundColor: colors.accent },
+                  dotAnimatedStyle,
+                ]}
+              />
+            )}
 
-          {/* Play / Pause icon */}
+            {/* Title */}
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.title,
+                {
+                  color: isCompleted ? colors.textMuted : colors.text,
+                  maxWidth: MAX_TITLE_WIDTH,
+                },
+              ]}
+            >
+              {displayTitle}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Play / Pause — separate tap target */}
           {!isCompleted && (
-            <Animated.View
-              // Separate touchable for play/pause so it can be tapped independently
-              // But since the whole pill is a tap target, we use it as visual indicator
-              // Tap on pill expands; the icon is decorative within the gesture area
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleToggle}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.iconTouchable}
             >
               {isPlaying ? (
                 <PauseIcon size={ICON_SIZE} color={colors.accent} weight="fill" />
               ) : (
                 <PlayIcon size={ICON_SIZE} color={colors.accent} weight="fill" />
               )}
-            </Animated.View>
+            </TouchableOpacity>
           )}
         </Animated.View>
       </GestureDetector>
@@ -235,11 +263,17 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing['4'],
+    paddingLeft: Spacing['4'],
+    paddingRight: Spacing['2'],
     paddingVertical: Spacing['2'],
     borderRadius: Radius.full,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  bodyTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing['2'],
+    flexShrink: 1,
   },
   dot: {
     width: DOT_SIZE,
@@ -250,6 +284,12 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.xs,
     flexShrink: 1,
+  },
+  iconTouchable: {
+    width: ICON_HIT_SIZE,
+    height: ICON_HIT_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

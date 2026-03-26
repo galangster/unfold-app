@@ -19,6 +19,7 @@ export default function YouLayout() {
       <Stack.Screen name="stats" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="your-journey" options={{ animation: 'ios_from_right' }} />
       <Stack.Screen name="component-catalog" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="checkin-schedule" options={{ animation: 'ios_from_right' }} />
     </Stack>
   );
 }

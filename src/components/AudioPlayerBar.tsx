@@ -90,7 +90,7 @@ export function AudioPlayerBar() {
 
   const handleSwipeUp = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTier('halfsheet');
+    setTier('sheet');
   }, [setTier]);
 
   const handleSwipeDown = useCallback(() => {
@@ -167,6 +167,11 @@ export function AudioPlayerBar() {
             tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
+
+          {/* Drag handle */}
+          <View style={styles.dragHandleRow}>
+            <View style={[styles.dragHandle, { backgroundColor: alpha(colors.text, 0.2) }]} />
+          </View>
 
           {/* Progress bar */}
           <View style={[styles.progressTrack, { backgroundColor: alpha(colors.text, 0.1) }]}>
@@ -289,6 +294,15 @@ const styles = StyleSheet.create({
   speedText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.xs,
+  },
+  dragHandleRow: {
+    alignItems: 'center',
+    paddingTop: Spacing['2'],
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
 });
 
