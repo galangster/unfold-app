@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import {
   createAudioPlayer,
   setAudioModeAsync,
@@ -49,19 +50,17 @@ const COMPLETED_DISPLAY_MS = 3_000;
 
 let globalPlayer: AudioPlayer | null = null;
 let statusSubscription: EventSubscription | null = null;
-
-function getOrCreatePlayer(): AudioPlayer {
-  if (!globalPlayer) {
-    globalPlayer = createAudioPlayer(null, { updateInterval: 250 });
-    logger.log('[AudioPlayer] Created new singleton player');
-  }
-  return globalPlayer;
-}
+/** Watchdog timer — resets state if playback doesn't start within timeout */
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Tear down the singleton: remove listener, release native resources, null out.
  */
 function destroyPlayer(): void {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer);
+    watchdogTimer = null;
+  }
   if (statusSubscription) {
     statusSubscription.remove();
     statusSubscription = null;
@@ -207,45 +206,76 @@ export function useGlobalAudioPlayer() {
       // Update store first (sets tier to minibar, isLoading, etc.)
       useAudioPlayerState.getState().startAudio(uri, metadata);
 
-      try {
-        // Get or create the singleton player
-        const player = getOrCreatePlayer();
+      logger.log('[AudioPlayer] startAudio: deferring native ops for', metadata.title);
 
-        // Attach status listener (idempotent — removes old first)
-        attachStatusListener(player);
-
-        // Replace source and play
-        player.replace({ uri });
-        player.shouldCorrectPitch = true;
-
-        // Restore speed from store
-        const speed = useAudioPlayerState.getState().playbackSpeed;
-        if (speed !== 1) {
-          player.setPlaybackRate(speed, 'medium');
-        }
-
-        player.play();
-
-        // Lock screen controls
+      // CRITICAL: Defer native audio operations to avoid blocking the JS thread.
+      // expo-audio's replace()/play()/createAudioPlayer() are synchronous JSI calls
+      // that can block the thread during audio file loading/decoding.
+      // Using InteractionManager ensures the UI shows the loading state first.
+      InteractionManager.runAfterInteractions(() => {
         try {
-          player.setActiveForLockScreen(true, {
-            title: metadata.title,
-            artist: metadata.seriesTitle,
-          }, {
-            showSeekForward: true,
-            showSeekBackward: true,
-          });
-        } catch (e) {
-          logger.warn('[AudioPlayer] Lock screen setup failed', e);
-        }
+          // Destroy any existing player — create fresh each time to avoid
+          // the replace() call which can deadlock the JS thread.
+          destroyPlayer();
 
-        logger.log('[AudioPlayer] startAudio:', metadata.title);
-      } catch (e) {
-        logger.error('[AudioPlayer] startAudio FAILED — stopping to prevent freeze:', e);
-        // Reset state so the UI doesn't get stuck in loading
-        useAudioPlayerState.getState().stopAudio();
-        destroyPlayer();
-      }
+          // Create new player WITH the source instead of null+replace().
+          // This lets the native layer start async loading immediately.
+          globalPlayer = createAudioPlayer({ uri }, { updateInterval: 250 });
+          logger.log('[AudioPlayer] Created player with source');
+
+          // Attach status listener
+          attachStatusListener(globalPlayer);
+
+          // Configure playback
+          globalPlayer.shouldCorrectPitch = true;
+          const speed = useAudioPlayerState.getState().playbackSpeed;
+          if (speed !== 1) {
+            globalPlayer.setPlaybackRate(speed, 'medium');
+          }
+
+          // Defer play() to next tick — gives the native player one frame
+          // to initialize before we ask it to start playback.
+          setTimeout(() => {
+            if (!globalPlayer) return;
+            try {
+              globalPlayer.play();
+              logger.log('[AudioPlayer] play() called');
+            } catch (e) {
+              logger.error('[AudioPlayer] play() failed:', e);
+              useAudioPlayerState.getState().stopAudio();
+              destroyPlayer();
+            }
+          }, 50);
+
+          // Lock screen controls
+          try {
+            globalPlayer.setActiveForLockScreen(true, {
+              title: metadata.title,
+              artist: metadata.seriesTitle,
+            }, {
+              showSeekForward: true,
+              showSeekBackward: true,
+            });
+          } catch (e) {
+            logger.warn('[AudioPlayer] Lock screen setup failed', e);
+          }
+
+          // Watchdog: if not playing within 10s, reset to prevent stuck state
+          watchdogTimer = setTimeout(() => {
+            const store = useAudioPlayerState.getState();
+            if (store.isLoading && !store.isPlaying) {
+              logger.warn('[AudioPlayer] Watchdog: still loading after 10s — resetting');
+              useAudioPlayerState.getState().stopAudio();
+              destroyPlayer();
+            }
+          }, 10_000);
+
+        } catch (e) {
+          logger.error('[AudioPlayer] startAudio FAILED:', e);
+          useAudioPlayerState.getState().stopAudio();
+          destroyPlayer();
+        }
+      });
     },
     [],
   );

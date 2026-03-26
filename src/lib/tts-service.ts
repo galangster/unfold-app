@@ -138,12 +138,20 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     logger.log(`[TTS] generation complete — downloadId=${downloadId}, ${Date.now() - fetchStart}ms`);
 
     // Step 2: Native download — audio data never enters JS thread
+    // 30s download timeout prevents hanging on slow/stalled connections
+    const DOWNLOAD_TIMEOUT = 30_000;
     const downloadUrl = `${TTS_PROXY_URL}/${downloadId}`;
-    const downloadResult = await FileSystem.downloadAsync(
+    const downloadPromise = FileSystem.downloadAsync(
       downloadUrl,
       cachedFile.uri,
       { headers }
     );
+    const downloadResult = await Promise.race([
+      downloadPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('TTS download timed out after 30s')), DOWNLOAD_TIMEOUT)
+      ),
+    ]);
 
     if (downloadResult.status !== 200) {
       throw new Error(`TTS download failed: HTTP ${downloadResult.status}`);
@@ -151,6 +159,9 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
 
     const fileInfo = await FileSystem.getInfoAsync(cachedFile.uri);
     const fileSize = fileInfo.exists ? (fileInfo as any).size ?? 0 : 0;
+    if (!fileInfo.exists || fileSize === 0) {
+      throw new Error('TTS download produced empty file');
+    }
     logger.log(`[TTS] cached — ${fileSize} bytes, ${Date.now() - fetchStart}ms total`);
     return { audioUrl: cachedFile.uri };
   } catch (error) {
