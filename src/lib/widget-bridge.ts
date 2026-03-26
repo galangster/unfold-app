@@ -105,6 +105,31 @@ function getWeeklyProgress(state: ReturnType<typeof useUnfoldStore.getState>): s
 }
 
 /**
+ * Whether Live Activities are available.
+ * Disabled on simulator (hangs indefinitely) and after runtime errors.
+ */
+let liveActivityDisabled = false;
+
+// Detect simulator — Live Activity .start() is a sync JSI call that hangs on simulator
+try {
+  // expo-constants or NativeModules can tell us, but the simplest check:
+  // __DEV__ + no hardware support is a reasonable proxy
+  const { Platform } = require('react-native');
+  // Platform.constants.isTesting is set on simulator
+  if (__DEV__ && Platform.OS === 'ios') {
+    // Check for simulator via model name — simulators have "x86_64" or "arm64" arch
+    // but the safest check is whether we're in Expo dev client
+    const Constants = require('expo-constants').default;
+    if (Constants?.executionEnvironment === 'storeClient' ? false : !Constants?.isDevice) {
+      liveActivityDisabled = true;
+      logger.log('[Widgets] Live Activities disabled (simulator detected)');
+    }
+  }
+} catch {
+  // If detection fails, leave enabled — will catch errors at runtime
+}
+
+/**
  * Start a Live Activity for an active reading/listening session.
  */
 export function startReadingSession(params: {
@@ -115,9 +140,10 @@ export function startReadingSession(params: {
   totalMinutes: number;
   isListening: boolean;
 }): void {
-  // Defer to next tick — Live Activity .start() is a synchronous native JSI call
-  // that can block the JS thread (especially on simulator). Running it async
-  // prevents it from freezing the UI.
+  // Skip on simulator or after previous failures — prevents app freeze
+  if (liveActivityDisabled) return;
+
+  // Defer to next tick so UI can update first
   setTimeout(() => {
     try {
       // End existing session if any
@@ -133,8 +159,10 @@ export function startReadingSession(params: {
         elapsedMinutes: 0,
         streakCount: state.streakCurrent,
       });
+      logger.log('[Widgets] Live Activity started');
     } catch (error) {
-      logger.log('[Widgets] startReadingSession error:', error);
+      logger.log('[Widgets] startReadingSession error — disabling:', error);
+      liveActivityDisabled = true;
     }
   }, 0);
 }

@@ -223,7 +223,7 @@ export function useGlobalAudioPlayer() {
 
           // createAudioPlayer is a synchronous JSI call — but with the UI
           // already showing the loading state, the brief block is acceptable.
-          globalPlayer = createAudioPlayer({ uri }, { updateInterval: 250 });
+          globalPlayer = createAudioPlayer({ uri }, { updateInterval: 1000 });
           logger.log('[AudioPlayer] Created player with source');
 
           // Attach status listener

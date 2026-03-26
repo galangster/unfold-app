@@ -9,6 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
 import { getAuthHeaders, RAILWAY_BACKEND_URL } from '@/lib/api-config';
+// Debug instrumentation available at '@/lib/tts-debug' if needed
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 
 const TTS_PROXY_URL = `${RAILWAY_BACKEND_URL}/api/tts`;
@@ -108,6 +109,12 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
 
   try {
     const headers = await getAuthHeaders();
+
+    // Fail fast if not authenticated — backend will 401 anyway
+    if (!headers['Authorization']) {
+      throw new Error('TTS_AUTH_REQUIRED');
+    }
+
     const fetchStart = Date.now();
 
     // Step 1: POST to generate audio — returns { downloadId }
@@ -237,16 +244,24 @@ export async function streamDevotionalAudio(
  * Prefetch audio in background. Call when reading screen mounts.
  * By the time user taps play, audio is likely cached.
  */
-export function prefetchDevotionalAudio(
+export async function prefetchDevotionalAudio(
   text: string,
   voiceId: string = DEFAULT_VOICE_ID,
-): void {
+): Promise<void> {
   const resolvedVoice = resolveVoiceId(voiceId || getDefaultVoice());
   const key = hashKey(text, resolvedVoice);
 
   // Skip if cached or already downloading
   if (isCached(key)) return;
   if (inFlightRequests.has(key)) return;
+
+  // Skip prefetch if not authenticated — avoid a wasted 401
+  try {
+    const headers = await getAuthHeaders();
+    if (!headers['Authorization']) return;
+  } catch {
+    return;
+  }
 
   const promise = downloadAudio(text, resolvedVoice, key);
   inFlightRequests.set(key, promise);

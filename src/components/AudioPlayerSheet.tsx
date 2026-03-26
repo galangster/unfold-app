@@ -11,10 +11,14 @@
  *   Skip back / Play-Pause / Skip forward (centered)
  *
  * Swipe down to close → collapses to pill tier (audio continues).
+ *
+ * Performance: The scrubber and time labels are isolated into a
+ * separate component so that currentTime updates (1x/sec) only
+ * re-render the scrubber — not the entire sheet + controls.
  */
 
-import React, { useRef, useCallback, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useRef, useCallback, useState, memo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -57,35 +61,148 @@ function formatTime(seconds: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// ScrubberSection — isolated to avoid re-rendering the whole sheet on tick
+// ---------------------------------------------------------------------------
+
+const ScrubberSection = memo(function ScrubberSection() {
+  const { colors } = useTheme();
+  const { seekTo } = useGlobalAudioPlayer();
+
+  const currentTime = useAudioPlayerState((s) => s.currentTime);
+  const duration = useAudioPlayerState((s) => s.duration);
+
+  const [trackWidth, setTrackWidth] = useState(0);
+  const isScrubbing = useSharedValue(false);
+  const scrubPosition = useSharedValue(0);
+
+  const progress = duration > 0 ? currentTime / duration : 0;
+  const displayTime = isScrubbing.value
+    ? scrubPosition.value * duration
+    : currentTime;
+
+  const handleTrackLayout = useCallback(
+    (e: { nativeEvent: { layout: { width: number } } }) => {
+      setTrackWidth(e.nativeEvent.layout.width);
+    },
+    [],
+  );
+
+  const handleSeek = useCallback(
+    (normalizedPosition: number) => {
+      const seekTime = Math.max(0, Math.min(normalizedPosition, 1)) * duration;
+      seekTo(seekTime);
+    },
+    [duration, seekTo],
+  );
+
+  const handleScrubStart = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  const scrubGesture = Gesture.Pan()
+    .onStart((e) => {
+      isScrubbing.value = true;
+      if (trackWidth > 0) {
+        scrubPosition.value = Math.max(0, Math.min(e.x / trackWidth, 1));
+      }
+      runOnJS(handleScrubStart)();
+    })
+    .onUpdate((e) => {
+      if (trackWidth > 0) {
+        scrubPosition.value = Math.max(0, Math.min(e.x / trackWidth, 1));
+      }
+    })
+    .onEnd(() => {
+      isScrubbing.value = false;
+      runOnJS(handleSeek)(scrubPosition.value);
+    });
+
+  const scrubberFillStyle = useAnimatedStyle(() => {
+    const currentProgress = isScrubbing.value ? scrubPosition.value : progress;
+    return {
+      width: `${currentProgress * 100}%` as unknown as number,
+    };
+  });
+
+  const scrubberThumbStyle = useAnimatedStyle(() => {
+    const currentProgress = isScrubbing.value ? scrubPosition.value : progress;
+    return {
+      transform: [
+        {
+          translateX: currentProgress * trackWidth - SCRUBBER_THUMB_SIZE / 2,
+        },
+      ],
+      opacity: withTiming(isScrubbing.value ? 1 : 0, {
+        duration: Duration.fast,
+      }),
+    };
+  });
+
+  return (
+    <View style={styles.scrubberSection}>
+      <GestureDetector gesture={scrubGesture}>
+        <View
+          style={styles.scrubberTouchArea}
+          onLayout={handleTrackLayout}
+          accessibilityRole="adjustable"
+          accessibilityLabel={`Playback position. ${formatTime(displayTime)} of ${formatTime(duration)}`}
+          accessibilityHint="Drag to seek"
+        >
+          <View
+            style={[
+              styles.scrubberTrack,
+              { backgroundColor: alpha(colors.text, 0.1) },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.scrubberFill,
+                { backgroundColor: colors.accent },
+                scrubberFillStyle,
+              ]}
+            />
+          </View>
+          <Animated.View
+            style={[
+              styles.scrubberThumb,
+              { backgroundColor: colors.accent },
+              scrubberThumbStyle,
+            ]}
+          />
+        </View>
+      </GestureDetector>
+
+      <View style={styles.timeRow}>
+        <Text style={[styles.timeText, { color: colors.textMuted }]}>
+          {formatTime(displayTime)}
+        </Text>
+        <Text style={[styles.timeText, { color: colors.textMuted }]}>
+          {formatTime(duration)}
+        </Text>
+      </View>
+    </View>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Main component
 // ---------------------------------------------------------------------------
 
 export function AudioPlayerSheet() {
   const { colors } = useTheme();
   const sheetRef = useRef<BottomSheet>(null);
-  const { togglePlayPause, cycleSpeed, seekTo, skip } = useGlobalAudioPlayer();
+  const { togglePlayPause, cycleSpeed, skip } = useGlobalAudioPlayer();
 
-  // Zustand selectors
+  // Only subscribe to state that affects header/controls — NOT currentTime
   const isPlaying = useAudioPlayerState((s) => s.isPlaying);
-  const currentTime = useAudioPlayerState((s) => s.currentTime);
+  const isLoading = useAudioPlayerState((s) => s.isLoading);
   const duration = useAudioPlayerState((s) => s.duration);
   const playbackSpeed = useAudioPlayerState((s) => s.playbackSpeed);
   const title = useAudioPlayerState((s) => s.title);
   const seriesTitle = useAudioPlayerState((s) => s.seriesTitle);
   const setTier = useAudioPlayerState((s) => s.setTier);
 
-  // Scrubber track width (measured via onLayout)
-  const [trackWidth, setTrackWidth] = useState(0);
-
-  // Scrubber gesture shared values
-  const isScrubbing = useSharedValue(false);
-  const scrubPosition = useSharedValue(0); // 0..1 normalized
-
-  // -- Derived values --
-  const progress = duration > 0 ? currentTime / duration : 0;
-  const displayTime = isScrubbing.value
-    ? scrubPosition.value * duration
-    : currentTime;
+  const isPreparing = isLoading && duration === 0;
 
   // -- Sheet callbacks --
   const handleSheetChange = useCallback(
@@ -117,66 +234,6 @@ export function AudioPlayerSheet() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     skip(10);
   }, [skip]);
-
-  const handleTrackLayout = useCallback(
-    (e: { nativeEvent: { layout: { width: number } } }) => {
-      setTrackWidth(e.nativeEvent.layout.width);
-    },
-    [],
-  );
-
-  const handleSeek = useCallback(
-    (normalizedPosition: number) => {
-      const seekTime = Math.max(0, Math.min(normalizedPosition, 1)) * duration;
-      seekTo(seekTime);
-    },
-    [duration, seekTo],
-  );
-
-  const handleScrubStart = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
-
-  // -- Scrubber gesture --
-  const scrubGesture = Gesture.Pan()
-    .onStart((e) => {
-      isScrubbing.value = true;
-      if (trackWidth > 0) {
-        scrubPosition.value = Math.max(0, Math.min(e.x / trackWidth, 1));
-      }
-      runOnJS(handleScrubStart)();
-    })
-    .onUpdate((e) => {
-      if (trackWidth > 0) {
-        scrubPosition.value = Math.max(0, Math.min(e.x / trackWidth, 1));
-      }
-    })
-    .onEnd(() => {
-      isScrubbing.value = false;
-      runOnJS(handleSeek)(scrubPosition.value);
-    });
-
-  // -- Animated styles for scrubber --
-  const scrubberFillStyle = useAnimatedStyle(() => {
-    const currentProgress = isScrubbing.value ? scrubPosition.value : progress;
-    return {
-      width: `${currentProgress * 100}%` as unknown as number,
-    };
-  });
-
-  const scrubberThumbStyle = useAnimatedStyle(() => {
-    const currentProgress = isScrubbing.value ? scrubPosition.value : progress;
-    return {
-      transform: [
-        {
-          translateX: currentProgress * trackWidth - SCRUBBER_THUMB_SIZE / 2,
-        },
-      ],
-      opacity: withTiming(isScrubbing.value ? 1 : 0, {
-        duration: Duration.fast,
-      }),
-    };
-  });
 
   return (
     <BottomSheet
@@ -214,7 +271,14 @@ export function AudioPlayerSheet() {
             >
               {title ?? 'Listening...'}
             </Text>
-            {seriesTitle ? (
+            {isPreparing ? (
+              <View style={styles.preparingRow}>
+                <ActivityIndicator size={12} color={colors.accent} />
+                <Text style={[styles.seriesText, { color: colors.textMuted }]}>
+                  Preparing audio...
+                </Text>
+              </View>
+            ) : seriesTitle ? (
               <Text
                 numberOfLines={1}
                 style={[styles.seriesText, { color: colors.textMuted }]}
@@ -241,50 +305,8 @@ export function AudioPlayerSheet() {
           </TouchableOpacity>
         </View>
 
-        {/* Scrubber */}
-        <View style={styles.scrubberSection}>
-          <GestureDetector gesture={scrubGesture}>
-            <View
-              style={styles.scrubberTouchArea}
-              onLayout={handleTrackLayout}
-              accessibilityRole="adjustable"
-              accessibilityLabel={`Playback position. ${formatTime(displayTime)} of ${formatTime(duration)}`}
-              accessibilityHint="Drag to seek"
-            >
-              <View
-                style={[
-                  styles.scrubberTrack,
-                  { backgroundColor: alpha(colors.text, 0.1) },
-                ]}
-              >
-                <Animated.View
-                  style={[
-                    styles.scrubberFill,
-                    { backgroundColor: colors.accent },
-                    scrubberFillStyle,
-                  ]}
-                />
-              </View>
-              <Animated.View
-                style={[
-                  styles.scrubberThumb,
-                  { backgroundColor: colors.accent },
-                  scrubberThumbStyle,
-                ]}
-              />
-            </View>
-          </GestureDetector>
-
-          {/* Time labels */}
-          <View style={styles.timeRow}>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(displayTime)}
-            </Text>
-            <Text style={[styles.timeText, { color: colors.textMuted }]}>
-              {formatTime(duration)}
-            </Text>
-          </View>
-        </View>
+        {/* Scrubber — isolated component, only re-renders on currentTime */}
+        <ScrubberSection />
 
         {/* Controls — perfectly centered */}
         <View style={styles.controlsRow}>
@@ -304,11 +326,14 @@ export function AudioPlayerSheet() {
           <TouchableOpacity
             activeOpacity={1}
             onPress={handlePlayPause}
+            disabled={isPreparing}
             style={[styles.playButton, { backgroundColor: colors.accent }]}
-            accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+            accessibilityLabel={isPreparing ? 'Loading' : isPlaying ? 'Pause' : 'Play'}
             accessibilityRole="button"
           >
-            {isPlaying ? (
+            {isPreparing ? (
+              <ActivityIndicator size={26} color={colors.backgroundElevated} />
+            ) : isPlaying ? (
               <PauseIcon
                 size={26}
                 color={colors.backgroundElevated}
@@ -372,6 +397,11 @@ const styles = StyleSheet.create({
   seriesText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
+  },
+  preparingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   // -- Speed --
   speedPill: {

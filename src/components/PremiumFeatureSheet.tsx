@@ -4,22 +4,13 @@
  * Shows a small, contextual bottom sheet when a free user taps a premium feature.
  * Less disruptive than a full-screen paywall. Higher trust, better conversion.
  *
- * Wrapped in a React Native Modal so it renders in a separate native layer,
- * preventing clipping/z-index issues when rendered inside nested scroll views.
- *
- * Usage:
- *   <PremiumFeatureSheet
- *     visible={showSheet}
- *     onClose={() => setShowSheet(false)}
- *     feature="voice"
- *   />
+ * Uses a plain Modal + Animated.View instead of @gorhom/bottom-sheet to avoid
+ * Reanimated v4 worklet freeze on simulator and device.
  */
 
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import BottomSheet, { BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions } from 'react-native';
+import Animated, { FadeIn, SlideInDown, SlideOutDown, FadeOut } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import {
@@ -126,19 +117,9 @@ interface PremiumFeatureSheetProps {
 export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatureSheetProps) {
   const { colors } = useTheme();
   const router = useRouter();
-  const bottomSheetRef = useRef<BottomSheet>(null);
 
   const config = FEATURES[feature] ?? FEATURES.general;
   const IconComponent = config.icon as React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
-
-  const handleSheetChanges = useCallback(
-    (index: number) => {
-      if (index === -1) {
-        onClose();
-      }
-    },
-    [onClose]
-  );
 
   const paywallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -163,19 +144,6 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
     onClose();
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        opacity={0.5}
-        pressBehavior="close"
-      />
-    ),
-    []
-  );
-
   if (!visible) return null;
 
   return (
@@ -186,84 +154,108 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <GestureHandlerRootView style={pfStyles.modalRoot}>
-        <BottomSheet
-          ref={bottomSheetRef}
-          index={0}
-          snapPoints={['42%']}
-          enablePanDownToClose
-          onChange={handleSheetChanges}
-          backdropComponent={renderBackdrop}
-          backgroundStyle={{
-            backgroundColor: colors.inputBackground,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-          }}
-          handleIndicatorStyle={{
-            backgroundColor: colors.border,
-            width: 36,
-          }}
-        >
-          <View style={pfStyles.content}>
-            {/* Icon + headline */}
-            <Animated.View entering={FadeIn.duration(400)} style={pfStyles.centerContent}>
-              <View style={[pfStyles.iconContainer, { backgroundColor: `${colors.accent}14` }]}>
-                <IconComponent size={28} color={colors.accent} weight="light" />
-              </View>
+      {/* Backdrop — tap to dismiss */}
+      <Animated.View
+        entering={FadeIn.duration(250)}
+        exiting={FadeOut.duration(200)}
+        style={pfStyles.backdrop}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      </Animated.View>
 
-              <Text style={[pfStyles.headline, { color: colors.text }]}>
-                {config.headline}
-              </Text>
+      {/* Sheet content */}
+      <Animated.View
+        entering={SlideInDown.duration(350).damping(20).stiffness(200)}
+        exiting={SlideOutDown.duration(250)}
+        style={[
+          pfStyles.sheet,
+          { backgroundColor: colors.backgroundElevated },
+        ]}
+      >
+        {/* Handle indicator */}
+        <View style={pfStyles.handleRow}>
+          <View style={[pfStyles.handle, { backgroundColor: colors.border }]} />
+        </View>
 
-              <Text style={[pfStyles.description, { color: colors.textMuted }]}>
-                {config.description}
-              </Text>
-            </Animated.View>
-
-            {/* CTA button */}
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleStartTrial}
-              accessibilityRole="button"
-              accessibilityLabel={config.cta}
-              style={[pfStyles.ctaButton, { backgroundColor: colors.accent }]}
-            >
-              <Text style={[pfStyles.ctaText, { color: colors.background }]}>
-                {config.cta}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Trial reassurance */}
-            <View style={pfStyles.reassuranceRow}>
-              <ShieldCheckIcon size={13} color={colors.textSubtle} weight="light" style={pfStyles.shieldIcon} />
-              <Text style={[pfStyles.reassuranceText, { color: colors.textSubtle }]}>
-                Cancel anytime. No commitment.
-              </Text>
+        <View style={pfStyles.content}>
+          {/* Icon + headline */}
+          <View style={pfStyles.centerContent}>
+            <View style={[pfStyles.iconContainer, { backgroundColor: `${colors.accent}14` }]}>
+              <IconComponent size={28} color={colors.accent} weight="light" />
             </View>
 
-            {/* Maybe later */}
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleMaybeLater}
-              accessibilityRole="button"
-              accessibilityLabel="Maybe later"
-              style={pfStyles.maybeLaterButton}
-            >
-              <Text style={[pfStyles.maybeLaterText, { color: colors.textHint ?? colors.textSubtle }]}>
-                Maybe later
-              </Text>
-            </TouchableOpacity>
+            <Text style={[pfStyles.headline, { color: colors.text }]}>
+              {config.headline}
+            </Text>
+
+            <Text style={[pfStyles.description, { color: colors.textMuted }]}>
+              {config.description}
+            </Text>
           </View>
-        </BottomSheet>
-      </GestureHandlerRootView>
+
+          {/* CTA button */}
+          <TouchableOpacity activeOpacity={0.7}
+            onPress={handleStartTrial}
+            accessibilityRole="button"
+            accessibilityLabel={config.cta}
+            style={[pfStyles.ctaButton, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[pfStyles.ctaText, { color: colors.background }]}>
+              {config.cta}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Trial reassurance */}
+          <View style={pfStyles.reassuranceRow}>
+            <ShieldCheckIcon size={13} color={colors.textSubtle} weight="light" style={pfStyles.shieldIcon} />
+            <Text style={[pfStyles.reassuranceText, { color: colors.textSubtle }]}>
+              Cancel anytime. No commitment.
+            </Text>
+          </View>
+
+          {/* Maybe later */}
+          <TouchableOpacity activeOpacity={0.7}
+            onPress={handleMaybeLater}
+            accessibilityRole="button"
+            accessibilityLabel="Maybe later"
+            style={pfStyles.maybeLaterButton}
+          >
+            <Text style={[pfStyles.maybeLaterText, { color: colors.textHint ?? colors.textSubtle }]}>
+              Maybe later
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     </Modal>
   );
 }
 
 const pfStyles = StyleSheet.create({
-  modalRoot: {
-    flex: 1,
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 34, // Safe area
+    maxHeight: '50%',
+  },
+  handleRow: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   content: {
-    flex: 1,
     paddingHorizontal: Spacing['7'],
     paddingTop: Spacing['2'],
   },

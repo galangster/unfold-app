@@ -52,6 +52,7 @@ import { referenceToRoute } from '@/lib/bible-constants';
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { SignInSheet } from '@/components/SignInSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { alpha } from '@/components/ui';
@@ -187,6 +188,8 @@ export default function ReadingScreen() {
   const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
+  const [showSignInSheet, setShowSignInSheet] = useState(false);
+  const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [scriptureSheetRef, setScriptureSheetRef] = useState<string | null>(null);
@@ -513,36 +516,57 @@ export default function ReadingScreen() {
       setShowPremiumSheet(true);
       return;
     }
-    if (!currentDayData) return;
+    if (!currentDayData || isPreparingAudio) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Track audio usage for premium nudge + widget bridge
     useUnfoldStore.getState().setHasUsedAudio();
-    startReadingSession({
-      devotionalTitle: currentDevotional?.title ?? 'Unfold',
-      dayTitle: currentDayData?.title ?? 'Reading',
+
+    // Show loading state immediately — play button becomes spinner
+    setIsPreparingAudio(true);
+
+    // Show audio player sheet in loading state right away
+    const metadata = {
+      title: currentDayData?.title ?? 'Devotional',
+      seriesTitle: currentDevotional?.title ?? '',
+      devotionalId: currentDevotionalId ?? '',
       dayNumber: viewingDay,
-      totalDays: totalDays,
-      totalMinutes: user?.readingDuration ?? 5,
-      isListening: true,
-    });
+    };
+    useAudioPlayerState.getState().startAudio('', metadata);
 
     try {
       const voiceId = user?.preferredVoice || getDefaultVoice();
       const fullText = `${currentDayData.scriptureReference}.\n${currentDayData.scriptureText}\n\n${currentDayData.bodyText}`;
       const result = await streamDevotionalAudio(fullText, voiceId);
-      startAudio(result.audioUrl, {
-        title: currentDayData?.title ?? 'Devotional',
-        seriesTitle: currentDevotional?.title ?? '',
-        devotionalId: currentDevotionalId ?? '',
+
+      // Start Live Activity only after audio is ready
+      startReadingSession({
+        devotionalTitle: currentDevotional?.title ?? 'Unfold',
+        dayTitle: currentDayData?.title ?? 'Reading',
         dayNumber: viewingDay,
+        totalDays: totalDays,
+        totalMinutes: user?.readingDuration ?? 5,
+        isListening: true,
       });
+
+      // Feed the real audio URL — auto-plays
+      startAudio(result.audioUrl, metadata);
     } catch (e) {
-      logger.error('[Reading] Failed to load audio:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === 'TTS_AUTH_REQUIRED' || msg.includes('401')) {
+        logger.warn('[Reading] Audio requires sign-in — showing sign-in sheet');
+        setShowSignInSheet(true);
+      } else {
+        logger.error('[Reading] Failed to load audio:', e);
+        setAudioToast({ visible: true, message: 'Audio unavailable — try again later' });
+        setTimeout(() => setAudioToast(null), 3000);
+      }
+      // Dismiss the loading sheet on error
+      useAudioPlayerState.getState().stopAudio();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsPreparingAudio(false);
     }
-  }, [isPremium, currentDayData, currentDevotional, currentDevotionalId, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration, startAudio]);
+  }, [isPremium, currentDayData, currentDevotional, currentDevotionalId, user?.preferredVoice, viewingDay, totalDays, user?.readingDuration, startAudio, isPreparingAudio]);
 
   const handleStudyMethodPress = useCallback((methodId: string) => {
     // Audio continues playing behind the study method sheet (spec requirement)
@@ -1401,17 +1425,22 @@ export default function ReadingScreen() {
                 {/* Audio Player Button */}
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handlePlayAudio}
+                  disabled={isPreparingAudio}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Listen to devotional"
+                  accessibilityLabel={isPreparingAudio ? 'Loading audio' : 'Listen to devotional'}
                   accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
                   style={{ padding: Spacing['2'] }}
                 >
-                  <PlayIcon
-                    size={22}
-                    color={colors.text}
-                    weight="fill"
-                  />
+                  {isPreparingAudio ? (
+                    <ActivityIndicator size={20} color={colors.accent} />
+                  ) : (
+                    <PlayIcon
+                      size={22}
+                      color={colors.text}
+                      weight="fill"
+                    />
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -2009,6 +2038,16 @@ export default function ReadingScreen() {
         visible={showPremiumSheet}
         onClose={() => setShowPremiumSheet(false)}
         feature={premiumFeature}
+      />
+
+      <SignInSheet
+        visible={showSignInSheet}
+        onClose={() => setShowSignInSheet(false)}
+        onSignedIn={() => {
+          setShowSignInSheet(false);
+          // Auto-retry audio after signing in
+          setTimeout(() => handlePlayAudio(), 500);
+        }}
       />
 
       {showReadingSettings && (
