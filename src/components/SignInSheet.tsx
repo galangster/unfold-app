@@ -225,15 +225,17 @@ export function SignInSheet({ visible, onClose, onSignedIn }: SignInSheetProps) 
               alignItems: 'center',
               justifyContent: 'center',
               height: 52,
+              paddingHorizontal: Spacing['4'],
               borderRadius: Radius.md,
               backgroundColor: '#FFFFFF',
               gap: 10,
+              overflow: 'visible' as const,
             }}
             onPress={() => handleOAuthSignIn(startAppleFlow, 'Apple')}
             activeOpacity={0.8}
             disabled={isSigningIn}
           >
-            <AppleLogoIcon size={20} color="#1F1F1F" weight="fill" />
+            <AppleLogoIcon size={22} color="#1F1F1F" weight="fill" />
             <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: FontSize.base, color: '#1F1F1F' }}>
               Sign in with Apple
             </Text>

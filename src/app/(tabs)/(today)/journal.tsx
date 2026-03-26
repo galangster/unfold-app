@@ -732,7 +732,7 @@ Their journal entry:
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             bottomOffset={20}
-            extraKeyboardSpace={60}
+            extraKeyboardSpace={120}
           >
             {/* Scripture anchor — connects the blank page to today's content */}
             {currentDay && (
@@ -1235,7 +1235,7 @@ const jStyles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['6'],
-    paddingBottom: 120,
+    paddingBottom: 300,
   },
   scriptureAnchor: {
     marginBottom: Spacing['6'],

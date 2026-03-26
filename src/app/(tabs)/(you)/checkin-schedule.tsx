@@ -44,8 +44,40 @@ export default function CheckInScheduleScreen() {
   const { type } = useLocalSearchParams<{ type: CheckInType }>();
   const { colors } = useTheme();
 
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+
   const checkInType: CheckInType = type === 'evening' ? 'evening' : 'midday';
   const isMidday = checkInType === 'midday';
+
+  // Gate to premium
+  if (!isPremium) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+          <Text style={{ fontFamily: FontFamily.display, fontSize: 24, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
+            Custom Schedules
+          </Text>
+          <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>
+            Customize your check-in times with Premium.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/paywall'); }}
+            style={{ backgroundColor: colors.accent, paddingVertical: 16, paddingHorizontal: Spacing['8'], borderRadius: 28 }}
+          >
+            <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: colors.background }}>
+              Unlock Premium
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const defaultTime = useUnfoldStore((s) =>
     isMidday ? s.middayCheckInTime : s.eveningWindDownTime

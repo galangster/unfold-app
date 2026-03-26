@@ -59,6 +59,19 @@ import { alpha } from '@/components/ui';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+/**
+ * Transform Bible references into natural speech for TTS.
+ * "John 3:16-18" → "John chapter 3, verses 16 through 18"
+ * "Psalm 23:1"   → "Psalm 23, verse 1"
+ */
+function humanizeReference(ref: string): string {
+  return ref
+    // "3:16-18" → "chapter 3, verses 16 through 18"
+    .replace(/(\d+):(\d+)-(\d+)/g, 'chapter $1, verses $2 through $3')
+    // "3:16" → "chapter 3, verse 16"
+    .replace(/(\d+):(\d+)/g, 'chapter $1, verse $2');
+}
+
 const AUTO_RETRY_MAX_ATTEMPTS = 3;
 const AUTO_RETRY_BASE_DELAY_MS = 15000;
 
@@ -360,7 +373,7 @@ export default function ReadingScreen() {
   useEffect(() => {
     if (!isPremium || !currentDayData) return;
     const voiceId = user?.preferredVoice || getDefaultVoice();
-    const fullText = `${currentDayData.scriptureReference}.\n${currentDayData.scriptureText}\n\n${currentDayData.bodyText}`;
+    const fullText = `${humanizeReference(currentDayData.scriptureReference)}.\n\n${currentDayData.scriptureText}\n\n...\n\n${currentDayData.bodyText}`;
     prefetchDevotionalAudio(fullText, voiceId);
   }, [isPremium, currentDayData, user?.preferredVoice]);
 
@@ -535,7 +548,7 @@ export default function ReadingScreen() {
 
     try {
       const voiceId = user?.preferredVoice || getDefaultVoice();
-      const fullText = `${currentDayData.scriptureReference}.\n${currentDayData.scriptureText}\n\n${currentDayData.bodyText}`;
+      const fullText = `${humanizeReference(currentDayData.scriptureReference)}.\n\n${currentDayData.scriptureText}\n\n...\n\n${currentDayData.bodyText}`;
       const result = await streamDevotionalAudio(fullText, voiceId);
 
       // Start Live Activity only after audio is ready
@@ -644,13 +657,21 @@ export default function ReadingScreen() {
   const handleJournal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    // If viewing an unread day, journal for the last completed day instead
+    const journalDay = currentDayData?.isRead
+      ? viewingDay
+      : currentDevotional?.days
+          .filter((d) => d.isRead)
+          .sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? viewingDay;
+    const journalDayData = currentDevotional?.days.find((d) => d.dayNumber === journalDay);
+
     if (currentDevotionalId && currentDevotional) {
       setResumeContext({
         route: 'journal',
         devotionalId: currentDevotionalId,
-        dayNumber: viewingDay,
+        dayNumber: journalDay,
         devotionalTitle: currentDevotional.title,
-        dayTitle: currentDayData?.title,
+        dayTitle: journalDayData?.title ?? currentDayData?.title,
         touchedAt: new Date().toISOString(),
       });
     }
@@ -659,10 +680,10 @@ export default function ReadingScreen() {
       pathname: '/(tabs)/(today)/journal',
       params: {
         devotionalId: currentDevotionalId ?? '',
-        dayNumber: viewingDay.toString(),
+        dayNumber: journalDay.toString(),
       },
     });
-  }, [currentDevotionalId, currentDevotional, currentDayData?.title, viewingDay, router, setResumeContext]);
+  }, [currentDevotionalId, currentDevotional, currentDayData, viewingDay, router, setResumeContext]);
 
   // Memoized scroll handler — tracks progress bar + scroll hint visibility
   const handleScroll = useCallback((e: {

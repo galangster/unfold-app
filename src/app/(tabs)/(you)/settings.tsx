@@ -14,7 +14,7 @@ import { useTheme } from '@/lib/theme';
 import Constants from 'expo-constants';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import {
   scheduleDailyReminder,
   cancelAllReminders,
@@ -28,6 +28,7 @@ import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { TTS_VOICES } from '@/lib/tts-service';
+import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
 import { useAuth } from '@/hooks/useAuth';
@@ -138,12 +139,13 @@ export default function SettingsScreen() {
               await signOut();
               updateUser({
                 authUserId: null,
-                authProvider: 'guest',
+                authProvider: null,
                 authEmail: null,
                 authDisplayName: null,
+                hasCompletedOnboarding: false,
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              // Navigate to splash screen so user sees they're signed out
+              // Navigate to splash screen — hasCompletedOnboarding=false prevents auto-redirect
               router.replace({ pathname: '/', params: { signedOut: '1' } });
             } catch (err) {
               logger.error('[Settings] Sign out error:', err);
@@ -236,6 +238,8 @@ export default function SettingsScreen() {
 
     const sample = VOICE_SAMPLES[voiceId];
     if (sample) {
+      // Ensure audio plays even when iOS silent switch is on
+      setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
       previewPlayer.replace(sample);
       previewPlayer.play();
     }
@@ -340,7 +344,10 @@ export default function SettingsScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             try {
               reset();
-              router.replace('/');
+              useCompanionChatStore.getState().clearAllConversations();
+              // Navigate to welcome screen — use dismiss + replace to escape tabs navigator
+              router.dismissAll();
+              setTimeout(() => router.replace('/'), 50);
             } finally {
               setIsDeletingAccount(false);
             }
@@ -3065,6 +3072,7 @@ export default function SettingsScreen() {
               Version 1.0.0
             </Text>
           </Animated.View>
+
         </ScrollView>
       </SafeAreaView>
 

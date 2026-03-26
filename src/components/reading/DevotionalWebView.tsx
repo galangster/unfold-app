@@ -28,11 +28,11 @@ const CONTENT_PADDING = 24;
 
 // Color definitions for highlights
 const HIGHLIGHT_COLORS = {
-  yellow: { light: 'rgba(255, 220, 100, 0.6)', dark: 'rgba(200, 165, 92, 0.35)' },
-  green: { light: 'rgba(100, 200, 100, 0.4)', dark: 'rgba(100, 200, 100, 0.25)' },
-  blue: { light: 'rgba(100, 150, 255, 0.4)', dark: 'rgba(100, 150, 255, 0.25)' },
-  purple: { light: 'rgba(180, 100, 200, 0.4)', dark: 'rgba(180, 100, 200, 0.25)' },
-  red: { light: 'rgba(255, 100, 100, 0.4)', dark: 'rgba(255, 100, 100, 0.25)' },
+  yellow: { light: 'rgba(240, 200, 80, 0.30)', dark: 'rgba(200, 165, 92, 0.22)' },
+  green: { light: 'rgba(107, 191, 123, 0.25)', dark: 'rgba(100, 200, 100, 0.18)' },
+  blue: { light: 'rgba(107, 163, 214, 0.25)', dark: 'rgba(100, 150, 255, 0.18)' },
+  purple: { light: 'rgba(168, 116, 192, 0.25)', dark: 'rgba(180, 100, 200, 0.18)' },
+  red: { light: 'rgba(232, 112, 112, 0.25)', dark: 'rgba(255, 100, 100, 0.18)' },
 };
 
 export function DevotionalWebView({

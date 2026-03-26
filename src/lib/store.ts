@@ -58,9 +58,9 @@ export const READING_FONTS: ReadingFont[] = [
 export type { ThemeCategory, DevotionalType };
 
 export const FONT_SIZE_VALUES: Record<FontSize, { body: number; scripture: number; title: number }> = {
-  small: { body: 15, scripture: 17, title: 28 },
-  medium: { body: 17, scripture: 19, title: 32 },
-  large: { body: 20, scripture: 22, title: 36 },
+  small: { body: 15, scripture: 19, title: 28 },
+  medium: { body: 17, scripture: 21, title: 32 },
+  large: { body: 20, scripture: 24, title: 36 },
 };
 
 // Bible translation preferences
@@ -1157,8 +1157,8 @@ export const useUnfoldStore = create<UnfoldState>()(
 
             const effectiveMissed = daysMissed - missedWeekendDays;
 
-            // Use freeze if available for first missed day
-            if (effectiveMissed >= 1 && state.streakFreezes > 0) {
+            // Use freeze if available for first missed day (premium only)
+            if (effectiveMissed >= 1 && state.streakFreezes > 0 && state.user?.isPremium) {
               newFreezes--;
               newStreak = state.streakCurrent + 1;
             } else if (effectiveMissed === 1) {
@@ -1180,7 +1180,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             // Check if we already earned for this week
             const lastEarnedStreak = Math.floor((state.streakLongest || 0) / 7) * 7;
             if (newStreak > lastEarnedStreak) {
-              const maxFreezes = state.user?.isPremium ? 99 : 1;
+              const maxFreezes = state.user?.isPremium ? 99 : 0;
               newFreezes = Math.min(newFreezes + 1, maxFreezes);
             }
           }

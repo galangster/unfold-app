@@ -141,8 +141,8 @@ const VerseItem = React.memo(({
   // Flash highlight color — white glow on dark, subtle gray on light
   const flashBg = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.10)';
 
-  // Red-letter: bright warm red for Jesus's words — 8.3:1 contrast on #0A0A0A dark bg
-  const redLetterColor = isDark ? '#F28B82' : '#B5413B';
+  // Red-letter: bright warm red for Jesus's words
+  const redLetterColor = isDark ? '#F56B5E' : '#C0392B';
   const displayText = isSelected ? selectionText : (isRedLetter ? redLetterColor : textColor);
   const overlayBg = isSelected ? selectionBg : hlBg;
 

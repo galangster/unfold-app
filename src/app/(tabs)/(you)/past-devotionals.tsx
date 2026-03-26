@@ -219,13 +219,15 @@ export default function PastDevotionalsScreen() {
     };
   }, []);
 
-  // Filter devotionals by tab
+  // Filter devotionals by tab, most recent first
   const filteredDevotionals = useMemo(() => {
-    return devotionals.filter((d) => {
-      const completedDays = d.days.filter((day) => day.isRead).length;
-      const isComplete = completedDays >= d.totalDays;
-      return activeTab === 'completed' ? isComplete : !isComplete;
-    });
+    return devotionals
+      .filter((d) => {
+        const completedDays = d.days.filter((day) => day.isRead).length;
+        const isComplete = completedDays >= d.totalDays;
+        return activeTab === 'completed' ? isComplete : !isComplete;
+      })
+      .sort((a, b) => b.createdAt - a.createdAt);
   }, [devotionals, activeTab]);
 
   const handleSelectDevotional = useCallback((id: string) => {

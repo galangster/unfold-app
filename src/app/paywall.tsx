@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
-import { View, Text, ActivityIndicator, Linking, ScrollView, Image } from 'react-native';
+import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon } from 'phosphor-react-native';
+import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon, SquaresFourIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
+import { GoldEmberField } from '@/components/home/GoldEmberField';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -393,7 +394,7 @@ export default function PaywallScreen() {
     { icon: PencilLineIcon, title: 'Full note-taking suite', desc: 'Rich-text journal with folders, favorites, and scripture linking' },
     { icon: CircleNotchIcon, title: 'AI Companion', desc: 'Ask questions about faith, scripture, and your devotional' },
     { icon: FilePdfIcon, title: 'Beautiful PDF exports', desc: 'Export your devotionals to share or print' },
-    { icon: InfinityIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
+    { icon: SquaresFourIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
   ];
 
   // Free vs premium comparison rows
@@ -410,13 +411,25 @@ export default function PaywallScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Reversed embers — falling from top */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
+          <GoldEmberField streakLevel={3} active />
+        </View>
+      </View>
+
       {/* ─── Scrollable content ─── */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: Spacing['6'] }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top + 16 }}>
+        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top + 8 }}>
+          {/* Drag handle */}
+          <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.textSubtle, opacity: 0.4 }} />
+          </View>
+
           {/* Unfold icon + close button row */}
           <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
             <Image

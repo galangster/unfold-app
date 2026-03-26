@@ -131,6 +131,7 @@ export default function StreakSettingsScreen() {
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const longestStreak = useUnfoldStore((s) => s.streakLongest);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
   const weekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);
   const lastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const toggleWeekendAmnesty = useUnfoldStore((s) => s.toggleWeekendAmnesty);
@@ -345,8 +346,8 @@ export default function StreakSettingsScreen() {
               <Text style={[ssStyles.statValue, { color: colors.text }]}>
                 {freezes}
               </Text>
-              <Text style={[ssStyles.statLabel, { color: colors.textMuted }]}>
-                Freezes
+              <Text style={[ssStyles.statLabel, { color: isPremium ? colors.textMuted : colors.textSubtle }]}>
+                {isPremium ? 'Freezes' : 'Premium'}
               </Text>
             </TouchableOpacity>
             {activeTooltip === 'freezes' && (

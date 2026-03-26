@@ -60,11 +60,15 @@ export function useAuth() {
 
     if (newUserId) {
       // User signed in via Clerk
+      const state = useUnfoldStore.getState();
+      const hasExistingContent = (state.devotionals?.length ?? 0) > 0;
       updateUser({
         authUserId: newUserId,
         authProvider,
         authEmail: email,
         authDisplayName: displayName,
+        // Restore onboarding flag if user has existing devotional content (re-sign-in after sign-out)
+        ...(hasExistingContent ? { hasCompletedOnboarding: true } : {}),
       });
 
       // Sync RevenueCat (wrapper returns { ok, reason }, never rejects)

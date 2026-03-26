@@ -187,7 +187,7 @@ export default function ShareCardScreen() {
 
       // Build verse paragraph
       const verseParagraphStyle = {
-        textAlign: TextAlign.Center,
+        textAlign: TextAlign.Left,
         textStyle: {
           color: mainColor,
           fontFamilies: ['InstrumentSerif'],
@@ -202,11 +202,11 @@ export default function ShareCardScreen() {
 
       // Build reference paragraph
       const refParagraphStyle = {
-        textAlign: TextAlign.Center,
+        textAlign: TextAlign.Left,
         textStyle: {
           color: refColor,
           fontFamilies: ['Inter'],
-          fontSize: 28,
+          fontSize: 24,
           letterSpacing: 0.8,
         },
       };
@@ -219,11 +219,11 @@ export default function ShareCardScreen() {
 
       // Build branding paragraph
       const brandParagraphStyle = {
-        textAlign: TextAlign.Center,
+        textAlign: TextAlign.Left,
         textStyle: {
           color: refColor,
           fontFamilies: ['Inter'],
-          fontSize: 22,
+          fontSize: 18,
           letterSpacing: 5,
         },
       };
@@ -380,7 +380,7 @@ export default function ShareCardScreen() {
                 fontSize,
                 lineHeight,
                 color: textColor,
-                textAlign: 'center',
+                textAlign: 'left',
               }}
             >
               {displayText}
@@ -388,18 +388,18 @@ export default function ShareCardScreen() {
           </View>
 
           {/* Divider */}
-          <View style={[s.divider, { backgroundColor: dividerColor }]} />
+          <View style={[s.divider, { backgroundColor: dividerColor, alignSelf: 'flex-start' }]} />
 
           {/* Reference */}
-          <View style={s.refContainer}>
+          <View style={[s.refContainer, { alignItems: 'flex-start' }]}>
             {reference ? (
               <Text
                 style={{
                   fontFamily: FontFamily.uiMedium,
-                  fontSize: 13,
+                  fontSize: 11,
                   color: subtleColor,
                   letterSpacing: 0.3,
-                  textAlign: 'center',
+                  textAlign: 'left',
                 }}
               >
                 {reference}
@@ -409,11 +409,11 @@ export default function ShareCardScreen() {
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
-                  fontSize: 10,
+                  fontSize: 9,
                   color: subtleColor,
                   letterSpacing: 0.8,
                   marginTop: 4,
-                  textAlign: 'center',
+                  textAlign: 'left',
                   opacity: 0.7,
                 }}
               >
@@ -423,10 +423,10 @@ export default function ShareCardScreen() {
           </View>
 
           {/* Unfold logo */}
-          <View style={s.brandRow}>
+          <View style={[s.brandRow, { alignItems: 'flex-start' }]}>
             <Image
               source={require('@/app/icon-paywall-light.png')}
-              style={[s.brandIcon, { tintColor: subtleColor }]}
+              style={[s.brandIcon, { tintColor: subtleColor, width: 14, height: 14 }]}
               resizeMode="contain"
             />
           </View>

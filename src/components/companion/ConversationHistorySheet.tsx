@@ -81,9 +81,12 @@ export function ConversationHistorySheet({
   onSelectConversation,
 }: Props) {
   const { colors } = useTheme();
-  // useShallow prevents infinite re-renders — .filter() creates new array refs
+  // Show all conversations with messages except the current active one.
+  // Previously only showed `archived: true`, which missed conversations that
+  // were never formally archived (e.g. from v1 migration or no new conversation started).
+  const activeId = useCompanionChatStore((s) => s.activeConversationId);
   const archivedRaw = useCompanionChatStore(
-    useShallow((s) => s.conversations.filter(c => c.archived && c.messages.length > 0))
+    useShallow((s) => s.conversations.filter(c => c.id !== s.activeConversationId && c.messages.length > 0))
   );
   const deleteConversation = useCompanionChatStore((s) => s.deleteConversation);
 

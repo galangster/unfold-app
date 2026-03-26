@@ -541,8 +541,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 52,
+    paddingHorizontal: Spacing['4'],
     borderRadius: Radius.md,
     gap: 10,
+    overflow: 'visible',
   },
   appleButton: {
     backgroundColor: '#FFFFFF',

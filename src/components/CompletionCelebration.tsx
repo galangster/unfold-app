@@ -18,6 +18,7 @@ import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { GoldEmberField } from '@/components/home/GoldEmberField';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CENTER_X = SCREEN_WIDTH / 2;
@@ -278,7 +279,6 @@ export function CompletionCelebration({
   const titleTranslateY = useSharedValue(18);
   const subtitleOpacity = useSharedValue(0);
   const subtitleTranslateY = useSharedValue(14);
-  const lineWidth = useSharedValue(0);
   const hintOpacity = useSharedValue(0);
 
   useEffect(() => {
@@ -286,9 +286,7 @@ export function CompletionCelebration({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       if (reducedMotion) {
-        // Show everything immediately — no staggered animations
         overlayOpacity.value = 1;
-        lineWidth.value = 48;
         titleOpacity.value = 1;
         titleTranslateY.value = 0;
         subtitleOpacity.value = 1;
@@ -300,29 +298,25 @@ export function CompletionCelebration({
       // Background overlay fade in
       overlayOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
 
-      // Accent lines grow from center
-      lineWidth.value = withDelay(600, withTiming(48, { duration: 600, easing: Easing.out(Easing.cubic) }));
-
       // Title rises into view
-      titleOpacity.value = withDelay(700, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-      titleTranslateY.value = withDelay(700, withSpring(0, { damping: 20, stiffness: 100 }));
+      titleOpacity.value = withDelay(500, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+      titleTranslateY.value = withDelay(500, withSpring(0, { damping: 20, stiffness: 100 }));
 
       // Subtitle follows
-      subtitleOpacity.value = withDelay(1000, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
-      subtitleTranslateY.value = withDelay(1000, withSpring(0, { damping: 20, stiffness: 100 }));
+      subtitleOpacity.value = withDelay(800, withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) }));
+      subtitleTranslateY.value = withDelay(800, withSpring(0, { damping: 20, stiffness: 100 }));
 
       // Dismiss hint appears last
-      hintOpacity.value = withDelay(2200, withTiming(1, { duration: 800 }));
+      hintOpacity.value = withDelay(2000, withTiming(1, { duration: 800 }));
     } else {
       overlayOpacity.value = withTiming(0, { duration: Duration.slow });
       titleOpacity.value = withTiming(0, { duration: Duration.normal });
       subtitleOpacity.value = withTiming(0, { duration: Duration.normal });
-      lineWidth.value = 0;
       hintOpacity.value = 0;
       titleTranslateY.value = 18;
       subtitleTranslateY.value = 14;
     }
-  }, [visible, overlayOpacity, titleOpacity, titleTranslateY, subtitleOpacity, subtitleTranslateY, lineWidth, hintOpacity, reducedMotion]);
+  }, [visible, overlayOpacity, titleOpacity, titleTranslateY, subtitleOpacity, subtitleTranslateY, hintOpacity, reducedMotion]);
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
@@ -339,10 +333,6 @@ export function CompletionCelebration({
     transform: [{ translateY: subtitleTranslateY.value }],
   }));
 
-  const lineStyle = useAnimatedStyle(() => ({
-    width: lineWidth.value,
-  }));
-
   const hintStyle = useAnimatedStyle(() => ({
     opacity: hintOpacity.value,
   }));
@@ -356,16 +346,8 @@ export function CompletionCelebration({
       <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onDismiss}>
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
-          {/* Expanding circle that fills the screen (skip if reduced motion) */}
-          {!reducedMotion && <ExpandingCircle accentColor={colors.accent} />}
-
-          {/* Expanding ripple rings (skip if reduced motion) */}
-          {!reducedMotion && (
-            <>
-              <RippleRing delay={200} maxRadius={SCREEN_WIDTH * 0.4} accentColor={colors.accent} />
-              <RippleRing delay={450} maxRadius={SCREEN_WIDTH * 0.65} accentColor={colors.accent} />
-            </>
-          )}
+          {/* Ember particles rising from bottom */}
+          {!reducedMotion && <GoldEmberField streakLevel={7} active />}
 
           {/* Luminous motes drifting upward (skip if reduced motion) */}
           {!reducedMotion && motes.map((m) => (
@@ -382,28 +364,15 @@ export function CompletionCelebration({
             />
           ))}
 
-          {/* Content */}
+          {/* Content — left aligned */}
           <View
             style={{
               flex: 1,
               justifyContent: 'center',
-              alignItems: 'center',
-              paddingHorizontal: Spacing['12'],
+              alignItems: 'flex-start',
+              paddingHorizontal: Spacing['8'],
             }}
           >
-            {/* Top accent line */}
-            <Animated.View
-              style={[
-                {
-                  height: 1.5,
-                  backgroundColor: colors.accent,
-                  marginBottom: Spacing['9'],
-                  borderRadius: 1,
-                },
-                lineStyle,
-              ]}
-            />
-
             {/* Title */}
             <Animated.View style={titleStyle}>
               <Text
@@ -411,7 +380,7 @@ export function CompletionCelebration({
                   fontFamily: FontFamily.display,
                   fontSize: type === 'series' ? 52 : 48,
                   color: '#F5F0EB',
-                  textAlign: 'center',
+                  textAlign: 'left',
                   lineHeight: type === 'series' ? 56 : 52,
                   letterSpacing: -1,
                 }}
@@ -427,26 +396,13 @@ export function CompletionCelebration({
                   fontFamily: FontFamily.bodyItalic,
                   fontSize: 17,
                   color: 'rgba(245, 240, 235, 0.55)',
-                  textAlign: 'center',
+                  textAlign: 'left',
                   lineHeight: 26,
                 }}
               >
                 {subtitle}
               </Text>
             </Animated.View>
-
-            {/* Bottom accent line */}
-            <Animated.View
-              style={[
-                {
-                  height: 1.5,
-                  backgroundColor: colors.accent,
-                  marginTop: Spacing['9'],
-                  borderRadius: 1,
-                },
-                lineStyle,
-              ]}
-            />
           </View>
 
           {/* Dismiss hint */}

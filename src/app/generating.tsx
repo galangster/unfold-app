@@ -107,10 +107,10 @@ export default function GeneratingScreen() {
   const { colors: themeColors } = useTheme();
   const { reducedMotion, entering, exiting } = useAccessibleAnimation();
 
-  // Prevent swipe-back during generation
+  // Prevent swipe-back during generation, re-enable on error
   useEffect(() => {
-    navigation.setOptions({ gestureEnabled: false });
-  }, [navigation]);
+    navigation.setOptions({ gestureEnabled: !!error });
+  }, [navigation, error]);
 
   const colors = {
     ...themeColors,
@@ -905,6 +905,14 @@ export default function GeneratingScreen() {
     router.replace('/onboarding');
   };
 
+  const handleGoHome = () => {
+    if (isGenerating) return;
+    void logBugEvent('generation', 'generation-abandoned-go-home');
+    clearGenerationSession();
+    markFullGenerationInactive();
+    router.replace('/(tabs)/(today)');
+  };
+
   // ========== RENDER: ERROR STATE ==========
 
   if (error) {
@@ -948,6 +956,17 @@ export default function GeneratingScreen() {
               </Text>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity activeOpacity={0.7}
+            onPress={handleGoHome}
+            disabled={isGenerating}
+            accessibilityState={{ disabled: isGenerating }}
+            style={[genStyles.startOverButton, { opacity: isGenerating ? 0.6 : 1, marginTop: Spacing['2'] }]}
+          >
+            <Text style={[genStyles.startOverText, { color: colors.textSubtle }]}>
+              Go home
+            </Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </View>
     );
@@ -959,14 +978,14 @@ export default function GeneratingScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: 'transparent' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }} edges={['top', 'bottom']}>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['7'] }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: Spacing['8'] }}>
             <Animated.View entering={entering(FadeIn.duration(600).delay(100))} style={{ marginBottom: Spacing['7'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.ui,
                   fontSize: 13,
                   color: colors.textSubtle,
-                  textAlign: 'center',
+                  textAlign: 'left',
                   letterSpacing: 3,
                   textTransform: 'uppercase',
                 }}
@@ -981,7 +1000,7 @@ export default function GeneratingScreen() {
                   fontFamily: FontFamily.display,
                   fontSize: 44,
                   color: colors.text,
-                  textAlign: 'center',
+                  textAlign: 'left',
                   lineHeight: 54,
                 }}
               >
@@ -1008,7 +1027,7 @@ export default function GeneratingScreen() {
                 fontFamily: FontFamily.bodyItalic,
                 fontSize: FontSize.base,
                 color: colors.textSubtle,
-                textAlign: 'center',
+                textAlign: 'left',
                 lineHeight: 24,
               }}
             >

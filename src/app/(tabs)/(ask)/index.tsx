@@ -7,6 +7,7 @@ import React, { useCallback, useRef, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
@@ -274,8 +275,8 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages or empty state */}
-      <View style={{ flex: 1 }}>
+      {/* Messages or empty state — tap to dismiss keyboard */}
+      <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={{ flex: 1 }}>
         {isEmpty ? (
           <CompanionEmptyState onSelectStarter={handleSend} />
         ) : (
@@ -289,7 +290,7 @@ export default function CompanionScreen() {
               onScroll={handleScroll}
               scrollEventThrottle={16}
               keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               initialNumToRender={15}
               maxToRenderPerBatch={10}
               windowSize={11}
@@ -377,7 +378,7 @@ export default function CompanionScreen() {
             )}
           </>
         )}
-      </View>
+      </TouchableOpacity>
 
       {/* Input bar */}
       <CompanionInput
