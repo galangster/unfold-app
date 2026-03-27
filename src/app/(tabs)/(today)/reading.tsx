@@ -742,16 +742,8 @@ export default function ReadingScreen() {
         advanceDay(currentDevotionalId);
         refreshDailyReminder();
 
-        // Progressive mode: trigger next-day generation immediately
-        if (currentDevotional?.generationMode === 'progressive') {
-          setIsPreparingNextDay(true);
-          triggerNextDayGeneration(currentDevotionalId, viewingDay)
-            .then(() => {
-              // Refresh notification now that next day's content exists
-              refreshDailyReminder();
-            })
-            .finally(() => setIsPreparingNextDay(false));
-        }
+        // Progressive mode: generation is deferred to next app open or background fetch
+        // (triggerNextDayGeneration removed — context buffer is richer after user journals/checks-in)
       }
 
       // Phase 5: Evaluate series extension for progressive devotionals completing last day
