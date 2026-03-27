@@ -36,6 +36,7 @@ import {
   PATTERN_BREAK_DIRECTIVE,
   getStoryDirectiveForDay,
   getDialogueDirectiveForDay,
+  getClosureArchetypeForSeries,
 } from '../constants/writing-craft';
 import {
   BIBLE_STUDY_METHODS,
@@ -47,6 +48,7 @@ import {
   type BibleStudyMethodCard,
 } from '../constants/bible-study-methods';
 import type { PersonaTrait } from '../constants/devotional-personas-v2';
+import { computeCompletionStatus, type CompletionStatus } from './completion-status';
 import { useUnfoldStore } from './store';
 import type {
   DevotionalDay,
@@ -549,6 +551,7 @@ async function _generateProgressiveDayInternal(
 ): Promise<DevotionalDay> {
   const persona = resolvedPersona ?? resolvePersonaForGeneration(context);
   const scriptureAnalysis = analyzeScriptureVariety(usedScriptures);
+  let fetchedStoryId: string | undefined;
 
   // Build system prompt (same layers as batch generation)
   const baseSystem = getSystemPrompt(0);
@@ -597,13 +600,23 @@ async function _generateProgressiveDayInternal(
 
     if (uniqueThemes.length > 0) {
       try {
+        // Get used story IDs for dedup
+        const devo = useUnfoldStore.getState().devotionals.find((d) => d.id === devotionalId);
+        const excludeIds = devo?.usedStoryIds ?? [];
+
         const stories = await fetchStoriesForGeneration(uniqueThemes, {
           limit: 3,
           spinnable: true,
+          exclude: excludeIds,
         });
         storiesBlock = formatStoriesForPrompt(stories);
         if (storiesBlock) {
           logger.log(`Day ${dayNumber}: fetched ${stories.length} stories for themes [${uniqueThemes.join(', ')}]`);
+        }
+
+        // Track which story was used
+        if (stories.length > 0) {
+          fetchedStoryId = stories[0].id;
         }
       } catch {
         // Silent fallback — generation works without stories
@@ -629,7 +642,7 @@ async function _generateProgressiveDayInternal(
 
   // Build the progressive user prompt
   let userPrompt = buildProgressiveUserPrompt(
-    context, dayNumber, arc, memory, scriptureAnalysis,
+    devotionalId, context, dayNumber, arc, memory, scriptureAnalysis,
   );
 
   // Append real stories from the API (if available) to the user prompt
@@ -702,6 +715,11 @@ async function _generateProgressiveDayInternal(
     studyMethod: resolvedMethod?.id,
     generatedAt: new Date().toISOString(),
     contextSignals: buildContextSignalList(memory, dayNumber),
+    storyId: undefined, // Set below if a story was used
+    seriesReflectionSummary: dayData.seriesReflectionSummary,
+    closureArchetype: dayNumber === arc.totalDaysPlanned
+      ? getClosureArchetypeForSeries(devotionalId).name
+      : undefined,
   };
 
   logger.log(`Day ${dayNumber} generated: "${day.title}" — ${day.scriptureReference}`);
@@ -717,6 +735,12 @@ async function _generateProgressiveDayInternal(
   // Record method usage for cross-series tracking
   if (resolvedMethod?.id) {
     useUnfoldStore.getState().recordMethodUsage(resolvedMethod.id, devotionalId, dayNumber);
+  }
+
+  // Set storyId if a story was used
+  if (fetchedStoryId) {
+    day.storyId = fetchedStoryId;
+    useUnfoldStore.getState().addUsedStoryId(devotionalId, fetchedStoryId);
   }
 
   return day;
@@ -774,6 +798,7 @@ function resolveMethodForDay(
 // ---------------------------------------------------------------------------
 
 function buildProgressiveUserPrompt(
+  devotionalId: string,
   context: GenerationContext,
   dayNumber: number,
   arc: SeriesArc,
@@ -798,6 +823,18 @@ Feeling: ${sanitizeForPrompt(context.emotionalState, 200)}
 Seeking: ${sanitizeForPrompt(context.spiritualSeeking, 200)}
 Faith background: ${context.writingStyle?.faithBackground ?? 'growing'}
 Bible translation: ${context.bibleTranslation}`);
+
+  // Append previous day's engagement status to reader context
+  const prevDayMemory = memory.fullDays?.find((d: MemoryLayerFull) => d.dayNumber === dayNumber - 1);
+  if (prevDayMemory?.completionStatus) {
+    const statusMessages: Record<CompletionStatus, string> = {
+      completed_with_engagement: `The reader completed Day ${dayNumber - 1} and engaged deeply — their reflections are in RECENT DAYS above.`,
+      completed_minimal: `The reader completed Day ${dayNumber - 1}'s reading.`,
+      in_progress: `The reader is still working through Day ${dayNumber - 1}.`,
+      not_started: `The reader hasn't started Day ${dayNumber - 1} yet.`,
+    };
+    sections[0] += `\nEngagement: ${statusMessages[prevDayMemory.completionStatus]}`;
+  }
 
   // Section 2: Journey narrative (Layer 3)
   if (memory.narrative) {
@@ -885,6 +922,33 @@ ${methodCard.id === 'soap_journal' ? '- Frame questions around Scripture/Observa
     sections.push(lines.join('\n'));
   }
 
+  // Section 6.5: Series finale directive (last day only)
+  if (dayNumber === arc.totalDaysPlanned) {
+    const archetype = getClosureArchetypeForSeries(devotionalId);
+    const narrativeText = memory.narrative?.narrative ?? 'No journey narrative available.';
+    sections.push(`=== SERIES FINALE ===
+This is the FINAL day of this devotional series. Create a meaningful conclusion.
+
+Closure archetype: "${archetype.name}"
+${archetype.description}
+
+Guidelines:
+- Reflect back on the journey themes from the series narrative below
+- Revisit the reader's original story/struggle from onboarding
+- Show how the scripture and reflections have built toward this moment
+- End with a commissioning prayer — sending the reader forward
+- Include a "looking ahead" reflection question that plants a seed for what's next
+- Tone: warm, celebratory but grounded — like finishing a meaningful book with a friend
+
+Series journey narrative:
+${narrativeText}`);
+  }
+
+  // Conditional finale JSON field for last day of series
+  const finaleJsonFields = dayNumber === arc.totalDaysPlanned
+    ? `,\n  "seriesReflectionSummary": "2-3 sentence summary of what this series journey covered — for the completion celebration screen"`
+    : '';
+
   // Section 7: Generation instructions
   sections.push(`=== GENERATE DAY ${dayNumber} ===
 Write ONE devotional day for a ${readingMinutes}-minute reading (~${wordTarget} words for bodyText).
@@ -914,7 +978,7 @@ Respond with valid JSON only:
   "closingPrayer": "A first-person prayer (I/me/my) — never use the reader's name",
   "checkInQuestion": "A midday check-in question related to today's theme",
   "checkInChips": ["Quick response 1", "Quick response 2", "Quick response 3"],
-  "eveningScriptureRef": "A calming evening scripture reference"
+  "eveningScriptureRef": "A calming evening scripture reference"${finaleJsonFields}
 }`);
 
   return sections.join('\n\n');
@@ -965,6 +1029,13 @@ export function assembleContextBuffer(
   // Use the most recent check-in for the summary
   const latestCheckIn = checkIns[0];
 
+  const completionStatus = computeCompletionStatus({
+    isRead: dayData?.isRead ?? false,
+    hasJournal: !!journal?.content || !!journal?.soapResponses,
+    hasCheckIn: checkIns.length > 0,
+    hasReadAt: !!dayData?.readAt,
+  });
+
   return {
     dayNumber: completedDayNumber,
     devotionalTitle: dayData?.title ?? `Day ${completedDayNumber}`,
@@ -977,6 +1048,7 @@ export function assembleContextBuffer(
     checkInMoodLabel: latestCheckIn?.moodLabel,
     checkInChipAnswer: latestCheckIn?.chipAnswer,
     readAt: dayData?.readAt,
+    completionStatus,
   };
 }
 

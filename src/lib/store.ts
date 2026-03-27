@@ -344,6 +344,7 @@ export interface MemoryLayerFull {
   checkInChipAnswer?: string;
   readAt?: string;
   readingDurationMs?: number;
+  completionStatus?: import('./completion-status').CompletionStatus;
 }
 
 /** Compressed summary of a range of days (Layer 2) */
