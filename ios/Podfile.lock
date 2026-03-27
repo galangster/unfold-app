@@ -191,6 +191,8 @@ PODS:
     - ExpoModulesCore
   - ExpoAudio (55.0.8):
     - ExpoModulesCore
+  - ExpoBackgroundFetch (55.0.10):
+    - ExpoModulesCore
   - ExpoBattery (55.0.8):
     - ExpoModulesCore
   - ExpoBlur (55.0.8):
@@ -329,6 +331,9 @@ PODS:
     - ExpoModulesCore
   - ExpoSystemUI (55.0.9):
     - ExpoModulesCore
+  - ExpoTaskManager (55.0.10):
+    - ExpoModulesCore
+    - UMAppLoader
   - ExpoUI (55.0.1):
     - ExpoModulesCore
     - React-RCTFabric
@@ -3003,6 +3008,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - UMAppLoader (55.0.2)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -3020,6 +3026,7 @@ DEPENDENCIES:
   - ExpoAppleAuthentication (from `../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoAudio (from `../node_modules/expo-audio/ios`)
+  - ExpoBackgroundFetch (from `../node_modules/expo-background-fetch/ios`)
   - ExpoBattery (from `../node_modules/expo-battery/ios`)
   - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoBrightness (from `../node_modules/expo-brightness/ios`)
@@ -3061,6 +3068,7 @@ DEPENDENCIES:
   - ExpoStoreReview (from `../node_modules/expo-store-review/ios`)
   - ExpoSymbols (from `../node_modules/expo-symbols/ios`)
   - ExpoSystemUI (from `../node_modules/expo-system-ui/ios`)
+  - ExpoTaskManager (from `../node_modules/expo-task-manager/ios`)
   - "ExpoUI (from `../node_modules/@expo/ui/ios`)"
   - ExpoVideo (from `../node_modules/expo-video/ios`)
   - ExpoVideoThumbnails (from `../node_modules/expo-video-thumbnails/ios`)
@@ -3171,6 +3179,7 @@ DEPENDENCIES:
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - "tentap (from `../node_modules/@10play/tentap-editor`)"
+  - UMAppLoader (from `../node_modules/unimodules-app-loader/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -3221,6 +3230,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-asset/ios"
   ExpoAudio:
     :path: "../node_modules/expo-audio/ios"
+  ExpoBackgroundFetch:
+    :path: "../node_modules/expo-background-fetch/ios"
   ExpoBattery:
     :path: "../node_modules/expo-battery/ios"
   ExpoBlur:
@@ -3303,6 +3314,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-symbols/ios"
   ExpoSystemUI:
     :path: "../node_modules/expo-system-ui/ios"
+  ExpoTaskManager:
+    :path: "../node_modules/expo-task-manager/ios"
   ExpoUI:
     :path: "../node_modules/@expo/ui/ios"
   ExpoVideo:
@@ -3522,6 +3535,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-worklets"
   tentap:
     :path: "../node_modules/@10play/tentap-editor"
+  UMAppLoader:
+    :path: "../node_modules/unimodules-app-loader/ios"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -3540,6 +3555,7 @@ SPEC CHECKSUMS:
   ExpoAppleAuthentication: 86e97b24bd6687c156c55bb448f570bc29081ace
   ExpoAsset: 7701a5ed7df0170d280b29af4b9e5e570cab29b2
   ExpoAudio: af1b3b6271e309bfc1ea4626284a47d3af49c7e1
+  ExpoBackgroundFetch: e2cbb4b2434c05f007baa45ca81d67209228435e
   ExpoBattery: 6248dea4b5c9e9c05e16bdd2fe8c7c5d7b3b02c9
   ExpoBlur: aaa1443160dec73e53850f1f7010463d645c97d9
   ExpoBrightness: 2db2f4f24d57939960b5bbec77df4eaa57ba5898
@@ -3581,6 +3597,7 @@ SPEC CHECKSUMS:
   ExpoStoreReview: 9c2691ba892a818f17b80787c5b3163df0598e1b
   ExpoSymbols: 307fe2d295b4a8e7bb782b4356f1e30e32f400a9
   ExpoSystemUI: ae936ff8f78ca3d6c13884704beb7705fe26d136
+  ExpoTaskManager: 8bd83cdc4b57aaa750806366385ef1781fa70dc3
   ExpoUI: db65f9a5eed67fc6b4789c4ca384cd22220fb359
   ExpoVideo: 1c915f3277188fd47ba9daa29f02ee4468f435fe
   ExpoVideoThumbnails: 3cefcc573fd30bf787b985fad6d33f405e059f22
@@ -3706,6 +3723,7 @@ SPEC CHECKSUMS:
   SPIndicator: 93e0a4fb23de51294ac48e874c0f081a5e293e4f
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   tentap: 60c7b42c6b4c3e91ebccb9917a0217a8009b8112
+  UMAppLoader: 71b50bcc31d86495e52c0b4cd17e2708bf297be3
   Yoga: dd994d8c85dca5cc9b10f5df8c01f9ef1d0da191
 
 PODFILE CHECKSUM: 86c7af9f23ae063ee1ae80b5c0e820c46b105d25
