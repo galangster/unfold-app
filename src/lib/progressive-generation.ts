@@ -1237,6 +1237,23 @@ export async function triggerNextDayGeneration(
     return null;
   }
 
+  // Check for stale generation state (app was killed mid-generation)
+  const currentGen = store.progressiveGeneration.currentDayGeneration;
+  if (currentGen?.status === 'generating' && currentGen.startedAt) {
+    const startedAt = new Date(currentGen.startedAt).getTime();
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    if (startedAt < fiveMinutesAgo) {
+      logger.warn(`Stale generation detected for day ${currentGen.dayNumber} (started ${currentGen.startedAt}), resetting to failed`);
+      store.setProgressiveGeneration({
+        currentDayGeneration: {
+          ...currentGen,
+          status: 'failed',
+          error: 'Generation timed out (app may have been backgrounded)',
+        },
+      });
+    }
+  }
+
   // Update generation state
   store.setProgressiveGeneration({
     devotionalId,
