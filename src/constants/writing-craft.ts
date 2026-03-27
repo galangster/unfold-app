@@ -1150,3 +1150,42 @@ export function getCraftInfluencesForTraits(
 
   return lines.join('\n');
 }
+
+// ---------------------------------------------------------------------------
+// Series Finale Closure Archetypes
+// ---------------------------------------------------------------------------
+
+export interface ClosureArchetype {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export const CLOSURE_ARCHETYPES: ClosureArchetype[] = [
+  { id: 'commissioning', name: 'Commissioning', description: 'Send the reader forward with a charge and sense of purpose. End with a prayer that anoints them for what comes next — not wrapping up, but launching out.' },
+  { id: 'reflection_mosaic', name: 'Reflection Mosaic', description: 'Weave together threads from across the series — a phrase from Day 2, a prayer from Day 5, a struggle from Day 8 — into a mosaic that reveals the bigger picture only visible at the end.' },
+  { id: 'full_circle', name: 'Full Circle', description: 'Return to the opening theme or scripture of Day 1, but now the reader sees it with transformed eyes. The same words carry different weight after the journey.' },
+  { id: 'gratitude', name: 'Gratitude', description: 'Celebrate what the reader brought to this series — their honesty, their questions, their willingness to show up. Make the reader feel seen for the work they did, not just the content they consumed.' },
+  { id: 'open_door', name: 'Open Door', description: 'End with a question, not an answer. The series opened something that was meant to stay open. Leave the reader leaning forward, curious, unfinished in the best way.' },
+  { id: 'letter_to_self', name: 'Letter to Self', description: 'Frame the devotional as a letter the reader is writing to their future self — capturing what they learned, what they hope to remember, what they want to carry.' },
+  { id: 'benediction', name: 'Benediction', description: 'End with a spoken blessing in the tradition of Numbers 6:24-26. Priestly, warm, authoritative. The reader should feel like hands have been placed on their head.' },
+  { id: 'campfire', name: 'Campfire', description: 'Intimate storytelling tone — "remember when we started this?" Walk back through the journey like old friends around a fire, noticing how far the reader has come.' },
+  { id: 'milestone_marker', name: 'Milestone Marker', description: 'Concrete, specific acknowledgment of what was accomplished. Name the days completed, the scriptures explored, the prayers prayed. Make the invisible work visible.' },
+  { id: 'quiet_landing', name: 'Quiet Landing', description: 'No fanfare. No grand statements. Just stillness. The series ends the way a deep breath ends — not with a gasp, but with a gentle release. Trust the silence.' },
+  { id: 'torch_pass', name: 'Torch Pass', description: 'Frame the reader as now equipped to carry what they received to someone else. They are no longer just a learner — they have something to offer. Commission them as a giver, not just a receiver.' },
+];
+
+/**
+ * Deterministic archetype selection based on devotional ID hash.
+ * Same ID always returns the same archetype (consistent on retry).
+ */
+export function getClosureArchetypeForSeries(devotionalId: string): ClosureArchetype {
+  let hash = 0;
+  for (let i = 0; i < devotionalId.length; i++) {
+    const char = devotionalId.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32-bit integer
+  }
+  const index = Math.abs(hash) % CLOSURE_ARCHETYPES.length;
+  return CLOSURE_ARCHETYPES[index];
+}
