@@ -46,9 +46,10 @@ export async function fetchStoriesForGeneration(
     category?: string;
     limit?: number;
     spinnable?: boolean;
+    exclude?: string[];
   } = {}
 ): Promise<StoryResult[]> {
-  const { category, limit = 5, spinnable = true } = options;
+  const { category, limit = 5, spinnable = true, exclude } = options;
 
   try {
     const params = new URLSearchParams();
@@ -57,6 +58,9 @@ export async function fetchStoriesForGeneration(
     if (spinnable !== undefined) params.set('spinnable', String(spinnable));
     params.set('limit', String(limit));
     params.set('random', 'true');
+    if (exclude?.length) {
+      params.set('exclude', exclude.join(','));
+    }
 
     const headers = await getAuthHeaders();
     const controller = new AbortController();
