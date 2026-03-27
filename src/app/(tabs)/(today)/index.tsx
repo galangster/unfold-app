@@ -14,7 +14,8 @@ import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
-import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
+import { cancelAndRescheduleMiddayForTomorrow, refreshDailyReminder } from '@/lib/notifications';
+import { isPastCutoff, todayDateString } from '@/lib/cutoff-logic';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips, type TargetRect } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
@@ -211,8 +212,18 @@ export default function HomeScreen() {
       missingDay: currentDay,
     });
 
-    triggerNextDayGeneration(currentDevotional.id, currentDay - 1)
-      .finally(() => setIsPreparingCurrentDay(false));
+    // Only generate if past midnight cutoff (ensures full engagement context)
+    const lastCutoff = useUnfoldStore.getState().lastGenerationCutoffDate;
+    if (isPastCutoff(lastCutoff)) {
+      triggerNextDayGeneration(currentDevotional.id, currentDay - 1)
+        .then(() => {
+          useUnfoldStore.getState().setLastGenerationCutoffDate(todayDateString());
+          refreshDailyReminder();
+        })
+        .finally(() => setIsPreparingCurrentDay(false));
+    } else {
+      setIsPreparingCurrentDay(false);
+    }
   }, [currentDevotional]);
 
   // Daily Bridge — generate a personalized transition from yesterday to today
