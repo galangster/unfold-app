@@ -239,6 +239,7 @@ interface CompletionCelebrationProps {
   onDismiss: () => void;
   type: 'day' | 'series';
   message?: string;
+  seriesReflectionSummary?: string;
 }
 
 export function CompletionCelebration({
@@ -246,6 +247,7 @@ export function CompletionCelebration({
   onDismiss,
   type,
   message,
+  seriesReflectionSummary,
 }: CompletionCelebrationProps) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
@@ -403,6 +405,24 @@ export function CompletionCelebration({
                 {subtitle}
               </Text>
             </Animated.View>
+
+            {/* Series reflection summary */}
+            {type === 'series' && seriesReflectionSummary && (
+              <Animated.View style={[{ marginTop: 12 }, subtitleStyle]}>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.bodyItalic,
+                    fontSize: 14,
+                    lineHeight: 20,
+                    color: 'rgba(245, 240, 235, 0.35)',
+                    textAlign: 'left',
+                    paddingHorizontal: 8,
+                  }}
+                >
+                  {seriesReflectionSummary}
+                </Text>
+              </Animated.View>
+            )}
           </View>
 
           {/* Dismiss hint */}

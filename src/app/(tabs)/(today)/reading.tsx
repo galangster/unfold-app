@@ -1960,6 +1960,11 @@ export default function ReadingScreen() {
           }
         }}
         type={celebrationType}
+        seriesReflectionSummary={
+          celebrationType === 'series'
+            ? currentDevotional?.days.find((d) => d.dayNumber === viewingDay)?.seriesReflectionSummary
+            : undefined
+        }
       />
 
       {/* Phase 5: Continuation Prompt */}
