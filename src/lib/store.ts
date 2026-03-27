@@ -189,6 +189,10 @@ export interface DevotionalDay {
   // Progressive generation metadata
   generatedAt?: string;
   contextSignals?: string[];
+  // Deferred generation metadata
+  storyId?: string;
+  seriesReflectionSummary?: string;
+  closureArchetype?: string;
 }
 
 export interface Devotional {
@@ -212,6 +216,8 @@ export interface Devotional {
   seriesArc?: SeriesArc;
   progressiveMemory?: ProgressiveMemory;
   generationMode: 'batch' | 'progressive';
+  // Story deduplication
+  usedStoryIds?: string[];
 }
 
 export type JournalMode = 'freewrite' | 'soap' | 'guided';
@@ -676,6 +682,11 @@ interface UnfoldState {
   hasConsentedToAI: boolean;
   setHasConsentedToAI: (consented: boolean) => void;
 
+  // Deferred generation
+  lastGenerationCutoffDate: string;
+  setLastGenerationCutoffDate: (date: string) => void;
+  addUsedStoryId: (devotionalId: string, storyId: string) => void;
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -739,6 +750,8 @@ const initialState = {
   eveningWindDownByDay: null,
   // AI data consent
   hasConsentedToAI: false,
+  // Deferred generation
+  lastGenerationCutoffDate: '',
   // Notebook
   notes: [] as Note[],
   folders: [] as NoteFolder[],
@@ -1301,6 +1314,16 @@ export const useUnfoldStore = create<UnfoldState>()(
       // AI data consent
       setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
 
+      // Deferred generation
+      setLastGenerationCutoffDate: (date) => set({ lastGenerationCutoffDate: date }),
+      addUsedStoryId: (devotionalId, storyId) => set((state) => {
+        const devo = state.devotionals.find((d) => d.id === devotionalId);
+        if (devo) {
+          devo.usedStoryIds = [...(devo.usedStoryIds ?? []), storyId];
+        }
+        return { devotionals: [...state.devotionals] };
+      }),
+
       // Progressive generation state
       setProgressiveGeneration: (updates) =>
         set((state) => ({
@@ -1612,7 +1635,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 26, // Increment when state structure changes
+      version: 27, // Increment when state structure changes
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1902,6 +1925,15 @@ export const useUnfoldStore = create<UnfoldState>()(
             (state as any).eveningWindDownByDay = (state as any).eveningWindDownByDay ?? null;
           } catch (err) {
             console.error('[store] Migration v25→26 failed:', err);
+          }
+        }
+
+        // Migration from version 26 to 27: Add deferred generation fields
+        if (version < 27) {
+          try {
+            (state as any).lastGenerationCutoffDate = (state as any).lastGenerationCutoffDate ?? '';
+          } catch (err) {
+            console.error('[store] Migration v26→27 failed:', err);
           }
         }
 
