@@ -36,6 +36,7 @@ import {
   CaretDownIcon,
   CaretUpIcon,
   BookOpenIcon,
+  ArrowRightIcon,
   EyeIcon,
   HandsPrayingIcon,
   PencilSimpleIcon,
@@ -784,15 +785,28 @@ Their journal entry:
             bottomOffset={20}
             extraKeyboardSpace={120}
           >
-            {/* Scripture anchor — connects the blank page to today's content */}
+            {/* Scripture anchor — tappable link back to today's reading */}
             {currentDay && (
               <Animated.View entering={FadeIn.duration(400)}>
-                <View style={[jStyles.scriptureAnchor, { borderLeftColor: alpha(colors.accent, 0.25) }]}>
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({
+                      pathname: '/(tabs)/(today)/reading',
+                      params: { dayNumber: String(dayNumber) },
+                    });
+                  }}
+                  style={[jStyles.scriptureAnchor, { borderLeftColor: alpha(colors.accent, 0.25) }]}
+                  accessibilityLabel={`Return to reading: ${currentDay.title}`}
+                  accessibilityRole="link"
+                >
                   <Text style={[jStyles.scriptureAnchorText, { color: colors.textMuted }]}>
                     {currentDay.title}
                     {currentDay.scriptureReference ? ` — ${currentDay.scriptureReference}` : ''}
                   </Text>
-                </View>
+                  <ArrowRightIcon size={14} color={colors.textMuted} weight="light" style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
               </Animated.View>
             )}
 
@@ -1294,12 +1308,15 @@ const jStyles = StyleSheet.create({
     paddingBottom: 300,
   },
   scriptureAnchor: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: Spacing['6'],
     paddingLeft: Spacing['3'],
     borderLeftWidth: 2,
     borderRadius: 1,
   },
   scriptureAnchorText: {
+    flex: 1,
     fontFamily: FontFamily.bodyItalic,
     fontSize: FontSize.sm,
     lineHeight: 20,
