@@ -874,6 +874,12 @@ Their journal entry:
                               style={jStyles.questionInputWrapper}
                             >
                               <View style={[jStyles.questionInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}>
+                                <Text
+                                  numberOfLines={2}
+                                  style={[jStyles.questionInputPromptHint, { color: colors.textMuted }]}
+                                >
+                                  {prompt}
+                                </Text>
                                 <TextInput
                                   ref={(ref) => {
                                     questionInputRefs.current.set(index, ref);
@@ -1350,6 +1356,12 @@ const jStyles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     padding: 14,
+  },
+  questionInputPromptHint: {
+    fontFamily: FontFamily.bodyItalic,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
   },
   questionTextInput: {
     minHeight: 80,
