@@ -126,7 +126,7 @@ export default function SettingsScreen() {
   const handleSignOut = useCallback(async () => {
     Alert.alert(
       'Sign out?',
-      'Your devotionals and data will remain on this device. You can sign back in anytime.',
+      'This will clear all your data on this device and return you to the start.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -137,15 +137,10 @@ export default function SettingsScreen() {
               setIsSigningOut(true);
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               await signOut();
-              updateUser({
-                authUserId: null,
-                authProvider: null,
-                authEmail: null,
-                authDisplayName: null,
-                hasCompletedOnboarding: false,
-              });
+              // Full reset — clear all user data, devotionals, preferences
+              reset();
+              useCompanionChatStore.getState().clearAllConversations();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              // Navigate to splash screen — hasCompletedOnboarding=false prevents auto-redirect
               router.replace({ pathname: '/', params: { signedOut: '1' } });
             } catch (err) {
               logger.error('[Settings] Sign out error:', err);
@@ -157,7 +152,7 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [signOut, updateUser, router]);
+  }, [signOut, reset, router]);
 
   const handleSettingsOAuth = useCallback(async (
     startFlow: typeof startAppleFlow,

@@ -362,7 +362,7 @@ export default function SignInScreen() {
               activeOpacity={0.8}
               disabled={isSigningIn}
             >
-              <AppleLogoIcon size={20} color="#1F1F1F" weight="fill" />
+              <AppleLogoIcon size={22} color="#1F1F1F" weight="fill" />
               <Text style={[styles.oauthButtonText, { color: '#1F1F1F' }]}>
                 Sign in with Apple
               </Text>
