@@ -157,6 +157,7 @@ export default function JournalScreen() {
   const addPrayerRequest = useUnfoldStore((s) => s.addPrayerRequest);
   const togglePrayerAnswered = useUnfoldStore((s) => s.togglePrayerAnswered);
   const updateQuestionResponse = useUnfoldStore((s) => s.updateQuestionResponse);
+  const setDeeperQuestions = useUnfoldStore((s) => s.setDeeperQuestions);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
@@ -193,6 +194,9 @@ export default function JournalScreen() {
   );
   const soapInputRefs = useRef<Map<string, TextInput | null>>(new Map());
   const soapSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const soapValuesRef = useRef(soapValues);
+  soapValuesRef.current = soapValues;
+  const hasPendingSoapRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -201,8 +205,10 @@ export default function JournalScreen() {
   const [showPrayerInput, setShowPrayerInput] = useState(false);
   const prayerInputRef = useRef<TextInput>(null);
 
-  // Go Deeper state
-  const [deeperPrompts, setDeeperPrompts] = useState<string[]>([]);
+  // Go Deeper state — restore from persisted entry if available
+  const [deeperPrompts, setDeeperPrompts] = useState<string[]>(
+    () => existingEntry?.deeperQuestions ?? []
+  );
   const [loadingDeeper, setLoadingDeeper] = useState(false);
   const [deeperError, setDeeperError] = useState(false);
 
@@ -310,17 +316,29 @@ export default function JournalScreen() {
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
-      if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
-      // Flush any pending changes on unmount — including deletions (empty content).
-      // Must run before setting isMountedRef to false so saveEntry is not blocked.
+      // Flush any pending SOAP saves before unmount
+      if (hasPendingSoapRef.current && soapSaveTimerRef.current) {
+        clearTimeout(soapSaveTimerRef.current);
+        // Synchronously flush all SOAP fields
+        const entryId = savedEntryIdRef.current;
+        if (entryId) {
+          const vals = soapValuesRef.current;
+          for (const key of ['scripture', 'observation', 'application', 'prayer'] as const) {
+            if (vals[key]) updateSoapResponse(entryId, key, vals[key]);
+          }
+        }
+      } else if (soapSaveTimerRef.current) {
+        clearTimeout(soapSaveTimerRef.current);
+      }
+      // Flush any pending freewrite changes on unmount
       if (hasChangesRef.current) {
         saveEntry(contentRef.current);
       }
       isMountedRef.current = false;
     };
-  }, [saveEntry]);
+  }, [saveEntry, updateSoapResponse]);
 
   useEffect(() => {
     if (!hasChanges || isSaving) return;
@@ -354,6 +372,8 @@ export default function JournalScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (activeMode === 'freewrite') {
       saveEntry(content);
+    } else if (activeMode === 'soap') {
+      flushSoapSaves();
     }
     AccessibilityInfo.announceForAccessibility('Journal entry saved');
     router.back();
@@ -390,6 +410,7 @@ export default function JournalScreen() {
   // SOAP handlers
   const handleSoapChange = useCallback((field: keyof SoapResponses, text: string) => {
     setSoapValues((prev) => ({ ...prev, [field]: text }));
+    hasPendingSoapRef.current = true;
 
     if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
     soapSaveTimerRef.current = setTimeout(() => {
@@ -397,7 +418,24 @@ export default function JournalScreen() {
       if (entryId) {
         updateSoapResponse(entryId, field, text);
       }
+      hasPendingSoapRef.current = false;
     }, 800);
+  }, [ensureEntry, updateSoapResponse]);
+
+  // Flush all pending SOAP values to the store immediately
+  const flushSoapSaves = useCallback(() => {
+    if (!hasPendingSoapRef.current) return;
+    if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
+    const entryId = ensureEntry();
+    if (entryId) {
+      const vals = soapValuesRef.current;
+      for (const key of ['scripture', 'observation', 'application', 'prayer'] as const) {
+        if (vals[key]) {
+          updateSoapResponse(entryId, key, vals[key]);
+        }
+      }
+    }
+    hasPendingSoapRef.current = false;
   }, [ensureEntry, updateSoapResponse]);
 
   const handleSoapSectionTap = useCallback((field: keyof SoapResponses) => {
@@ -646,7 +684,19 @@ Their journal entry:
 
       if (Array.isArray(parsed) && parsed.length > 0) {
         await incrementRateLimit('go-deeper');
-        setDeeperPrompts(parsed.slice(0, 3));
+        const prompts = parsed.slice(0, 3);
+        setDeeperPrompts(prompts);
+
+        // Persist to store so questions survive navigation
+        if (!savedEntryIdRef.current) {
+          addJournalEntry({ devotionalId, dayNumber, content: content || '', journalMode: activeMode });
+          const newEntry = getJournalEntry(devotionalId, dayNumber);
+          if (newEntry) savedEntryIdRef.current = newEntry.id;
+        }
+        if (savedEntryIdRef.current) {
+          setDeeperQuestions(savedEntryIdRef.current, prompts);
+        }
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         throw new Error('Invalid response format');

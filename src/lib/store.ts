@@ -249,6 +249,8 @@ export interface JournalEntry {
   prayerRequests?: PrayerRequest[];
   // Phase 4: Per-question responses for Go Deeper
   questionResponses?: { question: string; response: string }[];
+  // Persisted "Go Deeper" prompt questions so they don't regenerate on revisit
+  deeperQuestions?: string[];
 }
 
 // Phase 2: Midday Check-In
@@ -502,6 +504,7 @@ interface UnfoldState {
   addPrayerRequest: (entryId: string, text: string) => void;
   togglePrayerAnswered: (entryId: string, prayerId: string) => void;
   updateQuestionResponse: (entryId: string, question: string, response: string) => void;
+  setDeeperQuestions: (entryId: string, questions: string[]) => void;
   getJournalEntry: (devotionalId: string, dayNumber: number) => JournalEntry | undefined;
 
   // Scripture tracking for variety
@@ -964,6 +967,15 @@ export const useUnfoldStore = create<UnfoldState>()(
             }
             return { ...e, questionResponses: updated, updatedAt: new Date().toISOString() };
           }),
+        })),
+
+      setDeeperQuestions: (entryId, questions) =>
+        set((state) => ({
+          journalEntries: state.journalEntries.map((e) =>
+            e.id === entryId
+              ? { ...e, deeperQuestions: questions, updatedAt: new Date().toISOString() }
+              : e
+          ),
         })),
 
       getJournalEntry: (devotionalId, dayNumber) => {
