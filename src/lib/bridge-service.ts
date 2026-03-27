@@ -321,7 +321,7 @@ export async function generateBridge(
     await incrementRateLimit('bridge');
     return cleanText;
   } catch (error) {
-    logger.error(
+    logger.warn(
       `${LOG_PREFIX} generation failed`,
       error instanceof Error ? error.message : error
     );
