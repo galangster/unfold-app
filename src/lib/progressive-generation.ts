@@ -949,6 +949,24 @@ ${narrativeText}`);
     ? `,\n  "seriesReflectionSummary": "2-3 sentence summary of what this series journey covered — for the completion celebration screen"`
     : '';
 
+  // Section 6.7: Quote selection directive
+  sections.push(`=== QUOTE SELECTION ===
+Draw quotes from the full breadth of human wisdom — not just theologians.
+Include: poets, scientists, activists, philosophers, novelists, artists,
+world leaders, musicians, athletes, indigenous voices, comedians, everyday
+wisdom. The only criteria:
+
+1. The quote illuminates today's specific theme
+2. The tone complements the devotional's spiritual posture (reflective,
+   warm, searching) — it should feel like it belongs in the same room
+   as the scripture, even if the author isn't religious
+3. Avoid voices primarily known for opposing faith/spirituality — not
+   because they lack wisdom, but because the tonal dissonance distracts
+   from the reader's experience
+4. No profanity or crude language in quoted text
+5. Vary sources across days — don't default to the same familiar voices
+   (C.S. Lewis, Henri Nouwen) every time. Surprise the reader.`);
+
   // Section 7: Generation instructions
   sections.push(`=== GENERATE DAY ${dayNumber} ===
 Write ONE devotional day for a ${readingMinutes}-minute reading (~${wordTarget} words for bodyText).

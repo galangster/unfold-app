@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   preparingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
   // -- Speed --
   speedPill: {
