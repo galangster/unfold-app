@@ -24,6 +24,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 // blocking touch events and causing audio playback freezes. See GlowBackground.tsx for details.
 // import { GlowBackground } from '@/components/GlowBackground';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
+import { registerBackgroundGeneration } from '@/lib/background-generation';
 
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -127,6 +128,11 @@ function RootLayoutNav() {
       Sentry.setUser(null);
     }
   }, [userId, email, authProvider, isPremium]);
+
+  // Register background generation task (fire-and-forget, logs warnings internally)
+  useEffect(() => {
+    registerBackgroundGeneration();
+  }, []);
 
   return (
     <NavigationThemeProvider value={navigationTheme}>
