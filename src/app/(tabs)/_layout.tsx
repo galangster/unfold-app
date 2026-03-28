@@ -209,8 +209,13 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               canPreventDefault: true,
             });
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
+            if (!event.defaultPrevented) {
+              if (!isFocused) {
+                navigation.navigate(route.name, route.params);
+              } else {
+                // Already on this tab — pop to root (e.g., reading → home)
+                navigation.navigate(route.name, { screen: 'index' });
+              }
 
               // Auto-collapse audio player to pill on tab switch
               if (playerTier === 'sheet') {

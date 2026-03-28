@@ -964,14 +964,16 @@ export default function OnboardingScreen() {
       const themeName = data.selectedThemes.length > 0
         ? getThemeById(data.selectedThemes[0])?.name ?? data.selectedThemes[0]
         : '';
-      const typeName = data.selectedType?.replace(/_/g, ' ') ?? '';
+      const typeName = data.selectedType
+        ? getDevotionalTypeById(data.selectedType)?.name ?? data.selectedType.replace(/_/g, ' ')
+        : '';
 
       const firstQuestion: { question: string; subtext: string; chips?: string[] } = selectionType === 'theme' ? {
         question: `What does "${themeName}" look like in your life right now?`,
         subtext: "The honest, unfiltered reality of where you are.",
         chips: getContextualChips('currentSituation', themeName),
       } : selectionType === 'type' ? {
-        question: `As you begin this ${typeName}, what's on your heart?`,
+        question: `As you begin your ${typeName} journey, what's on your heart?`,
         subtext: "The thing that's there when the noise quiets down.",
         chips: getContextualChips('currentSituation', typeName),
       } : {
@@ -1752,8 +1754,8 @@ export default function OnboardingScreen() {
             </Animated.View>
           </View>
 
-          {/* CTA */}
-          <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['10'] }}>
+          {/* CTA buttons */}
+          <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['10'], gap: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1782,7 +1784,29 @@ export default function OnboardingScreen() {
                   fontSize: FontSize.base,
                   color: '#FFFFFF',
                 }}>
-                  Begin my series
+                  Yes, this feels right
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                handleBack();
+              }}
+            >
+              <View style={{
+                paddingVertical: 14,
+                paddingHorizontal: Spacing['6'],
+                borderRadius: Radius.lg,
+                alignItems: 'center',
+              }}>
+                <Text style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: FontSize.sm,
+                  color: colors.textMuted,
+                }}>
+                  Let me adjust something
                 </Text>
               </View>
             </TouchableOpacity>
@@ -1983,7 +2007,7 @@ export default function OnboardingScreen() {
             <Text
               style={{
                 fontFamily: FontFamily.displayItalic,
-                fontSize: 26,
+                fontSize: 30,
                 color: colors.text,
               }}
             >
@@ -2465,12 +2489,12 @@ export default function OnboardingScreen() {
                           : getStepQuestion()
                       }
                       onComplete={handleTypewriterComplete}
-                      style={{ fontSize: 28, lineHeight: 36, color: colors.text }}
+                      style={{ fontSize: 32, lineHeight: 40, color: colors.text }}
                     />
                   </View>
                   {showInput && (
                     <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['6'] }}>
-                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>
+                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.lg, color: colors.textMuted, lineHeight: 26 }}>
                         {baseStep?.type === 'themeType' && themeSelectionMode === 'theme'
                           ? "Select up to 3 themes that resonate with where you are."
                           : baseStep?.type === 'themeType' && themeSelectionMode === 'type'
@@ -2550,13 +2574,13 @@ export default function OnboardingScreen() {
                       <TypewriterText
                         text={getStepQuestion()}
                         onComplete={handleTypewriterComplete}
-                        style={{ fontSize: 28, lineHeight: 36, color: colors.text }}
+                        style={{ fontSize: 32, lineHeight: 40, color: colors.text }}
                       />
                     )}
                   </View>
                   {showInput && (
                     <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['8'] }}>
-                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.base, color: colors.textMuted, lineHeight: 24 }}>{getStepSubtext()}</Text>
+                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.lg, color: colors.textMuted, lineHeight: 26 }}>{getStepSubtext()}</Text>
                     </Animated.View>
                   )}
                   {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
