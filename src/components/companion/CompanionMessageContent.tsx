@@ -73,7 +73,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
       {/* Icon column — 28px wide + 12px gap = 40px indent */}
       <View style={{ width: 28, marginRight: Spacing['3'] }}>
         {showIcon && (
-          <CompanionOrb accentColor={colors.accent} size={28} />
+          <CompanionOrb accentColor={colors.accent} size={28} animated={false} />
         )}
       </View>
 

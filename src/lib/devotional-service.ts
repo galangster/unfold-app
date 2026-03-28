@@ -2075,6 +2075,178 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
   }
 }
 
+// Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
+export interface MirrorBackContent {
+  opening: string;
+  verse: string;
+  verseRef: string;
+  closing: string;
+}
+
+export async function generateMirrorBackText(
+  onboardingData: {
+    selectedThemes?: string[];
+    selectedType?: string;
+    emotionalState?: string;
+    currentSituation?: string;
+    spiritualSeeking?: string;
+    devotionalLength?: number;
+    name?: string;
+  }
+): Promise<{ content: MirrorBackContent; source: 'backend' | 'fallback' }> {
+  const rateLimit = await checkRateLimit('adaptive-question');
+  if (!rateLimit.allowed) {
+    logger.warn('[MirrorBack] Rate limited, using fallback');
+    return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
+  }
+
+  try {
+    const contextParts: string[] = [];
+    if (onboardingData.selectedThemes?.length) {
+      contextParts.push(`Selected themes: ${onboardingData.selectedThemes.join(', ')}`);
+    }
+    if (onboardingData.selectedType) {
+      contextParts.push(`Study type: ${onboardingData.selectedType}`);
+    }
+    if (onboardingData.emotionalState) {
+      contextParts.push(`How they're feeling: ${onboardingData.emotionalState}`);
+    }
+    if (onboardingData.currentSituation) {
+      contextParts.push(`Their current situation: ${onboardingData.currentSituation}`);
+    }
+    if (onboardingData.spiritualSeeking) {
+      contextParts.push(`What they're seeking: ${onboardingData.spiritualSeeking}`);
+    }
+    const daysText = onboardingData.devotionalLength ? `${onboardingData.devotionalLength} days` : 'the days ahead';
+
+    const systemPrompt = `You write intimate, poetic mirror-back reflections for a Christian devotional app. The user just completed onboarding and shared personal details about where they are spiritually and emotionally. Your job is to write a short, beautiful reflection that makes them feel SEEN — like something sacred is about to begin.
+
+This is NOT a summary of their answers. This is a mini devotional moment that speaks to the heart of what they shared.
+
+VOICE: Warm, unhurried, intimate. Like a trusted spiritual director speaking gently. No exclamation marks. No hype. No Christian clichés ("season of life", "walk with God", "journey"). Write like a poet, not a pastor.
+
+STRUCTURE — return valid JSON with these four fields:
+{
+  "opening": "1-2 sentences that acknowledge where they are without parroting their words back. Speak to the emotional undercurrent, not the surface details. Make them feel understood.",
+  "verse": "A single Bible verse (just the text, no quotes) that speaks directly to their situation. Choose something unexpected when possible — not the obvious verse for their theme. ESV translation.",
+  "verseRef": "Book chapter:verse (e.g. 'Isaiah 43:19')",
+  "closing": "1 sentence about what the next ${daysText} will hold for them. Create anticipation. Make it feel like something is being crafted specifically for them."
+}
+
+RULES:
+- opening: 1-2 sentences, max 180 characters. No questions. Speak WITH them, not AT them.
+- verse: Pick a verse that will surprise and move them. Avoid overused verses (Jeremiah 29:11, Philippians 4:13, Romans 8:28) unless truly perfect. Use lesser-known passages when possible.
+- verseRef: Standard format, ESV translation
+- closing: 1 sentence, max 120 characters. Reference "${daysText}" naturally.
+- NEVER use the person's name
+- NEVER reference specific biographical details (job, family role, location)
+- Speak to the emotional truth, not the facts
+- RESPOND WITH VALID JSON ONLY`;
+
+    const userPrompt = `Here is what this person shared during onboarding:\n\n${contextParts.join('\n')}\n\nWrite a mirror-back reflection that makes them feel seen and creates anticipation for the ${daysText} ahead.`;
+
+    const backendResult = await postJsonWithBackendFallback(
+      '/api/generate/adaptive-question',
+      {
+        model: 'grok-4-1-fast-non-reasoning',
+        max_tokens: 350,
+        temperature: 0.8,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      },
+      { timeoutMs: 12000 },
+    );
+
+    const { response } = backendResult;
+
+    if (!response.ok) {
+      logger.warn('[MirrorBack] Backend error, using fallback:', response.status);
+      return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
+    }
+
+    const data = await response.json();
+
+    // Try direct structured response
+    if (typeof data?.opening === 'string' && data.opening.trim()) {
+      await incrementRateLimit('adaptive-question');
+      return {
+        content: {
+          opening: data.opening.trim(),
+          verse: data.verse?.trim() || 'Be still, and know that I am God.',
+          verseRef: data.verseRef?.trim() || 'Psalm 46:10',
+          closing: data.closing?.trim() || `Over the next ${daysText}, each devotional will be written for exactly where you are.`,
+        },
+        source: 'backend',
+      };
+    }
+
+    // Parse from content array (Anthropic-style response)
+    const content = data?.content?.[0]?.text;
+    if (content && typeof content === 'string') {
+      let jsonText = content;
+      const markdownMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+      if (markdownMatch) jsonText = markdownMatch[1].trim();
+      else {
+        const objectMatch = content.match(/\{[\s\S]*\}/);
+        if (objectMatch) jsonText = objectMatch[0];
+      }
+
+      const parsed = JSON.parse(jsonText);
+      if (parsed?.opening) {
+        await incrementRateLimit('adaptive-question');
+        return {
+          content: {
+            opening: parsed.opening.trim(),
+            verse: parsed.verse?.trim() || 'Be still, and know that I am God.',
+            verseRef: parsed.verseRef?.trim() || 'Psalm 46:10',
+            closing: parsed.closing?.trim() || `Over the next ${daysText}, each devotional will be written for exactly where you are.`,
+          },
+          source: 'backend',
+        };
+      }
+    }
+
+    logger.warn('[MirrorBack] Could not parse backend response, using fallback');
+    return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
+  } catch (err) {
+    logger.warn('[MirrorBack] Error generating mirror-back:', err);
+    return { content: buildFallbackMirrorBack(onboardingData), source: 'fallback' };
+  }
+}
+
+// Fallback mirror-back content when AI generation fails
+function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; spiritualSeeking?: string; devotionalLength?: number }): MirrorBackContent {
+  const daysText = data.devotionalLength ? `${data.devotionalLength} days` : 'the days ahead';
+  const hasEmotional = !!(data.emotionalState || data.currentSituation);
+  const hasSeeking = !!data.spiritualSeeking;
+  const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+  let opening: string;
+  if (hasEmotional && hasSeeking) {
+    opening = pick([
+      'Something real brought you here — a weight you\'ve been carrying, and a hope you haven\'t let go of.',
+      'Between where you are and where you\'re reaching, God is already at work.',
+    ]);
+  } else if (hasEmotional) {
+    opening = pick([
+      'You named something that matters. That kind of honesty is where God meets us.',
+      'What you shared took courage. It\'s exactly the right place to begin.',
+    ]);
+  } else {
+    opening = pick([
+      'Something drew you here today. Whatever the reason — you\'re in the right place.',
+      'You showed up. That\'s the beginning of everything.',
+    ]);
+  }
+
+  return {
+    opening,
+    verse: 'Be still, and know that I am God.',
+    verseRef: 'Psalm 46:10',
+    closing: `Over the next ${daysText}, each devotional will be written for exactly where you are.`,
+  };
+}
+
 // Extract the most shareable quotes from a devotional day using AI
 export async function extractShareableQuotes(
   dayContent: string,

@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -9,23 +9,32 @@ import Animated, {
   cancelAnimation,
   interpolateColor,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
+import { EmberParticles } from '@/components/EmberParticles';
 
 const BG = 'transparent';
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Single character with pre-rendered fade ───────────────────────
 const RevealChar = React.memo(({
   char,
   animDelay,
+  fontFamily,
+  fontSize,
+  letterSpacing,
 }: {
   char: string;
   animDelay: number;
+  fontFamily?: string;
+  fontSize?: number;
+  letterSpacing?: number;
 }) => {
   const { colors } = useTheme();
   const opacity = useSharedValue(0);
@@ -66,9 +75,9 @@ const RevealChar = React.memo(({
       <Animated.Text
         style={[
           {
-            fontFamily: FontFamily.display,
-            fontSize: 56,
-            letterSpacing: -1.5,
+            fontFamily: fontFamily ?? FontFamily.display,
+            fontSize: fontSize ?? 56,
+            letterSpacing: letterSpacing ?? -1.5,
           },
           textColorStyle,
         ]}
@@ -79,7 +88,7 @@ const RevealChar = React.memo(({
   );
 });
 
-// ─── Shuffled char order for "Unfold" ──────────────────────────────
+// ─── Shuffled char order ──────────────────────────────────────────
 function shuffleOrder(length: number): number[] {
   const indices = Array.from({ length }, (_, i) => i);
   for (let i = length - 1; i > 0; i--) {
@@ -89,6 +98,64 @@ function shuffleOrder(length: number): number[] {
   return indices;
 }
 
+// ─── Subtitle word that fades in like title chars ─────────────────
+const RevealWord = React.memo(({
+  word,
+  animDelay,
+}: {
+  word: string;
+  animDelay: number;
+}) => {
+  const { colors } = useTheme();
+  const opacity = useSharedValue(0);
+  const colorProgress = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(
+      animDelay,
+      withTiming(1, { duration: 600, easing: EASE }),
+    );
+    colorProgress.value = withDelay(
+      animDelay,
+      withTiming(1, { duration: 1200, easing: Easing.out(Easing.cubic) }),
+    );
+
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(colorProgress);
+    };
+  }, [animDelay]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  const textColorStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      colorProgress.value,
+      [0, 1],
+      ['#FFFFFF', colors.accent],
+    ),
+  }));
+
+  return (
+    <Animated.View style={containerStyle}>
+      <Animated.Text
+        style={[
+          {
+            fontFamily: FontFamily.displayItalic,
+            fontSize: FontSize.lg,
+            letterSpacing: -0.3,
+          },
+          textColorStyle,
+        ]}
+      >
+        {word}
+      </Animated.Text>
+    </Animated.View>
+  );
+});
+
 export default function WelcomeScreen() {
   const router = useRouter();
   const { signedOut } = useLocalSearchParams<{ signedOut?: string }>();
@@ -97,7 +164,6 @@ export default function WelcomeScreen() {
 
   const iconOpacity = useSharedValue(0);
   const iconScale = useSharedValue(0.92);
-  const subtitleOpacity = useSharedValue(0);
   const buttonOpacity = useSharedValue(0);
   const buttonTranslateY = useSharedValue(16);
   const titleChars = useMemo(() => 'Unfold'.split(''), []);
@@ -114,6 +180,21 @@ export default function WelcomeScreen() {
   const titleEndTime = useMemo(() => {
     return Math.max(...charDelays) + 600 + 100; // max delay + fade duration + buffer
   }, [charDelays]);
+
+  // Subtitle words with staggered reveal (same animation style as title)
+  const subtitleLine1 = useMemo(() => "The world's most personal".split(' '), []);
+  const subtitleLine2 = useMemo(() => 'Bible studies'.split(' '), []);
+  const subtitleWords = useMemo(() => [...subtitleLine1, '\n', ...subtitleLine2], []);
+
+  const subtitleWordDelays = useMemo(() => {
+    const baseDelay = titleEndTime; // start after title finishes
+    const stagger = 120; // faster stagger for words
+    return subtitleWords.map((_, i) => baseDelay + i * stagger);
+  }, [titleEndTime, subtitleWords]);
+
+  const subtitleEndTime = useMemo(() => {
+    return Math.max(...subtitleWordDelays) + 600 + 100;
+  }, [subtitleWordDelays]);
 
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -141,30 +222,20 @@ export default function WelcomeScreen() {
       withTiming(1, { duration: 800, easing: EASE })
     );
 
-    // Subtitle fade in after title finishes
-    subtitleOpacity.value = withDelay(
-      titleEndTime,
-      withTiming(1, { duration: 600, easing: EASE })
-    );
-
     // Continue button fade in after subtitle
     buttonOpacity.value = withDelay(
-      titleEndTime + 500,
+      subtitleEndTime + 300,
       withTiming(1, { duration: 600, easing: EASE })
     );
     buttonTranslateY.value = withDelay(
-      titleEndTime + 500,
+      subtitleEndTime + 300,
       withTiming(0, { duration: 600, easing: EASE })
     );
-  }, [user, titleEndTime]);
+  }, [user, titleEndTime, subtitleEndTime]);
 
   const iconStyle = useAnimatedStyle(() => ({
     opacity: iconOpacity.value,
     transform: [{ scale: iconScale.value }],
-  }));
-
-  const subtitleStyle = useAnimatedStyle(() => ({
-    opacity: subtitleOpacity.value,
   }));
 
   const buttonStyle = useAnimatedStyle(() => ({
@@ -174,6 +245,22 @@ export default function WelcomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
+      {/* Ember particles — floating glow */}
+      <EmberParticles color={colors.accent} count={10} />
+
+      {/* Bottom glow gradient */}
+      <LinearGradient
+        colors={['transparent', `${colors.accent}08`, `${colors.accent}15`]}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 220,
+        }}
+        pointerEvents="none"
+      />
+
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
         {/* Icon — fades in before title */}
         <Animated.View style={[{ marginBottom: Spacing['7'] }, iconStyle]}>
@@ -195,20 +282,21 @@ export default function WelcomeScreen() {
           ))}
         </View>
 
-        <Animated.Text
-          style={[
-            {
-              fontFamily: FontFamily.bodyItalic,
-              fontSize: FontSize.base,
-              color: 'rgba(200, 165, 92, 0.7)',
-              textAlign: 'center',
-              lineHeight: 24,
-            },
-            subtitleStyle,
-          ]}
-        >
-          The world's most personal{'\n'}Bible studies
-        </Animated.Text>
+        {/* Subtitle — each word reveals with same animation as title */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 }}>
+          {subtitleWords.map((word, i) => {
+            if (word === '\n') {
+              return <View key={`br-${i}`} style={{ width: '100%', height: 4 }} />;
+            }
+            return (
+              <RevealWord
+                key={`sw-${i}`}
+                word={word}
+                animDelay={subtitleWordDelays[i]}
+              />
+            );
+          })}
+        </View>
       </View>
 
       {/* Continue button — fades in after the text */}

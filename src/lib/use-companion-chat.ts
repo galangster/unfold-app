@@ -238,7 +238,6 @@ export function useCompanionChat() {
   const activeConversationId = useCompanionChatStore((s) => s.activeConversationId);
 
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -303,10 +302,31 @@ export function useCompanionChat() {
       streamingIdRef.current = companionId;
 
       setIsStreaming(true);
-      setStreamingText('');
 
       const abortController = new AbortController();
+
+      // Throttled store updates — batch token updates to reduce re-renders
+      let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+      const flushTokens = (id: string, text: string) => {
+        updateMessage(id, { content: text });
+      };
+      const throttledUpdate = (id: string, text: string) => {
+        if (!throttleTimer) {
+          throttleTimer = setTimeout(() => {
+            throttleTimer = null;
+            flushTokens(id, text);
+          }, 100);
+        }
+      };
+      const cancelThrottle = () => {
+        if (throttleTimer) {
+          clearTimeout(throttleTimer);
+          throttleTimer = null;
+        }
+      };
       abortRef.current = abortController;
+
+      let accumulatedText = '';
 
       try {
         // Build conversation context (last 10 messages)
@@ -335,7 +355,6 @@ export function useCompanionChat() {
         // ── Try SSE streaming (Phase 3) ──────────────────────────────────
 
         let streamSucceeded = false;
-        let accumulatedText = '';
 
         try {
           streamSucceeded = await consumeSSE(
@@ -351,10 +370,10 @@ export function useCompanionChat() {
             {
               onToken: (token) => {
                 accumulatedText += token;
-                setStreamingText(accumulatedText);
-                updateMessage(companionId, { content: accumulatedText });
+                throttledUpdate(companionId, accumulatedText);
               },
               onDone: (sug, cleanText) => {
+                cancelThrottle();
                 const finalText = cleanText || accumulatedText;
                 const finalSuggestions =
                   sug.length > 0
@@ -394,8 +413,7 @@ export function useCompanionChat() {
             chatMessages,
             abortController.signal,
             (revealed) => {
-              setStreamingText(revealed);
-              updateMessage(companionId, { content: revealed });
+              throttledUpdate(companionId, revealed);
             }
           );
 
@@ -414,10 +432,13 @@ export function useCompanionChat() {
           .map((m) => ({ role: m.role, content: m.content }));
         updateCompanionMemory(completedMessages);
 
-        setStreamingText('');
       } catch (err: any) {
+        cancelThrottle();
         if (err.name === 'AbortError') {
-          // User stopped — keep whatever was revealed
+          // User stopped — flush any buffered tokens before setting status
+          if (accumulatedText) {
+            updateMessage(companionId, { content: accumulatedText });
+          }
           const current = selectActiveMessages(useCompanionChatStore.getState())
             .find((m) => m.id === companionId);
           updateMessage(companionId, {
@@ -458,7 +479,6 @@ export function useCompanionChat() {
   return {
     messages,
     isStreaming,
-    streamingText,
     suggestions,
     error,
     sendMessage,

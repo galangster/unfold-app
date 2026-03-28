@@ -29,6 +29,7 @@ interface CompanionOrbProps {
   onPress?: () => void;
   isActive?: boolean;
   showBadge?: boolean;
+  animated?: boolean;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -136,6 +137,7 @@ export function CompanionOrb({
   onPress,
   isActive = false,
   showBadge = false,
+  animated = true,
 }: CompanionOrbProps) {
   const { reducedMotion } = useAccessibleAnimation();
   const morphTime = useSharedValue(0);
@@ -144,8 +146,8 @@ export function CompanionOrb({
   const gradientRotation = useSharedValue(0);
 
   useEffect(() => {
-    // Skip all looping animations when reduced motion is on
-    if (reducedMotion) return;
+    // Skip all looping animations when reduced motion is on or animated is false
+    if (reducedMotion || !animated) return;
 
     // Morph animation — continuous, slow cycle
     morphTime.value = withRepeat(
@@ -165,7 +167,7 @@ export function CompanionOrb({
       -1,
       true,
     );
-  }, [reducedMotion]);
+  }, [reducedMotion, animated]);
 
   // Canvas padding so glow doesn't clip
   const padding = Math.ceil(size * 0.45);
@@ -197,19 +199,15 @@ export function CompanionOrb({
     return buildMorphPath(cx, cy, baseRadius, morphTime.value, morphIntensity);
   });
 
-  // Create Skia path from string on the UI thread
-  const outerGlowPath = useDerivedValue(() => {
+  // Parse SVG string once per frame, then .copy() for each layer
+  // (Skia Path objects are mutable — sharing one across multiple <Path> causes artifacts)
+  const basePath = useDerivedValue(() => {
     return Skia.Path.MakeFromSVGString(morphPathStr.value) ?? Skia.Path.Make();
   });
-  const midGlowPath = useDerivedValue(() => {
-    return Skia.Path.MakeFromSVGString(morphPathStr.value) ?? Skia.Path.Make();
-  });
-  const innerGlowPath = useDerivedValue(() => {
-    return Skia.Path.MakeFromSVGString(morphPathStr.value) ?? Skia.Path.Make();
-  });
-  const sharpRingPath = useDerivedValue(() => {
-    return Skia.Path.MakeFromSVGString(morphPathStr.value) ?? Skia.Path.Make();
-  });
+  const outerGlowPath = useDerivedValue(() => basePath.value.copy());
+  const midGlowPath = useDerivedValue(() => basePath.value.copy());
+  const innerGlowPath = useDerivedValue(() => basePath.value.copy());
+  const sharpRingPath = useDerivedValue(() => basePath.value.copy());
 
   const gradientTransform = useDerivedValue(() => {
     return [{ rotate: gradientRotation.value }];

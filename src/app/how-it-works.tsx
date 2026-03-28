@@ -987,7 +987,7 @@ const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }
   const words = useMemo(() => text.split(' '), [text]);
 
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
       {words.map((word, i) => (
         <RevealWord
           key={`${pageKey}-${i}`}
@@ -1032,7 +1032,7 @@ function AnimatedBody({ text, color, pageKey }: { text: string; color: string; p
           fontFamily: FontFamily.body,
           fontSize: FontSize.base,
           color,
-          textAlign: 'center',
+          textAlign: 'left',
           lineHeight: 24,
         },
         animStyle,
@@ -1146,12 +1146,12 @@ export default function HowItWorksScreen() {
               exiting={FadeOut.duration(Duration.fast)}
               style={StyleSheet.absoluteFill}
             >
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['10'] }}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
                 {page.type === 'companion' ? (
-                  <View style={{ alignItems: 'center', gap: 36 }}>
+                  <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                     <CompanionOrb accentColor={colors.accent} size={120} isActive />
 
-                    <View style={{ gap: 14 }}>
+                    <View style={{ gap: 14, alignSelf: 'stretch' }}>
                       <AnimatedHeadline
                         text="The only app that grows with you"
                         color={colors.text}
@@ -1166,10 +1166,10 @@ export default function HowItWorksScreen() {
                     </View>
                   </View>
                 ) : (
-                  <View style={{ alignItems: 'center', gap: 36 }}>
+                  <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                     <CardAnimation type={page.card.animation} accent={colors.accent} />
 
-                    <View style={{ gap: 12 }}>
+                    <View style={{ gap: 12, alignSelf: 'stretch' }}>
                       <AnimatedHeadline
                         text={page.card.headline}
                         color={colors.text}
@@ -1192,7 +1192,7 @@ export default function HowItWorksScreen() {
         {/* Bottom: page dots + continue button */}
         <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'] }}>
           {/* Page dots */}
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}>
             {PAGES.map((_, index) => (
               <View
                 key={index}

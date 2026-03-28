@@ -258,6 +258,18 @@ export const useCompanionChatStore = create<CompanionChatState>()(
       name: 'unfold-companion-chat',
       storage: createJSONStorage(() => mmkvStorage),
       version: 2,
+      // Skip persisting streaming message content to avoid expensive serialization during SSE
+      partialize: (state) => ({
+        ...state,
+        conversations: state.conversations.map(c => ({
+          ...c,
+          messages: c.messages.map(m =>
+            m.status === 'streaming'
+              ? { ...m, content: '' }
+              : m
+          ),
+        })),
+      }),
       migrate: (persisted: any, version: number) => {
         if (version === 1) {
           // v1 → v2: wrap flat messages[] into a single Conversation

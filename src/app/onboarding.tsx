@@ -32,7 +32,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, PenNibIcon, GavelIcon } from 'phosphor-react-native';
-import { continueAsGuest } from '@/lib/clerk';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
@@ -46,7 +45,7 @@ import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
-import { generateAdaptiveQuestion } from '@/lib/devotional-service';
+import { generateAdaptiveQuestion, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
   pickRandomVariation,
@@ -57,7 +56,7 @@ import { getOfferings, purchasePackage, isRevenueCatEnabled } from '@/lib/revenu
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
-import { SignInSheet } from '@/components/SignInSheet';
+import { EmberParticles } from '@/components/EmberParticles';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 
 
@@ -84,6 +83,34 @@ const LOADING_QUIPS = [
 ];
 
 const getRandomLoadingQuip = () => LOADING_QUIPS[Math.floor(Math.random() * LOADING_QUIPS.length)];
+
+// Scripture verses for mirror-back screen, mapped to theme categories
+const THEME_SCRIPTURE: Record<string, { text: string; ref: string }> = {
+  trust: { text: 'When I am afraid, I put my trust in you.', ref: 'Psalm 56:3' },
+  identity: { text: 'See what kind of love the Father has given to us, that we should be called children of God; and so we are.', ref: '1 John 3:1' },
+  rest: { text: 'Come to me, all who labor and are heavy laden, and I will give you rest.', ref: 'Matthew 11:28' },
+  purpose: { text: 'For we are his workmanship, created in Christ Jesus for good works, which God prepared beforehand, that we should walk in them.', ref: 'Ephesians 2:10' },
+  healing: { text: 'He heals the brokenhearted and binds up their wounds.', ref: 'Psalm 147:3' },
+  gratitude: { text: 'Every good gift and every perfect gift is from above, coming down from the Father of lights.', ref: 'James 1:17' },
+  surrender: { text: 'Trust in the Lord with all your heart, and do not lean on your own understanding.', ref: 'Proverbs 3:5' },
+  courage: { text: 'Be strong and courageous. Do not be frightened, for the Lord your God is with you wherever you go.', ref: 'Joshua 1:9' },
+  hope: { text: 'For I know the plans I have for you, declares the Lord, plans for welfare and not for evil, to give you a future and a hope.', ref: 'Jeremiah 29:11' },
+  presence: { text: 'Where shall I go from your Spirit? Or where shall I flee from your presence?', ref: 'Psalm 139:7' },
+  conviction: { text: 'For the word of God is living and active, sharper than any two-edged sword.', ref: 'Hebrews 4:12' },
+  joy: { text: 'You make known to me the path of life; in your presence there is fullness of joy.', ref: 'Psalm 16:11' },
+  lament: { text: 'The Lord is near to the brokenhearted and saves the crushed in spirit.', ref: 'Psalm 34:18' },
+  justice: { text: 'He has told you, O man, what is good; and what does the Lord require of you but to do justice, and to love kindness, and to walk humbly with your God?', ref: 'Micah 6:8' },
+  discipline: { text: 'I discipline my body and keep it under control.', ref: '1 Corinthians 9:27' },
+  wonder: { text: 'The heavens declare the glory of God, and the sky above proclaims his handiwork.', ref: 'Psalm 19:1' },
+};
+const DEFAULT_SCRIPTURES = [
+  { text: 'Be still, and know that I am God.', ref: 'Psalm 46:10' },
+  { text: 'The Lord is my shepherd; I shall not want.', ref: 'Psalm 23:1' },
+  { text: 'I am with you always, to the end of the age.', ref: 'Matthew 28:20' },
+];
+const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+
+// MirrorBackContent type imported from devotional-service
 
 // ThemePill component - defined at module scope to avoid nested component definition
 interface ThemePillProps {
@@ -199,20 +226,18 @@ const ALL_STEPS = [
   { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Poetic reflection before building — like a book introduction
-  { id: 'mirrorBack', question: "Before we\u00A0begin.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'mirrorBack', question: "Written for\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i))
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION NAMING: Name the companion (intro now lives in how-it-works.tsx)
   { id: 'companionNaming', question: "Name your companion.", subtext: 'Remembers your story. Shows up every\u00A0morning.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
   { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // SIGN-IN: Optional Apple Sign In before generating
-  { id: 'signIn', question: 'One last\u00A0thing.', subtext: 'Keep your progress safe across all\u00A0your\u00A0devices.', type: 'signIn' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // PREMIUM SHOWCASE: Final premium pitch before generating
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'signIn' | 'premiumShowcase';
+type StepId = 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -357,59 +382,45 @@ export default function OnboardingScreen() {
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
   });
 
-  // Sign-in sheet for guest users trying to generate
   const { isSignedIn } = useClerkAuth();
-  const [showSignInSheet, setShowSignInSheet] = useState(false);
 
   // Adaptive-question endpoint is now public (no auth required) — no early auth needed.
 
-  // Mirror-back text — memoized so it doesn't change on re-render
-  const mirrorBackText = useMemo(() => {
-    const themeName = (data?.selectedThemes?.length ?? 0) > 0
-      ? getThemeById(data.selectedThemes[0])?.name ?? ''
-      : data?.selectedType
-        ? getDevotionalTypeById(data.selectedType)?.name ?? ''
-        : '';
-    const emotionalSnippet = data?.emotionalState
-      ? data.emotionalState.split(/[.!?]/)[0].trim().toLowerCase()
-      : data?.currentSituation
-        ? data.currentSituation.split(/[.!?]/)[0].trim().toLowerCase()
-        : '';
-    const seekingSnippet = data?.spiritualSeeking
-      ? data.spiritualSeeking.split(/[.!?]/)[0].trim().toLowerCase()
-      : '';
+  // Mirror-back content — structured for the redesigned screen
+  const mirrorBackContent = useMemo<MirrorBackContent>(() => {
+    const themeId = (data?.selectedThemes?.length ?? 0) > 0 ? data.selectedThemes[0] : null;
     const daysText = data?.devotionalLength ? `${data.devotionalLength} days` : 'the days ahead';
+    const hasEmotional = !!(data?.emotionalState || data?.currentSituation);
+    const hasSeeking = !!data?.spiritualSeeking;
 
-    const pickRandom = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    // Pick scripture based on selected theme
+    const scripture = themeId && THEME_SCRIPTURE[themeId]
+      ? THEME_SCRIPTURE[themeId]
+      : pickRandom(DEFAULT_SCRIPTURES);
 
-    if (emotionalSnippet && seekingSnippet) {
-      return pickRandom(themeName ? [
-        `You said "${themeName}" — and underneath that, ${emotionalSnippet}. You're reaching for ${seekingSnippet}. That's exactly where your next ${daysText} will\u00A0begin.`,
-        `${emotionalSnippet.charAt(0).toUpperCase() + emotionalSnippet.slice(1)}, and a longing for ${seekingSnippet}. "${themeName}" is the lens — but your story is the\u00A0material.`,
-        `Between ${emotionalSnippet} and wanting ${seekingSnippet}, there's a thread worth following. Over the next ${daysText}, we'll pull\u00A0on\u00A0it.`,
-      ] : [
-        `You named it: ${emotionalSnippet}. And what you're reaching for — ${seekingSnippet}. Over the next ${daysText}, each devotional will meet you right\u00A0there.`,
-        `${emotionalSnippet.charAt(0).toUpperCase() + emotionalSnippet.slice(1)}, and a desire for ${seekingSnippet}. That honesty is the foundation your devotionals will be built\u00A0on.`,
-        `Between ${emotionalSnippet} and ${seekingSnippet}, something real is taking shape. The next ${daysText} are designed around exactly\u00A0that.`,
+    let opening: string;
+    if (hasEmotional && hasSeeking) {
+      opening = pickRandom([
+        'Something real brought you here\u00A0— a weight you\'ve been carrying, and a hope you haven\'t let go\u00A0of.',
+        'Between where you are and where you\'re reaching, God is already at\u00A0work.',
+        'You named what many people never pause long enough to say out\u00A0loud.',
       ]);
-    } else if (emotionalSnippet) {
-      return pickRandom(themeName ? [
-        `"${themeName}" and ${emotionalSnippet} — you named what most people scroll past. Your devotionals will speak directly to\u00A0that.`,
-        `You chose "${themeName}" because of ${emotionalSnippet}. Each day will meet that honesty with\u00A0scripture.`,
-      ] : [
-        `${emotionalSnippet.charAt(0).toUpperCase() + emotionalSnippet.slice(1)}. Most people don't pause long enough to name it. Your devotionals will start right\u00A0here.`,
-        `You put words to something real: ${emotionalSnippet}. That's the seed your ${daysText} of devotionals will grow\u00A0from.`,
+    } else if (hasEmotional) {
+      opening = pickRandom([
+        'You named something that matters. That kind of honesty is where God meets\u00A0us.',
+        'What you shared took courage. It\'s exactly the right place to\u00A0begin.',
       ]);
     } else {
-      return pickRandom(themeName ? [
-        `"${themeName}" — you picked this for a reason only you know. Your devotionals will be shaped around that\u00A0reason.`,
-        `You chose "${themeName}." No two people come to it the same way. Your series will reflect your\u00A0way\u00A0in.`,
-      ] : [
-        `Something drew you here today. You might not have all the words yet — and that's okay. The next few days will help you find\u00A0them.`,
-        `You showed up. That's the start. Each devotional will be written for where you are right\u00A0now.`,
+      opening = pickRandom([
+        'Something drew you here today. Whatever the reason\u00A0— known or not yet named\u00A0— you\'re in the right\u00A0place.',
+        'You showed up. That\'s the beginning of\u00A0everything.',
       ]);
     }
-  }, [data?.selectedThemes, data?.selectedType, data?.emotionalState, data?.currentSituation, data?.spiritualSeeking, data?.devotionalLength]);
+
+    const closing = `Over the next ${daysText}, each devotional will be written for exactly where you\u00A0are.`;
+
+    return { opening, verse: scripture.text, verseRef: scripture.ref, closing };
+  }, [data?.selectedThemes, data?.emotionalState, data?.currentSituation, data?.spiritualSeeking, data?.devotionalLength]);
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('name');
@@ -425,6 +436,10 @@ export default function OnboardingScreen() {
   const [isPreparingDiscovery, setIsPreparingDiscovery] = useState(false);
   const [preparingQuip, setPreparingQuip] = useState('Contemplating...');
   
+  // AI-generated mirror-back content
+  const [aiMirrorBack, setAiMirrorBack] = useState<MirrorBackContent | null>(null);
+  const [isLoadingMirrorBack, setIsLoadingMirrorBack] = useState(false);
+
   // Adaptive question states
   const [adaptedSteps, setAdaptedSteps] = useState<Record<string, { question: string; subtext: string; chips?: string[] }>>({});
   const [isLoadingAdaptive, setIsLoadingAdaptive] = useState(false);
@@ -497,7 +512,33 @@ export default function OnboardingScreen() {
       withRepeat(withTiming(1, { duration: 1700, easing: Easing.out(Easing.ease) }), -1, false)
     );
   }, [isLoadingAdaptive, ripple1, ripple2, ripple3]);
-  
+
+  // Generate AI mirror-back when reaching that step
+  useEffect(() => {
+    if (currentStepId === 'mirrorBack' && !aiMirrorBack && !isLoadingMirrorBack) {
+      setIsLoadingMirrorBack(true);
+      generateMirrorBackText({
+        selectedThemes: data.selectedThemes,
+        selectedType: data.selectedType,
+        emotionalState: data.emotionalState,
+        currentSituation: data.currentSituation,
+        spiritualSeeking: data.spiritualSeeking,
+        devotionalLength: data.devotionalLength,
+        name: data.name,
+      })
+        .then(({ content }) => {
+          setAiMirrorBack(content);
+        })
+        .catch((err) => {
+          logger.warn('[MirrorBack] Generation failed, using fallback:', err);
+          setAiMirrorBack(mirrorBackContent);
+        })
+        .finally(() => {
+          setIsLoadingMirrorBack(false);
+        });
+    }
+  }, [currentStepId]);
+
   // Keyboard height tracking for scroll adjustment
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   
@@ -520,11 +561,6 @@ export default function OnboardingScreen() {
         }
       }
       
-      // Skip sign-in if user is already authenticated with Apple
-      if (step.id === 'signIn' && existingUser?.authProvider && existingUser.authProvider !== 'guest') {
-        return false;
-      }
-
       // Skip premium showcase during onboarding — show paywall after first reading instead
       if (step.id === 'premiumShowcase' && !existingUser?.hasCompletedOnboarding) {
         return false;
@@ -538,7 +574,7 @@ export default function OnboardingScreen() {
       // Skip first-time-only steps for returning users
       // These are first-time onboarding only — not shown when building new devotionals
       if (existingUser?.hasCompletedOnboarding) {
-        if (step.id === 'founderNote' || step.id === 'companionNaming' || step.id === 'signIn' || step.id === 'premiumShowcase' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
+        if (step.id === 'founderNote' || step.id === 'companionNaming' || step.id === 'premiumShowcase' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
           return false;
         }
       }
@@ -644,11 +680,6 @@ export default function OnboardingScreen() {
       return true;
     }
 
-    // Sign-in step — handled by its own buttons, hide Continue from header
-    if (step.type === 'signIn') {
-      return false;
-    }
-
     return true;
   };
   
@@ -722,11 +753,15 @@ export default function OnboardingScreen() {
 
   const completeOnboarding = useCallback(() => {
     if (!isSignedIn) {
-      setShowSignInSheet(true);
+      awaitingSignInReturn.current = true;
+      router.push({
+        pathname: '/(onboarding)/sign-in',
+        params: { source: 'onboarding' },
+      });
       return;
     }
     proceedToGeneration();
-  }, [isSignedIn, proceedToGeneration]);
+  }, [isSignedIn, proceedToGeneration, router]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -752,35 +787,18 @@ export default function OnboardingScreen() {
     inputOpacity.value = 0;
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
-  // Auto-advance when user returns from sign-in screen
+  // Auto-advance when user returns from sign-in screen (only if signed in)
   useFocusEffect(
     useCallback(() => {
       if (awaitingSignInReturn.current) {
         awaitingSignInReturn.current = false;
-        advanceToNextStep();
+        if (isSignedIn) {
+          proceedToGeneration();
+        }
+        // If not signed in (user hit back), stay on current step
       }
-    }, [advanceToNextStep])
+    }, [isSignedIn, proceedToGeneration])
   );
-
-  // Handle skipping sign-in during onboarding (local-only guest mode)
-  const handleSkipSignIn = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
-
-    // Set up local-only guest mode (no Firebase, no Clerk)
-    continueAsGuest(); // sets authUserId = 'local-{timestamp}', authProvider = 'guest'
-
-    const skipData: Partial<UserProfile> = {
-      hasSeenSignInPrompt: true,
-      signInPromptCount: (existingUser?.signInPromptCount ?? 0) + 1,
-    };
-
-    pendingAuthDataRef.current = skipData;
-    updateUser(skipData);
-
-    logger.log('[Onboarding] User skipped sign-in during onboarding');
-    advanceToNextStep();
-  }, [updateUser, existingUser?.signInPromptCount, advanceToNextStep]);
 
   // Handle next button press
   const handleNext = () => {
@@ -1657,62 +1675,118 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Mirror-back step: reflect user's answers and commitment button
+    // Mirror-back step: AI-generated poetic reflection with scripture + floating embers
     if (step.type === 'mirrorBack') {
-      return (
-        <View style={{ gap: Spacing['6'], marginTop: Spacing['2'] }}>
-          {/* Mirror-back reflection */}
-          <View style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: Radius.xl,
-            padding: Spacing['6'],
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}>
-            <Text style={{
-              fontFamily: FontFamily.body,
-              fontSize: FontSize.lg,
-              color: colors.text,
-              lineHeight: 28,
-            }}>
-              {mirrorBackText}
-            </Text>
-          </View>
+      const displayContent = aiMirrorBack || mirrorBackContent;
 
-          {/* Commitment button with accent glow */}
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
-              // Auto-advance after commitment
-              setTimeout(() => {
-                setShowInput(false);
-                inputOpacity.value = 0;
-                setTimeout(() => advanceToNextStep(), 50);
-              }, 400);
-            }}
-          >
-            <View style={{
-              backgroundColor: colors.accent,
-              paddingVertical: 18,
-              paddingHorizontal: Spacing['6'],
-              borderRadius: Radius.lg,
-              alignItems: 'center',
-              shadowColor: colors.accent,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 20,
-              elevation: 8,
-            }}>
-              <Text style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.base,
-                color: '#FFFFFF',
-              }}>
-                Let's get started
+      // Loading state while AI generates
+      if (isLoadingMirrorBack && !aiMirrorBack) {
+        return (
+          <View style={{ minHeight: 380, position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
+            <EmberParticles color={colors.accent} count={10} />
+            <View style={{ alignItems: 'center', gap: Spacing['4'] }}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textMuted }}>
+                Crafting something for you...
               </Text>
             </View>
-          </TouchableOpacity>
+          </View>
+        );
+      }
+
+      return (
+        <View style={{ minHeight: 380, position: 'relative' }}>
+          {/* Floating ember particles */}
+          <EmberParticles color={colors.accent} count={10} />
+
+          <View style={{ gap: Spacing['8'] }}>
+            {/* Opening reflection */}
+            <Animated.View entering={FadeIn.duration(800).delay(200)}>
+              <Text style={{
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.lg,
+                color: colors.text,
+                lineHeight: 30,
+              }}>
+                {displayContent.opening}
+              </Text>
+            </Animated.View>
+
+            {/* Scripture verse */}
+            <Animated.View
+              entering={FadeIn.duration(800).delay(700)}
+              style={{
+                paddingLeft: Spacing['4'],
+                borderLeftWidth: 2,
+                borderLeftColor: alpha(colors.accent, 0.3),
+              }}
+            >
+              <Text style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: FontSize.lg,
+                color: alpha(colors.text, 0.85),
+                lineHeight: 30,
+              }}>
+                "{displayContent.verse}"
+              </Text>
+              <Text style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.sm,
+                color: colors.accent,
+                marginTop: Spacing['2'],
+              }}>
+                — {displayContent.verseRef}
+              </Text>
+            </Animated.View>
+
+            {/* Closing */}
+            <Animated.View entering={FadeIn.duration(800).delay(1200)}>
+              <Text style={{
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.base,
+                color: colors.textMuted,
+                lineHeight: 24,
+              }}>
+                {displayContent.closing}
+              </Text>
+            </Animated.View>
+          </View>
+
+          {/* CTA */}
+          <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['10'] }}>
+            <TouchableOpacity activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
+                setTimeout(() => {
+                  setShowInput(false);
+                  inputOpacity.value = 0;
+                  setTimeout(() => advanceToNextStep(), 50);
+                }, 400);
+              }}
+            >
+              <View style={{
+                backgroundColor: colors.accent,
+                paddingVertical: 18,
+                paddingHorizontal: Spacing['6'],
+                borderRadius: Radius.lg,
+                alignItems: 'center',
+                shadowColor: colors.accent,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.4,
+                shadowRadius: 16,
+                elevation: 8,
+              }}>
+                <Text style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.base,
+                  color: '#FFFFFF',
+                }}>
+                  Begin my series
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       );
     }
@@ -2286,139 +2360,6 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Sign-in step: CTA button to full sign-in screen
-    if (step.type === 'signIn') {
-      return (
-        <View style={{ gap: Spacing['8'], marginTop: Spacing['2'] }}>
-          {/* Benefits list */}
-          <View style={{ gap: Spacing['5'], paddingHorizontal: Spacing['1'] }}>
-            {[
-              {
-                icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
-                title: 'Sync across devices',
-                description: 'Pick up where you left off on any device',
-              },
-              {
-                icon: <ShieldIcon size={20} color={colors.accent} weight="light" />,
-                title: 'Secure backup',
-                description: 'Never lose your devotionals or journal',
-              },
-              {
-                icon: <SparkleIcon size={20} color={colors.accent} weight="light" />,
-                title: 'Personalized experience',
-                description: 'Unlock features tailored to where you are',
-              },
-            ].map((benefit, index) => (
-              <Animated.View
-                key={benefit.title}
-                entering={FadeIn.delay(200 + index * 150).duration(500)}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: Spacing['4'],
-                }}
-              >
-                <View style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: Radius.md,
-                  backgroundColor: colors.inputBackground,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  {benefit.icon}
-                </View>
-                <View style={{ flex: 1, gap: Spacing['0.5'] }}>
-                  <Text style={{
-                    fontFamily: FontFamily.uiSemiBold,
-                    fontSize: 15,
-                    color: colors.text,
-                    letterSpacing: -0.2,
-                  }}>
-                    {benefit.title}
-                  </Text>
-                  <Text style={{
-                    fontFamily: FontFamily.ui,
-                    fontSize: 13,
-                    color: colors.textMuted,
-                    lineHeight: 18,
-                  }}>
-                    {benefit.description}
-                  </Text>
-                </View>
-              </Animated.View>
-            ))}
-          </View>
-
-          {/* Sign in CTA — navigates to full sign-in screen */}
-          <Animated.View entering={FadeIn.delay(650).duration(400)}>
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                awaitingSignInReturn.current = true;
-                router.push({
-                  pathname: '/(onboarding)/sign-in',
-                  params: { source: 'onboarding' },
-                });
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Sign in to keep your progress"
-              style={{
-                width: Dimensions.get('window').width - 48,
-                height: 54,
-                borderRadius: Radius.card,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.text,
-              }}
-            >
-              <Text style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.base,
-                color: colors.background,
-              }}>
-                Sign in to keep your progress
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Skip option */}
-          <Animated.View entering={FadeIn.delay(800).duration(400)}>
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleSkipSignIn}
-              accessibilityRole="button"
-              accessibilityLabel="Continue without signing in"
-              style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingVertical: Spacing['3'],
-              }}
-            >
-              <Text style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 15,
-                color: colors.textMuted,
-              }}>
-                Continue without signing in
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Privacy note */}
-          <Animated.View entering={FadeIn.delay(900).duration(400)}>
-            <Text style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textSubtle,
-              textAlign: 'center',
-            }}>
-              Your privacy matters. We never share your information.
-            </Text>
-          </Animated.View>
-        </View>
-      );
-    }
-
     return null;
   };
 
@@ -2626,14 +2567,6 @@ export default function OnboardingScreen() {
         </View>
       </SafeAreaView>
 
-      <SignInSheet
-        visible={showSignInSheet}
-        onClose={() => setShowSignInSheet(false)}
-        onSignedIn={() => {
-          setShowSignInSheet(false);
-          proceedToGeneration();
-        }}
-      />
     </View>
   );
 }

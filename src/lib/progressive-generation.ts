@@ -130,7 +130,7 @@ ${methodPrompt}
 
 JSON SCHEMA:
 {
-  "title": "Series title (3-6 words, evocative, not generic)",
+  "title": "Series title (3-6 words, evocative, not generic — DO NOT repeat the reader's self-description or identity labels like 'dad', 'mom', 'student' etc. in the title. Use metaphor, scripture imagery, or emotional resonance instead)",
   "overarchingTheme": "One sentence describing the journey's throughline",
   "narrativeShape": "e.g. Foundation → Deepening → Tension → Resolution",
   "dayHints": [

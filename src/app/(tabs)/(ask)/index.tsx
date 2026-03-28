@@ -50,23 +50,17 @@ import { Spacing } from '@/constants/spacing';
 
 const MessageItem = React.memo(function MessageItem({
   item,
-  index,
-  messages,
+  isFirstInGroup,
+  isLastMessage,
   isStreaming,
   onVersePress,
 }: {
   item: CompanionMessage;
-  index: number;
-  messages: CompanionMessage[];
+  isFirstInGroup: boolean;
+  isLastMessage: boolean;
   isStreaming: boolean;
   onVersePress: (reference: string) => void;
 }) {
-  // In inverted list, index 0 is the LAST message
-  const nextMsg = index > 0 ? messages[index - 1] : null;
-  const prevMsg = index < messages.length - 1 ? messages[index + 1] : null;
-
-  const isFirstInGroup = !prevMsg || prevMsg.role !== item.role;
-  const isLastMessage = index === 0;
   const gapStyle = isFirstInGroup ? { marginTop: 16 } : { marginTop: 6 };
 
   if (item.role === 'user') {
@@ -108,7 +102,8 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.status === next.item.status &&
   prev.item.feedback === next.item.feedback &&
   prev.isStreaming === next.isStreaming &&
-  prev.index === next.index
+  prev.isFirstInGroup === next.isFirstInGroup &&
+  prev.isLastMessage === next.isLastMessage
 );
 
 // Height of the custom absolutely-positioned tab bar (content + padding)
@@ -201,6 +196,10 @@ export default function CompanionScreen() {
     [messages]
   );
 
+  // Stable ref so renderItem doesn't depend on invertedMessages identity
+  const invertedMessagesRef = useRef(invertedMessages);
+  invertedMessagesRef.current = invertedMessages;
+
   // Show typing indicator when streaming and last message is companion with empty content
   const showTyping =
     isStreaming &&
@@ -212,16 +211,22 @@ export default function CompanionScreen() {
   const showSuggestions = !isStreaming && suggestions.length > 0 && messages.length > 0;
 
   const renderItem = useCallback(
-    ({ item, index }: ListRenderItemInfo<CompanionMessage>) => (
-      <MessageItem
-        item={item}
-        index={index}
-        messages={invertedMessages}
-        isStreaming={isStreaming}
-        onVersePress={handleVersePress}
-      />
-    ),
-    [invertedMessages, isStreaming, handleVersePress]
+    ({ item, index }: ListRenderItemInfo<CompanionMessage>) => {
+      const msgs = invertedMessagesRef.current;
+      const prevMsg = index < msgs.length - 1 ? msgs[index + 1] : null;
+      const isFirstInGroup = !prevMsg || prevMsg.role !== item.role;
+      const isLastMessage = index === 0;
+      return (
+        <MessageItem
+          item={item}
+          isFirstInGroup={isFirstInGroup}
+          isLastMessage={isLastMessage}
+          isStreaming={isStreaming}
+          onVersePress={handleVersePress}
+        />
+      );
+    },
+    [isStreaming, handleVersePress]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);

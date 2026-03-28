@@ -21,7 +21,6 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
-import { continueAsGuest } from '@/lib/clerk';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
@@ -263,21 +262,6 @@ export default function SignInScreen() {
     [isSigningIn, navigateAfterAuth, updateUser],
   );
 
-  const handleGuestMode = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Analytics.logEvent(AnalyticsEvents.SIGN_IN_SKIPPED);
-
-    const currentCount = userProfile?.signInPromptCount ?? 0;
-    continueAsGuest();
-    updateUser({
-      hasSeenSignInPrompt: true,
-      signInPromptCount: currentCount + 1,
-    });
-
-    logger.log('[SignIn] Continued as guest');
-    navigateAfterAuth();
-  }, [navigateAfterAuth, updateUser, userProfile?.signInPromptCount]);
-
   const benefits: Omit<BenefitItemProps, 'colors' | 'delay'>[] = [
     {
       icon: <CloudIcon size={20} color={colors.accent} weight="light" />,
@@ -299,14 +283,11 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.content}>
+        {/* Top spacer — pushes header to ~30% from top */}
+        <View style={{ flex: 0.35 }} />
+
         {/* Header Section */}
         <Animated.View style={[styles.header, headerStyle]}>
-          <View style={[styles.topLine, { backgroundColor: colors.accent }]} />
-
-          <Text style={[styles.eyebrow, { color: colors.accent, fontFamily: FontFamily.uiSemiBold }]}>
-            Keep your progress safe
-          </Text>
-
           <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
             Sync across all your devices
           </Text>
@@ -362,7 +343,7 @@ export default function SignInScreen() {
               activeOpacity={0.8}
               disabled={isSigningIn}
             >
-              <AppleLogoIcon size={22} color="#1F1F1F" weight="fill" />
+              <AppleLogoIcon size={24} color="#1F1F1F" weight="fill" />
               <Text style={[styles.oauthButtonText, { color: '#1F1F1F' }]}>
                 Sign in with Apple
               </Text>
@@ -393,19 +374,7 @@ export default function SignInScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Guest link */}
-          <Animated.View style={skipStyle}>
-            <TouchableOpacity
-              onPress={handleGuestMode}
-              style={styles.guestLink}
-              activeOpacity={0.6}
-              disabled={isSigningIn}
-            >
-              <Text style={[styles.guestLinkText, { color: colors.textSubtle }]}>
-                Continue as Guest
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* Sign-in is required — no guest option */}
         </Animated.View>
 
         {/* Privacy Note */}
@@ -468,38 +437,23 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing['7'],
-    paddingTop: Spacing['16'],
-    paddingBottom: Spacing['6'],
-    justifyContent: 'space-between',
+    paddingBottom: Spacing['4'],
   },
   header: {
-    alignItems: 'center',
-  },
-  topLine: {
-    width: 40,
-    height: 3,
-    borderRadius: 2,
-    marginBottom: Spacing['6'],
-    opacity: 0.8,
-  },
-  eyebrow: {
-    fontSize: 13,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: Spacing['4'],
+    alignItems: 'flex-start',
+    marginBottom: Spacing['10'],
   },
   title: {
     fontSize: FontSize['4xl'],
-    textAlign: 'center',
+    textAlign: 'left',
     letterSpacing: -0.5,
     lineHeight: 44,
     marginBottom: Spacing['4'],
   },
   subtitle: {
     fontSize: FontSize.base,
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 24,
-    paddingHorizontal: Spacing['2'],
   },
   benefitsContainer: {
     gap: Spacing['5'],
@@ -531,6 +485,8 @@ const styles = StyleSheet.create({
   },
   buttonSection: {
     gap: 4,
+    marginTop: 'auto' as any,
+    marginBottom: Spacing['2'],
   },
   authButtons: {
     gap: 14,
@@ -558,14 +514,6 @@ const styles = StyleSheet.create({
   oauthButtonText: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.base,
-  },
-  guestLink: {
-    paddingVertical: Spacing['4'],
-    alignItems: 'center',
-  },
-  guestLinkText: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.sm,
   },
   privacyContainer: {
     alignItems: 'center',

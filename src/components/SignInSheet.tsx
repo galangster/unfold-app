@@ -34,9 +34,11 @@ interface SignInSheetProps {
   onClose: () => void;
   /** Called after successful sign-in */
   onSignedIn: () => void;
+  /** Hide the "Not now" dismiss link (e.g. when sign-in is required) */
+  hideDismiss?: boolean;
 }
 
-export function SignInSheet({ visible, onClose, onSignedIn }: SignInSheetProps) {
+export function SignInSheet({ visible, onClose, onSignedIn, hideDismiss }: SignInSheetProps) {
   const { colors } = useTheme();
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
@@ -235,7 +237,7 @@ export function SignInSheet({ visible, onClose, onSignedIn }: SignInSheetProps) 
             activeOpacity={0.8}
             disabled={isSigningIn}
           >
-            <AppleLogoIcon size={22} color="#1F1F1F" weight="fill" />
+            <AppleLogoIcon size={24} color="#1F1F1F" weight="fill" />
             <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: FontSize.base, color: '#1F1F1F' }}>
               Sign in with Apple
             </Text>
@@ -282,23 +284,25 @@ export function SignInSheet({ visible, onClose, onSignedIn }: SignInSheetProps) 
           </TouchableOpacity>
         </View>
 
-        {/* Dismiss link */}
-        <TouchableOpacity
-          onPress={onClose}
-          style={{ paddingVertical: Spacing['4'] }}
-          activeOpacity={0.6}
-          disabled={isSigningIn}
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-            }}
+        {/* Dismiss link — hidden when sign-in is required */}
+        {!hideDismiss && (
+          <TouchableOpacity
+            onPress={onClose}
+            style={{ paddingVertical: Spacing['4'] }}
+            activeOpacity={0.6}
+            disabled={isSigningIn}
           >
-            Not now
-          </Text>
-        </TouchableOpacity>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textMuted,
+              }}
+            >
+              Not now
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Sheet>
   );
