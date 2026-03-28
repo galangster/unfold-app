@@ -1,18 +1,15 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
 } from 'react-native-reanimated';
 import { CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
-import { Duration, Ease } from '@/constants/animations';
+import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { NotificationCard } from '@/components/home/NotificationCard';
 import { BridgeShimmer } from '@/components/home/BridgeShimmer';
@@ -49,8 +46,7 @@ interface Props {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Estimated expanded height for the collapse/expand animation. */
-const EXPANDED_HEIGHT = 100;
+/** @deprecated — collapse animation removed, content auto-sizes now */
 const ENTER_DURATION = Duration.normal;
 const EXIT_DURATION = 180;
 
@@ -138,21 +134,7 @@ export function ContextSlot({
 }: Props) {
   const { entering, exiting } = useAccessibleAnimation();
 
-  // Collapse / expand animation
   const isVisible = slotType !== 'none';
-  const height = useSharedValue(isVisible ? EXPANDED_HEIGHT : 0);
-
-  useEffect(() => {
-    height.value = withTiming(isVisible ? EXPANDED_HEIGHT : 0, {
-      duration: Duration.normal,
-      easing: Ease.out,
-    });
-  }, [isVisible, height]);
-
-  const collapseStyle = useAnimatedStyle(() => ({
-    height: isVisible ? undefined : height.value,
-    overflow: isVisible ? 'visible' : 'hidden',
-  }));
 
   // Render the active card based on slot type
   function renderCard() {
@@ -200,17 +182,15 @@ export function ContextSlot({
     }
   }
 
+  if (!isVisible) return null;
+
   return (
-    <Animated.View style={collapseStyle}>
-      {slotType !== 'none' && (
-        <Animated.View
-          key={slotType}
-          entering={entering(FadeIn.duration(ENTER_DURATION))}
-          exiting={exiting(FadeOut.duration(EXIT_DURATION))}
-        >
-          {renderCard()}
-        </Animated.View>
-      )}
+    <Animated.View
+      key={slotType}
+      entering={entering(FadeIn.duration(ENTER_DURATION))}
+      exiting={exiting(FadeOut.duration(EXIT_DURATION))}
+    >
+      {renderCard()}
     </Animated.View>
   );
 }
