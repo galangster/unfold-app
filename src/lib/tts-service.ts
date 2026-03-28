@@ -11,6 +11,7 @@ import { reportError } from '@/lib/report-error';
 import { getAuthHeaders, RAILWAY_BACKEND_URL } from '@/lib/api-config';
 // Debug instrumentation available at '@/lib/tts-debug' if needed
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { recordCachedFile, touchCachedFile, saveMetadata } from '@/lib/audio-cache';
 
 const TTS_PROXY_URL = `${RAILWAY_BACKEND_URL}/api/tts`;
 
@@ -107,7 +108,7 @@ function isCached(key: string): boolean {
   return file.exists && file.size > MIN_AUDIO_FILE_SIZE;
 }
 
-/** Clear entire TTS cache directory. */
+/** Clear entire TTS cache directory and reset LRU metadata. */
 export async function clearAudioCache(): Promise<void> {
   try {
     const cacheDir = new Directory(Paths.cache);
@@ -119,6 +120,8 @@ export async function clearAudioCache(): Promise<void> {
         }
       }
     }
+    // Reset cache metadata
+    saveMetadata({ version: 1, entries: {} });
   } catch (e) {
     logger.warn('[TTS] Failed to clear cache:', e);
   }
@@ -200,6 +203,11 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
       throw new Error(`TTS download produced invalid file (${fileSize} bytes)`);
     }
     logger.log(`[TTS] cached — ${fileSize} bytes, ${Date.now() - fetchStart}ms total`);
+
+    // Record in LRU cache index and trigger eviction if limits exceeded
+    const filename = `tts_${key}.mp3`;
+    recordCachedFile(filename, fileSize);
+
     return { audioUrl: cachedFile.uri };
   } catch (error) {
     logger.log(`[TTS] downloadAudio ERROR:`, error);
@@ -228,6 +236,7 @@ export async function streamDevotionalAudio(
     // Return cached audio if available
     if (isCached(key)) {
       logger.log('[TTS] cache HIT');
+      touchCachedFile(`tts_${key}.mp3`);
       return { audioUrl: getCacheFile(key).uri };
     }
     logger.log('[TTS] cache MISS — downloading');
