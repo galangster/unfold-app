@@ -522,7 +522,14 @@ export default function JournalHubScreen() {
 
   const currentDayData = useMemo(() => {
     if (!currentDevotional) return null;
+    // For reflections, show the most recently completed day (not the next day).
+    // After completing Day 1, currentDay advances to 2 but the user should
+    // reflect on Day 1, not Day 2.
+    const lastCompletedDay = currentDevotional.days
+      .filter((d) => d.isRead)
+      .sort((a, b) => b.dayNumber - a.dayNumber)[0];
     return (
+      lastCompletedDay ??
       currentDevotional.days.find(
         (d) => d.dayNumber === currentDevotional.currentDay,
       ) ?? null
@@ -686,14 +693,16 @@ export default function JournalHubScreen() {
   const handleWriteToday = useCallback(() => {
     if (!currentDevotional) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Navigate to the day being reflected on (last completed), not the next day
+    const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
     router.push({
       pathname: '/(tabs)/(journal)/entry',
       params: {
         devotionalId: currentDevotional.id,
-        dayNumber: String(currentDevotional.currentDay),
+        dayNumber: String(reflectionDay),
       },
     });
-  }, [currentDevotional, router]);
+  }, [currentDevotional, currentDayData, router]);
 
   const handleQuestionTap = useCallback(
     (questionIndex: number) => {
@@ -1076,7 +1085,7 @@ export default function JournalHubScreen() {
                             color: colors.textSubtle,
                           }}
                         >
-                          Day {currentDevotional.currentDay}/
+                          Day {currentDayData?.dayNumber ?? currentDevotional.currentDay}/
                           {Math.max(currentDevotional.totalDays, currentDevotional.days.length)}
                         </Text>
                       </View>

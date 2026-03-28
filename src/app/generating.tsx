@@ -45,6 +45,7 @@ import {
 } from '@/lib/notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+import { todayDateString } from '@/lib/cutoff-logic';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -613,6 +614,10 @@ export default function GeneratingScreen() {
           // Step 5: Store Day 1
           addGeneratedDay(devotionalId, day1);
           setGeneratedDays([day1]);
+
+          // Step 5b: Set generation cutoff to today — prevents Day 2 from generating
+          // on the same day the user creates and completes Day 1
+          useUnfoldStore.getState().setLastGenerationCutoffDate(todayDateString());
 
           // Step 6: Track scripture usage
           if (day1.scriptureReference) {

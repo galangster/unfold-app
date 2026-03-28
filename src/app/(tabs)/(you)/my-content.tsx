@@ -212,7 +212,7 @@ export default function MyContentScreen() {
                         pathname: '/(tabs)/(today)/journal',
                         params: {
                           devotionalId: currentDevotionalId,
-                          dayNumber: currentDevotional.currentDay.toString(),
+                          dayNumber: (currentDevotional.days.filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0]?.dayNumber ?? currentDevotional.currentDay).toString(),
                         },
                       });
                     }
