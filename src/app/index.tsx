@@ -143,8 +143,8 @@ const RevealWord = React.memo(({
       <Animated.Text
         style={[
           {
-            fontFamily: FontFamily.displayItalic,
-            fontSize: FontSize.lg,
+            fontFamily: FontFamily.display,
+            fontSize: FontSize['2xl'],
             letterSpacing: -0.3,
           },
           textColorStyle,
@@ -207,6 +207,7 @@ export default function WelcomeScreen() {
 
   useEffect(() => {
     // Returning users skip the welcome animation (unless they just signed out)
+    // Returning users skip the welcome animation (unless they just signed out)
     if (user?.hasCompletedOnboarding && !signedOut) {
       router.replace('/(tabs)/(today)');
       return;
@@ -246,17 +247,17 @@ export default function WelcomeScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       {/* Ember particles — floating glow */}
-      <EmberParticles color={colors.accent} count={10} />
+      <EmberParticles color={colors.accent} count={22} bidirectional />
 
       {/* Bottom glow gradient */}
       <LinearGradient
-        colors={['transparent', `${colors.accent}08`, `${colors.accent}15`]}
+        colors={['transparent', `${colors.accent}20`, `${colors.accent}40`]}
         style={{
           position: 'absolute',
           bottom: 0,
           left: 0,
           right: 0,
-          height: 220,
+          height: 350,
         }}
         pointerEvents="none"
       />
@@ -283,10 +284,10 @@ export default function WelcomeScreen() {
         </View>
 
         {/* Subtitle — each word reveals with same animation as title */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}>
           {subtitleWords.map((word, i) => {
             if (word === '\n') {
-              return <View key={`br-${i}`} style={{ width: '100%', height: 4 }} />;
+              return <View key={`br-${i}`} style={{ width: '100%', height: 0 }} />;
             }
             return (
               <RevealWord

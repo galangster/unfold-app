@@ -26,13 +26,12 @@ interface ParticleConfig {
   maxOpacity: number;
 }
 
-function Ember({ x, size, duration, delay, sway, maxOpacity, color }: ParticleConfig & { color: string }) {
+function Ember({ x, size, duration, delay, sway, maxOpacity, color, direction = 'up' }: ParticleConfig & { color: string; direction?: 'up' | 'down' }) {
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    // Pulse: fade in then slowly fade out as particle rises
     opacity.value = withDelay(
       delay,
       withRepeat(
@@ -45,17 +44,17 @@ function Ember({ x, size, duration, delay, sway, maxOpacity, color }: ParticleCo
       ),
     );
 
-    // Float upward
+    // Float up or down
+    const travel = direction === 'up' ? -320 : 320;
     translateY.value = withDelay(
       delay,
       withRepeat(
-        withTiming(-320, { duration, easing: Easing.out(Easing.quad) }),
+        withTiming(travel, { duration, easing: Easing.out(Easing.quad) }),
         -1,
         false,
       ),
     );
 
-    // Gentle horizontal sway
     translateX.value = withDelay(
       delay,
       withRepeat(
@@ -82,7 +81,7 @@ function Ember({ x, size, duration, delay, sway, maxOpacity, color }: ParticleCo
       style={[
         {
           position: 'absolute',
-          bottom: 0,
+          [direction === 'up' ? 'bottom' : 'top']: 0,
           left: x,
           width: size,
           height: size,
@@ -102,20 +101,38 @@ function Ember({ x, size, duration, delay, sway, maxOpacity, color }: ParticleCo
 interface EmberParticlesProps {
   color: string;
   count?: number;
+  /** Also emit falling embers from the top of the screen */
+  bidirectional?: boolean;
 }
 
-export function EmberParticles({ color, count = 12 }: EmberParticlesProps) {
-  const particles = useMemo<ParticleConfig[]>(
+export function EmberParticles({ color, count = 12, bidirectional = false }: EmberParticlesProps) {
+  const upCount = bidirectional ? Math.ceil(count * 0.6) : count;
+  const downCount = bidirectional ? count - upCount : 0;
+
+  const upParticles = useMemo<ParticleConfig[]>(
     () =>
-      Array.from({ length: count }, () => ({
+      Array.from({ length: upCount }, () => ({
         x: Math.random() * SCREEN_WIDTH * 0.85 + SCREEN_WIDTH * 0.075,
-        size: 2 + Math.random() * 3.5,
+        size: 2.5 + Math.random() * 4,
         duration: 5000 + Math.random() * 5000,
         delay: Math.random() * 4000,
         sway: 8 + Math.random() * 18,
-        maxOpacity: 0.12 + Math.random() * 0.22,
+        maxOpacity: 0.25 + Math.random() * 0.35,
       })),
-    [count],
+    [upCount],
+  );
+
+  const downParticles = useMemo<ParticleConfig[]>(
+    () =>
+      Array.from({ length: downCount }, () => ({
+        x: Math.random() * SCREEN_WIDTH * 0.85 + SCREEN_WIDTH * 0.075,
+        size: 2 + Math.random() * 3,
+        duration: 6000 + Math.random() * 5000,
+        delay: Math.random() * 4000,
+        sway: 6 + Math.random() * 14,
+        maxOpacity: 0.15 + Math.random() * 0.25,
+      })),
+    [downCount],
   );
 
   return (
@@ -123,8 +140,11 @@ export function EmberParticles({ color, count = 12 }: EmberParticlesProps) {
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}
       pointerEvents="none"
     >
-      {particles.map((p, i) => (
-        <Ember key={i} {...p} color={color} />
+      {upParticles.map((p, i) => (
+        <Ember key={`up-${i}`} {...p} color={color} direction="up" />
+      ))}
+      {downParticles.map((p, i) => (
+        <Ember key={`dn-${i}`} {...p} color={color} direction="down" />
       ))}
     </View>
   );
