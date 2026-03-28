@@ -140,17 +140,19 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
       throw new Error(`TTS proxy error: ${genResponse.status} ${errBody.slice(0, 200)}`);
     }
 
-    const { downloadId } = await genResponse.json();
+    const { downloadId, audioHash } = await genResponse.json();
     if (!downloadId) {
       throw new Error('TTS proxy returned no downloadId');
     }
 
-    logger.log(`[TTS] generation complete — downloadId=${downloadId}, ${Date.now() - fetchStart}ms`);
+    logger.log(`[TTS] generation complete — downloadId=${downloadId}, audioHash=${audioHash}, ${Date.now() - fetchStart}ms`);
 
     // Step 2: Native download — audio data never enters JS thread
-    // Uses public download endpoint (downloadId is opaque UUID, no auth needed)
+    // Prefer CDN endpoint (cached at Railway CDN edge via Fastly) over one-time download
     const DOWNLOAD_TIMEOUT = 30_000;
-    const downloadUrl = `${RAILWAY_BACKEND_URL}/api/tts-download/${downloadId}`;
+    const downloadUrl = audioHash
+      ? `${RAILWAY_BACKEND_URL}/api/audio/${audioHash}`
+      : `${RAILWAY_BACKEND_URL}/api/tts-download/${downloadId}`;
     const downloadPromise = FileSystem.downloadAsync(
       downloadUrl,
       cachedFile.uri,

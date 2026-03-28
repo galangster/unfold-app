@@ -304,9 +304,13 @@ export default function HomeScreen() {
     return 'Today';
   };
 
-  const handleContinueReading = () => {
+  const handleContinueReading = (dayNumber?: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    router.push('/(tabs)/(today)/reading');
+    if (dayNumber) {
+      router.push({ pathname: '/(tabs)/(today)/reading', params: { dayNumber: String(dayNumber) } });
+    } else {
+      router.push('/(tabs)/(today)/reading');
+    }
   };
 
   const handleResume = () => {

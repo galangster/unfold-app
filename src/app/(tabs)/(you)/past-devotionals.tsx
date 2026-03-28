@@ -273,9 +273,8 @@ export default function PastDevotionalsScreen() {
 
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentDevotional(id);
-    router.push('/(tabs)/(today)/reading');
-  }, [setCurrentDevotional, router]);
+    router.push({ pathname: '/(tabs)/(you)/series-detail', params: { id } });
+  }, [router]);
 
   const handleExportPDF = useCallback(async (devotional: Devotional) => {
     if (exportingId) return;

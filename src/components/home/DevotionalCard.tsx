@@ -304,15 +304,17 @@ function MainCard({ state }: MainCardProps) {
   // CTA handling
   const hasCta = state.type === 'unread' || state.type === 'in-progress' || state.type === 'complete-today';
   const ctaText =
-    state.type === 'unread' || state.type === 'in-progress' ? state.ctaText : 'Continue Reading';
+    state.type === 'complete-today' ? "Today's Reading"
+    : state.type === 'unread' || state.type === 'in-progress' ? state.ctaText
+    : 'Continue Reading';
   const onPress = isTomorrow
     ? () => setShowTomorrowInfo((v) => !v)
     : 'onContinue' in state
       ? state.onContinue
       : undefined;
 
-  // New series secondary CTA
-  const showNewSeries = !isTomorrow;
+  // New series secondary CTA — always show when available
+  const showNewSeries = true;
   const onCreateNew = 'onCreateNew' in state ? state.onCreateNew : undefined;
 
   // Day label
@@ -336,7 +338,7 @@ function MainCard({ state }: MainCardProps) {
             ? 'Preparing your reading, please wait'
             : `Continue ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`
         }
-        style={[styles.cardTouchable, isDisabled && styles.cardDisabled]}
+        style={styles.cardTouchable}
       >
         <View
           style={[
@@ -597,7 +599,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardDisabled: {
-    opacity: 0.85,
+    opacity: 0.5,
   },
   journeyCompleteCard: {
     borderRadius: Radius.lg,

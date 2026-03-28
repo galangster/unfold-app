@@ -4,17 +4,15 @@
  * Shows in-progress devotionals as a horizontal FlatList with:
  * - Snap-to-card behavior
  * - Peek of the next card (~8px visible)
- * - Slight scale + shadow depth on background cards
- * - Dot indicators below
- * - Updates currentDevotionalId on swipe
+ * - Subtle opacity on background cards
+ * - Dot indicators below (state-driven, updates on snap)
  *
  * Falls back to a single DevotionalCard when there's 0 or 1 devotional.
  */
 
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View,
-  Text,
   FlatList,
   useWindowDimensions,
   StyleSheet,
@@ -41,7 +39,7 @@ import { DevotionalCard } from './DevotionalCard';
 interface DevotionalCardStackProps {
   scrollY: SharedValue<number>;
   onCreateNew: () => void;
-  onContinueReading: () => void;
+  onContinueReading: (dayNumber?: number) => void;
 }
 
 interface CardItem {
@@ -77,22 +75,14 @@ function AnimatedCardWrapper({
       (index + 1) * totalCardWidth,
     ];
 
-    const scale = interpolate(
-      scrollX.value,
-      inputRange,
-      [0.95, 1, 0.95],
-      Extrapolation.CLAMP,
-    );
-
     const opacity = interpolate(
       scrollX.value,
       inputRange,
-      [0.7, 1, 0.7],
+      [0.85, 1, 0.85],
       Extrapolation.CLAMP,
     );
 
     return {
-      transform: [{ scale }],
       opacity,
     };
   });
@@ -104,81 +94,32 @@ function AnimatedCardWrapper({
   );
 }
 
-// ─── Dot indicators ─────────────────────────────────────────────
+// ─── Dot indicators (state-driven) ──────────────────────────────
 
 function DotIndicators({
   count,
-  scrollX,
-  cardWidth,
+  activeIndex,
 }: {
   count: number;
-  scrollX: SharedValue<number>;
-  cardWidth: number;
+  activeIndex: number;
 }) {
   const { colors } = useTheme();
-  const totalCardWidth = cardWidth + CARD_GAP;
 
   return (
     <View style={dotStyles.container}>
       {Array.from({ length: count }).map((_, i) => (
-        <DotItem
+        <View
           key={i}
-          index={i}
-          scrollX={scrollX}
-          totalCardWidth={totalCardWidth}
-          activeColor={colors.accent}
-          inactiveColor={colors.textHint ?? colors.textSubtle}
+          style={[
+            dotStyles.dot,
+            {
+              backgroundColor: colors.accent,
+              opacity: i === activeIndex ? 1 : 0.2,
+            },
+          ]}
         />
       ))}
     </View>
-  );
-}
-
-function DotItem({
-  index,
-  scrollX,
-  totalCardWidth,
-  activeColor,
-  inactiveColor,
-}: {
-  index: number;
-  scrollX: SharedValue<number>;
-  totalCardWidth: number;
-  activeColor: string;
-  inactiveColor: string;
-}) {
-  const animatedStyle = useAnimatedStyle(() => {
-    const inputRange = [
-      (index - 1) * totalCardWidth,
-      index * totalCardWidth,
-      (index + 1) * totalCardWidth,
-    ];
-
-    const width = interpolate(
-      scrollX.value,
-      inputRange,
-      [6, 18, 6],
-      Extrapolation.CLAMP,
-    );
-
-    const opacity = interpolate(
-      scrollX.value,
-      inputRange,
-      [0.3, 1, 0.3],
-      Extrapolation.CLAMP,
-    );
-
-    return { width, opacity };
-  });
-
-  return (
-    <Animated.View
-      style={[
-        dotStyles.dot,
-        { backgroundColor: activeColor },
-        animatedStyle,
-      ]}
-    />
   );
 }
 
@@ -192,8 +133,9 @@ const dotStyles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
   },
   dot: {
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
 });
 
@@ -212,13 +154,74 @@ export function DevotionalCardStack({
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
 
   const scrollX = useSharedValue(0);
-  const activeIndexRef = useRef(0);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   // Card width: full screen minus padding on both sides, minus peek
   const cardWidth = screenWidth - HORIZONTAL_PADDING * 2 - PEEK_WIDTH;
 
+  // Capture initial sort order so cards never reorder during swipes.
+  const initialSortIdRef = useRef(currentDevotionalId);
+
   // Get in-progress devotionals (not fully completed), plus current
   const cardItems: CardItem[] = useMemo(() => {
+    const todayStr = new Date().toDateString();
+
+    function buildItem(d: Devotional): CardItem {
+      const completedDays = d.days.filter((day) => day.isRead).length;
+      const isComplete = completedDays >= d.totalDays;
+      const progress = d.totalDays > 0 ? (completedDays / d.totalDays) * 100 : 0;
+
+      const nextDayData = d.days.find((day) => day.dayNumber === d.currentDay) ?? null;
+      const hasReadToday = d.days.some(
+        (day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === todayStr,
+      );
+
+      // When today's reading is done, show the COMPLETED day (not tomorrow's)
+      let displayDayData = nextDayData;
+      let navigateToDayNumber: number | undefined;
+
+      if (hasReadToday && nextDayData && !nextDayData.isRead) {
+        const todayCompleted = d.days
+          .filter((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === todayStr)
+          .sort((a, b) => b.dayNumber - a.dayNumber)[0];
+        if (todayCompleted) {
+          displayDayData = todayCompleted;
+          navigateToDayNumber = todayCompleted.dayNumber;
+        }
+      }
+
+      // CTA text
+      const isFirstDay = d.currentDay === 1 && completedDays === 0;
+      const isLastDay = d.currentDay === d.totalDays;
+      let ctaText = 'Continue Reading';
+      if (navigateToDayNumber) ctaText = "Today's Reading";
+      else if (isFirstDay) ctaText = 'Begin Your Journey';
+      else if (isLastDay && !isComplete) ctaText = 'Finish Your Series';
+
+      // Per-card onContinue: set correct devotional BEFORE navigating
+      const onContinue = () => {
+        setCurrentDevotional(d.id);
+        onContinueReading(navigateToDayNumber);
+      };
+
+      const state = computeDevotionalState({
+        currentDevotional: d,
+        currentDayData: displayDayData,
+        hasReadToday,
+        isJourneyComplete: isComplete,
+        isPreparing: !hasReadToday && !displayDayData,
+        daysCompleted: completedDays,
+        totalDays: d.totalDays,
+        progress,
+        tomorrowTeaser: null,
+        onContinue,
+        onCreateNew,
+        ctaText,
+      });
+
+      return { devotional: d, state };
+    }
+
     // Filter to in-progress (or unstarted) devotionals
     const inProgress = devotionals.filter((d) => {
       const completedDays = d.days.filter((day) => day.isRead).length;
@@ -226,8 +229,6 @@ export function DevotionalCardStack({
     });
 
     if (inProgress.length === 0) {
-      // No in-progress devotionals — show the current one (which may be complete)
-      // or empty state
       const current = devotionals.find((d) => d.id === currentDevotionalId);
       if (!current) {
         return [{
@@ -242,71 +243,27 @@ export function DevotionalCardStack({
             totalDays: 0,
             progress: 0,
             tomorrowTeaser: null,
-            onContinue: onContinueReading,
+            onContinue: () => onContinueReading(),
             onCreateNew,
             ctaText: 'Begin Your Journey',
           }),
         }];
       }
-      return [buildCardItem(current)];
+      return [buildItem(current)];
     }
 
-    // Sort: current devotional first, then by most recently created
+    // Stable sort: use the INITIAL currentDevotionalId (captured at mount),
+    // then by creation date. This prevents cards reordering during swipes.
+    const sortId = initialSortIdRef.current;
     const sorted = [...inProgress].sort((a, b) => {
-      if (a.id === currentDevotionalId) return -1;
-      if (b.id === currentDevotionalId) return 1;
+      if (a.id === sortId) return -1;
+      if (b.id === sortId) return 1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    return sorted.map(buildCardItem);
-  }, [devotionals, currentDevotionalId, onCreateNew, onContinueReading]);
-
-  function buildCardItem(d: Devotional): CardItem {
-    const completedDays = d.days.filter((day) => day.isRead).length;
-    const isComplete = completedDays >= d.totalDays;
-    const progress = d.totalDays > 0 ? (completedDays / d.totalDays) * 100 : 0;
-
-    const currentDayData = d.days.find((day) => day.dayNumber === d.currentDay) ?? null;
-    const hasReadToday = d.days.some(
-      (day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === new Date().toDateString(),
-    );
-
-    // Tomorrow teaser
-    let tomorrowTeaser: string | null = null;
-    const isTomorrow = !isComplete && hasReadToday;
-    if (isTomorrow && currentDayData?.bodyText) {
-      const stripped = currentDayData.bodyText
-        .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
-        .replace(/^---$/gm, '')
-        .trim();
-      const firstSentence = stripped.match(/^.+?[.!?]/s);
-      tomorrowTeaser = firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
-    }
-
-    // CTA text
-    const isFirstDay = d.currentDay === 1 && completedDays === 0;
-    const isLastDay = d.currentDay === d.totalDays;
-    let ctaText = 'Continue Reading';
-    if (isFirstDay) ctaText = 'Begin Your Journey';
-    else if (isLastDay && !isComplete) ctaText = 'Finish Your Series';
-
-    const state = computeDevotionalState({
-      currentDevotional: d,
-      currentDayData,
-      hasReadToday,
-      isJourneyComplete: isComplete,
-      isPreparing: !hasReadToday && !currentDayData,
-      daysCompleted: completedDays,
-      totalDays: d.totalDays,
-      progress,
-      tomorrowTeaser,
-      onContinue: onContinueReading,
-      onCreateNew,
-      ctaText,
-    });
-
-    return { devotional: d, state };
-  }
+    return sorted.map(buildItem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devotionals, onCreateNew, onContinueReading, setCurrentDevotional]);
 
   // If only 1 card, render directly (no stack)
   if (cardItems.length <= 1) {
@@ -323,18 +280,13 @@ export function DevotionalCardStack({
     },
   });
 
+  // State setters are stable references — safe to use in stale closure
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         const newIndex = viewableItems[0].index;
-        if (newIndex !== activeIndexRef.current) {
-          activeIndexRef.current = newIndex;
-          const item = cardItems[newIndex];
-          if (item?.devotional?.id && item.devotional.id !== currentDevotionalId) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setCurrentDevotional(item.devotional.id);
-          }
-        }
+        setActiveIndex(newIndex);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     },
   ).current;
@@ -365,7 +317,7 @@ export function DevotionalCardStack({
   }, [cardItems.length, cardWidth]);
 
   return (
-    <View>
+    <View style={{ marginTop: Spacing['5'] }}>
       <AnimatedFlatList
         data={cardItems}
         renderItem={renderItem}
@@ -384,7 +336,7 @@ export function DevotionalCardStack({
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
       />
-      <DotIndicators count={cardItems.length} scrollX={scrollX} cardWidth={cardWidth} />
+      <DotIndicators count={cardItems.length} activeIndex={activeIndex} />
     </View>
   );
 }

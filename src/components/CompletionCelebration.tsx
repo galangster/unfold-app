@@ -395,7 +395,7 @@ export function CompletionCelebration({
             <Animated.View style={[{ marginTop: Spacing['5'] }, subtitleStyle]}>
               <Text
                 style={{
-                  fontFamily: FontFamily.bodyItalic,
+                  fontFamily: FontFamily.body,
                   fontSize: 17,
                   color: 'rgba(245, 240, 235, 0.55)',
                   textAlign: 'left',
