@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, LayoutChangeEvent } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
+  FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -11,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -209,9 +210,13 @@ export default function PastDevotionalsScreen() {
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
   const [activeTab, setActiveTab] = useState<PastSeriesTab>('progress');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchVisible, setSearchVisible] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportSuccessId, setExportSuccessId] = useState<string | null>(null);
   const exportSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<TextInput>(null);
+  const scrollY = useSharedValue(0);
 
   useEffect(() => {
     return () => {
@@ -219,16 +224,52 @@ export default function PastDevotionalsScreen() {
     };
   }, []);
 
-  // Filter devotionals by tab, most recent first
+  // Filter devotionals by tab and search query, most recent first
   const filteredDevotionals = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
     return devotionals
       .filter((d) => {
         const completedDays = d.days.filter((day) => day.isRead).length;
         const isComplete = completedDays >= d.totalDays;
-        return activeTab === 'completed' ? isComplete : !isComplete;
+        const matchesTab = activeTab === 'completed' ? isComplete : !isComplete;
+        if (!matchesTab) return false;
+        // Search filter
+        if (query) {
+          const searchableText = [
+            d.title,
+            ...d.days.map((day) => day.title),
+            ...d.days.map((day) => day.scriptureReference),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return searchableText.includes(query);
+        }
+        return true;
       })
-      .sort((a, b) => b.createdAt - a.createdAt);
-  }, [devotionals, activeTab]);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [devotionals, activeTab, searchQuery]);
+
+  // Pull-down to reveal search — detect overscroll
+  const handleScroll = useCallback((event: { nativeEvent: { contentOffset: { y: number } } }) => {
+    const y = event.nativeEvent.contentOffset.y;
+    scrollY.value = y;
+    if (y < -50 && !searchVisible) {
+      setSearchVisible(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      // Focus the search input after a short delay for the animation
+      setTimeout(() => searchInputRef.current?.focus(), 200);
+    }
+  }, [searchVisible, scrollY]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    if (!searchQuery) {
+      // If already empty, dismiss the search bar
+      setSearchVisible(false);
+      searchInputRef.current?.blur();
+    }
+  }, [searchQuery]);
 
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -445,9 +486,11 @@ export default function PastDevotionalsScreen() {
     );
   }
 
-  const emptyLabel = activeTab === 'completed'
-    ? 'No completed studies yet'
-    : 'No studies in progress';
+  const emptyLabel = searchQuery.trim()
+    ? `No studies match "${searchQuery}"`
+    : activeTab === 'completed'
+      ? 'No completed studies yet'
+      : 'No studies in progress';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -483,6 +526,68 @@ export default function PastDevotionalsScreen() {
           <SegmentedControl activeTab={activeTab} onTabChange={setActiveTab} />
         </View>
 
+        {/* Pull-down search bar */}
+        {searchVisible && (
+          <Animated.View
+            entering={FadeIn.duration(Duration.fast)}
+            exiting={FadeOut.duration(Duration.fast)}
+            style={searchStyles.container}
+          >
+            <View
+              style={[
+                searchStyles.inputRow,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <MagnifyingGlassIcon size={16} color={colors.textMuted} weight="light" />
+              <TextInput
+                ref={searchInputRef}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search studies, days, scriptures..."
+                placeholderTextColor={colors.textHint}
+                style={[
+                  searchStyles.input,
+                  { color: colors.text },
+                ]}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                accessibilityLabel="Search studies"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => setSearchQuery('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
+                >
+                  <XCircleIcon size={18} color={colors.textMuted} weight="fill" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {!searchQuery && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  setSearchVisible(false);
+                  setSearchQuery('');
+                  searchInputRef.current?.blur();
+                }}
+                style={searchStyles.cancelButton}
+              >
+                <Text style={[searchStyles.cancelText, { color: colors.accent }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        )}
+
         {filteredDevotionals.length === 0 ? (
           <Animated.View
             entering={FadeIn.duration(Duration.slow)}
@@ -508,9 +613,49 @@ export default function PastDevotionalsScreen() {
             keyExtractor={(item: Devotional) => item.id}
             contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['1'], paddingBottom: 100 } as any}
             showsVerticalScrollIndicator={false}
+            onScroll={handleScroll as any}
+            scrollEventThrottle={16}
           />
         )}
       </SafeAreaView>
     </View>
   );
 }
+
+// ============================================================================
+// Search Bar Styles
+// ============================================================================
+
+const searchStyles = StyleSheet.create({
+  container: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing['6'],
+    marginBottom: Spacing['3'],
+    gap: Spacing['2'],
+  },
+  inputRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+    height: 40,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    paddingHorizontal: Spacing['3'],
+  },
+  input: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    paddingVertical: 0,
+  },
+  cancelButton: {
+    paddingVertical: Spacing['2'],
+    paddingHorizontal: Spacing['1'],
+  },
+  cancelText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+});
