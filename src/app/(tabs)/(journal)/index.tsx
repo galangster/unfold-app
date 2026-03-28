@@ -34,6 +34,7 @@ import {
   XIcon,
   PlusIcon,
   NotepadIcon,
+  CaretRightIcon,
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -674,6 +675,42 @@ export default function JournalHubScreen() {
     });
   }, [journalEntries, searchQuery, devotionals]);
 
+  // ---- Series with journal entries (for YOUR STUDIES section) ----
+  const seriesWithEntries = useMemo(() => {
+    // Group entries by devotionalId and compute stats
+    const seriesMap = new Map<string, { devotional: typeof devotionals[0]; entryCount: number; latestEntry: string; scriptures: string[] }>();
+    for (const entry of journalEntries) {
+      const existing = seriesMap.get(entry.devotionalId);
+      const devotional = devotionals.find((d) => d.id === entry.devotionalId);
+      if (!devotional) continue;
+
+      if (!existing) {
+        // Collect unique scripture references from this devotional's days
+        const scriptures = Array.from(
+          new Set(
+            devotional.days
+              .filter((d) => d.scriptureReference)
+              .map((d) => d.scriptureReference),
+          ),
+        ).slice(0, 3);
+        seriesMap.set(entry.devotionalId, {
+          devotional,
+          entryCount: 1,
+          latestEntry: entry.updatedAt,
+          scriptures,
+        });
+      } else {
+        existing.entryCount += 1;
+        if (new Date(entry.updatedAt).getTime() > new Date(existing.latestEntry).getTime()) {
+          existing.latestEntry = entry.updatedAt;
+        }
+      }
+    }
+
+    return Array.from(seriesMap.values())
+      .sort((a, b) => new Date(b.latestEntry).getTime() - new Date(a.latestEntry).getTime());
+  }, [journalEntries, devotionals]);
+
   // ---- Relative date formatting ----
   const formatRelativeDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr);
@@ -1215,27 +1252,103 @@ export default function JournalHubScreen() {
                   </Animated.View>
                 )}
 
-              {/* Past Entries */}
-              {(journalEntries.length > 0 || !currentDevotional) && (
+              {/* YOUR STUDIES — grouped by series */}
+              {(seriesWithEntries.length > 0 || !currentDevotional) && (
                 <Animated.View
                   entering={FadeIn.duration(Duration.slow).delay(90)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['7'] }}
                 >
-                  {journalEntries.length > 0 && (
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.mono,
-                        fontSize: 11,
-                        color: colors.textSubtle,
-                        letterSpacing: 1,
-                        marginBottom: Spacing['4'],
-                      }}
-                    >
-                      YOUR SERIES
-                    </Text>
-                  )}
+                  {seriesWithEntries.length > 0 ? (
+                    <>
+                      {/* Header row: YOUR STUDIES + View All */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: Spacing['4'],
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.mono,
+                            fontSize: 11,
+                            color: colors.textSubtle,
+                            letterSpacing: 1,
+                          }}
+                        >
+                          YOUR STUDIES
+                        </Text>
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            router.push('/(tabs)/(you)/past-devotionals');
+                          }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="link"
+                          accessibilityLabel="View all studies"
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.ui,
+                                fontSize: FontSize.sm,
+                                color: colors.accent,
+                              }}
+                            >
+                              View All
+                            </Text>
+                            <CaretRightIcon size={12} color={colors.accent} weight="bold" />
+                          </View>
+                        </TouchableOpacity>
+                      </View>
 
-                  {journalEntries.length === 0 ? (
+                      {/* Latest 4 series as simple rows */}
+                      {seriesWithEntries.slice(0, 4).map((series) => (
+                        <TouchableOpacity
+                          key={series.devotional.id}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            router.push({
+                              pathname: '/(tabs)/(you)/past-devotionals' as any,
+                            });
+                          }}
+                          activeOpacity={0.7}
+                          style={{ marginBottom: Spacing['4'] }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${series.devotional.title}, ${series.entryCount} entries`}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.display,
+                              fontSize: 22,
+                              color: colors.text,
+                              lineHeight: 28,
+                              marginBottom: 2,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {series.devotional.title}
+                          </Text>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.body,
+                              fontSize: FontSize.sm,
+                              color: colors.textMuted,
+                              lineHeight: 20,
+                            }}
+                            numberOfLines={1}
+                          >
+                            {series.entryCount} {series.entryCount === 1 ? 'entry' : 'entries'}
+                            {series.scriptures.length > 0
+                              ? ` \u00B7 ${series.scriptures.join(', ')}`
+                              : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </>
+                  ) : (
                     <View
                       style={{
                         borderRadius: Radius.lg,
@@ -1307,159 +1420,6 @@ export default function JournalHubScreen() {
                         />
                       </View>
                     </View>
-                  ) : filteredEntries.length === 0 && searchQuery ? (
-                    <View
-                      style={{
-                        borderRadius: Radius.lg,
-                        padding: Spacing['6'],
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: 15,
-                          color: colors.textMuted,
-                          textAlign: 'center',
-                        }}
-                      >
-                        No entries match "{searchQuery}"
-                      </Text>
-                    </View>
-                  ) : (
-                    filteredEntries.map((entry) => {
-                      const devotional = devotionals.find(
-                        (d) => d.id === entry.devotionalId,
-                      );
-                      const day = devotional?.days.find(
-                        (d) => d.dayNumber === entry.dayNumber,
-                      );
-                      const answeredCount =
-                        entry.questionResponses?.filter(
-                          (qr) => qr.response.trim().length > 0,
-                        ).length ?? 0;
-                      return (
-                        <TouchableOpacity
-                          key={entry.id}
-                          onPress={() => {
-                            Haptics.impactAsync(
-                              Haptics.ImpactFeedbackStyle.Light,
-                            );
-                            router.push({
-                              pathname: '/(tabs)/(journal)/entry',
-                              params: {
-                                devotionalId: entry.devotionalId,
-                                dayNumber: String(entry.dayNumber),
-                              },
-                            });
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <View
-                            style={{
-                              backgroundColor: colors.backgroundElevated,
-                              borderRadius: Radius.card,
-                              padding: Spacing['4'],
-                              marginBottom: Spacing['2.5'],
-                              borderWidth: 1,
-                              borderColor: colors.border,
-                              ...Shadow.sm,
-                            }}
-                          >
-                            <View
-                              style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                marginBottom: Spacing['1.5'],
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontFamily: FontFamily.uiMedium,
-                                  fontSize: FontSize.sm,
-                                  color: colors.text,
-                                  flex: 1,
-                                }}
-                                numberOfLines={1}
-                              >
-                                {day?.title ?? `Day ${entry.dayNumber}`}
-                              </Text>
-                              <Text
-                                style={{
-                                  fontFamily: FontFamily.ui,
-                                  fontSize: 11,
-                                  color: colors.textSubtle,
-                                  marginLeft: Spacing['2'],
-                                }}
-                              >
-                                {formatRelativeDate(entry.updatedAt)}
-                              </Text>
-                            </View>
-                            {entry.content ? (
-                              <Text
-                                style={{
-                                  fontFamily: FontFamily.body,
-                                  fontSize: 13,
-                                  color: colors.textMuted,
-                                  lineHeight: 19,
-                                }}
-                                numberOfLines={2}
-                              >
-                                {entry.content}
-                              </Text>
-                            ) : null}
-                            {(answeredCount > 0 || devotional) && (
-                              <View
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: Spacing['2'],
-                                  marginTop: Spacing['2'],
-                                }}
-                              >
-                                {devotional && (
-                                  <Text
-                                    style={{
-                                      fontFamily: FontFamily.ui,
-                                      fontSize: 11,
-                                      color: colors.textSubtle,
-                                    }}
-                                    numberOfLines={1}
-                                  >
-                                    {devotional.title}
-                                  </Text>
-                                )}
-                                {answeredCount > 0 && (
-                                  <View
-                                    style={{
-                                      flexDirection: 'row',
-                                      alignItems: 'center',
-                                      gap: 3,
-                                    }}
-                                  >
-                                    <CheckCircleIcon
-                                      size={11}
-                                      color={colors.accent}
-                                      weight="fill"
-                                    />
-                                    <Text
-                                      style={{
-                                        fontFamily: FontFamily.ui,
-                                        fontSize: 11,
-                                        color: colors.accent,
-                                      }}
-                                    >
-                                      {answeredCount}
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    })
                   )}
                 </Animated.View>
               )}
