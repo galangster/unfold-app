@@ -5,6 +5,7 @@ import type { ThemeCategory, DevotionalType } from '../constants/devotional-type
 import { logBugError } from './bug-logger';
 import { logger } from './logger';
 import { mmkvStorage } from './mmkv-storage';
+import { compositeId, newId } from './sync-ids';
 import type { NudgeType, NudgeImpression, NudgeState } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 
@@ -100,6 +101,7 @@ export interface BibleHighlight {
   note?: string;
   translation: string;
   createdAt: string;
+  updatedAt?: string; // ISO timestamp
 }
 
 export interface BibleReadingPosition {
@@ -108,6 +110,8 @@ export interface BibleReadingPosition {
   chapter: number;
   translation: string;
   lastReadAt: string;
+  id?: string; // Added for sync — composite from bookId:translation
+  updatedAt?: string; // ISO timestamp
 }
 
 export interface BibleReaderSettings {
@@ -193,6 +197,9 @@ export interface DevotionalDay {
   storyId?: string;
   seriesReflectionSummary?: string;
   closureArchetype?: string;
+  // Sync fields
+  id?: string; // Added for sync — composite from devotionalId:dayNumber
+  updatedAt?: string; // ISO timestamp
 }
 
 export interface Devotional {
@@ -218,6 +225,8 @@ export interface Devotional {
   generationMode: 'batch' | 'progressive';
   // Story deduplication
   usedStoryIds?: string[];
+  // Sync fields
+  updatedAt?: string; // ISO timestamp
 }
 
 export type JournalMode = 'freewrite' | 'soap' | 'guided';
@@ -267,6 +276,7 @@ export interface CheckIn {
   freeText?: string;
   createdAt: string;
   timeOfDay: CheckInTimeOfDay;
+  updatedAt?: string; // ISO timestamp
 }
 
 // Scripture tracking for variety
@@ -275,6 +285,8 @@ export interface UsedScripture {
   book: string; // e.g., "John"
   usedAt: string; // ISO timestamp
   devotionalId: string;
+  id?: string; // Added for sync — composite from reference:devotionalId
+  updatedAt?: string; // ISO timestamp
 }
 
 // Bookmarks for saved passages (premium feature)
@@ -287,6 +299,7 @@ export interface Bookmark {
   scriptureReference: string;
   scriptureText: string;
   savedAt: string;
+  updatedAt?: string; // ISO timestamp
 }
 
 // Highlight colors for categorization
@@ -305,6 +318,7 @@ export interface Highlight {
   contextBefore?: string;
   contextAfter?: string;
   createdAt: string;
+  updatedAt?: string; // ISO timestamp
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +417,8 @@ export interface SeriesPersonaRecord {
   secondaryTrait: string;
   templateSeed: number;
   createdAt: string;
+  id?: string; // Added for sync — composite from devotionalId
+  updatedAt?: string; // ISO timestamp
 }
 
 // Cross-series method usage tracking
@@ -411,6 +427,8 @@ export interface MethodUsageRecord {
   devotionalId: string;
   dayNumber: number;
   usedAt: string;
+  id?: string; // Added for sync — composite from methodId:devotionalId:dayNumber
+  updatedAt?: string; // ISO timestamp
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +711,9 @@ interface UnfoldState {
   setLastEveningGenerationDate: (date: string) => void;
   addUsedStoryId: (devotionalId: string, storyId: string) => void;
 
+  // Sync tracking
+  userUpdatedAt?: string; // ISO timestamp for user profile sync
+
   // Helpers
   getCurrentDevotional: () => Devotional | undefined;
   reset: () => void;
@@ -784,6 +805,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       updateUser: (updates) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...updates } : null,
+          userUpdatedAt: new Date().toISOString(),
         })),
 
       // Devotional actions
@@ -794,72 +816,81 @@ export const useUnfoldStore = create<UnfoldState>()(
             return { currentDevotionalId: devotional.id };
           }
           return {
-            devotionals: [devotional, ...state.devotionals],
+            devotionals: [{ ...devotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
             currentDevotionalId: devotional.id,
           };
         }),
 
       updateDevotionalDays: (devotionalId, days, title) =>
-        set((state) => ({
-          devotionals: state.devotionals.map((d) => {
-            if (d.id !== devotionalId) return d;
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            devotionals: state.devotionals.map((d) => {
+              if (d.id !== devotionalId) return d;
 
-            // Merge incoming days with existing days by dayNumber.
-            // Preserve read status/readAt from existing entries so late generation updates
-            // never reset a day the user already completed.
-            const existingByDay = new Map(d.days.map((day) => [day.dayNumber, day]));
-            const incomingByDay = new Map(days.map((day) => [day.dayNumber, day]));
-            const mergedByDay = new Map<number, DevotionalDay>();
+              // Merge incoming days with existing days by dayNumber.
+              // Preserve read status/readAt from existing entries so late generation updates
+              // never reset a day the user already completed.
+              const existingByDay = new Map(d.days.map((day) => [day.dayNumber, day]));
+              const incomingByDay = new Map(days.map((day) => [day.dayNumber, day]));
+              const mergedByDay = new Map<number, DevotionalDay>();
 
-            for (const [dayNumber, existingDay] of existingByDay.entries()) {
-              const incomingDay = incomingByDay.get(dayNumber);
-              if (!incomingDay) {
-                mergedByDay.set(dayNumber, existingDay);
-                continue;
+              for (const [dayNumber, existingDay] of existingByDay.entries()) {
+                const incomingDay = incomingByDay.get(dayNumber);
+                if (!incomingDay) {
+                  mergedByDay.set(dayNumber, existingDay);
+                  continue;
+                }
+
+                mergedByDay.set(dayNumber, {
+                  ...incomingDay,
+                  isRead: existingDay.isRead || incomingDay.isRead,
+                  readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
+                  updatedAt: now,
+                });
               }
 
-              mergedByDay.set(dayNumber, {
-                ...incomingDay,
-                isRead: existingDay.isRead || incomingDay.isRead,
-                readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
-              });
-            }
-
-            for (const [dayNumber, incomingDay] of incomingByDay.entries()) {
-              if (!mergedByDay.has(dayNumber)) {
-                mergedByDay.set(dayNumber, incomingDay);
+              for (const [dayNumber, incomingDay] of incomingByDay.entries()) {
+                if (!mergedByDay.has(dayNumber)) {
+                  mergedByDay.set(dayNumber, { ...incomingDay, updatedAt: now });
+                }
               }
-            }
 
-            const mergedDays = [...mergedByDay.values()].sort((a, b) => a.dayNumber - b.dayNumber);
+              const mergedDays = [...mergedByDay.values()].sort((a, b) => a.dayNumber - b.dayNumber);
 
-            return {
-              ...d,
-              days: mergedDays,
-              // Only increase totalDays, never shrink it - partial batches shouldn't lower the target
-              totalDays: Math.max(d.totalDays, mergedDays.length),
-              ...(title ? { title } : {}),
-            };
-          }),
-        })),
+              return {
+                ...d,
+                days: mergedDays,
+                // Only increase totalDays, never shrink it - partial batches shouldn't lower the target
+                totalDays: Math.max(d.totalDays, mergedDays.length),
+                ...(title ? { title } : {}),
+                updatedAt: now,
+              };
+            }),
+          };
+        }),
 
       setCurrentDevotional: (id) => set({ currentDevotionalId: id }),
 
       markDayAsRead: (devotionalId, dayNumber) =>
-        set((state) => ({
-          devotionals: state.devotionals.map((d) =>
-            d.id === devotionalId
-              ? {
-                  ...d,
-                  days: d.days.map((day) =>
-                    day.dayNumber === dayNumber
-                      ? { ...day, isRead: true, readAt: new Date().toISOString() }
-                      : day
-                  ),
-                }
-              : d
-          ),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            devotionals: state.devotionals.map((d) =>
+              d.id === devotionalId
+                ? {
+                    ...d,
+                    updatedAt: now,
+                    days: d.days.map((day) =>
+                      day.dayNumber === dayNumber
+                        ? { ...day, isRead: true, readAt: now, updatedAt: now }
+                        : day
+                    ),
+                  }
+                : d
+            ),
+          };
+        }),
 
       advanceDay: (devotionalId) =>
         set((state) => ({
@@ -869,7 +900,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             const userLength = state.user?.devotionalLength ?? d.totalDays;
             const effectiveTotal = Math.max(d.totalDays, userLength);
             return d.currentDay < effectiveTotal
-              ? { ...d, currentDay: d.currentDay + 1 }
+              ? { ...d, currentDay: d.currentDay + 1, updatedAt: new Date().toISOString() }
               : d;
           }),
         })),
@@ -991,7 +1022,9 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Scripture tracking actions
       addUsedScriptures: (scriptures) =>
         set((state) => {
-          const combined = [...state.usedScriptures, ...scriptures];
+          const now = new Date().toISOString();
+          const timestamped = scriptures.map((s) => ({ ...s, updatedAt: now }));
+          const combined = [...state.usedScriptures, ...timestamped];
           // Cap at 200 most recent scriptures to prevent unbounded growth
           const MAX_SCRIPTURES = 200;
           if (combined.length > MAX_SCRIPTURES) {
@@ -1014,12 +1047,15 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Bookmark actions
       addBookmark: (bookmark) =>
-        set((state) => ({
-          bookmarks: [
-            { ...bookmark, id: `bm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, savedAt: new Date().toISOString() },
-            ...state.bookmarks,
-          ],
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            bookmarks: [
+              { ...bookmark, id: `bm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, savedAt: now, updatedAt: now },
+              ...state.bookmarks,
+            ],
+          };
+        }),
 
       removeBookmark: (id) =>
         set((state) => ({
@@ -1035,12 +1071,15 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Highlight actions
       addHighlight: (highlight) =>
-        set((state) => ({
-          highlights: [
-            { ...highlight, id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, createdAt: new Date().toISOString() },
-            ...state.highlights,
-          ],
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            highlights: [
+              { ...highlight, id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, createdAt: now, updatedAt: now },
+              ...state.highlights,
+            ],
+          };
+        }),
 
       removeHighlight: (id) =>
         set((state) => ({
@@ -1237,7 +1276,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       addSeriesPersonaRecord: (record) =>
         set((state) => {
           const MAX_HISTORY = 10;
-          const updated = [record, ...state.seriesPersonaHistory].slice(0, MAX_HISTORY);
+          const updated = [{ ...record, updatedAt: new Date().toISOString() }, ...state.seriesPersonaHistory].slice(0, MAX_HISTORY);
           return { seriesPersonaHistory: updated };
         }),
 
@@ -1250,10 +1289,11 @@ export const useUnfoldStore = create<UnfoldState>()(
             (r) => r.devotionalId === devotionalId && r.dayNumber === dayNumber,
           );
           if (exists) return state;
+          const now = new Date().toISOString();
           const MAX_HISTORY = 200;
           return {
             methodUsageHistory: [
-              { methodId, devotionalId, dayNumber, usedAt: new Date().toISOString() },
+              { methodId, devotionalId, dayNumber, usedAt: now, updatedAt: now },
               ...state.methodUsageHistory,
             ].slice(0, MAX_HISTORY),
           };
@@ -1261,12 +1301,15 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Check-ins (Phase 2)
       addCheckIn: (checkIn) =>
-        set((state) => ({
-          checkIns: [
-            { ...checkIn, id: `checkin_${Date.now()}`, createdAt: new Date().toISOString() },
-            ...state.checkIns,
-          ].slice(0, 200), // Cap at 200 entries
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            checkIns: [
+              { ...checkIn, id: newId(), createdAt: now, updatedAt: now },
+              ...state.checkIns,
+            ].slice(0, 200), // Cap at 200 entries
+          };
+        }),
       getCheckIn: (devotionalId, dayNumber, timeOfDay) => {
         return get().checkIns.find(
           (c) => c.devotionalId === devotionalId && c.dayNumber === dayNumber && c.timeOfDay === timeOfDay
@@ -1359,7 +1402,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       setSeriesArc: (devotionalId, arc) =>
         set((state) => ({
           devotionals: state.devotionals.map((d) =>
-            d.id === devotionalId ? { ...d, seriesArc: arc, title: arc.overarchingTheme ? d.title : d.title } : d
+            d.id === devotionalId ? { ...d, seriesArc: arc, title: arc.overarchingTheme ? d.title : d.title, updatedAt: new Date().toISOString() } : d
           ),
         })),
 
@@ -1369,15 +1412,17 @@ export const useUnfoldStore = create<UnfoldState>()(
             if (d.id !== devotionalId || !d.seriesArc) return d;
             // Use actual hint count, not the requested count — LLM may return fewer/more
             const actualAdded = newDayHints.length;
+            const now = new Date().toISOString();
             return {
               ...d,
               totalDays: d.totalDays + actualAdded,
+              updatedAt: now,
               seriesArc: {
                 ...d.seriesArc,
                 totalDaysPlanned: d.seriesArc.totalDaysPlanned + actualAdded,
                 dayHints: [...d.seriesArc.dayHints, ...newDayHints],
                 isOpenEnded: true,
-                lastExtendedAt: new Date().toISOString(),
+                lastExtendedAt: now,
               },
             };
           }),
@@ -1417,28 +1462,35 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Single-day addition for progressive generation
       addGeneratedDay: (devotionalId, day) =>
-        set((state) => ({
-          devotionals: state.devotionals.map((d) => {
-            if (d.id !== devotionalId) return d;
-            // Don't duplicate if day already exists
-            if (d.days.some((existing) => existing.dayNumber === day.dayNumber)) return d;
-            const updatedDays = [...d.days, day].sort((a, b) => a.dayNumber - b.dayNumber);
-            return { ...d, days: updatedDays };
-          }),
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            devotionals: state.devotionals.map((d) => {
+              if (d.id !== devotionalId) return d;
+              // Don't duplicate if day already exists
+              if (d.days.some((existing) => existing.dayNumber === day.dayNumber)) return d;
+              const updatedDays = [...d.days, { ...day, updatedAt: now }].sort((a, b) => a.dayNumber - b.dayNumber);
+              return { ...d, days: updatedDays, updatedAt: now };
+            }),
+          };
+        }),
 
       // Bible Reader actions
       addBibleHighlight: (highlight) =>
-        set((state) => ({
-          bibleHighlights: [
-            ...state.bibleHighlights,
-            {
-              ...highlight,
-              id: `bh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        })),
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            bibleHighlights: [
+              ...state.bibleHighlights,
+              {
+                ...highlight,
+                id: `bh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+          };
+        }),
 
       removeBibleHighlight: (id) =>
         set((state) => ({
@@ -1448,7 +1500,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       updateBibleHighlightNote: (id, note) =>
         set((state) => ({
           bibleHighlights: state.bibleHighlights.map((h) =>
-            h.id === id ? { ...h, note } : h,
+            h.id === id ? { ...h, note, updatedAt: new Date().toISOString() } : h,
           ),
         })),
 
@@ -1460,9 +1512,11 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       recordBibleReading: (position) =>
         set((state) => {
+          const now = new Date().toISOString();
           const newEntry: BibleReadingPosition = {
             ...position,
-            lastReadAt: new Date().toISOString(),
+            lastReadAt: now,
+            updatedAt: now,
           };
           // Keep last 100 entries, most recent first
           const history = [
@@ -1652,7 +1706,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 28, // v28: Add lastEveningGenerationDate for evening generation triggers
+      version: 29, // v29: Add updatedAt + id to all syncable records for cloud sync
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1960,6 +2014,103 @@ export const useUnfoldStore = create<UnfoldState>()(
             (state as any).lastEveningGenerationDate = (state as any).lastEveningGenerationDate ?? '';
           } catch (err) {
             console.error('[store] Migration v27→28 failed:', err);
+          }
+        }
+
+        // Migration from version 28 to 29: Add updatedAt + id for cloud sync
+        if (version < 29) {
+          try {
+            const now = new Date().toISOString();
+
+            // Backfill devotionals
+            const devos = (state as any).devotionals ?? [];
+            for (const d of devos) {
+              if (!d) continue;
+              if (!d.updatedAt) d.updatedAt = d.createdAt || now;
+              // Backfill days
+              if (Array.isArray(d.days)) {
+                for (const day of d.days) {
+                  if (!day) continue;
+                  if (!day.id) day.id = compositeId(d.id, day.dayNumber);
+                  if (!day.updatedAt) day.updatedAt = day.readAt || day.generatedAt || d.createdAt || now;
+                }
+              }
+            }
+
+            // Backfill bookmarks
+            const bookmarks = (state as any).bookmarks ?? [];
+            for (const b of bookmarks) {
+              if (!b) continue;
+              if (!b.updatedAt) b.updatedAt = b.savedAt || now;
+            }
+
+            // Backfill highlights
+            const highlights = (state as any).highlights ?? [];
+            for (const h of highlights) {
+              if (!h) continue;
+              if (!h.updatedAt) h.updatedAt = h.createdAt || now;
+            }
+
+            // Backfill bible highlights
+            const bibleHighlights = (state as any).bibleHighlights ?? [];
+            for (const bh of bibleHighlights) {
+              if (!bh) continue;
+              if (!bh.updatedAt) bh.updatedAt = bh.createdAt || now;
+            }
+
+            // Backfill bible reading positions
+            const bibleReadingHistory = (state as any).bibleReadingHistory ?? [];
+            for (const pos of bibleReadingHistory) {
+              if (!pos) continue;
+              if (!pos.id) pos.id = compositeId(pos.bookId, pos.translation || 'BSB');
+              if (!pos.updatedAt) pos.updatedAt = pos.lastReadAt || now;
+            }
+
+            // Backfill check-ins — convert `checkin_${Date.now()}` IDs to proper UUIDs
+            // (backend uses uuid('id').primaryKey() so non-UUID IDs will fail on INSERT)
+            const checkIns = (state as any).checkIns ?? [];
+            for (const ci of checkIns) {
+              if (!ci) continue;
+              if (!ci.id || !ci.id.match(/^[0-9a-f]{8}-/)) {
+                // Generate deterministic UUID from composite key
+                ci.id = compositeId(ci.devotionalId || 'unknown', ci.dayNumber ?? 0, ci.timeOfDay || 'morning');
+              }
+              if (!ci.updatedAt) ci.updatedAt = ci.createdAt || now;
+            }
+
+            // Backfill used scriptures
+            const usedScriptures = (state as any).usedScriptures ?? [];
+            for (const us of usedScriptures) {
+              if (!us) continue;
+              if (!us.id) us.id = compositeId(us.reference, us.devotionalId);
+              if (!us.updatedAt) us.updatedAt = us.usedAt || now;
+            }
+
+            // Backfill series persona history
+            const personaHistory = (state as any).seriesPersonaHistory ?? [];
+            for (const sp of personaHistory) {
+              if (!sp) continue;
+              if (!sp.id) sp.id = compositeId('persona', sp.devotionalId);
+              if (!sp.updatedAt) sp.updatedAt = sp.createdAt || now;
+            }
+
+            // Backfill method usage history
+            const methodHistory = (state as any).methodUsageHistory ?? [];
+            for (const mu of methodHistory) {
+              if (!mu) continue;
+              if (!mu.id) mu.id = compositeId(mu.methodId, mu.devotionalId, mu.dayNumber);
+              if (!mu.updatedAt) mu.updatedAt = mu.usedAt || now;
+            }
+
+            // Notes and folders already have updatedAt — no backfill needed
+            // Journal entries already have updatedAt — no backfill needed
+
+            // Add userUpdatedAt for user profile sync
+            (state as any).userUpdatedAt = now;
+
+            logger.log('[store] Migration v28→29: Backfilled updatedAt + id for sync');
+          } catch (err) {
+            console.error('[store] Migration v28→29 failed:', err);
           }
         }
 
