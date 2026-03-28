@@ -4,6 +4,7 @@
  * Separate from the main store to keep concerns isolated.
  *
  * v2: Multi-conversation model — conversations[], auto-archive, summaries.
+ * v3: Add updatedAt for cloud sync.
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -33,6 +34,7 @@ export interface CompanionMessage {
   citations?: Citation[];
   suggestions?: string[];
   feedback?: 'positive' | 'negative' | null;
+  updatedAt?: string; // ISO timestamp for sync
 }
 
 export interface Conversation {
@@ -43,6 +45,7 @@ export interface Conversation {
   summary: string | null;
   topicTags: string[];
   archived: boolean;
+  updatedAt?: string; // ISO timestamp for sync
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -110,16 +113,20 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       addMessage: (msg) =>
         set((s) => {
+          const now = new Date().toISOString();
+          const timestampedMsg = { ...msg, updatedAt: now };
+
           // Auto-create conversation if none active
           if (!s.activeConversationId) {
             const newConv: Conversation = {
               id: makeId(),
-              messages: [msg],
+              messages: [timestampedMsg],
               createdAt: Date.now(),
               lastMessageAt: Date.now(),
               summary: null,
               topicTags: [],
               archived: false,
+              updatedAt: now,
             };
             return {
               conversations: [...s.conversations, newConv],
@@ -130,13 +137,14 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== s.activeConversationId) return c;
-              const updated = [...c.messages, msg];
+              const updated = [...c.messages, timestampedMsg];
               return {
                 ...c,
                 messages: updated.length > MAX_STORED_MESSAGES
                   ? updated.slice(-MAX_STORED_MESSAGES)
                   : updated,
                 lastMessageAt: Date.now(),
+                updatedAt: now,
               };
             }),
           };
@@ -144,6 +152,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       updateMessage: (id, updates) =>
         set((s) => {
+          const now = new Date().toISOString();
           // Scope to active conversation for performance
           const activeId = s.activeConversationId;
           return {
@@ -151,8 +160,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               if (c.id !== activeId) return c;
               return {
                 ...c,
+                updatedAt: now,
                 messages: c.messages.map(m =>
-                  m.id === id ? { ...m, ...updates } : m
+                  m.id === id ? { ...m, ...updates, updatedAt: now } : m
                 ),
               };
             }),
@@ -161,14 +171,16 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       setFeedback: (id, feedback) =>
         set((s) => {
+          const now = new Date().toISOString();
           const activeId = s.activeConversationId;
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== activeId) return c;
               return {
                 ...c,
+                updatedAt: now,
                 messages: c.messages.map(m =>
-                  m.id === id ? { ...m, feedback } : m
+                  m.id === id ? { ...m, feedback, updatedAt: now } : m
                 ),
               };
             }),
@@ -177,6 +189,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       startNewConversation: () =>
         set((s) => {
+          const now = new Date().toISOString();
           const active = s.conversations.find(c => c.id === s.activeConversationId);
           let conversations = s.conversations;
 
@@ -185,7 +198,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             const tags = getTopicTags();
             conversations = conversations.map(c =>
               c.id === active.id
-                ? { ...c, archived: true, topicTags: tags, summary: generateSummary({ ...c, topicTags: tags }) }
+                ? { ...c, archived: true, topicTags: tags, summary: generateSummary({ ...c, topicTags: tags }), updatedAt: now }
                 : c
             );
           } else if (active && active.messages.length === 0) {
@@ -211,6 +224,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             summary: null,
             topicTags: [],
             archived: false,
+            updatedAt: now,
           };
 
           return {
@@ -228,6 +242,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
                   archived: true,
                   summary: summary ?? generateSummary(c),
                   topicTags: topicTags ?? c.topicTags,
+                  updatedAt: new Date().toISOString(),
                 }
               : c
           ),
@@ -257,7 +272,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
     {
       name: 'unfold-companion-chat',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 2,
+      version: 3, // v3: Add updatedAt for cloud sync
       // Skip persisting streaming message content to avoid expensive serialization during SSE
       partialize: (state) => ({
         ...state,
@@ -270,9 +285,12 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           ),
         })),
       }),
-      migrate: (persisted: any, version: number) => {
+      migrate: (persistedState: unknown, version: number) => {
+        const state = persistedState as Partial<CompanionChatState>;
+
         if (version === 1) {
           // v1 → v2: wrap flat messages[] into a single Conversation
+          const persisted = persistedState as any;
           const oldMessages = persisted.messages || [];
           const oldConvId = persisted.conversationId || makeId();
           const conversation: Conversation = {
@@ -284,12 +302,24 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             topicTags: [],
             archived: false,
           };
-          return {
-            conversations: oldMessages.length > 0 ? [conversation] : [],
-            activeConversationId: oldMessages.length > 0 ? oldConvId : null,
-          };
+          (state as any).conversations = oldMessages.length > 0 ? [conversation] : [];
+          (state as any).activeConversationId = oldMessages.length > 0 ? oldConvId : null;
         }
-        return persisted as any;
+
+        // v2 → v3: Backfill updatedAt for cloud sync
+        if (version < 3) {
+          const conversations = (state as any).conversations ?? [];
+          for (const conv of conversations) {
+            if (!conv) continue;
+            if (!conv.updatedAt) conv.updatedAt = new Date(conv.lastMessageAt || Date.now()).toISOString();
+            for (const msg of conv.messages ?? []) {
+              if (!msg) continue;
+              if (!msg.updatedAt) msg.updatedAt = new Date(msg.timestamp || Date.now()).toISOString();
+            }
+          }
+        }
+
+        return state as CompanionChatState;
       },
     }
   )
