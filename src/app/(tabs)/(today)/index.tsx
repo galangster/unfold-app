@@ -37,6 +37,7 @@ import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { getContextSlotType } from '@/lib/context-slot-priority';
 import { computeDevotionalState } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
+import { DevotionalCardStack } from '@/components/home/DevotionalCardStack';
 import { ContextSlot } from '@/components/home/ContextSlot';
 import { GreetingRow } from '@/components/home/GreetingRow';
 import { BentoGrid } from '@/components/home/BentoGrid';
@@ -554,10 +555,14 @@ export default function HomeScreen() {
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
 
-          {/* Zone 3: Hero Devotional */}
+          {/* Zone 3: Hero Devotional — swipeable card stack for multiple devotionals */}
           <View onLayout={onReadingLayout} collapsable={false}>
             <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
-              <DevotionalCard state={devotionalState} scrollY={scrollY} />
+              <DevotionalCardStack
+                scrollY={scrollY}
+                onCreateNew={handleCreateNew}
+                onContinueReading={handleContinueReading}
+              />
             </Animated.View>
           </View>
 

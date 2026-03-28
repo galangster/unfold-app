@@ -41,6 +41,8 @@ import type { DevotionalCardState } from './compute-devotional-state';
 interface Props {
   state: DevotionalCardState;
   scrollY?: SharedValue<number>;
+  /** When true, omits root padding/margin (used inside DevotionalCardStack) */
+  inStack?: boolean;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -474,7 +476,7 @@ function MainCard({ state }: MainCardProps) {
 
 // ─── DevotionalCard (root) ──────────────────────────────────────
 
-export function DevotionalCard({ state, scrollY }: Props) {
+export function DevotionalCard({ state, scrollY, inStack }: Props) {
   const { entering } = useAccessibleAnimation();
 
   // Subtle parallax when scrollY is provided
@@ -486,7 +488,7 @@ export function DevotionalCard({ state, scrollY }: Props) {
   return (
     <Animated.View
       entering={entering(FadeIn.delay(100).duration(400))}
-      style={[styles.root, parallaxStyle]}
+      style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
     >
       {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} />}
       {state.type === 'preparing' && <PreparingState />}
@@ -507,6 +509,10 @@ const styles = StyleSheet.create({
   root: {
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['5'],
+  },
+  rootInStack: {
+    // No padding/margin — the stack handles layout
+    flex: 1,
   },
 
   // Progress bar
