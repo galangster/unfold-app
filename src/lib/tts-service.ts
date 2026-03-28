@@ -54,6 +54,32 @@ export function getAvailableVoices(isPremium: boolean = false): readonly VoiceOp
   return TTS_VOICES.filter(v => !v.premium);
 }
 
+// ─── Shared TTS text construction ────────────────────────────
+
+/**
+ * Convert Bible reference notation to natural speech.
+ * "Romans 8:28" → "Romans chapter 8, verse 28"
+ * "Psalm 139:1-4" → "Psalm chapter 139, verses 1 through 4"
+ */
+export function humanizeReference(ref: string): string {
+  return ref
+    .replace(/(\d+):(\d+)-(\d+)/g, 'chapter $1, verses $2 through $3')
+    .replace(/(\d+):(\d+)/g, 'chapter $1, verse $2');
+}
+
+/**
+ * Build the full TTS text from a devotional day.
+ * CRITICAL: This must produce identical output to the inline construction
+ * in reading.tsx (lines 376 and 551) to avoid cache key mismatches.
+ */
+export function buildTtsText(day: {
+  scriptureReference: string;
+  scriptureText: string;
+  bodyText: string;
+}): string {
+  return `${humanizeReference(day.scriptureReference)}.\n\n${day.scriptureText}\n\n...\n\n${day.bodyText}`;
+}
+
 // ─── Cache ────────────────────────────────────────────────────
 
 /** Deterministic cache key from text + voiceId (djb2 + sdbm dual hash). */
@@ -140,19 +166,17 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
       throw new Error(`TTS proxy error: ${genResponse.status} ${errBody.slice(0, 200)}`);
     }
 
-    const { downloadId, audioHash } = await genResponse.json();
-    if (!downloadId) {
-      throw new Error('TTS proxy returned no downloadId');
+    const { downloadId, audioHash, audioUrl } = await genResponse.json();
+    if (!downloadId && !audioUrl) {
+      throw new Error('TTS proxy returned no downloadId or audioUrl');
     }
 
-    logger.log(`[TTS] generation complete — downloadId=${downloadId}, audioHash=${audioHash}, ${Date.now() - fetchStart}ms`);
+    logger.log(`[TTS] generation complete — audioHash=${audioHash}, audioUrl=${audioUrl ? 'yes' : 'no'}, ${Date.now() - fetchStart}ms`);
 
-    // Step 2: Native download — audio data never enters JS thread
-    // Prefer CDN endpoint (cached at Railway CDN edge via Fastly) over one-time download
+    // Step 2: Native download — prefer R2 URL, fall back to legacy CDN/download endpoints
     const DOWNLOAD_TIMEOUT = 30_000;
-    const downloadUrl = audioHash
-      ? `${RAILWAY_BACKEND_URL}/api/audio/${audioHash}`
-      : `${RAILWAY_BACKEND_URL}/api/tts-download/${downloadId}`;
+    const downloadUrl = audioUrl
+      ?? (audioHash ? `${RAILWAY_BACKEND_URL}/api/audio/${audioHash}` : `${RAILWAY_BACKEND_URL}/api/tts-download/${downloadId}`);
     const downloadPromise = FileSystem.downloadAsync(
       downloadUrl,
       cachedFile.uri,

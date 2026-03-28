@@ -10,6 +10,9 @@
  * system prompts, and persona engine.
  */
 
+import { buildTtsText, prefetchDevotionalAudio, getDefaultVoice } from './tts-service';
+import { isPastEveningCutoff, todayDateString } from './cutoff-logic';
+import { refreshDailyReminder } from './notifications';
 import { logBugError, logBugEvent } from './bug-logger';
 import { logger as appLogger } from './logger';
 import { reportError } from './report-error';
@@ -1443,4 +1446,73 @@ export async function triggerNextDayGeneration(
 
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// TTS Pre-Generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Pre-generate TTS audio for a devotional day.
+ * Called after text generation succeeds — audio is a bonus, not a blocker.
+ * Silently fails so devotional text delivery is never blocked by audio issues.
+ */
+export async function preGenerateAudio(
+  devotionalId: string,
+  dayNumber: number,
+): Promise<void> {
+  try {
+    const store = useUnfoldStore.getState();
+    const devotional = store.devotionals.find((d) => d.id === devotionalId);
+    const day = devotional?.days.find((d) => d.dayNumber === dayNumber);
+    if (!day) return;
+
+    const voiceId = store.user?.preferredVoice || getDefaultVoice();
+    const text = buildTtsText(day);
+    await prefetchDevotionalAudio(text, voiceId);
+  } catch {
+    // Silent fail — devotional text is the priority, audio is a bonus
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Evening Generation Trigger
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempt evening generation — fires when user completes evening check-in
+ * or opens the app after 9 PM. All guards are idempotent.
+ */
+export async function attemptEveningGeneration(
+  devotionalId: string,
+): Promise<boolean> {
+  const store = useUnfoldStore.getState();
+  const today = todayDateString();
+
+  // Guard: already generated tonight?
+  if (store.lastEveningGenerationDate === today) return false;
+
+  // Guard: past evening cutoff?
+  if (!isPastEveningCutoff()) return false;
+
+  // Guard: active progressive devotional with missing next day?
+  const devotional = store.devotionals.find(
+    (d) => d.id === devotionalId && d.generationMode === 'progressive',
+  );
+  if (!devotional) return false;
+
+  const nextDay = devotional.currentDay;
+  if (devotional.days.some((d) => d.dayNumber === nextDay)) return false;
+  if (nextDay > devotional.totalDays) return false;
+
+  // Generate
+  const result = await triggerNextDayGeneration(devotionalId, nextDay - 1);
+  if (result) {
+    store.setLastEveningGenerationDate(today);
+    store.setLastGenerationCutoffDate(today); // prevent midnight/morning double-gen
+    refreshDailyReminder();
+    await preGenerateAudio(devotionalId, nextDay);
+    return true;
+  }
+  return false;
 }

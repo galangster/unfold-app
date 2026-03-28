@@ -49,7 +49,7 @@ import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { referenceToRoute } from '@/lib/bible-constants';
-import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio } from '@/lib/tts-service';
+import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio, buildTtsText } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { SignInSheet } from '@/components/SignInSheet';
@@ -58,19 +58,6 @@ import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { alpha } from '@/components/ui';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-/**
- * Transform Bible references into natural speech for TTS.
- * "John 3:16-18" → "John chapter 3, verses 16 through 18"
- * "Psalm 23:1"   → "Psalm 23, verse 1"
- */
-function humanizeReference(ref: string): string {
-  return ref
-    // "3:16-18" → "chapter 3, verses 16 through 18"
-    .replace(/(\d+):(\d+)-(\d+)/g, 'chapter $1, verses $2 through $3')
-    // "3:16" → "chapter 3, verse 16"
-    .replace(/(\d+):(\d+)/g, 'chapter $1, verse $2');
-}
 
 const AUTO_RETRY_MAX_ATTEMPTS = 3;
 const AUTO_RETRY_BASE_DELAY_MS = 15000;
@@ -373,7 +360,7 @@ export default function ReadingScreen() {
   useEffect(() => {
     if (!isPremium || !currentDayData) return;
     const voiceId = user?.preferredVoice || getDefaultVoice();
-    const fullText = `${humanizeReference(currentDayData.scriptureReference)}.\n\n${currentDayData.scriptureText}\n\n...\n\n${currentDayData.bodyText}`;
+    const fullText = buildTtsText(currentDayData);
     prefetchDevotionalAudio(fullText, voiceId);
   }, [isPremium, currentDayData, user?.preferredVoice]);
 
@@ -548,7 +535,7 @@ export default function ReadingScreen() {
 
     try {
       const voiceId = user?.preferredVoice || getDefaultVoice();
-      const fullText = `${humanizeReference(currentDayData.scriptureReference)}.\n\n${currentDayData.scriptureText}\n\n...\n\n${currentDayData.bodyText}`;
+      const fullText = buildTtsText(currentDayData);
       const result = await streamDevotionalAudio(fullText, voiceId);
 
       // Start Live Activity only after audio is ready

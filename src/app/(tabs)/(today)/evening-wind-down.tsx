@@ -28,6 +28,7 @@ import { fetchVerse } from '@/lib/bible-api';
 import { streamDevotionalAudio } from '@/lib/tts-service';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { cancelAndRescheduleEveningForTomorrow } from '@/lib/notifications';
+import { attemptEveningGeneration } from '@/lib/progressive-generation';
 import { EveningCelebration } from '@/components/EveningCelebration';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
@@ -258,6 +259,8 @@ export default function EveningWindDownScreen() {
         mood: 3 as const,
         moodLabel: 'completed',
       });
+      // Trigger evening generation (idempotent — no-op if already generated)
+      attemptEveningGeneration(currentDevotional.id).catch(() => {});
       // Cancel today's evening notification and reschedule for tomorrow
       cancelAndRescheduleEveningForTomorrow();
     }

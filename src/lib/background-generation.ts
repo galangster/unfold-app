@@ -1,7 +1,7 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { useUnfoldStore } from './store';
-import { triggerNextDayGeneration } from './progressive-generation';
+import { triggerNextDayGeneration, preGenerateAudio } from './progressive-generation';
 import { refreshDailyReminder } from './notifications';
 import { isPastCutoff, todayDateString } from './cutoff-logic';
 import { logger } from './logger';
@@ -68,6 +68,8 @@ TaskManager.defineTask(GENERATION_TASK, async () => {
     if (result) {
       store.setLastGenerationCutoffDate(todayDateString());
       refreshDailyReminder();
+      // Pre-generate TTS audio for the newly generated day
+      await preGenerateAudio(devotional.id, devotional.currentDay).catch(() => {});
       logger.log(`[bg-gen] Background generation succeeded for day ${devotional.currentDay}`);
       return BackgroundFetch.BackgroundFetchResult.NewData;
     }

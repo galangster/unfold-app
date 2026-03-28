@@ -689,6 +689,8 @@ interface UnfoldState {
   // Deferred generation
   lastGenerationCutoffDate: string;
   setLastGenerationCutoffDate: (date: string) => void;
+  lastEveningGenerationDate: string;
+  setLastEveningGenerationDate: (date: string) => void;
   addUsedStoryId: (devotionalId: string, storyId: string) => void;
 
   // Helpers
@@ -756,6 +758,7 @@ const initialState = {
   hasConsentedToAI: false,
   // Deferred generation
   lastGenerationCutoffDate: '',
+  lastEveningGenerationDate: '',
   // Notebook
   notes: [] as Note[],
   folders: [] as NoteFolder[],
@@ -1329,6 +1332,7 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Deferred generation
       setLastGenerationCutoffDate: (date) => set({ lastGenerationCutoffDate: date }),
+      setLastEveningGenerationDate: (date) => set({ lastEveningGenerationDate: date }),
       addUsedStoryId: (devotionalId, storyId) => set((state) => {
         const devo = state.devotionals.find((d) => d.id === devotionalId);
         if (devo) {
@@ -1648,7 +1652,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 27, // Increment when state structure changes
+      version: 28, // v28: Add lastEveningGenerationDate for evening generation triggers
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -1947,6 +1951,15 @@ export const useUnfoldStore = create<UnfoldState>()(
             (state as any).lastGenerationCutoffDate = (state as any).lastGenerationCutoffDate ?? '';
           } catch (err) {
             console.error('[store] Migration v26→27 failed:', err);
+          }
+        }
+
+        // Migration from version 27 to 28: Add evening generation tracking
+        if (version < 28) {
+          try {
+            (state as any).lastEveningGenerationDate = (state as any).lastEveningGenerationDate ?? '';
+          } catch (err) {
+            console.error('[store] Migration v27→28 failed:', err);
           }
         }
 

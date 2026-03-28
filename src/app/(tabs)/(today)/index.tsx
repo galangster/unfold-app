@@ -15,7 +15,7 @@ import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { cancelAndRescheduleMiddayForTomorrow, refreshDailyReminder } from '@/lib/notifications';
-import { isPastCutoff, todayDateString } from '@/lib/cutoff-logic';
+import { isPastCutoff, todayDateString, isPastEveningCutoff } from '@/lib/cutoff-logic';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips, type TargetRect } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
@@ -23,7 +23,7 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
-import { triggerNextDayGeneration } from '@/lib/progressive-generation';
+import { triggerNextDayGeneration, preGenerateAudio, attemptEveningGeneration } from '@/lib/progressive-generation';
 import { logBugEvent } from '@/lib/bug-logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
@@ -217,11 +217,17 @@ export default function HomeScreen() {
     const lastCutoff = useUnfoldStore.getState().lastGenerationCutoffDate;
     if (isPastCutoff(lastCutoff)) {
       triggerNextDayGeneration(currentDevotional.id, currentDay - 1)
-        .then(() => {
+        .then(async () => {
           useUnfoldStore.getState().setLastGenerationCutoffDate(todayDateString());
           refreshDailyReminder();
+          // Pre-generate TTS audio for the new day
+          await preGenerateAudio(currentDevotional.id, currentDay).catch(() => {});
         })
         .finally(() => setIsPreparingCurrentDay(false));
+    } else if (isPastEveningCutoff()) {
+      // Evening trigger: generate next day if past 9 PM
+      attemptEveningGeneration(currentDevotional.id).catch(() => {});
+      setIsPreparingCurrentDay(false);
     } else {
       setIsPreparingCurrentDay(false);
     }

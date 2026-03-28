@@ -21,3 +21,18 @@ export function isPastCutoff(lastCutoffDate: string, now: Date = new Date()): bo
   if (!lastCutoffDate) return true;
   return lastCutoffDate < todayDateString(now);
 }
+
+// ─── Evening cutoff ──────────────────────────────────────────
+
+const DEFAULT_EVENING_CUTOFF_HOUR = 21; // 9 PM local time
+
+/**
+ * Returns true if current time is past the evening cutoff (default 9 PM).
+ * Used for evening generation triggers — not related to midnight cutoff.
+ */
+export function isPastEveningCutoff(
+  now: Date = new Date(),
+  cutoffHour: number = DEFAULT_EVENING_CUTOFF_HOUR,
+): boolean {
+  return now.getHours() >= cutoffHour;
+}
