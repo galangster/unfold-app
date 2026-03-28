@@ -873,7 +873,7 @@ export default function GeneratingScreen() {
     if (shouldShowSignIn) {
       router.replace('/(onboarding)/sign-in?source=generating');
     } else {
-      router.replace('/(tabs)/(today)');
+      router.replace('/(tabs)/(today)/reading');
     }
   };
 

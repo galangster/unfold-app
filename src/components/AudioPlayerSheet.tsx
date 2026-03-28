@@ -275,7 +275,7 @@ export function AudioPlayerSheet() {
               <View style={styles.preparingRow}>
                 <ActivityIndicator size={12} color={colors.accent} />
                 <Text style={[styles.seriesText, { color: colors.textMuted }]}>
-                  Preparing audio...
+                  Preparing audio — this may take a minute or two...
                 </Text>
               </View>
             ) : seriesTitle ? (

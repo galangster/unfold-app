@@ -130,7 +130,7 @@ ${methodPrompt}
 
 JSON SCHEMA:
 {
-  "title": "Series title (3-6 words, evocative, not generic — DO NOT repeat the reader's self-description or identity labels like 'dad', 'mom', 'student' etc. in the title. Use metaphor, scripture imagery, or emotional resonance instead)",
+  "title": "Series title (3-6 words). TITLE RULES: Write it like a bestselling book title — the kind that makes someone stop scrolling and think 'I NEED to read this.' Use tension, paradox, or mystery. Good examples: 'The God Who Stays', 'Wrestling the Dark', 'Fire in the Bones', 'When Silence Speaks', 'The Long Way Home'. Bad examples: 'Psalms of Restless Justice', 'A Father's Journey', 'Finding Peace Today'. NEVER echo the reader's identity labels (dad, mom, student) or their exact words back at them. The title should create curiosity and emotional pull — a window into something the reader didn't know they needed.",
   "overarchingTheme": "One sentence describing the journey's throughline",
   "narrativeShape": "e.g. Foundation → Deepening → Tension → Resolution",
   "dayHints": [

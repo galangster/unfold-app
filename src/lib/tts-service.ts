@@ -118,8 +118,8 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     const fetchStart = Date.now();
 
     // Step 1: POST to generate audio — returns { downloadId }
-    // 60s timeout — Fish Audio S2 Pro can take 25-40s for long devotionals
-    const TTS_TIMEOUT = 60_000;
+    // Scale timeout with text length — longer devotionals (15min) need more time
+    const TTS_TIMEOUT = text.length > 5000 ? 180_000 : 60_000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TTS_TIMEOUT);
 
