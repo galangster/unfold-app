@@ -6,7 +6,6 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
-import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 
 /* ─────────────────────────────────────────────────────────
@@ -62,17 +61,3 @@ export async function getClerkToken(): Promise<string | null> {
   }
 }
 
-/* ─────────────────────────────────────────────────────────
- * Guest mode helper
- * ───────────────────────────────────────────────────────── */
-
-export function continueAsGuest(): void {
-  const store = useUnfoldStore.getState();
-  store.updateUser({
-    authUserId: `local-${Date.now()}`,
-    authProvider: 'guest',
-    authEmail: null,
-    authDisplayName: null,
-  });
-  logger.log('[Clerk] Continuing as guest');
-}

@@ -5,7 +5,7 @@
  * Returns the same interface the rest of the app expects.
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo';
 import * as Sentry from '@sentry/react-native';
 import { useUnfoldStore } from '@/lib/store';
@@ -18,18 +18,13 @@ export function useAuth() {
   const { user: clerkUser } = useUser();
 
   // Zustand store — authUserId and authProvider live inside UserProfile
-  const storeUserId = useUnfoldStore((s) => s.user?.authUserId);
-  const storeProvider = useUnfoldStore((s) => s.user?.authProvider);
   const updateUser = useUnfoldStore((s) => s.updateUser);
-  const signInPromptCount = useUnfoldStore((s) => s.user?.signInPromptCount ?? 0);
 
   const prevUserIdRef = useRef<string | null>(null);
 
   // Derive auth provider from Clerk external accounts
   const authProvider = (() => {
-    if (!clerkUser) {
-      return storeProvider === 'guest' ? 'guest' : null;
-    }
+    if (!clerkUser) return null;
     const primary = clerkUser.externalAccounts?.[0];
     if (!primary) return 'apple'; // fallback
     const provider = primary.provider;
@@ -39,13 +34,12 @@ export function useAuth() {
     return 'apple';
   })();
 
-  // Resolve userId: Clerk user, or local guest, or null
-  const userId = clerkUserId ?? storeUserId ?? null;
+  // Resolve userId from Clerk
+  const userId = clerkUserId ?? null;
   const email = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
   const displayName = clerkUser?.firstName ?? null;
 
   const isAuthenticated = !!userId;
-  const isAnonymous = storeProvider === 'guest';
   const isLoading = !isLoaded;
 
   // Sync auth state to Zustand + RevenueCat when user changes
@@ -88,8 +82,8 @@ export function useAuth() {
       Sentry.setUser({ id: newUserId, email: email ?? undefined });
 
       logger.log('[useAuth] Clerk user synced:', newUserId);
-    } else if (!isSignedIn && storeProvider !== 'guest') {
-      // Signed out (not guest mode)
+    } else if (!isSignedIn) {
+      // Signed out
       updateUser({
         authUserId: null,
         authProvider: null,
@@ -114,30 +108,10 @@ export function useAuth() {
     }
   }, [isLoaded, isSignedIn, clerkUserId, authProvider, email, displayName]);
 
-  // Sign-in prompt management — preserve existing progressive backoff logic
-  const hasSeenSignInPrompt = useUnfoldStore((s) => s.user?.hasSeenSignInPrompt ?? false);
-
-  const shouldShowSignInPrompt = (() => {
-    if (!isAnonymous) return false; // Signed in with a provider
-    if (!hasSeenSignInPrompt) return true; // First time
-    if (signInPromptCount >= 3) return false; // Max prompts reached
-    return true; // Progressive backoff (timing handled by caller)
-  })();
-
-  const recordSignInPrompt = useCallback(() => {
-    const state = useUnfoldStore.getState();
-    const current = state.user?.signInPromptCount ?? 0;
-    state.updateUser({
-      hasSeenSignInPrompt: true,
-      signInPromptCount: current + 1,
-    });
-  }, []);
-
   return {
     // Auth state
     user: clerkUser ?? null,
     isAuthenticated,
-    isAnonymous,
     isLoading,
     authProvider,
 
@@ -145,10 +119,5 @@ export function useAuth() {
     displayName,
     email,
     userId,
-
-    // Sign in prompt management
-    shouldShowSignInPrompt,
-    recordSignInPrompt,
-    signInPromptCount,
   };
 }

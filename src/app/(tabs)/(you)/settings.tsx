@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon, SignOutIcon, UserCircleIcon, AppleLogoIcon, GoogleLogoIcon, FacebookLogoIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, CaretRightIcon, CrownIcon, CreditCardIcon, TrashIcon, LockIcon, PlayIcon, PauseIcon, StarIcon, CaretDownIcon, ChatDotsIcon, StackIcon, CompassIcon, BookIcon, SunIcon, MoonIcon, MonitorIcon, PencilSimpleIcon, CheckIcon, PaletteIcon, TextAaIcon, SpeakerHighIcon, HourglassIcon, SignOutIcon, UserCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -32,11 +32,8 @@ import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
 import { useAuth } from '@/hooks/useAuth';
-import { useClerk, useOAuth } from '@clerk/clerk-expo';
-import * as WebBrowser from 'expo-web-browser';
+import { useClerk } from '@clerk/clerk-expo';
 import { alpha } from '@/components/ui';
-
-WebBrowser.maybeCompleteAuthSession();
 
 /** Bundled voice samples — Psalm 23:1 read by each voice. Instant playback, zero network. */
 const VOICE_SAMPLES: Record<string, any> = {
@@ -111,17 +108,10 @@ export default function SettingsScreen() {
   const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
   const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
   const { colors, isDark } = useTheme();
-  const { isAuthenticated, isAnonymous, email, authProvider } = useAuth();
+  const { isAuthenticated, email, authProvider } = useAuth();
   const { signOut } = useClerk();
 
-  // OAuth flows for in-settings sign-in
-  const { startOAuthFlow: startAppleFlow } = useOAuth({ strategy: 'oauth_apple' });
-  const { startOAuthFlow: startGoogleFlow } = useOAuth({ strategy: 'oauth_google' });
-  const { startOAuthFlow: startFacebookFlow } = useOAuth({ strategy: 'oauth_facebook' });
-
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
 
   const handleSignOut = useCallback(async () => {
     Alert.alert(
@@ -153,51 +143,6 @@ export default function SettingsScreen() {
       ]
     );
   }, [signOut, reset, router]);
-
-  const handleSettingsOAuth = useCallback(async (
-    startFlow: typeof startAppleFlow,
-    providerName: string,
-  ) => {
-    if (isSigningIn) return;
-    setIsSigningIn(true);
-    setAuthError(null);
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await WebBrowser.warmUpAsync().catch(() => {});
-
-      const OAUTH_TIMEOUT = 60_000;
-      const flowPromise = startFlow({ redirectUrl: 'unfold://oauth-callback' });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('oauth_timeout')), OAUTH_TIMEOUT),
-      );
-
-      const { createdSessionId, setActive } = await Promise.race([flowPromise, timeoutPromise]);
-
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
-        updateUser({ hasSeenSignInPrompt: true });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-    } catch (err: any) {
-      if (err?.errors?.[0]?.code === 'session_exists') return;
-      if (
-        err?.errors?.[0]?.code === 'user_cancelled' ||
-        err?.message?.includes('cancelled') ||
-        err?.message?.includes('canceled')
-      ) {
-        setIsSigningIn(false);
-        return;
-      }
-      if (err?.message === 'oauth_timeout') {
-        setAuthError('Sign-in took too long. Please try again.');
-        WebBrowser.coolDownAsync().catch(() => {});
-        return;
-      }
-      setAuthError("Couldn't connect. Please check your connection and try again.");
-    } finally {
-      setIsSigningIn(false);
-    }
-  }, [isSigningIn, updateUser]);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
@@ -2719,248 +2664,90 @@ export default function SettingsScreen() {
                 marginBottom: Spacing['6'],
               }}
             >
-              {isAuthenticated && !isAnonymous ? (
-                <>
-                  {/* Signed-in user info */}
-                  <View
+              {/* Signed-in user info */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: alpha(colors.accent, 0.12),
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <UserCircleIcon size={20} color={colors.accent} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text
                     style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: Spacing['4'],
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
                     }}
                   >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        backgroundColor: alpha(colors.accent, 0.12),
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <UserCircleIcon size={20} color={colors.accent} weight="light" />
-                    </View>
-                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 15,
-                          color: colors.text,
-                        }}
-                      >
-                        {email ?? 'Signed in'}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: FontSize.xs,
-                          color: colors.textMuted,
-                          marginTop: Spacing['0.5'],
-                        }}
-                      >
-                        {authProvider === 'apple' ? 'Apple' : authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : 'Signed in'}
-                      </Text>
-                    </View>
-                  </View>
+                    {email ?? 'Signed in'}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textMuted,
+                      marginTop: Spacing['0.5'],
+                    }}
+                  >
+                    {authProvider === 'apple' ? 'Apple' : authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : 'Signed in'}
+                  </Text>
+                </View>
+              </View>
 
-                  {/* Sign out */}
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={handleSignOut}
-                    disabled={isSigningOut}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: Spacing['4'],
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        backgroundColor: colors.buttonBackground,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      {isSigningOut ? (
-                        <ActivityIndicator size="small" color={colors.textMuted} />
-                      ) : (
-                        <SignOutIcon size={18} color={colors.textMuted} weight="light" />
-                      )}
-                    </View>
-                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 15,
-                          color: colors.text,
-                        }}
-                      >
-                        {isSigningOut ? 'Signing out...' : 'Sign out'}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  {/* Guest user — sign in options */}
-                  <View
-                    style={{
-                      padding: Spacing['4'],
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: FontSize.sm,
-                        color: colors.textMuted,
-                        lineHeight: 20,
-                      }}
-                    >
-                      Sign in to sync your devotionals across devices and keep your data safe.
-                    </Text>
-                  </View>
-
-                  {authError && (
-                    <View
-                      style={{
-                        backgroundColor: alpha('#EF4444', 0.15),
-                        padding: Spacing['3'],
-                        marginHorizontal: Spacing['3'],
-                        marginTop: Spacing['2'],
-                        borderRadius: Radius.md,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: '#EF4444',
-                          fontFamily: FontFamily.ui,
-                          fontSize: FontSize.xs,
-                          textAlign: 'center',
-                        }}
-                      >
-                        {authError}
-                      </Text>
-                    </View>
+              {/* Sign out */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleSignOut}
+                disabled={isSigningOut}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  {isSigningOut ? (
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                  ) : (
+                    <SignOutIcon size={18} color={colors.textMuted} weight="light" />
                   )}
-
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => handleSettingsOAuth(startAppleFlow, 'Apple')}
-                    disabled={isSigningIn}
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text
                     style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: Spacing['4'],
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
                     }}
                   >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        backgroundColor: colors.buttonBackground,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <AppleLogoIcon size={18} color={colors.text} weight="fill" />
-                    </View>
-                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 15,
-                          color: colors.text,
-                        }}
-                      >
-                        Sign in with Apple
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => handleSettingsOAuth(startGoogleFlow, 'Google')}
-                    disabled={isSigningIn}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: Spacing['4'],
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        backgroundColor: colors.buttonBackground,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <GoogleLogoIcon size={18} color={colors.text} weight="bold" />
-                    </View>
-                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 15,
-                          color: colors.text,
-                        }}
-                      >
-                        Sign in with Google
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.7}
-                    onPress={() => handleSettingsOAuth(startFacebookFlow, 'Facebook')}
-                    disabled={isSigningIn}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      padding: Spacing['4'],
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        backgroundColor: '#1877F2',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <FacebookLogoIcon size={18} color="#FFFFFF" weight="fill" />
-                    </View>
-                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.ui,
-                          fontSize: 15,
-                          color: colors.text,
-                        }}
-                      >
-                        Sign in with Facebook
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </>
-              )}
+                    {isSigningOut ? 'Signing out...' : 'Sign out'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
           </Animated.View>
 
@@ -3007,7 +2794,7 @@ export default function SettingsScreen() {
               </View>
             </TouchableOpacity>
 
-            {isAuthenticated && !isAnonymous && (
+            {isAuthenticated && (
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={() => {

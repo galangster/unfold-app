@@ -52,7 +52,6 @@ import { referenceToRoute } from '@/lib/bible-constants';
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio, buildTtsText } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { SignInSheet } from '@/components/SignInSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { alpha } from '@/components/ui';
@@ -188,7 +187,6 @@ export default function ReadingScreen() {
   const [showReadingSettings, setShowReadingSettings] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [premiumFeature, setPremiumFeature] = useState<'audio' | 'series' | 'general'>('audio');
-  const [showSignInSheet, setShowSignInSheet] = useState(false);
   const [isPreparingAudio, setIsPreparingAudio] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -553,8 +551,9 @@ export default function ReadingScreen() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === 'TTS_AUTH_REQUIRED' || msg.includes('401')) {
-        logger.warn('[Reading] Audio requires sign-in — showing sign-in sheet');
-        setShowSignInSheet(true);
+        logger.warn('[Reading] Audio auth error (token may have expired)');
+        setAudioToast({ visible: true, message: 'Audio unavailable — please try again' });
+        setTimeout(() => setAudioToast(null), 3000);
       } else {
         logger.error('[Reading] Failed to load audio:', e);
         setAudioToast({ visible: true, message: 'Audio unavailable — try again later' });
@@ -2043,16 +2042,6 @@ export default function ReadingScreen() {
         visible={showPremiumSheet}
         onClose={() => setShowPremiumSheet(false)}
         feature={premiumFeature}
-      />
-
-      <SignInSheet
-        visible={showSignInSheet}
-        onClose={() => setShowSignInSheet(false)}
-        onSignedIn={() => {
-          setShowSignInSheet(false);
-          // Auto-retry audio after signing in
-          setTimeout(() => handlePlayAudio(), 500);
-        }}
       />
 
       {showReadingSettings && (

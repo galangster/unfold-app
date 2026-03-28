@@ -374,7 +374,7 @@ export default function SignInScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Sign-in is required — no guest option */}
+          {/* Sign-in is required */}
         </Animated.View>
 
         {/* Privacy Note */}

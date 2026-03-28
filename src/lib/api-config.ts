@@ -30,8 +30,6 @@ export function getBackendCandidates(): string[] {
 
 /**
  * Build request headers with Clerk session token for backend authentication.
- * Falls back gracefully to unauthenticated headers if no token is available
- * (guest mode).
  */
 export async function getAuthHeaders(
   _forceRefresh = false,
@@ -46,7 +44,7 @@ export async function getAuthHeaders(
       headers['Authorization'] = `Bearer ${token}`;
     }
   } catch {
-    // No token available — guest mode, requests will get 401 on protected endpoints
+    // No token available — requests will get 401 on protected endpoints
   }
 
   return headers;

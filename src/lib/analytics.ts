@@ -22,7 +22,6 @@ export const AnalyticsEvents = {
   // Sign In
   SIGN_IN_PROMPT_SHOWN: 'sign_in_prompt_shown',
   SIGN_IN_APPLE_TAPPED: 'sign_in_apple_tapped',
-  SIGN_IN_SKIPPED: 'sign_in_skipped',
   SIGN_IN_SUCCESS: 'sign_in_success',
   SIGN_IN_ERROR: 'sign_in_error',
   
@@ -74,7 +73,7 @@ export const AnalyticsEvents = {
 
 // User properties for segmentation
 export const UserProperties = {
-  AUTH_PROVIDER: 'auth_provider', // 'apple', 'anonymous', 'none'
+  AUTH_PROVIDER: 'auth_provider', // 'apple', 'google', 'facebook'
   IS_PREMIUM: 'is_premium', // 'true', 'false'
   READING_DURATION: 'reading_duration', // '5', '15', '30'
   DEVOTIONAL_LENGTH: 'devotional_length', // '3', '7', '14', '30'

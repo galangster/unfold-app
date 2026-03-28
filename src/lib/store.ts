@@ -144,7 +144,7 @@ export interface UserProfile {
   preferredVoice: string;
   // Auth-related fields (synced from Clerk)
   authUserId?: string | null;
-  authProvider?: 'apple' | 'google' | 'facebook' | 'guest' | null;
+  authProvider?: 'apple' | 'google' | 'facebook' | null;
   authEmail?: string | null;
   authDisplayName?: string | null;
   signInPromptCount?: number;
@@ -1946,11 +1946,11 @@ export const useUnfoldStore = create<UnfoldState>()(
         }
 
         if (version < 24) {
-          // Rename 'anonymous' auth provider to 'guest' for Clerk migration
+          // Clear legacy anonymous/guest auth providers — sign-in is now required
           try {
             const user = (state as any).user;
-            if (user?.authProvider === 'anonymous') {
-              user.authProvider = 'guest';
+            if (user?.authProvider === 'anonymous' || user?.authProvider === 'guest') {
+              user.authProvider = null;
             }
           } catch (err) {
             console.error('[store] Migration v23→24 failed:', err);

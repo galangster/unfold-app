@@ -870,16 +870,7 @@ export default function GeneratingScreen() {
     if (isNavigating) return;
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const shouldShowSignIn =
-      !user?.hasSeenSignInPrompt &&
-      user?.authProvider === 'guest';
-
-    if (shouldShowSignIn) {
-      router.replace('/(onboarding)/sign-in?source=generating');
-    } else {
-      router.replace('/(tabs)/(today)/reading');
-    }
+    router.replace('/(tabs)/(today)/reading');
   };
 
   const handleStartReadingEarly = () => {
