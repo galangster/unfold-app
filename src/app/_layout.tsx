@@ -19,6 +19,7 @@ import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
+import { syncService } from '@/lib/sync-service';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 // GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
 // blocking touch events and causing audio playback freezes. See GlowBackground.tsx for details.
@@ -102,6 +103,14 @@ function RootLayoutNav() {
 
   // Auth state — syncs Clerk to Zustand, RevenueCat, Sentry
   const { userId, email, authProvider } = useAuth();
+
+  // Start/stop cloud sync service based on auth state
+  useEffect(() => {
+    if (userId) {
+      syncService.start();
+      return () => syncService.stop();
+    }
+  }, [userId]);
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
