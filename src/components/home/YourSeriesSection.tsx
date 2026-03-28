@@ -112,7 +112,7 @@ export function YourSeriesSection() {
         <View style={styles.headerLeft}>
           <BookOpenIcon size={14} color={colors.textMuted} weight="light" />
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-            YOUR SERIES
+            YOUR STUDIES
           </Text>
         </View>
 
@@ -122,7 +122,7 @@ export function YourSeriesSection() {
             onPress={handleSeeAll}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="link"
-            accessibilityLabel="See all series"
+            accessibilityLabel="See all studies"
           >
             <View style={styles.seeAllRow}>
               <Text style={[styles.seeAllText, { color: colors.accent }]}>

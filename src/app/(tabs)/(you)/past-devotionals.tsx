@@ -419,7 +419,7 @@ export default function PastDevotionalsScreen() {
                 marginLeft: Spacing['2'],
               }}
             >
-              Past Series
+              My Studies
             </Text>
           </View>
 
@@ -446,8 +446,8 @@ export default function PastDevotionalsScreen() {
   }
 
   const emptyLabel = activeTab === 'completed'
-    ? 'No completed series yet'
-    : 'No series in progress';
+    ? 'No completed studies yet'
+    : 'No studies in progress';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -474,7 +474,7 @@ export default function PastDevotionalsScreen() {
               marginLeft: Spacing['2'],
             }}
           >
-            Past Series
+            My Studies
           </Text>
         </View>
 

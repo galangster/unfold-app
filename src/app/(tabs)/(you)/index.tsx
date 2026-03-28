@@ -68,8 +68,8 @@ export default function YouScreen() {
     },
     {
       icon: BookOpenIcon,
-      label: 'Past Series',
-      subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'series' : 'series'}`,
+      label: 'My Studies',
+      subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'study' : 'studies'}`,
       route: '/(tabs)/(you)/past-devotionals',
     },
     {

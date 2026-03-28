@@ -175,7 +175,7 @@ export function SeriesCarousel() {
       {/* Header row */}
       <View style={styles.headerRow}>
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-          YOUR SERIES
+          YOUR STUDIES
         </Text>
 
         {showSeeAll && (
@@ -184,7 +184,7 @@ export function SeriesCarousel() {
             onPress={handleSeeAll}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="link"
-            accessibilityLabel="See all series"
+            accessibilityLabel="See all studies"
           >
             <View style={styles.seeAllRow}>
               <Text style={[styles.seeAllText, { color: colors.accent }]}>

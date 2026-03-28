@@ -17,7 +17,7 @@ export function BentoGrid() {
 
   const items = [
     {
-      label: 'Past Series',
+      label: 'My Studies',
       icon: BookmarksSimpleIcon,
       pathname: '/(tabs)/(you)/past-devotionals',
     },
