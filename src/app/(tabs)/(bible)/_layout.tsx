@@ -11,9 +11,9 @@ export default function BibleLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
-      <Stack.Screen name="reader" options={{ animation: 'fade', animationDuration: 150 }} />
-      <Stack.Screen name="search" options={{ animation: 'ios_from_right' }} />
-      <Stack.Screen name="saved" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="reader" options={{ animation: 'fade', animationDuration: 150, gestureEnabled: true, fullScreenGestureEnabled: true }} />
+      <Stack.Screen name="search" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
+      <Stack.Screen name="saved" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
     </Stack>
   );
 }

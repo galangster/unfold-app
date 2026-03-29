@@ -35,7 +35,7 @@ import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
 import type { FontSize as FontSizePreference } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
-import { triggerNextDayGeneration, evaluateSeriesExtension, generateArcExtension } from '@/lib/progressive-generation';
+import { submitGenerationJob } from '@/lib/generation-api';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -728,21 +728,26 @@ export default function ReadingScreen() {
         advanceDay(currentDevotionalId);
         refreshDailyReminder();
 
-        // Progressive mode: generation is deferred to next app open or background fetch
-        // (triggerNextDayGeneration removed — context buffer is richer after user journals/checks-in)
+        // Progressive mode: fire-and-forget server-side generation for the next day
+        if (currentDevotional?.generationMode === 'progressive') {
+          submitGenerationJob({
+            devotionalId: currentDevotionalId,
+            dayNumber: viewingDay + 1,
+            jobType: 'day',
+          }).catch((err) => {
+            console.warn('[day-complete] Failed to submit next-day server job:', err);
+          });
+        }
       }
 
       // Phase 5: Evaluate series extension for progressive devotionals completing last day
+      // Server-side handles extension evaluation — submit a job for it
       const isProgressiveLastDay = completingLastDay && currentDevotional?.generationMode === 'progressive';
       if (isProgressiveLastDay) {
-        // Run evaluation in background during celebration — result shows after dismissal
-        evaluateSeriesExtension(currentDevotionalId).then((result) => {
-          if (!mountedRef.current) return; // Guard against unmount
-          if (result.shouldExtend && result.suggestedDays > 0) {
-            setContinuationReason(result.reason);
-            setContinuationDays(result.suggestedDays);
-            // Don't show yet — wait for celebration dismiss
-          }
+        submitGenerationJob({
+          devotionalId: currentDevotionalId,
+          dayNumber: viewingDay,
+          jobType: 'extension_eval',
         }).catch(() => {
           // Silent fail — extension is optional
         });
@@ -790,26 +795,21 @@ export default function ReadingScreen() {
   }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   // Phase 5: Handle "Keep Going" from continuation prompt
+  // Server-side handles arc extension and next-day generation
   const handleContinueJourney = useCallback(async () => {
     if (!currentDevotionalId || continuationDays <= 0) return;
     setIsExtendingArc(true);
     setExtensionError(false);
     try {
-      const newHints = await generateArcExtension(currentDevotionalId, continuationDays);
+      // Submit server-side arc extension + generation job
+      await submitGenerationJob({
+        devotionalId: currentDevotionalId,
+        dayNumber: continuationDays,
+        jobType: 'arc_extension',
+      });
       if (!mountedRef.current) return;
-      useUnfoldStore.getState().extendSeriesArc(currentDevotionalId, newHints, continuationDays);
-      // Advance to next day and trigger generation
       advanceDay(currentDevotionalId);
-      // Read the completed day from store (not the stale closure) so triggerNext generates the right day
-      const freshState = useUnfoldStore.getState();
-      const completedDay = freshState.devotionals.find(
-        (d) => d.id === currentDevotionalId
-      )?.currentDay ?? freshState.devotionals.find(
-        (d) => d.id === currentDevotionalId
-      )?.days?.length ?? 1;
       setIsPreparingNextDay(true);
-      triggerNextDayGeneration(currentDevotionalId, completedDay - 1)
-        .finally(() => { if (mountedRef.current) setIsPreparingNextDay(false); });
       setShowContinuationPrompt(false);
       setContinuationDays(0);
       setContinuationReason('');
@@ -1069,13 +1069,13 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       try {
-        // Progressive mode: use progressive generation (memory-aware, one day at a time)
+        // Progressive mode: submit server-side generation job
         if (currentDevotional.generationMode === 'progressive') {
-          const completedDay = viewingDay - 1;
-          const result = await triggerNextDayGeneration(currentDevotionalId!, completedDay);
-          if (!result) {
-            throw new Error('Progressive generation returned null');
-          }
+          await submitGenerationJob({
+            devotionalId: currentDevotionalId!,
+            dayNumber: viewingDay,
+            jobType: 'day',
+          });
           void logBugEvent('reading-generation', 'manual-retry-progressive-success', {
             viewingDay,
           });

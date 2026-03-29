@@ -14,8 +14,7 @@ import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
-import { cancelAndRescheduleMiddayForTomorrow, refreshDailyReminder } from '@/lib/notifications';
-import { isPastCutoff, todayDateString, isPastEveningCutoff } from '@/lib/cutoff-logic';
+import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips, type TargetRect } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
@@ -23,8 +22,6 @@ import { CheckInSheet } from '@/components/CheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
-import { triggerNextDayGeneration, preGenerateAudio, attemptEveningGeneration } from '@/lib/progressive-generation';
-import { logBugEvent } from '@/lib/bug-logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
@@ -190,49 +187,42 @@ export default function HomeScreen() {
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
 
-  // Progressive generation: detect missing current day and trigger generation on app open
-  const [isPreparingCurrentDay, setIsPreparingCurrentDay] = useState(false);
-  const progressiveGenTriggeredRef = React.useRef<string | null>(null);
-
+  // Reveal screen trigger — show the reveal animation when new unread content is ready
+  // Covers cold app open and in-app transitions (push notification is handled in Task 13)
   useEffect(() => {
     if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const lastRevealDate = useUnfoldStore.getState().lastRevealShownDate;
+
+    // Already shown today
+    if (lastRevealDate === today) return;
+
+    // Check if there's a new unread day
     const currentDay = currentDevotional.currentDay;
-    const dayExists = currentDevotional.days.some(d => d.dayNumber === currentDay);
-    if (dayExists) {
-      setIsPreparingCurrentDay(false);
-      return;
+    const dayData = currentDevotional.days.find((d) => d.dayNumber === currentDay);
+
+    // Must be Day 2+ (Day 1 has its own generating screen flow), must have data, must be unread
+    if (dayData && !dayData.isRead && currentDay > 1) {
+      router.push({
+        pathname: '/reveal',
+        params: {
+          devotionalId: currentDevotional.id,
+          dayNumber: String(currentDay),
+          seriesTitle: currentDevotional.title,
+          dayTitle: dayData.title,
+          totalDays: String(currentDevotional.totalDays),
+        },
+      });
     }
+  }, [currentDevotional, router]);
 
-    // Avoid duplicate triggers for the same day
-    const triggerKey = `${currentDevotional.id}::${currentDay}`;
-    if (progressiveGenTriggeredRef.current === triggerKey) return;
-    progressiveGenTriggeredRef.current = triggerKey;
-
-    // Current day is missing — trigger generation
-    setIsPreparingCurrentDay(true);
-    void logBugEvent('progressive-gen', 'app-open-trigger', {
-      devotionalId: currentDevotional.id,
-      missingDay: currentDay,
-    });
-
-    // Only generate if past midnight cutoff (ensures full engagement context)
-    const lastCutoff = useUnfoldStore.getState().lastGenerationCutoffDate;
-    if (isPastCutoff(lastCutoff)) {
-      triggerNextDayGeneration(currentDevotional.id, currentDay - 1)
-        .then(async () => {
-          useUnfoldStore.getState().setLastGenerationCutoffDate(todayDateString());
-          refreshDailyReminder();
-          // Pre-generate TTS audio for the new day
-          await preGenerateAudio(currentDevotional.id, currentDay).catch(() => {});
-        })
-        .finally(() => setIsPreparingCurrentDay(false));
-    } else if (isPastEveningCutoff()) {
-      // Evening trigger: generate next day if past 9 PM
-      attemptEveningGeneration(currentDevotional.id).catch(() => {});
-      setIsPreparingCurrentDay(false);
-    } else {
-      setIsPreparingCurrentDay(false);
-    }
+  // Server-side generation handles content creation. The client only tracks
+  // whether the current day's content hasn't arrived yet (shows a loading card).
+  const isPreparingCurrentDay = useMemo(() => {
+    if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return false;
+    const dayExists = currentDevotional.days.some(d => d.dayNumber === currentDevotional.currentDay);
+    return !dayExists;
   }, [currentDevotional]);
 
   // Daily Bridge — generate a personalized transition from yesterday to today

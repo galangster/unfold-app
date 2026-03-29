@@ -176,11 +176,13 @@ export function DevotionalCardStack({
         (day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === todayStr,
       );
 
-      // When today's reading is done, show the COMPLETED day (not tomorrow's)
+      // When today's reading is done, show the COMPLETED day (not tomorrow's).
+      // This also handles the case where advanceDay() already bumped currentDay
+      // but the next day hasn't been generated yet (nextDayData is null).
       let displayDayData = nextDayData;
       let navigateToDayNumber: number | undefined;
 
-      if (hasReadToday && nextDayData && !nextDayData.isRead) {
+      if (hasReadToday && (!nextDayData || !nextDayData.isRead)) {
         const todayCompleted = d.days
           .filter((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === todayStr)
           .sort((a, b) => b.dayNumber - a.dayNumber)[0];

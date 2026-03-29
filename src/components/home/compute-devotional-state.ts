@@ -77,13 +77,14 @@ export interface ComputeInput {
  * Compute the DevotionalCard state from app data.
  *
  * Priority order (first match wins):
- * 1. No devotional            -> empty
- * 2. isPreparing or no dayData -> preparing
- * 3. isJourneyComplete         -> journey-complete
- * 4. hasReadToday              -> tomorrow-locked
- * 5. dayData.isRead            -> complete-today
- * 6. daysCompleted > 0         -> in-progress
- * 7. else                      -> unread
+ * 1. No devotional                          -> empty
+ * 2. !hasReadToday && (preparing/no data)   -> preparing
+ * 3. No day data (fallback)                 -> preparing
+ * 4. isJourneyComplete                      -> journey-complete
+ * 5. hasReadToday & next day unread         -> tomorrow-locked
+ * 6. dayData.isRead                         -> complete-today
+ * 7. daysCompleted > 0                      -> in-progress
+ * 8. else                                   -> unread
  */
 export function computeDevotionalState(input: ComputeInput): DevotionalCardState {
   const {
@@ -108,8 +109,15 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
 
   const seriesTitle = currentDevotional.title;
 
-  // 2. Content is still being generated or no day data available
-  if (isPreparing || !currentDayData) {
+  // 2. Content is still being generated or no day data available.
+  // Never show "preparing" if the user has already read today — the completed
+  // day should remain visible while the next day generates in the background.
+  if (!hasReadToday && (isPreparing || !currentDayData)) {
+    return { type: 'preparing' };
+  }
+
+  // If we somehow have no day data even after reading today, bail to empty
+  if (!currentDayData) {
     return { type: 'preparing' };
   }
 

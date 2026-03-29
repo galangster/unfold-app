@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor } from '@/lib/store';
+import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, useUnfoldStore } from '@/lib/store';
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
 
@@ -21,6 +21,10 @@ interface DevotionalWebViewProps {
   onQuoteSelected?: (quote: Quote) => void;
   existingHighlights?: Highlight[];
   onScriptureTap?: (reference: string) => void;
+  devotionalId?: string;
+  devotionalTitle?: string;
+  dayNumber?: number;
+  dayTitle?: string;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -41,6 +45,10 @@ export function DevotionalWebView({
   onQuoteSelected,
   existingHighlights = [],
   onScriptureTap,
+  devotionalId,
+  devotionalTitle,
+  dayNumber,
+  dayTitle,
 }: DevotionalWebViewProps) {
   const { colors, isDark } = useTheme();
   const readingFont = useReadingFont();
@@ -49,19 +57,11 @@ export function DevotionalWebView({
 
   // Inject JS to report content height and apply highlights using rangy
   const injectedJavaScript = useMemo(() => {
-    // Group highlights by color for rangy deserialization
-    const highlightsByColor: Record<string, string[]> = {
-      yellow: [],
-      green: [],
-      blue: [],
-      purple: [],
-      red: [],
-    };
-    
+    // Collect all individual serialized ranges to restore in a single deserialize call
+    const allSerializedRanges: string[] = [];
     existingHighlights.forEach(h => {
-      const color = h.color || 'yellow';
-      if (h.serializedRange && highlightsByColor[color]) {
-        highlightsByColor[color].push(h.serializedRange);
+      if (h.serializedRange) {
+        allSerializedRanges.push(h.serializedRange);
       }
     });
 
@@ -87,7 +87,7 @@ export function DevotionalWebView({
           const applier = rangy.createClassApplier('rangy-highlight-' + color, {
             elementTagName: 'mark',
             elementProperties: {
-              style: 'background: ' + bgColor + '; color: inherit; padding: 2px 0; border-radius: 2px;',
+              style: 'background: ' + bgColor + '; color: inherit; padding: 0; border-radius: 2px;',
               className: 'highlight-' + color
             }
           });
@@ -97,22 +97,52 @@ export function DevotionalWebView({
         // Store highlighter globally
         window.rangyHighlighter = highlighter;
         
-        // Deserialize existing highlights by color
-        const highlightsByColor = ${JSON.stringify(highlightsByColor)};
-        Object.keys(highlightsByColor).forEach(color => {
-          const ranges = highlightsByColor[color];
-          if (ranges && ranges.length > 0) {
-            ranges.forEach(range => {
-              if (range) {
-                try {
-                  highlighter.deserialize(range);
-                } catch (e) {
-                  console.log('Failed to deserialize highlight:', e);
-                }
+        // Deserialize existing highlights — join all individual ranges into one
+        // rangy serialization string and deserialize in a single call.
+        // Each stored range may or may not include the "type:textContent" header;
+        // we ensure exactly one header is present at the front.
+        const allRanges = ${JSON.stringify(allSerializedRanges)};
+        if (allRanges.length > 0) {
+          var typeHeader = 'type:textContent';
+          var dataEntriesSet = {};
+          var dataEntries = [];
+          allRanges.forEach(function(range) {
+            var parts = range.split('|');
+            parts.forEach(function(part) {
+              if (part && !part.startsWith('type:') && !dataEntriesSet[part]) {
+                dataEntriesSet[part] = true;
+                dataEntries.push(part);
               }
             });
+          });
+          if (dataEntries.length > 0) {
+            var combined = typeHeader + '|' + dataEntries.join('|');
+            try {
+              highlighter.deserialize(combined);
+            } catch (e) {
+              console.log('Failed to deserialize combined highlights, trying one-by-one:', e);
+              // Fallback: find which entries are valid, then deserialize valid ones together
+              var validEntries = [];
+              dataEntries.forEach(function(entry) {
+                try {
+                  // Test deserialize to see if this entry is valid
+                  highlighter.deserialize(typeHeader + '|' + entry);
+                  validEntries.push(entry);
+                } catch (e2) {
+                  console.log('Skipping invalid highlight entry:', e2);
+                }
+              });
+              // Re-deserialize all valid entries together so they coexist
+              if (validEntries.length > 0) {
+                try {
+                  highlighter.deserialize(typeHeader + '|' + validEntries.join('|'));
+                } catch (e3) {
+                  console.log('Failed to deserialize valid entries:', e3);
+                }
+              }
+            }
           }
-        });
+        }
         
         // Report height after highlights applied
         setTimeout(reportHeight, 100);
@@ -268,9 +298,25 @@ export function DevotionalWebView({
             selection.addRange(selectionRange);
           }
 
+          // Capture serialization BEFORE to extract only the new highlight
+          var beforeSerialized = '';
+          try { beforeSerialized = window.rangyHighlighter.serialize(); } catch(_) {}
+
           window.rangyHighlighter.highlightSelection('rangy-highlight-' + color, { exclusive: true });
           highlightApplied = true;
-          serializedHighlight = window.rangyHighlighter.serialize();
+
+          // Extract only the newly added highlight entry from serialization
+          // rangy serializes all highlights as pipe-separated entries
+          var afterSerialized = window.rangyHighlighter.serialize();
+          if (beforeSerialized) {
+            // New entries are appended after existing ones
+            var beforeParts = beforeSerialized.split('|');
+            var afterParts = afterSerialized.split('|');
+            var newParts = afterParts.slice(beforeParts.length);
+            serializedHighlight = newParts.length > 0 ? newParts.join('|') : afterSerialized;
+          } else {
+            serializedHighlight = afterSerialized;
+          }
         } catch (err) {
           console.log('Highlight failed:', err);
         }
@@ -339,7 +385,38 @@ export function DevotionalWebView({
           }, 200);
         }
       });
-      
+
+      // Bookmark button handler for quotes, context boxes, and word study boxes
+      window.handleBookmark = function(el) {
+        var type = el.getAttribute('data-type');
+        var index = el.getAttribute('data-index');
+        var parent = el.parentElement;
+        var text = '';
+
+        if (type === 'quote') {
+          var p = parent.querySelector('p');
+          var cite = parent.querySelector('cite');
+          text = (p ? p.textContent : '') + (cite ? ' ' + cite.textContent : '');
+        } else if (type === 'context') {
+          text = parent.querySelector('p') ? parent.querySelector('p').textContent : '';
+        } else if (type === 'wordstudy') {
+          var term = parent.querySelector('.term');
+          var meaning = parent.querySelectorAll('p');
+          text = (term ? term.textContent + ': ' : '') + (meaning.length > 0 ? meaning[meaning.length - 1].textContent : '');
+        }
+
+        var isNowBookmarked = !el.classList.contains('bookmarked');
+        el.classList.toggle('bookmarked');
+
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'BOOKMARK',
+          contentType: type,
+          text: text.trim(),
+          index: parseInt(index) || 0,
+          isBookmarked: isNowBookmarked
+        }));
+      };
+
       true;
     `;
   }, [existingHighlights, isDark]);
@@ -425,8 +502,13 @@ export function DevotionalWebView({
       : '';
 
     const quotesHtml = day.quotes?.length
-      ? day.quotes.map(q => `
+      ? day.quotes.map((q, i) => `
         <blockquote>
+          <div class="bookmark-btn" data-type="quote" data-index="${i}" onclick="handleBookmark(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
           <span class="deco-quote">\u201C</span>
           <p>${escapeHtml(q.text)}</p>
           <cite>\u2014\u2009${escapeHtml(q.author)}</cite>
@@ -437,6 +519,11 @@ export function DevotionalWebView({
     const contextHtml = day.contextNote
       ? `
         <div class="context-box">
+          <div class="bookmark-btn" data-type="context" data-index="0" onclick="handleBookmark(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
           <h3>Historical Context</h3>
           <p>${escapeHtml(day.contextNote)}</p>
         </div>
@@ -446,6 +533,11 @@ export function DevotionalWebView({
     const wordStudyHtml = day.wordStudy
       ? `
         <div class="word-study-box">
+          <div class="bookmark-btn" data-type="wordstudy" data-index="0" onclick="handleBookmark(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
           <h3>Word Study</h3>
           <div class="word-term">
             <span class="term">${escapeHtml(day.wordStudy.term)}</span>
@@ -539,7 +631,7 @@ export function DevotionalWebView({
     /* Highlight colors */
     mark {
       color: inherit;
-      padding: 2px 0;
+      padding: 0;
       border-radius: 2px;
     }
     
@@ -656,6 +748,7 @@ export function DevotionalWebView({
       background: ${inputBg};
       border-radius: 16px;
       padding: 22px;
+      position: relative;
     }
     
     h3 {
@@ -694,7 +787,31 @@ export function DevotionalWebView({
       margin-left: 12px;
       opacity: 0.7;
     }
-    
+
+    /* Bookmark button on quotes, context, and word study boxes */
+    .bookmark-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0.4;
+      transition: opacity 0.2s;
+      z-index: 10;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bookmark-btn:active { opacity: 0.8; }
+    .bookmark-btn.bookmarked { opacity: 1; }
+    .bookmark-btn svg { width: 18px; height: 18px; }
+    .bookmark-btn.bookmarked svg {
+      fill: ${accentColor};
+      stroke: ${accentColor};
+    }
+
     /* Highlight toolbar */
     #highlight-toolbar {
       position: fixed;
@@ -797,6 +914,43 @@ export function DevotionalWebView({
       } else if (data.type === 'HAPTIC_SELECTION') {
         Haptics.selectionAsync();
       } else if (data.type === 'HAPTIC_IMPACT') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else if (data.type === 'BOOKMARK') {
+        const { contentType, text, isBookmarked: nowBookmarked } = data;
+        const store = useUnfoldStore.getState();
+        const resolvedDayNumber = dayNumber ?? day.dayNumber;
+        if (nowBookmarked && devotionalId) {
+          const labelMap: Record<string, string> = {
+            quote: 'Quote',
+            context: 'Historical Context',
+            wordstudy: 'Word Study',
+          };
+          // Look up series title from store if not provided via props
+          const seriesTitle =
+            devotionalTitle ||
+            store.devotionals.find((d) => d.id === devotionalId)?.title ||
+            '';
+          store.addBookmark({
+            devotionalId,
+            devotionalTitle: seriesTitle,
+            dayNumber: resolvedDayNumber,
+            dayTitle: dayTitle || day.title || '',
+            scriptureReference: labelMap[contentType] || contentType,
+            scriptureText: text,
+            updatedAt: new Date().toISOString(),
+          });
+        } else if (!nowBookmarked && devotionalId) {
+          // Find and remove the matching bookmark
+          const existing = store.bookmarks.find(
+            (b) =>
+              b.devotionalId === devotionalId &&
+              b.dayNumber === resolvedDayNumber &&
+              b.scriptureText === text
+          );
+          if (existing) {
+            store.removeBookmark(existing.id);
+          }
+        }
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     } catch (e) {

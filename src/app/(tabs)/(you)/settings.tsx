@@ -273,24 +273,37 @@ export default function SettingsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
       'Reset all data?',
-      'This will permanently delete all your devotionals, journal entries, and settings. This cannot be undone.',
+      'This will permanently delete all your devotionals, journal entries, and settings.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            setIsDeletingAccount(true);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            try {
-              reset();
-              useCompanionChatStore.getState().clearAllConversations();
-              // Navigate to welcome screen — use dismiss + replace to escape tabs navigator
-              router.dismissAll();
-              setTimeout(() => router.replace('/'), 50);
-            } finally {
-              setIsDeletingAccount(false);
-            }
+          text: 'Continue',
+          onPress: () => {
+            // Second confirmation
+            Alert.alert(
+              'Are you absolutely sure?',
+              'This action cannot be undone. All your data will be permanently deleted.',
+              [
+                { text: 'Go Back', style: 'cancel' },
+                {
+                  text: 'Delete Everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    try {
+                      reset();
+                      useCompanionChatStore.getState().clearAllConversations();
+                      // Navigate to welcome screen — use dismiss + replace to escape tabs navigator
+                      router.dismissAll();
+                      setTimeout(() => router.replace('/'), 50);
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
           },
         },
       ]

@@ -12,9 +12,9 @@ export default function TodayLayout() {
     >
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
       <Stack.Screen name="reading" options={{ animation: 'fade' }} />
-      <Stack.Screen name="journal" options={{ animation: 'ios_from_right' }} />
-      <Stack.Screen name="journal-detail" options={{ animation: 'ios_from_right' }} />
-      <Stack.Screen name="highlights" options={{ animation: 'ios_from_right' }} />
+      <Stack.Screen name="journal" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
+      <Stack.Screen name="journal-detail" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
+      <Stack.Screen name="highlights" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
       <Stack.Screen
         name="evening-wind-down"
         options={{ animation: 'fade_from_bottom' }}

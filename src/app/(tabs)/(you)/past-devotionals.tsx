@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -10,9 +10,10 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { Swipeable } from 'react-native-gesture-handler';
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -196,6 +197,173 @@ const segStyles = StyleSheet.create({
 });
 
 // ============================================================================
+// Swipeable Devotional Card
+// ============================================================================
+
+interface DevotionalCardProps {
+  item: Devotional;
+  colors: ReturnType<typeof useTheme>['colors'];
+  exportingId: string | null;
+  exportSuccessId: string | null;
+  onSelect: (id: string) => void;
+  onExport: (devotional: Devotional) => void;
+  onDelete: (devotional: Devotional) => void;
+}
+
+function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, onExport, onDelete }: DevotionalCardProps) {
+  const swipeableRef = useRef<Swipeable>(null);
+  const completedDays = item.days.filter((d) => d.isRead).length;
+  const progress = (completedDays / item.totalDays) * 100;
+  const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
+
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      'Delete Study?',
+      `Are you sure you want to delete "${item.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel', onPress: () => swipeableRef.current?.close() },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            onDelete(item);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ],
+    );
+  }, [item, onDelete]);
+
+  const renderRightActions = useCallback(() => (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={handleDelete}
+      style={{
+        backgroundColor: '#FF3B30',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: 80,
+        borderRadius: Radius.lg,
+        marginBottom: Spacing['3'],
+        marginLeft: Spacing['2'],
+      }}
+      accessibilityLabel={`Delete ${item.title}`}
+      accessibilityRole="button"
+    >
+      <TrashSimpleIcon size={22} color="white" weight="regular" />
+    </TouchableOpacity>
+  ), [handleDelete, item.title]);
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={renderRightActions}
+      overshootRight={false}
+      friction={2}
+    >
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => onSelect(item.id)}
+        style={{
+          backgroundColor: colors.inputBackground,
+          borderRadius: Radius.lg,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: Spacing['5'],
+          marginBottom: Spacing['3'],
+        }}
+      >
+        {/* Top row: date + download circle */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text
+            style={{
+              fontFamily: FontFamily.mono,
+              fontSize: 11,
+              color: colors.textHint,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+            }}
+          >
+            {createdDate}
+          </Text>
+
+          <TouchableOpacity activeOpacity={0.7}
+            onPress={(e) => { e.stopPropagation(); onExport(item); }}
+            disabled={exportingId !== null}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: `${colors.accent}15`,
+              justifyContent: 'center',
+              alignItems: 'center',
+              opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
+            }}
+            accessibilityLabel="Export as PDF"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: exportingId !== null }}
+          >
+            {exportingId === item.id ? (
+              <ActivityIndicator size={18} color={colors.accent} />
+            ) : exportSuccessId === item.id ? (
+              <CheckIcon size={22} color={colors.accent} weight="bold" />
+            ) : (
+              <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Title + progress */}
+        <View>
+          <Text
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 22,
+              color: colors.text,
+              lineHeight: 28,
+              marginBottom: Spacing['3'],
+            }}
+          >
+            {item.title}
+          </Text>
+
+          <View
+            style={{
+              height: 2,
+              backgroundColor: colors.border,
+              borderRadius: 1,
+              marginBottom: Spacing['2'],
+            }}
+          >
+            <View
+              style={{
+                height: '100%',
+                width: `${progress}%`,
+                backgroundColor: colors.accent,
+                borderRadius: 1,
+              }}
+            />
+          </View>
+
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: 13,
+              color: colors.textSubtle,
+            }}
+          >
+            {completedDays === item.totalDays
+              ? `${item.totalDays} days completed`
+              : `Day ${item.currentDay} of ${item.totalDays}`}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Swipeable>
+  );
+}
+
+// ============================================================================
 // Main Screen
 // ============================================================================
 
@@ -205,6 +373,7 @@ export default function PastDevotionalsScreen() {
   const { colors } = useTheme();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
+  const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
   const user = useUnfoldStore((s) => s.user);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const checkIns = useUnfoldStore((s) => s.checkIns);
@@ -263,9 +432,9 @@ export default function PastDevotionalsScreen() {
   }, [searchVisible, scrollY]);
 
   const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-    if (!searchQuery) {
-      // If already empty, dismiss the search bar
+    if (searchQuery) {
+      setSearchQuery('');
+    } else {
       setSearchVisible(false);
       searchInputRef.current?.blur();
     }
@@ -309,125 +478,36 @@ export default function PastDevotionalsScreen() {
           moodLabel: c.moodLabel,
         }));
 
-      await exportDevotionalToPDF(devotional, {
+      const success = await exportDevotionalToPDF(devotional, {
         accentColor: colors.accent,
         journalEntries: devJournals,
         checkIns: devCheckIns,
       });
-      setExportSuccessId(devotional.id);
-      if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
-      exportSuccessTimerRef.current = setTimeout(() => setExportSuccessId(null), 2000);
+      if (success) {
+        setExportSuccessId(devotional.id);
+        if (exportSuccessTimerRef.current) clearTimeout(exportSuccessTimerRef.current);
+        exportSuccessTimerRef.current = setTimeout(() => setExportSuccessId(null), 2000);
+      }
     } finally {
       setExportingId(null);
     }
   }, [exportingId, user?.isPremium, router, journalEntries, checkIns, colors.accent]);
 
-  const renderItem = useCallback(({ item }: { item: Devotional }) => {
-    const completedDays = item.days.filter((d) => d.isRead).length;
-    const progress = (completedDays / item.totalDays) * 100;
-    const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
+  const handleDeleteDevotional = useCallback((devotional: Devotional) => {
+    removeDevotional(devotional.id);
+  }, [removeDevotional]);
 
-    return (
-      <View
-        style={{
-          backgroundColor: colors.inputBackground,
-          borderRadius: Radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: Spacing['5'],
-          marginBottom: Spacing['3'],
-        }}
-      >
-        {/* Top row: date + download circle */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <Text
-            style={{
-              fontFamily: FontFamily.mono,
-              fontSize: 11,
-              color: colors.textHint,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-            }}
-          >
-            {createdDate}
-          </Text>
-
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={() => handleExportPDF(item)}
-            disabled={exportingId !== null}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: `${colors.accent}15`,
-              justifyContent: 'center',
-              alignItems: 'center',
-              opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
-            }}
-            accessibilityLabel="Export as PDF"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: exportingId !== null }}
-          >
-            {exportingId === item.id ? (
-              <ActivityIndicator size={18} color={colors.accent} />
-            ) : exportSuccessId === item.id ? (
-              <CheckIcon size={22} color={colors.accent} weight="bold" />
-            ) : (
-              <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Tappable content area */}
-        <TouchableOpacity activeOpacity={0.7}
-          onPress={() => handleSelectDevotional(item.id)}
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 22,
-              color: colors.text,
-              lineHeight: 28,
-              marginBottom: Spacing['3'],
-            }}
-          >
-            {item.title}
-          </Text>
-
-          <View
-            style={{
-              height: 2,
-              backgroundColor: colors.border,
-              borderRadius: 1,
-              marginBottom: Spacing['2'],
-            }}
-          >
-            <View
-              style={{
-                height: '100%',
-                width: `${progress}%`,
-                backgroundColor: colors.accent,
-                borderRadius: 1,
-              }}
-            />
-          </View>
-
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 13,
-              color: colors.textSubtle,
-            }}
-          >
-            {completedDays === item.totalDays
-              ? `${item.totalDays} days completed`
-              : `Day ${item.currentDay} of ${item.totalDays}`}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }, [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, user?.isPremium]);
+  const renderItem = useCallback(({ item }: { item: Devotional }) => (
+    <DevotionalCard
+      item={item}
+      colors={colors}
+      exportingId={exportingId}
+      exportSuccessId={exportSuccessId}
+      onSelect={handleSelectDevotional}
+      onExport={handleExportPDF}
+      onDelete={handleDeleteDevotional}
+    />
+  ), [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, handleDeleteDevotional]);
 
   if (devotionals.length === 0) {
     return (
@@ -557,33 +637,16 @@ export default function PastDevotionalsScreen() {
                 returnKeyType="search"
                 accessibilityLabel="Search studies"
               />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => setSearchQuery('')}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Clear search"
-                  accessibilityRole="button"
-                >
-                  <XCircleIcon size={18} color={colors.textMuted} weight="fill" />
-                </TouchableOpacity>
-              )}
-            </View>
-            {!searchQuery && (
               <TouchableOpacity
                 activeOpacity={0.7}
-                onPress={() => {
-                  setSearchVisible(false);
-                  setSearchQuery('');
-                  searchInputRef.current?.blur();
-                }}
-                style={searchStyles.cancelButton}
+                onPress={handleClearSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
               >
-                <Text style={[searchStyles.cancelText, { color: colors.accent }]}>
-                  Cancel
-                </Text>
+                <XCircleIcon size={18} color={colors.textMuted} weight="fill" />
               </TouchableOpacity>
-            )}
+            </View>
           </Animated.View>
         )}
 
@@ -606,6 +669,20 @@ export default function PastDevotionalsScreen() {
             </Text>
           </Animated.View>
         ) : (
+          <>
+          {!searchVisible && filteredDevotionals.length > 3 && (
+            <View style={{ alignItems: 'center', paddingBottom: Spacing['2'] }}>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: 12,
+                  color: colors.textHint,
+                }}
+              >
+                Pull down to search
+              </Text>
+            </View>
+          )}
           <FlashList
             data={filteredDevotionals}
             renderItem={renderItem as any}
@@ -615,6 +692,7 @@ export default function PastDevotionalsScreen() {
             onScroll={handleScroll as any}
             scrollEventThrottle={16}
           />
+          </>
         )}
       </SafeAreaView>
     </View>

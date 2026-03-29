@@ -19,13 +19,14 @@ import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
+import { registerPushToken, setupNotificationListeners } from '@/lib/push-notifications';
 import { syncService } from '@/lib/sync-service';
+import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 // GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
 // blocking touch events and causing audio playback freezes. See GlowBackground.tsx for details.
 // import { GlowBackground } from '@/components/GlowBackground';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
-import { registerBackgroundGeneration } from '@/lib/background-generation';
 
 const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -118,6 +119,23 @@ function RootLayoutNav() {
   // Schedule/cancel midday check-in and evening wind-down notifications
   useCheckInNotifications();
 
+  // Register push token with backend and listen for notification taps
+  useEffect(() => {
+    if (userId) {
+      registerPushToken();
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    const cleanup = setupNotificationListeners();
+    return cleanup;
+  }, []);
+
+  // One-time migration of local generation data to server
+  useEffect(() => {
+    migrateGenerationDataToServer().catch(() => {});
+  }, []);
+
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
   // Register navigation container with Sentry for screen tracking
@@ -138,10 +156,6 @@ function RootLayoutNav() {
     }
   }, [userId, email, authProvider, isPremium]);
 
-  // Register background generation task (fire-and-forget, logs warnings internally)
-  useEffect(() => {
-    registerBackgroundGeneration();
-  }, []);
 
   return (
     <NavigationThemeProvider value={navigationTheme}>
@@ -179,6 +193,14 @@ function RootLayoutNav() {
           options={{
             presentation: 'modal',
             animation: 'slide_from_bottom',
+          }}
+        />
+        <Stack.Screen
+          name="reveal"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen

@@ -255,6 +255,9 @@ export function DevotionalContent({
         onQuoteSelected={onQuoteSelected}
         existingHighlights={existingHighlights}
         onScriptureTap={onScriptureTap}
+        devotionalId={devotionalId}
+        dayNumber={dayNumber}
+        dayTitle={day.title}
       />
 
       {/* Cross References Section */}

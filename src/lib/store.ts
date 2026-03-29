@@ -390,24 +390,6 @@ export interface ProgressiveMemory {
   narrative: MemoryLayerNarrative | null;
 }
 
-export type DayGenerationStatus = 'pending' | 'generating' | 'ready' | 'failed';
-
-export interface DayGenerationState {
-  dayNumber: number;
-  status: DayGenerationStatus;
-  startedAt?: string;
-  completedAt?: string;
-  error?: string;
-  retryCount: number;
-}
-
-export interface ProgressiveGenerationState {
-  devotionalId: string | null;
-  currentDayGeneration: DayGenerationState | null;
-  lastGenerationTriggeredAt?: string;
-  isArcGenerated: boolean;
-}
-
 // ---------------------------------------------------------------------------
 
 // Cross-series persona tracking for content freshness
@@ -508,6 +490,7 @@ interface UnfoldState {
   devotionals: Devotional[];
   currentDevotionalId: string | null;
   addDevotional: (devotional: Devotional) => void;
+  removeDevotional: (devotionalId: string) => void;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
@@ -632,10 +615,13 @@ interface UnfoldState {
   hasUsedAudio: boolean;
   setHasUsedAudio: () => void;
 
-  // Progressive generation state
-  progressiveGeneration: ProgressiveGenerationState;
-  setProgressiveGeneration: (state: Partial<ProgressiveGenerationState>) => void;
-  clearProgressiveGeneration: () => void;
+  // Server-side generation tracking
+  pendingJobId: string | null;
+  setPendingJobId: (id: string | null) => void;
+
+  // Reveal animation tracking (date string, e.g. "2026-03-28")
+  lastRevealShownDate: string | null;
+  setLastRevealShownDate: (date: string) => void;
 
   // Series arc management
   setSeriesArc: (devotionalId: string, arc: SeriesArc) => void;
@@ -704,11 +690,7 @@ interface UnfoldState {
   hasConsentedToAI: boolean;
   setHasConsentedToAI: (consented: boolean) => void;
 
-  // Deferred generation
-  lastGenerationCutoffDate: string;
-  setLastGenerationCutoffDate: (date: string) => void;
-  lastEveningGenerationDate: string;
-  setLastEveningGenerationDate: (date: string) => void;
+  // Story deduplication
   addUsedStoryId: (devotionalId: string, storyId: string) => void;
 
   // Sync tracking
@@ -757,12 +739,9 @@ const initialState = {
   hasSeenFeatureOnboarding: false,
   dismissedMiddayCardDate: null as string | null,
   dismissedEveningCardDate: null as string | null,
-  // Progressive generation
-  progressiveGeneration: {
-    devotionalId: null,
-    currentDayGeneration: null,
-    isArcGenerated: false,
-  } as ProgressiveGenerationState,
+  // Server-side generation tracking
+  pendingJobId: null as string | null,
+  lastRevealShownDate: null as string | null,
   // Premium nudge system
   ...NUDGE_INITIAL_STATE,
   streakJustReset: false,
@@ -777,9 +756,6 @@ const initialState = {
   eveningWindDownByDay: null,
   // AI data consent
   hasConsentedToAI: false,
-  // Deferred generation
-  lastGenerationCutoffDate: '',
-  lastEveningGenerationDate: '',
   // Notebook
   notes: [] as Note[],
   folders: [] as NoteFolder[],
@@ -820,6 +796,18 @@ export const useUnfoldStore = create<UnfoldState>()(
             currentDevotionalId: devotional.id,
           };
         }),
+
+      removeDevotional: (devotionalId) =>
+        set((state) => ({
+          devotionals: state.devotionals.filter((d) => d.id !== devotionalId),
+          currentDevotionalId:
+            state.currentDevotionalId === devotionalId ? null : state.currentDevotionalId,
+          // Clean up all associated data
+          journalEntries: state.journalEntries.filter((j) => j.devotionalId !== devotionalId),
+          checkIns: state.checkIns.filter((c) => c.devotionalId !== devotionalId),
+          highlights: state.highlights.filter((h) => h.devotionalId !== devotionalId),
+          bookmarks: state.bookmarks.filter((b) => b.devotionalId !== devotionalId),
+        })),
 
       updateDevotionalDays: (devotionalId, days, title) =>
         set((state) => {
@@ -1374,8 +1362,6 @@ export const useUnfoldStore = create<UnfoldState>()(
       setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
 
       // Deferred generation
-      setLastGenerationCutoffDate: (date) => set({ lastGenerationCutoffDate: date }),
-      setLastEveningGenerationDate: (date) => set({ lastEveningGenerationDate: date }),
       addUsedStoryId: (devotionalId, storyId) => set((state) => {
         const devo = state.devotionals.find((d) => d.id === devotionalId);
         if (devo) {
@@ -1384,19 +1370,9 @@ export const useUnfoldStore = create<UnfoldState>()(
         return { devotionals: [...state.devotionals] };
       }),
 
-      // Progressive generation state
-      setProgressiveGeneration: (updates) =>
-        set((state) => ({
-          progressiveGeneration: { ...state.progressiveGeneration, ...updates },
-        })),
-      clearProgressiveGeneration: () =>
-        set({
-          progressiveGeneration: {
-            devotionalId: null,
-            currentDayGeneration: null,
-            isArcGenerated: false,
-          },
-        }),
+      // Server-side generation tracking
+      setPendingJobId: (id) => set({ pendingJobId: id }),
+      setLastRevealShownDate: (date) => set({ lastRevealShownDate: date }),
 
       // Series arc management
       setSeriesArc: (devotionalId, arc) =>
@@ -1706,7 +1682,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 29, // v29: Add updatedAt + id to all syncable records for cloud sync
+      version: 30, // v30: Remove client-side generation state, add server-side job tracking
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2111,6 +2087,25 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v28→29: Backfilled updatedAt + id for sync');
           } catch (err) {
             console.error('[store] Migration v28→29 failed:', err);
+          }
+        }
+
+        // Migration from version 29 to 30: Remove client-side generation state,
+        // add server-side job tracking fields
+        if (version < 30) {
+          try {
+            // Strip removed client-side generation fields
+            delete (state as any).progressiveGeneration;
+            delete (state as any).lastGenerationCutoffDate;
+            delete (state as any).lastEveningGenerationDate;
+
+            // Add new server-side tracking fields
+            (state as any).pendingJobId = (state as any).pendingJobId ?? null;
+            (state as any).lastRevealShownDate = (state as any).lastRevealShownDate ?? null;
+
+            logger.log('[store] Migration v29→30: Removed client-side generation state');
+          } catch (err) {
+            console.error('[store] Migration v29→30 failed:', err);
           }
         }
 
