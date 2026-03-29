@@ -105,7 +105,11 @@ export function Sheet({
       Gesture.Pan()
         .onUpdate((e) => {
           if (e.translationY > 0) {
+            // Swipe down — direct tracking for dismiss
             translateY.value = e.translationY;
+          } else {
+            // Swipe up — rubber band resistance (20% of gesture)
+            translateY.value = e.translationY * 0.2;
           }
         })
         .onEnd((e) => {

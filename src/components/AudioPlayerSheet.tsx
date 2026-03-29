@@ -244,8 +244,10 @@ export function AudioPlayerSheet() {
       enableOverDrag={false}
       onChange={handleSheetChange}
       handleIndicatorStyle={{
-        backgroundColor: alpha(colors.text, 0.2),
+        backgroundColor: colors.borderStrong,
         width: 36,
+        height: 5,
+        borderRadius: 2.5,
       }}
       backgroundStyle={[
         styles.sheetBackground,

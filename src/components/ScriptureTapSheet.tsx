@@ -159,7 +159,7 @@ export function ScriptureTapSheet({
         >
           {/* Drag indicator */}
           <View style={s.handleRow}>
-            <View style={[s.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
+            <View style={[s.handle, { backgroundColor: colors.borderStrong }]} />
           </View>
 
           {/* Header row: reference + translation + actions + close */}
@@ -313,21 +313,21 @@ const s = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
     maxHeight: '65%',
   },
 
   // ─── Handle ─────────────────────────────────────
   handleRow: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handle: {
     width: 36,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 2.5,
   },
 
   // ─── Header ─────────────────────────────────────

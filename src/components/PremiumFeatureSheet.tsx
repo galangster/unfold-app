@@ -174,7 +174,7 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
       >
         {/* Handle indicator */}
         <View style={pfStyles.handleRow}>
-          <View style={[pfStyles.handle, { backgroundColor: colors.border }]} />
+          <View style={[pfStyles.handle, { backgroundColor: colors.borderStrong }]} />
         </View>
 
         <View style={pfStyles.content}>
@@ -240,20 +240,20 @@ const pfStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: Radius['2xl'],
+    borderTopRightRadius: Radius['2xl'],
     paddingBottom: 34, // Safe area
     maxHeight: '50%',
   },
   handleRow: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handle: {
     width: 36,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 2.5,
   },
   content: {
     paddingHorizontal: Spacing['7'],

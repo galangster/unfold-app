@@ -180,8 +180,10 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
         borderTopRightRadius: Radius['2xl'],
       }}
       handleIndicatorStyle={{
-        backgroundColor: colors.border,
+        backgroundColor: colors.borderStrong,
         width: 36,
+        height: 5,
+        borderRadius: 2.5,
       }}
     >
       <View style={styles.content}>

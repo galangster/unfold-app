@@ -711,7 +711,7 @@ export function CheckInSheet({
               <View
                 style={[
                   styles.handleBar,
-                  { backgroundColor: colors.textHint },
+                  { backgroundColor: colors.borderStrong },
                 ]}
               />
             </View>
@@ -791,13 +791,13 @@ const styles = StyleSheet.create({
   },
   handleBarContainer: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   handleBar: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
   },
 
   /* Header */

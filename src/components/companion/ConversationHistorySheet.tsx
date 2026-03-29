@@ -81,18 +81,17 @@ export function ConversationHistorySheet({
   onSelectConversation,
 }: Props) {
   const { colors } = useTheme();
-  // Show all conversations with messages except the current active one.
-  // Previously only showed `archived: true`, which missed conversations that
-  // were never formally archived (e.g. from v1 migration or no new conversation started).
+  // Show ALL conversations with messages, including the active one.
+  // The active conversation gets a "Current" label so users always see their history.
   const activeId = useCompanionChatStore((s) => s.activeConversationId);
-  const archivedRaw = useCompanionChatStore(
-    useShallow((s) => s.conversations.filter(c => c.id !== s.activeConversationId && c.messages.length > 0))
+  const allWithMessages = useCompanionChatStore(
+    useShallow((s) => s.conversations.filter(c => c.messages.length > 0))
   );
   const deleteConversation = useCompanionChatStore((s) => s.deleteConversation);
 
   const archivedConversations = useMemo(
-    () => [...archivedRaw].sort((a, b) => b.lastMessageAt - a.lastMessageAt),
-    [archivedRaw],
+    () => [...allWithMessages].sort((a, b) => b.lastMessageAt - a.lastMessageAt),
+    [allWithMessages],
   );
 
   const sections = useMemo(
@@ -152,7 +151,42 @@ export function ConversationHistorySheet({
 
       const conv = item.conversation;
       const msgCount = conv.messages.length;
-      const summary = conv.summary || 'Conversation';
+      const isCurrent = conv.id === activeId;
+      const summary = isCurrent
+        ? 'Current conversation'
+        : (conv.summary || 'Conversation');
+
+      const row = (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => isCurrent ? onClose() : onSelectConversation(conv)}
+          style={[
+            styles.conversationRow,
+            {
+              marginHorizontal: Spacing['4'],
+              backgroundColor: alpha(colors.backgroundElevated, 0.6),
+              borderLeftWidth: isCurrent ? 2 : 0,
+              borderLeftColor: isCurrent ? colors.accent : 'transparent',
+            },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`${summary}, ${formatDate(conv.lastMessageAt)}, ${msgCount} message${msgCount !== 1 ? 's' : ''}`}
+        >
+          <Text
+            style={[styles.summary, { color: isCurrent ? colors.accent : colors.text }]}
+            numberOfLines={1}
+          >
+            {summary}
+          </Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            {formatDate(conv.lastMessageAt)} · {msgCount} message
+            {msgCount !== 1 ? 's' : ''}
+          </Text>
+        </TouchableOpacity>
+      );
+
+      // Don't allow swipe-to-delete on the current conversation
+      if (isCurrent) return row;
 
       return (
         <ReanimatedSwipeable
@@ -172,30 +206,7 @@ export function ConversationHistorySheet({
             </TouchableOpacity>
           )}
         >
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => onSelectConversation(conv)}
-            style={[
-              styles.conversationRow,
-              {
-                marginHorizontal: Spacing['4'],
-                backgroundColor: alpha(colors.backgroundElevated, 0.6),
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={`${summary}, ${formatDate(conv.lastMessageAt)}, ${msgCount} message${msgCount !== 1 ? 's' : ''}`}
-          >
-            <Text
-              style={[styles.summary, { color: colors.text }]}
-              numberOfLines={1}
-            >
-              {summary}
-            </Text>
-            <Text style={[styles.meta, { color: colors.textMuted }]}>
-              {formatDate(conv.lastMessageAt)} · {msgCount} message
-              {msgCount !== 1 ? 's' : ''}
-            </Text>
-          </TouchableOpacity>
+          {row}
         </ReanimatedSwipeable>
       );
     },
@@ -243,7 +254,7 @@ export function ConversationHistorySheet({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    minHeight: 280,
   },
   header: {
     flexDirection: 'row',
