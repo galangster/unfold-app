@@ -17,6 +17,8 @@ import { logBugError, logBugEvent } from './bug-logger';
 import { logger as appLogger } from './logger';
 import { reportError } from './report-error';
 import { sanitizeForPrompt } from '@/lib/api-config';
+import { validateDevotional, applyValidation, logGenerationToBackend, type ValidationResult } from './prompt-validator';
+import { UNIVERSAL_EXAMPLES, getPersonaExample, getDynamicExampleXml, setCachedDynamicExample } from './prompt-examples';
 import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-service';
 import {
   postJsonWithBackendFallback,
@@ -641,6 +643,10 @@ async function _generateProgressiveDayInternal(
     voiceOverlay,
     voiceAdaptation,
     STICKY_SENTENCE_INSTRUCTION,
+    // Few-shot examples (prompt engineering overhaul)
+    UNIVERSAL_EXAMPLES,
+    getPersonaExample(persona.primary),
+    getDynamicExampleXml(),
   ].join('');
 
   // Build the progressive user prompt
@@ -734,6 +740,37 @@ async function _generateProgressiveDayInternal(
     contextSignals: day.contextSignals?.length ?? 0,
     studyMethod: resolvedMethod?.id ?? 'none',
   });
+
+  // --- Validation chain: run Haiku validator on bodyText ---
+  let validationResult: ValidationResult = { hasViolations: false, violations: [], correctedText: null };
+  try {
+    validationResult = await validateDevotional(day.bodyText);
+    if (validationResult.hasViolations && validationResult.correctedText) {
+      logger.log(`Day ${dayNumber}: validator found ${validationResult.violations.length} violations, applying fixes`);
+      day.bodyText = validationResult.correctedText;
+    }
+  } catch (valErr) {
+    logger.warn(`Day ${dayNumber}: validation failed, using original text`, valErr);
+  }
+
+  // --- Log generation + violations to backend (async, fire-and-forget) ---
+  const promptHashValue = ''; // TODO: compute SHA-256 of static system prompt portion
+  logGenerationToBackend({
+    model: 'claude-sonnet-4-6',
+    persona: persona.primary,
+    dayNumber,
+    seriesLength: context.devotionalLength,
+    promptHash: promptHashValue,
+    hadViolations: validationResult.hasViolations,
+    violations: validationResult.violations.map(v => ({
+      ...v,
+      autoFixed: v.fixed !== null,
+    })),
+  }).then(result => {
+    if (result.activeDynamicExample) {
+      setCachedDynamicExample(result.activeDynamicExample);
+    }
+  }).catch(() => { /* silent */ });
 
   // Record method usage for cross-series tracking
   if (resolvedMethod?.id) {
