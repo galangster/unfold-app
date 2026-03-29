@@ -11,6 +11,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from './mmkv-storage';
 
 import { getTopicTags } from './companion-memory';
+import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -173,6 +174,32 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         set((s) => {
           const now = new Date().toISOString();
           const activeId = s.activeConversationId;
+
+          // Fire backend log (async, best-effort)
+          const activeConv = s.conversations.find(c => c.id === activeId);
+          const msg = activeConv?.messages.find(m => m.id === id);
+          if (msg) {
+            const prevMsg = activeConv?.messages
+              .filter(m => m.role === 'user')
+              .slice(-1)[0];
+
+            getAuthHeaders().then(headers => {
+              fetch(`${PRIMARY_BACKEND_URL}/api/companion-feedback`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  messageId: id,
+                  feedback,
+                  messageContent: msg.content?.slice(0, 5000),
+                  userMessage: prevMsg?.content?.slice(0, 5000),
+                  model: 'claude-haiku-4-5-20251001',
+                  companionName: null,
+                  contextSummary: activeConv?.topicTags?.join(', '),
+                }),
+              }).catch(() => { /* silent */ });
+            });
+          }
+
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== activeId) return c;
