@@ -269,34 +269,43 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!isPreparingCurrentDay || !currentDevotional) return;
 
-    const key = `${currentDevotional.id}-${currentDevotional.currentDay}`;
+    const devId = currentDevotional.id;
+    const dayNum = currentDevotional.currentDay;
+    const key = `${devId}-${dayNum}`;
     if (autoGenAttemptedRef.current === key) return;
-    autoGenAttemptedRef.current = key;
 
     let cancelled = false;
+
+    // Normalize a discovered day payload so it has sync-compatible identity fields.
+    // Without this, the day has no `id` and sync pull appends a duplicate row.
+    const normalizeDayForSync = (day: any) => ({
+      ...day,
+      id: day.id ?? `day-${devId}-${dayNum}`,
+      devotionalId: day.devotionalId ?? devId,
+      dayNumber: day.dayNumber ?? dayNum,
+    });
 
     (async () => {
       try {
         // Step 1: Check if content already exists on server
-        const existing = await findCompletedJob(
-          currentDevotional.id,
-          currentDevotional.currentDay,
-        );
+        const existing = await findCompletedJob(devId, dayNum);
         if (cancelled) return;
 
         if (existing?.result?.devotionalDay) {
-          addGeneratedDay(currentDevotional.id, existing.result.devotionalDay);
-          console.log('[home] Applied existing server content for day', currentDevotional.currentDay);
+          addGeneratedDay(devId, normalizeDayForSync(existing.result.devotionalDay));
+          autoGenAttemptedRef.current = key;
+          console.log('[home] Applied existing server content for day', dayNum);
           return;
         }
 
         // Step 2: No content exists — submit generation job
         const resp = await submitGenerationJob({
-          devotionalId: currentDevotional.id,
-          dayNumber: currentDevotional.currentDay,
+          devotionalId: devId,
+          dayNumber: dayNum,
           jobType: 'day',
         });
         if (cancelled) return;
+        autoGenAttemptedRef.current = key;
         console.log('[home] Submitted generation job:', resp.jobId);
       } catch (err) {
         if (cancelled) return;
@@ -306,11 +315,13 @@ export default function HomeScreen() {
           const jobResult = await fetchJobResult(err.existingJobId).catch(() => null);
           if (cancelled) return;
           if (jobResult?.result?.devotionalDay) {
-            addGeneratedDay(currentDevotional.id, jobResult.result.devotionalDay);
+            addGeneratedDay(devId, normalizeDayForSync(jobResult.result.devotionalDay));
+            autoGenAttemptedRef.current = key;
             return;
           }
         }
-        console.warn('[home] Auto-generation failed:', err instanceof Error ? err.message : err);
+        // Don't set autoGenAttemptedRef — allow retry on next render cycle
+        console.warn('[home] Auto-generation failed, will retry:', err instanceof Error ? err.message : err);
       }
     })();
 

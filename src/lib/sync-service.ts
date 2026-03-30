@@ -472,7 +472,12 @@ class SyncService {
       if (devo) {
         // Ensure days array exists (server-synced devotionals may not include it)
         if (!Array.isArray(devo.days)) devo.days = [];
-        const dayIdx = devo.days.findIndex((d: any) => d.id === data.id);
+        // Match by id first, fall back to (devotionalId, dayNumber) to merge
+        // server-generated days that were applied from find-completed without a sync id
+        let dayIdx = devo.days.findIndex((d: any) => d.id === data.id);
+        if (dayIdx < 0 && data.dayNumber != null) {
+          dayIdx = devo.days.findIndex((d: any) => d.dayNumber === data.dayNumber);
+        }
         if (dayIdx >= 0) devo.days[dayIdx] = { ...devo.days[dayIdx], ...data };
         else devo.days.push(data);
         useUnfoldStore.setState({ devotionals: devos } as any);
