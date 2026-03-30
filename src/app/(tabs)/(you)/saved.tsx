@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -13,6 +13,7 @@ import {
   BookmarkSimpleIcon,
   BookOpenIcon,
 } from 'phosphor-react-native';
+import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -29,9 +30,9 @@ const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; d
 
 export default function SavedScreen() {
   const router = useRouter();
-  const { from } = useLocalSearchParams<{ from?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { handleBack } = useCrossTabBack();
   const highlights = useUnfoldStore((s) => s.highlights);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -63,15 +64,6 @@ export default function SavedScreen() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 2);
   }, [devotionals]);
-
-  const handleBack = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (from === 'home') {
-      router.navigate('/(tabs)/(today)');
-    } else {
-      router.back();
-    }
-  };
 
   const handleJumpToSource = (devotionalId: string, dayNumber: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

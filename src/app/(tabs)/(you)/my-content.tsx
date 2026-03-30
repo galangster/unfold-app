@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon } from 'phosphor-react-native';
+import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -32,8 +33,8 @@ type Tab = 'journal' | 'highlights' | 'bookmarks';
 
 export default function MyContentScreen() {
   const router = useRouter();
-  const { from } = useLocalSearchParams<{ from?: string }>();
   const { colors, isDark } = useTheme();
+  const { handleBack } = useCrossTabBack();
   const [activeTab, setActiveTab] = useState<Tab>('journal');
 
   const highlights = useUnfoldStore((s) => s.highlights);
@@ -41,15 +42,6 @@ export default function MyContentScreen() {
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
-
-  const handleBack = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (from === 'home') {
-      router.navigate('/(tabs)/(today)');
-    } else {
-      router.back();
-    }
-  };
 
   const handleTabPress = (tab: Tab) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
