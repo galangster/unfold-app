@@ -28,7 +28,7 @@ import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { useAuth } from '@/hooks/useAuth';
-import { submitGenerationJob } from '@/lib/generation-api';
+import { submitGenerationJob, findCompletedJob, fetchJobResult, ApiError } from '@/lib/generation-api';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 
@@ -81,6 +81,7 @@ export default function HomeScreen() {
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
+  const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
@@ -226,26 +227,61 @@ export default function HomeScreen() {
     return !dayExists;
   }, [currentDevotional]);
 
-  // Auto-submit generation job when today's content is missing.
-  // This is the client-side fallback: if the midnight cron didn't fire or if the user
-  // opens the app before the cron window, the app proactively requests generation.
+  // Content discovery flow: check for server-generated content before submitting a new job.
+  // 1. Check if a completed job already exists on the server (e.g., from midnight cron)
+  // 2. If found, apply it directly — no generation needed
+  // 3. If not, submit a new generation job as a client-side fallback
+  // 4. If 409 (already generated), recover by fetching the existing job result
   const autoGenAttemptedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!isPreparingCurrentDay || !currentDevotional) return;
 
     const key = `${currentDevotional.id}-${currentDevotional.currentDay}`;
-    if (autoGenAttemptedRef.current === key) return; // Already attempted this day
+    if (autoGenAttemptedRef.current === key) return;
     autoGenAttemptedRef.current = key;
 
-    submitGenerationJob({
-      devotionalId: currentDevotional.id,
-      dayNumber: currentDevotional.currentDay,
-      jobType: 'day',
-    }).then((resp) => {
-      console.log('[home] Auto-submitted generation job:', resp.jobId);
-    }).catch((err) => {
-      console.warn('[home] Auto-generation request failed (server may already be handling):', err.message);
-    });
+    let cancelled = false;
+
+    (async () => {
+      try {
+        // Step 1: Check if content already exists on server
+        const existing = await findCompletedJob(
+          currentDevotional.id,
+          currentDevotional.currentDay,
+        );
+        if (cancelled) return;
+
+        if (existing?.result?.devotionalDay) {
+          addGeneratedDay(currentDevotional.id, existing.result.devotionalDay);
+          console.log('[home] Applied existing server content for day', currentDevotional.currentDay);
+          return;
+        }
+
+        // Step 2: No content exists — submit generation job
+        const resp = await submitGenerationJob({
+          devotionalId: currentDevotional.id,
+          dayNumber: currentDevotional.currentDay,
+          jobType: 'day',
+        });
+        if (cancelled) return;
+        console.log('[home] Submitted generation job:', resp.jobId);
+      } catch (err) {
+        if (cancelled) return;
+
+        // Handle 409 with structured error — server already has this day's content
+        if (err instanceof ApiError && err.status === 409 && err.existingJobId) {
+          const jobResult = await fetchJobResult(err.existingJobId).catch(() => null);
+          if (cancelled) return;
+          if (jobResult?.result?.devotionalDay) {
+            addGeneratedDay(currentDevotional.id, jobResult.result.devotionalDay);
+            return;
+          }
+        }
+        console.warn('[home] Auto-generation failed:', err instanceof Error ? err.message : err);
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [isPreparingCurrentDay, currentDevotional]);
 
   // Daily Bridge — generate a personalized transition from yesterday to today
