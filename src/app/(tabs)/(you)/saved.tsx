@@ -351,7 +351,7 @@ export default function SavedScreen() {
             <>
               {completedSeries.map((devotional) => {
                 const itemIndex = globalIndex++;
-                const completedDays = devotional.days.filter((d) => d.isRead).length;
+                const completedDays = (devotional.days ?? []).filter((d) => d.isRead).length;
                 const progress = (completedDays / devotional.totalDays) * 100;
 
                 return (

@@ -1832,6 +1832,7 @@ export const useUnfoldStore = create<UnfoldState>()(
             for (const d of devos) {
               if (!d) continue; // Skip null/undefined entries
               if (!d.generationMode) d.generationMode = 'batch';
+              if (!Array.isArray(d.days)) d.days = [];
             }
             (state as any).devotionals = devos;
             (state as any).progressiveGeneration = (state as any).progressiveGeneration ?? {

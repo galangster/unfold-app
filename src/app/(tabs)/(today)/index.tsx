@@ -235,7 +235,7 @@ export default function HomeScreen() {
 
     // Check if there's a new unread day
     const currentDay = currentDevotional.currentDay;
-    const dayData = currentDevotional.days.find((d) => d.dayNumber === currentDay);
+    const dayData = (currentDevotional.days ?? []).find((d) => d.dayNumber === currentDay);
 
     // Must be Day 2+ (Day 1 has its own generating screen flow), must have data, must be unread
     if (dayData && !dayData.isRead && currentDay > 1) {
@@ -256,7 +256,7 @@ export default function HomeScreen() {
   // whether the current day's content hasn't arrived yet (shows a loading card).
   const isPreparingCurrentDay = useMemo(() => {
     if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return false;
-    const dayExists = currentDevotional.days.some(d => d.dayNumber === currentDevotional.currentDay);
+    const dayExists = (currentDevotional.days ?? []).some(d => d.dayNumber === currentDevotional.currentDay);
     return !dayExists;
   }, [currentDevotional]);
 
@@ -322,7 +322,7 @@ export default function HomeScreen() {
     if (!currentDevotional || !user?.name) return null;
     if (currentDevotional.currentDay <= 1) return null; // No bridge for Day 1
 
-    const todayDay = currentDevotional.days.find((d) => d.dayNumber === currentDevotional.currentDay);
+    const todayDay = (currentDevotional.days ?? []).find((d) => d.dayNumber === currentDevotional.currentDay);
     if (!todayDay) return null;
 
     // Find yesterday's check-in
@@ -379,7 +379,7 @@ export default function HomeScreen() {
 
   const getReadingDayLabel = () => {
     if (!currentDevotional) return 'Today';
-    const previousDayData = currentDevotional.days.find(d => d.dayNumber === currentDevotional.currentDay - 1);
+    const previousDayData = (currentDevotional.days ?? []).find(d => d.dayNumber === currentDevotional.currentDay - 1);
     if (previousDayData?.readAt) {
       const lastReadDate = new Date(previousDayData.readAt);
       const today = new Date();
@@ -513,13 +513,13 @@ export default function HomeScreen() {
     }
   };
 
-  const daysCompleted = currentDevotional ? currentDevotional.days.filter(d => d.isRead).length : 0;
+  const daysCompleted = currentDevotional ? (currentDevotional.days ?? []).filter(d => d.isRead).length : 0;
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
-  const currentDayData = currentDevotional?.days.find(d => d.dayNumber === currentDevotional.currentDay)
+  const currentDayData = (currentDevotional?.days ?? []).find(d => d.dayNumber === currentDevotional?.currentDay)
     // When today's reading is done but next day isn't generated yet (progressive mode),
     // fall back to last completed day to avoid showing "Preparing today's reading..."
     ?? (hasReadToday && currentDevotional
-      ? currentDevotional.days.filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0] ?? null
+      ? (currentDevotional.days ?? []).filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0] ?? null
       : null);
 
   // Content-aware check-in messages — reference today's devotional when available

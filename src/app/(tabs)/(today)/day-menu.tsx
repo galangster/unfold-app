@@ -86,7 +86,7 @@ export default function DayMenuScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing['5'], paddingBottom: Spacing['5'] }}
         showsVerticalScrollIndicator={false}
       >
-        {devotional.days.map((day, index) => {
+        {(devotional.days ?? []).map((day, index) => {
           const isActive = day.dayNumber === currentViewingDay;
           const isDayRead = day.isRead;
           const isLocked = day.dayNumber > devotional.currentDay;

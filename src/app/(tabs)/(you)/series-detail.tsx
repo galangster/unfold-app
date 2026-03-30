@@ -106,7 +106,7 @@ export default function SeriesDetailScreen() {
   );
 
   const completedDays = useMemo(
-    () => (devotional ? devotional.days.filter((d) => d.isRead).length : 0),
+    () => (devotional ? (devotional.days ?? []).filter((d) => d.isRead).length : 0),
     [devotional],
   );
 
@@ -210,7 +210,7 @@ export default function SeriesDetailScreen() {
 
           {/* Day list */}
           <View style={styles.dayList}>
-            {devotional.days
+            {(devotional.days ?? [])
               .sort((a, b) => a.dayNumber - b.dayNumber)
               .map((day) => {
                 const isRead = day.isRead;

@@ -95,7 +95,7 @@ function getWeeklyProgress(state: ReturnType<typeof useUnfoldStore.getState>): s
     const dateStr = d.toDateString();
 
     // Check if any day was read on this date
-    const wasRead = devotional.days.some(
+    const wasRead = (devotional.days ?? []).some(
       (day) => day.readAt && new Date(day.readAt).toDateString() === dateStr
     );
     bits.push(wasRead ? '1' : '0');

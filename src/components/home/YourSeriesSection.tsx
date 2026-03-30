@@ -19,7 +19,7 @@ function SeriesCard({
   colors: ReturnType<typeof useTheme>['colors'];
   onPress: () => void;
 }) {
-  const completedDays = devotional.days.filter((d) => d.isRead).length;
+  const completedDays = (devotional.days ?? []).filter((d) => d.isRead).length;
   const progress = devotional.totalDays > 0 ? (completedDays / devotional.totalDays) * 100 : 0;
 
   return (

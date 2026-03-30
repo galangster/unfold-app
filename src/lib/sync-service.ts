@@ -470,6 +470,8 @@ class SyncService {
       const devos = [...(state as any).devotionals];
       const devo = devos.find((d: any) => d.id === data.devotionalId);
       if (devo) {
+        // Ensure days array exists (server-synced devotionals may not include it)
+        if (!Array.isArray(devo.days)) devo.days = [];
         const dayIdx = devo.days.findIndex((d: any) => d.id === data.id);
         if (dayIdx >= 0) devo.days[dayIdx] = { ...devo.days[dayIdx], ...data };
         else devo.days.push(data);
@@ -481,8 +483,16 @@ class SyncService {
     // Standard array merge: find by id, update or append
     const arr = [...((state as any)[stateKey] ?? [])];
     const idx = arr.findIndex((r: any) => r.id === data.id);
-    if (idx >= 0) arr[idx] = { ...arr[idx], ...data };
-    else arr.push(data);
+    if (idx >= 0) {
+      arr[idx] = { ...arr[idx], ...data };
+    } else {
+      // Devotionals from server won't have a days array (days are in a separate table).
+      // Initialize it so nested devotional_days records can be applied later.
+      if (stateKey === 'devotionals' && !Array.isArray(data.days)) {
+        data.days = [];
+      }
+      arr.push(data);
+    }
     useUnfoldStore.setState({ [stateKey]: arr } as any);
   }
 
