@@ -24,13 +24,15 @@ Reuses the exact `RevealChar` + `shuffleOrder` pattern from `src/app/index.tsx` 
 
 **Changes to existing title:**
 - Font size: 32px → **42px**, lineHeight: 40px → **50px**
-- Animation: Each letter fades in (opacity 0→1, 600ms cubic ease) with white→`colors.accent` color interpolation (1200ms)
+- Animation: Each letter fades in (opacity 0→1, 600ms cubic ease) with `colors.background`→`colors.accent` color interpolation (1200ms). Letters start invisible against the background and materialize into gold — works on both dark (#0A0A08 → gold) and light (#FAF7F2 → deeper gold) themes.
 - Order: Letters appear in shuffled pseudo-random order via `shuffleOrder()` (deterministic per title length)
 - Stagger: **80ms** between characters (faster than welcome screen's 200ms, since titles are longer — e.g. "Barren Years, Buried Promises" is 30 chars)
 - Base delay: 500ms after mount (after eyebrow fades in)
 - Post-animation shimmer: Once all letters are placed, a diagonal gradient mask sweeps left→right over 800ms. Implemented as an `Animated.View` with a `LinearGradient` (accent at 15% opacity → transparent) that translates across the title width using withTiming.
 
 **Eyebrow + day counter:** Simple opacity fade-in. Eyebrow at 200ms, day counter at ~100ms after last title letter lands.
+
+**Light mode:** All colors come from `useTheme().colors` which returns the correct palette for dark/light/system. The scatter start color (`colors.background`) and end color (`colors.accent`) adapt automatically. The shimmer gradient uses `colors.accent` at 15% opacity, which reads well on both cream and dark backgrounds.
 
 **Reduced motion:** Detected via reanimated's `useReducedMotion()` hook. Skip scatter animation, show title immediately at full opacity in `colors.accent`. Skip shimmer.
 
