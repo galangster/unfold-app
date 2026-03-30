@@ -134,22 +134,50 @@ export function ScatterTitle({
     return () => clearTimeout(timer);
   }, [maxDelay, onComplete, reducedMotion]);
 
+  // Split text into words to preserve word-boundary wrapping
+  const words = useMemo(() => {
+    const result: { word: string; startIndex: number }[] = [];
+    let idx = 0;
+    for (const word of text.split(' ')) {
+      result.push({ word, startIndex: idx });
+      idx += word.length + 1; // +1 for the space
+    }
+    return result;
+  }, [text]);
+
   // Reduced motion: show immediately in accent color
   if (reducedMotion) {
     return (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {chars.map((char, i) => (
-          <Animated.Text
-            key={`c-${i}`}
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize,
-              lineHeight: 50,
-              color: colors.accent,
-            }}
-          >
-            {char}
-          </Animated.Text>
+        {words.map((w, wi) => (
+          <View key={`w-${wi}`} style={{ flexDirection: 'row' }}>
+            {w.word.split('').map((char, ci) => (
+              <Animated.Text
+                key={`c-${w.startIndex + ci}`}
+                style={{
+                  fontFamily: FontFamily.display,
+                  fontSize,
+                  lineHeight: 50,
+                  color: colors.accent,
+                }}
+              >
+                {char}
+              </Animated.Text>
+            ))}
+            {/* Add space between words (except last) */}
+            {wi < words.length - 1 && (
+              <Animated.Text
+                style={{
+                  fontFamily: FontFamily.display,
+                  fontSize,
+                  lineHeight: 50,
+                  color: colors.accent,
+                }}
+              >
+                {' '}
+              </Animated.Text>
+            )}
+          </View>
         ))}
       </View>
     );
@@ -157,15 +185,32 @@ export function ScatterTitle({
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-      {chars.map((char, i) => (
-        <ScatterChar
-          key={`c-${i}`}
-          char={char}
-          animDelay={charDelays[i]}
-          startColor={colors.background}
-          endColor={colors.accent}
-          fontSize={fontSize}
-        />
+      {words.map((w, wi) => (
+        <View key={`w-${wi}`} style={{ flexDirection: 'row' }}>
+          {w.word.split('').map((char, ci) => {
+            const globalIndex = w.startIndex + ci;
+            return (
+              <ScatterChar
+                key={`c-${globalIndex}`}
+                char={char}
+                animDelay={charDelays[globalIndex]}
+                startColor={colors.background}
+                endColor={colors.accent}
+                fontSize={fontSize}
+              />
+            );
+          })}
+          {/* Space between words — animates with the last char of this word */}
+          {wi < words.length - 1 && (
+            <ScatterChar
+              char=" "
+              animDelay={charDelays[w.startIndex + w.word.length]}
+              startColor={colors.background}
+              endColor={colors.accent}
+              fontSize={fontSize}
+            />
+          )}
+        </View>
       ))}
     </View>
   );
