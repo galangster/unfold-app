@@ -23,6 +23,7 @@ import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
+import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { generateExamen, type ExamenPrayer } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
 import { streamDevotionalAudio } from '@/lib/tts-service';
@@ -135,6 +136,21 @@ export default function EveningWindDownScreen() {
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
+
+  // Premium gate — evening wind-down is premium-only
+  const { data: premiumResult } = useQuery({
+    queryKey: ['revenuecat', 'premium'],
+    queryFn: () => hasEntitlement('Unfold Premium'),
+    enabled: isRevenueCatEnabled(),
+    staleTime: 1000 * 60,
+  });
+  const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
+
+  useEffect(() => {
+    if (!isPremium) {
+      router.back();
+    }
+  }, [isPremium, router]);
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);

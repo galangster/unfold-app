@@ -11,6 +11,7 @@ const base: ContextSlotInput = {
   hasBridgeText: false,
   isBridgeLoading: false,
   hasBridgeInput: false,
+  isPremium: true,
 };
 
 describe('getContextSlotType', () => {
@@ -66,5 +67,29 @@ describe('getContextSlotType', () => {
 
   it('returns none when nothing applies', () => {
     expect(getContextSlotType(base)).toBe('none');
+  });
+
+  it('returns none for free users during evening window', () => {
+    expect(getContextSlotType({
+      ...base, isPremium: false, currentHour: 19, hasReadToday: true,
+    })).toBe('none');
+  });
+
+  it('returns none for free users during midday window', () => {
+    expect(getContextSlotType({
+      ...base, isPremium: false, currentHour: 14, hasReadToday: false,
+    })).toBe('none');
+  });
+
+  it('returns none for free users with bridge text', () => {
+    expect(getContextSlotType({
+      ...base, isPremium: false, hasBridgeInput: true, hasBridgeText: true,
+    })).toBe('none');
+  });
+
+  it('returns resume for free users (resume is not gated)', () => {
+    expect(getContextSlotType({
+      ...base, isPremium: false, hasResumeContext: true,
+    })).toBe('resume');
   });
 });

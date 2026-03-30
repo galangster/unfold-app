@@ -263,7 +263,7 @@ export default function HomeScreen() {
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
     queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber],
     queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
-    enabled: !!bridgeInput && !authLoading,
+    enabled: isPremium && !!bridgeInput && !authLoading,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
     retry: 1,
   });
@@ -488,6 +488,7 @@ export default function HomeScreen() {
     hasBridgeText: !!validBridgeText,
     isBridgeLoading: bridgeLoading && !!bridgeInput,
     hasBridgeInput: !!bridgeInput,
+    isPremium,
   });
 
   // Compute resume props for context slot

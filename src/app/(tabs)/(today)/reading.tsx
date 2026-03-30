@@ -309,9 +309,9 @@ export default function ReadingScreen() {
     };
   }, []);
 
-  // Bridge text — personalized transition passage for Day 2+
+  // Bridge text — personalized transition passage for Day 2+ (premium only)
   useEffect(() => {
-    if (viewingDay < 2 || !currentDevotional || !currentDayData || !user) {
+    if (!isPremium || viewingDay < 2 || !currentDevotional || !currentDayData || !user) {
       setBridgeText(null);
       setIsBridgeLoading(false);
       return;
