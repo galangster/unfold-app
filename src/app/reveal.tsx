@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,15 +70,23 @@ export default function RevealScreen() {
   const promptOpacity = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) {
+      // Show everything immediately
+      eyebrowOpacity.value = 1;
+      dayCounterOpacity.value = 1;
+      promptOpacity.value = 1;
+      return;
+    }
     // Eyebrow fades in at 200ms
     eyebrowOpacity.value = withDelay(
       200,
       withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }),
     );
-  }, []);
+  }, [reducedMotion]);
 
   // Called when ScatterTitle finishes all letters
   const onTitleComplete = useCallback(() => {
+    if (reducedMotion) return; // Already shown immediately
     // Day counter fades in ~100ms after title completes
     dayCounterOpacity.value = withDelay(
       100,
@@ -89,7 +97,7 @@ export default function RevealScreen() {
       300,
       withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }),
     );
-  }, []);
+  }, [reducedMotion]);
 
   const eyebrowStyle = useAnimatedStyle(() => ({
     opacity: eyebrowOpacity.value,
@@ -106,6 +114,7 @@ export default function RevealScreen() {
   const chevronY2 = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) return;
     const floatConfig = {
       duration: 1200,
       easing: Easing.inOut(Easing.ease),
@@ -115,7 +124,7 @@ export default function RevealScreen() {
       200,
       withRepeat(withTiming(-8, floatConfig), -1, true),
     );
-  }, []);
+  }, [reducedMotion]);
 
   const chevron1Style = useAnimatedStyle(() => ({
     transform: [{ translateY: chevronY1.value }],
@@ -153,37 +162,41 @@ export default function RevealScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
 
-  const panGesture = Gesture.Pan()
-    .onBegin(() => {
-      didTickApproach.value = 0;
-      didTickCommit.value = 0;
-    })
-    .onUpdate((event) => {
-      // Clamp to upward only
-      translateY.value = Math.min(0, event.translationY);
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onBegin(() => {
+          didTickApproach.value = 0;
+          didTickCommit.value = 0;
+        })
+        .onUpdate((event) => {
+          // Clamp to upward only
+          translateY.value = Math.min(0, event.translationY);
 
-      // Approach haptic at -40px
-      if (event.translationY < APPROACH_THRESHOLD && didTickApproach.value === 0) {
-        didTickApproach.value = 1;
-        runOnJS(fireApproachHaptic)();
-      }
+          // Approach haptic at -40px
+          if (event.translationY < APPROACH_THRESHOLD && didTickApproach.value === 0) {
+            didTickApproach.value = 1;
+            runOnJS(fireApproachHaptic)();
+          }
 
-      // Commit haptic at -120px
-      if (event.translationY < COMMIT_THRESHOLD && didTickCommit.value === 0) {
-        didTickCommit.value = 1;
-        runOnJS(fireCommitHaptic)();
-      }
-    })
-    .onEnd((event) => {
-      if (event.translationY < COMMIT_THRESHOLD) {
-        // Past threshold — spring off screen and navigate
-        translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING);
-        runOnJS(navigateToReading)();
-      } else {
-        // Before threshold — spring back
-        translateY.value = withSpring(0, CURTAIN_SPRING);
-      }
-    });
+          // Commit haptic at -120px
+          if (event.translationY < COMMIT_THRESHOLD && didTickCommit.value === 0) {
+            didTickCommit.value = 1;
+            runOnJS(fireCommitHaptic)();
+          }
+        })
+        .onEnd((event) => {
+          if (event.translationY < COMMIT_THRESHOLD) {
+            // Past threshold — spring off screen and navigate
+            translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING);
+            runOnJS(navigateToReading)();
+          } else {
+            // Before threshold — spring back
+            translateY.value = withSpring(0, CURTAIN_SPRING);
+          }
+        }),
+    [navigateToReading, fireApproachHaptic, fireCommitHaptic],
+  );
 
   const curtainStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
