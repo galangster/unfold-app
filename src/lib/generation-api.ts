@@ -8,6 +8,18 @@
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code: string,
+    public existingJobId?: string | null,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 /** Hermes-compatible fetch timeout (AbortSignal.timeout() not available) */
 function fetchWithTimeout(
   url: string,
@@ -64,6 +76,16 @@ export async function submitGenerationJob(params: {
     15_000
   );
 
+  if (response.status === 409) {
+    const body = await response.json();
+    throw new ApiError(
+      body.error?.message ?? 'Already generated today',
+      409,
+      body.error?.code ?? 'ALREADY_GENERATED_TODAY',
+      body.existingJobId,
+    );
+  }
+
   if (!response.ok) {
     const body = await response.text().catch(() => "");
     throw new Error(
@@ -108,5 +130,41 @@ export async function retryJob(
     );
   }
 
+  return response.json();
+}
+
+/**
+ * Single-fetch job result — for 409 recovery, NOT polling.
+ * Returns null on any error (non-throwing).
+ */
+export async function fetchJobResult(
+  jobId: string,
+): Promise<GenerationJobResponse | null> {
+  const headers = await getAuthHeaders();
+  const response = await fetchWithTimeout(
+    `${PRIMARY_BACKEND_URL}/api/jobs/${jobId}`,
+    { method: "GET", headers },
+    10_000,
+  );
+  if (!response.ok) return null;
+  return response.json();
+}
+
+/**
+ * Discover server-generated content by devotionalId + dayNumber.
+ * Returns null if no completed job exists (404), throws on other errors.
+ */
+export async function findCompletedJob(
+  devotionalId: string,
+  dayNumber: number,
+): Promise<GenerationJobResponse | null> {
+  const headers = await getAuthHeaders();
+  const response = await fetchWithTimeout(
+    `${PRIMARY_BACKEND_URL}/api/jobs/find-completed?devotionalId=${encodeURIComponent(devotionalId)}&dayNumber=${dayNumber}`,
+    { method: "GET", headers },
+    10_000,
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Find job failed: ${response.status}`);
   return response.json();
 }
