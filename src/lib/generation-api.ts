@@ -8,6 +8,19 @@
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
 
+/** Hermes-compatible fetch timeout (AbortSignal.timeout() not available) */
+function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  ms: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
+  );
+}
+
 export interface GenerationJobResponse {
   jobId: string;
   status: "pending" | "processing" | "complete" | "failed";
@@ -45,12 +58,11 @@ export async function submitGenerationJob(params: {
   };
 }): Promise<{ jobId: string; status: string }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${PRIMARY_BACKEND_URL}/api/jobs/generate-day`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(params),
-    signal: AbortSignal.timeout(15_000),
-  });
+  const response = await fetchWithTimeout(
+    `${PRIMARY_BACKEND_URL}/api/jobs/generate-day`,
+    { method: "POST", headers, body: JSON.stringify(params) },
+    15_000
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -66,11 +78,11 @@ export async function pollJobStatus(
   jobId: string
 ): Promise<GenerationJobResponse> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${PRIMARY_BACKEND_URL}/api/jobs/${jobId}`, {
-    method: "GET",
-    headers,
-    signal: AbortSignal.timeout(10_000),
-  });
+  const response = await fetchWithTimeout(
+    `${PRIMARY_BACKEND_URL}/api/jobs/${jobId}`,
+    { method: "GET", headers },
+    10_000
+  );
 
   if (!response.ok) {
     throw new Error(`Poll job failed: ${response.status}`);
@@ -83,13 +95,10 @@ export async function retryJob(
   jobId: string
 ): Promise<{ jobId: string; status: string }> {
   const headers = await getAuthHeaders();
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/${jobId}/retry`,
-    {
-      method: "POST",
-      headers,
-      signal: AbortSignal.timeout(10_000),
-    }
+    { method: "POST", headers },
+    10_000
   );
 
   if (!response.ok) {
