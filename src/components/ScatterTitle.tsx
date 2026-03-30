@@ -144,7 +144,7 @@ export function ScatterTitle({
             style={{
               fontFamily: FontFamily.display,
               fontSize,
-              lineHeight: fontSize * 1.2,
+              lineHeight: 50,
               color: colors.accent,
             }}
           >
