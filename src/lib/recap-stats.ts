@@ -325,7 +325,7 @@ export function computeRecapData(params: {
 
   for (const d of devotionals) {
     let allRead = true;
-    for (const day of d.days) {
+    for (const day of d.days ?? []) {
       if (day.isRead) totalDaysRead++;
       else allRead = false;
       if (day.readAt) {
@@ -337,7 +337,7 @@ export function computeRecapData(params: {
         weekdayCounts[getWeekday(day.readAt)] += 1;
       }
     }
-    if (allRead && d.days.length === d.totalDays) completedSeries++;
+    if (allRead && (d.days ?? []).length === d.totalDays) completedSeries++;
   }
 
   // Fallback to devotional creation date if no readAt found

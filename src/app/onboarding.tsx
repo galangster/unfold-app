@@ -31,7 +31,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, PenNibIcon, GavelIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from 'phosphor-react-native';
 import { logger } from '@/lib/logger';
 import { Analytics, AnalyticsEvents } from '@/lib/analytics';
 import { useTheme } from '@/lib/theme';
@@ -209,15 +209,15 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  // COMPANION NAMING: Name the companion — shows orb animation with naming input, "the only app that grows with you"
-  { id: 'companionNaming', question: "Name your companion.", subtext: 'The only app that grows with\u00A0you.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
-  { id: 'stylePreferences1', question: "A little about\u00A0you.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'stylePreferences1', question: "Your walk right\u00A0now.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // STYLE PREFERENCES: Tone + depth
-  { id: 'stylePreferences2', question: "How should this feel?", subtext: 'The tone and depth that serves you best.', type: 'stylePreferences2' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'stylePreferences2', question: "Your reading\u00A0style.", subtext: 'The tone and depth that serves you best. You can always change this in settings.', type: 'stylePreferences2' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // COMPANION: Intro + naming on a single screen
+  { id: 'companionNaming', question: "Meet your\u00A0companion.", subtext: 'Your companion checks in daily, learns what matters to you, and shapes every devotional and reflection around where you are right\u00A0now.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -1494,28 +1494,6 @@ export default function OnboardingScreen() {
             value={data.name}
             onChangeText={(text) => setData((prev) => ({ ...prev, name: text }))}
           />
-          {/* Continue button below input — easy thumb reach with keyboard up */}
-          {canProceed() && (
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleNext}
-              style={{
-                marginTop: Spacing['5'],
-                backgroundColor: colors.accent,
-                paddingVertical: Spacing['4'],
-                borderRadius: Radius.card,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: FontSize.base,
-                color: colors.background,
-                letterSpacing: 0.2,
-              }}>
-                Continue
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
       );
     }
@@ -1841,7 +1819,7 @@ export default function OnboardingScreen() {
         {
           icon: <SparkleIcon size={22} color={colors.accent} weight="light" />,
           title: 'AI-Generated Content',
-          description: 'Unfold weaves 32 study methods, theological frameworks, and your story together to create devotionals no one else will ever read.',
+          description: 'Best-in-class AI weaves 32 study methods, theological frameworks, and your story into devotionals no one else will ever read.',
         },
         {
           icon: <SpeakerHighIcon size={22} color={colors.accent} weight="light" />,
@@ -1958,92 +1936,103 @@ export default function OnboardingScreen() {
     // Founder's note step: a personal letter from Nick
     if (step.type === 'founderNote') {
       return (
-        <View style={{ marginTop: Spacing['4'], paddingHorizontal: Spacing['1'] }}>
-          {/* Pen nib icon */}
-          <Animated.View
-            entering={FadeIn.delay(200).duration(600)}
-            style={{ marginBottom: Spacing['6'] }}
-          >
-            <PenNibIcon size={32} color={colors.accent} weight="light" />
-          </Animated.View>
-
-          {/* Gold accent line */}
-          <Animated.View
-            entering={FadeIn.delay(400).duration(600)}
-            style={{
-              width: 40,
-              height: 1.5,
-              backgroundColor: colors.accent,
-              opacity: 0.4,
-              marginBottom: Spacing['7'],
-              borderRadius: 1,
-            }}
-          />
-
-          {/* The note */}
-          <View style={{ gap: Spacing['5'] }}>
-            <Animated.Text
-              entering={FadeIn.delay(600).duration(700)}
+        <View style={{ flex: 1, justifyContent: 'space-between', paddingHorizontal: Spacing['1'] }}>
+          <View>
+            {/* Gold accent line */}
+            <Animated.View
+              entering={FadeIn.delay(200).duration(600)}
               style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: 17,
-                color: colors.text,
-                lineHeight: 30,
-              }}
-            >
-              I built Unfold because I needed it. I craved something deeper than a daily verse notification — something that actually knew where I was and met me there.
-            </Animated.Text>
-
-            <Animated.Text
-              entering={FadeIn.delay(900).duration(700)}
-              style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: 17,
-                color: colors.text,
-                lineHeight: 30,
-              }}
-            >
-              So this app is for me just as much as it is for you. I believe people everywhere deserve a space that takes their spiritual life seriously — not as a product, but as something sacred.
-            </Animated.Text>
-
-            <Animated.Text
-              entering={FadeIn.delay(1200).duration(700)}
-              style={{
-                fontFamily: FontFamily.bodyItalic,
-                fontSize: 17,
-                color: colors.textMuted,
-                lineHeight: 30,
-              }}
-            >
-              I'm dedicating myself to making Unfold that space. Thank you for trusting me with yours.
-            </Animated.Text>
-          </View>
-
-          {/* Signature */}
-          <Animated.View
-            entering={FadeIn.delay(1600).duration(800)}
-            style={{ marginTop: Spacing['8'] }}
-          >
-            <Text
-              style={{
-                fontFamily: FontFamily.displayItalic,
-                fontSize: 30,
-                color: colors.text,
-              }}
-            >
-              Nick
-            </Text>
-            {/* Gold underline under signature */}
-            <View
-              style={{
-                width: 48,
+                width: 40,
                 height: 1.5,
                 backgroundColor: colors.accent,
-                opacity: 0.5,
-                marginTop: Spacing['1.5'],
+                opacity: 0.4,
+                marginBottom: Spacing['5'],
                 borderRadius: 1,
               }}
             />
+
+            {/* The note */}
+            <View style={{ gap: Spacing['4'] }}>
+              <Animated.Text
+                entering={FadeIn.delay(400).duration(700)}
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 17,
+                  color: colors.text,
+                  lineHeight: 30,
+                }}
+              >
+                I built Unfold because I needed it. I craved something deeper than a daily verse notification — something that actually knew where I was and met me there.
+              </Animated.Text>
+
+              <Animated.Text
+                entering={FadeIn.delay(700).duration(700)}
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 17,
+                  color: colors.text,
+                  lineHeight: 30,
+                }}
+              >
+                So this app is for me just as much as it is for you. I believe people everywhere deserve a space that takes their spiritual life seriously — not as a product, but as something sacred.
+              </Animated.Text>
+
+              <Animated.Text
+                entering={FadeIn.delay(1000).duration(700)}
+                style={{
+                  fontFamily: FontFamily.bodyItalic,
+                  fontSize: 17,
+                  color: colors.textMuted,
+                  lineHeight: 30,
+                }}
+              >
+                I'm dedicating myself to making Unfold that space. Thank you for trusting me with yours.
+              </Animated.Text>
+            </View>
+
+            {/* Signature */}
+            <Animated.View
+              entering={FadeIn.delay(1400).duration(800)}
+              style={{ marginTop: Spacing['5'] }}
+            >
+              <Text
+                style={{
+                  fontFamily: FontFamily.displayItalic,
+                  fontSize: 30,
+                  color: colors.text,
+                }}
+              >
+                Nick
+              </Text>
+              <View
+                style={{
+                  width: 48,
+                  height: 1.5,
+                  backgroundColor: colors.accent,
+                  opacity: 0.5,
+                  marginTop: Spacing['1.5'],
+                  borderRadius: 1,
+                }}
+              />
+            </Animated.View>
+          </View>
+
+          {/* Bottom Continue button */}
+          <Animated.View entering={FadeIn.delay(1800).duration(600)} style={{ paddingBottom: Spacing['4'] }}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleNext}
+              style={{
+                backgroundColor: colors.accent,
+                paddingVertical: Spacing['4'],
+                borderRadius: Radius.md,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.background, letterSpacing: 0.3 }}>
+                Continue
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         </View>
       );
@@ -2240,20 +2229,22 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Companion naming step: simplified — just the name input with orb
+    // Companion step: orb + naming input on a single screen
     if (step.type === 'companionNaming') {
       return (
-        <View style={{ alignItems: 'center', gap: Spacing['6'], marginTop: Spacing['4'] }}>
+        <View style={{ alignItems: 'center', gap: Spacing['4'], marginTop: Spacing['2'] }}>
           <Animated.View
             entering={FadeIn.delay(200).duration(600)}
-            style={{ marginBottom: Spacing['2'] }}
           >
             <CompanionOrb accentColor={colors.accent} size={80} isActive showBadge={false} />
           </Animated.View>
           <Animated.View
-            entering={FadeIn.delay(400).duration(500)}
+            entering={FadeIn.delay(350).duration(500)}
             style={{ width: '100%', paddingHorizontal: Spacing['1'] }}
           >
+            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: Spacing['2'], marginLeft: Spacing['1'] }}>
+              Companion name
+            </Text>
             <TextInput
               value={companionNameInput}
               onChangeText={setCompanionNameInput}
@@ -2274,7 +2265,7 @@ export default function OnboardingScreen() {
             />
           </Animated.View>
           <Animated.Text
-            entering={FadeIn.delay(600).duration(500)}
+            entering={FadeIn.delay(500).duration(500)}
             style={{
               fontFamily: FontFamily.ui,
               fontSize: FontSize.sm,
@@ -2293,15 +2284,25 @@ export default function OnboardingScreen() {
     if (step.type === 'premiumShowcase') {
       const features = [
         { title: 'Unlimited devotionals', description: 'Create as many series as you want' },
-        { title: 'Premium voices', description: 'Listen in studio-quality narration' },
-        { title: 'Advanced study methods', description: '32 ways to engage with scripture' },
-        { title: 'Bookmarks & highlights', description: 'Save passages that speak to you' },
-        { title: 'Custom themes', description: 'Choose from 7 accent color palettes' },
-        { title: 'Reading fonts', description: 'Pick the typeface that fits your reading style' },
-        { title: 'Deeper personalization', description: 'Your companion learns faster' },
+        { title: 'AI companion', description: 'Learns your story and shapes tomorrow\u2019s reading' },
+        { title: 'A rhythm, morning to night', description: 'Check-ins and reflections that adapt your next devotional to your responses' },
+        { title: 'Thousands of resources', description: 'Stories, commentaries, and encyclopedias curated for you' },
+        { title: '40+ study methods', description: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
+        { title: 'Longer, deeper content', description: 'Extended devotionals and longer series' },
+        { title: 'Guided journal prompts', description: 'Reflection questions shaped by your story and today\u2019s reading' },
+        { title: 'Themes, fonts & colors', description: 'Make the app feel like yours' },
       ];
       return (
         <View style={{ gap: Spacing['4'], marginTop: Spacing['1'] }}>
+          {/* Embers + gradient overlay */}
+          <View style={{ position: 'absolute', top: -200, left: -Spacing['6'], right: -Spacing['6'], bottom: -100, pointerEvents: 'none' }}>
+            <EmberParticles color={colors.accent} count={14} bidirectional />
+            <LinearGradient
+              colors={['transparent', `${colors.accent}15`, `${colors.accent}30`]}
+              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 }}
+            />
+          </View>
+
           <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: Spacing['2'] }}>
             {features.map((feature, index) => (
               <Animated.View
@@ -2310,8 +2311,10 @@ export default function OnboardingScreen() {
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: Spacing['3'],
                   paddingVertical: Spacing['2.5'], paddingHorizontal: Spacing['3.5'],
-                  backgroundColor: alpha(colors.accent, 0.04),
+                  backgroundColor: alpha(colors.accent, 0.06),
                   borderRadius: Radius.md,
+                  borderWidth: 1,
+                  borderColor: alpha(colors.accent, 0.08),
                 }}
               >
                 <View style={{
@@ -2469,7 +2472,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for choice/timeChoice steps (they auto-advance) and mirrorBack (has its own CTA) */}
-            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' ? (
+            {canProceed() && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2527,7 +2530,7 @@ export default function OnboardingScreen() {
                 </View>
               </KeyboardAwareScrollView>
             ) : (
-              <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={60}>
+              <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={100}>
                 <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'], paddingBottom: 120 }}>
                   <View>
                     {isLoadingAdaptive && step?.adaptive ? (

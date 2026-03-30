@@ -212,7 +212,7 @@ interface DevotionalCardProps {
 
 function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, onExport, onDelete }: DevotionalCardProps) {
   const swipeableRef = useRef<Swipeable>(null);
-  const completedDays = item.days.filter((d) => d.isRead).length;
+  const completedDays = (item.days ?? []).filter((d) => d.isRead).length;
   const progress = (completedDays / item.totalDays) * 100;
   const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
 
@@ -255,24 +255,25 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
   ), [handleDelete, item.title]);
 
   return (
-    <Swipeable
-      ref={swipeableRef}
-      renderRightActions={renderRightActions}
-      overshootRight={false}
-      friction={2}
-    >
-      <TouchableOpacity
-        activeOpacity={0.7}
-        onPress={() => onSelect(item.id)}
-        style={{
-          backgroundColor: colors.inputBackground,
-          borderRadius: Radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: Spacing['5'],
-          marginBottom: Spacing['3'],
-        }}
+    <View collapsable={false}>
+      <Swipeable
+        ref={swipeableRef}
+        renderRightActions={renderRightActions}
+        overshootRight={false}
+        friction={2}
       >
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => onSelect(item.id)}
+          style={{
+            backgroundColor: colors.inputBackground,
+            borderRadius: Radius.lg,
+            borderWidth: 1,
+            borderColor: colors.border,
+            padding: Spacing['5'],
+            marginBottom: Spacing['3'],
+          }}
+        >
         {/* Top row: date + download circle */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <Text
@@ -359,7 +360,8 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
           </Text>
         </View>
       </TouchableOpacity>
-    </Swipeable>
+      </Swipeable>
+    </View>
   );
 }
 
@@ -396,9 +398,10 @@ export default function PastDevotionalsScreen() {
   // Filter devotionals by tab and search query, most recent first
   const filteredDevotionals = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    return devotionals
+    return (devotionals ?? [])
       .filter((d) => {
-        const completedDays = d.days.filter((day) => day.isRead).length;
+        const days = d.days ?? [];
+        const completedDays = days.filter((day) => day.isRead).length;
         const isComplete = completedDays >= d.totalDays;
         const matchesTab = activeTab === 'completed' ? isComplete : !isComplete;
         if (!matchesTab) return false;
@@ -406,8 +409,8 @@ export default function PastDevotionalsScreen() {
         if (query) {
           const searchableText = [
             d.title,
-            ...d.days.map((day) => day.title),
-            ...d.days.map((day) => day.scriptureReference),
+            ...days.map((day) => day.title),
+            ...days.map((day) => day.scriptureReference),
           ]
             .filter(Boolean)
             .join(' ')

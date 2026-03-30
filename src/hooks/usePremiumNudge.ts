@@ -96,8 +96,8 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const totalReadingsCompleted = useMemo(() => {
     let count = 0;
-    for (const d of devotionals) {
-      for (const day of d.days) {
+    for (const d of devotionals ?? []) {
+      for (const day of d.days ?? []) {
         if (day.isRead) count++;
       }
     }

@@ -181,12 +181,14 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
 
   const handleStartTrial = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Close sheet first, then navigate after Modal fully unmounts
     onClose();
-    // Small delay so the sheet closes before paywall opens
+    // InteractionManager would be ideal but setTimeout is reliable here —
+    // Modal with animationType="none" unmounts synchronously on next frame
     if (paywallTimerRef.current) clearTimeout(paywallTimerRef.current);
     paywallTimerRef.current = setTimeout(() => {
       router.push('/paywall');
-    }, 200);
+    }, 350);
   };
 
   const handleMaybeLater = () => {

@@ -145,12 +145,12 @@ export default function StatsScreen() {
 
   const stats = useMemo(() => {
     const totalDaysCompleted = scopedDevotionals.reduce(
-      (acc, d) => acc + d.days.filter((day) => day.isRead).length,
+      (acc, d) => acc + (d.days ?? []).filter((day) => day.isRead).length,
       0
     );
     const totalJourneys = scopedDevotionals.length;
     const completedJourneys = scopedDevotionals.filter(
-      (d) => d.days.length === d.totalDays && d.days.every((day) => day.isRead)
+      (d) => (d.days ?? []).length === d.totalDays && (d.days ?? []).every((day) => day.isRead)
     ).length;
     const totalJournalEntries = scopedJournalEntries.length;
     const uniqueScriptures = new Set(scopedUsedScriptures.map((s) => s.reference)).size;

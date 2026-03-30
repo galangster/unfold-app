@@ -241,7 +241,7 @@ export const EVENING_CELEBRATION_MESSAGES: string[] = [
   "Jesus carries what you cannot.",
   "God's faithfulness outlasts the day.",
   "He is working even now.",
-  "The Lord gives sleep to those He loves.",
+  "The Lord gives sleep\u00A0to\u00A0those\u00A0He\u00A0loves.",
   "His peace has no expiration.",
   "God holds tomorrow already.",
   "Christ's grace covers tonight.",

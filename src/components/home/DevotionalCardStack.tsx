@@ -167,12 +167,12 @@ export function DevotionalCardStack({
     const todayStr = new Date().toDateString();
 
     function buildItem(d: Devotional): CardItem {
-      const completedDays = d.days.filter((day) => day.isRead).length;
+      const completedDays = (d.days ?? []).filter((day) => day.isRead).length;
       const isComplete = completedDays >= d.totalDays;
       const progress = d.totalDays > 0 ? (completedDays / d.totalDays) * 100 : 0;
 
-      const nextDayData = d.days.find((day) => day.dayNumber === d.currentDay) ?? null;
-      const hasReadToday = d.days.some(
+      const nextDayData = (d.days ?? []).find((day) => day.dayNumber === d.currentDay) ?? null;
+      const hasReadToday = (d.days ?? []).some(
         (day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === todayStr,
       );
 
@@ -183,7 +183,7 @@ export function DevotionalCardStack({
       let navigateToDayNumber: number | undefined;
 
       if (hasReadToday && (!nextDayData || !nextDayData.isRead)) {
-        const todayCompleted = d.days
+        const todayCompleted = (d.days ?? [])
           .filter((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === todayStr)
           .sort((a, b) => b.dayNumber - a.dayNumber)[0];
         if (todayCompleted) {
@@ -226,7 +226,7 @@ export function DevotionalCardStack({
 
     // Filter to in-progress (or unstarted) devotionals
     const inProgress = devotionals.filter((d) => {
-      const completedDays = d.days.filter((day) => day.isRead).length;
+      const completedDays = (d.days ?? []).filter((day) => day.isRead).length;
       return completedDays < d.totalDays;
     });
 
@@ -266,15 +266,6 @@ export function DevotionalCardStack({
     return sorted.map(buildItem);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devotionals, onCreateNew, onContinueReading, setCurrentDevotional]);
-
-  // If only 1 card, render directly (no stack)
-  if (cardItems.length <= 1) {
-    return (
-      <View>
-        <DevotionalCard state={cardItems[0]?.state ?? { type: 'empty', onCreateNew }} scrollY={scrollY} />
-      </View>
-    );
-  }
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -317,6 +308,15 @@ export function DevotionalCardStack({
   const snapOffsets = useMemo(() => {
     return cardItems.map((_, i) => i * (cardWidth + CARD_GAP));
   }, [cardItems.length, cardWidth]);
+
+  // If only 1 card, render directly (no stack)
+  if (cardItems.length <= 1) {
+    return (
+      <View>
+        <DevotionalCard state={cardItems[0]?.state ?? { type: 'empty', onCreateNew }} scrollY={scrollY} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ marginTop: Spacing['5'] }}>

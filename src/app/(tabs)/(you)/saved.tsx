@@ -59,7 +59,7 @@ export default function SavedScreen() {
   // Completed series (all days read)
   const completedSeries = useMemo(() => {
     return devotionals
-      .filter((d) => d.days.filter((day) => day.isRead).length >= d.totalDays && d.totalDays > 0)
+      .filter((d) => (d.days ?? []).filter((day) => day.isRead).length >= d.totalDays && d.totalDays > 0)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 2);
   }, [devotionals]);
@@ -434,7 +434,7 @@ export default function SavedScreen() {
           )}
 
           {devotionals.filter(
-            (d) => d.days.filter((day) => day.isRead).length >= d.totalDays && d.totalDays > 0
+            (d) => (d.days ?? []).filter((day) => day.isRead).length >= d.totalDays && d.totalDays > 0
           ).length > 0 && (
             <SeeAllLink
               label="See All"

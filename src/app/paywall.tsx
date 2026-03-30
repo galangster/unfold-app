@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, SpeakerHighIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, FilePdfIcon, SquaresFourIcon } from 'phosphor-react-native';
+import { XIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BookmarkSimpleIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { GoldEmberField } from '@/components/home/GoldEmberField';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -387,26 +387,24 @@ export default function PaywallScreen() {
 
   // Concrete premium benefits — title + description, not vague labels
   const premiumBenefits = [
-    { icon: SpeakerHighIcon, title: 'Listen hands-free', desc: '3 narration voices for your commute or quiet time' },
-    { icon: PaletteIcon, title: '7 reading themes', desc: 'Premium fonts and colors designed for focus' },
-    { icon: BookOpenTextIcon, title: '32 study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
-    { icon: InfinityIcon, title: 'Unlimited series', desc: 'Always shaped by your story and where you are now' },
-    { icon: PencilLineIcon, title: 'Full note-taking suite', desc: 'Rich-text journal with folders, favorites, and scripture linking' },
-    { icon: CircleNotchIcon, title: 'AI Companion', desc: 'Ask questions about faith, scripture, and your devotional' },
-    { icon: FilePdfIcon, title: 'Beautiful PDF exports', desc: 'Export your devotionals to share or print' },
-    { icon: SquaresFourIcon, title: 'Everything in one app', desc: 'Bible, devotionals, audio, notes. No more app-switching.' },
+    { icon: InfinityIcon, title: 'Unlimited devotionals', desc: 'Create as many series as you want, as long as you want' },
+    { icon: CircleNotchIcon, title: 'AI companion', desc: 'Learns your story and shapes tomorrow\u2019s reading' },
+    { icon: SunHorizonIcon, title: 'A rhythm, morning to night', desc: 'Check-ins and reflections that adapt your next devotional to your responses' },
+    { icon: BooksIcon, title: 'Thousands of resources', desc: 'Stories, commentaries, and encyclopedias curated for you' },
+    { icon: BookOpenTextIcon, title: '40+ study methods', desc: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
+    { icon: PencilLineIcon, title: 'Longer, deeper content', desc: 'Extended devotionals and longer series' },
+    { icon: ChatCircleDotsIcon, title: 'Guided journal prompts', desc: 'Reflection questions shaped by your story and today\u2019s reading' },
+    { icon: PaletteIcon, title: 'Themes, fonts & colors', desc: 'Make the app feel like yours' },
   ];
 
   // Free vs premium comparison rows
   const comparison = [
     { label: 'Devotional series', free: '1 active', premium: 'Unlimited' },
-    { label: 'Reading themes', free: '2', premium: '7' },
-    { label: 'Study methods', free: 'Basic', premium: '32 methods' },
-    { label: 'Audio narration', free: false, premium: true },
+    { label: 'Series length', free: '7 days', premium: 'Up to 30 days' },
+    { label: 'AI Companion', free: false, premium: 'Daily check-ins + chat' },
+    { label: 'Study methods', free: 'Basic', premium: '40+ methods' },
     { label: 'Journal prompts', free: false, premium: true },
-    { label: 'Share card styles', free: '2', premium: 'All' },
-    { label: 'AI Companion', free: false, premium: true },
-    { label: 'PDF exports', free: false, premium: true },
+    { label: 'Themes & fonts', free: '1 theme', premium: '7 themes + fonts' },
   ];
 
   return (
@@ -424,9 +422,9 @@ export default function PaywallScreen() {
         contentContainerStyle={{ paddingBottom: Spacing['6'] }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top + 8 }}>
-          {/* Drag handle */}
-          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
+          {/* Drag handle — flush to top of safe area */}
+          <View style={{ alignItems: 'center', paddingTop: Spacing['3'], paddingBottom: Spacing['2'] }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, alignSelf: 'center' }} />
           </View>
 
@@ -893,7 +891,7 @@ export default function PaywallScreen() {
         >
           <View
             style={{
-              backgroundColor: colors.inputBackground,
+              backgroundColor: colors.backgroundElevated,
               borderRadius: Radius.lg,
               padding: 28,
               alignItems: 'center',

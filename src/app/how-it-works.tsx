@@ -23,7 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon } from 'phosphor-react-native';
+import { PencilSimpleIcon, HeartIcon, CheckIcon, BookOpenIcon, CaretLeftIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -31,87 +31,58 @@ import { Duration } from '@/constants/animations';
 import { DarkColors, createThemedColors } from '@/constants/colors';
 import { useUnfoldStore, ACCENT_THEMES } from '@/lib/store';
 
-import { CompanionOrb } from '@/components/CompanionOrb';
+
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Page data ───────────────────────────────────────────────────
 
-interface FeatureCard {
+export interface FeatureCard {
   headline: string;
   body: string;
   animation: 'dots' | 'orb' | 'waveform' | 'pulse' | 'infinity' | 'lines' | 'glow' | 'rings' | 'pencil' | 'heartbeat' | 'weekCircles' | 'network' | 'openBook' | 'pulseLine';
 }
 
-type Page =
-  | { type: 'companion' }
-  | { type: 'feature'; card: FeatureCard };
-
-const PAGES: Page[] = [
-  { type: 'companion' },
+export const FEATURE_PAGES: FeatureCard[] = [
   {
-    type: 'feature',
-    card: {
-      headline: 'Written for you',
-      body: 'Every word shaped by your story, your struggles, where you are right now. No one in the world will have the same experience as you.',
-      animation: 'pencil',
-    },
+    headline: 'Written for you',
+    body: 'Every word shaped by your story, your struggles, where you are right now. No one in the world will have the same experience as you.',
+    animation: 'pencil',
   },
   {
-    type: 'feature',
-    card: {
-      headline: 'Personal daily check-ins',
-      body: "Your answers today shape tomorrow's Word.",
-      animation: 'heartbeat',
-    },
+    headline: 'Personal daily check-ins',
+    body: "Your answers today shape tomorrow's Word.",
+    animation: 'heartbeat',
   },
   {
-    type: 'feature',
-    card: {
-      headline: "Listen, don't just read",
-      body: 'Full audio narration in voices that feel like someone sitting across from you.',
-      animation: 'waveform',
-    },
+    headline: "Listen, don't just read",
+    body: 'Full audio narration in voices that feel like someone sitting across from you.',
+    animation: 'waveform',
   },
   {
-    type: 'feature',
-    card: {
-      headline: 'Build a rhythm',
-      body: 'Streaks that matter. A gentle push to show up, even when it\u2019s hard.',
-      animation: 'weekCircles',
-    },
+    headline: 'Build a rhythm',
+    body: 'Streaks that matter. A gentle push to show up, even when it\u2019s hard.',
+    animation: 'weekCircles',
   },
   {
-    type: 'feature',
-    card: {
-      headline: '32 Bible study methods',
-      body: 'Lectio Divina. SOAP. Ignatian reflection. Character studies. Parables. Pick the approach that fits how you learn.',
-      animation: 'network',
-    },
+    headline: '32 Bible study methods',
+    body: 'Lectio Divina. SOAP. Ignatian reflection. Character studies. Parables. Pick the approach that fits how you learn.',
+    animation: 'network',
   },
   {
-    type: 'feature',
-    card: {
-      headline: 'A full Bible reader',
-      body: 'Every book, chapter, and verse. Tap any scripture in your devotional to read it in context.',
-      animation: 'openBook',
-    },
+    headline: 'A full Bible reader',
+    body: 'Every book, chapter, and verse. Tap any scripture in your devotional to read it in context.',
+    animation: 'openBook',
   },
   {
-    type: 'feature',
-    card: {
-      headline: 'A real note-taking suite',
-      body: 'Rich-text journal with folders, favorites, and scripture linking. Your thoughts stay with the verses that sparked them.',
-      animation: 'pulseLine',
-    },
+    headline: 'A real note-taking suite',
+    body: 'Rich-text journal with folders, favorites, and scripture linking. Your thoughts stay with the verses that sparked them.',
+    animation: 'pulseLine',
   },
   {
-    type: 'feature',
-    card: {
-      headline: 'Everything in one place',
-      body: 'Bible. Devotionals. Notes. Audio. No more switching between three apps to do your quiet time.',
-      animation: 'infinity',
-    },
+    headline: 'Everything in one place',
+    body: 'Bible. Devotionals. Notes. No more switching between three apps to do your quiet time.',
+    animation: 'infinity',
   },
 ];
 
@@ -960,9 +931,9 @@ function ExpandingRings({ accent }: { accent: string }) {
 
 // ─── Animated text reveal ─────────────────────────────────────────
 
-const EASE_TEXT = Easing.bezier(0.25, 0.1, 0.25, 1);
+export const EASE_TEXT = Easing.bezier(0.25, 0.1, 0.25, 1);
 
-function RevealWord({ word, delay, color, style }: { word: string; delay: number; color: string; style: any }) {
+export function FeatureRevealWord({ word, delay, color, style }: { word: string; delay: number; color: string; style: any }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(14);
 
@@ -983,13 +954,13 @@ function RevealWord({ word, delay, color, style }: { word: string; delay: number
   );
 }
 
-const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
+export const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
   const words = useMemo(() => text.split(' '), [text]);
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
       {words.map((word, i) => (
-        <RevealWord
+        <FeatureRevealWord
           key={`${pageKey}-${i}`}
           word={word}
           delay={300 + i * 70}
@@ -1006,7 +977,7 @@ const AnimatedHeadline = memo(function AnimatedHeadline({ text, color, pageKey }
   );
 });
 
-function AnimatedBody({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
+export function AnimatedBody({ text, color, pageKey }: { text: string; color: string; pageKey: number }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(10);
   const wordCount = text.split(' ').length;
@@ -1043,7 +1014,7 @@ function AnimatedBody({ text, color, pageKey }: { text: string; color: string; p
   );
 }
 
-function CardAnimation({ type, accent }: { type: string; accent: string }) {
+export function CardAnimation({ type, accent }: { type: string; accent: string }) {
   switch (type) {
     case 'dots': return <FloatingDots accent={accent} />;
     case 'pencil': return <PencilWriting accent={accent} />;
@@ -1052,7 +1023,7 @@ function CardAnimation({ type, accent }: { type: string; accent: string }) {
     case 'network': return <NetworkNodes accent={accent} />;
     case 'openBook': return <OpenBook accent={accent} />;
     case 'pulseLine': return <PulseLine accent={accent} />;
-    case 'orb': return <CompanionOrb accentColor={accent} size={96} isActive />;
+    case 'orb': return null;
     case 'waveform': return <WaveformBars accent={accent} />;
     case 'pulse': return <PulseCircle accent={accent} />;
     case 'infinity': return <InfinityIcon accent={accent} />;
@@ -1077,7 +1048,7 @@ export default function HowItWorksScreen() {
 
   const [currentPage, setCurrentPage] = useState(0);
 
-  const isLastPage = currentPage === PAGES.length - 1;
+  const isLastPage = currentPage === FEATURE_PAGES.length - 1;
 
   const navigateToOnboarding = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1103,7 +1074,7 @@ export default function HowItWorksScreen() {
   // Swipe left/right to navigate pages (gesture handler — no scroll API needed)
   const handleSwipeLeft = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentPage((p) => Math.min(p + 1, PAGES.length - 1));
+    setCurrentPage((p) => Math.min(p + 1, FEATURE_PAGES.length - 1));
   }, []);
 
   const handleSwipeRight = useCallback(() => {
@@ -1122,14 +1093,28 @@ export default function HowItWorksScreen() {
       }
     });
 
-  const safePage = Math.min(currentPage, PAGES.length - 1);
-  const page = PAGES[safePage];
+  const safePage = Math.min(currentPage, FEATURE_PAGES.length - 1);
+  const page = FEATURE_PAGES[safePage];
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: Spacing['6'], paddingTop: Spacing['2'], height: 44 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingTop: Spacing['2'], height: 44 }}>
+          {currentPage > 0 ? (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleSwipeRight}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40, height: 40 }} />
+          )}
           <TouchableOpacity activeOpacity={0.7} onPress={handleSkip} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.textMuted }}>
               Skip
@@ -1147,43 +1132,25 @@ export default function HowItWorksScreen() {
               style={StyleSheet.absoluteFill}
             >
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
-                {page.type === 'companion' ? (
-                  <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
-                    <CompanionOrb accentColor={colors.accent} size={120} isActive />
-
-                    <View style={{ gap: 14, alignSelf: 'stretch' }}>
-                      <AnimatedHeadline
-                        text="The only app that grows with you"
-                        color={colors.text}
-                        pageKey={currentPage}
-                      />
-
-                      <AnimatedBody
-                        text="Your companion shows up daily. Learns what matters to you. Makes each devotional feel more like yours."
-                        color={colors.textMuted}
-                        pageKey={currentPage}
-                      />
-                    </View>
+                <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
+                  <View style={{ transform: [{ scale: 1.2 }] }}>
+                    <CardAnimation type={page.animation} accent={colors.accent} />
                   </View>
-                ) : (
-                  <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
-                    <CardAnimation type={page.card.animation} accent={colors.accent} />
 
-                    <View style={{ gap: 12, alignSelf: 'stretch' }}>
-                      <AnimatedHeadline
-                        text={page.card.headline}
-                        color={colors.text}
-                        pageKey={currentPage}
-                      />
+                  <View style={{ gap: 12, alignSelf: 'stretch' }}>
+                    <AnimatedHeadline
+                      text={page.headline}
+                      color={colors.text}
+                      pageKey={currentPage}
+                    />
 
-                      <AnimatedBody
-                        text={page.card.body}
-                        color={colors.textMuted}
-                        pageKey={currentPage}
-                      />
-                    </View>
+                    <AnimatedBody
+                      text={page.body}
+                      color={colors.textMuted}
+                      pageKey={currentPage}
+                    />
                   </View>
-                )}
+                </View>
               </View>
             </Animated.View>
           </View>
@@ -1193,7 +1160,7 @@ export default function HowItWorksScreen() {
         <View style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'] }}>
           {/* Page dots */}
           <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', gap: 6, marginBottom: Spacing['6'] }}>
-            {PAGES.map((_, index) => (
+            {FEATURE_PAGES.map((_, index) => (
               <View
                 key={index}
                 style={{

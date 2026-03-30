@@ -769,7 +769,7 @@ export default function ReadingScreen() {
 
         // Calculate total days completed across all devotionals
         const totalDaysCompleted = useUnfoldStore.getState().devotionals.reduce((sum, d) =>
-          sum + d.days.filter(day => day.isRead).length, 0
+          sum + (d.days ?? []).filter(day => day.isRead).length, 0
         );
 
         const streakCurrent = useUnfoldStore.getState().streakCurrent;
