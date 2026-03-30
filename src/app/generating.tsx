@@ -35,6 +35,12 @@ import {
 } from '@/lib/notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+
+// MMKV key for persisting in-flight generation job across app kills
+const INFLIGHT_KEY = 'inflight-generation-job';
+// Maximum time to poll before giving up (10 minutes)
+const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
 
 // Sample devotional content shown as a preview while generating
 const SAMPLE_PREVIEW = {
@@ -138,6 +144,9 @@ export default function GeneratingScreen() {
   const pollingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jobSubmittedRef = useRef(false);
+
+  // Track when polling started for max-duration timeout
+  const pollStartTime = useRef(Date.now());
 
   // Track whether we are auto-retrying after returning from background
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -405,6 +414,9 @@ export default function GeneratingScreen() {
       }]);
     }
 
+    // Clear inflight job from MMKV — generation succeeded
+    mmkvStorage.removeItem(INFLIGHT_KEY);
+
     // Update session and UI state
     completeGenerationSession({ title: seriesTitle });
     setDevotionalTitle(seriesTitle);
@@ -429,6 +441,21 @@ export default function GeneratingScreen() {
     pollingRef.current = true;
 
     const poll = async () => {
+      // Check max poll duration timeout
+      if (Date.now() - pollStartTime.current > MAX_POLL_DURATION_MS) {
+        pollingRef.current = false;
+        const timeoutMsg = 'Generation is taking longer than expected. Please try again.';
+        logger.warn('[generating] Poll timeout reached after 10 minutes');
+        mmkvStorage.removeItem(INFLIGHT_KEY);
+        failGenerationSession(timeoutMsg);
+        setIsGenerating(false);
+        setIsReconnecting(false);
+        setError(timeoutMsg);
+        setCanRetry(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
+
       try {
         const status = await pollJobStatus(jobId);
 
@@ -446,6 +473,7 @@ export default function GeneratingScreen() {
             level: 'error',
             extra: { jobId },
           });
+          mmkvStorage.removeItem(INFLIGHT_KEY);
           failGenerationSession(errorMsg);
           void logBugError('generation', new Error(errorMsg), { jobId, phase: 'server-poll' });
           setIsGenerating(false);
@@ -476,6 +504,26 @@ export default function GeneratingScreen() {
   useEffect(() => {
     if (!user || jobSubmittedRef.current) return;
     jobSubmittedRef.current = true;
+
+    // Check MMKV for an inflight job from a previous session (app-kill recovery)
+    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
+    if (raw) {
+      try {
+        const inflight = JSON.parse(raw) as { jobId: string; devotionalId?: string; submittedAt: number };
+        // Only resume if not expired (15 min)
+        if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
+          logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+          setPendingJobId(inflight.jobId);
+          pollStartTime.current = inflight.submittedAt;
+          startPolling(inflight.jobId);
+          return;
+        }
+        // Expired — clear and submit fresh
+        mmkvStorage.removeItem(INFLIGHT_KEY);
+      } catch {
+        mmkvStorage.removeItem(INFLIGHT_KEY);
+      }
+    }
 
     const submitJob = async () => {
       const devotionalId = `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -510,7 +558,15 @@ export default function GeneratingScreen() {
         setIsReconnecting(false);
         updateGenerationSessionProgress({ title: 'Generating...' });
 
-        // Start polling
+        // Persist inflight job to MMKV for app-kill recovery
+        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+          jobId,
+          devotionalId,
+          submittedAt: Date.now(),
+        }));
+
+        // Reset poll start time and start polling
+        pollStartTime.current = Date.now();
         startPolling(jobId);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -519,6 +575,7 @@ export default function GeneratingScreen() {
           tags: { phase: 'server-job-submission' },
           extra: { devotionalId, devotionalLength: user.devotionalLength },
         });
+        mmkvStorage.removeItem(INFLIGHT_KEY);
         failGenerationSession(errorMessage);
         void logBugError('generation', err, { devotionalId, phase: 'server-job-submission' });
         setIsGenerating(false);
@@ -567,12 +624,20 @@ export default function GeneratingScreen() {
     setIsReconnecting(true);
     setIsGenerating(true);
 
+    // Reset poll start time for retry
+    pollStartTime.current = Date.now();
+
     try {
       if (pendingJobId) {
         // Retry existing job on the server
         const { jobId } = await retryJob(pendingJobId);
         logger.log('[generating] Job retried:', jobId);
         setPendingJobId(jobId);
+        // Update MMKV with new jobId
+        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+          jobId,
+          submittedAt: Date.now(),
+        }));
         startPolling(jobId);
       } else {
         // No job ID -- resubmit from scratch
@@ -610,12 +675,19 @@ export default function GeneratingScreen() {
 
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);
+          // Persist inflight job to MMKV
+          mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
+            jobId,
+            devotionalId,
+            submittedAt: Date.now(),
+          }));
           startPolling(jobId);
         }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       logger.error('[generating] Retry failed:', errorMessage);
+      mmkvStorage.removeItem(INFLIGHT_KEY);
       failGenerationSession(errorMessage);
       setIsGenerating(false);
       setIsReconnecting(false);
@@ -633,6 +705,7 @@ export default function GeneratingScreen() {
       pollTimerRef.current = null;
     }
     pollingRef.current = false;
+    mmkvStorage.removeItem(INFLIGHT_KEY);
     clearGenerationSession();
     setError(null);
     router.replace('/onboarding');
@@ -647,6 +720,7 @@ export default function GeneratingScreen() {
       pollTimerRef.current = null;
     }
     pollingRef.current = false;
+    mmkvStorage.removeItem(INFLIGHT_KEY);
     clearGenerationSession();
     router.replace('/(tabs)/(today)');
   };

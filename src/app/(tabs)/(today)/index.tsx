@@ -29,8 +29,12 @@ import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/c
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { useAuth } from '@/hooks/useAuth';
 import { submitGenerationJob, findCompletedJob, fetchJobResult, ApiError } from '@/lib/generation-api';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
+
+// Must match the key used in generating.tsx
+const INFLIGHT_KEY = 'inflight-generation-job';
 
 // Zone components
 import { getContextSlotType } from '@/lib/context-slot-priority';
@@ -139,6 +143,35 @@ export default function HomeScreen() {
     // Fire-and-forget — no UI, no progress indicators
     downloadBibleDb().catch(() => {});
   }, []);
+
+  // Resume inflight generation job from a previous app session (app-kill recovery)
+  const inflightResumeAttempted = useRef(false);
+  useEffect(() => {
+    if (inflightResumeAttempted.current) return;
+    inflightResumeAttempted.current = true;
+
+    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
+    if (!raw) return;
+
+    try {
+      const inflight = JSON.parse(raw) as {
+        jobId: string;
+        devotionalId?: string;
+        submittedAt: number;
+      };
+      // Only resume if not expired (15 min)
+      if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
+        console.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
+        // Navigate to generating screen — it will pick up the inflight job from MMKV
+        router.replace('/generating');
+        return;
+      }
+      // Expired — clean up
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+    } catch {
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+    }
+  }, [router]);
 
   // Check premium status from RevenueCat
   const { data: premiumResult } = useQuery({
