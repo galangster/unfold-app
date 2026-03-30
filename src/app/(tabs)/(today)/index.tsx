@@ -28,6 +28,7 @@ import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { useAuth } from '@/hooks/useAuth';
+import { submitGenerationJob } from '@/lib/generation-api';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 
@@ -224,6 +225,28 @@ export default function HomeScreen() {
     const dayExists = currentDevotional.days.some(d => d.dayNumber === currentDevotional.currentDay);
     return !dayExists;
   }, [currentDevotional]);
+
+  // Auto-submit generation job when today's content is missing.
+  // This is the client-side fallback: if the midnight cron didn't fire or if the user
+  // opens the app before the cron window, the app proactively requests generation.
+  const autoGenAttemptedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isPreparingCurrentDay || !currentDevotional) return;
+
+    const key = `${currentDevotional.id}-${currentDevotional.currentDay}`;
+    if (autoGenAttemptedRef.current === key) return; // Already attempted this day
+    autoGenAttemptedRef.current = key;
+
+    submitGenerationJob({
+      devotionalId: currentDevotional.id,
+      dayNumber: currentDevotional.currentDay,
+      jobType: 'day',
+    }).then((resp) => {
+      console.log('[home] Auto-submitted generation job:', resp.jobId);
+    }).catch((err) => {
+      console.warn('[home] Auto-generation request failed (server may already be handling):', err.message);
+    });
+  }, [isPreparingCurrentDay, currentDevotional]);
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
