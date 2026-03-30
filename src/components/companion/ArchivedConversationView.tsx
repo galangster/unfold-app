@@ -77,7 +77,7 @@ export function ArchivedConversationView({ conversation, onClose }: Props) {
   const insets = useSafeAreaInsets();
 
   const invertedMessages = useMemo(
-    () => [...conversation.messages].reverse(),
+    () => [...(conversation.messages ?? [])].reverse(),
     [conversation.messages]
   );
 

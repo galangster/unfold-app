@@ -1049,11 +1049,12 @@ export default function SettingsScreen() {
                       {ACCENT_THEMES.map((theme) => {
                         const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
                         const swatchColor = isDark ? theme.dark : theme.light;
+                        const isLocked = !user?.isPremium && theme.id !== 'gold';
                         return (
                           <TouchableOpacity activeOpacity={0.7}
                             key={theme.id}
                             onPress={() => {
-                              if (!user?.isPremium) {
+                              if (isLocked) {
                                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                                 setPremiumFeature('theme');
                                 return;
@@ -1061,6 +1062,7 @@ export default function SettingsScreen() {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               updateUser({ accentTheme: theme.id });
                             }}
+                            accessibilityLabel={isLocked ? `${theme.name} accent theme, premium only` : `${theme.name} accent theme`}
                             style={{
                               alignItems: 'center',
                               width: 56,
@@ -1076,17 +1078,21 @@ export default function SettingsScreen() {
                                 borderColor: isSelected ? colors.text : colors.border,
                                 justifyContent: 'center',
                                 alignItems: 'center',
+                                opacity: isLocked ? 0.5 : 1,
                               }}
                             >
                               {isSelected && (
                                 <CheckIcon size={16} color={colors.background} weight="bold" />
+                              )}
+                              {isLocked && !isSelected && (
+                                <LockIcon size={14} color={colors.background} weight="fill" />
                               )}
                             </View>
                             <Text
                               style={{
                                 fontFamily: FontFamily.ui,
                                 fontSize: 11,
-                                color: isSelected ? colors.text : colors.textMuted,
+                                color: isSelected ? colors.text : (isLocked ? colors.textSubtle : colors.textMuted),
                                 marginTop: Spacing['1.5'],
                               }}
                             >

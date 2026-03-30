@@ -246,8 +246,8 @@ export function AudioPlayerSheet() {
       handleIndicatorStyle={{
         backgroundColor: colors.borderStrong,
         width: 36,
-        height: 5,
-        borderRadius: 2.5,
+        height: 4,
+        borderRadius: 2,
       }}
       backgroundStyle={[
         styles.sheetBackground,

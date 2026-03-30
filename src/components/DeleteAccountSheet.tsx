@@ -182,8 +182,8 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
       handleIndicatorStyle={{
         backgroundColor: colors.borderStrong,
         width: 36,
-        height: 5,
-        borderRadius: 2.5,
+        height: 4,
+        borderRadius: 2,
       }}
     >
       <View style={styles.content}>

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { RefObject } from 'react';
 import { View, Text, TextInput, Keyboard, TouchableOpacity } from 'react-native';
+import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -26,6 +28,7 @@ interface InlineReflectionJournalProps {
   dayNumber: number;
   onOpenFullJournal: (focusQuestion?: number) => void;
   fontSize?: FontSize;
+  scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
 }
 
 /**
@@ -39,6 +42,7 @@ export function InlineReflectionJournal({
   dayNumber,
   onOpenFullJournal,
   fontSize = 'medium',
+  scrollViewRef,
 }: InlineReflectionJournalProps) {
   const { colors } = useTheme();
   const readingFont = useReadingFont();
@@ -258,6 +262,7 @@ export function InlineReflectionJournal({
             colors={colors}
             readingFont={readingFont}
             fontSizes={fontSizes}
+            scrollViewRef={scrollViewRef}
           />
         );
       })}
@@ -317,6 +322,7 @@ function ReflectionQuestionCard({
   colors,
   readingFont,
   fontSizes,
+  scrollViewRef,
 }: {
   index: number;
   question: string;
@@ -329,6 +335,7 @@ function ReflectionQuestionCard({
   colors: any;
   readingFont: any;
   fontSizes: { body: number; scripture: number; title: number };
+  scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
 }) {
   // Animate border accent
   const borderProgress = useSharedValue(isAnswered ? 1 : 0);
@@ -424,6 +431,10 @@ function ReflectionQuestionCard({
               ref={(ref) => { inputRefs.current.set(index, ref); }}
               value={response}
               onChangeText={(text) => onResponseChange(index, question, text)}
+              onContentSizeChange={() => {
+                // Re-scroll to keep cursor visible as multiline text grows
+                scrollViewRef?.current?.assureFocusedInputVisible();
+              }}
               placeholder="Write your thoughts..."
               placeholderTextColor={colors.textHint}
               multiline

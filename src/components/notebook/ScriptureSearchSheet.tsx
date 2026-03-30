@@ -472,8 +472,8 @@ const sheetStyles = StyleSheet.create({
   },
   handleBar: {
     width: 36,
-    height: 5,
-    borderRadius: 2.5,
+    height: 4,
+    borderRadius: 2,
   },
   content: {
     paddingHorizontal: Spacing['6'],

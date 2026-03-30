@@ -49,9 +49,9 @@ function buildCompanionContext(
     timeOfDay: getTimeOfDay(),
     conversationMemory: memory
       ? {
-          topics: memory.topics.map(t => typeof t === 'string' ? t : t.text),
-          versesMentioned: memory.versesMentioned.map(v => typeof v === 'string' ? v : v.text),
-          prayerRequests: memory.prayerRequests.map((p) =>
+          topics: (memory.topics ?? []).map(t => typeof t === 'string' ? t : t.text),
+          versesMentioned: (memory.versesMentioned ?? []).map(v => typeof v === 'string' ? v : v.text),
+          prayerRequests: (memory.prayerRequests ?? []).map((p) =>
             typeof p === 'string' ? p : p.text
           ),
         }

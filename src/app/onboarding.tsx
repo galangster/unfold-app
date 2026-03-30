@@ -58,6 +58,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
 import { EmberParticles } from '@/components/EmberParticles';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
 
 
 // Types with subject selection
@@ -207,11 +209,15 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
 
 const ALL_STEPS = [
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
+  // COMPANION NAMING: Name the companion — shows orb animation with naming input, "the only app that grows with you"
+  { id: 'companionNaming', question: "Name your companion.", subtext: 'The only app that grows with\u00A0you.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
   { id: 'stylePreferences1', question: "A little about\u00A0you.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // STYLE PREFERENCES: Tone + depth
   { id: 'stylePreferences2', question: "How should this feel?", subtext: 'The tone and depth that serves you best.', type: 'stylePreferences2' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
+  { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -227,13 +233,9 @@ const ALL_STEPS = [
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
   // MIRROR-BACK: Poetic reflection before building — like a book introduction
   { id: 'mirrorBack', question: "Written for\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i))
-  { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // COMPANION NAMING: Name the companion (intro now lives in how-it-works.tsx)
-  { id: 'companionNaming', question: "Name your companion.", subtext: 'Remembers your story. Shows up every\u00A0morning.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
   { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // PREMIUM SHOWCASE: Final premium pitch before generating
+  // PREMIUM SHOWCASE: Final premium pitch before generating — shown to ALL users
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
@@ -383,6 +385,9 @@ export default function OnboardingScreen() {
   });
 
   const { isSignedIn } = useClerkAuth();
+
+  // Premium gating state for duration/length options in onboarding
+  const [premiumGateFeature, setPremiumGateFeature] = useState<'devotionalLength' | 'readingDuration' | null>(null);
 
   // Adaptive-question endpoint is now public (no auth required) — no early auth needed.
 
@@ -561,11 +566,6 @@ export default function OnboardingScreen() {
         }
       }
       
-      // Skip premium showcase during onboarding — show paywall after first reading instead
-      if (step.id === 'premiumShowcase' && !existingUser?.hasCompletedOnboarding) {
-        return false;
-      }
-
       // Skip AI consent if already consented
       if (step.id === 'aiConsent' && hasConsentedToAI) {
         return false;
@@ -1637,10 +1637,22 @@ export default function OnboardingScreen() {
         <View style={{ gap: Spacing['3'], marginTop: Spacing['2'] }}>
           {options.map((option) => {
             const isSelected = data[step.id as keyof OnboardingData] === option.value;
+
+            // Premium gating for duration and length options
+            const isLockedOption = !isPremium && (
+              (step.id === 'readingDuration' && !isReadingDurationFree(option.value as number)) ||
+              (step.id === 'devotionalLength' && !isDevotionalLengthFree(option.value as number))
+            );
+
             return (
               <TouchableOpacity activeOpacity={0.7}
                 key={option.value}
                 onPress={() => {
+                  if (isLockedOption) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    setPremiumGateFeature(step.id === 'readingDuration' ? 'readingDuration' : 'devotionalLength');
+                    return;
+                  }
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setData((prev) => ({ ...prev, [step.id]: option.value }));
                   // Auto-advance after a brief delay so user sees their selection
@@ -1651,6 +1663,7 @@ export default function OnboardingScreen() {
                     setTimeout(() => advanceToNextStep(), 50);
                   }, 300);
                 }}
+                accessibilityLabel={isLockedOption ? `${option.label}, premium only` : option.label}
               >
                     <View style={{
                       backgroundColor: colors.inputBackground,
@@ -1658,17 +1671,24 @@ export default function OnboardingScreen() {
                       paddingVertical: 18,
                       borderRadius: Radius.lg,
                       borderWidth: 1,
-                      borderColor: colors.border,
+                      borderColor: isLockedOption ? `${colors.border}80` : colors.border,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'space-between',
+                      opacity: isLockedOption ? 0.6 : 1,
                     }}>
-                      <View>
+                      <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{option.label}</Text>
                         {'description' in option && option.description && (
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{option.description}</Text>
                         )}
                       </View>
+                      {isLockedOption && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 8 }}>
+                          <LockIcon size={14} color={colors.accent} weight="light" />
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.accent }}>Premium</Text>
+                        </View>
+                      )}
                     </View>
               </TouchableOpacity>
             );
@@ -2591,6 +2611,12 @@ export default function OnboardingScreen() {
         </View>
       </SafeAreaView>
 
+      {/* Premium upsell sheet for gated onboarding options */}
+      <PremiumFeatureSheet
+        visible={!!premiumGateFeature}
+        onClose={() => setPremiumGateFeature(null)}
+        feature={premiumGateFeature ?? 'general'}
+      />
     </View>
   );
 }

@@ -388,25 +388,34 @@ class SyncService {
       if (table === 'companion_conversations') {
         const convData = {
           ...data,
+          messages: data.messages ?? [],  // Ensure messages array always exists
+          topicTags: data.topicTags ?? [],  // Ensure topicTags array always exists
           createdAt: new Date(data.createdAt).getTime(),
           lastMessageAt: new Date(data.lastMessageAt).getTime(),
         };
-        const idx = companionState.conversations.findIndex((c: any) => c.id === data.id);
-        const updated = [...companionState.conversations];
-        if (idx >= 0) updated[idx] = { ...updated[idx], ...convData };
-        else updated.unshift(convData);
+        const conversations = companionState.conversations ?? [];
+        const idx = conversations.findIndex((c: any) => c.id === data.id);
+        const updated = [...conversations];
+        if (idx >= 0) {
+          // Merge but preserve local messages if server doesn't have them
+          updated[idx] = { ...updated[idx], ...convData, messages: convData.messages.length > 0 ? convData.messages : (updated[idx].messages ?? []) };
+        } else {
+          updated.unshift(convData);
+        }
         useCompanionChatStore.setState({ conversations: updated });
       }
       // companion_messages: find parent conversation, update/add message
       if (table === 'companion_messages') {
         const msgData = { ...data, timestamp: new Date(data.timestamp).getTime() };
-        const convs = [...companionState.conversations];
+        const convs = [...(companionState.conversations ?? [])];
         let found = false;
         for (const conv of convs) {
           if (data.conversationId && conv.id !== data.conversationId) continue;
-          const msgIdx = conv.messages.findIndex((m: any) => m.id === data.id);
+          const convMessages = conv.messages ?? [];
+          const msgIdx = convMessages.findIndex((m: any) => m.id === data.id);
           if (msgIdx >= 0) {
-            conv.messages[msgIdx] = { ...conv.messages[msgIdx], ...msgData };
+            convMessages[msgIdx] = { ...convMessages[msgIdx], ...msgData };
+            conv.messages = convMessages;
             found = true;
             break;
           }
@@ -415,6 +424,7 @@ class SyncService {
         if (!found && data.conversationId) {
           for (const conv of convs) {
             if (conv.id === data.conversationId) {
+              if (!conv.messages) conv.messages = [];
               conv.messages.push(msgData);
               break;
             }
@@ -478,14 +488,14 @@ class SyncService {
 
   private removeLocalRecord(table: SyncTable, id: string) {
     if (table === 'companion_conversations') {
-      const convs = useCompanionChatStore.getState().conversations.filter((c: any) => c.id !== id);
+      const convs = (useCompanionChatStore.getState().conversations ?? []).filter((c: any) => c.id !== id);
       useCompanionChatStore.setState({ conversations: convs });
       return;
     }
     if (table === 'companion_messages') {
-      const convs = [...useCompanionChatStore.getState().conversations];
+      const convs = [...(useCompanionChatStore.getState().conversations ?? [])];
       for (const conv of convs) {
-        conv.messages = conv.messages.filter((m: any) => m.id !== id);
+        conv.messages = (conv.messages ?? []).filter((m: any) => m.id !== id);
       }
       useCompanionChatStore.setState({ conversations: convs });
       return;

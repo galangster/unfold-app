@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -27,6 +27,8 @@ import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
 import { getSectionHeadings } from '@/lib/bible-section-headings';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { isHighlightColorFree } from '@/lib/premium-gating';
 // VerseShareModal removed — now uses share-card route
 
 // ─── Highlight colors ───────────────────────────────────────────────────────
@@ -256,6 +258,9 @@ export default function BibleReaderScreen() {
   const [noteText, setNoteText] = useState('');
   const noteInputRef = useRef<TextInput>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Premium gating for highlight colors
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const [showHighlightPremiumSheet, setShowHighlightPremiumSheet] = useState(false);
   // shareModalData removed — share navigates to /share-card route
   const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);
   const [scrollToVerse, setScrollToVerse] = useState<number | null>(null);
@@ -852,16 +857,31 @@ export default function BibleReaderScreen() {
                   </View>
                 </TouchableOpacity>
               )}
-              {HIGHLIGHT_COLORS.map((c) => (
-                <TouchableOpacity
-                  key={c.key}
-                  onPress={() => handleHighlight(c.key)}
-                  style={styles.contextColorButton}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.contextColorDot, { backgroundColor: c.color }]} />
-                </TouchableOpacity>
-              ))}
+              {HIGHLIGHT_COLORS.map((c) => {
+                const isLocked = !isPremium && !isHighlightColorFree(c.key);
+                return (
+                  <TouchableOpacity
+                    key={c.key}
+                    onPress={() => {
+                      if (isLocked) {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                        setShowHighlightPremiumSheet(true);
+                        return;
+                      }
+                      handleHighlight(c.key);
+                    }}
+                    style={styles.contextColorButton}
+                    activeOpacity={0.7}
+                    accessibilityLabel={isLocked ? `${c.key} highlight color, premium only` : `${c.key} highlight color`}
+                  >
+                    <View style={[styles.contextColorDot, { backgroundColor: c.color, opacity: isLocked ? 0.4 : 1 }]}>
+                      {isLocked && (
+                        <LockSimpleIcon size={10} color="#FFF" weight="fill" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ) : showNoteInput ? (
             /* Note input mode */
@@ -955,6 +975,12 @@ export default function BibleReaderScreen() {
           </Animated.View>
         </View>
       )}
+      {/* Premium upsell sheet for highlight colors */}
+      <PremiumFeatureSheet
+        visible={showHighlightPremiumSheet}
+        onClose={() => setShowHighlightPremiumSheet(false)}
+        feature="highlight"
+      />
     </View>
   );
 }
@@ -1092,6 +1118,8 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.lg,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
 
   // Toast

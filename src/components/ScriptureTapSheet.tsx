@@ -326,8 +326,8 @@ const s = StyleSheet.create({
   },
   handle: {
     width: 36,
-    height: 5,
-    borderRadius: 2.5,
+    height: 4,
+    borderRadius: 2,
   },
 
   // ─── Header ─────────────────────────────────────

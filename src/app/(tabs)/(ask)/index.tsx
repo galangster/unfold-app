@@ -18,6 +18,7 @@ import {
   CaretDownIcon,
   PlusCircleIcon,
   ClockCounterClockwiseIcon,
+  CrownIcon,
 } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -43,8 +44,16 @@ import { CompanionActions } from '@/components/companion/CompanionActions';
 import { SuggestionChips } from '@/components/companion/SuggestionChips';
 import { TypingIndicator } from '@/components/companion/TypingIndicator';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
+import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
+import { useUnfoldStore } from '@/lib/store';
+import {
+  canSendCompanionMessage,
+  incrementCompanionDailyCount,
+  getCompanionDailyUsage,
+  FREE_COMPANION_DAILY_LIMIT,
+} from '@/lib/premium-gating';
 
 // ── Message item ───────────────────────────────────────────────────────────
 
@@ -119,6 +128,11 @@ export default function CompanionScreen() {
   // Full tab bar height including safe area (home indicator)
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
 
+  // Premium gating
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [dailyRemaining, setDailyRemaining] = useState(() => getCompanionDailyUsage().remaining);
+
   const {
     messages,
     isStreaming,
@@ -175,12 +189,26 @@ export default function CompanionScreen() {
 
   const handleSend = useCallback(
     (text: string) => {
+      // Free user daily limit check
+      if (!isPremium && !canSendCompanionMessage()) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setShowPremiumSheet(true);
+        return;
+      }
+
       sendMessage(text);
+
+      // Track daily usage for free users
+      if (!isPremium) {
+        incrementCompanionDailyCount();
+        setDailyRemaining(getCompanionDailyUsage().remaining);
+      }
+
       setTimeout(() => {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     },
-    [sendMessage]
+    [sendMessage, isPremium]
   );
 
   const handleChipSelect = useCallback(
@@ -295,7 +323,7 @@ export default function CompanionScreen() {
               onScroll={handleScroll}
               scrollEventThrottle={16}
               keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="always"
+              keyboardShouldPersistTaps="handled"
               initialNumToRender={15}
               maxToRenderPerBatch={10}
               windowSize={11}
@@ -385,6 +413,58 @@ export default function CompanionScreen() {
         )}
       </TouchableOpacity>
 
+      {/* Daily limit indicator for free users */}
+      {!isPremium && dailyRemaining <= FREE_COMPANION_DAILY_LIMIT && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            if (dailyRemaining === 0) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              setShowPremiumSheet(true);
+            }
+          }}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 6,
+            paddingHorizontal: Spacing['4'],
+            gap: 6,
+            backgroundColor: dailyRemaining === 0 ? alpha(colors.accent, 0.12) : 'transparent',
+          }}
+          accessibilityLabel={
+            dailyRemaining === 0
+              ? 'Daily message limit reached. Tap to upgrade.'
+              : `${dailyRemaining} of ${FREE_COMPANION_DAILY_LIMIT} free messages remaining today`
+          }
+        >
+          {dailyRemaining === 0 ? (
+            <>
+              <CrownIcon size={13} color={colors.accent} weight="fill" />
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiMedium,
+                  fontSize: 12,
+                  color: colors.accent,
+                }}
+              >
+                Daily limit reached. Upgrade for unlimited.
+              </Text>
+            </>
+          ) : (
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 11,
+                color: colors.textSubtle,
+              }}
+            >
+              {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} free messages left today
+            </Text>
+          )}
+        </TouchableOpacity>
+      )}
+
       {/* Input bar */}
       <CompanionInput
         onSend={handleSend}
@@ -433,6 +513,13 @@ export default function CompanionScreen() {
           />
         </View>
       )}
+
+      {/* Premium upsell sheet for companion daily limit */}
+      <PremiumFeatureSheet
+        visible={showPremiumSheet}
+        onClose={() => setShowPremiumSheet(false)}
+        feature="companion"
+      />
     </KeyboardAvoidingView>
   );
 }

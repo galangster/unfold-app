@@ -85,7 +85,7 @@ export function ConversationHistorySheet({
   // The active conversation gets a "Current" label so users always see their history.
   const activeId = useCompanionChatStore((s) => s.activeConversationId);
   const allWithMessages = useCompanionChatStore(
-    useShallow((s) => s.conversations.filter(c => c.messages.length > 0))
+    useShallow((s) => (s.conversations ?? []).filter(c => (c.messages ?? []).length > 0))
   );
   const deleteConversation = useCompanionChatStore((s) => s.deleteConversation);
 
@@ -150,7 +150,7 @@ export function ConversationHistorySheet({
       }
 
       const conv = item.conversation;
-      const msgCount = conv.messages.length;
+      const msgCount = (conv.messages ?? []).length;
       const isCurrent = conv.id === activeId;
       const summary = isCurrent
         ? 'Current conversation'

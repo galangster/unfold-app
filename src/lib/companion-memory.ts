@@ -58,13 +58,13 @@ export function pruneExpiredMemory(): void {
   const cutoff = Date.now() - THIRTY_DAYS_MS;
 
   const pruned: CompanionMemory = {
-    topics: memory.topics
+    topics: (memory.topics ?? [])
       .map(normalizeEntry)
       .filter(t => t.addedAt > cutoff),
-    versesMentioned: memory.versesMentioned
+    versesMentioned: (memory.versesMentioned ?? [])
       .map(normalizeEntry)
       .filter(v => v.addedAt > cutoff),
-    prayerRequests: memory.prayerRequests
+    prayerRequests: (memory.prayerRequests ?? [])
       .map(p => typeof p === 'string' ? { text: p, addedAt: Date.now() } as PrayerRequest : p)
       .filter(p => p.addedAt > cutoff || !p.resolvedAt),  // Keep unresolved prayers
     lastUpdated: Date.now(),
@@ -117,7 +117,7 @@ export function updateCompanionMemory(
 
   // Extract verse references from all messages
   const versePattern = /\[([A-Z1-3][a-z]+ \d+:\d+(?:-\d+)?)\]/g;
-  const existingVerseTexts = existing.versesMentioned.map(entryText);
+  const existingVerseTexts = (existing.versesMentioned ?? []).map(entryText);
   const newVerses: TimestampedEntry[] = [];
   for (const msg of messages) {
     let match;
@@ -137,7 +137,7 @@ export function updateCompanionMemory(
     .filter((m) => m.role === 'user')
     .map((m) => m.content.toLowerCase());
 
-  const existingTopicTexts = existing.topics.map(entryText);
+  const existingTopicTexts = (existing.topics ?? []).map(entryText);
   const newTopics: TimestampedEntry[] = [];
   for (const keyword of TOPIC_KEYWORDS) {
     if (
@@ -150,7 +150,7 @@ export function updateCompanionMemory(
 
   // Extract prayer requests from user messages (sanitized to prevent prompt injection)
   const newPrayers: PrayerRequest[] = [];
-  const existingTexts = existing.prayerRequests.map((p) =>
+  const existingTexts = (existing.prayerRequests ?? []).map((p) =>
     typeof p === 'string' ? p : p.text
   );
   for (const text of userTexts) {
@@ -173,9 +173,9 @@ export function updateCompanionMemory(
 
   // Update — keep recent items, trim old
   const updated: CompanionMemory = {
-    topics: [...existing.topics, ...newTopics].slice(-20),
-    versesMentioned: [...existing.versesMentioned, ...newVerses].slice(-15),
-    prayerRequests: [...existing.prayerRequests, ...newPrayers].slice(-5),
+    topics: [...(existing.topics ?? []), ...newTopics].slice(-20),
+    versesMentioned: [...(existing.versesMentioned ?? []), ...newVerses].slice(-15),
+    prayerRequests: [...(existing.prayerRequests ?? []), ...newPrayers].slice(-5),
     lastUpdated: Date.now(),
   };
 
@@ -188,7 +188,7 @@ export function updateCompanionMemory(
 export function getTopicTags(): string[] {
   const memory = getCompanionMemory();
   if (!memory) return [];
-  return memory.topics.map(entryText);
+  return (memory.topics ?? []).map(entryText);
 }
 
 /**

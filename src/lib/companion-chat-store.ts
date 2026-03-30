@@ -62,13 +62,15 @@ const INACTIVITY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function generateSummary(conversation: Conversation): string {
   // Primary: use topic tags if available
-  if (conversation.topicTags.length > 0) {
-    const topics = conversation.topicTags.slice(0, 3).join(', ');
+  const tags = conversation.topicTags ?? [];
+  if (tags.length > 0) {
+    const topics = tags.slice(0, 3).join(', ');
     return topics.charAt(0).toUpperCase() + topics.slice(1);
   }
 
   // Fallback: first user message, truncated
-  const firstUserMsg = conversation.messages.find(m => m.role === 'user');
+  const msgs = conversation.messages ?? [];
+  const firstUserMsg = msgs.find(m => m.role === 'user');
   if (firstUserMsg) {
     const text = firstUserMsg.content.slice(0, 80);
     return text.length < firstUserMsg.content.length ? `${text}...` : text;
@@ -80,14 +82,14 @@ function generateSummary(conversation: Conversation): string {
 // ── External selectors (proper Zustand subscription tracking) ─────────────
 
 export const selectActiveConversation = (s: CompanionChatState): Conversation | null =>
-  s.conversations.find(c => c.id === s.activeConversationId) ?? null;
+  (s.conversations ?? []).find(c => c.id === s.activeConversationId) ?? null;
 
 const EMPTY_MESSAGES: CompanionMessage[] = [];
 export const selectActiveMessages = (s: CompanionChatState): CompanionMessage[] =>
-  s.conversations.find(c => c.id === s.activeConversationId)?.messages ?? EMPTY_MESSAGES;
+  (s.conversations ?? []).find(c => c.id === s.activeConversationId)?.messages ?? EMPTY_MESSAGES;
 
 export const selectArchivedConversations = (s: CompanionChatState): Conversation[] =>
-  s.conversations.filter(c => c.archived && c.messages.length > 0);
+  (s.conversations ?? []).filter(c => c.archived && (c.messages ?? []).length > 0);
 
 // ── Store ──────────────────────────────────────────────────────────────────
 
@@ -138,7 +140,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           return {
             conversations: s.conversations.map(c => {
               if (c.id !== s.activeConversationId) return c;
-              const updated = [...c.messages, timestampedMsg];
+              const updated = [...(c.messages ?? []), timestampedMsg];
               return {
                 ...c,
                 messages: updated.length > MAX_STORED_MESSAGES
@@ -162,7 +164,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               return {
                 ...c,
                 updatedAt: now,
-                messages: c.messages.map(m =>
+                messages: (c.messages ?? []).map(m =>
                   m.id === id ? { ...m, ...updates, updatedAt: now } : m
                 ),
               };
@@ -177,9 +179,10 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
           // Fire backend log (async, best-effort)
           const activeConv = s.conversations.find(c => c.id === activeId);
-          const msg = activeConv?.messages.find(m => m.id === id);
+          const activeConvMessages = activeConv?.messages ?? [];
+          const msg = activeConvMessages.find(m => m.id === id);
           if (msg) {
-            const prevMsg = activeConv?.messages
+            const prevMsg = activeConvMessages
               .filter(m => m.role === 'user')
               .slice(-1)[0];
 
@@ -206,7 +209,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               return {
                 ...c,
                 updatedAt: now,
-                messages: c.messages.map(m =>
+                messages: (c.messages ?? []).map(m =>
                   m.id === id ? { ...m, feedback, updatedAt: now } : m
                 ),
               };
@@ -221,14 +224,15 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           let conversations = s.conversations;
 
           // Archive current if it has messages
-          if (active && active.messages.length > 0) {
+          const activeMessages = active?.messages ?? [];
+          if (active && activeMessages.length > 0) {
             const tags = getTopicTags();
             conversations = conversations.map(c =>
               c.id === active.id
                 ? { ...c, archived: true, topicTags: tags, summary: generateSummary({ ...c, topicTags: tags }), updatedAt: now }
                 : c
             );
-          } else if (active && active.messages.length === 0) {
+          } else if (active && activeMessages.length === 0) {
             // Remove empty conversation instead of archiving
             conversations = conversations.filter(c => c.id !== active.id);
           }
@@ -278,7 +282,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       checkAndArchiveStale: () => {
         const active = selectActiveConversation(get());
-        if (!active || active.messages.length === 0) return;
+        if (!active || (active.messages ?? []).length === 0) return;
 
         const elapsed = Date.now() - active.lastMessageAt;
         if (elapsed > INACTIVITY_THRESHOLD_MS) {
@@ -303,9 +307,9 @@ export const useCompanionChatStore = create<CompanionChatState>()(
       // Skip persisting streaming message content to avoid expensive serialization during SSE
       partialize: (state) => ({
         ...state,
-        conversations: state.conversations.map(c => ({
+        conversations: (state.conversations ?? []).map(c => ({
           ...c,
-          messages: c.messages.map(m =>
+          messages: (c.messages ?? []).map(m =>
             m.status === 'streaming'
               ? { ...m, content: '' }
               : m

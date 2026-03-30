@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -138,6 +138,7 @@ export default function ReadingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string }>();
   const { colors, isDark } = useTheme();
+  const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
@@ -1465,6 +1466,7 @@ export default function ReadingScreen() {
             {/* Content - Scrollable with day-transition fade + keyboard-aware scrolling */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
             <KeyboardAwareScrollView
+              ref={scrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
                 paddingHorizontal: Spacing['6'],
@@ -1548,6 +1550,7 @@ export default function ReadingScreen() {
                 onStudyMethodPress={handleStudyMethodPress}
                 onQuoteSelected={handleQuoteSelected}
                 existingHighlights={currentDayHighlights}
+                scrollViewRef={scrollViewRef}
                 onScriptureTap={(ref) => {
                   const parsed = referenceToRoute(ref);
                   if (parsed) {
@@ -2149,8 +2152,8 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
         }}
       >
         {/* Handle */}
-        <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: Spacing['2'] }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }} />
+        <View style={{ alignItems: 'center', paddingTop: Spacing['3'], paddingBottom: Spacing['2'] }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', alignSelf: 'center' }} />
         </View>
 
         {/* Font Size */}

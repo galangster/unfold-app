@@ -426,8 +426,8 @@ export default function PaywallScreen() {
       >
         <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top + 8 }}>
           {/* Drag handle */}
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.textSubtle, opacity: 0.4 }} />
+          <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, alignSelf: 'center' }} />
           </View>
 
           {/* Unfold icon + close button row */}

@@ -297,7 +297,8 @@ const styles = StyleSheet.create({
   },
   dragHandleRow: {
     alignItems: 'center',
-    paddingTop: Spacing['2'],
+    paddingTop: Spacing['3'],
+    paddingBottom: Spacing['2'],
   },
   dragHandle: {
     width: 36,
