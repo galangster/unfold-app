@@ -416,17 +416,17 @@ export default function PaywallScreen() {
         </View>
       </View>
 
+      {/* Drag handle — sticky, above scroll content */}
+      <View style={{ position: 'absolute', top: 6, left: 0, right: 0, zIndex: 10, alignItems: 'center', pointerEvents: 'none' }}>
+        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong }} />
+      </View>
+
       {/* ─── Scrollable content ─── */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Spacing['6'] }}
+        contentContainerStyle={{ paddingBottom: Spacing['6'], paddingTop: 18 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Drag handle — pinned to top of sheet */}
-        <View style={{ alignItems: 'center', paddingTop: 6, paddingBottom: Spacing['2'] }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong }} />
-        </View>
-
         <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
           {/* Unfold icon + close button row */}
           <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
