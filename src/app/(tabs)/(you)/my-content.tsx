@@ -409,7 +409,7 @@ export default function MyContentScreen() {
                       }}
                       numberOfLines={3}
                     >
-                      "{bookmark.quotedText || day?.quotableLine || day?.scriptureText || bookmark.scriptureText}"
+                      "{bookmark.quotedText || (['Quote', 'Historical Context', 'Word Study'].includes(bookmark.scriptureReference) ? bookmark.scriptureText : null) || day?.quotableLine || day?.scriptureText || bookmark.scriptureText}"
                     </Text>
                   </TouchableOpacity>
                 );

@@ -937,6 +937,7 @@ export function DevotionalWebView({
             dayTitle: dayTitle || day.title || '',
             scriptureReference: labelMap[contentType] || contentType,
             scriptureText: text,
+            quotedText: text,
             updatedAt: new Date().toISOString(),
           });
         } else if (!nowBookmarked && devotionalId) {
