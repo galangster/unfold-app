@@ -27,9 +27,8 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { FlashList } from '@shopify/flash-list';
-import { PlusCircle, Trash } from 'phosphor-react-native';
+import { PlusCircle } from 'phosphor-react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -216,10 +215,12 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete }: Conver
   const title = getConversationTitle(conversation);
   const dateLabel = formatRelativeDate(conversation.lastMessageAt);
 
-  const row = (
+  return (
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => onSelect(conversation)}
+      onLongPress={isCurrent ? undefined : () => onDelete(conversation.id)}
+      delayLongPress={400}
       style={[
         styles.conversationRow,
         {
@@ -239,28 +240,6 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete }: Conver
       </Text>
       <Text style={[styles.convDate, { color: colors.textMuted }]}>{dateLabel}</Text>
     </TouchableOpacity>
-  );
-
-  // Don't allow swipe-to-delete on the current conversation
-  if (isCurrent) return row;
-
-  return (
-    <Swipeable
-      overshootRight={false}
-      renderRightActions={() => (
-        <TouchableOpacity
-          onPress={() => onDelete(conversation.id)}
-          activeOpacity={0.7}
-          style={styles.deleteAction}
-          accessibilityRole="button"
-          accessibilityLabel="Delete conversation"
-        >
-          <Trash size={20} color="#fff" weight="light" />
-        </TouchableOpacity>
-      )}
-    >
-      {row}
-    </Swipeable>
   );
 }
 
