@@ -1,6 +1,6 @@
 /**
  * Pure function state machine for the DevotionalCard.
- * Computes which of 7 visual states the card should render
+ * Computes which of 6 visual states the card should render
  * based on devotional data, reading progress, and time constraints.
  *
  * Keeps all logic testable and free of React/RN dependencies.
@@ -15,15 +15,6 @@ export type DevotionalCardState =
   | { type: 'preparing' }
   | {
       type: 'unread';
-      dayData: DevotionalDay;
-      seriesTitle: string;
-      totalDays: number;
-      onContinue: () => void;
-      onCreateNew: () => void;
-      ctaText: string;
-    }
-  | {
-      type: 'in-progress';
       dayData: DevotionalDay;
       seriesTitle: string;
       progress: number;
@@ -83,8 +74,7 @@ export interface ComputeInput {
  * 4. isJourneyComplete                      -> journey-complete
  * 5. hasReadToday & next day unread         -> tomorrow-locked
  * 6. dayData.isRead                         -> complete-today
- * 7. daysCompleted > 0                      -> in-progress
- * 8. else                                   -> unread
+ * 7. else                                   -> unread  (daysCompleted may be > 0)
  */
 export function computeDevotionalState(input: ComputeInput): DevotionalCardState {
   const {
@@ -153,26 +143,13 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     };
   }
 
-  // 6. Some days completed but current day unread
-  if (daysCompleted > 0) {
-    return {
-      type: 'in-progress',
-      dayData: currentDayData,
-      seriesTitle,
-      progress,
-      daysCompleted,
-      totalDays,
-      onContinue,
-      onCreateNew,
-      ctaText,
-    };
-  }
-
-  // 7. Brand-new series, nothing read yet
+  // 6. Unread — covers both brand-new (daysCompleted=0) and in-progress (daysCompleted>0)
   return {
     type: 'unread',
     dayData: currentDayData,
     seriesTitle,
+    progress,
+    daysCompleted,
     totalDays,
     onContinue,
     onCreateNew,

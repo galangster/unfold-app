@@ -124,7 +124,7 @@ describe('computeDevotionalState', () => {
     }
   });
 
-  it('returns in-progress when some days completed but current day unread', () => {
+  it('returns unread with daysCompleted when some days completed but current day unread', () => {
     const state = computeDevotionalState({
       ...baseInput,
       daysCompleted: 3,
@@ -132,18 +132,19 @@ describe('computeDevotionalState', () => {
       ctaText: 'Keep Going',
       currentDayData: makeDayData({ dayNumber: 4, isRead: false }),
     });
-    expect(state.type).toBe('in-progress');
-    if (state.type === 'in-progress') {
+    expect(state.type).toBe('unread');
+    if (state.type === 'unread') {
       expect(state.daysCompleted).toBe(3);
       expect(state.ctaText).toBe('Keep Going');
     }
   });
 
-  it('returns unread when no days completed', () => {
+  it('returns unread with daysCompleted=0 when no days completed', () => {
     const state = computeDevotionalState(baseInput);
     expect(state.type).toBe('unread');
     if (state.type === 'unread') {
       expect(state.totalDays).toBe(7);
+      expect(state.daysCompleted).toBe(0);
       expect(state.ctaText).toBe('Begin Your Journey');
       expect(typeof state.onContinue).toBe('function');
     }

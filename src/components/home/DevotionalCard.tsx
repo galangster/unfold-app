@@ -1,8 +1,8 @@
 /**
- * DevotionalCard — 7-state hero card for the home screen.
+ * DevotionalCard — 6-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | unread | in-progress | complete-today | tomorrow-locked | journey-complete
+ *   empty | preparing | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -274,10 +274,10 @@ function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: strin
   );
 }
 
-// ─── Main card (shared by unread / in-progress / complete-today / tomorrow-locked) ──
+// ─── Main card (shared by unread / complete-today / tomorrow-locked) ──
 
 interface MainCardProps {
-  state: Extract<DevotionalCardState, { type: 'unread' | 'in-progress' | 'complete-today' | 'tomorrow-locked' }>;
+  state: Extract<DevotionalCardState, { type: 'unread' | 'complete-today' | 'tomorrow-locked' }>;
 }
 
 function MainCard({ state }: MainCardProps) {
@@ -294,18 +294,18 @@ function MainCard({ state }: MainCardProps) {
   const isDisabled = state.type === 'tomorrow-locked';
   const dayData = state.dayData;
 
-  // Progress data — unread has no progress bar, derive common fields
-  const showProgress = state.type !== 'unread';
-  const progress = 'progress' in state ? state.progress : 0;
-  const daysCompleted = 'daysCompleted' in state ? state.daysCompleted : 0;
+  // Progress data — show progress bar when days have been completed
+  const progress = state.progress;
+  const daysCompleted = state.daysCompleted;
+  const showProgress = daysCompleted > 0;
   const totalDays = state.totalDays;
   const seriesTitle = state.seriesTitle;
 
   // CTA handling
-  const hasCta = state.type === 'unread' || state.type === 'in-progress' || state.type === 'complete-today';
+  const hasCta = state.type === 'unread' || state.type === 'complete-today';
   const ctaText =
     state.type === 'complete-today' ? "Today's Reading"
-    : state.type === 'unread' || state.type === 'in-progress' ? state.ctaText
+    : state.type === 'unread' ? state.ctaText
     : 'Continue Reading';
   const onPress = isTomorrow
     ? () => setShowTomorrowInfo((v) => !v)
@@ -498,7 +498,6 @@ export function DevotionalCard({ state, scrollY, inStack }: Props) {
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
       )}
       {(state.type === 'unread' ||
-        state.type === 'in-progress' ||
         state.type === 'complete-today' ||
         state.type === 'tomorrow-locked') && <MainCard state={state} />}
     </Animated.View>
