@@ -42,6 +42,8 @@ export type DevotionalCardState =
       daysCompleted: number;
       totalDays: number;
       tomorrowTeaser: string | null;
+      onContinue: () => void;
+      onCreateNew: () => void;
     }
   | { type: 'journey-complete'; seriesTitle: string; onCreateNew: () => void };
 
@@ -126,6 +128,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       daysCompleted,
       totalDays,
       tomorrowTeaser,
+      onContinue,
+      onCreateNew,
     };
   }
 

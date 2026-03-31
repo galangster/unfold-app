@@ -23,7 +23,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
-import { PlusIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { PlusIcon } from 'phosphor-react-native';
 
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -284,14 +284,13 @@ function MainCard({ state }: MainCardProps) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
   const scale = useSharedValue(1);
-  const [showTomorrowInfo, setShowTomorrowInfo] = React.useState(false);
 
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
   const isTomorrow = state.type === 'tomorrow-locked';
-  const isDisabled = state.type === 'tomorrow-locked';
+  const isCompleted = state.type === 'complete-today' || state.type === 'tomorrow-locked';
   const dayData = state.dayData;
 
   // Progress data — show progress bar when days have been completed
@@ -302,16 +301,12 @@ function MainCard({ state }: MainCardProps) {
   const seriesTitle = state.seriesTitle;
 
   // CTA handling
-  const hasCta = state.type === 'unread' || state.type === 'complete-today';
+  const hasCta = state.type === 'unread' || state.type === 'complete-today' || state.type === 'tomorrow-locked';
   const ctaText =
-    state.type === 'complete-today' ? "Today's Reading"
+    isCompleted ? 'Return to Reading'
     : state.type === 'unread' ? state.ctaText
     : 'Continue Reading';
-  const onPress = isTomorrow
-    ? () => setShowTomorrowInfo((v) => !v)
-    : 'onContinue' in state
-      ? state.onContinue
-      : undefined;
+  const onPress = 'onContinue' in state ? state.onContinue : undefined;
 
   // New series secondary CTA — always show when available
   const showNewSeries = true;
@@ -324,7 +319,7 @@ function MainCard({ state }: MainCardProps) {
     <Animated.View style={scaleStyle}>
       <TouchableOpacity
         activeOpacity={0.7}
-        onPress={isDisabled ? () => setShowTomorrowInfo((v) => !v) : onPress}
+        onPress={onPress}
         disabled={false}
         onPressIn={() => {
           scale.value = withTiming(0.98, { duration: 120 });
@@ -334,8 +329,8 @@ function MainCard({ state }: MainCardProps) {
         }}
         accessibilityRole="button"
         accessibilityLabel={
-          isDisabled
-            ? 'Preparing your reading, please wait'
+          isCompleted
+            ? `Return to ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`
             : `Continue ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`
         }
         style={styles.cardTouchable}
@@ -370,39 +365,48 @@ function MainCard({ state }: MainCardProps) {
             {dayData.title}
           </Text>
 
-          {/* Scripture teaser */}
-          {dayData.scriptureReference && (
-            <Text
-              style={[
-                styles.mainCardScripture,
-                {
-                  color: colors.textMuted,
-                  marginBottom: dayData.studyMethod ? 12 : 20,
-                },
-              ]}
-              numberOfLines={2}
-            >
-              {dayData.scriptureReference}
-              {dayData.scriptureText ? ` — "${dayData.scriptureText.slice(0, 80).trim()}..."` : ''}
-            </Text>
-          )}
-
-          {/* Tomorrow teaser */}
-          {isTomorrow && state.tomorrowTeaser && (
-            <Text style={[styles.mainCardTomorrowTeaser, { color: colors.textMuted }]} numberOfLines={3}>
-              {state.tomorrowTeaser}
-            </Text>
-          )}
-
-          {/* Study method chip */}
-          {dayData.studyMethod && BIBLE_STUDY_METHODS[dayData.studyMethod] && (
-            <View style={styles.mainCardMethodRow}>
-              <View style={[styles.mainCardMethodChip, { backgroundColor: alpha(colors.accent, 0.07) }]}>
-                <Text style={[styles.mainCardMethodText, { color: colors.accent }]}>
-                  {BIBLE_STUDY_METHODS[dayData.studyMethod].name}
+          {/* Completed state: quotable line recall + tomorrow note */}
+          {isCompleted ? (
+            <>
+              {dayData.quotableLine ? (
+                <Text style={[styles.completedQuoteLine, { color: colors.text }]}>
+                  {'\u201C'}{dayData.quotableLine}{'\u201D'}
                 </Text>
-              </View>
-            </View>
+              ) : null}
+              <Text style={[styles.completedTomorrowNote, { color: colors.textMuted }]}>
+                Your next reading will be ready tomorrow morning.
+              </Text>
+            </>
+          ) : (
+            <>
+              {/* Scripture teaser */}
+              {dayData.scriptureReference && (
+                <Text
+                  style={[
+                    styles.mainCardScripture,
+                    {
+                      color: colors.textMuted,
+                      marginBottom: dayData.studyMethod ? 12 : 20,
+                    },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {dayData.scriptureReference}
+                  {dayData.scriptureText ? ` — "${dayData.scriptureText.slice(0, 80).trim()}..."` : ''}
+                </Text>
+              )}
+
+              {/* Study method chip */}
+              {dayData.studyMethod && BIBLE_STUDY_METHODS[dayData.studyMethod] && (
+                <View style={styles.mainCardMethodRow}>
+                  <View style={[styles.mainCardMethodChip, { backgroundColor: alpha(colors.accent, 0.07) }]}>
+                    <Text style={[styles.mainCardMethodText, { color: colors.accent }]}>
+                      {BIBLE_STUDY_METHODS[dayData.studyMethod].name}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           {/* Progress section */}
@@ -421,31 +425,7 @@ function MainCard({ state }: MainCardProps) {
           )}
 
           {/* CTA Button */}
-          {isTomorrow ? (
-            <>
-              <View
-                style={[
-                  styles.tomorrowLockedCta,
-                  {
-                    backgroundColor: colors.buttonBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <LockSimpleIcon size={15} color={colors.textMuted} weight="light" />
-                <Text style={[styles.tomorrowLockedCtaText, { color: colors.textMuted }]}>
-                  Unlocks Tomorrow
-                </Text>
-              </View>
-              {showTomorrowInfo && (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.tomorrowInfoContainer}>
-                  <Text style={[styles.tomorrowInfoText, { color: colors.textSubtle }]}>
-                    Give today a chance to sink in.{'\n'}Come back tomorrow — it'll be worth it.
-                  </Text>
-                </Animated.View>
-              )}
-            </>
-          ) : hasCta ? (
+          {hasCta ? (
             <AccentGlow color={colors.accent} intensity="medium" active style={{ borderRadius: Radius.md }}>
               <View style={[styles.ctaButton, { backgroundColor: colors.accent }]}>
                 <Text style={[styles.ctaButtonText, { color: colors.background }]}>
@@ -688,13 +668,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     opacity: 0.8,
   },
-  mainCardTomorrowTeaser: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 14,
-    opacity: 0.72,
-  },
   mainCardMethodRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -729,6 +702,23 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
 
+  // Completed state (complete-today / tomorrow-locked)
+  completedQuoteLine: {
+    fontFamily: FontFamily.displayItalic,
+    fontSize: FontSize.xl,
+    lineHeight: 30,
+    textAlign: 'center',
+    marginBottom: Spacing['4'],
+    paddingHorizontal: Spacing['2'],
+  },
+  completedTomorrowNote: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: Spacing['5'],
+  },
+
   // CTA
   ctaButton: {
     paddingVertical: 15,
@@ -741,31 +731,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // Tomorrow locked
-  tomorrowLockedCta: {
-    paddingVertical: 15,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: Spacing['2'],
-  },
-  tomorrowLockedCtaText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
-  tomorrowInfoContainer: {
-    marginTop: 10,
-    paddingHorizontal: Spacing['1'],
-  },
-  tomorrowInfoText: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
 
   // New series secondary CTA
   newSeriesButton: {
