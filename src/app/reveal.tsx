@@ -110,27 +110,19 @@ export default function RevealScreen() {
   }));
 
   // ─── Dual chevron float ────────────────────────────────────────
-  const chevronY1 = useSharedValue(0);
-  const chevronY2 = useSharedValue(0);
+  const chevronY = useSharedValue(0);
 
   useEffect(() => {
     if (reducedMotion) return;
-    const floatConfig = {
-      duration: 1200,
-      easing: Easing.inOut(Easing.ease),
-    };
-    chevronY1.value = withRepeat(withTiming(-8, floatConfig), -1, true);
-    chevronY2.value = withDelay(
-      200,
-      withRepeat(withTiming(-8, floatConfig), -1, true),
+    chevronY.value = withRepeat(
+      withTiming(-8, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
     );
   }, [reducedMotion]);
 
-  const chevron1Style = useAnimatedStyle(() => ({
-    transform: [{ translateY: chevronY1.value }],
-  }));
-  const chevron2Style = useAnimatedStyle(() => ({
-    transform: [{ translateY: chevronY2.value }],
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: chevronY.value }],
   }));
 
   // ─── Draggable curtain lift ────────────────────────────────────
@@ -202,11 +194,6 @@ export default function RevealScreen() {
     transform: [{ translateY: translateY.value }],
   }));
 
-  // Parallax: ambient glow moves at 0.3x drag speed
-  const glowParallaxStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value * 0.3 }],
-  }));
-
   // ─── Shimmer sweep across title after scatter completes ────────
   const shimmerSweepOpacity = useSharedValue(0);
   const shimmerSweepX = useSharedValue(-SCREEN_WIDTH);
@@ -254,15 +241,6 @@ export default function RevealScreen() {
         accessibilityLabel={`New devotional ready: ${seriesTitle ?? 'Series'}, ${dayTitle ?? 'Today'}. Day ${dayNum} of ${total}. Swipe up to reveal your devotional.`}
         accessibilityRole="header"
       >
-        {/* Ambient glow effect — with parallax */}
-        <Animated.View
-          style={[
-            styles.ambientGlow,
-            { backgroundColor: alpha(colors.accent, 0.06) },
-            glowParallaxStyle,
-          ]}
-        />
-
         {/* Main content — centered */}
         <View style={styles.content}>
           {/* Series title eyebrow */}
@@ -321,15 +299,9 @@ export default function RevealScreen() {
 
         {/* Swipe-up prompt — bottom of screen */}
         <Animated.View style={[styles.swipePrompt, promptStyle]}>
-          {/* Dual stacked chevrons */}
-          <View style={styles.chevronStack}>
-            <Animated.View style={chevron1Style}>
-              <CaretUp size={24} color={colors.textSubtle} weight="light" />
-            </Animated.View>
-            <Animated.View style={[{ marginTop: 2 }, chevron2Style]}>
-              <CaretUp size={24} color={colors.textSubtle} weight="light" />
-            </Animated.View>
-          </View>
+          <Animated.View style={chevronStyle}>
+            <CaretUp size={24} color={colors.textSubtle} weight="light" />
+          </Animated.View>
 
           <ShimmerText
             text="Swipe up to reveal your devotional"
@@ -362,15 +334,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  ambientGlow: {
-    position: 'absolute',
-    width: SCREEN_WIDTH * 0.8,
-    height: SCREEN_WIDTH * 0.8,
-    borderRadius: SCREEN_WIDTH * 0.4,
-    alignSelf: 'center',
-    top: '30%',
-    opacity: 0.7,
-  },
   eyebrow: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 12,
@@ -397,9 +360,6 @@ const styles = StyleSheet.create({
   },
   swipePrompt: {
     alignItems: 'center',
-    paddingBottom: 40,
-  },
-  chevronStack: {
-    alignItems: 'center',
+    paddingBottom: 16,
   },
 });
