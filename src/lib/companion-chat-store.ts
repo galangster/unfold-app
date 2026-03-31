@@ -47,6 +47,7 @@ export interface Conversation {
   title: string | null;
   topicTags: string[];
   archived: boolean;
+  pinned?: boolean;
   updatedAt?: string; // ISO timestamp for sync
 }
 
@@ -107,7 +108,7 @@ interface CompanionChatState {
   checkAndArchiveStale: () => void;
   deleteConversation: (id: string) => void;
   clearAllConversations: () => void;
-  updateConversation: (id: string, updates: Partial<Pick<Conversation, 'title' | 'topicTags'>>) => void;
+  updateConversation: (id: string, updates: Partial<Pick<Conversation, 'title' | 'topicTags' | 'pinned'>>) => void;
   setActiveConversation: (id: string) => void;
 }
 

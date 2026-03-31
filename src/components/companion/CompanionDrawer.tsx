@@ -14,10 +14,12 @@ import {
   View,
   Text,
   TouchableOpacity,
+  FlatList,
   Dimensions,
   StyleSheet,
   Alert,
   ActionSheetIOS,
+  LayoutAnimation,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -29,7 +31,6 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture } from 'react-native-gesture-handler';
-import { FlashList } from '@shopify/flash-list';
 import { PlusCircle } from 'phosphor-react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -114,11 +115,16 @@ function buildListItems(conversations: Conversation[]): ListItem[] {
   const now = Date.now();
   const sorted = [...conversations].sort((a, b) => b.lastMessageAt - a.lastMessageAt);
 
+  const starred: Conversation[] = [];
   const today: Conversation[] = [];
   const thisWeek: Conversation[] = [];
   const earlier: Conversation[] = [];
 
   for (const conv of sorted) {
+    if (conv.pinned) {
+      starred.push(conv);
+      continue;
+    }
     const age = now - conv.createdAt;
     if (age < ONE_DAY_MS) today.push(conv);
     else if (age < ONE_WEEK_MS) thisWeek.push(conv);
@@ -127,6 +133,10 @@ function buildListItems(conversations: Conversation[]): ListItem[] {
 
   const items: ListItem[] = [];
 
+  if (starred.length > 0) {
+    items.push({ type: 'header', label: 'Starred' });
+    for (const conv of starred) items.push({ type: 'conversation', conversation: conv });
+  }
   if (today.length > 0) {
     items.push({ type: 'header', label: 'Today' });
     for (const conv of today) items.push({ type: 'conversation', conversation: conv });
@@ -219,11 +229,13 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete, onRename
   const title = getConversationTitle(conversation);
   const dateLabel = formatRelativeDate(conversation.lastMessageAt);
 
+  const isPinned = conversation.pinned ?? false;
+
   const handleLongPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     ActionSheetIOS.showActionSheetWithOptions(
       {
-        options: ['Pin Chat', 'Rename', 'Delete', 'Cancel'],
+        options: [isPinned ? 'Unstar' : 'Star', 'Rename', 'Delete', 'Cancel'],
         destructiveButtonIndex: 2,
         cancelButtonIndex: 3,
         title: title,
@@ -234,7 +246,7 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete, onRename
         if (buttonIndex === 2) onDelete(conversation.id);
       },
     );
-  }, [conversation.id, title, onPin, onRename, onDelete]);
+  }, [conversation.id, title, isPinned, onPin, onRename, onDelete]);
 
   return (
     <TouchableOpacity
@@ -307,7 +319,14 @@ export function CompanionDrawer({
           {
             text: 'Delete',
             style: 'destructive',
-            onPress: () => deleteConversation(id),
+            onPress: () => {
+              LayoutAnimation.configureNext({
+                duration: 250,
+                update: { type: LayoutAnimation.Types.easeOut },
+                delete: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+              });
+              deleteConversation(id);
+            },
           },
         ],
       );
@@ -335,11 +354,18 @@ export function CompanionDrawer({
   );
 
   const handlePin = useCallback(
-    (_id: string) => {
-      // TODO: Add pinned field to store
-      Alert.alert('Coming Soon', 'Pinning conversations will be available in a future update.');
+    (id: string) => {
+      const conv = allWithMessages.find(c => c.id === id);
+      const isPinned = conv?.pinned ?? false;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      LayoutAnimation.configureNext({
+        duration: 250,
+        update: { type: LayoutAnimation.Types.easeOut },
+        create: { type: LayoutAnimation.Types.easeOut, property: LayoutAnimation.Properties.opacity },
+      });
+      updateConversation(id, { pinned: !isPinned });
     },
-    [],
+    [allWithMessages, updateConversation],
   );
 
   // Scrim animated style — opacity interpolated from translateX
@@ -436,7 +462,7 @@ export function CompanionDrawer({
             </Text>
           </View>
         ) : (
-          <FlashList
+          <FlatList
             data={listItems}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
