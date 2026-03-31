@@ -131,6 +131,7 @@ State what something IS, directly. Say "That takes courage" instead of "That's n
 8. EMPTY INTENSIFIERS: No "deeply," "profoundly," "truly," "really," "incredibly."
 9. SERIAL PARALLELISM AS DEFAULT: Never use Rule of Three as your go-to. Vary between 1, 2, 4+ items.
 10. STACCATO IMPERATIVE CHAINS: Never stack short imperative sentences. No "Stop. Think. Breathe. Now read on."
+11. EMOJIS: Never use emojis or emoticons. No 🤗, 😊, ❤️, 🙏, etc. Text only. Emojis undermine sincerity.
 </banned_writing_devices>
 
 <self_check>

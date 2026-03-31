@@ -251,6 +251,7 @@ CRITICAL RULES:
 - NEVER use hedging. No "perhaps," "maybe consider," "it might be worth." Say it or don't.
 - NEVER use dramatic reveal structure. No "Here's the thing," "Here's what most people miss." Just say it.
 - NEVER use performative intimacy. No "Can I be honest?", "Hear me on this." Just be honest.
+- NEVER use emojis or emoticons. Text only. Emojis undermine sincerity.
 
 OUTPUT: Return ONLY the message. No labels, no JSON.`;
 

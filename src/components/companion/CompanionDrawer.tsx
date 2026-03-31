@@ -223,17 +223,16 @@ function ConversationRow({ conversation, isCurrent, onSelect, onDelete }: Conver
       delayLongPress={400}
       style={[
         styles.conversationRow,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.6),
-          borderLeftWidth: isCurrent ? 2 : 0,
-          borderLeftColor: isCurrent ? colors.accent : 'transparent',
+        isCurrent && {
+          backgroundColor: alpha(colors.backgroundElevated, 0.5),
+          borderRadius: Radius.sm,
         },
       ]}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${dateLabel}${isCurrent ? ', current conversation' : ''}`}
     >
       <Text
-        style={[styles.convTitle, { color: isCurrent ? colors.accent : colors.text }]}
+        style={[styles.convTitle, { color: colors.text }]}
         numberOfLines={1}
       >
         {title}

@@ -18,7 +18,7 @@ import {
   CaretDownIcon,
   CrownIcon,
   List,
-  PencilSimpleLine,
+  NotePencil,
 } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -333,7 +333,7 @@ export default function CompanionScreen() {
           accessibilityLabel="New conversation"
           accessibilityRole="button"
         >
-          <PencilSimpleLine size={22} color={colors.textMuted} weight="light" />
+          <NotePencil size={22} color={colors.textMuted} weight="light" />
         </TouchableOpacity>
       </View>
 
