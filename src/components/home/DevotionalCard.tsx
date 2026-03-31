@@ -34,6 +34,7 @@ import { useTheme } from '@/lib/theme';
 import { AccentGlow } from '@/components/AccentGlow';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { EmberParticles } from '@/components/EmberParticles';
 import type { DevotionalCardState } from './compute-devotional-state';
 
 // ─── Props ──────────────────────────────────────────────────────
@@ -43,6 +44,8 @@ interface Props {
   scrollY?: SharedValue<number>;
   /** When true, omits root padding/margin (used inside DevotionalCardStack) */
   inStack?: boolean;
+  /** When true, shows returning-user warm empty state instead of first-time brand intro */
+  isReturningUser?: boolean;
 }
 
 // ─── Character reveal for "Unfold" title (empty state) ──────────
@@ -146,7 +149,7 @@ function AnimatedProgressBar({ progress, colors }: { progress: number; colors: {
 
 // ─── Empty state ────────────────────────────────────────────────
 
-function EmptyState({ onCreateNew }: { onCreateNew: () => void }) {
+function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
 
@@ -195,6 +198,100 @@ function EmptyState({ onCreateNew }: { onCreateNew: () => void }) {
               Begin Your First Devotional
             </Text>
           </View>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+}
+
+// ─── EmptyState router — branches on isReturningUser ────────────
+
+function EmptyState({ onCreateNew, isReturningUser }: { onCreateNew: () => void; isReturningUser?: boolean }) {
+  if (isReturningUser) {
+    return <ReturningEmptyState onCreateNew={onCreateNew} />;
+  }
+  return <FirstTimeEmptyState onCreateNew={onCreateNew} />;
+}
+
+// ─── Returning user empty state ─────────────────────────────────
+
+function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
+  const { colors } = useTheme();
+  const { entering, reducedMotion } = useAccessibleAnimation();
+  const glowOpacity = useSharedValue(0.18);
+
+  useEffect(() => {
+    if (reducedMotion) return;
+    glowOpacity.value = withRepeat(
+      withTiming(0.38, { duration: 2800, easing: Easing.inOut(Easing.sin) }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(glowOpacity);
+  }, [glowOpacity, reducedMotion]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  return (
+    <View
+      style={[
+        styles.returningCard,
+        {
+          backgroundColor: colors.backgroundElevated,
+          borderColor: alpha(colors.accent, 0.12),
+          shadowColor: colors.accent,
+        },
+      ]}
+    >
+      {/* Pulsing glow overlay */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.returningGlow, glowStyle]}
+        pointerEvents="none"
+      >
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: Radius.xl,
+              backgroundColor: alpha(colors.accent, 0.07),
+            },
+          ]}
+        />
+      </Animated.View>
+
+      {/* Ember particles — non-interactive layer */}
+      <EmberParticles color={colors.accent} count={8} />
+
+      {/* Content */}
+      <Animated.View
+        entering={entering(FadeIn.duration(500).delay(80))}
+        style={styles.returningContent}
+      >
+        <View style={[styles.returningAccentBar, { backgroundColor: colors.accent }]} />
+
+        <Text style={[styles.returningTitle, { color: colors.text }]}>
+          Ready for your{'\n'}next study?
+        </Text>
+
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>
+          Continue growing with a new{'\n'}personalized devotional series.
+        </Text>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={onCreateNew}
+          accessibilityRole="button"
+          accessibilityLabel="Start a new study"
+        >
+          <AccentGlow color={colors.accent} intensity="medium" active style={{ borderRadius: Radius.md }}>
+            <View style={[styles.returningCta, { backgroundColor: colors.accent }]}>
+              <Text style={[styles.returningCtaText, { color: colors.background }]}>
+                Start a New Study
+              </Text>
+            </View>
+          </AccentGlow>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -458,7 +555,7 @@ function MainCard({ state }: MainCardProps) {
 
 // ─── DevotionalCard (root) ──────────────────────────────────────
 
-export function DevotionalCard({ state, scrollY, inStack }: Props) {
+export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Props) {
   const { entering } = useAccessibleAnimation();
 
   // Subtle parallax when scrollY is provided
@@ -472,7 +569,7 @@ export function DevotionalCard({ state, scrollY, inStack }: Props) {
       entering={entering(FadeIn.delay(100).duration(400))}
       style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
     >
-      {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} />}
+      {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} isReturningUser={isReturningUser} />}
       {state.type === 'preparing' && <PreparingState />}
       {state.type === 'journey-complete' && (
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
@@ -544,6 +641,56 @@ const styles = StyleSheet.create({
   emptyCtaText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 17,
+    letterSpacing: 0.3,
+  },
+
+  // Returning user empty state
+  returningCard: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  returningGlow: {
+    borderRadius: Radius.xl,
+  },
+  returningContent: {
+    padding: Spacing['7'],
+    alignItems: 'center',
+  },
+  returningAccentBar: {
+    width: 28,
+    height: 1.5,
+    borderRadius: 1,
+    marginBottom: Spacing['6'],
+  },
+  returningTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 32,
+    lineHeight: 40,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    marginBottom: Spacing['3'],
+  },
+  returningSubtitle: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 23,
+    textAlign: 'center',
+    marginBottom: Spacing['7'],
+  },
+  returningCta: {
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  returningCtaText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 15,
     letterSpacing: 0.3,
   },
 

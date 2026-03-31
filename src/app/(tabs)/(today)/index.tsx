@@ -85,6 +85,7 @@ export default function HomeScreen() {
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
+  const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
@@ -666,6 +667,7 @@ export default function HomeScreen() {
               <DevotionalCard
                 state={devotionalState}
                 scrollY={scrollY}
+                isReturningUser={isReturningUser}
               />
             </Animated.View>
           </View>
