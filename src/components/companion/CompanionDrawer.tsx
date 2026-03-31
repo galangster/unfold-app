@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
   drawer: {
     position: 'absolute',
     top: 0,
-    left: -DRAWER_WIDTH,
+    left: 0,
     bottom: 0,
     zIndex: 11,
     shadowColor: '#000',
