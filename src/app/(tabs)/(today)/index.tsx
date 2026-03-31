@@ -40,7 +40,6 @@ const INFLIGHT_KEY = 'inflight-generation-job';
 import { getContextSlotType } from '@/lib/context-slot-priority';
 import { computeDevotionalState } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
-import { DevotionalCardStack } from '@/components/home/DevotionalCardStack';
 import { ContextSlot } from '@/components/home/ContextSlot';
 import { GreetingRow } from '@/components/home/GreetingRow';
 import { BentoGrid } from '@/components/home/BentoGrid';
@@ -661,13 +660,12 @@ export default function HomeScreen() {
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
 
-          {/* Zone 3: Hero Devotional — swipeable card stack for multiple devotionals */}
+          {/* Zone 3: Hero Devotional — single card */}
           <View onLayout={onReadingLayout} collapsable={false}>
             <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
-              <DevotionalCardStack
+              <DevotionalCard
+                state={devotionalState}
                 scrollY={scrollY}
-                onCreateNew={handleCreateNew}
-                onContinueReading={handleContinueReading}
               />
             </Animated.View>
           </View>
