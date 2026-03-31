@@ -14,17 +14,20 @@ import {
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
   CaretDownIcon,
-  PlusCircleIcon,
-  ClockCounterClockwiseIcon,
   CrownIcon,
+  List,
+  PencilSimpleLine,
 } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
+  runOnJS,
   Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
@@ -33,9 +36,12 @@ import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { useCompanionChat } from '@/lib/use-companion-chat';
-import type { CompanionMessage, Conversation } from '@/lib/companion-chat-store';
-import { ConversationHistorySheet } from '@/components/companion/ConversationHistorySheet';
-import { ArchivedConversationView } from '@/components/companion/ArchivedConversationView';
+import type { CompanionMessage } from '@/lib/companion-chat-store';
+import {
+  CompanionDrawer,
+  useDrawerGesture,
+  DRAWER_WIDTH,
+} from '@/components/companion/CompanionDrawer';
 import { CompanionEmptyState } from '@/components/companion/CompanionEmptyState';
 import { CompanionInput } from '@/components/companion/CompanionInput';
 import { UserMessageBubble } from '@/components/companion/UserMessageBubble';
@@ -143,9 +149,33 @@ export default function CompanionScreen() {
     startNewConversation,
   } = useCompanionChat();
 
-  // Conversation history state
-  const [showHistory, setShowHistory] = useState(false);
-  const [viewingArchived, setViewingArchived] = useState<Conversation | null>(null);
+  // Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerTranslateX = useSharedValue(-DRAWER_WIDTH);
+
+  const handleDrawerOpen = useCallback(() => {
+    setDrawerOpen(true);
+    drawerTranslateX.value = withSpring(0, { duration: 300, dampingRatio: 1 });
+  }, [drawerTranslateX]);
+
+  const handleDrawerClose = useCallback(() => {
+    setDrawerOpen(false);
+    drawerTranslateX.value = withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
+  }, [drawerTranslateX]);
+
+  const panGesture = useDrawerGesture(
+    drawerTranslateX,
+    drawerOpen,
+    () => setDrawerOpen(true),
+    () => setDrawerOpen(false),
+  );
+
+  // Tap gesture for keyboard dismiss (replaces TouchableOpacity wrapper)
+  const tapGesture = Gesture.Tap().onEnd(() => {
+    runOnJS(Keyboard.dismiss)();
+  });
+
+  const composedGesture = Gesture.Simultaneous(panGesture, tapGesture);
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -267,7 +297,7 @@ export default function CompanionScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? -tabBarHeight : 0}
     >
-      {/* Header — new conversation / orb / history */}
+      {/* Header — drawer / orb + name / new chat */}
       <View
         style={{
           paddingTop: insets.top + 4,
@@ -281,6 +311,36 @@ export default function CompanionScreen() {
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleDrawerOpen();
+          }}
+          hitSlop={8}
+          activeOpacity={0.7}
+          accessibilityLabel="Open conversation history"
+          accessibilityRole="button"
+        >
+          <List size={24} color={colors.textMuted} weight="light" />
+        </TouchableOpacity>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <CompanionOrb
+            accentColor={colors.accent}
+            size={32}
+            isActive={isStreaming}
+          />
+          <Text
+            style={{
+              fontFamily: FontFamily.uiMedium,
+              fontSize: FontSize.base,
+              color: colors.text,
+            }}
+          >
+            Companion
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             startNewConversation();
           }}
           hitSlop={8}
@@ -288,130 +348,116 @@ export default function CompanionScreen() {
           accessibilityLabel="New conversation"
           accessibilityRole="button"
         >
-          <PlusCircleIcon size={24} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
-
-        <CompanionOrb
-          accentColor={colors.accent}
-          size={32}
-          isActive={isStreaming}
-        />
-
-        <TouchableOpacity
-          onPress={() => setShowHistory(true)}
-          hitSlop={8}
-          activeOpacity={0.7}
-          accessibilityLabel="Conversation history"
-          accessibilityRole="button"
-        >
-          <ClockCounterClockwiseIcon size={24} color={colors.textMuted} weight="light" />
+          <PencilSimpleLine size={22} color={colors.textMuted} weight="light" />
         </TouchableOpacity>
       </View>
 
-      {/* Messages or empty state — tap to dismiss keyboard */}
-      <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-        {isEmpty ? (
-          <CompanionEmptyState onSelectStarter={handleSend} />
-        ) : (
-          <>
-            <FlatList
-              ref={listRef}
-              data={invertedMessages}
-              renderItem={renderItem}
-              keyExtractor={keyExtractor}
-              inverted
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
-              initialNumToRender={15}
-              maxToRenderPerBatch={10}
-              windowSize={11}
-              removeClippedSubviews
-              contentContainerStyle={{
-                paddingBottom: Spacing['2'],
-                paddingTop: Spacing['2'],
-              }}
-              ListHeaderComponent={
-                <>
-                  {/* Typing indicator */}
-                  {showTyping && (
-                    <View style={{ paddingVertical: 8 }}>
-                      <TypingIndicator />
-                    </View>
-                  )}
-                  {/* Suggestion chips */}
-                  {showSuggestions && (
-                    <SuggestionChips
-                      suggestions={suggestions}
-                      onSelect={handleChipSelect}
-                      visible
-                    />
-                  )}
-                </>
-              }
-            />
-
-            {/* Error banner */}
-            {error && (
-              <View
-                style={{
-                  marginHorizontal: Spacing['4'],
-                  marginBottom: Spacing['2'],
-                  backgroundColor: alpha(colors.error, 0.10),
-                  borderRadius: Radius.md,
-                  padding: Spacing['3'],
+      {/* Messages or empty state — tap to dismiss keyboard, swipe for drawer */}
+      <GestureDetector gesture={composedGesture}>
+        <Animated.View style={{ flex: 1 }}>
+          {isEmpty ? (
+            <CompanionEmptyState onSelectStarter={handleSend} />
+          ) : (
+            <>
+              <FlatList
+                ref={listRef}
+                data={invertedMessages}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                inverted
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                keyboardDismissMode="interactive"
+                keyboardShouldPersistTaps="handled"
+                initialNumToRender={15}
+                maxToRenderPerBatch={10}
+                windowSize={11}
+                removeClippedSubviews
+                contentContainerStyle={{
+                  paddingBottom: Spacing['2'],
+                  paddingTop: Spacing['2'],
                 }}
-              >
-                <Text
-                  style={{
-                    fontFamily: FontFamily.body,
-                    fontSize: FontSize.sm,
-                    color: colors.error,
-                    textAlign: 'center',
-                  }}
-                >
-                  {error}
-                </Text>
-              </View>
-            )}
+                ListHeaderComponent={
+                  <>
+                    {/* Typing indicator */}
+                    {showTyping && (
+                      <View style={{ paddingVertical: 8 }}>
+                        <TypingIndicator />
+                      </View>
+                    )}
+                    {/* Suggestion chips */}
+                    {showSuggestions && (
+                      <SuggestionChips
+                        suggestions={suggestions}
+                        onSelect={handleChipSelect}
+                        visible
+                      />
+                    )}
+                  </>
+                }
+              />
 
-            {/* Scroll-to-bottom FAB */}
-            {showScrollButton && (
-              <Animated.View
-                style={[
-                  {
-                    position: 'absolute',
-                    bottom: 16,
-                    right: 16,
-                  },
-                  scrollButtonStyle,
-                ]}
-              >
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={scrollToBottom}
-                  accessibilityLabel="Scroll to bottom"
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              {/* Error banner */}
+              {error && (
+                <View
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: colors.backgroundElevated,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    ...Shadow.sm,
+                    marginHorizontal: Spacing['4'],
+                    marginBottom: Spacing['2'],
+                    backgroundColor: alpha(colors.error, 0.10),
+                    borderRadius: Radius.md,
+                    padding: Spacing['3'],
                   }}
                 >
-                  <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-          </>
-        )}
-      </TouchableOpacity>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.body,
+                      fontSize: FontSize.sm,
+                      color: colors.error,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {error}
+                  </Text>
+                </View>
+              )}
+
+              {/* Scroll-to-bottom FAB */}
+              {showScrollButton && (
+                <Animated.View
+                  style={[
+                    {
+                      position: 'absolute',
+                      bottom: 16,
+                      right: 16,
+                    },
+                    scrollButtonStyle,
+                  ]}
+                >
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={scrollToBottom}
+                    accessibilityLabel="Scroll to bottom"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: colors.backgroundElevated,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      ...Shadow.sm,
+                    }}
+                  >
+                    <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+            </>
+          )}
+        </Animated.View>
+      </GestureDetector>
 
       {/* Daily limit indicator for free users */}
       {!isPremium && dailyRemaining <= FREE_COMPANION_DAILY_LIMIT && (
@@ -484,35 +530,14 @@ export default function CompanionScreen() {
         reference={verseSheetRef ?? ''}
       />
 
-      {/* Conversation History Sheet */}
-      <ConversationHistorySheet
-        visible={showHistory}
-        onClose={() => setShowHistory(false)}
-        onSelectConversation={(conv) => {
-          setShowHistory(false);
-          setViewingArchived(conv);
-        }}
+      {/* Companion Drawer */}
+      <CompanionDrawer
+        translateX={drawerTranslateX}
+        isOpen={drawerOpen}
+        onOpen={handleDrawerOpen}
+        onClose={handleDrawerClose}
+        onNewChat={startNewConversation}
       />
-
-      {/* Archived Conversation Viewer — full screen overlay */}
-      {viewingArchived && (
-        <View
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: colors.background,
-            zIndex: 100,
-          }}
-        >
-          <ArchivedConversationView
-            conversation={viewingArchived}
-            onClose={() => setViewingArchived(null)}
-          />
-        </View>
-      )}
 
       {/* Premium upsell sheet for companion daily limit */}
       <PremiumFeatureSheet
