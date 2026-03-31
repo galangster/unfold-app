@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -12,7 +12,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon, MagnifyingGlassIcon, XIcon } from 'phosphor-react-native';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -43,6 +43,34 @@ export default function MyContentScreen() {
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
 
+  // Search
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredJournal = useMemo(() => {
+    if (!searchQuery.trim()) return journalEntries;
+    const q = searchQuery.toLowerCase();
+    return journalEntries.filter(e =>
+      e.content?.toLowerCase().includes(q)
+    );
+  }, [journalEntries, searchQuery]);
+
+  const filteredHighlights = useMemo(() => {
+    if (!searchQuery.trim()) return highlights;
+    const q = searchQuery.toLowerCase();
+    return highlights.filter(h =>
+      h.highlightedText?.toLowerCase().includes(q) || h.dayTitle?.toLowerCase().includes(q)
+    );
+  }, [highlights, searchQuery]);
+
+  const filteredBookmarks = useMemo(() => {
+    if (!searchQuery.trim()) return bookmarks;
+    const q = searchQuery.toLowerCase();
+    return bookmarks.filter(b =>
+      b.dayTitle?.toLowerCase().includes(q) || b.devotionalTitle?.toLowerCase().includes(q)
+    );
+  }, [bookmarks, searchQuery]);
+
   const handleTabPress = (tab: Tab) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveTab(tab);
@@ -68,7 +96,7 @@ export default function MyContentScreen() {
         <TouchableOpacity activeOpacity={0.7} onPress={handleBack} style={{ padding: Spacing['2'] }} accessibilityLabel="Go back" accessibilityRole="button">
           <CaretLeftIcon size={24} color={colors.text} weight="light" />
         </TouchableOpacity>
-        <View style={{ marginLeft: Spacing['3'] }}>
+        <View style={{ marginLeft: Spacing['3'], flex: 1 }}>
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
@@ -79,7 +107,59 @@ export default function MyContentScreen() {
             My Library
           </Text>
         </View>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowSearch(!showSearch);
+            if (showSearch) setSearchQuery('');
+          }}
+          style={{ padding: Spacing['2'] }}
+          accessibilityLabel={showSearch ? 'Close search' : 'Search library'}
+          accessibilityRole="button"
+        >
+          {showSearch ? (
+            <XIcon size={20} color={colors.textMuted} weight="light" />
+          ) : (
+            <MagnifyingGlassIcon size={20} color={colors.textMuted} weight="light" />
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* Search Bar */}
+      {showSearch && (
+        <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: Spacing['5'], paddingBottom: Spacing['3'] }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              backgroundColor: colors.inputBackground,
+              borderRadius: Radius.md,
+              borderWidth: 1,
+              borderColor: colors.border,
+              paddingHorizontal: Spacing['3'],
+              paddingVertical: Spacing['2.5'],
+            }}
+          >
+            <MagnifyingGlassIcon size={16} color={colors.textSubtle} weight="light" />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search your library..."
+              placeholderTextColor={colors.textHint}
+              autoFocus
+              style={{
+                flex: 1,
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.base,
+                color: colors.text,
+                padding: 0,
+              }}
+            />
+          </View>
+        </Animated.View>
+      )}
 
       {/* Elegant Tab Bar */}
       <View
@@ -154,7 +234,7 @@ export default function MyContentScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['5'] }}>
         {activeTab === 'journal' && (
           <Animated.View entering={FadeInRight.duration(Duration.slow)}>
-            {journalEntries.length === 0 ? (
+            {filteredJournal.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}>
                 <View
                   style={{
@@ -234,7 +314,7 @@ export default function MyContentScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              journalEntries.map((entry, index) => {
+              filteredJournal.map((entry, index) => {
                 const devotional = devotionals.find(d => d.id === entry.devotionalId);
                 return (
                   <TouchableOpacity activeOpacity={0.7}
@@ -280,14 +360,14 @@ export default function MyContentScreen() {
 
         {activeTab === 'highlights' && (
           <Animated.View entering={FadeInRight.duration(Duration.slow)}>
-            {highlights.length === 0 ? (
+            {filteredHighlights.length === 0 ? (
               <EmptyState
                 icon={HighlighterIcon}
                 title="No highlights yet"
                 subtitle="Select text while reading to save your favorite quotes."
               />
             ) : (
-              highlights.map((highlight) => {
+              filteredHighlights.map((highlight) => {
                 const devotional = devotionals.find(d => d.id === highlight.devotionalId);
                 return (
                   <TouchableOpacity activeOpacity={0.7}
@@ -342,14 +422,14 @@ export default function MyContentScreen() {
 
         {activeTab === 'bookmarks' && (
           <Animated.View entering={FadeInRight.duration(Duration.slow)}>
-            {bookmarks.length === 0 ? (
+            {filteredBookmarks.length === 0 ? (
               <EmptyState
                 icon={BookmarkSimpleIcon}
                 title="No bookmarks yet"
                 subtitle="Tap the bookmark icon while reading to save scriptures."
               />
             ) : (
-              bookmarks.map((bookmark) => {
+              filteredBookmarks.map((bookmark) => {
                 const devotional = devotionals.find(d => d.id === bookmark.devotionalId);
                 const day = devotional?.days.find(d => d.dayNumber === bookmark.dayNumber);
                 return (
