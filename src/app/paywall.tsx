@@ -422,12 +422,12 @@ export default function PaywallScreen() {
         contentContainerStyle={{ paddingBottom: Spacing['6'] }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
-          {/* Drag handle — flush to top of safe area */}
-          <View style={{ alignItems: 'center', paddingTop: Spacing['3'], paddingBottom: Spacing['2'] }}>
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong, alignSelf: 'center' }} />
-          </View>
+        {/* Drag handle — pinned to top of sheet */}
+        <View style={{ alignItems: 'center', paddingTop: 6, paddingBottom: Spacing['2'] }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong }} />
+        </View>
 
+        <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
           {/* Unfold icon + close button row */}
           <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
             <Image
