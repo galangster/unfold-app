@@ -233,3 +233,71 @@ Generate a short, personal companion response and 2 suggestion pills.`;
     return null;
   }
 }
+
+/**
+ * Generate an AI title for a conversation.
+ * Non-blocking, fire-and-forget. Returns null on any failure.
+ */
+export async function generateConversationTitle(
+  firstUserMessage: string,
+  firstAssistantMessage: string,
+): Promise<string | null> {
+  try {
+    const backendCandidates = getBackendCandidates();
+    const headers = await getAuthHeaders();
+
+    for (let i = 0; i < backendCandidates.length; i++) {
+      const backendUrl = backendCandidates[i];
+      const hasAnotherCandidate = i < backendCandidates.length - 1;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      try {
+        const response = await fetch(`${backendUrl}/api/companion/title`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            messages: [
+              { role: 'user', content: firstUserMessage },
+              { role: 'assistant', content: firstAssistantMessage },
+            ],
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok && hasAnotherCandidate) {
+          logger.warn(`[CompanionTitle] Backend ${backendUrl} returned ${response.status}; trying fallback`);
+          continue;
+        }
+
+        if (!response.ok) {
+          logger.warn(`[CompanionTitle] Backend returned ${response.status}`);
+          return null;
+        }
+
+        const data = await response.json();
+        if (data.title && typeof data.title === 'string') {
+          logger.log(`[CompanionTitle] Generated: "${data.title}"`);
+          return data.title;
+        }
+
+        return null;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (hasAnotherCandidate) {
+          logger.warn(`[CompanionTitle] Backend ${backendUrl} failed; trying fallback`);
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    logger.warn('[CompanionTitle] Error:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}

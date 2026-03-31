@@ -20,6 +20,7 @@ import {
   getCompanionMemory,
   pruneExpiredMemory,
 } from './companion-memory';
+import { generateConversationTitle } from './companion-service';
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
 
@@ -431,6 +432,28 @@ export function useCompanionChat() {
           .filter((m) => m.status === 'sent' || m.status === 'complete')
           .map((m) => ({ role: m.role, content: m.content }));
         updateCompanionMemory(completedMessages);
+
+        // Generate title after first exchange (user + companion)
+        const convId = useCompanionChatStore.getState().activeConversationId;
+        const conv = useCompanionChatStore.getState().conversations.find(c => c.id === convId);
+        const convMessages = conv?.messages ?? [];
+        const userMessages = convMessages.filter(m => m.role === 'user' && (m.status === 'sent' || m.status === 'complete'));
+        const companionMessages = convMessages.filter(m => m.role === 'companion' && m.status === 'complete');
+
+        // Only generate title once — on the first complete exchange, and only if no title yet
+        if (userMessages.length === 1 && companionMessages.length === 1 && !conv?.title) {
+          // Fire and forget — don't await, don't block
+          generateConversationTitle(
+            userMessages[0].content,
+            companionMessages[0].content,
+          ).then((title) => {
+            if (title && convId) {
+              useCompanionChatStore.getState().updateConversation(convId, { title });
+            }
+          }).catch(() => {
+            // Silent failure — title is a nice-to-have
+          });
+        }
 
       } catch (err: any) {
         cancelThrottle();
