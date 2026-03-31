@@ -11,7 +11,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+// Swipeable removed — old RNGH API crashes on Fabric. Using long-press delete instead.
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashSimpleIcon } from 'phosphor-react-native';
@@ -212,17 +212,17 @@ interface DevotionalCardProps {
 }
 
 function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, onExport, onDelete }: DevotionalCardProps) {
-  const swipeableRef = useRef<React.ComponentRef<typeof Swipeable>>(null);
   const completedDays = (item.days ?? []).filter((d) => d.isRead).length;
   const progress = (completedDays / item.totalDays) * 100;
   const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
 
   const handleDelete = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
       'Delete Study?',
       `Are you sure you want to delete "${item.title}"? This cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel', onPress: () => swipeableRef.current?.close() },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
@@ -235,37 +235,13 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
     );
   }, [item, onDelete]);
 
-  const renderRightActions = useCallback(() => (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={handleDelete}
-      style={{
-        backgroundColor: '#FF3B30',
-        justifyContent: 'center',
-        alignItems: 'center',
-        width: 80,
-        borderRadius: Radius.lg,
-        marginBottom: Spacing['3'],
-        marginLeft: Spacing['2'],
-      }}
-      accessibilityLabel={`Delete ${item.title}`}
-      accessibilityRole="button"
-    >
-      <TrashSimpleIcon size={22} color="white" weight="regular" />
-    </TouchableOpacity>
-  ), [handleDelete, item.title]);
-
   return (
     <View collapsable={false}>
-      <Swipeable
-        ref={swipeableRef}
-        renderRightActions={renderRightActions}
-        overshootRight={false}
-        friction={2}
-      >
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={() => onSelect(item.id)}
+          onLongPress={handleDelete}
+          delayLongPress={400}
           style={{
             backgroundColor: colors.inputBackground,
             borderRadius: Radius.lg,
@@ -361,7 +337,6 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
           </Text>
         </View>
       </TouchableOpacity>
-      </Swipeable>
     </View>
   );
 }
