@@ -17,7 +17,9 @@ import {
   Dimensions,
   StyleSheet,
   Alert,
+  ActionSheetIOS,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   useAnimatedStyle,
   withSpring,
@@ -208,18 +210,37 @@ interface ConversationRowProps {
   isCurrent: boolean;
   onSelect: (conv: Conversation) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string) => void;
+  onPin: (id: string) => void;
 }
 
-function ConversationRow({ conversation, isCurrent, onSelect, onDelete }: ConversationRowProps) {
+function ConversationRow({ conversation, isCurrent, onSelect, onDelete, onRename, onPin }: ConversationRowProps) {
   const { colors } = useTheme();
   const title = getConversationTitle(conversation);
   const dateLabel = formatRelativeDate(conversation.lastMessageAt);
+
+  const handleLongPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ['Pin Chat', 'Rename', 'Delete', 'Cancel'],
+        destructiveButtonIndex: 2,
+        cancelButtonIndex: 3,
+        title: title,
+      },
+      (buttonIndex) => {
+        if (buttonIndex === 0) onPin(conversation.id);
+        if (buttonIndex === 1) onRename(conversation.id);
+        if (buttonIndex === 2) onDelete(conversation.id);
+      },
+    );
+  }, [conversation.id, title, onPin, onRename, onDelete]);
 
   return (
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => onSelect(conversation)}
-      onLongPress={isCurrent ? undefined : () => onDelete(conversation.id)}
+      onLongPress={handleLongPress}
       delayLongPress={400}
       style={[
         styles.conversationRow,
@@ -260,6 +281,7 @@ export function CompanionDrawer({
   );
   const deleteConversation = useCompanionChatStore((s) => s.deleteConversation);
   const setActiveConversation = useCompanionChatStore((s) => s.setActiveConversation);
+  const updateConversation = useCompanionChatStore((s) => s.updateConversation);
 
   const listItems = useMemo(() => buildListItems(allWithMessages), [allWithMessages]);
 
@@ -293,6 +315,33 @@ export function CompanionDrawer({
     [deleteConversation],
   );
 
+  const handleRename = useCallback(
+    (id: string) => {
+      const conv = allWithMessages.find(c => c.id === id);
+      const currentTitle = conv ? getConversationTitle(conv) : '';
+      Alert.prompt(
+        'Rename Conversation',
+        undefined,
+        (newTitle) => {
+          if (newTitle?.trim()) {
+            updateConversation(id, { title: newTitle.trim() });
+          }
+        },
+        'plain-text',
+        currentTitle,
+      );
+    },
+    [allWithMessages, updateConversation],
+  );
+
+  const handlePin = useCallback(
+    (_id: string) => {
+      // TODO: Add pinned field to store
+      Alert.alert('Coming Soon', 'Pinning conversations will be available in a future update.');
+    },
+    [],
+  );
+
   // Scrim animated style — opacity interpolated from translateX
   const scrimStyle = useAnimatedStyle(() => ({
     opacity: interpolate(translateX.value, [-DRAWER_WIDTH, 0], [0, 0.5]),
@@ -322,10 +371,12 @@ export function CompanionDrawer({
           isCurrent={item.conversation.id === activeId}
           onSelect={handleSelectConversation}
           onDelete={handleDelete}
+          onRename={handleRename}
+          onPin={handlePin}
         />
       );
     },
-    [colors, activeId, handleSelectConversation, handleDelete],
+    [colors, activeId, handleSelectConversation, handleDelete, handleRename, handlePin],
   );
 
   const keyExtractor = useCallback(
