@@ -22,7 +22,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, CaretRightIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, ListBulletsIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -1380,12 +1380,8 @@ export default function ReadingScreen() {
                   )}
                 </View>
 
-                {/* Right Chevron */}
-                {viewingDay < availableDays ? (
-                  <CaretRightIcon size={18} color={colors.text} weight="regular" />
-                ) : (
-                  <View style={{ width: 18 }} />
-                )}
+                {/* Table of contents icon */}
+                <ListBulletsIcon size={18} color={colors.textMuted} weight="regular" />
               </TouchableOpacity>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -1439,18 +1435,6 @@ export default function ReadingScreen() {
             <ReadingProgressBar progress={scrollProgress} accentColor={colors.accent} />
 
             {/* Premium nudge banner — audio teaser */}
-            {premiumNudge && (
-              <PremiumNudgeCard
-                type={premiumNudge.type}
-                message={premiumNudge.message}
-                cta={premiumNudge.cta}
-                premiumFeature={premiumNudge.premiumFeature}
-                onAction={nudgeAction}
-                onDismiss={nudgeDismiss}
-                variant="banner"
-              />
-            )}
-
             {/* Content - Scrollable with day-transition fade + keyboard-aware scrolling */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
             <KeyboardAwareScrollView
