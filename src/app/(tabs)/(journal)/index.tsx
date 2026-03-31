@@ -1130,7 +1130,7 @@ export default function JournalHubScreen() {
                       <Text
                         style={{
                           fontFamily: FontFamily.display,
-                          fontSize: FontSize.xl,
+                          fontSize: FontSize['2xl'],
                           color: colors.text,
                           letterSpacing: -0.3,
                           marginBottom: Spacing['1.5'],

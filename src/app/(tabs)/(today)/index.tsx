@@ -672,8 +672,7 @@ export default function HomeScreen() {
             </Animated.View>
           </View>
 
-          {/* Zone 5: Series Carousel */}
-          <SeriesCarousel />
+          {/* Zone 5: Series Carousel — removed per user request */}
 
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
