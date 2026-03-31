@@ -263,21 +263,59 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
 };
 
 /**
- * Generate contextual chips that match the specific question/topic.
- * These feel like natural quick-select answers to the adaptive question,
- * not generic emotional states.
+ * Contextual situation chips — maps each theme and type to relevant Q1 pills.
+ * These replace the generic "Anxious, Grateful, Searching..." pills with options
+ * that match what the user chose to explore, providing zero-latency contextual answers.
  */
-function getContextualChips(stepId: string, topicName: string): string[] {
-  // For the opening question, chips should be ways the topic shows up in life
-  if (stepId === 'currentSituation') {
-    return [
-      'Something I need', 'Something I\'ve lost', 'A daily struggle',
-      'Just starting to explore', 'It comes and goes',
-      'I think about it constantly', 'I don\'t fully understand it',
-      'It feels far away', 'I\'m ready for it',
-    ];
+const CONTEXTUAL_SITUATION_CHIPS: Record<string, string[]> = {
+  // Theme pills
+  trust: ['Letting go', 'Control', 'Betrayed', 'Guarded', 'Vulnerable', 'Uncertain', 'Rebuilding', 'Suspicious'],
+  identity: ['Lost', 'Comparing', 'Performing', 'Unseen', 'Shifting', 'Questioning', 'Torn', 'Rebuilding'],
+  rest: ['Burned out', "Can't stop", 'Guilty resting', 'Running on empty', 'Wired', 'Depleted', 'Striving', 'Overcommitted'],
+  presence: ['Distracted', 'Distant from God', 'Going through motions', 'Longing', 'Numb', 'Disconnected', 'Seeking', 'Dry season'],
+  healing: ['Wounded', 'Processing', 'Stuck in pain', 'Ready', 'Afraid to hope', 'Scarred', 'Tired of hurting', 'Slowly mending'],
+  joy: ['Joyless', 'Faking it', 'Grateful but heavy', 'Searching for lightness', 'Nostalgic', 'Flat', 'Wanting to celebrate', 'Suppressing'],
+  gratitude: ['Taking things for granted', 'Overwhelmed by blessings', 'Hard to be thankful', 'Rediscovering', 'Guilt about complaining', 'Noticing more', 'Humbled', 'Adjusting perspective'],
+  lament: ['Crying out', 'Angry at God', 'Why me', 'Sitting in ashes', 'Raw', 'Unanswered prayers', 'Shaking fist', 'Abandoned'],
+  hope: ['Barely holding on', 'Waiting', 'Discouraged', 'Flickering', 'Skeptical', 'Wanting to believe', 'Weary', 'Cynical'],
+  purpose: ['Directionless', 'Stuck', 'Restless', 'Called but unclear', 'Underused', 'Pivoting', 'Searching', 'Torn between paths'],
+  courage: ['Paralyzed', 'Playing it safe', 'Avoiding', 'Shrinking back', 'Afraid to step out', 'People-pleasing', 'Hiding', 'Holding back'],
+  conviction: ['Compromising', 'Wavering', 'Standing alone', 'Pressured', 'Doubting beliefs', 'Torn', 'Tested', 'Conflicted'],
+  surrender: ['White-knuckling', 'Controlling', 'Resisting', 'Exhausted from fighting', 'Afraid to let go', 'Bargaining', 'Stubborn', 'Clinging'],
+  discipline: ['Inconsistent', 'Starting over again', 'Distracted', 'No routine', 'Falling short', 'Wanting structure', 'Undisciplined', 'Scattered'],
+  justice: ['Outraged', 'Helpless', 'Burdened for others', 'Systemic weight', 'Wanting to act', 'Complicit', 'Fatigued', 'Fired up'],
+  wonder: ['Dulled', 'Routine', 'Lost childlike faith', 'Craving awe', 'Overlooking beauty', 'Jaded', 'Curious again', 'Closed off'],
+  grief: ['Numb', 'Missing someone', 'Angry', 'Empty', 'Guilty', 'In denial', 'Exhausted', 'Waves of sadness'],
+  // Type pills
+  book_study: ['Curious', 'Intimidated', 'Excited', 'Returning to it', 'Fresh eyes', 'Looking deeper', 'Committed', 'Exploring'],
+  character_study: ['Curious', 'Identifying with someone', 'Inspired', 'Challenged', 'Seeking examples', 'Learning from failure', 'Drawn to a story', 'Wanting mentorship'],
+  psalm_study: ['Heavy-hearted', 'Praising', 'Lamenting', 'Grateful', 'Crying out', 'Worshiping', 'Wrestling', 'Remembering'],
+  topical_study: ['Questioning', 'Seeking answers', 'Building foundation', 'Deconstructing', 'Hungry to learn', 'Confused', 'Wanting depth', 'Revisiting basics'],
+  lectio_divina: ['Seeking stillness', 'Restless mind', 'Wanting to listen', 'Spiritually dry', 'Open', 'Contemplative', 'Distracted', 'Hungry for encounter'],
+  soap_journal: ['Wanting structure', 'Journaling curious', 'Need accountability', 'Fresh start', 'Building habit', 'Reflective', 'Seeking consistency', 'Ready to commit'],
+  verse_mapping: ['Detail-oriented', 'Wanting context', 'Digging deeper', 'Scholarly', 'Curious about original meaning', 'Seeking precision', 'Analytical', 'Thorough'],
+  parables: ['Confused by parables', 'Wanting fresh perspective', 'Familiar but shallow', 'Ready for depth', 'Seeking hidden meaning', 'Storyteller', 'Practical learner', 'Curious'],
+};
+
+/**
+ * Get contextual situation chips for Q1 based on the user's theme or type selection.
+ * Falls back to static DISCOVERY_CHIPS.currentSituation for guided mode or no match.
+ */
+function getContextualSituationChips(
+  selectedMainOption: 'theme' | 'type' | 'guided' | undefined,
+  selectedThemes: ThemeCategory[],
+  selectedType: DevotionalType | undefined,
+): string[] {
+  if (selectedMainOption === 'theme' && selectedThemes.length > 0) {
+    const themeChips = CONTEXTUAL_SITUATION_CHIPS[selectedThemes[0]];
+    if (themeChips) return themeChips;
   }
-  return DISCOVERY_CHIPS[stepId] ?? [];
+  if (selectedMainOption === 'type' && selectedType) {
+    const typeChips = CONTEXTUAL_SITUATION_CHIPS[selectedType];
+    if (typeChips) return typeChips;
+  }
+  // Guided mode or no match — fall back to generic chips
+  return DISCOVERY_CHIPS.currentSituation;
 }
 
 interface OnboardingData {
@@ -864,17 +902,22 @@ export default function OnboardingScreen() {
     }
 
     // Merge discovery chips into the text value before advancing
+    // Also compute the merged value synchronously for adaptive question generation
+    let mergedCurrentAnswer: string | undefined;
     const discoveryStepIds = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
     if (discoveryStepIds.includes(currentStepId)) {
       const chips = selectedChips[currentStepId] ?? [];
+      const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
       if (chips.length > 0) {
-        const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
         const chipPrefix = chips.join(', ');
         // Merge: "Anxious, Searching — I've been thinking about..."
         const merged = currentText
           ? `${chipPrefix} — ${currentText}`
           : chipPrefix;
+        mergedCurrentAnswer = merged;
         setData((prev) => ({ ...prev, [currentStepId]: merged }));
+      } else if (currentText) {
+        mergedCurrentAnswer = currentText;
       }
     }
 
@@ -896,7 +939,8 @@ export default function OnboardingScreen() {
     if (nextAdaptiveStepId && baseStep?.adaptive) {
       // Fire-and-forget: generate adaptive question in background while advancing
       // The question will be ready by the time the typewriter finishes on the next step
-      generateNextAdaptiveQuestion(nextAdaptiveStepId);
+      // Pass the merged answer directly since setData is async and data won't be updated yet
+      generateNextAdaptiveQuestion(nextAdaptiveStepId, mergedCurrentAnswer);
     }
 
     // Small delay to let keyboard fully dismiss before animating
@@ -968,17 +1012,25 @@ export default function OnboardingScreen() {
         ? getDevotionalTypeById(data.selectedType)?.name ?? data.selectedType.replace(/_/g, ' ')
         : '';
 
+      // Get contextual pills from the lookup table
+      const contextualChips = getContextualSituationChips(
+        selectionType === 'theme' ? 'theme' : selectionType === 'type' ? 'type' : 'guided',
+        data.selectedThemes,
+        data.selectedType,
+      );
+
       const firstQuestion: { question: string; subtext: string; chips?: string[] } = selectionType === 'theme' ? {
         question: `What does "${themeName}" look like in your life right now?`,
         subtext: "The honest, unfiltered reality of where you are.",
-        chips: getContextualChips('currentSituation', themeName),
+        chips: contextualChips,
       } : selectionType === 'type' ? {
         question: `As you begin your ${typeName} journey, what's on your heart?`,
         subtext: "The thing that's there when the noise quiets down.",
-        chips: getContextualChips('currentSituation', typeName),
+        chips: contextualChips,
       } : {
         question: "What's been on your heart lately?",
         subtext: "The thing that's there when the noise quiets down.",
+        chips: contextualChips,
       };
 
       // Set the first adaptive question immediately
@@ -1002,14 +1054,23 @@ export default function OnboardingScreen() {
   };
 
   // Generate AI adaptive question for the next discovery step
-  const generateNextAdaptiveQuestion = async (nextStepId: string) => {
+  // currentAnswerOverride: pass the merged chips+text for the step we're leaving,
+  // since setData is async and data[currentStepId] won't reflect the merge yet
+  const generateNextAdaptiveQuestion = async (nextStepId: string, currentAnswerOverride?: string) => {
     // Collect previous Q&A from all answered discovery steps
     const discoverySteps = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
     const previousAnswers: { question: string; answer: string }[] = [];
 
+    // The step immediately before nextStepId is the one we're leaving
+    const leavingStepIdx = discoverySteps.indexOf(nextStepId) - 1;
+    const leavingStepId = leavingStepIdx >= 0 ? discoverySteps[leavingStepIdx] : null;
+
     for (const stepId of discoverySteps) {
       if (stepId === nextStepId) break; // Stop before the next step
-      const answer = data[stepId as keyof OnboardingData];
+      // Use the override for the step we're leaving (data state hasn't updated yet)
+      const answer = (stepId === leavingStepId && currentAnswerOverride !== undefined)
+        ? currentAnswerOverride
+        : data[stepId as keyof OnboardingData];
       if (typeof answer === 'string' && answer.trim()) {
         const adapted = adaptedSteps[stepId];
         const baseStepDef = STEPS.find((s) => s.id === stepId);
