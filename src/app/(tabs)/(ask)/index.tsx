@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureDetector } from 'react-native-gesture-handler';
 import {
   CaretDownIcon,
   CrownIcon,
@@ -38,7 +37,6 @@ import { useCompanionChat } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
 import {
   CompanionDrawer,
-  useDrawerGesture,
   DRAWER_WIDTH,
 } from '@/components/companion/CompanionDrawer';
 import { CompanionEmptyState } from '@/components/companion/CompanionEmptyState';
@@ -162,14 +160,7 @@ export default function CompanionScreen() {
     drawerTranslateX.value = withSpring(-DRAWER_WIDTH, { duration: 300, dampingRatio: 1 });
   }, [drawerTranslateX]);
 
-  const panGesture = useDrawerGesture(
-    drawerTranslateX,
-    drawerOpen,
-    () => setDrawerOpen(true),
-    () => setDrawerOpen(false),
-  );
-
-  // Pan gesture handles drawer; keyboard dismiss handled by TouchableOpacity inside
+  // Gesture-based drawer open deferred — hamburger button + scrim tap for now
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -346,11 +337,9 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages or empty state — swipe for drawer, tap to dismiss keyboard */}
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={{ flex: 1 }}>
-          <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-          {isEmpty ? (
+      {/* Messages or empty state — tap to dismiss keyboard */}
+      <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={{ flex: 1 }}>
+        {isEmpty ? (
             <CompanionEmptyState onSelectStarter={handleSend} />
           ) : (
             <>
@@ -451,9 +440,7 @@ export default function CompanionScreen() {
               )}
             </>
           )}
-          </TouchableOpacity>
-        </Animated.View>
-      </GestureDetector>
+      </TouchableOpacity>
 
       {/* Daily limit indicator for free users */}
       {!isPremium && dailyRemaining <= FREE_COMPANION_DAILY_LIMIT && (
