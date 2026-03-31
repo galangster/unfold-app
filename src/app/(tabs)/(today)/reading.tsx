@@ -355,13 +355,13 @@ export default function ReadingScreen() {
     opacity: bridgeOpacity.value,
   }));
 
-  // Prefetch audio while user reads — by the time they tap play, it's cached
-  useEffect(() => {
-    if (!isPremium || !currentDayData) return;
-    const voiceId = user?.preferredVoice || getDefaultVoice();
-    const fullText = buildTtsText(currentDayData);
-    prefetchDevotionalAudio(fullText, voiceId);
-  }, [isPremium, currentDayData, user?.preferredVoice]);
+  // Audio narration disabled — TTS pipeline not yet production-ready
+  // useEffect(() => {
+  //   if (!isPremium || !currentDayData) return;
+  //   const voiceId = user?.preferredVoice || getDefaultVoice();
+  //   const fullText = buildTtsText(currentDayData);
+  //   prefetchDevotionalAudio(fullText, voiceId);
+  // }, [isPremium, currentDayData, user?.preferredVoice]);
 
   // Start the chevron bounce animation
   useEffect(() => {
@@ -1429,26 +1429,7 @@ export default function ReadingScreen() {
                   <TextAaIcon size={22} color={colors.text} weight="light" />
                 </TouchableOpacity>
 
-                {/* Audio Player Button */}
-                <TouchableOpacity activeOpacity={0.7}
-                  onPress={handlePlayAudio}
-                  disabled={isPreparingAudio}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={isPreparingAudio ? 'Loading audio' : 'Listen to devotional'}
-                  accessibilityHint={isPremium ? "Play audio version of today's reading" : "Premium feature. Upgrade to listen."}
-                  style={{ padding: Spacing['2'] }}
-                >
-                  {isPreparingAudio ? (
-                    <ActivityIndicator size={20} color={colors.accent} />
-                  ) : (
-                    <PlayIcon
-                      size={22}
-                      color={colors.text}
-                      weight="fill"
-                    />
-                  )}
-                </TouchableOpacity>
+                {/* Audio Player Button — hidden until TTS pipeline is production-ready */}
               </View>
             </View>
 
