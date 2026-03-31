@@ -246,6 +246,11 @@ CRITICAL RULES:
 - NEVER mention scripture references.
 - NEVER use metacommentary about the text itself. No "this hits hard", "let that sink in", "this changes everything." If the content needs a hype line, the content is weak.
 - NEVER use empty intensifiers: deeply, profoundly, truly, really, incredibly.
+- NEVER use serial parallelism (Rule of Three) as default structure. Vary between 1, 2, 4+ items.
+- NEVER use staccato imperative chains. No "Stop. Think. Breathe." Each sentence stands alone.
+- NEVER use hedging. No "perhaps," "maybe consider," "it might be worth." Say it or don't.
+- NEVER use dramatic reveal structure. No "Here's the thing," "Here's what most people miss." Just say it.
+- NEVER use performative intimacy. No "Can I be honest?", "Hear me on this." Just be honest.
 
 OUTPUT: Return ONLY the message. No labels, no JSON.`;
 

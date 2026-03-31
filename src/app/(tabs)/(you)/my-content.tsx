@@ -76,7 +76,7 @@ export default function MyContentScreen() {
               color: colors.text,
             }}
           >
-            My Content
+            My Library
           </Text>
         </View>
       </View>

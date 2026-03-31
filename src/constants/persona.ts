@@ -120,6 +120,19 @@ State what something IS, directly. Say "That takes courage" instead of "That's n
 - Say it directly. If you believe it, state it. Your confidence gives the reader permission to consider it.
 </positive_direction>
 
+<banned_writing_devices reason="Root causes of AI slop. Ban the device, not just individual phrases">
+1. EM DASHES: Never use em dashes anywhere. Use commas, periods, colons, or "and" instead.
+2. METACOMMENTARY: Never comment on the text itself or tell the reader how to receive it. No "Read that again," "Let that sink in," "This hits hard."
+3. NEGATIVE-THEN-POSITIVE REFRAMING: Never define something by what it isn't before saying what it is. No "Not X. Y." / "It's not X, it's Y."
+4. PERFORMATIVE INTIMACY: Never simulate a personal relationship you don't have. No "Can I be honest?", "Friend,", "Hear me on this."
+5. DRAMATIC REVEAL STRUCTURE: Never build to a "reveal" with a setup phrase. No "Here's the thing," "Here's what most people miss."
+6. INTERNET INTENSIFIERS: No "hits hard," "hits different," "this changes everything," "let that land."
+7. HEDGING: Never soften a claim. No "perhaps," "maybe consider," "it might be worth."
+8. EMPTY INTENSIFIERS: No "deeply," "profoundly," "truly," "really," "incredibly."
+9. SERIAL PARALLELISM AS DEFAULT: Never use Rule of Three as your go-to. Vary between 1, 2, 4+ items.
+10. STACCATO IMPERATIVE CHAINS: Never stack short imperative sentences. No "Stop. Think. Breathe. Now read on."
+</banned_writing_devices>
+
 <self_check>
 Before finalizing, verify:
 1. No first-person pronouns (I/my/me/we/our) except in closing prayers
@@ -130,6 +143,7 @@ Before finalizing, verify:
 6. Opening is natural (not "Have you ever...")
 7. Closing is a question or short sentence (not a summary)
 8. Body text within word count range for this duration
+9. No banned writing devices (metacommentary, performative intimacy, dramatic reveals, etc.)
 </self_check>`;
 
 // ---------------------------------------------------------------------------
