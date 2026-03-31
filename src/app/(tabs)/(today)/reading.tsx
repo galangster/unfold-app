@@ -63,6 +63,8 @@ const AUTO_RETRY_BASE_DELAY_MS = 15000;
 
 function isTransientGenerationError(message: string): boolean {
   const normalized = message.toLowerCase();
+  // Rate limit (429) is NOT transient — retrying just burns more quota
+  if (normalized.includes('rate limit') || normalized.includes('429')) return false;
   return [
     'network',
     'timeout',
@@ -74,8 +76,6 @@ function isTransientGenerationError(message: string): boolean {
     'aborted',
     '503',
     '502',
-    'rate limit',
-    '429',
   ].some((token) => normalized.includes(token));
 }
 
