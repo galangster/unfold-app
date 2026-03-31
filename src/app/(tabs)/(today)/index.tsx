@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -85,6 +85,7 @@ export default function HomeScreen() {
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
+  const archiveCurrentDevotional = useUnfoldStore((s) => s.archiveCurrentDevotional);
   const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
@@ -443,6 +444,23 @@ export default function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!isPremium && devotionals.length >= 1) {
       setShowPremiumSheet(true);
+      return;
+    }
+    if (currentDevotionalId) {
+      Alert.alert(
+        'Start a new series?',
+        'Starting a new series will end your current one.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: () => {
+              archiveCurrentDevotional();
+              router.push('/onboarding');
+            },
+          },
+        ],
+      );
     } else {
       router.push('/onboarding');
     }
