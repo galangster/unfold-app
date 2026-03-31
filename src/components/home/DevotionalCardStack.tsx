@@ -129,8 +129,8 @@ const dotStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
-    marginTop: Spacing['1.5'],
-    marginBottom: Spacing['1'],
+    marginTop: 8,
+    marginBottom: 0,
     paddingHorizontal: Spacing['6'],
   },
   dot: {
