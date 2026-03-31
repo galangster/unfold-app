@@ -298,6 +298,7 @@ export interface Bookmark {
   dayTitle: string;
   scriptureReference: string;
   scriptureText: string;
+  quotedText?: string;
   savedAt: string;
   updatedAt?: string; // ISO timestamp
 }

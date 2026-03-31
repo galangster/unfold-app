@@ -124,6 +124,7 @@ export function ScriptureTapSheet({
       dayTitle: dayTitle ?? '',
       scriptureReference: verse.reference,
       scriptureText: verse.text,
+      quotedText: verse.text,
     });
     setSaved(true);
   };

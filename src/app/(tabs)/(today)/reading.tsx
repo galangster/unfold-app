@@ -502,6 +502,7 @@ export default function ReadingScreen() {
         dayTitle: currentDayData.title,
         scriptureReference: currentDayData.scriptureReference,
         scriptureText: currentDayData.scriptureText,
+        quotedText: currentDayData.quotableLine || undefined,
       });
       // Show bookmark toast on save only
       setBookmarkToast(true);
