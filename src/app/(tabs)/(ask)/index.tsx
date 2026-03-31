@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector } from 'react-native-gesture-handler';
 import {
   CaretDownIcon,
   CrownIcon,
@@ -27,7 +27,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
-  runOnJS,
   Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
@@ -170,12 +169,7 @@ export default function CompanionScreen() {
     () => setDrawerOpen(false),
   );
 
-  // Tap gesture for keyboard dismiss (replaces TouchableOpacity wrapper)
-  const tapGesture = Gesture.Tap().onEnd(() => {
-    runOnJS(Keyboard.dismiss)();
-  });
-
-  const composedGesture = Gesture.Simultaneous(panGesture, tapGesture);
+  // Pan gesture handles drawer; keyboard dismiss handled by TouchableOpacity inside
 
   // Scripture tap sheet state
   const [verseSheetRef, setVerseSheetRef] = useState<string | null>(null);
@@ -352,9 +346,10 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages or empty state — tap to dismiss keyboard, swipe for drawer */}
-      <GestureDetector gesture={composedGesture}>
+      {/* Messages or empty state — swipe for drawer, tap to dismiss keyboard */}
+      <GestureDetector gesture={panGesture}>
         <Animated.View style={{ flex: 1 }}>
+          <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={{ flex: 1 }}>
           {isEmpty ? (
             <CompanionEmptyState onSelectStarter={handleSend} />
           ) : (
@@ -456,6 +451,7 @@ export default function CompanionScreen() {
               )}
             </>
           )}
+          </TouchableOpacity>
         </Animated.View>
       </GestureDetector>
 
