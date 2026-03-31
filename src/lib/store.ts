@@ -494,6 +494,8 @@ interface UnfoldState {
   removeDevotional: (devotionalId: string) => void;
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
+  archiveCurrentDevotional: () => void;
+  isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
   advanceDay: (devotionalId: string) => void;
 
@@ -860,6 +862,8 @@ export const useUnfoldStore = create<UnfoldState>()(
         }),
 
       setCurrentDevotional: (id) => set({ currentDevotionalId: id }),
+      archiveCurrentDevotional: () => set({ currentDevotionalId: null }),
+      isReturningUser: () => get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>
         set((state) => {
