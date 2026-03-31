@@ -927,14 +927,20 @@ export default function ReadingScreen() {
     await generateRemainingDays({ navigateToNextDay: true, withHaptics: true });
   }, [generateRemainingDays]);
 
+  // Stable primitives for the auto-generate effect — avoids re-triggering on
+  // Zustand object reference changes when sync updates create new state objects.
+  const devoId = currentDevotional?.id;
+  const devoTotalDays = currentDevotional?.totalDays ?? 0;
+  const devoDaysCount = currentDevotional?.days?.length ?? 0;
+
   // Auto-continue generation in the background when Day 1 is ready but remaining days are missing.
   // Includes capped retry with backoff for transient network/service failures.
   useEffect(() => {
-    if (!user || !currentDevotional || !isPremium || isGeneratingMore) return;
+    if (!user || !devoId || !isPremium || isGeneratingMore) return;
 
-    const devotionalId = currentDevotional.id;
-    const expectedTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength);
-    const needsMoreDays = currentDevotional.days.length < expectedTotalDays;
+    const devotionalId = devoId;
+    const expectedTotalDays = Math.max(devoTotalDays, user.devotionalLength);
+    const needsMoreDays = devoDaysCount < expectedTotalDays;
 
     if (!needsMoreDays) {
       autoRetryAttemptsRef.current[devotionalId] = 0;
@@ -952,7 +958,7 @@ export default function ReadingScreen() {
     if (!isOnline) {
       void logBugEvent('reading-generation', 'auto-retry-paused-offline', {
         devotionalId,
-        availableDays: currentDevotional.days.length,
+        availableDays: devoDaysCount,
         expectedTotalDays,
       });
       setIsWaitingForConnection(true);
@@ -964,9 +970,9 @@ export default function ReadingScreen() {
     setIsWaitingForConnection(false);
 
     const lastKickoffDayCount = autoBackgroundKickoffRef.current[devotionalId];
-    if (lastKickoffDayCount === currentDevotional.days.length) return;
+    if (lastKickoffDayCount === devoDaysCount) return;
 
-    autoBackgroundKickoffRef.current[devotionalId] = currentDevotional.days.length;
+    autoBackgroundKickoffRef.current[devotionalId] = devoDaysCount;
 
     void (async () => {
       const result = await generateRemainingDays({ navigateToNextDay: false, withHaptics: false });
@@ -1034,7 +1040,7 @@ export default function ReadingScreen() {
         setAutoRetryTick((tick) => tick + 1);
       }, delayMs);
     })();
-  }, [user, currentDevotional, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline]);
+  }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline]);
 
   // Early returns after all hooks
   if (!currentDevotional) {

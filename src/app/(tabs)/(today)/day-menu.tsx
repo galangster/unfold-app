@@ -86,25 +86,27 @@ export default function DayMenuScreen() {
         contentContainerStyle={{ paddingHorizontal: Spacing['5'], paddingBottom: Spacing['5'] }}
         showsVerticalScrollIndicator={false}
       >
-        {(devotional.days ?? []).map((day, index) => {
-          const isActive = day.dayNumber === currentViewingDay;
-          const isDayRead = day.isRead;
-          const isLocked = day.dayNumber > devotional.currentDay;
+        {Array.from({ length: Math.max(devotional.totalDays ?? 0, (devotional.days ?? []).length) }, (_, i) => {
+          const dayNumber = i + 1;
+          const day = (devotional.days ?? []).find((d) => d.dayNumber === dayNumber);
+          const isActive = dayNumber === currentViewingDay;
+          const isDayRead = day?.isRead ?? false;
+          const isLocked = !day || dayNumber > devotional.currentDay;
 
           return (
             <Animated.View
-              key={day.dayNumber}
-              entering={FadeInDown.duration(Duration.slow).delay(Math.min(index * Stagger.fast, 400))}
+              key={dayNumber}
+              entering={FadeInDown.duration(Duration.slow).delay(Math.min(i * Stagger.fast, 400))}
             >
             <TouchableOpacity activeOpacity={isLocked ? 1 : 0.7}
-              onPress={() => handleSelectDay(day.dayNumber)}
-              onPressIn={() => { if (!isLocked) setPressedDay(day.dayNumber); }}
+              onPress={() => handleSelectDay(dayNumber)}
+              onPressIn={() => { if (!isLocked) setPressedDay(dayNumber); }}
               onPressOut={() => setPressedDay(null)}
               style={{
                 opacity: isLocked ? 0.38 : 1,
                 backgroundColor: isActive
                   ? colors.buttonBackgroundPressed
-                  : pressedDay === day.dayNumber
+                  : pressedDay === dayNumber
                   ? colors.glassBackground
                   : 'transparent',
                 paddingVertical: Spacing['4'],
@@ -141,7 +143,7 @@ export default function DayMenuScreen() {
                       color: colors.textSubtle,
                     }}
                   >
-                    {day.dayNumber}
+                    {dayNumber}
                   </Text>
                 )}
               </View>
@@ -157,7 +159,7 @@ export default function DayMenuScreen() {
                     letterSpacing: 0.5,
                   }}
                 >
-                  Day {day.dayNumber}
+                  Day {dayNumber}
                 </Text>
                 <Text
                   style={{
@@ -167,7 +169,7 @@ export default function DayMenuScreen() {
                   }}
                   numberOfLines={1}
                 >
-                  {day.title}
+                  {day?.title ?? 'Generating...'}
                 </Text>
               </View>
 

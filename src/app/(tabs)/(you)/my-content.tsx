@@ -387,7 +387,17 @@ export default function MyContentScreen() {
                           letterSpacing: 0.5,
                         }}
                       >
-                        {day?.scriptureReference || 'Unknown Passage'}
+                        {bookmark.dayTitle || day?.title || 'Saved Passage'}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.mono,
+                          fontSize: FontSize.xs,
+                          color: colors.textSubtle,
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        · {day?.scriptureReference || bookmark.scriptureReference}
                       </Text>
                     </View>
                     <Text
@@ -399,7 +409,7 @@ export default function MyContentScreen() {
                       }}
                       numberOfLines={3}
                     >
-                      "{day?.scriptureText}"
+                      "{day?.quotableLine || day?.scriptureText || bookmark.scriptureText}"
                     </Text>
                   </TouchableOpacity>
                 );

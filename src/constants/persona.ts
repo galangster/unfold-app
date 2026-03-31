@@ -25,7 +25,8 @@ export const BANNED_PHRASES = [
   'pour out', 'throne of grace', 'wrestle with', 'step into',
   // AI filler
   'beautiful', 'amazing', 'just want to', 'incredible', 'powerful',
-  'hits different', 'this changes everything',
+  'hits different', 'hits hard', 'this hits', 'that hits',
+  'this changes everything',
   // Performative intimacy
   'Can I be honest?', 'Can we be real for a second?',
   'I want you to hear this', 'Hear me on this',

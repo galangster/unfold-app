@@ -12,7 +12,7 @@
 
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
-import { buildPromptWithPersona } from '@/constants/persona';
+import { buildPromptWithPersona, BANNED_PHRASES } from '@/constants/persona';
 import { getBackendCandidates, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { getSharedEncryptionKey } from '@/lib/mmkv-storage';
@@ -88,6 +88,11 @@ function sanitizeBridgeText(text: string): string {
   cleaned = cleaned.replace(/\bhell of a\b/gi, 'a real');
   // Capitalize "God" — never lowercase in theological context
   cleaned = sanitizeGodCapitalization(cleaned);
+  // Strip banned phrases (case-insensitive)
+  for (const phrase of BANNED_PHRASES) {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cleaned = cleaned.replace(new RegExp(escaped, 'gi'), '');
+  }
   // Clean up double spaces or awkward punctuation from replacements
   cleaned = cleaned.replace(/,\s*,/g, ',');
   cleaned = cleaned.replace(/\s{2,}/g, ' ');
@@ -239,6 +244,8 @@ CRITICAL RULES:
 - NEVER use negative framing to emphasize a positive. No "not X, but Y" constructions.
 - NEVER use poetic/vague phrasing. No "what X holds", "those quiet moments", metaphors.
 - NEVER mention scripture references.
+- NEVER use metacommentary about the text itself. No "this hits hard", "let that sink in", "this changes everything." If the content needs a hype line, the content is weak.
+- NEVER use empty intensifiers: deeply, profoundly, truly, really, incredibly.
 
 OUTPUT: Return ONLY the message. No labels, no JSON.`;
 
