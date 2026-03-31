@@ -10,6 +10,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   TouchableOpacity,
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
@@ -338,7 +339,7 @@ export default function CompanionScreen() {
       </View>
 
       {/* Messages or empty state — tap to dismiss keyboard */}
-      <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss} style={{ flex: 1 }}>
+      <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
         {isEmpty ? (
             <CompanionEmptyState onSelectStarter={handleSend} />
           ) : (
@@ -440,7 +441,7 @@ export default function CompanionScreen() {
               )}
             </>
           )}
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Daily limit indicator for free users */}
       {!isPremium && dailyRemaining <= FREE_COMPANION_DAILY_LIMIT && (
