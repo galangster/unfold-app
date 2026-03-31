@@ -843,7 +843,7 @@ const styles = StyleSheet.create({
   },
   streakWrapper: {
     paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['6'],
+    marginTop: Spacing['8'],
   },
   premiumNudgeWrapper: {
     paddingHorizontal: Spacing['6'],
