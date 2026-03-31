@@ -3,18 +3,21 @@ import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet,
 import { useRouter } from 'expo-router';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   FadeIn,
   FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  interpolate,
+  clamp,
   Easing,
 } from 'react-native-reanimated';
-// Swipeable removed — old RNGH API crashes on Fabric. Using long-press delete instead.
+// Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashSimpleIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -198,7 +201,139 @@ const segStyles = StyleSheet.create({
 });
 
 // ============================================================================
-// Swipeable Devotional Card
+// Swipeable Study Card (Gesture.Pan — Fabric-compatible)
+// ============================================================================
+
+const SWIPE_ACTION_WIDTH = 56;
+const SWIPE_SNAP_THRESHOLD = SWIPE_ACTION_WIDTH * 0.35;
+const EASE_OUT = Easing.out(Easing.cubic);
+const SWIPE_TIMING_CONFIG = { duration: Duration.normal, easing: EASE_OUT };
+
+interface SwipeableStudyCardProps {
+  children: React.ReactNode;
+  onDelete: () => void;
+}
+
+function SwipeableStudyCard({ children, onDelete }: SwipeableStudyCardProps) {
+  const { colors } = useTheme();
+  const translateX = useSharedValue(0);
+  const contextX = useSharedValue(0);
+
+  const close = useCallback(() => {
+    translateX.value = withTiming(0, SWIPE_TIMING_CONFIG);
+  }, [translateX]);
+
+  const handleDelete = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    close();
+    onDelete();
+  }, [onDelete, close]);
+
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-5, 5])
+    .onStart(() => {
+      contextX.value = translateX.value;
+    })
+    .onUpdate((e) => {
+      const raw = contextX.value + e.translationX;
+      translateX.value = clamp(raw, -SWIPE_ACTION_WIDTH, 0);
+    })
+    .onEnd((e) => {
+      const isOpen = translateX.value < -SWIPE_SNAP_THRESHOLD;
+      const isFlick = e.velocityX < -500;
+
+      if (isOpen || isFlick) {
+        translateX.value = withTiming(-SWIPE_ACTION_WIDTH, SWIPE_TIMING_CONFIG);
+      } else {
+        translateX.value = withTiming(0, SWIPE_TIMING_CONFIG);
+      }
+    });
+
+  const contentStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const actionsStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      Math.abs(translateX.value),
+      [0, SWIPE_ACTION_WIDTH * 0.4, SWIPE_ACTION_WIDTH],
+      [0, 0.7, 1],
+    ),
+  }));
+
+  return (
+    <View style={swipeStyles.outerContainer}>
+      {/* Delete action — positioned behind the card, right-aligned */}
+      <View style={swipeStyles.cardArea}>
+        <Animated.View style={[swipeStyles.actionsContainer, actionsStyle]}>
+          <TouchableOpacity
+            onPress={handleDelete}
+            activeOpacity={0.7}
+            style={swipeStyles.actionButton}
+            accessibilityRole="button"
+            accessibilityLabel="Delete study"
+          >
+            <View style={[swipeStyles.actionCircle, { backgroundColor: colors.error }]}>
+              <TrashIcon size={17} color="#FFFFFF" weight="regular" />
+            </View>
+            <Text style={[swipeStyles.actionLabel, { color: colors.textSubtle }]}>Delete</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+
+      {/* Sliding card content */}
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={contentStyle}>
+          {children}
+        </Animated.View>
+      </GestureDetector>
+    </View>
+  );
+}
+
+const swipeStyles = StyleSheet.create({
+  outerContainer: {
+    position: 'relative',
+  },
+  cardArea: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: Spacing['3'], // match card marginBottom
+    overflow: 'hidden',
+    borderTopRightRadius: Radius.lg,
+    borderBottomRightRadius: Radius.lg,
+  },
+  actionsContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: SWIPE_ACTION_WIDTH,
+    paddingRight: 4,
+  },
+  actionButton: {
+    width: SWIPE_ACTION_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  actionCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: {
+    fontFamily: FontFamily.ui,
+    fontSize: 10,
+  },
+});
+
+// ============================================================================
+// Devotional Card
 // ============================================================================
 
 interface DevotionalCardProps {
@@ -208,136 +343,115 @@ interface DevotionalCardProps {
   exportSuccessId: string | null;
   onSelect: (id: string) => void;
   onExport: (devotional: Devotional) => void;
-  onDelete: (devotional: Devotional) => void;
 }
 
-function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, onExport, onDelete }: DevotionalCardProps) {
+function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, onExport }: DevotionalCardProps) {
   const completedDays = (item.days ?? []).filter((d) => d.isRead).length;
+  const isComplete = completedDays >= item.totalDays;
   const progress = (completedDays / item.totalDays) * 100;
   const createdDate = format(new Date(item.createdAt), 'MMM d, yyyy');
 
-  const handleDelete = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert(
-      'Delete Study?',
-      `Are you sure you want to delete "${item.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            onDelete(item);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ],
-    );
-  }, [item, onDelete]);
-
   return (
-    <View collapsable={false}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => onSelect(item.id)}
-          onLongPress={handleDelete}
-          delayLongPress={400}
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => onSelect(item.id)}
+      style={{
+        backgroundColor: colors.inputBackground,
+        borderRadius: Radius.lg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: Spacing['5'],
+        marginBottom: Spacing['3'],
+      }}
+    >
+      {/* Top row: date + download circle */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <Text
           style={{
-            backgroundColor: colors.inputBackground,
-            borderRadius: Radius.lg,
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: Spacing['5'],
-            marginBottom: Spacing['3'],
+            fontFamily: FontFamily.mono,
+            fontSize: 11,
+            color: colors.textHint,
+            letterSpacing: 1,
+            textTransform: 'uppercase',
           }}
         >
-        {/* Top row: date + download circle */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <Text
-            style={{
-              fontFamily: FontFamily.mono,
-              fontSize: 11,
-              color: colors.textHint,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-            }}
-          >
-            {createdDate}
-          </Text>
+          {createdDate}
+        </Text>
 
-          <TouchableOpacity activeOpacity={0.7}
-            onPress={(e) => { e.stopPropagation(); onExport(item); }}
-            disabled={exportingId !== null}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: `${colors.accent}15`,
-              justifyContent: 'center',
-              alignItems: 'center',
-              opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
-            }}
-            accessibilityLabel="Export as PDF"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: exportingId !== null }}
-          >
-            {exportingId === item.id ? (
-              <ActivityIndicator size={18} color={colors.accent} />
-            ) : exportSuccessId === item.id ? (
-              <CheckIcon size={22} color={colors.accent} weight="bold" />
-            ) : (
-              <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
-            )}
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity activeOpacity={0.7}
+          onPress={(e) => { e.stopPropagation(); onExport(item); }}
+          disabled={exportingId !== null}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: `${colors.accent}15`,
+            justifyContent: 'center',
+            alignItems: 'center',
+            opacity: exportingId !== null && exportingId !== item.id ? 0.3 : 1,
+          }}
+          accessibilityLabel="Export as PDF"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: exportingId !== null }}
+        >
+          {exportingId === item.id ? (
+            <ActivityIndicator size={18} color={colors.accent} />
+          ) : exportSuccessId === item.id ? (
+            <CheckIcon size={22} color={colors.accent} weight="bold" />
+          ) : (
+            <DownloadSimpleIcon size={22} color={colors.accent} weight="regular" />
+          )}
+        </TouchableOpacity>
+      </View>
 
-        {/* Title + progress */}
-        <View>
-          <Text
-            style={{
-              fontFamily: FontFamily.display,
-              fontSize: 22,
-              color: colors.text,
-              lineHeight: 28,
-              marginBottom: Spacing['3'],
-            }}
-          >
-            {item.title}
-          </Text>
+      {/* Title + progress (progress bar only for in-progress studies) */}
+      <View>
+        <Text
+          style={{
+            fontFamily: FontFamily.display,
+            fontSize: 22,
+            color: colors.text,
+            lineHeight: 28,
+            marginBottom: isComplete ? 0 : Spacing['3'],
+          }}
+        >
+          {item.title}
+        </Text>
 
-          <View
-            style={{
-              height: 2,
-              backgroundColor: colors.border,
-              borderRadius: 1,
-              marginBottom: Spacing['2'],
-            }}
-          >
+        {!isComplete && (
+          <>
             <View
               style={{
-                height: '100%',
-                width: `${progress}%`,
-                backgroundColor: colors.accent,
+                height: 2,
+                backgroundColor: colors.border,
                 borderRadius: 1,
+                marginBottom: Spacing['2'],
               }}
-            />
-          </View>
+            >
+              <View
+                style={{
+                  height: '100%',
+                  width: `${progress}%`,
+                  backgroundColor: colors.accent,
+                  borderRadius: 1,
+                }}
+              />
+            </View>
 
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 13,
-              color: colors.textSubtle,
-            }}
-          >
-            {completedDays === item.totalDays
-              ? `${item.totalDays} days completed`
-              : `Day ${item.currentDay} of ${item.totalDays}`}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    </View>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 13,
+                color: colors.textSubtle,
+              }}
+            >
+              Day {item.currentDay} of {item.totalDays}
+            </Text>
+          </>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -473,19 +587,34 @@ export default function PastDevotionalsScreen() {
   }, [exportingId, user?.isPremium, router, journalEntries, checkIns, colors.accent]);
 
   const handleDeleteDevotional = useCallback((devotional: Devotional) => {
-    removeDevotional(devotional.id);
+    Alert.alert(
+      'Delete this study?',
+      'This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            removeDevotional(devotional.id);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ],
+    );
   }, [removeDevotional]);
 
   const renderItem = useCallback(({ item }: { item: Devotional }) => (
-    <DevotionalCard
-      item={item}
-      colors={colors}
-      exportingId={exportingId}
-      exportSuccessId={exportSuccessId}
-      onSelect={handleSelectDevotional}
-      onExport={handleExportPDF}
-      onDelete={handleDeleteDevotional}
-    />
+    <SwipeableStudyCard onDelete={() => handleDeleteDevotional(item)}>
+      <DevotionalCard
+        item={item}
+        colors={colors}
+        exportingId={exportingId}
+        exportSuccessId={exportSuccessId}
+        onSelect={handleSelectDevotional}
+        onExport={handleExportPDF}
+      />
+    </SwipeableStudyCard>
   ), [colors, exportingId, exportSuccessId, handleSelectDevotional, handleExportPDF, handleDeleteDevotional]);
 
   if (devotionals.length === 0) {
