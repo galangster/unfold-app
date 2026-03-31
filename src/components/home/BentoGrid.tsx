@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { BookmarksSimpleIcon, FolderIcon, UserCircleIcon } from 'phosphor-react-native';
+import { BookOpenIcon, BookmarksSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -17,18 +17,13 @@ export function BentoGrid() {
 
   const items = [
     {
-      label: 'My Studies',
-      icon: BookmarksSimpleIcon,
+      label: 'My Devotionals',
+      icon: BookOpenIcon,
       pathname: '/(tabs)/(you)/past-devotionals',
     },
     {
-      label: 'Your Library',
-      icon: FolderIcon,
-      pathname: '/(tabs)/(you)/saved',
-    },
-    {
-      label: 'My Content',
-      icon: UserCircleIcon,
+      label: 'My Library',
+      icon: BookmarksSimpleIcon,
       pathname: '/(tabs)/(you)/my-content',
     },
   ];
