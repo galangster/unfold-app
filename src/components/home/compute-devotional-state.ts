@@ -12,7 +12,7 @@ import type { DevotionalDay, Devotional } from '@/lib/store';
 
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
-  | { type: 'preparing' }
+  | { type: 'preparing'; progress: number }
   | {
       type: 'unread';
       dayData: DevotionalDay;
@@ -105,12 +105,12 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   // Never show "preparing" if the user has already read today — the completed
   // day should remain visible while the next day generates in the background.
   if (!hasReadToday && (isPreparing || !currentDayData)) {
-    return { type: 'preparing' };
+    return { type: 'preparing', progress: 0 };
   }
 
   // If we somehow have no day data even after reading today, bail to empty
   if (!currentDayData) {
-    return { type: 'preparing' };
+    return { type: 'preparing', progress: 0 };
   }
 
   // 3. Entire series finished

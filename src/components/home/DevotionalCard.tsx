@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   FadeIn,
   useSharedValue,
@@ -298,18 +298,129 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
   );
 }
 
-// ─── Preparing state ────────────────────────────────────────────
+// ─── Preparing progress bar ─────────────────────────────────────
 
-function PreparingState() {
-  const { colors } = useTheme();
+function PreparingProgressBar({ progress, colors }: { progress: number; colors: { accent: string; border: string } }) {
+  const { reducedMotion } = useAccessibleAnimation();
+  const animatedProgress = useSharedValue(0.05);
+
+  useEffect(() => {
+    // Map 0-1 progress to percentage; default to 5% so the bar is always visible
+    const target = Math.max(5, progress * 100);
+    if (reducedMotion) {
+      animatedProgress.value = target;
+      return;
+    }
+    animatedProgress.value = withTiming(target, {
+      duration: 900,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [progress, animatedProgress, reducedMotion]);
+
+  const barStyle = useAnimatedStyle(() => ({
+    width: `${animatedProgress.value}%`,
+  }));
 
   return (
-    <View style={[styles.preparingContainer, { backgroundColor: colors.backgroundElevated, borderColor: alpha(colors.accent, 0.09) }]}>
-      <View style={styles.preparingInner}>
-        <ActivityIndicator color={colors.accent} size="small" style={styles.preparingSpinner} />
-        <Text style={[styles.preparingText, { color: colors.textMuted }]}>
-          {'Preparing today\u2019s reading\u2026'}
+    <View style={styles.preparingProgressTrack}>
+      <Animated.View
+        style={[styles.preparingProgressFill, { backgroundColor: colors.accent }, barStyle]}
+      />
+    </View>
+  );
+}
+
+// ─── Preparing state ────────────────────────────────────────────
+
+function PreparingState({ progress }: { progress: number }) {
+  const { colors } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
+
+  // Shimmer text — looping opacity between 0.4 and 1.0
+  const shimmerOpacity = useSharedValue(0.4);
+  // Pulsing glow — looping opacity between 0.15 and 0.35
+  const glowOpacity = useSharedValue(0.15);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      shimmerOpacity.value = 1;
+      glowOpacity.value = 0.25;
+      return;
+    }
+    shimmerOpacity.value = withRepeat(
+      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    glowOpacity.value = withRepeat(
+      withTiming(0.35, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    return () => {
+      cancelAnimation(shimmerOpacity);
+      cancelAnimation(glowOpacity);
+    };
+  }, [shimmerOpacity, glowOpacity, reducedMotion]);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    opacity: shimmerOpacity.value,
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+  }));
+
+  return (
+    <View
+      style={[
+        styles.preparingContainer,
+        {
+          backgroundColor: colors.backgroundElevated,
+          borderColor: alpha(colors.accent, 0.12),
+          shadowColor: colors.accent,
+        },
+      ]}
+    >
+      {/* Pulsing glow overlay */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.preparingGlow, glowStyle]}
+        pointerEvents="none"
+      >
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderRadius: Radius.xl,
+              backgroundColor: alpha(colors.accent, 0.07),
+            },
+          ]}
+        />
+      </Animated.View>
+
+      {/* Ember particles — non-interactive layer */}
+      <EmberParticles color={colors.accent} count={6} />
+
+      {/* Content */}
+      <View style={styles.preparingContent}>
+        <View style={[styles.preparingAccentBar, { backgroundColor: colors.accent }]} />
+
+        <Animated.Text
+          style={[
+            styles.preparingTitle,
+            { color: colors.text },
+            shimmerStyle,
+          ]}
+        >
+          Preparing your{'\n'}reading{'\u2026'}
+        </Animated.Text>
+
+        <Text style={[styles.preparingSubtitle, { color: colors.textMuted }]}>
+          Crafting a personalized study{'\n'}just for you.
         </Text>
+
+        {/* Progress bar */}
+        <PreparingProgressBar progress={progress} colors={colors} />
       </View>
     </View>
   );
@@ -570,7 +681,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
       style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
     >
       {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} isReturningUser={isReturningUser} />}
-      {state.type === 'preparing' && <PreparingState />}
+      {state.type === 'preparing' && <PreparingState progress={state.progress} />}
       {state.type === 'journey-complete' && (
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
       )}
@@ -698,25 +809,50 @@ const styles = StyleSheet.create({
   preparingContainer: {
     borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: Spacing['6'],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 5,
   },
-  preparingInner: {
+  preparingGlow: {
+    borderRadius: Radius.xl,
+  },
+  preparingContent: {
+    padding: Spacing['7'],
     alignItems: 'center',
-    paddingVertical: Spacing['3'],
   },
-  preparingSpinner: {
-    marginBottom: 10,
+  preparingAccentBar: {
+    width: 28,
+    height: 1.5,
+    borderRadius: 1,
+    marginBottom: Spacing['6'],
   },
-  preparingText: {
-    fontFamily: FontFamily.bodyItalic,
-    fontSize: 15,
+  preparingTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    lineHeight: 36,
+    letterSpacing: -0.5,
     textAlign: 'center',
-    lineHeight: 22,
+    marginBottom: Spacing['3'],
+  },
+  preparingSubtitle: {
+    fontFamily: FontFamily.body,
+    fontSize: 15,
+    lineHeight: 23,
+    textAlign: 'center',
+    marginBottom: Spacing['7'],
+  },
+  preparingProgressTrack: {
+    height: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 1,
+    width: '100%',
+    marginHorizontal: Spacing['4'],
+  },
+  preparingProgressFill: {
+    height: '100%',
+    borderRadius: 1,
   },
 
   // Journey complete
