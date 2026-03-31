@@ -1,0 +1,156 @@
+<h2>Audio Player Design</h2>
+<p class="subtitle">How should the listening experience feel on the reading screen?</p>
+
+<div class="cards">
+
+  <!-- Option A: Inline Player Bar -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background: #0A0A0A; border-radius: 14px; padding: 0; overflow: hidden; font-family: -apple-system, sans-serif;">
+        <!-- Reading screen context -->
+        <div style="padding: 20px 20px 12px; border-bottom: 1px solid rgba(245,240,235,0.06);">
+          <div style="font-size: 10px; color: rgba(245,240,235,0.4); text-transform: uppercase; letter-spacing: 1.5px;">Day 3 of 12</div>
+          <div style="font-size: 18px; color: #F5F0EB; margin-top: 4px; font-family: Georgia, serif;">Finding Peace in the Storm</div>
+        </div>
+
+        <!-- Inline player bar - fixed at top of content -->
+        <div style="margin: 12px 16px; background: rgba(245,240,235,0.05); border-radius: 12px; padding: 12px 16px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <!-- Play button -->
+            <div style="width: 36px; height: 36px; border-radius: 18px; background: #C8A55C; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <div style="width: 0; height: 0; border-left: 10px solid #0A0A0A; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 2px;"></div>
+            </div>
+            <!-- Progress + time -->
+            <div style="flex: 1;">
+              <div style="height: 3px; background: rgba(245,240,235,0.1); border-radius: 2px; overflow: hidden;">
+                <div style="width: 35%; height: 100%; background: #C8A55C; border-radius: 2px;"></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                <span style="font-size: 10px; color: rgba(245,240,235,0.4);">2:14</span>
+                <span style="font-size: 10px; color: rgba(245,240,235,0.4);">6:30</span>
+              </div>
+            </div>
+            <!-- Speed pill -->
+            <div style="font-size: 11px; color: rgba(245,240,235,0.5); background: rgba(245,240,235,0.06); padding: 4px 8px; border-radius: 10px; flex-shrink: 0;">1x</div>
+          </div>
+        </div>
+
+        <!-- Body text preview -->
+        <div style="padding: 0 20px 20px;">
+          <div style="font-size: 13px; color: rgba(245,240,235,0.6); line-height: 1.7;">
+            <span style="font-style: italic; color: rgba(245,240,235,0.35);">"Mark 4:35-41"</span><br><br>
+            That evening, Jesus said to his disciples, "Let us cross to the other side." Leaving the crowd behind...
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Inline Bar</h3>
+      <p>Compact player sits between the title and body text. No sheet, no overlay. Play/pause, progress, speed. Scrolls with content or stays pinned at top.</p>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Always visible while reading</li><li>No modal interruption</li><li>Simplest implementation</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>No skip controls</li><li>Takes vertical space</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B: Bottom Floating Bar -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background: #0A0A0A; border-radius: 14px; padding: 0; overflow: hidden; font-family: -apple-system, sans-serif; position: relative; min-height: 320px;">
+        <!-- Reading screen context -->
+        <div style="padding: 20px 20px 12px; border-bottom: 1px solid rgba(245,240,235,0.06);">
+          <div style="font-size: 10px; color: rgba(245,240,235,0.4); text-transform: uppercase; letter-spacing: 1.5px;">Day 3 of 12</div>
+          <div style="font-size: 18px; color: #F5F0EB; margin-top: 4px; font-family: Georgia, serif;">Finding Peace in the Storm</div>
+        </div>
+
+        <!-- Body text -->
+        <div style="padding: 16px 20px 80px;">
+          <div style="font-size: 13px; color: rgba(245,240,235,0.6); line-height: 1.7;">
+            <span style="font-style: italic; color: rgba(245,240,235,0.35);">"Mark 4:35-41"</span><br><br>
+            That evening, Jesus said to his disciples, "Let us cross to the other side." Leaving the crowd behind, they took him along...
+          </div>
+        </div>
+
+        <!-- Floating bottom bar -->
+        <div style="position: absolute; bottom: 12px; left: 12px; right: 12px; background: rgba(30,28,24,0.95); backdrop-filter: blur(20px); border-radius: 14px; padding: 10px 14px; border: 1px solid rgba(245,240,235,0.08);">
+          <!-- Progress bar on top edge -->
+          <div style="position: absolute; top: 0; left: 14px; right: 14px; height: 2px; background: rgba(245,240,235,0.08); border-radius: 1px;">
+            <div style="width: 35%; height: 100%; background: #C8A55C; border-radius: 1px;"></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-top: 2px;">
+            <!-- Skip back -->
+            <div style="font-size: 10px; color: rgba(245,240,235,0.4);">-10</div>
+            <!-- Play -->
+            <div style="width: 34px; height: 34px; border-radius: 17px; background: #C8A55C; display: flex; align-items: center; justify-content: center;">
+              <div style="width: 0; height: 0; border-left: 9px solid #0A0A0A; border-top: 5px solid transparent; border-bottom: 5px solid transparent; margin-left: 2px;"></div>
+            </div>
+            <!-- Skip forward -->
+            <div style="font-size: 10px; color: rgba(245,240,235,0.4);">+10</div>
+            <!-- Spacer -->
+            <div style="flex: 1;"></div>
+            <!-- Time -->
+            <div style="font-size: 11px; color: rgba(245,240,235,0.4);">2:14 / 6:30</div>
+            <!-- Speed -->
+            <div style="font-size: 11px; color: rgba(245,240,235,0.5); background: rgba(245,240,235,0.06); padding: 3px 8px; border-radius: 8px;">1x</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Floating Bar</h3>
+      <p>Glass-effect bar floats at the bottom of the reading screen. Shows play/pause, skip ±10s, time, speed. Content scrolls freely behind it.</p>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Always accessible</li><li>Skip controls included</li><li>Doesn't interrupt reading</li><li>Feels native/modern</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Overlaps bottom content</li><li>Needs safe area handling</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C: Expandable Mini Player -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background: #0A0A0A; border-radius: 14px; padding: 0; overflow: hidden; font-family: -apple-system, sans-serif; position: relative; min-height: 320px;">
+        <!-- Reading screen context -->
+        <div style="padding: 20px 20px 12px; border-bottom: 1px solid rgba(245,240,235,0.06);">
+          <div style="font-size: 10px; color: rgba(245,240,235,0.4); text-transform: uppercase; letter-spacing: 1.5px;">Day 3 of 12</div>
+          <div style="font-size: 18px; color: #F5F0EB; margin-top: 4px; font-family: Georgia, serif;">Finding Peace in the Storm</div>
+        </div>
+
+        <!-- Body text -->
+        <div style="padding: 16px 20px 20px;">
+          <div style="font-size: 13px; color: rgba(245,240,235,0.6); line-height: 1.7;">
+            <span style="font-style: italic; color: rgba(245,240,235,0.35);">"Mark 4:35-41"</span><br><br>
+            That evening, Jesus said to his disciples, "Let us cross to the other side." Leaving the crowd behind, they took him along, just as he was, in the boat...
+          </div>
+        </div>
+
+        <!-- Collapsed state: just a play button with waveform -->
+        <div style="position: absolute; bottom: 16px; right: 16px;">
+          <div style="width: 48px; height: 48px; border-radius: 24px; background: #C8A55C; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(200,165,92,0.25);">
+            <div style="width: 0; height: 0; border-left: 12px solid #0A0A0A; border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 2px;"></div>
+          </div>
+          <!-- Circular progress ring hint -->
+          <svg width="52" height="52" style="position: absolute; top: -2px; left: -2px; transform: rotate(-90deg);">
+            <circle cx="26" cy="26" r="24" fill="none" stroke="rgba(200,165,92,0.2)" stroke-width="2"/>
+            <circle cx="26" cy="26" r="24" fill="none" stroke="#C8A55C" stroke-width="2" stroke-dasharray="150.8" stroke-dashoffset="98" stroke-linecap="round"/>
+          </svg>
+        </div>
+
+        <!-- Expanded state label -->
+        <div style="position: absolute; bottom: 72px; right: 16px; font-size: 9px; color: rgba(245,240,235,0.3); text-align: right;">
+          tap to expand →<br>full controls
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. FAB + Expand</h3>
+      <p>Floating action button in bottom-right with circular progress ring. Tap to play/pause. Long-press or swipe up to reveal full controls (skip, speed, scrubber).</p>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Minimal footprint</li><li>Progress visible at a glance</li><li>Doesn't cover content</li><li>Feels premium</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Controls hidden by default</li><li>Discoverability of expand gesture</li><li>More complex interaction</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

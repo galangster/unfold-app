@@ -1,0 +1,86 @@
+<h2>Where does the "restore player" indicator live?</h2>
+<p class="subtitle">When the mini player is hidden but audio is still playing, the user needs a way to bring it back. Where should this indicator appear?</p>
+
+<div class="section">
+  <h3>Context</h3>
+  <p>Audio plays across all tabs and even when the app is backgrounded. The indicator needs to be visible everywhere — not just the reading screen.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Floating pill above tab bar</h3>
+      <p>A small floating pill (like Spotify's green "now playing" bar) sits just above the tab bar. Shows title + play/pause. Tap to expand back to full mini player. Visible on every tab.</p>
+      <div style="background:#1a1a1a;border-radius:12px;padding:16px;margin:12px 0;font-family:system-ui;color:#fff;">
+        <div style="text-align:center;color:#666;padding:40px 0;">[ Screen content ]</div>
+        <div style="background:#2a2a2a;border-radius:20px;padding:8px 16px;display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:#D4A574;"></div>
+          <span style="font-size:12px;flex:1;color:#ccc;">When Honest Is All You Have</span>
+          <span style="font-size:12px;color:#D4A574;">&#9646;&#9646;</span>
+        </div>
+        <div style="display:flex;justify-content:space-around;padding:8px 0;border-top:1px solid #333;">
+          <span style="font-size:10px;color:#666;">Today</span>
+          <span style="font-size:10px;color:#666;">Bible</span>
+          <span style="font-size:10px;color:#666;">Companion</span>
+          <span style="font-size:10px;color:#666;">Journal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Pulsing icon in tab bar</h3>
+      <p>A small pulsing audio wave icon appears in/near the tab bar (or replaces one of the tab icons temporarily). Subtle but persistent. Tap to restore the full mini player.</p>
+      <div style="background:#1a1a1a;border-radius:12px;padding:16px;margin:12px 0;font-family:system-ui;color:#fff;">
+        <div style="text-align:center;color:#666;padding:40px 0;">[ Screen content ]</div>
+        <div style="display:flex;justify-content:space-around;padding:8px 0;border-top:1px solid #333;align-items:center;">
+          <span style="font-size:10px;color:#666;">Today</span>
+          <span style="font-size:10px;color:#666;">Bible</span>
+          <span style="font-size:10px;color:#D4A574;">&#9836; &#9835;</span>
+          <span style="font-size:10px;color:#666;">Journal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Collapsed mini bar (thinner version of current player)</h3>
+      <p>Instead of fully hiding, the player collapses to a thin strip — just the progress bar + a tap target. Like Apple Music's collapsed state. Always visible above the tab bar, minimal footprint.</p>
+      <div style="background:#1a1a1a;border-radius:12px;padding:16px;margin:12px 0;font-family:system-ui;color:#fff;">
+        <div style="text-align:center;color:#666;padding:40px 0;">[ Screen content ]</div>
+        <div style="margin-bottom:4px;">
+          <div style="height:3px;background:#333;border-radius:2px;overflow:hidden;">
+            <div style="width:35%;height:100%;background:#D4A574;border-radius:2px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 12px;align-items:center;">
+            <span style="font-size:11px;color:#ccc;">When Honest Is All You...</span>
+            <span style="font-size:14px;color:#D4A574;">&#9646;&#9646;</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-around;padding:8px 0;border-top:1px solid #333;">
+          <span style="font-size:10px;color:#666;">Today</span>
+          <span style="font-size:10px;color:#666;">Bible</span>
+          <span style="font-size:10px;color:#666;">Companion</span>
+          <span style="font-size:10px;color:#666;">Journal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>No in-app indicator — rely on system controls</h3>
+      <p>When hidden, the player is only accessible via iOS lock screen / Control Center. The app itself has no persistent indicator. Clean but less discoverable.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Zero visual clutter</li><li>Familiar iOS pattern</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Users may not know audio is still playing</li><li>Hard to bring back the in-app player</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

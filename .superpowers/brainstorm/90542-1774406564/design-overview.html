@@ -1,0 +1,126 @@
+<h2>Audio Player Design — Full Overview</h2>
+<p class="subtitle">Three-tier player with gesture-driven navigation and background audio</p>
+
+<div class="section">
+  <h3>The Three Tiers</h3>
+  <p>Each tier is connected by swipe gestures. No buttons for navigation between tiers — just swipes.</p>
+
+  <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin:20px 0;">
+
+    <!-- Tier 1: Pill -->
+    <div style="background:#1a1a1a;border-radius:16px;padding:16px;width:240px;font-family:system-ui;color:#fff;">
+      <div style="text-align:center;margin-bottom:8px;">
+        <span class="label" style="color:#D4A574;">Tier 1: Pill</span>
+      </div>
+      <div style="text-align:center;color:#555;padding:30px 0;font-size:11px;">[ Any screen content ]</div>
+      <div style="background:#2a2a2a;border-radius:20px;padding:8px 14px;display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#D4A574;animation:pulse 2s infinite;"></div>
+        <span style="font-size:11px;flex:1;color:#ccc;">When Honest Is All...</span>
+        <span style="font-size:11px;color:#D4A574;">&#9646;&#9646;</span>
+      </div>
+      <div style="border-top:1px solid #333;padding-top:6px;display:flex;justify-content:space-around;">
+        <span style="font-size:9px;color:#555;">Today</span>
+        <span style="font-size:9px;color:#555;">Bible</span>
+        <span style="font-size:9px;color:#555;">Companion</span>
+        <span style="font-size:9px;color:#555;">Journal</span>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#666;text-align:center;">
+        <b>Tap</b> → Mini bar &nbsp; <b>Swipe away</b> → Stop
+      </div>
+    </div>
+
+    <!-- Tier 2: Mini Bar -->
+    <div style="background:#1a1a1a;border-radius:16px;padding:16px;width:240px;font-family:system-ui;color:#fff;">
+      <div style="text-align:center;margin-bottom:8px;">
+        <span class="label" style="color:#D4A574;">Tier 2: Mini Bar</span>
+      </div>
+      <div style="text-align:center;color:#555;padding:30px 0;font-size:11px;">[ Reading screen ]</div>
+      <div style="background:#2a2a2a;border-radius:12px;overflow:hidden;margin-bottom:8px;">
+        <div style="height:3px;background:#333;">
+          <div style="width:35%;height:100%;background:#D4A574;"></div>
+        </div>
+        <div style="padding:12px;display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:11px;font-weight:600;color:#fff;">When Honest Is All You Have</div>
+            <div style="font-size:9px;color:#888;">0:42 / 2:11</div>
+          </div>
+          <div style="width:36px;height:36px;border-radius:18px;background:#D4A574;display:flex;align-items:center;justify-content:center;">
+            <span style="font-size:14px;color:#1a1a1a;">&#9646;&#9646;</span>
+          </div>
+          <span style="font-size:10px;color:#888;background:#333;padding:3px 8px;border-radius:6px;">1x</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid #333;padding-top:6px;display:flex;justify-content:space-around;">
+        <span style="font-size:9px;color:#555;">Today</span>
+        <span style="font-size:9px;color:#555;">Bible</span>
+        <span style="font-size:9px;color:#555;">Companion</span>
+        <span style="font-size:9px;color:#555;">Journal</span>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#666;text-align:center;">
+        <b>Swipe up</b> → Half-sheet &nbsp; <b>Swipe down</b> → Pill
+      </div>
+    </div>
+
+    <!-- Tier 3: Half-Sheet -->
+    <div style="background:#1a1a1a;border-radius:16px;padding:16px;width:240px;font-family:system-ui;color:#fff;">
+      <div style="text-align:center;margin-bottom:8px;">
+        <span class="label" style="color:#D4A574;">Tier 3: Half-Sheet</span>
+      </div>
+      <div style="text-align:center;color:#555;padding:10px 0;font-size:11px;">[ Reading visible ]</div>
+      <div style="background:#222;border-radius:14px 14px 0 0;padding:16px;border-top:1px solid #333;">
+        <div style="width:32px;height:3px;background:#444;border-radius:2px;margin:0 auto 12px;"></div>
+        <div style="text-align:center;margin-bottom:10px;">
+          <div style="font-size:14px;font-weight:600;color:#fff;">When Honest Is All You Have</div>
+          <div style="font-size:10px;color:#888;margin-top:2px;">Psalm Path from Loss to Presence</div>
+        </div>
+        <div style="margin:10px 0;">
+          <div style="height:4px;background:#333;border-radius:2px;overflow:hidden;">
+            <div style="width:35%;height:100%;background:#D4A574;border-radius:2px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:3px;">
+            <span style="font-size:9px;color:#666;">0:42</span>
+            <span style="font-size:9px;color:#666;">2:11</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin:10px 0;">
+          <span style="font-size:11px;color:#888;">-10s</span>
+          <div style="width:44px;height:44px;border-radius:22px;background:#D4A574;display:flex;align-items:center;justify-content:center;">
+            <span style="font-size:18px;color:#1a1a1a;">&#9646;&#9646;</span>
+          </div>
+          <span style="font-size:11px;color:#888;">+10s</span>
+        </div>
+        <div style="text-align:center;">
+          <span style="font-size:11px;color:#888;background:#333;padding:3px 10px;border-radius:6px;">1x</span>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:#666;text-align:center;">
+        <b>Swipe down</b> → Mini bar &nbsp; <b>Drag scrubber</b> → Seek
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Gesture Map</h3>
+  <div style="background:#1a1a1a;border-radius:12px;padding:20px;margin:12px 0;font-family:monospace;font-size:12px;color:#ccc;line-height:2;">
+    <div style="text-align:center;">
+      <span style="color:#D4A574;">STOP</span> ← swipe away ← <span style="background:#2a2a2a;padding:4px 10px;border-radius:8px;">PILL</span> → tap → <span style="background:#2a2a2a;padding:4px 10px;border-radius:8px;">MINI BAR</span> ↕ swipe ↕ <span style="background:#2a2a2a;padding:4px 10px;border-radius:8px;">HALF-SHEET</span>
+    </div>
+    <div style="text-align:center;margin-top:12px;color:#666;">
+      All tiers: tap play/pause to toggle playback<br>
+      Lock screen &amp; Control Center always available
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Key Behaviors</h3>
+  <ul style="color:#ccc;line-height:1.8;">
+    <li><strong>Background audio</strong> — plays through tab switches, app backgrounding, lock screen</li>
+    <li><strong>Lock screen controls</strong> — play/pause, skip -10s/+10s, scrubber, Now Playing metadata</li>
+    <li><strong>Audio ends</strong> — pill shows "Completed" briefly, then auto-dismisses after 3s</li>
+    <li><strong>No X button</strong> — all navigation via swipe gestures</li>
+    <li><strong>Pill visible on all tabs</strong> — floating above tab bar, consistent position</li>
+    <li><strong>State persists</strong> — if user closes app and reopens, pill restores with cached position</li>
+  </ul>
+</div>

@@ -1,0 +1,7 @@
+{"type":"server-started","port":63144,"host":"0.0.0.0","url_host":"localhost","url":"http://localhost:63144","screen_dir":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/90542-1774406564"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/90542-1774406564/dismiss-behavior.html"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/90542-1774406564/restore-indicator.html"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/90542-1774406564/expanded-player.html"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/90542-1774406564/design-overview.html"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/90542-1774406564/waiting.html"}
+{"type":"server-stopped","reason":"idle timeout"}

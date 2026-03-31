@@ -1,0 +1,339 @@
+<h2>Home Screen — Card Hierarchy & Rationale</h2>
+<p class="subtitle">Every card earns its spot based on what users actually do. Scroll to see the full layout with annotations explaining why each element exists, its size, and its position.</p>
+
+<div style="display: grid; grid-template-columns: 380px 1fr; gap: 40px; max-width: 1100px; margin: 0 auto;">
+
+  <!-- LEFT: Phone mockup -->
+  <div>
+    <div style="background: #0A0A0A; border-radius: 40px; padding: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); position: relative;">
+      <!-- Notch -->
+      <div style="width: 120px; height: 28px; background: #000; border-radius: 0 0 20px 20px; margin: 0 auto 4px; position: relative; z-index: 2;"></div>
+
+      <div style="background: #0A0A0A; border-radius: 28px; overflow: hidden; font-family: -apple-system, system-ui, 'SF Pro Display', sans-serif;">
+
+        <!-- ZONE 1: Header — Greeting + Avatar -->
+        <div data-zone="1" style="padding: 20px 20px 12px; position: relative;">
+          <!-- Subtle ambient line art — inspired by Endel -->
+          <svg style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0.03; pointer-events:none;" viewBox="0 0 380 80">
+            <circle cx="300" cy="-10" r="120" fill="none" stroke="#C8A55C" stroke-width="0.5"/>
+            <circle cx="310" cy="-5" r="90" fill="none" stroke="#C8A55C" stroke-width="0.3"/>
+            <circle cx="320" cy="0" r="60" fill="none" stroke="#C8A55C" stroke-width="0.2"/>
+          </svg>
+
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="color: rgba(245,240,235,0.4); font-size: 13px; font-style: italic; margin-bottom: 4px;">Good morning</div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: #F5F0EB; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">Galante</span>
+                <span style="font-size: 13px; color: rgba(245,240,235,0.5);">🔥 5</span>
+              </div>
+            </div>
+            <div style="width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #C8A55C, #8B6914); display:flex;align-items:center;justify-content:center; margin-top: 4px;">
+              <span style="color: white; font-size: 14px; font-weight: 600;">G</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZONE 2: Daily Bridge (contextual, AI-generated) -->
+        <div data-zone="2" style="padding: 0 20px; margin-bottom: 14px;">
+          <div style="display: flex; gap: 10px; align-items: flex-start;">
+            <div style="width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle, rgba(200,165,92,0.3), rgba(200,165,92,0.1)); flex-shrink: 0; margin-top: 2px;"></div>
+            <div style="background: rgba(200,165,92,0.06); border: 1px solid rgba(200,165,92,0.12); border-radius: 14px; padding: 12px 14px; flex: 1;">
+              <div style="color: rgba(245,240,235,0.75); font-size: 13px; line-height: 1.5;">Yesterday you reflected on patience. Today we explore how that patience becomes peace.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZONE 3: Hero Devotional Card — THE main action -->
+        <div data-zone="3" style="padding: 0 20px; margin-bottom: 16px;">
+          <div style="background: linear-gradient(165deg, rgba(200,165,92,0.10) 0%, rgba(200,165,92,0.02) 100%); border: 1px solid rgba(200,165,92,0.12); border-radius: 20px; padding: 22px 20px; position: relative; overflow: hidden;">
+            <!-- Ambient line art inside card -->
+            <svg style="position:absolute; top:-20px; right:-30px; width:180px; height:180px; opacity:0.04; pointer-events:none;" viewBox="0 0 180 180">
+              <circle cx="90" cy="90" r="80" fill="none" stroke="#C8A55C" stroke-width="0.8"/>
+              <circle cx="90" cy="90" r="55" fill="none" stroke="#C8A55C" stroke-width="0.5"/>
+              <circle cx="90" cy="90" r="30" fill="none" stroke="#C8A55C" stroke-width="0.3"/>
+            </svg>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:5px; height:5px; border-radius:50%; background:#C8A55C;"></div>
+                <span style="color:#C8A55C; font-size:10px; text-transform:uppercase; letter-spacing:1.2px; font-weight:600;">Today's Reading</span>
+              </div>
+              <div style="background: rgba(245,240,235,0.06); padding: 4px 10px; border-radius: 20px;">
+                <span style="color: rgba(245,240,235,0.5); font-size: 11px;">Day 4/7</span>
+              </div>
+            </div>
+
+            <div style="color: #F5F0EB; font-size: 22px; font-weight: 600; margin-bottom: 6px; line-height: 1.25; letter-spacing: -0.3px;">Finding Peace in Uncertainty</div>
+
+            <div style="color: rgba(245,240,235,0.5); font-size: 12px; font-style: italic; margin-bottom: 16px; line-height: 1.5;">John 14:27 — "Peace I leave with you..."</div>
+
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+              <div style="background: rgba(200,165,92,0.08); padding: 4px 10px; border-radius: 6px;">
+                <span style="font-family: monospace; color: #C8A55C; font-size: 9px; letter-spacing: 0.8px; text-transform: uppercase;">LECTIO DIVINA</span>
+              </div>
+            </div>
+
+            <!-- Progress -->
+            <div style="height: 3px; background: rgba(245,240,235,0.06); border-radius: 2px; overflow: hidden; margin-bottom: 10px;">
+              <div style="width: 57%; height: 100%; background: linear-gradient(90deg, #C8A55C, #D4B76A); border-radius: 2px;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: rgba(245,240,235,0.35); font-size: 11px;">4 of 7 completed</span>
+              <span style="color: #C8A55C; font-size: 11px; font-weight: 500;">57%</span>
+            </div>
+
+            <!-- CTA -->
+            <div style="background: #C8A55C; padding: 14px; border-radius: 12px; text-align: center; margin-top: 16px; box-shadow: 0 4px 16px rgba(200,165,92,0.15);">
+              <span style="color: #0A0A0A; font-size: 15px; font-weight: 600; letter-spacing: 0.3px;">Continue Reading</span>
+            </div>
+
+            <div style="text-align: center; margin-top: 10px;">
+              <span style="color: rgba(245,240,235,0.3); font-size: 12px;">+ New Series</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZONE 4: Discovery Grid — varied sizes, Endel-inspired -->
+        <div data-zone="4" style="padding: 0 20px; margin-bottom: 14px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+
+            <!-- Streak card — small, left -->
+            <div style="background: rgba(245,240,235,0.03); border: 1px solid rgba(245,240,235,0.05); border-radius: 16px; padding: 16px; position: relative; overflow: hidden;">
+              <svg style="position:absolute; bottom:-10px; right:-10px; width:60px; height:60px; opacity:0.05;" viewBox="0 0 60 60">
+                <circle cx="30" cy="30" r="25" fill="none" stroke="#C8A55C" stroke-width="0.5"/>
+              </svg>
+              <div style="font-size: 20px; margin-bottom: 8px;">🔥</div>
+              <div style="color: #F5F0EB; font-size: 22px; font-weight: 700; margin-bottom: 2px;">5</div>
+              <div style="color: rgba(245,240,235,0.4); font-size: 11px;">day streak</div>
+              <div style="color: rgba(200,165,92,0.6); font-size: 10px; margin-top: 4px;">Ember Tier</div>
+            </div>
+
+            <!-- Companion card — small, right -->
+            <div style="background: rgba(245,240,235,0.03); border: 1px solid rgba(245,240,235,0.05); border-radius: 16px; padding: 16px; position: relative; overflow: hidden;">
+              <svg style="position:absolute; bottom:-15px; left:-15px; width:70px; height:70px; opacity:0.04;" viewBox="0 0 70 70">
+                <circle cx="35" cy="35" r="30" fill="none" stroke="#C8A55C" stroke-width="0.5"/>
+                <circle cx="35" cy="35" r="18" fill="none" stroke="#C8A55C" stroke-width="0.3"/>
+              </svg>
+              <div style="width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle, rgba(200,165,92,0.25), rgba(200,165,92,0.08)); margin-bottom: 8px;"></div>
+              <div style="color: #F5F0EB; font-size: 14px; font-weight: 500; margin-bottom: 2px;">Ask Anything</div>
+              <div style="color: rgba(245,240,235,0.4); font-size: 11px;">Your companion</div>
+            </div>
+
+            <!-- Bible reader — wide, spans both columns -->
+            <div style="grid-column: 1 / -1; background: rgba(245,240,235,0.03); border: 1px solid rgba(245,240,235,0.05); border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 14px; position: relative; overflow: hidden;">
+              <svg style="position:absolute; top:-20px; right:-20px; width:100px; height:100px; opacity:0.03;" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="45" fill="none" stroke="#C8A55C" stroke-width="0.4"/>
+              </svg>
+              <div style="font-size: 20px; flex-shrink: 0;">📖</div>
+              <div style="flex: 1;">
+                <div style="color: #F5F0EB; font-size: 14px; font-weight: 500;">Bible Reader</div>
+                <div style="color: rgba(245,240,235,0.4); font-size: 11px;">Continue in John 14</div>
+              </div>
+              <div style="color: rgba(245,240,235,0.2); font-size: 16px;">›</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ZONE 5: Remember This — surfaced highlight -->
+        <div data-zone="5" style="padding: 0 20px; margin-bottom: 14px;">
+          <div style="background: rgba(245,240,235,0.03); border: 1px solid rgba(200,165,92,0.12); border-radius: 16px; padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px;">
+              <span style="color: #C8A55C; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Remember This</span>
+            </div>
+            <div style="border-left: 2px solid #C8A55C; padding-left: 12px; margin-bottom: 8px;">
+              <div style="color: rgba(245,240,235,0.8); font-size: 14px; font-style: italic; line-height: 1.5;">"When anxiety speaks loudest, that's exactly when stillness speaks truest."</div>
+            </div>
+            <div style="color: rgba(245,240,235,0.35); font-size: 11px;">From Day 2 · Trusting God's Plan</div>
+          </div>
+        </div>
+
+        <!-- ZONE 6: Your Series — library -->
+        <div data-zone="6" style="padding: 0 20px; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="color: rgba(245,240,235,0.4); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 500;">Your Series</span>
+            <span style="color: #C8A55C; font-size: 12px;">See All ›</span>
+          </div>
+          <div style="display: flex; gap: 10px; overflow: hidden;">
+            <div style="flex: 1; background: rgba(245,240,235,0.03); border: 1px solid rgba(245,240,235,0.05); border-radius: 12px; padding: 12px;">
+              <div style="color: rgba(245,240,235,0.8); font-size: 13px; font-weight: 500; margin-bottom: 4px;">Trusting God's Plan</div>
+              <div style="color: rgba(245,240,235,0.35); font-size: 11px; margin-bottom: 8px;">Day 4 of 7</div>
+              <div style="height: 2px; background: rgba(245,240,235,0.06); border-radius: 1px; overflow: hidden;">
+                <div style="width: 57%; height: 100%; background: #C8A55C; border-radius: 1px;"></div>
+              </div>
+            </div>
+            <div style="flex: 1; background: rgba(245,240,235,0.03); border: 1px solid rgba(245,240,235,0.05); border-radius: 12px; padding: 12px;">
+              <div style="color: rgba(245,240,235,0.8); font-size: 13px; font-weight: 500; margin-bottom: 4px;">Overcoming Anxiety</div>
+              <div style="color: rgba(245,240,235,0.35); font-size: 11px; margin-bottom: 8px;">Completed</div>
+              <div style="height: 2px; background: rgba(245,240,235,0.06); border-radius: 1px; overflow: hidden;">
+                <div style="width: 100%; height: 100%; background: rgba(200,165,92,0.4); border-radius: 1px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab bar hint -->
+        <div style="display: flex; justify-content: space-around; padding: 12px 20px 20px; border-top: 1px solid rgba(245,240,235,0.04);">
+          <div style="text-align:center;">
+            <div style="color: #C8A55C; font-size: 10px; font-weight: 500;">Today</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="color: rgba(245,240,235,0.3); font-size: 10px;">Journal</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="color: rgba(245,240,235,0.3); font-size: 10px;">Ask</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="color: rgba(245,240,235,0.3); font-size: 10px;">You</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Annotations -->
+  <div style="padding-top: 60px;">
+
+    <!-- Zone 1 annotation -->
+    <div style="margin-bottom: 32px; padding: 20px; background: rgba(255,255,255,0.02); border-left: 2px solid rgba(200,165,92,0.3); border-radius: 0 12px 12px 0;">
+      <div style="color: #C8A55C; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;">Zone 1 — Header</div>
+      <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; margin-bottom: 8px;">Greeting + Name + Streak + Avatar</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        <strong style="color: rgba(255,255,255,0.7);">Why it's here:</strong> Personal identity anchoring. Seeing your name + streak immediately reinforces "this is mine" and "I'm building something."<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Why this size:</strong> Compact. The header should never compete with the hero card. Name is large (28px display), but everything else is muted.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Ambient detail:</strong> Subtle concentric circle SVGs (inspired by Endel's moving geometry). Nearly invisible — they create atmosphere, not distraction. In production these would slowly rotate via Reanimated.
+      </div>
+    </div>
+
+    <!-- Zone 2 annotation -->
+    <div style="margin-bottom: 32px; padding: 20px; background: rgba(255,255,255,0.02); border-left: 2px solid rgba(200,165,92,0.3); border-radius: 0 12px 12px 0;">
+      <div style="color: #C8A55C; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;">Zone 2 — Daily Bridge</div>
+      <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; margin-bottom: 8px;">AI-generated transition from yesterday to today</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        <strong style="color: rgba(255,255,255,0.7);">Why it's here:</strong> Continuity. This is the feature that makes Unfold feel like a living relationship, not a content feed. It references yesterday's check-in + today's theme. Already in the codebase (<code>bridge-service.ts</code>).<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Why this size:</strong> Small, inline bubble. It's a nudge, not a headline. Compact orb + speech bubble pattern — feels like a friend texting you.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Conditional:</strong> Only appears on Day 2+. Day 1 users don't see it. Disappears once they tap into reading.
+      </div>
+    </div>
+
+    <!-- Zone 3 annotation -->
+    <div style="margin-bottom: 32px; padding: 20px; background: rgba(200,165,92,0.04); border-left: 2px solid #C8A55C; border-radius: 0 12px 12px 0;">
+      <div style="color: #C8A55C; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;">Zone 3 — Hero Devotional Card ★</div>
+      <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; margin-bottom: 8px;">THE primary action — today's reading</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        <strong style="color: rgba(255,255,255,0.7);">Why it's here:</strong> This is what 90%+ of users open the app for. It MUST be the most prominent element, immediately tappable. Hero card = hero action.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Why this size:</strong> Largest card on screen (~45% of visible viewport). Rich content: title, scripture teaser, study method badge, progress bar, CTA button. Everything you need to decide "yes, I'm reading today" without scrolling.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Ambient detail:</strong> Concentric circle SVG art in the top-right corner. In production, these would slowly pulse/rotate via React Native Skia or Reanimated — creating that "living" Endel feel without being distracting.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Design principle:</strong> The gold accent border + subtle gradient background + shadow elevation all work together to make this feel elevated above everything else. It's the only card with an AccentGlow CTA button.
+      </div>
+    </div>
+
+    <!-- Zone 4 annotation -->
+    <div style="margin-bottom: 32px; padding: 20px; background: rgba(255,255,255,0.02); border-left: 2px solid rgba(200,165,92,0.3); border-radius: 0 12px 12px 0;">
+      <div style="color: #C8A55C; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;">Zone 4 — Discovery Grid</div>
+      <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; margin-bottom: 8px;">Streak + Companion + Bible Reader — varied card sizes</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        <strong style="color: rgba(255,255,255,0.7);">Why it's here:</strong> Secondary actions. After the hero card, these are the next most common things people do: check their streak, ask the companion something, or read the Bible directly.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Card sizing logic (Endel-inspired):</strong><br>
+        • <strong>Streak (small square, left):</strong> Glanceable — you just need the number. No tap needed unless curious.<br>
+        • <strong>Companion (small square, right):</strong> Entry point to Ask tab. Small because it's available as a full tab — this is a shortcut, not the destination.<br>
+        • <strong>Bible Reader (full width):</strong> Wider because it carries context ("Continue in John 14"). The horizontal layout with chevron invites a tap.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Why varied sizes:</strong> Visual rhythm. Same-sized cards create monotony (an AI slop tell). Different sizes create hierarchy within the grid — your eye knows what to scan first.
+      </div>
+    </div>
+
+    <!-- Zone 5 annotation -->
+    <div style="margin-bottom: 32px; padding: 20px; background: rgba(255,255,255,0.02); border-left: 2px solid rgba(200,165,92,0.3); border-radius: 0 12px 12px 0;">
+      <div style="color: #C8A55C; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;">Zone 5 — Remember This</div>
+      <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; margin-bottom: 8px;">Random highlight from past devotionals</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        <strong style="color: rgba(255,255,255,0.7);">Why it's here:</strong> Delight + reinforcement. Surfacing a past highlight makes the user feel "my history matters here." It's the same mechanic as Kindle's daily highlight email — low effort, high emotional payoff.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Why this size:</strong> Medium — full width but compact height. The colored left border draws the eye without competing with the hero card. Only appears if user has highlights (progressive disclosure).<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Already built:</strong> <code>RememberThisCard.tsx</code> exists. Just needs repositioning from current layout.
+      </div>
+    </div>
+
+    <!-- Zone 6 annotation -->
+    <div style="margin-bottom: 32px; padding: 20px; background: rgba(255,255,255,0.02); border-left: 2px solid rgba(200,165,92,0.3); border-radius: 0 12px 12px 0;">
+      <div style="color: #C8A55C; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 600;">Zone 6 — Your Series</div>
+      <div style="color: rgba(255,255,255,0.8); font-size: 14px; font-weight: 500; margin-bottom: 8px;">Library of past & in-progress series</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        <strong style="color: rgba(255,255,255,0.7);">Why it's here:</strong> Lowest priority on home — users access their library infrequently (1-2x/week). But it's important for the feeling of "I've built something here" and for switching between series.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Why this size:</strong> Compact horizontal scroll cards. Takes minimal vertical space but shows breadth. "See All" links to the full library in the You tab.<br><br>
+        <strong style="color: rgba(255,255,255,0.7);">Already built:</strong> <code>YourSeriesSection.tsx</code> exists as a vertical list — would change to horizontal scroll for space efficiency.
+      </div>
+    </div>
+
+    <!-- Ambient art note -->
+    <div style="padding: 20px; background: rgba(200,165,92,0.04); border-radius: 12px; border: 1px solid rgba(200,165,92,0.1);">
+      <div style="color: #C8A55C; font-size: 13px; font-weight: 600; margin-bottom: 8px;">On the Endel-Inspired Ambient Art</div>
+      <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.6;">
+        The concentric circles and line art throughout are static in this mockup. In the real app, these would be:<br><br>
+        • <strong style="color: rgba(255,255,255,0.7);">React Native Skia</strong> for GPU-rendered geometry<br>
+        • <strong style="color: rgba(255,255,255,0.7);">Slow rotation</strong> (0.5-2rpm) with Reanimated <code>withRepeat</code><br>
+        • <strong style="color: rgba(255,255,255,0.7);">Very low opacity</strong> (3-5%) — felt, not seen<br>
+        • <strong style="color: rgba(255,255,255,0.7);">Theme-reactive</strong> — accent-colored, so they shift with the user's chosen theme<br><br>
+        The goal is the same as Endel: the screen feels <em>alive</em> without anything specific demanding attention. Beauty through subtlety.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="max-width: 1100px; margin: 40px auto 0; padding: 24px; background: rgba(255,255,255,0.02); border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+  <h3 style="margin: 0 0 16px; font-size: 16px; color: #C8A55C;">User Intent → Card Priority</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <th style="text-align:left; padding: 10px; color: rgba(255,255,255,0.5);">Action</th>
+        <th style="text-align:center; padding: 10px; color: rgba(255,255,255,0.5);">Frequency</th>
+        <th style="text-align:center; padding: 10px; color: rgba(255,255,255,0.5);">Zone</th>
+        <th style="text-align:center; padding: 10px; color: rgba(255,255,255,0.5);">Size</th>
+        <th style="text-align:left; padding: 10px; color: rgba(255,255,255,0.5);">Rationale</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 10px; color: rgba(255,255,255,0.8);">Read devotional</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Daily</td>
+        <td style="text-align:center; padding: 10px; color: #C8A55C; font-weight: 600;">3 ★</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Hero</td>
+        <td style="padding: 10px; color: rgba(255,255,255,0.5);">#1 reason to open app. Must be instant.</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 10px; color: rgba(255,255,255,0.8);">Check streak</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Daily</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">4</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Small</td>
+        <td style="padding: 10px; color: rgba(255,255,255,0.5);">Glanceable — number is enough. No tap needed.</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 10px; color: rgba(255,255,255,0.8);">Ask companion</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">2-3x/week</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">4</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Small</td>
+        <td style="padding: 10px; color: rgba(255,255,255,0.5);">Has its own tab — this is a shortcut, not the destination.</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 10px; color: rgba(255,255,255,0.8);">Read Bible</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">2-3x/week</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">4</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Wide</td>
+        <td style="padding: 10px; color: rgba(255,255,255,0.5);">Needs context ("continue in John 14"). Wider for readability.</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <td style="padding: 10px; color: rgba(255,255,255,0.8);">Remember highlight</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Passive</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">5</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Medium</td>
+        <td style="padding: 10px; color: rgba(255,255,255,0.5);">User doesn't seek this — we surface it for delight.</td>
+      </tr>
+      <tr>
+        <td style="padding: 10px; color: rgba(255,255,255,0.8);">Browse library</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">1-2x/week</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">6</td>
+        <td style="text-align:center; padding: 10px; color: rgba(255,255,255,0.8);">Compact</td>
+        <td style="padding: 10px; color: rgba(255,255,255,0.5);">Horizontal scroll — shows breadth without eating vertical space.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

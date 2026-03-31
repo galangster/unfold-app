@@ -1,0 +1,90 @@
+<h2>Reveal Screen — Design Overview</h2>
+<p class="subtitle">Curtain-lift transition with animated backgrounds, text effects, and haptic feedback</p>
+
+<div class="section">
+  <h3>The Five Layers</h3>
+  <p>Each layer adds a distinct sensory dimension. Together they create a moment that feels sacred but not heavy.</p>
+</div>
+
+<div class="options">
+  <!-- Layer 1: Background -->
+  <div class="option" data-choice="bg" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>Animated Pattern Backgrounds</h3>
+      <p><strong>Slowly drifting geometric patterns</strong> drawn with Skia — concentric rings, radial dots, or flowing waves. Rotate through 4-5 patterns per series/day (seeded from devotionalId so the same day always shows the same pattern). Subtle accent-colored, ~10% opacity, drifting at 0.5-1px/sec. Calm, not distracting.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Patterns</h4><ul>
+          <li>Concentric ripples (expanding rings)</li>
+          <li>Radial dot field (sacred geometry)</li>
+          <li>Flowing sine waves (horizon lines)</li>
+          <li>Soft grid breathing (pulsing intersections)</li>
+          <li>Scattered light particles (existing ember style)</li>
+        </ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layer 2: Title -->
+  <div class="option" data-choice="title" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>Title Text Effect — "Letter Cascade"</h3>
+      <p><strong>Font size bumped to 42px</strong> (from 32). Letters animate in with the same MagicalChar pattern from TypewriterText — each character fades in with a slight rise + golden glow that settles to white. Staggered ~25ms per character. A subtle <strong>shimmer sweep</strong> passes across the completed title once all letters are placed (a diagonal gradient mask moving left-to-right over ~800ms).</p>
+    </div>
+  </div>
+
+  <!-- Layer 3: Swipe prompt -->
+  <div class="option" data-choice="prompt" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>Swipe Prompt — Lower + Shimmer + Animated Chevrons</h3>
+      <p>Move prompt to <strong>bottom 40px</strong> (from 60px padding). "Swipe up to reveal your devotional" gets a <strong>traveling shimmer</strong> — a soft highlight that sweeps across the text every 3 seconds. The single chevron becomes <strong>two stacked chevrons</strong> with a staggered float animation (second chevron delayed 200ms), creating a visual "pull upward" rhythm.</p>
+    </div>
+  </div>
+
+  <!-- Layer 4: Gesture -->
+  <div class="option" data-choice="gesture" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>Draggable Sheet + Curtain Lift</h3>
+      <p>The entire reveal screen <strong>follows the user's finger</strong> as they drag up (translateY tracks gesture). Parallax: background pattern moves at 0.3x speed, content at 1x. Past -120px threshold, the screen <strong>accelerates upward</strong> (spring to -screenHeight) while the reading screen fades in underneath. The content was already pre-loaded beneath the reveal overlay.</p>
+    </div>
+  </div>
+
+  <!-- Layer 5: Haptics -->
+  <div class="option" data-choice="haptics" onclick="toggleSelect(this)">
+    <div class="letter">5</div>
+    <div class="content">
+      <h3>Haptic Choreography</h3>
+      <p>Three haptic moments:<br>
+      <strong>(a)</strong> Subtle tick at -40px drag (you're getting close)<br>
+      <strong>(b)</strong> Medium tick at -120px threshold (commit point)<br>
+      <strong>(c)</strong> Satisfying <code>notificationAsync(Success)</code> as the curtain lifts — this is the "reward" haptic that says "you did it."</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 32px; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+  <h3 style="margin-top: 0;">Timeline: What Happens On Mount</h3>
+  <div style="font-family: monospace; font-size: 13px; line-height: 2; color: #aaa;">
+    <span style="color: #666;">0ms</span> &nbsp;&nbsp; Screen fades in, pattern starts drifting<br>
+    <span style="color: #666;">200ms</span> &nbsp; Series eyebrow fades in (uppercase)<br>
+    <span style="color: #666;">400ms</span> &nbsp; Title letters begin cascading in (~25ms each)<br>
+    <span style="color: #666;">~1.2s</span> &nbsp; Title complete → shimmer sweep across title<br>
+    <span style="color: #666;">~1.5s</span> &nbsp; Day counter fades in<br>
+    <span style="color: #666;">~1.8s</span> &nbsp; Swipe prompt + chevrons appear, begin floating<br>
+    <span style="color: #666;">∞</span> &nbsp;&nbsp;&nbsp;&nbsp; Pattern drifts, chevrons float, shimmer loops on prompt text
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>Key Constraints</h3>
+  <ul style="color: #999; line-height: 1.8;">
+    <li>All springs critically-damped (no bounce) per your animation rules</li>
+    <li>Pattern rendering via Skia Canvas (GPU, 60fps, off JS thread)</li>
+    <li>Reduced motion: skip letter cascade, show static title; skip pattern drift</li>
+    <li>Entrance sequence &lt;2s total; no blocking — user can swipe during animation</li>
+    <li>Pattern seeded from devotionalId hash so it's deterministic per day</li>
+  </ul>
+</div>

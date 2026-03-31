@@ -1,0 +1,84 @@
+<h2>Reveal Screen — Final Design</h2>
+<p class="subtitle">Four layers: scatter-in title, shimmer swipe prompt, draggable curtain lift, haptic choreography</p>
+
+<div class="section">
+  <h3>Layer 1: Random Scatter Title (42px)</h3>
+  <p>Reuses the exact <code>RevealChar</code> + <code>shuffleOrder</code> pattern from the welcome screen (<code>src/app/index.tsx</code>).</p>
+  <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); margin: 16px 0;">
+    <div style="font-family: monospace; font-size: 13px; line-height: 2; color: #aaa;">
+      <strong style="color: #ccc;">Font size:</strong> 32px → <strong style="color: #e8c47c;">42px</strong> (lineHeight: 50px)<br>
+      <strong style="color: #ccc;">Animation:</strong> Each letter fades in (opacity 0→1, 600ms) with white→gold color transition (1200ms)<br>
+      <strong style="color: #ccc;">Order:</strong> Shuffled via <code>shuffleOrder()</code> — deterministic pseudo-random per title length<br>
+      <strong style="color: #ccc;">Stagger:</strong> 200ms base delay + <code>charOrder[i] * 80ms</code> (faster than welcome screen's 200ms — titles are longer)<br>
+      <strong style="color: #ccc;">Shimmer:</strong> Once all letters are placed, a diagonal gradient mask sweeps left→right over 800ms<br>
+      <strong style="color: #ccc;">Eyebrow + day counter:</strong> Fade in before/after title (staggered, simple opacity)
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 2: Shimmer Swipe Prompt</h3>
+  <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); margin: 16px 0;">
+    <div style="font-family: monospace; font-size: 13px; line-height: 2; color: #aaa;">
+      <strong style="color: #ccc;">Position:</strong> Bottom of screen with <strong style="color: #e8c47c;">paddingBottom: 40px</strong> (down from 60px, still has 6px+ clearance above safe area)<br>
+      <strong style="color: #ccc;">Text:</strong> "Swipe up to reveal your devotional"<br>
+      <strong style="color: #ccc;">Shimmer:</strong> A soft highlight gradient (accent at 15% opacity) sweeps across the text every 3 seconds using a translating <code>MaskedView</code> + <code>LinearGradient</code><br>
+      <strong style="color: #ccc;">Chevrons:</strong> Two stacked <code>CaretUp</code> icons, each floating with the existing withRepeat timing (-8px, 1200ms). Second chevron delayed 200ms — creates a visual "pull upward" rhythm<br>
+      <strong style="color: #ccc;">Entrance:</strong> Fades in ~1.8s after mount (after title completes)
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 3: Draggable Curtain Lift</h3>
+  <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); margin: 16px 0;">
+    <div style="font-family: monospace; font-size: 13px; line-height: 2; color: #aaa;">
+      <strong style="color: #ccc;">Gesture:</strong> <code>Gesture.Pan()</code> tracks <code>translationY</code> on every frame via <code>onUpdate</code><br>
+      <strong style="color: #ccc;">Drag behavior:</strong> Screen translateY follows finger (clamped: only upward, <code>Math.min(0, translationY)</code>)<br>
+      <strong style="color: #ccc;">Ambient glow:</strong> Existing circle glow moves at 0.3x parallax speed during drag<br>
+      <strong style="color: #ccc;">Threshold:</strong> -120px (up from -80px to feel more intentional)<br>
+      <strong style="color: #ccc;">Commit:</strong> Past threshold → spring to <code>-screenHeight</code> (critically-damped, damping: 20, stiffness: 200)<br>
+      <strong style="color: #ccc;">Cancel:</strong> Released before threshold → spring back to 0<br>
+      <strong style="color: #ccc;">Underneath:</strong> Reading screen pre-mounted at opacity 0; fades to 1 as reveal slides away<br>
+      <strong style="color: #ccc;">Navigation:</strong> <code>router.replace()</code> fires via <code>runOnJS</code> once spring reaches ~80% of exit
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 4: Haptic Choreography</h3>
+  <div style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.08); margin: 16px 0;">
+    <div style="font-family: monospace; font-size: 13px; line-height: 2; color: #aaa;">
+      <strong style="color: #e8c47c;">@ -40px drag:</strong> <code>Haptics.selectionAsync()</code> — subtle tick, "you're getting close"<br>
+      <strong style="color: #e8c47c;">@ -120px threshold:</strong> <code>Haptics.impactAsync(Medium)</code> — commit point<br>
+      <strong style="color: #e8c47c;">@ curtain lifts:</strong> <code>Haptics.notificationAsync(Success)</code> — the satisfying reward haptic<br>
+      <br>
+      <span style="color: #666;">Haptics fire once per gesture (tracked via shared value flags, reset on gesture start)</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 32px; padding: 20px; background: rgba(232,196,124,0.05); border-radius: 12px; border: 1px solid rgba(232,196,124,0.15);">
+  <h3 style="margin-top: 0; color: #e8c47c;">Mount Timeline</h3>
+  <div style="font-family: monospace; font-size: 13px; line-height: 2.2; color: #aaa;">
+    <span style="color: #666;">0ms&nbsp;&nbsp;&nbsp;</span> Screen fades in, ambient glow appears<br>
+    <span style="color: #666;">200ms&nbsp;</span> Series eyebrow fades in<br>
+    <span style="color: #666;">500ms&nbsp;</span> Title letters begin scatter-in (~80ms stagger each)<br>
+    <span style="color: #666;">~1.5s&nbsp;</span> All letters placed → shimmer sweep across title<br>
+    <span style="color: #666;">~1.6s&nbsp;</span> Day counter fades in<br>
+    <span style="color: #666;">~1.8s&nbsp;</span> Swipe prompt + dual chevrons appear<br>
+    <span style="color: #666;">∞&nbsp;&nbsp;&nbsp;&nbsp;</span> Chevrons float, shimmer loops on prompt text every 3s<br>
+    <br>
+    <span style="color: #666; font-style: italic;">User can swipe at any time — animations don't block interaction</span>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 24px;">
+  <h3>What We're NOT Changing</h3>
+  <ul style="color: #999; line-height: 1.8;">
+    <li>Background stays solid <code>colors.background</code> — no pattern overlays</li>
+    <li>Ambient circle glow stays (existing <code>alpha(colors.accent, 0.06)</code>)</li>
+    <li>Safe area insets handling stays the same</li>
+    <li>Accessibility label stays, reduced motion skips scatter (shows static title)</li>
+  </ul>
+</div>

@@ -1,0 +1,5 @@
+{"type":"server-started","port":64422,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:64422","screen_dir":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/68295-1774468536"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/68295-1774468536/home-screen-options.html"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/68295-1774468536/home-card-hierarchy.html"}
+{"type":"screen-added","file":"/Users/galangster/clawd/work/unfold/app/mobile/.superpowers/brainstorm/68295-1774468536/home-refined-v2.html"}
+{"type":"server-stopped","reason":"idle timeout"}

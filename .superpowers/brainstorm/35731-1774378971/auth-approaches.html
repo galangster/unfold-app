@@ -1,0 +1,130 @@
+<h2>Onboarding Sign-In Step: Which approach?</h2>
+<p class="subtitle">The onboarding flow currently only shows "Sign in with Apple." How should we add Google & Facebook?</p>
+
+<div class="cards">
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 24px; background: #0A0A0A;">
+      <div style="max-width: 280px; margin: 0 auto;">
+        <!-- Onboarding step header -->
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 11px; color: #A0A6B1; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;">STEP 8 OF 9</div>
+          <div style="font-size: 22px; font-weight: 600; color: #F5F5F7; margin-bottom: 6px;">Keep your progress safe</div>
+          <div style="font-size: 14px; color: #8C93A0;">Sign in to sync across devices</div>
+        </div>
+        <!-- All 3 buttons inline -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="background: #000; border: 1px solid #333; border-radius: 12px; height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span style="font-size: 16px;">&#63743;</span>
+            <span style="color: #FFF; font-size: 14px; font-weight: 600;">Sign in with Apple</span>
+          </div>
+          <div style="background: #FFF; border-radius: 12px; height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span style="font-size: 14px;">G</span>
+            <span style="color: #1F1F1F; font-size: 14px; font-weight: 600;">Sign in with Google</span>
+          </div>
+          <div style="background: #1877F2; border-radius: 12px; height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span style="color: #FFF; font-size: 14px;">f</span>
+            <span style="color: #FFF; font-size: 14px; font-weight: 600;">Sign in with Facebook</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 12px;">
+          <span style="color: #6F7785; font-size: 13px;">Skip for now</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A: All 3 Providers Inline</h3>
+      <p>Add Google & Facebook directly into the onboarding step. Duplicates UI from the dedicated sign-in screen.</p>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>No navigation away from flow</li><li>User sees all options immediately</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Two sign-in UIs to maintain</li><li>Onboarding step gets tall/busy</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 24px; background: #0A0A0A;">
+      <div style="max-width: 280px; margin: 0 auto;">
+        <!-- Full sign-in screen -->
+        <div style="text-align: center; margin-bottom: 16px;">
+          <div style="width: 32px; height: 3px; background: #7C6BFF; border-radius: 2px; margin: 0 auto 16px;"></div>
+          <div style="font-size: 11px; color: #7C6BFF; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px;">KEEP YOUR PROGRESS SAFE</div>
+          <div style="font-size: 22px; font-weight: 600; color: #F5F5F7; margin-bottom: 6px;">Sync across all your devices</div>
+          <div style="font-size: 13px; color: #A0A6B1;">Sign in to save your devotionals, journal, and reading streak.</div>
+        </div>
+        <!-- Benefits -->
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; background: #111214; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #7C6BFF;">&#9729;</div>
+            <div><div style="font-size: 13px; color: #F5F5F7; font-weight: 500;">Sync across devices</div></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; background: #111214; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #7C6BFF;">&#128737;</div>
+            <div><div style="font-size: 13px; color: #F5F5F7; font-weight: 500;">Secure backup</div></div>
+          </div>
+        </div>
+        <!-- All 3 buttons -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="background: #000; border: 1px solid #333; border-radius: 12px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <span style="color: #FFF; font-size: 13px; font-weight: 600;">&#63743; Sign in with Apple</span>
+          </div>
+          <div style="background: #FFF; border-radius: 12px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <span style="color: #1F1F1F; font-size: 13px; font-weight: 600;">G Sign in with Google</span>
+          </div>
+          <div style="background: #1877F2; border-radius: 12px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <span style="color: #FFF; font-size: 13px; font-weight: 600;">f Sign in with Facebook</span>
+          </div>
+        </div>
+        <div style="text-align: center; margin-top: 10px;">
+          <span style="color: #6F7785; font-size: 12px;">Continue as Guest</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B: Route to Full Sign-In Screen <span style="background:#7C6BFF22;color:#7C6BFF;font-size:11px;padding:2px 8px;border-radius:4px;margin-left:6px;">RECOMMENDED</span></h3>
+      <p>When the onboarding step is reached, navigate to the existing <code>(onboarding)/sign-in.tsx</code> screen. It already has all 3 providers, benefits, animations, and error handling.</p>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Single source of truth for sign-in UI</li><li>Already fully built and polished</li><li>No duplicate code to maintain</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Leaves the onboarding flow briefly</li><li>Back navigation could be confusing</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 24px; background: #0A0A0A;">
+      <div style="max-width: 280px; margin: 0 auto;">
+        <!-- Onboarding step header -->
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 11px; color: #A0A6B1; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;">STEP 8 OF 9</div>
+          <div style="font-size: 22px; font-weight: 600; color: #F5F5F7; margin-bottom: 6px;">Keep your progress safe</div>
+          <div style="font-size: 14px; color: #8C93A0;">Sign in to sync across devices</div>
+        </div>
+        <!-- Apple prominent -->
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="background: #000; border: 1px solid #333; border-radius: 12px; height: 48px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <span style="font-size: 18px;">&#63743;</span>
+            <span style="color: #FFF; font-size: 15px; font-weight: 600;">Sign in with Apple</span>
+          </div>
+        </div>
+        <!-- More options link -->
+        <div style="text-align: center; margin-top: 14px; padding-top: 14px; border-top: 1px solid #24262B;">
+          <span style="color: #7C6BFF; font-size: 13px; font-weight: 500;">More sign-in options &rarr;</span>
+          <div style="font-size: 11px; color: #6F7785; margin-top: 4px;">Google, Facebook</div>
+        </div>
+        <div style="text-align: center; margin-top: 12px;">
+          <span style="color: #6F7785; font-size: 13px;">Skip for now</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C: Apple Primary + "More Options" Link</h3>
+      <p>Keep Apple as the main CTA in onboarding (cleanest for iOS users). Add a "More sign-in options" link that navigates to the full sign-in screen for Google/Facebook.</p>
+      <div class="pros-cons" style="margin-top: 8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean, focused onboarding step</li><li>Apple is primary (most iOS users prefer it)</li><li>Still provides all options via link</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Google/Facebook users need extra tap</li><li>Slightly more complex flow</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

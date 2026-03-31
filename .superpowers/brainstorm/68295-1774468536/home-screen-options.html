@@ -1,0 +1,277 @@
+<h2>Home Screen Direction</h2>
+<p class="subtitle">Which layout approach feels right for Unfold's home screen? Each mockup shows dark mode — the primary experience.</p>
+
+<div class="cards" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 1200px; margin: 0 auto;">
+
+  <!-- Option A: Discovery Feed -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)" style="cursor:pointer; border-radius: 16px; overflow: hidden; background: #1a1a1a; border: 2px solid transparent; transition: border-color 0.2s;">
+    <div class="card-image" style="padding: 0;">
+      <!-- Phone mockup -->
+      <div style="background: #0A0A0A; border-radius: 12px 12px 0 0; padding: 16px 16px 24px; font-family: -apple-system, system-ui, sans-serif; min-height: 520px; overflow: hidden;">
+        <!-- Status bar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding: 0 4px;">
+          <span style="color: rgba(245,240,235,0.6); font-size: 13px;">Good morning</span>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #C8A55C, #8B6914); display:flex;align-items:center;justify-content:center;">
+            <span style="color: white; font-size: 11px; font-weight: 600;">G</span>
+          </div>
+        </div>
+
+        <!-- Devotional Hero Card — tall, prominent -->
+        <div style="background: linear-gradient(160deg, rgba(200,165,92,0.12) 0%, rgba(200,165,92,0.04) 100%); border: 1px solid rgba(200,165,92,0.15); border-radius: 16px; padding: 20px; margin-bottom: 12px;">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom: 10px;">
+            <div style="width:6px; height:6px; border-radius:50%; background:#C8A55C;"></div>
+            <span style="color:#C8A55C; font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Today's Reading</span>
+          </div>
+          <div style="color: #F5F0EB; font-size: 17px; font-weight: 600; margin-bottom: 6px; line-height: 1.3;">Finding Peace in Uncertainty</div>
+          <div style="color: rgba(245,240,235,0.5); font-size: 12px; margin-bottom: 14px;">Day 4 of 7 · Trusting God's Plan</div>
+          <!-- Progress bar -->
+          <div style="height: 3px; background: rgba(245,240,235,0.08); border-radius: 2px; overflow: hidden;">
+            <div style="width: 57%; height: 100%; background: linear-gradient(90deg, #C8A55C, #D4B76A); border-radius: 2px;"></div>
+          </div>
+        </div>
+
+        <!-- Discovery cards — varied sizes, Endel-inspired -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+          <!-- Seasonal/featured card — spans both cols -->
+          <div style="grid-column: 1 / -1; background: linear-gradient(135deg, #1a2332 0%, #0f1922 100%); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 14px;">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #4A6B8A, #2D4A6B); display:flex;align-items:center;justify-content:center; flex-shrink:0;">
+              <span style="font-size: 20px;">🕊️</span>
+            </div>
+            <div>
+              <div style="color: #F5F0EB; font-size: 14px; font-weight: 600;">Lenten Journey</div>
+              <div style="color: rgba(245,240,235,0.45); font-size: 11px;">Seasonal · 40 days</div>
+            </div>
+          </div>
+
+          <!-- Small card 1 -->
+          <div style="background: rgba(245,240,235,0.04); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 14px;">
+            <div style="font-size: 18px; margin-bottom: 8px;">📖</div>
+            <div style="color: #F5F0EB; font-size: 13px; font-weight: 500; margin-bottom: 2px;">Bible Reader</div>
+            <div style="color: rgba(245,240,235,0.4); font-size: 11px;">John 14</div>
+          </div>
+
+          <!-- Small card 2 -->
+          <div style="background: rgba(245,240,235,0.04); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 14px;">
+            <div style="font-size: 18px; margin-bottom: 8px;">🔥</div>
+            <div style="color: #F5F0EB; font-size: 13px; font-weight: 500; margin-bottom: 2px;">5-Day Streak</div>
+            <div style="color: rgba(245,240,235,0.4); font-size: 11px;">Keep going!</div>
+          </div>
+        </div>
+
+        <!-- Quick Actions row -->
+        <div style="display: flex; gap: 8px;">
+          <div style="flex:1; background: rgba(245,240,235,0.04); border-radius: 12px; padding: 10px; text-align:center;">
+            <div style="color: rgba(245,240,235,0.5); font-size: 11px;">Journal</div>
+          </div>
+          <div style="flex:1; background: rgba(245,240,235,0.04); border-radius: 12px; padding: 10px; text-align:center;">
+            <div style="color: rgba(245,240,235,0.5); font-size: 11px;">Pray</div>
+          </div>
+          <div style="flex:1; background: rgba(245,240,235,0.04); border-radius: 12px; padding: 10px; text-align:center;">
+            <div style="color: rgba(245,240,235,0.5); font-size: 11px;">Library</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body" style="padding: 16px; background: #1a1a1a;">
+      <h3 style="color: #F5F0EB; margin: 0 0 6px; font-size: 16px;">A — Discovery Feed</h3>
+      <p style="color: rgba(245,240,235,0.6); margin: 0; font-size: 13px; line-height: 1.5;">Multiple card types with varied dimensions (Endel-style). Devotional hero + seasonal banners + quick links + library. Lots to explore.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Rich Single-Focus -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="cursor:pointer; border-radius: 16px; overflow: hidden; background: #1a1a1a; border: 2px solid transparent; transition: border-color 0.2s;">
+    <div class="card-image" style="padding: 0;">
+      <div style="background: #0A0A0A; border-radius: 12px 12px 0 0; padding: 16px 16px 24px; font-family: -apple-system, system-ui, sans-serif; min-height: 520px; overflow: hidden;">
+        <!-- Status bar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; padding: 0 4px;">
+          <span style="color: rgba(245,240,235,0.6); font-size: 13px;">Good morning</span>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #C8A55C, #8B6914); display:flex;align-items:center;justify-content:center;">
+            <span style="color: white; font-size: 11px; font-weight: 600;">G</span>
+          </div>
+        </div>
+
+        <!-- Ambient glow area -->
+        <div style="position: relative; margin-bottom: 20px;">
+          <!-- Soft radial glow -->
+          <div style="position:absolute; top: -30px; left: 50%; transform: translateX(-50%); width: 200px; height: 120px; background: radial-gradient(ellipse, rgba(200,165,92,0.08) 0%, transparent 70%); pointer-events:none;"></div>
+
+          <!-- Main devotional — large, centered, breathing room -->
+          <div style="background: linear-gradient(160deg, rgba(200,165,92,0.15) 0%, rgba(200,165,92,0.03) 100%); border: 1px solid rgba(200,165,92,0.18); border-radius: 20px; padding: 28px 22px; position: relative; overflow: hidden;">
+            <!-- Subtle pattern overlay -->
+            <div style="position:absolute; top:0; right:0; width: 100px; height: 100px; background: radial-gradient(circle at top right, rgba(200,165,92,0.06), transparent 60%);"></div>
+
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom: 14px;">
+              <div style="width:6px; height:6px; border-radius:50%; background:#C8A55C;"></div>
+              <span style="color:#C8A55C; font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Today's Reading</span>
+            </div>
+            <div style="color: #F5F0EB; font-size: 20px; font-weight: 600; margin-bottom: 8px; line-height: 1.3;">Finding Peace in Uncertainty</div>
+            <div style="color: rgba(245,240,235,0.5); font-size: 13px; margin-bottom: 6px;">Day 4 of 7 · Trusting God's Plan</div>
+            <div style="color: rgba(245,240,235,0.35); font-size: 12px; font-style: italic; margin-bottom: 18px; line-height: 1.5;">"Peace I leave with you; my peace I give you." — John 14:27</div>
+            <!-- Progress bar -->
+            <div style="height: 3px; background: rgba(245,240,235,0.08); border-radius: 2px; overflow: hidden;">
+              <div style="width: 57%; height: 100%; background: linear-gradient(90deg, #C8A55C, #D4B76A); border-radius: 2px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Streak — minimal, inline -->
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 24px;">
+          <span style="font-size: 14px;">🔥</span>
+          <span style="color: rgba(245,240,235,0.5); font-size: 13px;">5 day streak</span>
+          <span style="color: rgba(245,240,235,0.2); font-size: 13px;">·</span>
+          <span style="color: rgba(245,240,235,0.4); font-size: 13px;">Ember tier</span>
+        </div>
+
+        <!-- Remember This — verse of the day -->
+        <div style="background: rgba(245,240,235,0.03); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 16px; margin-bottom: 12px;">
+          <div style="color: rgba(245,240,235,0.4); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Remember This</div>
+          <div style="color: rgba(245,240,235,0.8); font-size: 14px; font-style: italic; line-height: 1.5;">"Cast all your anxiety on him because he cares for you."</div>
+          <div style="color: rgba(245,240,235,0.35); font-size: 12px; margin-top: 6px;">1 Peter 5:7</div>
+        </div>
+
+        <!-- Minimal bottom actions -->
+        <div style="display: flex; justify-content: center; gap: 32px; padding-top: 8px;">
+          <div style="text-align: center;">
+            <div style="color: rgba(245,240,235,0.3); font-size: 11px;">Journal</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="color: rgba(245,240,235,0.3); font-size: 11px;">Bible</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="color: rgba(245,240,235,0.3); font-size: 11px;">Library</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body" style="padding: 16px; background: #1a1a1a;">
+      <h3 style="color: #F5F0EB; margin: 0 0 6px; font-size: 16px;">B — Rich Single Focus</h3>
+      <p style="color: rgba(245,240,235,0.6); margin: 0; font-size: 13px; line-height: 1.5;">Devotional card dominates with ambient glow + verse preview. Breathing room. Minimal distractions. Meditative, calm — like opening a devotional book.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Hybrid -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)" style="cursor:pointer; border-radius: 16px; overflow: hidden; background: #1a1a1a; border: 2px solid transparent; transition: border-color 0.2s;">
+    <div class="card-image" style="padding: 0;">
+      <div style="background: #0A0A0A; border-radius: 12px 12px 0 0; padding: 16px 16px 24px; font-family: -apple-system, system-ui, sans-serif; min-height: 520px; overflow: hidden;">
+        <!-- Status bar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; padding: 0 4px;">
+          <span style="color: rgba(245,240,235,0.6); font-size: 13px;">Good morning</span>
+          <div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #C8A55C, #8B6914); display:flex;align-items:center;justify-content:center;">
+            <span style="color: white; font-size: 11px; font-weight: 600;">G</span>
+          </div>
+        </div>
+
+        <!-- Devotional Hero — large but not as spacious as B -->
+        <div style="background: linear-gradient(160deg, rgba(200,165,92,0.12) 0%, rgba(200,165,92,0.04) 100%); border: 1px solid rgba(200,165,92,0.15); border-radius: 18px; padding: 22px 18px; margin-bottom: 14px; position: relative; overflow:hidden;">
+          <div style="position:absolute; top:0; right:0; width: 80px; height: 80px; background: radial-gradient(circle at top right, rgba(200,165,92,0.06), transparent 60%);"></div>
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom: 12px;">
+            <div style="width:6px; height:6px; border-radius:50%; background:#C8A55C;"></div>
+            <span style="color:#C8A55C; font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Today's Reading</span>
+          </div>
+          <div style="color: #F5F0EB; font-size: 18px; font-weight: 600; margin-bottom: 6px; line-height: 1.3;">Finding Peace in Uncertainty</div>
+          <div style="color: rgba(245,240,235,0.5); font-size: 12px; margin-bottom: 14px;">Day 4 of 7 · Trusting God's Plan</div>
+          <div style="height: 3px; background: rgba(245,240,235,0.08); border-radius: 2px; overflow: hidden;">
+            <div style="width: 57%; height: 100%; background: linear-gradient(90deg, #C8A55C, #D4B76A); border-radius: 2px;"></div>
+          </div>
+        </div>
+
+        <!-- Streak pill + Explore header on same row -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 2px;">
+          <div style="display: flex; align-items: center; gap: 6px; background: rgba(245,240,235,0.04); border-radius: 20px; padding: 6px 12px;">
+            <span style="font-size: 12px;">🔥</span>
+            <span style="color: rgba(245,240,235,0.5); font-size: 12px;">5 days</span>
+          </div>
+          <span style="color: rgba(245,240,235,0.35); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;">Explore</span>
+        </div>
+
+        <!-- Discovery section — mixed card sizes -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+          <!-- Tall card -->
+          <div style="background: linear-gradient(170deg, #1a2332, #0f1922); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 16px; grid-row: span 2;">
+            <div style="font-size: 22px; margin-bottom: 10px;">🕊️</div>
+            <div style="color: #F5F0EB; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Lenten Journey</div>
+            <div style="color: rgba(245,240,235,0.4); font-size: 11px; margin-bottom: 12px;">40-day seasonal devotional</div>
+            <div style="color: #C8A55C; font-size: 11px; font-weight: 500;">Start →</div>
+          </div>
+
+          <!-- Small card 1 -->
+          <div style="background: rgba(245,240,235,0.04); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 14px;">
+            <div style="color: #F5F0EB; font-size: 13px; font-weight: 500;">📖 Bible</div>
+            <div style="color: rgba(245,240,235,0.35); font-size: 11px; margin-top: 4px;">John 14</div>
+          </div>
+
+          <!-- Small card 2 -->
+          <div style="background: rgba(245,240,235,0.04); border: 1px solid rgba(245,240,235,0.06); border-radius: 14px; padding: 14px;">
+            <div style="color: #F5F0EB; font-size: 13px; font-weight: 500;">✍️ Journal</div>
+            <div style="color: rgba(245,240,235,0.35); font-size: 11px; margin-top: 4px;">Today's prompt</div>
+          </div>
+        </div>
+
+        <!-- Your Library -->
+        <div style="padding: 0 2px;">
+          <div style="color: rgba(245,240,235,0.35); font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Your Library</div>
+          <div style="display: flex; gap: 10px; overflow: hidden;">
+            <div style="width: 100px; flex-shrink:0; background: rgba(245,240,235,0.04); border-radius: 10px; padding: 10px;">
+              <div style="color: rgba(245,240,235,0.7); font-size: 12px; font-weight: 500;">Anxiety</div>
+              <div style="color: rgba(245,240,235,0.3); font-size: 10px;">7 days</div>
+            </div>
+            <div style="width: 100px; flex-shrink:0; background: rgba(245,240,235,0.04); border-radius: 10px; padding: 10px;">
+              <div style="color: rgba(245,240,235,0.7); font-size: 12px; font-weight: 500;">Hope</div>
+              <div style="color: rgba(245,240,235,0.3); font-size: 10px;">5 days</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body" style="padding: 16px; background: #1a1a1a;">
+      <h3 style="color: #F5F0EB; margin: 0 0 6px; font-size: 16px;">C — Hybrid</h3>
+      <p style="color: rgba(245,240,235,0.6); margin: 0; font-size: 13px; line-height: 1.5;">Rich hero devotional card + discovery section below with mixed-size cards (Endel-style). Library at bottom. Best of both worlds — focused yet explorable.</p>
+    </div>
+  </div>
+</div>
+
+<div style="max-width: 800px; margin: 32px auto 0; padding: 20px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+  <h3 style="margin: 0 0 12px; font-size: 15px;">Key differences at a glance</h3>
+  <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <th style="text-align:left; padding: 8px 12px; color: rgba(255,255,255,0.5);"></th>
+        <th style="text-align:center; padding: 8px 12px; color: #C8A55C;">A — Discovery</th>
+        <th style="text-align:center; padding: 8px 12px; color: #C8A55C;">B — Single Focus</th>
+        <th style="text-align:center; padding: 8px 12px; color: #C8A55C;">C — Hybrid</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <td style="padding: 8px 12px; color: rgba(255,255,255,0.6);">Devotional prominence</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Medium</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Maximum</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">High</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <td style="padding: 8px 12px; color: rgba(255,255,255,0.6);">Content density</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">High</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Low</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Medium</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <td style="padding: 8px 12px; color: rgba(255,255,255,0.6);">Exploration</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Lots to tap</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Minimal</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Below the fold</td>
+      </tr>
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+        <td style="padding: 8px 12px; color: rgba(255,255,255,0.6);">Vibe</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">App dashboard</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Devotional book</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Curated magazine</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 12px; color: rgba(255,255,255,0.6);">Endel influence</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Strong</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Light</td>
+        <td style="text-align:center; padding: 8px 12px; color: rgba(255,255,255,0.8);">Moderate</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,112 @@
+<h2>Design: Clerk Auth Integration</h2>
+<p class="subtitle">Unified sign-in screen with context-aware navigation</p>
+
+<div class="section">
+  <h3>Architecture</h3>
+  <div class="mockup">
+    <div class="mockup-header">User Flow Diagram</div>
+    <div class="mockup-body" style="padding: 32px; background: #111;">
+      <div style="display: flex; flex-direction: column; gap: 24px; max-width: 600px; margin: 0 auto;">
+
+        <!-- Entry Points -->
+        <div style="display: flex; justify-content: center; gap: 40px;">
+          <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 10px; padding: 12px 20px; text-align: center;">
+            <div style="font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Entry 1</div>
+            <div style="font-size: 14px; color: #F5F5F7; margin-top: 4px; font-weight: 600;">Onboarding Step 8</div>
+            <div style="font-size: 11px; color: #A0A6B1; margin-top: 2px;">router.push with source="onboarding"</div>
+          </div>
+          <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 10px; padding: 12px 20px; text-align: center;">
+            <div style="font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Entry 2</div>
+            <div style="font-size: 14px; color: #F5F5F7; margin-top: 4px; font-weight: 600;">Post-Generation</div>
+            <div style="font-size: 11px; color: #A0A6B1; margin-top: 2px;">router.push with source="generating"</div>
+          </div>
+        </div>
+
+        <!-- Arrow down -->
+        <div style="text-align: center; color: #555; font-size: 24px;">&darr;</div>
+
+        <!-- Shared sign-in screen -->
+        <div style="background: #0A0A0A; border: 2px solid #7C6BFF; border-radius: 14px; padding: 20px; text-align: center; position: relative;">
+          <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #7C6BFF; color: white; font-size: 10px; padding: 2px 10px; border-radius: 4px; font-weight: 600;">SHARED</div>
+          <div style="font-size: 16px; color: #F5F5F7; font-weight: 600;">(onboarding)/sign-in.tsx</div>
+          <div style="display: flex; justify-content: center; gap: 12px; margin-top: 12px;">
+            <div style="background: #000; border: 1px solid #444; border-radius: 8px; padding: 6px 14px; font-size: 11px; color: #fff;">Apple</div>
+            <div style="background: #fff; border-radius: 8px; padding: 6px 14px; font-size: 11px; color: #1F1F1F;">Google</div>
+            <div style="background: #1877F2; border-radius: 8px; padding: 6px 14px; font-size: 11px; color: #fff;">Facebook</div>
+          </div>
+          <div style="font-size: 12px; color: #6F7785; margin-top: 8px;">Continue as Guest</div>
+        </div>
+
+        <!-- Branch arrows -->
+        <div style="display: flex; justify-content: center; gap: 80px;">
+          <div style="text-align: center;">
+            <div style="color: #555; font-size: 20px;">&darr;</div>
+            <div style="font-size: 10px; color: #4CAF50; font-weight: 600;">SUCCESS</div>
+          </div>
+          <div style="text-align: center;">
+            <div style="color: #555; font-size: 20px;">&darr;</div>
+            <div style="font-size: 10px; color: #FF9800; font-weight: 600;">SKIP / GUEST</div>
+          </div>
+        </div>
+
+        <!-- Outcomes -->
+        <div style="display: flex; justify-content: center; gap: 24px;">
+          <!-- Success outcomes -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: #1a2e1a; border: 1px solid #2d5a2d; border-radius: 8px; padding: 10px 16px; text-align: center;">
+              <div style="font-size: 12px; color: #4CAF50; font-weight: 500;">From onboarding</div>
+              <div style="font-size: 11px; color: #A0A6B1;">&#8594; Continue to step 9</div>
+            </div>
+            <div style="background: #1a2e1a; border: 1px solid #2d5a2d; border-radius: 8px; padding: 10px 16px; text-align: center;">
+              <div style="font-size: 12px; color: #4CAF50; font-weight: 500;">From generating</div>
+              <div style="font-size: 11px; color: #A0A6B1;">&#8594; Home screen</div>
+            </div>
+          </div>
+          <!-- Skip outcomes -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: #2e2a1a; border: 1px solid #5a4d2d; border-radius: 8px; padding: 10px 16px; text-align: center;">
+              <div style="font-size: 12px; color: #FF9800; font-weight: 500;">From onboarding</div>
+              <div style="font-size: 11px; color: #A0A6B1;">&#8594; Continue to step 9</div>
+            </div>
+            <div style="background: #2e2a1a; border: 1px solid #5a4d2d; border-radius: 8px; padding: 10px 16px; text-align: center;">
+              <div style="font-size: 12px; color: #FF9800; font-weight: 500;">From generating</div>
+              <div style="font-size: 11px; color: #A0A6B1;">&#8594; Home screen</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Changes Required</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+    <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 10px; padding: 16px;">
+      <div class="label">1. sign-in.tsx</div>
+      <p style="font-size: 13px; color: #ccc; margin-top: 6px;">Accept <code>source</code> route param. Branch navigation in <code>handleOAuthSignIn</code> success and <code>handleGuestMode</code> based on source.</p>
+      <div style="margin-top: 8px; font-size: 11px; color: #7C6BFF;">~15 lines changed</div>
+    </div>
+
+    <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 10px; padding: 16px;">
+      <div class="label">2. onboarding.tsx</div>
+      <p style="font-size: 13px; color: #ccc; margin-top: 6px;">Replace inline Apple OAuth with <code>router.push</code> to sign-in screen. Remove <code>useOAuth</code> hook + Apple button rendering. Add callback to advance onboarding on return.</p>
+      <div style="margin-top: 8px; font-size: 11px; color: #7C6BFF;">~50 lines removed, ~10 added</div>
+    </div>
+
+    <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 10px; padding: 16px;">
+      <div class="label">3. generating.tsx</div>
+      <p style="font-size: 13px; color: #ccc; margin-top: 6px;">Update existing <code>router.push</code> to include <code>source: "generating"</code> param. Minimal change.</p>
+      <div style="margin-top: 8px; font-size: 11px; color: #7C6BFF;">~2 lines changed</div>
+    </div>
+
+    <div style="background: #1a1a2e; border: 1px solid #333; border-radius: 10px; padding: 16px;">
+      <div class="label">4. No new files</div>
+      <p style="font-size: 13px; color: #ccc; margin-top: 6px;">Pure modification of existing files. No new components, hooks, or utils needed.</p>
+      <div style="margin-top: 8px; font-size: 11px; color: #4CAF50;">Zero file bloat</div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,53 @@
+<h2>Audio Player: What should "dismiss" mean?</h2>
+<p class="subtitle">Currently, tapping the X button destroys the audio — no way to bring it back without re-generating via TTS. Let's define the right behavior.</p>
+
+<div class="section">
+  <h3>Current Problems</h3>
+  <ul>
+    <li>Closing the player destroys the audio URI (can't restore)</li>
+    <li>No swipe gesture — only the small X button</li>
+    <li>Opening a study method kills the audio too</li>
+    <li>No way to minimize/hide without stopping</li>
+  </ul>
+</div>
+
+<h3>What should closing the player do?</h3>
+<p class="subtitle">Pick the model that feels right for a devotional listening experience</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Spotify Model — Hide, keep playing</h3>
+      <p>Swipe down or tap X to hide the bar. Audio keeps playing in the background. A small "headphones" icon in the header lets you bring it back. Explicit "stop" requires long-press or a second action.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Audio never accidentally lost</li><li>Can read while listening</li><li>Familiar pattern</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>More complex state management</li><li>Devotionals are short (~2 min) — may be overkill</li><li>Background audio needs careful cleanup</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Podcast Model — Pause + minimize, restore from header</h3>
+      <p>Swipe down to minimize (pauses audio, hides bar). A subtle indicator in the reading header shows paused audio is available. Tap to restore and resume. X button fully stops and clears.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Two tiers: minimize (recoverable) vs close (final)</li><li>Clear user intent — swipe = temporary, X = done</li><li>No background audio complexity</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Two different dismiss actions might confuse</li><li>Need a restore indicator somewhere</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Simple Model — Close means close, but cache the position</h3>
+      <p>X button and swipe both close and pause. But the playback position is cached. Next time user taps "Listen", it resumes from where they left off instead of restarting. No minimize/restore — just smart resume.</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>Pros</h4><ul><li>Simplest to implement and understand</li><li>No hidden state or restore UX</li><li>Smart resume feels polished</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Can't listen while scrolling through text</li><li>No background playback</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
