@@ -5,6 +5,7 @@
  *
  * v2: Multi-conversation model — conversations[], auto-archive, summaries.
  * v3: Add updatedAt for cloud sync.
+ * v4: Rename summary to title, add updateConversation/setActiveConversation.
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -43,7 +44,7 @@ export interface Conversation {
   messages: CompanionMessage[];
   createdAt: number;
   lastMessageAt: number;
-  summary: string | null;
+  title: string | null;
   topicTags: string[];
   archived: boolean;
   updatedAt?: string; // ISO timestamp for sync
@@ -58,9 +59,9 @@ const MAX_STORED_MESSAGES = 200;
 const MAX_CONVERSATIONS = 50;
 const INACTIVITY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// ── Summary helper ────────────────────────────────────────────────────────
+// ── Title helper ──────────────────────────────────────────────────────────
 
-function generateSummary(conversation: Conversation): string {
+export function generateTitle(conversation: Conversation): string {
   // Primary: use topic tags if available
   const tags = conversation.topicTags ?? [];
   if (tags.length > 0) {
@@ -102,10 +103,12 @@ interface CompanionChatState {
   updateMessage: (id: string, updates: Partial<CompanionMessage>) => void;
   setFeedback: (id: string, feedback: 'positive' | 'negative') => void;
   startNewConversation: () => void;
-  archiveActiveConversation: (summary?: string, topicTags?: string[]) => void;
+  archiveActiveConversation: (title?: string, topicTags?: string[]) => void;
   checkAndArchiveStale: () => void;
   deleteConversation: (id: string) => void;
   clearAllConversations: () => void;
+  updateConversation: (id: string, updates: Partial<Pick<Conversation, 'title' | 'topicTags'>>) => void;
+  setActiveConversation: (id: string) => void;
 }
 
 export const useCompanionChatStore = create<CompanionChatState>()(
@@ -126,7 +129,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
               messages: [timestampedMsg],
               createdAt: Date.now(),
               lastMessageAt: Date.now(),
-              summary: null,
+              title: null,
               topicTags: [],
               archived: false,
               updatedAt: now,
@@ -229,7 +232,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             const tags = getTopicTags();
             conversations = conversations.map(c =>
               c.id === active.id
-                ? { ...c, archived: true, topicTags: tags, summary: generateSummary({ ...c, topicTags: tags }), updatedAt: now }
+                ? { ...c, archived: true, topicTags: tags, title: generateTitle({ ...c, topicTags: tags }), updatedAt: now }
                 : c
             );
           } else if (active && activeMessages.length === 0) {
@@ -252,7 +255,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             messages: [],
             createdAt: Date.now(),
             lastMessageAt: Date.now(),
-            summary: null,
+            title: null,
             topicTags: [],
             archived: false,
             updatedAt: now,
@@ -264,14 +267,14 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           };
         }),
 
-      archiveActiveConversation: (summary, topicTags) =>
+      archiveActiveConversation: (title, topicTags) =>
         set((s) => ({
           conversations: s.conversations.map(c =>
             c.id === s.activeConversationId
               ? {
                   ...c,
                   archived: true,
-                  summary: summary ?? generateSummary(c),
+                  title: title ?? generateTitle(c),
                   topicTags: topicTags ?? c.topicTags,
                   updatedAt: new Date().toISOString(),
                 }
@@ -299,11 +302,51 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
       clearAllConversations: () =>
         set({ conversations: [], activeConversationId: null }),
+
+      updateConversation: (id, updates) =>
+        set((s) => ({
+          conversations: s.conversations.map(c =>
+            c.id === id
+              ? { ...c, ...updates, updatedAt: new Date().toISOString() }
+              : c
+          ),
+        })),
+
+      setActiveConversation: (id) =>
+        set((s) => {
+          const now = new Date().toISOString();
+          const target = s.conversations.find(c => c.id === id);
+          if (!target) return s;
+
+          // Archive current active conversation if it has messages
+          const active = s.conversations.find(c => c.id === s.activeConversationId);
+          let conversations = s.conversations;
+
+          if (active && active.id !== id && (active.messages ?? []).length > 0) {
+            conversations = conversations.map(c =>
+              c.id === active.id
+                ? { ...c, archived: true, title: c.title ?? generateTitle(c), updatedAt: now }
+                : c
+            );
+          } else if (active && active.id !== id && (active.messages ?? []).length === 0) {
+            conversations = conversations.filter(c => c.id !== active.id);
+          }
+
+          // Un-archive the target and set it active
+          conversations = conversations.map(c =>
+            c.id === id ? { ...c, archived: false, updatedAt: now } : c
+          );
+
+          return {
+            conversations,
+            activeConversationId: id,
+          };
+        }),
     }),
     {
       name: 'unfold-companion-chat',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 3, // v3: Add updatedAt for cloud sync
+      version: 4, // v4: Rename summary to title, add updateConversation/setActiveConversation
       // Skip persisting streaming message content to avoid expensive serialization during SSE
       partialize: (state) => ({
         ...state,
@@ -329,7 +372,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             messages: oldMessages,
             createdAt: oldMessages[0]?.timestamp ?? Date.now(),
             lastMessageAt: oldMessages[oldMessages.length - 1]?.timestamp ?? Date.now(),
-            summary: null,
+            title: null,
             topicTags: [],
             archived: false,
           };
@@ -346,6 +389,18 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             for (const msg of conv.messages ?? []) {
               if (!msg) continue;
               if (!msg.updatedAt) msg.updatedAt = new Date(msg.timestamp || Date.now()).toISOString();
+            }
+          }
+        }
+
+        // v3 → v4: Rename summary to title
+        if (version < 4) {
+          const conversations = (state as any).conversations ?? [];
+          for (const conv of conversations) {
+            if (!conv) continue;
+            if (conv.summary !== undefined && conv.title === undefined) {
+              conv.title = conv.summary;
+              delete conv.summary;
             }
           }
         }
