@@ -1,51 +1,167 @@
-import { useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
-  GearIcon,
-  FireIcon,
   BookOpenIcon,
   PencilLineIcon,
   CaretRightIcon,
   CrownIcon,
   SparkleIcon,
+  CaretDownIcon,
+  ChatDotsIcon,
+  StackIcon,
+  CompassIcon,
+  BookIcon,
+  SunIcon,
+  MoonIcon,
+  MonitorIcon,
+  CheckIcon,
+  PaletteIcon,
+  TextAaIcon,
+  HourglassIcon,
+  SignOutIcon,
+  UserCircleIcon,
+  LockIcon,
+  CreditCardIcon,
+  TrashIcon,
+  StarIcon,
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore } from '@/lib/store';
+import {
+  useUnfoldStore,
+  FontSize as FontSizePreference,
+  WritingTone,
+  ContentDepth,
+  FaithBackground,
+  LifeStage,
+  BIBLE_TRANSLATIONS,
+  BibleTranslation,
+  ThemeMode,
+  ACCENT_THEMES,
+  AccentThemeId,
+  READING_FONTS,
+  ReadingFontId,
+} from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
+import {
+  scheduleDailyReminder,
+  cancelAllReminders,
+  areNotificationsEnabled,
+  scheduleMiddayCheckIn,
+  scheduleEveningWindDown,
+  cancelMiddayCheckIn,
+  cancelEveningWindDown,
+} from '@/lib/notifications';
+import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
+import { analyzeNetworkError } from '@/lib/network-error-handler';
+import { useCompanionChatStore } from '@/lib/companion-chat-store';
+import { useAuth } from '@/hooks/useAuth';
+import { useClerk } from '@clerk/clerk-expo';
+import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
+import Constants from 'expo-constants';
+import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+
+// --- Constants (from settings) ---
+
+const FONT_SIZES: { value: FontSizePreference; label: string }[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' },
+];
+
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof SunIcon }[] = [
+  { value: 'light', label: 'Light', icon: SunIcon },
+  { value: 'dark', label: 'Dark', icon: MoonIcon },
+  { value: 'system', label: 'System', icon: MonitorIcon },
+];
+
+const REMINDER_TIMES = [
+  { value: '6:00 AM', label: 'Early morning' },
+  { value: '8:00 AM', label: 'Morning' },
+  { value: '12:00 PM', label: 'Midday' },
+  { value: '6:00 PM', label: 'Evening' },
+  { value: '9:00 PM', label: 'Night' },
+];
+
+function formatCheckInTime(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${hour12}:${m.toString().padStart(2, '0')} ${period}`;
+}
+
+const TONE_OPTIONS: { value: WritingTone; label: string; description: string }[] = [
+  { value: 'warm', label: 'Like a friend', description: 'Gentle, encouraging, and personal' },
+  { value: 'direct', label: 'Straight to the point', description: 'Clear, practical, and actionable' },
+  { value: 'poetic', label: 'With beauty', description: 'Lyrical, contemplative, and evocative' },
+];
+
+const DEPTH_OPTIONS: { value: ContentDepth; label: string; description: string }[] = [
+  { value: 'simple', label: 'Keep it simple', description: 'Clear truth without complexity' },
+  { value: 'balanced', label: 'A good balance', description: 'Substance with accessibility' },
+  { value: 'theological', label: 'Take me deeper', description: 'Rich study with historical context' },
+];
+
+const FAITH_OPTIONS: { value: FaithBackground; label: string; description: string }[] = [
+  { value: 'new', label: "I'm exploring", description: 'New to faith or rediscovering it' },
+  { value: 'growing', label: "I'm growing", description: 'Familiar with faith, deepening understanding' },
+  { value: 'mature', label: "I'm grounded", description: 'Well-versed and seeking deeper study' },
+];
+
+const LIFE_STAGE_OPTIONS: { value: LifeStage; label: string; description: string }[] = [
+  { value: 'student', label: "I'm a student", description: 'Figuring things out and finding my footing' },
+  { value: 'building', label: "I'm building my life", description: 'Career, relationships, and big decisions' },
+  { value: 'midlife', label: "I'm in the thick of it", description: 'Family, work, and a thousand responsibilities' },
+  { value: 'reflective', label: "I'm in a reflective season", description: 'Looking back, looking forward, finding meaning' },
+];
+
+// --- Menu items ---
 
 interface MenuItem {
-  icon: typeof GearIcon;
+  icon: typeof BookOpenIcon;
   label: string;
   subtitle?: string;
   route: string;
-  accent?: boolean;
 }
 
 export default function YouScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const user = useUnfoldStore((s) => s.user);
+  const updateUser = useUnfoldStore((s) => s.updateUser);
+  const reset = useUnfoldStore((s) => s.reset);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
+  const middayCheckInEnabled = useUnfoldStore((s) => s.middayCheckInEnabled);
+  const eveningWindDownEnabled = useUnfoldStore((s) => s.eveningWindDownEnabled);
+  const setMiddayCheckInEnabled = useUnfoldStore((s) => s.setMiddayCheckInEnabled);
+  const setEveningWindDownEnabled = useUnfoldStore((s) => s.setEveningWindDownEnabled);
+  const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
+  const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
+
+  const { isAuthenticated, email, authProvider } = useAuth();
+  const { signOut } = useClerk();
 
   const { data: premiumResult } = useQuery({
     queryKey: ['revenuecat', 'premium'],
@@ -55,15 +171,261 @@ export default function YouScreen() {
   });
 
   const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
+
+  // --- State ---
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'lifeStage' | 'translation' | null>(null);
+  const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>(null);
+  const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'translation' | 'general' | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [showTimeSelector, setShowTimeSelector] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isExportingData, setIsExportingData] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+
+  // Check notification status on mount
+  useEffect(() => {
+    const checkNotifications = async () => {
+      const enabled = await areNotificationsEnabled();
+      setNotificationsEnabled(enabled && !!user?.reminderTime);
+    };
+    checkNotifications();
+  }, [user?.reminderTime]);
+
+  // --- Handlers ---
+
+  const handleToggleNotifications = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (value) {
+      const time = user?.reminderTime ?? '8:00 AM';
+      const result = await scheduleDailyReminder(time);
+      if (result) {
+        setNotificationsEnabled(true);
+        updateUser({ reminderTime: time });
+        if (middayCheckInEnabled) await scheduleMiddayCheckIn();
+        if (eveningWindDownEnabled) await scheduleEveningWindDown();
+      }
+    } else {
+      await cancelAllReminders();
+      setNotificationsEnabled(false);
+    }
+  };
+
+  const handleToggleMiddayCheckIn = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setMiddayCheckInEnabled(value);
+    if (value) {
+      await scheduleMiddayCheckIn();
+    } else {
+      await cancelMiddayCheckIn();
+    }
+  };
+
+  const handleToggleEveningWindDown = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEveningWindDownEnabled(value);
+    if (value) {
+      await scheduleEveningWindDown();
+    } else {
+      await cancelEveningWindDown();
+    }
+  };
+
+  const handleSelectTime = async (time: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateUser({ reminderTime: time });
+    setShowTimeSelector(false);
+    if (notificationsEnabled) {
+      await scheduleDailyReminder(time);
+    }
+  };
+
+  const handleSignOut = useCallback(async () => {
+    Alert.alert(
+      'Sign out?',
+      'This will clear all your data on this device and return you to the start.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsSigningOut(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              await signOut();
+              reset();
+              useCompanionChatStore.getState().clearAllConversations();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.replace({ pathname: '/', params: { signedOut: '1' } });
+            } catch (err) {
+              logger.error('[YouScreen] Sign out error:', err);
+              Alert.alert('Error', 'Could not sign out. Please try again.');
+            } finally {
+              setIsSigningOut(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [signOut, reset, router]);
+
+  const handleResetData = async () => {
+    if (isDeletingAccount) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      'Reset all data?',
+      'This will permanently delete all your devotionals, journal entries, and settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () => {
+            Alert.alert(
+              'Are you absolutely sure?',
+              'This action cannot be undone. All your data will be permanently deleted.',
+              [
+                { text: 'Go Back', style: 'cancel' },
+                {
+                  text: 'Delete Everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    try {
+                      reset();
+                      useCompanionChatStore.getState().clearAllConversations();
+                      router.dismissAll();
+                      setTimeout(() => router.replace('/'), 50);
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRateApp = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS === 'ios') {
+      try {
+        await Linking.openURL('https://apps.apple.com/app/id6746827498?action=write-review');
+      } catch {}
+    } else if (Platform.OS === 'android') {
+      const bundleId = Constants.expoConfig?.android?.package ?? 'com.unfold.app';
+      try {
+        await Linking.openURL(`https://play.google.com/store/apps/details?id=${bundleId}`);
+      } catch {}
+    }
+  };
+
+  const promptForBugReportNote = async (): Promise<string | undefined> => {
+    if (Platform.OS !== 'ios') return undefined;
+    return new Promise((resolve) => {
+      Alert.prompt(
+        'What happened? (optional)',
+        'Add a short note so we have context (example: stuck on day 3 after tapping retry).',
+        [
+          { text: 'Skip', style: 'cancel', onPress: () => resolve(undefined) },
+          {
+            text: 'Send',
+            onPress: (value?: string) => {
+              const trimmed = value?.trim();
+              resolve(trimmed && trimmed.length > 0 ? trimmed : undefined);
+            },
+          },
+        ],
+        'plain-text'
+      );
+    });
+  };
+
+  const sendBugReportEmail = async (payload: {
+    source: string;
+    label?: string;
+    userNote?: string;
+    report: Record<string, unknown>;
+  }) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(`${PRIMARY_BACKEND_URL}/api/bug-report/email`, {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!response.ok) {
+        let detail = '';
+        try {
+          const data = await response.json();
+          detail = typeof data?.error === 'string' ? data.error : JSON.stringify(data);
+        } catch {
+          detail = `HTTP ${response.status}`;
+        }
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  };
+
+  const handleReportBug = async () => {
+    if (isExportingData) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsExportingData(true);
+    try {
+      const note = await promptForBugReportNote();
+      void logBugEvent('profile', 'bug-report-export-requested', { hasNote: !!note });
+      const { path, bundle, triageSummary } = await exportBugReportBundleToFile({ source: 'profile', note, label: note });
+      const reportPayload = { triageSummary, ...bundle } as Record<string, unknown>;
+      try {
+        await sendBugReportEmail({ source: 'profile', label: note, userNote: note, report: reportPayload });
+        void logBugEvent('profile', 'bug-report-email-succeeded', {
+          events: bundle.events.length,
+          triageHeadline: triageSummary.headline,
+          hasNote: !!note,
+        });
+        Alert.alert('Bug report sent', 'Thanks — your report was sent automatically.');
+        return;
+      } catch (emailError) {
+        void logBugEvent('profile', 'bug-report-email-failed', {
+          error: emailError instanceof Error ? emailError.message : String(emailError),
+        }, 'error');
+        const analyzed = analyzeNetworkError(emailError);
+        if (analyzed.type !== 'unknown') {
+          Alert.alert('Unable to Send Report', analyzed.userFriendlyMessage);
+        }
+      }
+      const sharingAvailable = await Sharing.isAvailableAsync();
+      if (sharingAvailable) {
+        await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Share Unfold bug report' });
+        Alert.alert("Couldn't auto-send", 'We opened the share sheet so you can send this report manually.');
+      } else {
+        const text = JSON.stringify(reportPayload, null, 2);
+        await Clipboard.setStringAsync(text);
+        Alert.alert('Bug report copied', 'Auto-send and sharing are unavailable. The bug report JSON has been copied to your clipboard.');
+      }
+      void logBugEvent('profile', 'bug-report-fallback-used', { hasNote: !!note }, 'warn');
+    } catch (error) {
+      void logBugEvent('profile', 'bug-report-export-failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }, 'error');
+      Alert.alert("Couldn't create bug report", 'Please try again in a moment. If this keeps happening, restart the app and retry.');
+    } finally {
+      setIsExportingData(false);
+    }
+  };
 
   const menuItems: MenuItem[] = [
-    {
-      icon: FireIcon,
-      label: 'Streak & Goals',
-      subtitle: streakCurrent > 0 ? `${streakCurrent} day streak` : 'Build your rhythm',
-      route: '/(tabs)/(you)/streak-settings',
-    },
     {
       icon: BookOpenIcon,
       label: 'My Studies',
@@ -76,13 +438,25 @@ export default function YouScreen() {
       subtitle: `${journalEntries.length + bookmarks.length + highlights.length} saved items`,
       route: '/(tabs)/(you)/my-content',
     },
-    {
-      icon: GearIcon,
-      label: 'Settings',
-      subtitle: 'Preferences, theme & voice',
-      route: '/(tabs)/(you)/settings',
-    },
   ];
+
+  // --- Section header helper ---
+  const SectionHeader = ({ label, delay = 0 }: { label: string; delay?: number }) => (
+    <Animated.View entering={FadeInDown.duration(300).delay(delay)}>
+      <Text
+        style={{
+          fontFamily: FontFamily.ui,
+          fontSize: FontSize.xs,
+          color: colors.textHint,
+          letterSpacing: 1,
+          marginBottom: Spacing['3'],
+          textTransform: 'uppercase',
+        }}
+      >
+        {label}
+      </Text>
+    </Animated.View>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -158,7 +532,6 @@ export default function YouScreen() {
                   style={{
                     borderRadius: 18,
                     overflow: 'hidden',
-                    // Premium glow shadow
                     shadowColor: colors.accent,
                     shadowOffset: { width: 0, height: 4 },
                     shadowOpacity: 0.2,
@@ -287,7 +660,7 @@ export default function YouScreen() {
 
           {/* Menu Items — grouped card */}
           <View
-            style={{ paddingHorizontal: Spacing['6'] }}
+            style={{ paddingHorizontal: Spacing['6'], marginBottom: Spacing['6'] }}
           >
             <View
               style={{
@@ -295,7 +668,6 @@ export default function YouScreen() {
                 borderRadius: Radius.lg,
                 borderWidth: 1,
                 borderColor: colors.border,
-                // Subtle lift for menu group
                 ...Shadow.sm,
                 overflow: 'hidden',
               }}
@@ -307,7 +679,7 @@ export default function YouScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     router.push(item.route as any);
                   }}
-  
+
                 >
                   <View
                     style={{
@@ -361,13 +733,1489 @@ export default function YouScreen() {
               ))}
             </View>
           </View>
+
+          {/* ==============================
+              SETTINGS SECTIONS (inlined)
+              ============================== */}
+
+          {/* --- Preferences: Appearance --- */}
+          <View style={{ paddingHorizontal: Spacing['6'] }}>
+            <SectionHeader label="Preferences" />
+
+            {/* Theme + Accent Colors + Reading Font card */}
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: Spacing['6'],
+              }}
+            >
+              {/* Theme row */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.text,
+                    flex: 1,
+                  }}
+                >
+                  Theme
+                </Text>
+                <View style={{ flexDirection: 'row' }}>
+                  {THEME_OPTIONS.map((option, index) => {
+                    const Icon = option.icon;
+                    const isSelected = (user?.themeMode ?? 'dark') === option.value;
+                    return (
+                      <TouchableOpacity activeOpacity={0.7}
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({ themeMode: option.value });
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${option.label} theme`}
+                        accessibilityState={{ selected: isSelected }}
+                        style={{ marginLeft: index > 0 ? Spacing['2'] : 0 }}
+                      >
+                        <View
+                          style={{
+                            backgroundColor: isSelected ? colors.text : colors.buttonBackground,
+                            paddingVertical: Spacing['2'],
+                            paddingHorizontal: Spacing['3'],
+                            borderRadius: Radius.sm,
+                            borderWidth: 1,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Icon
+                            size={14}
+                            color={isSelected ? colors.background : colors.text}
+                            weight="light"
+                          />
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.uiMedium,
+                              fontSize: FontSize.xs,
+                              color: isSelected ? colors.background : colors.text,
+                              marginLeft: Spacing['1.5'],
+                            }}
+                          >
+                            {option.label}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Accent Colors - Collapsible */}
+              <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => {
+                    if (!user?.isPremium) {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                      setPremiumFeature('theme');
+                      return;
+                    }
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setExpandedPremium(expandedPremium === 'colors' ? null : 'colors');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: Spacing['4'],
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2.5'] }}>
+                    <PaletteIcon size={18} color={colors.text} weight="light" />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Accent Colors
+                    </Text>
+                    {!user?.isPremium && (
+                      <LockIcon size={12} color={colors.textSubtle} weight="light" />
+                    )}
+                  </View>
+                  <CaretDownIcon
+                    size={18}
+                    color={colors.textMuted}
+                    weight="light"
+                    style={{
+                      transform: [{ rotate: expandedPremium === 'colors' ? '180deg' : '0deg' }],
+                    }}
+                  />
+                </TouchableOpacity>
+
+                {expandedPremium === 'colors' && (
+                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ paddingHorizontal: Spacing['4'], paddingBottom: Spacing['4'] }}>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['3'] }}>
+                      {ACCENT_THEMES.map((theme) => {
+                        const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
+                        const swatchColor = isDark ? theme.dark : theme.light;
+                        const isLocked = !user?.isPremium && theme.id !== 'gold';
+                        return (
+                          <TouchableOpacity activeOpacity={0.7}
+                            key={theme.id}
+                            onPress={() => {
+                              if (isLocked) {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                                setPremiumFeature('theme');
+                                return;
+                              }
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              updateUser({ accentTheme: theme.id });
+                            }}
+                            accessibilityLabel={isLocked ? `${theme.name} accent theme, premium only` : `${theme.name} accent theme`}
+                            style={{ alignItems: 'center', width: 56 }}
+                          >
+                            <View
+                              style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 22,
+                                backgroundColor: swatchColor,
+                                borderWidth: isSelected ? 3 : 1,
+                                borderColor: isSelected ? colors.text : colors.border,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                opacity: isLocked ? 0.5 : 1,
+                              }}
+                            >
+                              {isSelected && (
+                                <CheckIcon size={16} color={colors.background} weight="bold" />
+                              )}
+                              {isLocked && !isSelected && (
+                                <LockIcon size={14} color={colors.background} weight="fill" />
+                              )}
+                            </View>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.ui,
+                                fontSize: 11,
+                                color: isSelected ? colors.text : (isLocked ? colors.textSubtle : colors.textMuted),
+                                marginTop: Spacing['1.5'],
+                              }}
+                            >
+                              {theme.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </Animated.View>
+                )}
+              </View>
+
+              {/* Reading Font - Collapsible */}
+              <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setExpandedPremium(expandedPremium === 'fonts' ? null : 'fonts');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: Spacing['4'],
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2.5'] }}>
+                    <TextAaIcon size={18} color={colors.text} weight="light" />
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Reading Font
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 13,
+                        color: colors.textMuted,
+                      }}
+                    >
+                      {READING_FONTS.find(f => f.id === (user?.readingFont ?? 'source-serif'))?.name}
+                    </Text>
+                    <CaretDownIcon
+                      size={18}
+                      color={colors.textMuted}
+                      weight="light"
+                      style={{
+                        transform: [{ rotate: expandedPremium === 'fonts' ? '180deg' : '0deg' }],
+                      }}
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {expandedPremium === 'fonts' && (
+                  <Animated.View entering={FadeIn.duration(Duration.normal)}>
+                    {READING_FONTS.map((font, index) => {
+                      const isSelected = (user?.readingFont ?? 'source-serif') === font.id;
+                      return (
+                        <TouchableOpacity activeOpacity={0.7}
+                          key={font.id}
+                          onPress={() => {
+                            if (!user?.isPremium) {
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                              setPremiumFeature('font');
+                              return;
+                            }
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            updateUser({ readingFont: font.id });
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 13,
+                            paddingHorizontal: Spacing['4'],
+                            borderBottomWidth: index < READING_FONTS.length - 1 ? 1 : 0,
+                            borderBottomColor: colors.border,
+                            backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                fontFamily: font.regular,
+                                fontSize: 17,
+                                color: colors.text,
+                                marginBottom: Spacing['0.5'],
+                              }}
+                            >
+                              {font.name}
+                            </Text>
+                            <Text
+                              style={{
+                                fontFamily: FontFamily.ui,
+                                fontSize: FontSize.xs,
+                                color: colors.textMuted,
+                              }}
+                            >
+                              {font.preview}
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <CheckIcon size={18} color={colors.accent} weight="bold" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </Animated.View>
+                )}
+              </View>
+
+              {/* Font size row */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.text,
+                    flex: 1,
+                  }}
+                >
+                  Font size
+                </Text>
+                <View style={{ flexDirection: 'row' }}>
+                  {FONT_SIZES.map((size, index) => (
+                    <TouchableOpacity activeOpacity={0.7}
+                      key={size.value}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        updateUser({ fontSize: size.value });
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${size.label} font size`}
+                      accessibilityState={{ selected: user?.fontSize === size.value }}
+                      style={{ marginLeft: index > 0 ? Spacing['2'] : 0 }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor:
+                            user?.fontSize === size.value
+                              ? colors.text
+                              : colors.buttonBackground,
+                          paddingVertical: Spacing['2'],
+                          paddingHorizontal: Spacing['3.5'],
+                          borderRadius: Radius.sm,
+                          borderWidth: 1,
+                          borderColor: user?.fontSize === size.value ? colors.text : colors.border,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.uiMedium,
+                            fontSize: 13,
+                            color: user?.fontSize === size.value ? colors.background : colors.text,
+                          }}
+                        >
+                          {size.label}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {/* --- Reminders --- */}
+            <SectionHeader label="Reminders" />
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: Spacing['6'],
+              }}
+            >
+              {/* Daily reminders toggle */}
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => handleToggleNotifications(!notificationsEnabled)}
+                accessibilityRole="button"
+                accessibilityLabel="Daily reminders"
+                accessibilityState={{ selected: notificationsEnabled }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: Spacing['4'],
+                  borderBottomWidth: notificationsEnabled && user?.isPremium ? 1 : 0,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.text,
+                  }}
+                >
+                  Daily reminders
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.uiMedium,
+                    fontSize: FontSize.sm,
+                    color: (user?.isPremium ? notificationsEnabled : false) ? colors.text : colors.textMuted,
+                  }}
+                >
+                  {(user?.isPremium ? notificationsEnabled : false) ? 'On' : 'Off'}
+                </Text>
+              </TouchableOpacity>
+
+              {notificationsEnabled && user?.isPremium && (
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => setShowTimeSelector(!showTimeSelector)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reminder time"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 13,
+                    paddingHorizontal: Spacing['4'],
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Reminder time
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.sm,
+                      color: colors.textMuted,
+                    }}
+                  >
+                    {user?.reminderTime ?? '8:00 AM'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Midday check-in */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: Spacing['4'],
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'midday' } });
+                  }}
+                  style={{ flex: 1 }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Midday check-in
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textMuted,
+                      marginTop: Spacing['0.5'],
+                    }}
+                  >
+                    {formatCheckInTime(middayCheckInTime)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: FontSize.sm,
+                      color: middayCheckInEnabled ? colors.text : colors.textMuted,
+                    }}
+                  >
+                    {middayCheckInEnabled ? 'On' : 'Off'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Evening wind-down */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 13,
+                  paddingHorizontal: Spacing['4'],
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'evening' } });
+                  }}
+                  style={{ flex: 1 }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Evening wind-down
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textMuted,
+                      marginTop: Spacing['0.5'],
+                    }}
+                  >
+                    {formatCheckInTime(eveningWindDownTime)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiMedium,
+                      fontSize: FontSize.sm,
+                      color: eveningWindDownEnabled ? colors.text : colors.textMuted,
+                    }}
+                  >
+                    {eveningWindDownEnabled ? 'On' : 'Off'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Time options (outside the card for cleaner expand) */}
+            {showTimeSelector && (
+              <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
+                {REMINDER_TIMES.map((time) => (
+                  <TouchableOpacity activeOpacity={0.7}
+                    key={time.value}
+                    onPress={() => handleSelectTime(time.value)}
+                  >
+                    <View
+                      style={{
+                        backgroundColor:
+                          user?.reminderTime === time.value
+                            ? colors.buttonBackgroundPressed
+                            : 'transparent',
+                        paddingVertical: Spacing['3.5'],
+                        paddingHorizontal: Spacing['4'],
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.ui,
+                          fontSize: 15,
+                          color: colors.text,
+                        }}
+                      >
+                        {time.label}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.ui,
+                          fontSize: 13,
+                          color: colors.textMuted,
+                        }}
+                      >
+                        {time.value}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </Animated.View>
+            )}
+
+            {/* --- Bible Translation --- */}
+            <SectionHeader label="Bible Translation" />
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: Spacing['6'],
+              }}
+            >
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'translation' ? null : 'translation');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <BookIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.text,
+                    }}
+                  >
+                    Translation
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textMuted,
+                      marginTop: Spacing['0.5'],
+                    }}
+                  >
+                    {BIBLE_TRANSLATIONS.find((t) => t.value === user?.bibleTranslation)?.label ?? 'WEB'}
+                  </Text>
+                </View>
+                <CaretDownIcon
+                  size={20}
+                  color={colors.textMuted}
+                  weight="light"
+                  style={{
+                    transform: [{ rotate: expandedPreference === 'translation' ? '180deg' : '0deg' }],
+                  }}
+                />
+              </TouchableOpacity>
+
+              {expandedPreference === 'translation' && (
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textMuted,
+                      marginBottom: Spacing['2.5'],
+                      paddingHorizontal: Spacing['1'],
+                      lineHeight: 17,
+                    }}
+                  >
+                    Licensed translations such as the NIV, ESV, NLT, and NASB are available and we are currently talking to the licensors.
+                  </Text>
+                  {BIBLE_TRANSLATIONS.map((option) => {
+                    const isSelected = (user?.bibleTranslation ?? 'WEB') === option.value;
+                    return (
+                      <TouchableOpacity activeOpacity={0.7}
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({ bibleTranslation: option.value });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: Spacing['1'],
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.uiMedium,
+                              fontSize: 15,
+                              color: colors.text,
+                            }}
+                          >
+                            {option.label}
+                          </Text>
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.ui,
+                              fontSize: FontSize.xs,
+                              color: colors.textMuted,
+                              marginTop: Spacing['0.5'],
+                            }}
+                          >
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: 4,
+                                backgroundColor: colors.background,
+                              }}
+                            />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </Animated.View>
+              )}
+            </View>
+
+            {/* --- Writing Style --- */}
+            <SectionHeader label="Writing Style" />
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: Spacing['6'],
+              }}
+            >
+              {/* Tone */}
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'tone' ? null : 'tone');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <ChatDotsIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Tone
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    {TONE_OPTIONS.find((o) => o.value === user?.writingStyle?.tone)?.label ?? 'Like a friend'}
+                  </Text>
+                </View>
+                <CaretDownIcon
+                  size={20}
+                  color={colors.textMuted}
+                  weight="light"
+                  style={{ transform: [{ rotate: expandedPreference === 'tone' ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+
+              {expandedPreference === 'tone' && (
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                  {TONE_OPTIONS.map((option) => {
+                    const isSelected = user?.writingStyle?.tone === option.value;
+                    return (
+                      <TouchableOpacity activeOpacity={0.7}
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({
+                            writingStyle: {
+                              ...user?.writingStyle,
+                              tone: option.value,
+                              depth: user?.writingStyle?.depth ?? 'balanced',
+                              faithBackground: user?.writingStyle?.faithBackground ?? 'growing',
+                            },
+                          });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: Spacing['1'],
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>
+                            {option.label}
+                          </Text>
+                          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20, height: 20, borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center', alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.background }} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </Animated.View>
+              )}
+
+              {/* Depth */}
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'depth' ? null : 'depth');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  <StackIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Depth
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    {DEPTH_OPTIONS.find((o) => o.value === user?.writingStyle?.depth)?.label ?? 'A good balance'}
+                  </Text>
+                </View>
+                <CaretDownIcon
+                  size={20}
+                  color={colors.textMuted}
+                  weight="light"
+                  style={{ transform: [{ rotate: expandedPreference === 'depth' ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+
+              {expandedPreference === 'depth' && (
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                  {DEPTH_OPTIONS.map((option) => {
+                    const isSelected = user?.writingStyle?.depth === option.value;
+                    return (
+                      <TouchableOpacity activeOpacity={0.7}
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({
+                            writingStyle: {
+                              ...user?.writingStyle,
+                              tone: user?.writingStyle?.tone ?? 'warm',
+                              depth: option.value,
+                              faithBackground: user?.writingStyle?.faithBackground ?? 'growing',
+                            },
+                          });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: Spacing['1'],
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>
+                            {option.label}
+                          </Text>
+                          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20, height: 20, borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center', alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.background }} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </Animated.View>
+              )}
+
+              {/* Faith Background */}
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'faith' ? null : 'faith');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  <CompassIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Faith Background
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    {FAITH_OPTIONS.find((o) => o.value === user?.writingStyle?.faithBackground)?.label ?? "I'm growing"}
+                  </Text>
+                </View>
+                <CaretDownIcon
+                  size={20}
+                  color={colors.textMuted}
+                  weight="light"
+                  style={{ transform: [{ rotate: expandedPreference === 'faith' ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+
+              {expandedPreference === 'faith' && (
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                  {FAITH_OPTIONS.map((option) => {
+                    const isSelected = user?.writingStyle?.faithBackground === option.value;
+                    return (
+                      <TouchableOpacity activeOpacity={0.7}
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({
+                            writingStyle: {
+                              ...user?.writingStyle,
+                              tone: user?.writingStyle?.tone ?? 'warm',
+                              depth: user?.writingStyle?.depth ?? 'balanced',
+                              faithBackground: option.value,
+                            },
+                          });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: Spacing['1'],
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>
+                            {option.label}
+                          </Text>
+                          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20, height: 20, borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center', alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.background }} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </Animated.View>
+              )}
+
+              {/* Life Stage */}
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setExpandedPreference(expandedPreference === 'lifeStage' ? null : 'lifeStage');
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  <HourglassIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Life Stage
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    {LIFE_STAGE_OPTIONS.find((o) => o.value === user?.writingStyle?.lifeStage)?.label ?? "I'm building my life"}
+                  </Text>
+                </View>
+                <CaretDownIcon
+                  size={20}
+                  color={colors.textMuted}
+                  weight="light"
+                  style={{ transform: [{ rotate: expandedPreference === 'lifeStage' ? '180deg' : '0deg' }] }}
+                />
+              </TouchableOpacity>
+
+              {expandedPreference === 'lifeStage' && (
+                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                  {LIFE_STAGE_OPTIONS.map((option) => {
+                    const isSelected = (user?.writingStyle?.lifeStage ?? 'building') === option.value;
+                    return (
+                      <TouchableOpacity activeOpacity={0.7}
+                        key={option.value}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          updateUser({
+                            writingStyle: {
+                              ...user?.writingStyle,
+                              tone: user?.writingStyle?.tone ?? 'warm',
+                              depth: user?.writingStyle?.depth ?? 'balanced',
+                              faithBackground: user?.writingStyle?.faithBackground ?? 'growing',
+                              lifeStage: option.value,
+                            },
+                          });
+                        }}
+                        style={{
+                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
+                          paddingVertical: Spacing['3'],
+                          paddingHorizontal: Spacing['3'],
+                          borderRadius: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          marginBottom: Spacing['1'],
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>
+                            {option.label}
+                          </Text>
+                          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                            {option.description}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            width: 20, height: 20, borderRadius: 10,
+                            borderWidth: 2,
+                            borderColor: isSelected ? colors.text : colors.border,
+                            backgroundColor: isSelected ? colors.text : 'transparent',
+                            justifyContent: 'center', alignItems: 'center',
+                          }}
+                        >
+                          {isSelected && (
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.background }} />
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </Animated.View>
+              )}
+            </View>
+
+            {/* --- Support --- */}
+            <SectionHeader label="Support" />
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: Spacing['6'],
+              }}
+            >
+              {user?.isPremium && (
+                <TouchableOpacity activeOpacity={0.7}
+                  onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
+                  accessibilityRole="link"
+                  accessibilityLabel="Manage Subscription"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: Spacing['4'],
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      backgroundColor: colors.buttonBackground,
+                      justifyContent: 'center', alignItems: 'center',
+                    }}
+                  >
+                    <CreditCardIcon size={18} color={colors.text} weight="light" />
+                  </View>
+                  <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                    <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                      Manage Subscription
+                    </Text>
+                  </View>
+                  <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={handleReportBug}
+                disabled={isExportingData}
+                accessibilityState={{ disabled: isExportingData }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                  opacity: isExportingData ? 0.6 : 1,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  {isExportingData ? (
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  ) : (
+                    <ChatDotsIcon size={18} color={colors.text} weight="light" />
+                  )}
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    {isExportingData ? 'Sending report...' : 'Report a bug'}
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    {isExportingData ? 'Please wait...' : 'Send diagnostics report'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={handleRateApp}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  <StarIcon size={18} color={colors.text} weight="fill" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Rate Unfold
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    Leave a review
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
+                accessibilityRole="link"
+                accessibilityLabel="Privacy Policy"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  <LockIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Privacy Policy
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => Linking.openURL('https://unfoldapp.co/terms')}
+                accessibilityRole="link"
+                accessibilityLabel="Terms of Use"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  <BookIcon size={18} color={colors.text} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    Terms of Use
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* --- Account --- */}
+            <SectionHeader label="Account" />
+
+            <View
+              style={{
+                backgroundColor: colors.inputBackground,
+                borderRadius: Radius.lg,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginBottom: Spacing['6'],
+              }}
+            >
+              {/* Signed-in user info */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: alpha(colors.accent, 0.12),
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <UserCircleIcon size={20} color={colors.accent} weight="light" />
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    {email ?? 'Signed in'}
+                  </Text>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
+                    {authProvider === 'apple' ? 'Apple' : authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : 'Signed in'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Sign out */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleSignOut}
+                disabled={isSigningOut}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: Spacing['4'],
+                }}
+              >
+                <View
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: colors.buttonBackground,
+                    justifyContent: 'center', alignItems: 'center',
+                  }}
+                >
+                  {isSigningOut ? (
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                  ) : (
+                    <SignOutIcon size={18} color={colors.textMuted} weight="light" />
+                  )}
+                </View>
+                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
+                    {isSigningOut ? 'Signing out...' : 'Sign out'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* --- Data / Danger zone --- */}
+            <SectionHeader label="Data" />
+
+            <TouchableOpacity activeOpacity={0.7} onPress={handleResetData} disabled={isDeletingAccount} accessibilityState={{ disabled: isDeletingAccount }}>
+              <View
+                style={{
+                  borderRadius: Radius.md,
+                  paddingVertical: Spacing['3.5'],
+                  paddingHorizontal: Spacing['4'],
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  opacity: isDeletingAccount ? 0.6 : 1,
+                }}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <TrashIcon size={20} color={colors.error} weight="light" />
+                )}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.ui,
+                    fontSize: 15,
+                    color: colors.error,
+                    marginLeft: Spacing['3'],
+                  }}
+                >
+                  {isDeletingAccount ? 'Resetting...' : 'Reset all data'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {isAuthenticated && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setShowDeleteAccount(true);
+                }}
+                accessibilityLabel="Delete account"
+              >
+                <View
+                  style={{
+                    borderRadius: Radius.md,
+                    paddingVertical: Spacing['3.5'],
+                    paddingHorizontal: Spacing['4'],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                  }}
+                >
+                  <TrashIcon size={20} color={colors.error} weight="light" />
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 15,
+                      color: colors.error,
+                      marginLeft: Spacing['3'],
+                    }}
+                  >
+                    Delete account
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* App info */}
+            <View style={{ marginTop: Spacing['12'], alignItems: 'center', marginBottom: Spacing['6'] }}>
+              <Text
+                style={{
+                  fontFamily: FontFamily.display,
+                  fontSize: FontSize['2xl'],
+                  color: colors.textHint,
+                }}
+              >
+                Unfold
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: FontSize.xs,
+                  color: colors.textHint,
+                  marginTop: Spacing['1'],
+                }}
+              >
+                Version 1.0.0
+              </Text>
+            </View>
+          </View>
         </ScrollView>
       </SafeAreaView>
 
       <PremiumFeatureSheet
-        visible={showPremiumSheet}
-        onClose={() => setShowPremiumSheet(false)}
-        feature="general"
+        visible={!!premiumFeature || showPremiumSheet}
+        onClose={() => {
+          setPremiumFeature(null);
+          setShowPremiumSheet(false);
+        }}
+        feature={premiumFeature ?? 'general'}
+      />
+
+      <DeleteAccountSheet
+        visible={showDeleteAccount}
+        onClose={() => setShowDeleteAccount(false)}
       />
     </View>
   );
