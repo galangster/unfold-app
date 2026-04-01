@@ -47,6 +47,7 @@ const baseInput: ComputeInput = {
   tomorrowTeaser: null,
   onContinue: noop,
   onCreateNew: noop,
+  onReveal: noop,
   ctaText: 'Begin Your Journey',
 };
 
@@ -132,7 +133,7 @@ describe('computeDevotionalState', () => {
       daysCompleted: 3,
       progress: 42.9,
       ctaText: 'Keep Going',
-      currentDayData: makeDayData({ dayNumber: 4, isRead: false }),
+      currentDayData: makeDayData({ dayNumber: 4, isRead: false, isRevealed: true }),
     });
     expect(state.type).toBe('unread');
     if (state.type === 'unread') {
@@ -150,6 +151,53 @@ describe('computeDevotionalState', () => {
       expect(state.ctaText).toBe('Begin Your Journey');
       expect(typeof state.onContinue).toBe('function');
     }
+  });
+
+  // ─── Reveal-ready state ──────────────────────────────────────
+
+  it('returns reveal-ready when day exists, unread, unrevealed, and dayNumber > 1', () => {
+    const onReveal = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false, isRevealed: false }),
+      daysCompleted: 1,
+      progress: 14.3,
+      onReveal,
+    });
+    expect(state.type).toBe('reveal-ready');
+    if (state.type === 'reveal-ready') {
+      expect(state.dayNumber).toBe(2);
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.totalDays).toBe(7);
+      expect(state.onReveal).toBe(onReveal);
+    }
+  });
+
+  it('returns unread (not reveal-ready) when day is already revealed', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false, isRevealed: true }),
+      daysCompleted: 1,
+    });
+    expect(state.type).toBe('unread');
+  });
+
+  it('returns unread (not reveal-ready) for Day 1', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: makeDayData({ dayNumber: 1, isRead: false, isRevealed: false }),
+    });
+    expect(state.type).toBe('unread');
+  });
+
+  it('tomorrow-locked takes priority over reveal-ready', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      hasReadToday: true,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false, isRevealed: false }),
+      daysCompleted: 1,
+    });
+    expect(state.type).toBe('tomorrow-locked');
   });
 
   // ─── Priority order ──────────────────────────────────────────

@@ -1,6 +1,6 @@
 /**
  * Pure function state machine for the DevotionalCard.
- * Computes which of 6 visual states the card should render
+ * Computes which of 7 visual states the card should render
  * based on devotional data, reading progress, and time constraints.
  *
  * Keeps all logic testable and free of React/RN dependencies.
@@ -50,6 +50,15 @@ export type DevotionalCardState =
       onContinue: () => void;
       onCreateNew: () => void;
     }
+  | {
+      type: 'reveal-ready';
+      dayData: DevotionalDay;
+      dayLabel: DayLabel;
+      seriesTitle: string;
+      dayNumber: number;
+      totalDays: number;
+      onReveal: () => void;
+    }
   | { type: 'journey-complete'; seriesTitle: string; onCreateNew: () => void };
 
 // ─── Input shape ────────────────────────────────────────────────
@@ -68,6 +77,7 @@ export interface ComputeInput {
   tomorrowTeaser: string | null;
   onContinue: () => void;
   onCreateNew: () => void;
+  onReveal: () => void;
   ctaText: string;
 }
 
@@ -83,7 +93,8 @@ export interface ComputeInput {
  * 4. isJourneyComplete                      -> journey-complete
  * 5. hasReadToday & next day unread         -> tomorrow-locked
  * 6. dayData.isRead                         -> complete-today
- * 7. else                                   -> unread  (daysCompleted may be > 0)
+ * 7. !isRead & !isRevealed & dayNumber > 1  -> reveal-ready
+ * 8. else                                   -> unread  (daysCompleted may be > 0)
  */
 export function computeDevotionalState(input: ComputeInput): DevotionalCardState {
   const {
@@ -100,6 +111,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     tomorrowTeaser,
     onContinue,
     onCreateNew,
+    onReveal,
     ctaText,
   } = input;
 
@@ -160,7 +172,21 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     };
   }
 
-  // 6. Unread — covers both brand-new (daysCompleted=0) and in-progress (daysCompleted>0)
+  // 6. Content available but not yet revealed — show teaser card
+  //    Day 1 bypasses this (uses generating screen flow).
+  if (!currentDayData.isRead && !currentDayData.isRevealed && currentDayData.dayNumber > 1) {
+    return {
+      type: 'reveal-ready',
+      dayData: currentDayData,
+      dayLabel,
+      seriesTitle,
+      dayNumber: currentDayData.dayNumber,
+      totalDays,
+      onReveal,
+    };
+  }
+
+  // 7. Unread — covers both brand-new (daysCompleted=0) and in-progress (daysCompleted>0)
   return {
     type: 'unread',
     dayData: currentDayData,
