@@ -43,8 +43,6 @@ import {
   ContentDepth,
   FaithBackground,
   LifeStage,
-  BIBLE_TRANSLATIONS,
-  BibleTranslation,
   ThemeMode,
   ACCENT_THEMES,
   AccentThemeId,
@@ -174,9 +172,9 @@ export default function YouScreen() {
 
   // --- State ---
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
-  const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'lifeStage' | 'translation' | null>(null);
+  const [expandedPreference, setExpandedPreference] = useState<'tone' | 'depth' | 'faith' | 'lifeStage' | null>(null);
   const [expandedPremium, setExpandedPremium] = useState<'colors' | 'fonts' | null>(null);
-  const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'translation' | 'general' | null>(null);
+  const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'general' | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -1332,156 +1330,6 @@ export default function YouScreen() {
                 ))}
               </Animated.View>
             )}
-
-            {/* --- Bible Translation --- */}
-            <SectionHeader label="Bible Translation" />
-
-            <View
-              style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: Radius.lg,
-                borderWidth: 1,
-                borderColor: colors.border,
-                marginBottom: Spacing['6'],
-              }}
-            >
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setExpandedPreference(expandedPreference === 'translation' ? null : 'translation');
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: Spacing['4'],
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    backgroundColor: colors.buttonBackground,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <BookIcon size={18} color={colors.text} weight="light" />
-                </View>
-                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 15,
-                      color: colors.text,
-                    }}
-                  >
-                    Translation
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.xs,
-                      color: colors.textMuted,
-                      marginTop: Spacing['0.5'],
-                    }}
-                  >
-                    {BIBLE_TRANSLATIONS.find((t) => t.value === user?.bibleTranslation)?.label ?? 'WEB'}
-                  </Text>
-                </View>
-                <CaretDownIcon
-                  size={20}
-                  color={colors.textMuted}
-                  weight="light"
-                  style={{
-                    transform: [{ rotate: expandedPreference === 'translation' ? '180deg' : '0deg' }],
-                  }}
-                />
-              </TouchableOpacity>
-
-              {expandedPreference === 'translation' && (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.xs,
-                      color: colors.textMuted,
-                      marginBottom: Spacing['2.5'],
-                      paddingHorizontal: Spacing['1'],
-                      lineHeight: 17,
-                    }}
-                  >
-                    Licensed translations such as the NIV, ESV, NLT, and NASB are available and we are currently talking to the licensors.
-                  </Text>
-                  {BIBLE_TRANSLATIONS.map((option) => {
-                    const isSelected = (user?.bibleTranslation ?? 'WEB') === option.value;
-                    return (
-                      <TouchableOpacity activeOpacity={0.7}
-                        key={option.value}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          updateUser({ bibleTranslation: option.value });
-                        }}
-                        style={{
-                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : 'transparent',
-                          paddingVertical: Spacing['3'],
-                          paddingHorizontal: Spacing['3'],
-                          borderRadius: 10,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          marginBottom: Spacing['1'],
-                        }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.uiMedium,
-                              fontSize: 15,
-                              color: colors.text,
-                            }}
-                          >
-                            {option.label}
-                          </Text>
-                          <Text
-                            style={{
-                              fontFamily: FontFamily.ui,
-                              fontSize: FontSize.xs,
-                              color: colors.textMuted,
-                              marginTop: Spacing['0.5'],
-                            }}
-                          >
-                            {option.description}
-                          </Text>
-                        </View>
-                        <View
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 10,
-                            borderWidth: 2,
-                            borderColor: isSelected ? colors.text : colors.border,
-                            backgroundColor: isSelected ? colors.text : 'transparent',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          {isSelected && (
-                            <View
-                              style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: 4,
-                                backgroundColor: colors.background,
-                              }}
-                            />
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </Animated.View>
-              )}
-            </View>
 
             {/* --- Writing Style --- */}
             <SectionHeader label="Writing Style" />

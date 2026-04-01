@@ -548,7 +548,7 @@ export default function GeneratingScreen() {
             studySubject: user.selectedStudySubject,
             readingDuration: user.readingDuration,
             devotionalLength: user.devotionalLength,
-            bibleTranslation: user.bibleTranslation ?? 'WEB',
+            bibleTranslation: user.bibleTranslation ?? 'BSB',
             writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
           },
         });
@@ -668,7 +668,7 @@ export default function GeneratingScreen() {
               studySubject: user.selectedStudySubject,
               readingDuration: user.readingDuration,
               devotionalLength: user.devotionalLength,
-              bibleTranslation: user.bibleTranslation ?? 'WEB',
+              bibleTranslation: user.bibleTranslation ?? 'BSB',
               writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
             },
           });

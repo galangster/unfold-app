@@ -65,12 +65,11 @@ export const FONT_SIZE_VALUES: Record<FontSize, { body: number; scripture: numbe
 };
 
 // Bible translation preferences
-export type BibleTranslation = 'BSB' | 'KJV' | 'WEB';
+export type BibleTranslation = 'BSB' | 'KJV';
 
 export const BIBLE_TRANSLATIONS: { value: BibleTranslation; label: string; description: string }[] = [
   { value: 'BSB', label: 'BSB', description: 'Berean Standard Bible - modern, clear, and free' },
   { value: 'KJV', label: 'KJV', description: 'King James Version - classic and traditional' },
-  { value: 'WEB', label: 'WEB', description: 'World English Bible - clear, modern, and free' },
 ];
 
 // Writing style preferences
@@ -1687,7 +1686,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 30, // v30: Remove client-side generation state, add server-side job tracking
+      version: 31, // v31: Migrate WEB bible translation to BSB (WEB removed)
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2112,6 +2111,19 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v29→30: Removed client-side generation state');
           } catch (err) {
             console.error('[store] Migration v29→30 failed:', err);
+          }
+        }
+
+        // Migration from version 30 to 31: Migrate WEB bible translation to BSB
+        if (version < 31) {
+          try {
+            const user = (state as any).user;
+            if (user && user.bibleTranslation === 'WEB') {
+              user.bibleTranslation = 'BSB';
+            }
+            logger.log('[store] Migration v30→31: Migrated WEB bible translation to BSB');
+          } catch (err) {
+            console.error('[store] Migration v30→31 failed:', err);
           }
         }
 

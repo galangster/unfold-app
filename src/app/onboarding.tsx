@@ -44,7 +44,7 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
-import { useUnfoldStore, UserProfile, BIBLE_TRANSLATIONS, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
+import { useUnfoldStore, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
 import { generateAdaptiveQuestion, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -378,7 +378,7 @@ export default function OnboardingScreen() {
   // Form data (declared early — mirrorBackText useMemo depends on it)
   const [data, setData] = useState<OnboardingData>({
     name: existingUser?.name || '',
-    bibleTranslation: existingUser?.bibleTranslation || 'WEB',
+    bibleTranslation: existingUser?.bibleTranslation || 'BSB',
     aboutMe: existingUser?.aboutMe || '',
     faithBackground: 'growing',
     lifeStage: 'building',
