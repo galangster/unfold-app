@@ -168,10 +168,16 @@ export default function SignInScreen() {
   }));
 
   const navigateAfterAuth = useCallback(() => {
+    // Always dismiss the modal first — router.replace() from inside a
+    // fullScreenModal doesn't dismiss the modal, leaving it stuck on screen.
+    // After dismissing, the underlying screen (index.tsx) will detect the
+    // user's auth state and navigate to tabs if hasCompletedOnboarding.
     if (source === 'onboarding') {
       router.back();
     } else {
-      router.replace('/(tabs)/(today)');
+      router.dismiss();
+      // Small delay to let the modal animation complete before replacing
+      setTimeout(() => router.replace('/(tabs)/(today)'), 150);
     }
   }, [source, router]);
 
@@ -207,6 +213,7 @@ export default function SignInScreen() {
         ]);
 
         if (createdSessionId && setActive) {
+          logger.log(`[SignIn] ${providerName} OAuth succeeded, activating session`);
           await setActive({ session: createdSessionId });
 
           Analytics.logEvent(AnalyticsEvents.SIGN_IN_SUCCESS, {
@@ -218,6 +225,10 @@ export default function SignInScreen() {
 
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           navigateAfterAuth();
+        } else {
+          // OAuth resolved but without a session — user may have cancelled
+          // at the consent screen or Clerk couldn't create a session
+          logger.warn(`[SignIn] ${providerName} OAuth resolved without session (createdSessionId=${createdSessionId})`);
         }
       } catch (err: any) {
         logger.error(`[SignIn] ${providerName} OAuth error:`, err);
