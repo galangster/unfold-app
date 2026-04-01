@@ -175,6 +175,7 @@ export interface DevotionalDay {
   quotableLine: string;
   isRead: boolean;
   readAt?: string;
+  isRevealed?: boolean;
   // Enhanced content fields
   quotes?: Quote[];
   crossReferences?: CrossReference[];
@@ -496,6 +497,7 @@ interface UnfoldState {
   archiveCurrentDevotional: () => void;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
+  markDayAsRevealed: (devotionalId: string, dayNumber: number) => void;
   advanceDay: (devotionalId: string) => void;
 
   // Journal entries
@@ -621,10 +623,6 @@ interface UnfoldState {
   pendingJobId: string | null;
   setPendingJobId: (id: string | null) => void;
 
-  // Reveal animation tracking (date string, e.g. "2026-03-28")
-  lastRevealShownDate: string | null;
-  setLastRevealShownDate: (date: string) => void;
-
   // Series arc management
   setSeriesArc: (devotionalId: string, arc: SeriesArc) => void;
   extendSeriesArc: (devotionalId: string, newDayHints: SeriesArcDay[], additionalDays: number) => void;
@@ -743,7 +741,6 @@ const initialState = {
   dismissedEveningCardDate: null as string | null,
   // Server-side generation tracking
   pendingJobId: null as string | null,
-  lastRevealShownDate: null as string | null,
   // Premium nudge system
   ...NUDGE_INITIAL_STATE,
   streakJustReset: false,
@@ -876,6 +873,26 @@ export const useUnfoldStore = create<UnfoldState>()(
                     days: d.days.map((day) =>
                       day.dayNumber === dayNumber
                         ? { ...day, isRead: true, readAt: now, updatedAt: now }
+                        : day
+                    ),
+                  }
+                : d
+            ),
+          };
+        }),
+
+      markDayAsRevealed: (devotionalId, dayNumber) =>
+        set((state) => {
+          const now = new Date().toISOString();
+          return {
+            devotionals: state.devotionals.map((d) =>
+              d.id === devotionalId
+                ? {
+                    ...d,
+                    updatedAt: now,
+                    days: d.days.map((day) =>
+                      day.dayNumber === dayNumber
+                        ? { ...day, isRevealed: true, updatedAt: now }
                         : day
                     ),
                   }
@@ -1376,7 +1393,6 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Server-side generation tracking
       setPendingJobId: (id) => set({ pendingJobId: id }),
-      setLastRevealShownDate: (date) => set({ lastRevealShownDate: date }),
 
       // Series arc management
       setSeriesArc: (devotionalId, arc) =>
@@ -1686,7 +1702,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 31, // v31: Migrate WEB bible translation to BSB (WEB removed)
+      version: 32, // v32: Add isRevealed to DevotionalDay, remove lastRevealShownDate
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2124,6 +2140,23 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v30→31: Migrated WEB bible translation to BSB');
           } catch (err) {
             console.error('[store] Migration v30→31 failed:', err);
+          }
+        }
+
+        // Migration from version 31 to 32: Add isRevealed to DevotionalDay, remove lastRevealShownDate
+        if (version < 32) {
+          try {
+            for (const d of (state as any).devotionals ?? []) {
+              for (const day of d.days ?? []) {
+                if (day.isRead || day.dayNumber === 1) {
+                  day.isRevealed = true;
+                }
+              }
+            }
+            delete (state as any).lastRevealShownDate;
+            logger.log('[store] Migration v31→32: Added isRevealed, removed lastRevealShownDate');
+          } catch (err) {
+            console.error('[store] Migration v31→32 failed:', err);
           }
         }
 
