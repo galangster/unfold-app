@@ -4,7 +4,7 @@
  * theme, reason text, and quick-start CTA.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, Platform, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
@@ -33,9 +33,11 @@ interface RecommendedSeriesCardProps {
   /** "completion" renders inside journey-complete, "empty" renders standalone */
   variant: 'completion' | 'empty';
   onChooseOther: () => void;
+  /** Optional fallback rendered when the recommendation fetch fails */
+  renderFallback?: () => ReactNode;
 }
 
-export function RecommendedSeriesCard({ variant, onChooseOther }: RecommendedSeriesCardProps) {
+export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }: RecommendedSeriesCardProps) {
   const { colors, isDark } = useTheme();
   const { entering } = useAccessibleAnimation();
   const router = useRouter();
@@ -82,8 +84,10 @@ export function RecommendedSeriesCard({ variant, onChooseOther }: RecommendedSer
     router.push('/generating');
   };
 
-  // Error or no recommendation → don't render (parent will show generic CTA)
-  if (error || (!loading && !recommendation)) return null;
+  // Error or no recommendation → render fallback if provided, otherwise don't render
+  if (error || (!loading && !recommendation)) {
+    return renderFallback ? <>{renderFallback()}</> : null;
+  }
 
   // Loading state — subtle shimmer
   if (loading) {

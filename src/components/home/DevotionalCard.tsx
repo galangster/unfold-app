@@ -36,6 +36,7 @@ import { AccentGlow } from '@/components/AccentGlow';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { EmberParticles } from '@/components/EmberParticles';
+import { RecommendedSeriesCard } from './RecommendedSeriesCard';
 import type { DevotionalCardState } from './compute-devotional-state';
 
 // ─── Props ──────────────────────────────────────────────────────
@@ -216,7 +217,7 @@ function EmptyState({ onCreateNew, isReturningUser }: { onCreateNew: () => void;
 
 // ─── Returning user empty state ─────────────────────────────────
 
-function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
+function ReturningEmptyStateFallback({ onCreateNew }: { onCreateNew: () => void }) {
   const { colors, isDark } = useTheme();
   const { entering, reducedMotion } = useAccessibleAnimation();
   const glowOpacity = useSharedValue(0.18);
@@ -305,6 +306,16 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
         </TouchableOpacity>
       </Animated.View>
     </View>
+  );
+}
+
+function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
+  return (
+    <RecommendedSeriesCard
+      variant="empty"
+      onChooseOther={onCreateNew}
+      renderFallback={() => <ReturningEmptyStateFallback onCreateNew={onCreateNew} />}
+    />
   );
 }
 
@@ -496,7 +507,7 @@ function PreparingState({ progress }: { progress: number }) {
 
 // ─── Journey complete state ─────────────────────────────────────
 
-function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: string; onCreateNew: () => void }) {
+function JourneyCompleteStateFallback({ onCreateNew }: { onCreateNew: () => void }) {
   const { colors, isDark } = useTheme();
   const scale = useSharedValue(1);
 
@@ -558,6 +569,16 @@ function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: strin
         </View>
       </TouchableOpacity>
     </Animated.View>
+  );
+}
+
+function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: string; onCreateNew: () => void }) {
+  return (
+    <RecommendedSeriesCard
+      variant="completion"
+      onChooseOther={onCreateNew}
+      renderFallback={() => <JourneyCompleteStateFallback onCreateNew={onCreateNew} />}
+    />
   );
 }
 
