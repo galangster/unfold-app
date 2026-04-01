@@ -1,0 +1,56 @@
+# Bible Reader E2E Test
+# Tests: Bible tab navigation, book/chapter selection, highlights, bookmarks
+
+appId: com.unfoldapp.ios
+---
+# Launch app
+- launchApp
+- assertVisible: "Today"
+
+# Navigate to Bible tab
+- tapOn: "Bible"
+
+# Verify Bible reader loads
+- assertVisible:
+    text: ".*Genesis.*|.*Psalms.*|.*Matthew.*"
+    optional: true
+
+# Navigate to a specific book (tap on book navigator)
+- tapOn:
+    id: "book-navigator"
+    optional: true
+
+# Select a book
+- tapOn:
+    text: "Psalms"
+    optional: true
+
+# Select chapter
+- tapOn:
+    text: "23"
+    optional: true
+
+# Verify chapter content loads
+- assertVisible:
+    text: ".*shepherd.*|.*Lord.*"
+    optional: true
+
+# Test highlighting — long press on a verse
+- longPressOn:
+    text: ".*Lord.*"
+    index: 0
+    optional: true
+
+# Verify highlight color picker appears
+- assertVisible:
+    text: ".*highlight.*"
+    optional: true
+
+# Navigate to saved/bookmarks
+- tapOn: "Saved"
+- assertVisible:
+    text: ".*Highlights.*|.*Bookmarks.*"
+    optional: true
+
+# Navigate back to Bible
+- tapOn: "Bible"

@@ -1,11 +1,43 @@
-# Maestro E2E Testing for Unfold
-# Run: maestro test .maestro/
+# Onboarding Flow E2E Test
+# Run: maestro test .maestro/onboarding.yml
+# Requires: Java runtime, Maestro CLI, iOS Simulator running the app
 
 appId: com.unfoldapp.ios
 ---
-# Onboarding Flow Test
-- launchApp
-- tapOn: "Quick Start"
-- assertVisible: ".* devotional.*"
-- tapOn: "Complete Day"
-- assertVisible: "🔥.*day streak"
+# Step 1: App launches to onboarding
+- launchApp:
+    clearState: true
+- assertVisible: "What should we call you?"
+
+# Step 2: Enter name
+- tapOn:
+    id: "name-input"
+- inputText: "Test User"
+- tapOn: "Next"
+
+# Step 3: Faith background selection
+- assertVisible: "faith"
+- tapOn: "Growing"
+- tapOn: "Next"
+
+# Step 4: Life stage selection
+- assertVisible: "season"
+- tapOn: "Building"
+- tapOn: "Next"
+
+# Step 5: Writing style preferences
+- assertVisible: "tone"
+- tapOn: "Warm"
+- tapOn: "Next"
+
+# Step 6: Reading duration
+- assertVisible: "reading"
+- tapOn: "15 min"
+- tapOn: "Next"
+
+# Step 7: Devotional type selection
+- assertVisible: "study"
+- tapOn: "Start"
+
+# Step 8: Verify we land on home screen
+- assertVisible: "Today"

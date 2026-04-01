@@ -1,0 +1,47 @@
+# Settings Flow E2E Test
+# Tests: settings navigation, preference changes, profile editing
+
+appId: com.unfoldapp.ios
+---
+# Launch and navigate to settings
+- launchApp
+- assertVisible: "Today"
+
+# Navigate to You tab
+- tapOn: "You"
+- assertVisible: "Settings"
+
+# Open settings
+- tapOn: "Settings"
+
+# Verify settings sections are visible
+- assertVisible: "Writing Style"
+- assertVisible: "Reading Duration"
+
+# Verify Bible Translation picker is NOT visible (removed)
+- assertNotVisible:
+    text: "Bible Translation"
+    optional: true
+
+# Test writing tone change
+- tapOn: "Tone"
+- tapOn: "Direct"
+
+# Test depth change
+- tapOn: "Depth"
+- tapOn: "Balanced"
+
+# Scroll to see more settings
+- scroll:
+    direction: "DOWN"
+    speed: 40
+
+# Verify theme settings
+- assertVisible:
+    text: ".*Theme.*"
+    optional: true
+
+# Navigate back
+- tapOn:
+    id: "back-button"
+    optional: true

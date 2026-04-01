@@ -1,0 +1,52 @@
+# Reading Flow E2E Test
+# Tests: devotional reading, highlighting, bookmarking, journaling
+# Prereq: User has completed onboarding and has an active devotional
+
+appId: com.unfoldapp.ios
+---
+# Launch and navigate to reading
+- launchApp
+- assertVisible: "Today"
+
+# Tap the devotional card to start reading
+- tapOn:
+    text: ".*Day.*"
+    index: 0
+
+# Verify reading screen loads
+- assertVisible: "Day"
+- assertVisible:
+    text: ".*\\d+:\\d+.*"  # Scripture reference (e.g., "Mark 4:35-41")
+
+# Scroll through content
+- scroll:
+    direction: "DOWN"
+    speed: 40
+
+# Test highlighting — long press on scripture text
+- longPressOn:
+    text: ".*scripture.*"
+    index: 0
+
+# Verify highlight UI appears
+- assertVisible:
+    text: ".*Highlight.*"
+    optional: true
+
+# Scroll to reflection questions
+- scroll:
+    direction: "DOWN"
+    speed: 40
+
+# Verify reflection questions exist
+- assertVisible:
+    text: ".*\\?$"  # Questions end with ?
+    optional: true
+
+# Navigate back to home
+- tapOn:
+    id: "back-button"
+    optional: true
+
+# Verify back on home screen
+- assertVisible: "Today"

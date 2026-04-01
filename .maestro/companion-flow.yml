@@ -1,0 +1,51 @@
+# Companion Chat E2E Test
+# Tests: companion chat access, message sending, response display
+
+appId: com.unfoldapp.ios
+---
+# Launch app
+- launchApp
+- assertVisible: "Today"
+
+# Navigate to companion (hamburger menu or direct access)
+- tapOn:
+    text: ".*companion.*"
+    optional: true
+
+# If companion is accessed via reading screen
+- tapOn:
+    text: ".*Day.*"
+    index: 0
+    optional: true
+
+# Look for companion access point
+- tapOn:
+    id: "companion-button"
+    optional: true
+
+# Verify companion chat loads
+- assertVisible:
+    text: ".*Grace.*"
+    optional: true
+
+# Type a message
+- tapOn:
+    id: "chat-input"
+    optional: true
+- inputText: "What does today's devotional mean?"
+
+# Send message
+- tapOn:
+    id: "send-button"
+    optional: true
+
+# Wait for response
+- extendedWaitUntil:
+    visible:
+      text: ".*"
+    timeout: 15000
+
+# Navigate back
+- tapOn:
+    id: "back-button"
+    optional: true

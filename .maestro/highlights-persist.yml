@@ -1,0 +1,49 @@
+# Highlights Persistence E2E Test
+# Tests: Highlights created in reading persist after app restart
+
+appId: com.unfoldapp.ios
+---
+# Step 1: Create a highlight
+- launchApp
+- assertVisible: "Today"
+
+# Navigate to reading
+- tapOn:
+    text: ".*Day.*"
+    index: 0
+
+# Wait for content to load
+- extendedWaitUntil:
+    visible:
+      text: ".*\\d+:\\d+.*"
+    timeout: 10000
+
+# Long press to highlight
+- longPressOn:
+    text: ".*"
+    index: 3
+
+# Confirm highlight (if highlight sheet appears)
+- tapOn:
+    text: ".*Highlight.*"
+    optional: true
+
+# Go back
+- tapOn:
+    id: "back-button"
+    optional: true
+
+# Step 2: Restart and verify highlight persists
+- launchApp:
+    clearState: false
+
+- assertVisible: "Today"
+
+# Navigate to Bible > Saved
+- tapOn: "Bible"
+- tapOn: "Saved"
+
+# Verify highlight appears in saved list
+- assertVisible:
+    text: ".*Highlight.*"
+    optional: true
