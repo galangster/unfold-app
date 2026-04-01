@@ -179,9 +179,12 @@ export default function RevealScreen() {
         })
         .onEnd((event) => {
           if (event.translationY < COMMIT_THRESHOLD) {
-            // Past threshold — spring off screen and navigate
-            translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING);
-            runOnJS(navigateToReading)();
+            // Past threshold — spring off screen, then navigate after curtain clears
+            translateY.value = withSpring(-SCREEN_HEIGHT, CURTAIN_SPRING, (finished) => {
+              if (finished) {
+                runOnJS(navigateToReading)();
+              }
+            });
           } else {
             // Before threshold — spring back
             translateY.value = withSpring(0, CURTAIN_SPRING);

@@ -1410,8 +1410,8 @@ export default function SettingsScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-              {/* Voice subsection - Moved into Premium */}
-              <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+              {/* Voice subsection - Hidden until TTS pipeline is ready */}
+              {false && <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1578,7 +1578,7 @@ export default function SettingsScreen() {
                     })}
                   </Animated.View>
                 )}
-              </View>
+              </View>}
             </View>
 
             {/* Time options (outside the card for cleaner expand) */}
