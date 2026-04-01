@@ -532,6 +532,8 @@ function MainCard({ state }: MainCardProps) {
   const isTomorrow = state.type === 'tomorrow-locked';
   const isCompleted = state.type === 'complete-today' || state.type === 'tomorrow-locked';
   const dayData = state.dayData;
+  const dayLabel = state.dayLabel;
+  const isYesterday = dayLabel === 'Yesterday';
 
   // Progress data — show progress bar when days have been completed
   const progress = state.progress;
@@ -544,6 +546,7 @@ function MainCard({ state }: MainCardProps) {
   const hasCta = state.type === 'unread' || state.type === 'complete-today' || state.type === 'tomorrow-locked';
   const ctaText =
     isCompleted ? 'Return to Reading'
+    : isYesterday ? "Finish Yesterday's Devotional"
     : state.type === 'unread' ? state.ctaText
     : 'Continue Reading';
   const onPress = 'onContinue' in state ? state.onContinue : undefined;
@@ -551,9 +554,6 @@ function MainCard({ state }: MainCardProps) {
   // New series secondary CTA — always show when available
   const showNewSeries = true;
   const onCreateNew = 'onCreateNew' in state ? state.onCreateNew : undefined;
-
-  // Day label
-  const dayLabel = isTomorrow ? 'Tomorrow' : 'Today';
 
   return (
     <Animated.View style={scaleStyle}>

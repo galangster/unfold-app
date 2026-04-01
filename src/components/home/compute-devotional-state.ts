@@ -10,12 +10,15 @@ import type { DevotionalDay, Devotional } from '@/lib/store';
 
 // ─── State discriminated union ──────────────────────────────────
 
+export type DayLabel = 'Yesterday' | 'Today' | 'Tomorrow';
+
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
   | { type: 'preparing'; progress: number }
   | {
       type: 'unread';
       dayData: DevotionalDay;
+      dayLabel: DayLabel;
       seriesTitle: string;
       progress: number;
       daysCompleted: number;
@@ -27,6 +30,7 @@ export type DevotionalCardState =
   | {
       type: 'complete-today';
       dayData: DevotionalDay;
+      dayLabel: DayLabel;
       seriesTitle: string;
       progress: number;
       daysCompleted: number;
@@ -37,6 +41,7 @@ export type DevotionalCardState =
   | {
       type: 'tomorrow-locked';
       dayData: DevotionalDay;
+      dayLabel: DayLabel;
       seriesTitle: string;
       progress: number;
       daysCompleted: number;
@@ -53,6 +58,8 @@ export interface ComputeInput {
   currentDevotional: Devotional | null;
   currentDayData: DevotionalDay | null;
   hasReadToday: boolean;
+  isCatchUp: boolean;
+  dayLabel: DayLabel;
   isJourneyComplete: boolean;
   isPreparing: boolean;
   daysCompleted: number;
@@ -83,6 +90,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     currentDevotional,
     currentDayData,
     hasReadToday,
+    isCatchUp,
+    dayLabel,
     isJourneyComplete,
     isPreparing,
     daysCompleted,
@@ -119,10 +128,13 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   }
 
   // 4. Today's reading done but series not complete — locked until tomorrow
-  if (hasReadToday && !currentDayData.isRead) {
+  //    UNLESS the user is catching up on an overdue day, in which case the
+  //    current content is available now (don't lock them out of today's reading).
+  if (hasReadToday && !currentDayData.isRead && !isCatchUp) {
     return {
       type: 'tomorrow-locked',
       dayData: currentDayData,
+      dayLabel: 'Tomorrow' as DayLabel,
       seriesTitle,
       progress,
       daysCompleted,
@@ -138,6 +150,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     return {
       type: 'complete-today',
       dayData: currentDayData,
+      dayLabel,
       seriesTitle,
       progress,
       daysCompleted,
@@ -151,6 +164,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   return {
     type: 'unread',
     dayData: currentDayData,
+    dayLabel,
     seriesTitle,
     progress,
     daysCompleted,

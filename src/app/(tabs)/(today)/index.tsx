@@ -407,20 +407,29 @@ export default function HomeScreen() {
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
-  const getReadingDayLabel = () => {
+  const getReadingDayLabel = (): 'Yesterday' | 'Today' | 'Tomorrow' => {
     if (!currentDevotional) return 'Today';
-    const previousDayData = (currentDevotional.days ?? []).find(d => d.dayNumber === currentDevotional.currentDay - 1);
-    if (previousDayData?.readAt) {
-      const lastReadDate = new Date(previousDayData.readAt);
-      const today = new Date();
-      if (
-        lastReadDate.getDate() === today.getDate() &&
-        lastReadDate.getMonth() === today.getMonth() &&
-        lastReadDate.getFullYear() === today.getFullYear()
-      ) {
-        return 'Tomorrow';
+    const dayData = (currentDevotional.days ?? []).find(d => d.dayNumber === currentDevotional.currentDay);
+    if (!dayData) return 'Today';
+
+    const todayStr = new Date().toDateString();
+
+    // Case 1: Current day already read today → previewing tomorrow's content
+    if (dayData.isRead && dayData.readAt && new Date(dayData.readAt).toDateString() === todayStr) {
+      return 'Tomorrow';
+    }
+
+    // Case 2: Current day NOT read — check if it's overdue
+    // If the content was generated before today, the user missed it yesterday
+    if (!dayData.isRead && dayData.generatedAt) {
+      const genDate = new Date(dayData.generatedAt);
+      if (genDate.toDateString() !== todayStr) {
+        // Generated on a different day than today — content is overdue
+        return 'Yesterday';
       }
     }
+
+    // Case 3: Content generated today or just now — it's today's reading
     return 'Today';
   };
 
@@ -642,11 +651,26 @@ export default function HomeScreen() {
     timeAgo: formatResumeRelativeTime(resumeContext.touchedAt),
   } : undefined;
 
+  // Detect catch-up: user read an overdue day today (content generated before today).
+  // When catching up, the next day should NOT be locked as "tomorrow".
+  const isCatchUp = useMemo(() => {
+    if (!hasReadToday || !currentDevotional) return false;
+    const todayStr = new Date().toDateString();
+    // Find the day(s) the user read today
+    const readToday = (currentDevotional.days ?? []).filter(
+      d => d.isRead && d.readAt && new Date(d.readAt).toDateString() === todayStr
+    );
+    // If any day read today was generated on a different (earlier) date, user is catching up
+    return readToday.some(d => d.generatedAt && new Date(d.generatedAt).toDateString() !== todayStr);
+  }, [hasReadToday, currentDevotional, devotionals]);
+
   // Compute devotional card state
   const devotionalState = computeDevotionalState({
     currentDevotional: currentDevotional ?? null,
     currentDayData,
     hasReadToday,
+    isCatchUp,
+    dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional)),
     daysCompleted,

@@ -37,6 +37,8 @@ const baseInput: ComputeInput = {
   currentDevotional: makeDevotional(),
   currentDayData: makeDayData(),
   hasReadToday: false,
+  isCatchUp: false,
+  dayLabel: 'Today',
   isJourneyComplete: false,
   isPreparing: false,
   daysCompleted: 0,
