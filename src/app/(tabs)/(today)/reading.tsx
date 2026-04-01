@@ -168,8 +168,13 @@ export default function ReadingScreen() {
   // Premium nudge system (audio teaser on reading screen)
   const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
 
-  const currentDevotional = useUnfoldStore(
-    (s) => s.devotionals.find((d) => d.id === currentDevotionalId)
+  const devotionals = useUnfoldStore((s) => s.devotionals);
+  // Derive via useMemo instead of inline .find() in a Zustand selector.
+  // .find() inside a selector returns a new reference on every store update,
+  // which causes infinite re-renders when used as a useEffect dependency.
+  const currentDevotional = useMemo(
+    () => devotionals.find((d) => d.id === currentDevotionalId),
+    [devotionals, currentDevotionalId],
   );
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
