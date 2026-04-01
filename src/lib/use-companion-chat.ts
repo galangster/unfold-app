@@ -140,18 +140,18 @@ async function fallbackNonStreaming(
   signal: AbortSignal,
   onWord: (revealed: string) => void
 ): Promise<{ responseText: string; suggestions: string[] }> {
-  // Use the companion endpoint (non-streaming) — server builds prompt from context
+  // Call companion/chat with stream:false — gets full JSON response
+  // with the proper system prompt and companion personality.
   const response = await fetch(
-    `${PRIMARY_BACKEND_URL}/api/generate/adaptive-question`,
+    `${PRIMARY_BACKEND_URL}/api/companion/chat`,
     {
       method: 'POST',
       headers,
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
-        temperature: 0.7,
         context: companionContext,
         messages: chatMessages,
+        stream: false,
       }),
       signal,
     }
@@ -162,55 +162,12 @@ async function fallbackNonStreaming(
   }
 
   const data = await response.json();
-  let rawText = '';
+  const rawText = data?.content ?? data?.text ?? '';
+  const suggestions: string[] = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
-  if (typeof data === 'string') {
-    rawText = data;
-  } else if (data?.content) {
-    if (typeof data.content === 'string') {
-      rawText = data.content;
-    } else if (Array.isArray(data.content)) {
-      rawText = data.content
-        .filter((block: any) => block.type === 'text')
-        .map((block: any) => block.text)
-        .join('\n');
-    } else {
-      rawText = String(data.content);
-    }
-  } else if (data?.choices?.[0]?.message?.content) {
-    rawText = data.choices[0].message.content;
-  } else if (data?.text) {
-    rawText = data.text;
-  } else if (data?.response) {
-    rawText = typeof data.response === 'string'
-      ? data.response
-      : JSON.stringify(data.response);
-  }
-
-  // Separate response text from suggestions JSON
-  let responseText = rawText;
-  let suggestions: string[] = [];
-
-  const jsonMatch = rawText.match(/\n?\s*\{[\s\S]*?"suggestions"[\s\S]*?\}\s*$/);
-  if (jsonMatch) {
-    responseText = rawText.slice(0, jsonMatch.index).trim();
-    try {
-      const parsed = JSON.parse(jsonMatch[0].trim());
-      if (Array.isArray(parsed.suggestions)) {
-        suggestions = parsed.suggestions
-          .filter((s: unknown) => typeof s === 'string' && s.trim())
-          .slice(0, 3)
-          .map((s: string) => s.trim());
-      }
-    } catch {
-      // JSON parse failed
-    }
-  }
-
-  // Progressive reveal (~120 tokens/sec)
-  const words = responseText.split(/(\s+)/);
+  // Progressive reveal (~120 tokens/sec) for smooth UX
+  const words = rawText.split(/(\s+)/);
   let revealed = '';
-
   for (let i = 0; i < words.length; i++) {
     if (signal.aborted) break;
     revealed += words[i];
@@ -225,7 +182,7 @@ async function fallbackNonStreaming(
       ? suggestions
       : ['Tell me more', 'How do I apply this?', 'Help me with a prayer'];
 
-  return { responseText, suggestions: fallbackSuggestions };
+  return { responseText: rawText, suggestions: fallbackSuggestions };
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────────
