@@ -78,6 +78,7 @@ export default function HomeScreen() {
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
+  const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
@@ -89,6 +90,23 @@ export default function HomeScreen() {
   const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
+
+  // Auto-navigate to reading when coming from the reveal screen.
+  // The reveal sets resumeContext with a fresh touchedAt timestamp,
+  // then navigates here. We detect the fresh context and immediately
+  // push to reading — avoids the home screen flash.
+  useEffect(() => {
+    if (!resumeContext?.touchedAt) return;
+    const age = Date.now() - new Date(resumeContext.touchedAt).getTime();
+    if (age < 3000) {
+      // Fresh from reveal — auto-navigate and clear
+      clearResumeContext();
+      router.push({
+        pathname: '/(tabs)/(today)/reading',
+        params: { dayNumber: String(resumeContext.dayNumber) },
+      });
+    }
+  }, [resumeContext?.touchedAt]);
 
   // Safe area insets for tooltip y-offset calculation
   const insets = useSafeAreaInsets();

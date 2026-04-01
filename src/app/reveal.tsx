@@ -57,6 +57,7 @@ export default function RevealScreen() {
 
   const setLastRevealShownDate = useUnfoldStore((s) => s.setLastRevealShownDate);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
+  const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
 
   // Mark today as revealed on mount
   useEffect(() => {
@@ -139,12 +140,19 @@ export default function RevealScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (devotionalId) {
       setCurrentDevotional(devotionalId);
+      // Set resume context so the home screen auto-navigates to reading
+      // without a visible flash (avoids the tab hierarchy mounting home first)
+      setResumeContext({
+        route: 'reading',
+        devotionalId,
+        dayNumber: dayNumber ? Number(dayNumber) : 1,
+        dayTitle: dayTitle || undefined,
+        touchedAt: new Date().toISOString(),
+      });
     }
-    router.replace({
-      pathname: '/(tabs)/(today)/reading',
-      params: dayNumber ? { dayNumber } : undefined,
-    });
-  }, [devotionalId, dayNumber, router, setCurrentDevotional]);
+    // Navigate to the home tab — it will detect resumeContext and push to reading
+    router.replace('/(tabs)/(today)');
+  }, [devotionalId, dayNumber, dayTitle, router, setCurrentDevotional, setResumeContext]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();
