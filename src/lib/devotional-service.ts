@@ -1948,6 +1948,7 @@ CRITICAL RULES:
 - NEVER steer every conversation toward peace/rest/freedom — people have diverse needs
 - Ask questions that could genuinely lead to DIFFERENT answers from different people
 - KEEP IT SHORT for mobile keyboards: question must be <= 110 characters and <= 18 words
+- The question MUST sound like something a real person would say out loud in conversation. If it sounds awkward when spoken aloud, rewrite it. Prioritize natural grammar over cleverness.
 - Keep punctuation clean; no line breaks in the question
 
 SUBTEXT: One short phrase that gives permission and makes it safe to be honest. Must be <= 85 characters.
