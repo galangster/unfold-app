@@ -11,16 +11,6 @@ export const NOTIFICATION_IDS = {
   EVENING_WINDDOWN: 'unfold-evening-winddown',
 } as const;
 
-// Teaser content for daily notifications
-export interface NotificationTeaser {
-  dayTitle: string;
-  quotableLine: string;
-  seriesTitle: string;
-  dayNumber: number;
-  totalDays: number;
-  scripture: string;
-}
-
 // Configure how notifications appear when the app is in the foreground
 // This is critical for showing notifications when the user is in the app
 Notifications.setNotificationHandler({
@@ -90,63 +80,62 @@ function parseTimeString(timeString: string): { hours: number; minutes: number }
   return { hours, minutes };
 }
 
-// Get today's teaser content from the current devotional
-export function getTodayTeaser(): NotificationTeaser | null {
+// Reading-state-aware notification content
+export function getNotificationContent(): { title: string; body: string } {
   const state = useUnfoldStore.getState();
   const currentDevotional = state.devotionals.find((d) => d.id === state.currentDevotionalId);
 
+  // No active devotional
   if (!currentDevotional) {
-    return null;
+    return {
+      title: 'Ready for something new?',
+      body: 'Start your next study when you\'re ready.',
+    };
   }
 
-  const todayDay = currentDevotional.days.find((d) => d.dayNumber === currentDevotional.currentDay);
+  const currentDay = currentDevotional.days.find(
+    (d) => d.dayNumber === currentDevotional.currentDay,
+  );
 
-  if (!todayDay) {
-    return null;
+  // Content not generated yet
+  if (!currentDay) {
+    return {
+      title: 'Your reading is being prepared',
+      body: 'Check back soon — it\'ll be ready.',
+    };
   }
 
-  return {
-    dayTitle: todayDay.title,
-    quotableLine: todayDay.quotableLine,
-    seriesTitle: currentDevotional.title,
-    dayNumber: currentDevotional.currentDay,
-    totalDays: currentDevotional.totalDays,
-    scripture: todayDay.scriptureReference ?? '',
-  };
-}
+  // Check if content is overdue (generated before today)
+  const todayStr = new Date().toDateString();
+  const isOverdue =
+    !currentDay.isRead &&
+    currentDay.generatedAt &&
+    new Date(currentDay.generatedAt).toDateString() !== todayStr;
 
-// Generate notification body — content-driven, describes what the reading is about
-function generateNotificationBody(teaser: NotificationTeaser | null): string {
-  if (!teaser) {
-    return 'Your next reading is waiting.';
+  if (isOverdue) {
+    return {
+      title: 'Pick up where you left off',
+      body: `Day ${currentDay.dayNumber} of ${currentDevotional.title} is waiting for you.`,
+    };
   }
 
-  // Lead with the quotable line — it's the hook
-  if (teaser.quotableLine) {
-    const maxLength = 100;
-    let body = teaser.quotableLine;
-    if (body.length > maxLength) {
-      body = body.substring(0, maxLength - 3) + '...';
-    }
-    return body;
+  // On schedule — use content-driven notification
+  if (currentDay.quotableLine) {
+    const body =
+      currentDay.quotableLine.length > 100
+        ? currentDay.quotableLine.substring(0, 97) + '...'
+        : currentDay.quotableLine;
+    return { title: currentDay.title, body };
   }
 
-  // Fall back to scripture reference if no quotable line
-  if (teaser.scripture) {
-    return `Today's reading: ${teaser.scripture}`;
+  if (currentDay.scriptureReference) {
+    return {
+      title: currentDay.title,
+      body: `Today's reading: ${currentDay.scriptureReference}`,
+    };
   }
 
-  return 'Your next reading is waiting.';
-}
-
-// Generate notification title — the devotional day title, not generic branding
-function generateNotificationTitle(teaser: NotificationTeaser | null): string {
-  if (!teaser) {
-    return 'Time to Unfold';
-  }
-
-  // Use the day's actual title — describes what the content is about
-  return teaser.dayTitle;
+  return { title: currentDay.title, body: 'Your next reading is waiting.' };
 }
 
 // Schedule a daily reminder notification
@@ -166,18 +155,12 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
   }
 
   const { hours, minutes } = parseTimeString(timeString);
-
-  // Get teaser content for today
-  const teaser = getTodayTeaser();
+  const { title, body } = getNotificationContent();
 
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_IDS.DAILY_REMINDER,
-      content: {
-        title: generateNotificationTitle(teaser),
-        body: generateNotificationBody(teaser),
-        sound: true,
-      },
+      content: { title, body, sound: true },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: hours,
@@ -186,9 +169,7 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
     });
 
     logger.log(`[Notifications] Daily reminder scheduled for ${timeString} (${hours}:${minutes})`);
-    if (teaser) {
-      logger.log(`[Notifications] Teaser: "${teaser.quotableLine.substring(0, 50)}..."`);
-    }
+    logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
     return identifier;
   } catch (error) {
     logger.error('[Notifications] Failed to schedule:', error);
@@ -223,16 +204,11 @@ export async function sendTestNotification(): Promise<boolean> {
     return false;
   }
 
-  // Get teaser content for today
-  const teaser = getTodayTeaser();
+  const { title, body } = getNotificationContent();
 
   try {
     await Notifications.scheduleNotificationAsync({
-      content: {
-        title: generateNotificationTitle(teaser),
-        body: generateNotificationBody(teaser),
-        sound: true,
-      },
+      content: { title, body, sound: true },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds: 3,
@@ -240,9 +216,7 @@ export async function sendTestNotification(): Promise<boolean> {
     });
 
     logger.log('[Notifications] Test notification scheduled for 3 seconds');
-    if (teaser) {
-      logger.log(`[Notifications] Teaser: "${teaser.quotableLine.substring(0, 50)}..."`);
-    }
+    logger.log(`[Notifications] Content: "${title}" — "${body.substring(0, 50)}..."`);
     return true;
   } catch (error) {
     logger.error('[Notifications] Failed to send test:', error);
