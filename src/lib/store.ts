@@ -478,7 +478,8 @@ export interface ResumeContext {
   dayNumber: number;
   devotionalTitle?: string;
   dayTitle?: string;
-  touchedAt: string;
+  /** Only set by reveal.tsx to trigger auto-navigate in index.tsx. Do NOT set from reading/journal screens. */
+  touchedAt?: string;
 }
 
 interface UnfoldState {

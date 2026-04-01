@@ -457,11 +457,14 @@ export default function ReadingScreen() {
       dayNumber: viewingDay,
       devotionalTitle: currentDevotional.title,
       dayTitle: currentDayData?.title,
-      touchedAt: new Date().toISOString(),
+      // NOTE: Do NOT set touchedAt here. touchedAt is only set by reveal.tsx
+      // to trigger the auto-navigate effect in index.tsx. Setting it here
+      // causes an infinite loop: reading sets resumeContext → home detects
+      // fresh touchedAt → home clears + pushes to reading → loop.
     });
   }, [
     currentDevotionalId,
-    currentDevotional,
+    currentDevotional?.title,
     currentDayData?.title,
     viewingDay,
     setResumeContext,
