@@ -2122,7 +2122,6 @@ export const useUnfoldStore = create<UnfoldState>()(
 
             // Add new server-side tracking fields
             (state as any).pendingJobId = (state as any).pendingJobId ?? null;
-            (state as any).lastRevealShownDate = (state as any).lastRevealShownDate ?? null;
 
             logger.log('[store] Migration v29→30: Removed client-side generation state');
           } catch (err) {

@@ -200,6 +200,26 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('tomorrow-locked');
   });
 
+  it('returns reveal-ready when isRevealed is undefined (unmigrated data)', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: makeDayData({ dayNumber: 2, isRead: false }),
+      daysCompleted: 1,
+    });
+    expect(state.type).toBe('reveal-ready');
+  });
+
+  it('returns reveal-ready (not tomorrow-locked) when catching up on missed days', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      hasReadToday: true,
+      isCatchUp: true,
+      currentDayData: makeDayData({ dayNumber: 3, isRead: false, isRevealed: false }),
+      daysCompleted: 2,
+    });
+    expect(state.type).toBe('reveal-ready');
+  });
+
   // ─── Priority order ──────────────────────────────────────────
 
   it('preparing takes priority over journey-complete', () => {

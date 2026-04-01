@@ -316,7 +316,7 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
   const isYesterday = state.dayLabel === 'Yesterday';
 
   return (
-    <Animated.View entering={entering(FadeIn.duration(400))}>
+    <Animated.View entering={entering(FadeIn.duration(300))}>
       <View style={[styles.revealCard, {
         backgroundColor: Platform.OS === 'ios'
           ? alpha(colors.backgroundElevated, 0.6)
