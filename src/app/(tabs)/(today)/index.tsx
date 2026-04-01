@@ -87,6 +87,7 @@ export default function HomeScreen() {
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
   const archiveCurrentDevotional = useUnfoldStore((s) => s.archiveCurrentDevotional);
+  const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
@@ -240,36 +241,6 @@ export default function HomeScreen() {
   }, [hasReadToday]);
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
-
-  // Reveal screen trigger — show the reveal animation when new unread content is ready
-  // Covers cold app open and in-app transitions (push notification is handled in Task 13)
-  useEffect(() => {
-    if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return;
-
-    const today = new Date().toISOString().split('T')[0];
-    const lastRevealDate = useUnfoldStore.getState().lastRevealShownDate;
-
-    // Already shown today
-    if (lastRevealDate === today) return;
-
-    // Check if there's a new unread day
-    const currentDay = currentDevotional.currentDay;
-    const dayData = (currentDevotional.days ?? []).find((d) => d.dayNumber === currentDay);
-
-    // Must be Day 2+ (Day 1 has its own generating screen flow), must have data, must be unread
-    if (dayData && !dayData.isRead && currentDay > 1) {
-      router.push({
-        pathname: '/reveal',
-        params: {
-          devotionalId: currentDevotional.id,
-          dayNumber: String(currentDay),
-          seriesTitle: currentDevotional.title,
-          dayTitle: dayData.title,
-          totalDays: String(currentDevotional.totalDays),
-        },
-      });
-    }
-  }, [currentDevotional, router]);
 
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).
@@ -623,6 +594,21 @@ export default function HomeScreen() {
     return 'Continue Reading';
   };
 
+  const handleReveal = useCallback(() => {
+    if (!currentDevotional || !currentDayData) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/reveal',
+      params: {
+        devotionalId: currentDevotional.id,
+        dayNumber: String(currentDayData.dayNumber),
+        seriesTitle: currentDevotional.title,
+        dayTitle: currentDayData.title,
+        totalDays: String(currentDevotional.totalDays),
+      },
+    });
+  }, [currentDevotional, currentDayData, router]);
+
   // Compute context slot type
   const validBridgeText = bridgeText && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) ? bridgeText : undefined;
   const slotType = getContextSlotType({
@@ -679,6 +665,7 @@ export default function HomeScreen() {
     tomorrowTeaser: homeTomorrowTeaser,
     onContinue: handleContinueReading,
     onCreateNew: handleCreateNew,
+    onReveal: handleReveal,
     ctaText: getCtaText(),
   });
 
