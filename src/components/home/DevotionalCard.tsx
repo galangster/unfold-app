@@ -23,7 +23,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
-import { PlusIcon } from 'phosphor-react-native';
+import { PlusIcon, CheckIcon } from 'phosphor-react-native';
 
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -559,8 +559,11 @@ function MainCard({ state }: MainCardProps) {
               {seriesTitle}
             </Text>
 
-            <View style={[styles.mainCardDayPill, { backgroundColor: colors.buttonBackground }]}>
-              <Text style={[styles.mainCardDayPillText, { color: colors.textMuted }]}>
+            <View style={[styles.mainCardDayPill, { backgroundColor: isCompleted ? colors.accent : colors.buttonBackground }]}>
+              {isCompleted && (
+                <CheckIcon size={11} color={colors.background} weight="bold" style={{ marginRight: 4 }} />
+              )}
+              <Text style={[styles.mainCardDayPillText, { color: isCompleted ? colors.background : colors.textMuted }]}>
                 {dayLabel} · Day {dayData.dayNumber}/{totalDays}
               </Text>
             </View>
@@ -582,7 +585,7 @@ function MainCard({ state }: MainCardProps) {
                 </Text>
               ) : null}
               <Text style={[styles.completedTomorrowNote, { color: colors.textMuted }]}>
-                Your next reading will be ready tomorrow morning.
+                Your next reading will be ready tomorrow.
               </Text>
             </>
           ) : (
@@ -990,7 +993,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.displayItalic,
     fontSize: FontSize.xl,
     lineHeight: 30,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['4'],
     paddingHorizontal: Spacing['2'],
   },
@@ -998,7 +1001,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: 13,
     lineHeight: 20,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['5'],
   },
 
