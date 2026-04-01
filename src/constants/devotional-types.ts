@@ -284,68 +284,151 @@ export interface BiblicalCharacter {
   description: string;
   keyScriptures: string[];
   themes: ThemeCategory[];
+  testament: 'ot' | 'nt';
 }
 
 export const BIBLICAL_CHARACTERS: BiblicalCharacter[] = [
+  // Old Testament
   {
     name: 'David',
     description: 'Shepherd, poet, king—a man after God\'s own heart who knew both triumph and failure',
     keyScriptures: ['1 Samuel 16-17', 'Psalms', '2 Samuel 11-12', '2 Samuel 22'],
     themes: ['trust', 'identity', 'healing', 'courage', 'surrender'],
+    testament: 'ot',
   },
   {
     name: 'Ruth',
     description: 'A foreigner who chose faithfulness and found belonging',
     keyScriptures: ['Ruth 1-4'],
     themes: ['trust', 'identity', 'courage', 'hope'],
+    testament: 'ot',
   },
   {
     name: 'Moses',
     description: 'Reluctant leader who encountered God face to face',
     keyScriptures: ['Exodus 3-4', 'Exodus 33', 'Numbers 20', 'Deuteronomy 34'],
     themes: ['trust', 'purpose', 'surrender', 'courage', 'presence'],
-  },
-  {
-    name: 'Mary (Mother of Jesus)',
-    description: 'Young woman who said yes and pondered God\'s mysteries',
-    keyScriptures: ['Luke 1-2', 'John 2', 'John 19', 'Acts 1'],
-    themes: ['trust', 'surrender', 'hope', 'presence'],
+    testament: 'ot',
   },
   {
     name: 'Joseph (Genesis)',
     description: 'Dreamer who suffered deeply before seeing God\'s redemption',
     keyScriptures: ['Genesis 37-50'],
     themes: ['trust', 'purpose', 'healing', 'hope', 'surrender'],
-  },
-  {
-    name: 'Peter',
-    description: 'Impulsive fisherman who became a rock of the church',
-    keyScriptures: ['Matthew 14', 'Matthew 16', 'Luke 22', 'John 21', 'Acts 2'],
-    themes: ['identity', 'courage', 'healing', 'surrender'],
+    testament: 'ot',
   },
   {
     name: 'Hannah',
     description: 'Woman who poured out her grief and received a miracle',
     keyScriptures: ['1 Samuel 1-2'],
     themes: ['trust', 'healing', 'surrender', 'hope', 'presence'],
+    testament: 'ot',
   },
   {
     name: 'Elijah',
     description: 'Prophet who stood boldly, then ran in fear, then met God in whispers',
     keyScriptures: ['1 Kings 17-19', '2 Kings 2'],
     themes: ['trust', 'rest', 'courage', 'presence'],
+    testament: 'ot',
   },
   {
     name: 'Esther',
     description: 'Queen who risked everything for her people',
     keyScriptures: ['Esther 1-10'],
     themes: ['identity', 'purpose', 'courage'],
+    testament: 'ot',
+  },
+  {
+    name: 'Abraham',
+    description: 'Father of faith who left everything on a promise',
+    keyScriptures: ['Genesis 12-22'],
+    themes: ['trust', 'surrender', 'courage', 'hope'],
+    testament: 'ot',
+  },
+  // New Testament
+  {
+    name: 'Peter',
+    description: 'Impulsive fisherman who became a rock of the church',
+    keyScriptures: ['Matthew 14', 'Matthew 16', 'Luke 22', 'John 21', 'Acts 2'],
+    themes: ['identity', 'courage', 'healing', 'surrender'],
+    testament: 'nt',
+  },
+  {
+    name: 'Mary (Mother of Jesus)',
+    description: 'Young woman who said yes and pondered God\'s mysteries',
+    keyScriptures: ['Luke 1-2', 'John 2', 'John 19', 'Acts 1'],
+    themes: ['trust', 'surrender', 'hope', 'presence'],
+    testament: 'nt',
   },
   {
     name: 'Paul',
-    description: 'Persecutor turned apostle, transformed by encounter',
+    description: 'Persecutor turned apostle who wrote half the New Testament',
     keyScriptures: ['Acts 9', 'Philippians', '2 Corinthians 11-12', '2 Timothy'],
     themes: ['identity', 'purpose', 'healing', 'courage', 'hope'],
+    testament: 'nt',
+  },
+  {
+    name: 'John',
+    description: 'The beloved disciple who leaned close and listened deeply',
+    keyScriptures: ['John 13', 'John 21', '1 John', 'Revelation 1'],
+    themes: ['presence', 'identity', 'trust', 'hope'],
+    testament: 'nt',
+  },
+  {
+    name: 'Martha & Mary',
+    description: 'Two sisters, two ways of showing up for Jesus',
+    keyScriptures: ['Luke 10:38-42', 'John 11', 'John 12:1-8'],
+    themes: ['rest', 'presence', 'trust', 'surrender'],
+    testament: 'nt',
+  },
+  {
+    name: 'Timothy',
+    description: 'Young leader mentored through doubt and timidity',
+    keyScriptures: ['1 Timothy', '2 Timothy', 'Acts 16'],
+    themes: ['identity', 'purpose', 'courage'],
+    testament: 'nt',
+  },
+  {
+    name: 'Barnabas',
+    description: 'The encourager who saw potential others missed',
+    keyScriptures: ['Acts 4:36-37', 'Acts 9:26-27', 'Acts 11:22-26', 'Acts 15:36-41'],
+    themes: ['identity', 'purpose', 'healing', 'hope'],
+    testament: 'nt',
+  },
+  {
+    name: 'Mary Magdalene',
+    description: 'First witness to the resurrection, restored and sent',
+    keyScriptures: ['Luke 8:1-3', 'John 19:25', 'John 20:1-18'],
+    themes: ['healing', 'identity', 'hope', 'courage'],
+    testament: 'nt',
+  },
+  {
+    name: 'Thomas',
+    description: 'The honest doubter who needed to see for himself',
+    keyScriptures: ['John 11:16', 'John 14:5', 'John 20:24-29'],
+    themes: ['trust', 'courage', 'presence'],
+    testament: 'nt',
+  },
+  {
+    name: 'Stephen',
+    description: 'First martyr whose faith held under ultimate pressure',
+    keyScriptures: ['Acts 6-7'],
+    themes: ['courage', 'surrender', 'hope', 'presence'],
+    testament: 'nt',
+  },
+  {
+    name: 'Lydia',
+    description: 'Businesswoman whose open heart opened a continent to the gospel',
+    keyScriptures: ['Acts 16:11-15', 'Acts 16:40'],
+    themes: ['purpose', 'trust', 'courage'],
+    testament: 'nt',
+  },
+  {
+    name: 'Nicodemus',
+    description: 'The seeker who came with questions in the dark',
+    keyScriptures: ['John 3:1-21', 'John 7:50-52', 'John 19:38-42'],
+    themes: ['trust', 'identity', 'courage', 'surrender'],
+    testament: 'nt',
   },
 ];
 

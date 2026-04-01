@@ -664,6 +664,10 @@ export default function OnboardingScreen() {
   // Get display text for current step (adaptive or default)
   const getStepQuestion = () => {
     if (!step) return '';
+    // Character study gets "Who" instead of "Which"
+    if (step.id === 'studySubject' && data.selectedType === 'character_study') {
+      return 'Who would you like to study?';
+    }
     const adapted = adaptedSteps[step.id];
     return adapted?.question ?? step.question;
   };
@@ -1020,7 +1024,7 @@ export default function OnboardingScreen() {
       );
 
       const firstQuestion: { question: string; subtext: string; chips?: string[] } = selectionType === 'theme' ? {
-        question: `What does "${themeName}" look like in your life right now?`,
+        question: `When you think about ${themeName.toLowerCase()}, where do you find\u00A0yourself?`,
         subtext: "The honest, unfiltered reality of where you are.",
         chips: contextualChips,
       } : selectionType === 'type' ? {
@@ -1468,26 +1472,67 @@ export default function OnboardingScreen() {
     }
 
     if (baseStep?.type === 'studySubject') {
-      const getSubjectList = () => {
-        if (data.selectedType === 'book_study') {
-          return BIBLE_BOOKS_FOR_STUDY.map(book => ({
-            id: book.name,
-            name: book.name,
-            description: book.description,
-          }));
-        }
-        if (data.selectedType === 'character_study') {
-          return BIBLICAL_CHARACTERS.map(char => ({
-            id: char.name,
-            name: char.name,
-            description: char.description,
-          }));
-        }
-        return [];
-      };
+      const isCharacterStudy = data.selectedType === 'character_study';
 
-      const subjects = getSubjectList();
-      const isBookStudy = data.selectedType === 'book_study';
+      if (isCharacterStudy) {
+        const otCharacters = BIBLICAL_CHARACTERS.filter(c => c.testament === 'ot');
+        const ntCharacters = BIBLICAL_CHARACTERS.filter(c => c.testament === 'nt');
+
+        const renderCharacterGrid = (characters: typeof BIBLICAL_CHARACTERS) => (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            {characters.map((char) => {
+              const isSelected = data.selectedStudySubject === char.name;
+              return (
+                <TouchableOpacity activeOpacity={0.7}
+                  key={char.name}
+                  style={{ width: '48%' }}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setData((prev) => ({
+                      ...prev,
+                      selectedStudySubject: isSelected ? undefined : char.name,
+                    }));
+                  }}
+                >
+                  <View style={{
+                    backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    borderRadius: Radius.md,
+                    borderWidth: 1,
+                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                    minHeight: 72,
+                  }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.text }} numberOfLines={1}>{char.name}</Text>
+                    <Text style={{ fontFamily: FontFamily.body, fontSize: 12, color: colors.textMuted, marginTop: 3, lineHeight: 16 }} numberOfLines={3}>{char.description}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        );
+
+        return (
+          <View style={{ flex: 1 }}>
+            <ScrollView showsVerticalScrollIndicator={false} onScroll={handleListScroll} scrollEventThrottle={16}>
+              <View style={{ gap: 10, paddingBottom: 200 }}>
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>Old Testament</Text>
+                {renderCharacterGrid(otCharacters)}
+
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 12, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginTop: 10, marginBottom: 2 }}>New Testament</Text>
+                {renderCharacterGrid(ntCharacters)}
+              </View>
+            </ScrollView>
+          </View>
+        );
+      }
+
+      // Book study — keep original single-column layout
+      const subjects = BIBLE_BOOKS_FOR_STUDY.map(book => ({
+        id: book.name,
+        name: book.name,
+        description: book.description,
+      }));
 
       return (
         <View style={{ flex: 1 }}>
