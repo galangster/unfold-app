@@ -1322,7 +1322,7 @@ export default function ReadingScreen() {
                   paddingVertical: 10,
                 }}
               >
-              {/* Day indicator -- editorial serif typography, left-aligned */}
+              {/* Left: Table of contents icon */}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1334,56 +1334,50 @@ export default function ReadingScreen() {
                     },
                   });
                 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
                 accessibilityHint="Opens day selector menu"
-                accessibilityValue={{ min: 1, max: currentDevotional.totalDays, now: viewingDay, text: `Day ${viewingDay} of ${currentDevotional.totalDays}` }}
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 4,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                }}
+                style={{ padding: Spacing['2'] }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiMedium,
-                      fontSize: FontSize.lg,
-                      color: colors.text,
-                    }}
-                  >
-                    Day {viewingDay} of {currentDevotional.totalDays}
-                  </Text>
-                  {viewingDay === currentDevotional.currentDay && (
-                    <View
-                      style={{
-                        backgroundColor: alpha(colors.accent, 0.13),
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 4,
-                        marginLeft: 2,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.uiMedium,
-                          fontSize: 9,
-                          color: colors.accent,
-                          letterSpacing: 0.8,
-                        }}
-                      >
-                        TODAY
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Table of contents icon */}
-                <ListBulletsIcon size={18} color={colors.textMuted} weight="regular" />
+                <ListBulletsIcon size={22} color={colors.text} weight="light" />
               </TouchableOpacity>
 
+              {/* Center: Day indicator */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text
+                  style={{
+                    fontFamily: FontFamily.uiMedium,
+                    fontSize: FontSize.base,
+                    color: colors.text,
+                  }}
+                >
+                  Day {viewingDay} of {currentDevotional.totalDays}
+                </Text>
+                {viewingDay === currentDevotional.currentDay && (
+                  <View
+                    style={{
+                      backgroundColor: alpha(colors.accent, 0.13),
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 9,
+                        color: colors.accent,
+                        letterSpacing: 0.8,
+                      }}
+                    >
+                      TODAY
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Right: Journal + Reading Settings */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                 {/* Journal button */}
                 <TouchableOpacity activeOpacity={0.7}
