@@ -441,8 +441,8 @@ export default function YouScreen() {
   ];
 
   // --- Section header helper ---
-  const SectionHeader = ({ label, delay = 0 }: { label: string; delay?: number }) => (
-    <Animated.View entering={FadeInDown.duration(300).delay(delay)}>
+  const SectionHeader = ({ label }: { label: string }) => (
+    <View>
       <Text
         style={{
           fontFamily: FontFamily.ui,
@@ -455,7 +455,7 @@ export default function YouScreen() {
       >
         {label}
       </Text>
-    </Animated.View>
+    </View>
   );
 
   return (
