@@ -69,18 +69,6 @@ function AnimatedTabIcon({
       <Animated.View style={iconAnimStyle}>
         {children}
       </Animated.View>
-      <Animated.View
-        style={[
-          {
-            width: 4,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: accentColor,
-            marginTop: Spacing['1'],
-          },
-          dotAnimStyle,
-        ]}
-      />
     </View>
   );
 }
