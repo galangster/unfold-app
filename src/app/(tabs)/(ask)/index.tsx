@@ -294,20 +294,20 @@ export default function CompanionScreen() {
           justifyContent: 'space-between',
         }}
       >
-        <TouchableOpacity
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            handleDrawerOpen();
-          }}
-          hitSlop={8}
-          activeOpacity={0.7}
-          accessibilityLabel="Open conversation history"
-          accessibilityRole="button"
-        >
-          <List size={24} color={colors.textMuted} weight="light" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleDrawerOpen();
+            }}
+            hitSlop={8}
+            activeOpacity={0.7}
+            accessibilityLabel="Open conversation history"
+            accessibilityRole="button"
+          >
+            <List size={24} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <CompanionOrb
             accentColor={colors.accent}
             size={32}
