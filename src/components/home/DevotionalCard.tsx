@@ -8,7 +8,8 @@
  */
 
 import React, { useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
   useSharedValue,
@@ -216,7 +217,7 @@ function EmptyState({ onCreateNew, isReturningUser }: { onCreateNew: () => void;
 // ─── Returning user empty state ─────────────────────────────────
 
 function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { entering, reducedMotion } = useAccessibleAnimation();
   const glowOpacity = useSharedValue(0.18);
 
@@ -239,12 +240,23 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
       style={[
         styles.returningCard,
         {
-          backgroundColor: colors.backgroundElevated,
+          backgroundColor: Platform.OS === 'ios'
+            ? alpha(colors.backgroundElevated, 0.6)
+            : alpha(colors.backgroundElevated, 0.85),
           borderColor: alpha(colors.accent, 0.12),
           shadowColor: colors.accent,
         },
       ]}
     >
+      {/* Frosted glass blur (iOS only) */}
+      {Platform.OS === 'ios' && (
+        <BlurView
+          intensity={80}
+          tint={isDark ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+
       {/* Pulsing glow overlay */}
       <Animated.View
         style={[StyleSheet.absoluteFill, styles.returningGlow, glowStyle]}
@@ -331,7 +343,7 @@ function PreparingProgressBar({ progress, colors }: { progress: number; colors: 
 // ─── Preparing state ────────────────────────────────────────────
 
 function PreparingState({ progress }: { progress: number }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
 
   // Shimmer text — looping opacity between 0.4 and 1.0
@@ -374,12 +386,23 @@ function PreparingState({ progress }: { progress: number }) {
       style={[
         styles.preparingContainer,
         {
-          backgroundColor: colors.backgroundElevated,
+          backgroundColor: Platform.OS === 'ios'
+            ? alpha(colors.backgroundElevated, 0.6)
+            : alpha(colors.backgroundElevated, 0.85),
           borderColor: alpha(colors.accent, 0.12),
           shadowColor: colors.accent,
         },
       ]}
     >
+      {/* Frosted glass blur (iOS only) */}
+      {Platform.OS === 'ios' && (
+        <BlurView
+          intensity={80}
+          tint={isDark ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+
       {/* Pulsing glow overlay */}
       <Animated.View
         style={[StyleSheet.absoluteFill, styles.preparingGlow, glowStyle]}
@@ -427,7 +450,7 @@ function PreparingState({ progress }: { progress: number }) {
 // ─── Journey complete state ─────────────────────────────────────
 
 function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: string; onCreateNew: () => void }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const scale = useSharedValue(1);
 
   const scaleStyle = useAnimatedStyle(() => ({
@@ -454,11 +477,22 @@ function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: strin
             styles.journeyCompleteCard,
             {
               borderColor: alpha(colors.accent, 0.09),
-              backgroundColor: colors.backgroundElevated,
+              backgroundColor: Platform.OS === 'ios'
+                ? alpha(colors.backgroundElevated, 0.6)
+                : alpha(colors.backgroundElevated, 0.85),
               shadowColor: colors.accent,
             },
           ]}
         >
+          {/* Frosted glass blur (iOS only) */}
+          {Platform.OS === 'ios' && (
+            <BlurView
+              intensity={80}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+
           <View style={[styles.journeyCompleteAccent, { backgroundColor: colors.accent }]} />
 
           <Text style={[styles.journeyCompleteTitle, { color: colors.text }]}>
@@ -487,7 +521,7 @@ interface MainCardProps {
 }
 
 function MainCard({ state }: MainCardProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { entering } = useAccessibleAnimation();
   const scale = useSharedValue(1);
 
@@ -546,11 +580,22 @@ function MainCard({ state }: MainCardProps) {
             styles.mainCard,
             {
               borderColor: alpha(colors.accent, 0.09),
-              backgroundColor: colors.backgroundElevated,
+              backgroundColor: Platform.OS === 'ios'
+                ? alpha(colors.backgroundElevated, 0.6)
+                : alpha(colors.backgroundElevated, 0.85),
               shadowColor: colors.accent,
             },
           ]}
         >
+          {/* Frosted glass blur (iOS only) */}
+          {Platform.OS === 'ios' && (
+            <BlurView
+              intensity={80}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+
           {/* Series label + day pill */}
           <View style={styles.mainCardHeader}>
             <Text style={[styles.mainCardSeriesTitle, { color: colors.textSubtle }]} numberOfLines={1}>
@@ -862,6 +907,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing['7'],
     alignItems: 'center',
+    overflow: 'hidden',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
@@ -903,6 +949,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     borderWidth: 1,
     padding: Spacing['6'],
+    overflow: 'hidden',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,

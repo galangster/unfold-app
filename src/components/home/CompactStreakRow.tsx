@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export function CompactStreakRow({ streakCount, onPress }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { entering } = useAccessibleAnimation();
 
   const streakLabel = streakCount === 1 ? 'day' : 'days';
@@ -37,7 +38,9 @@ export function CompactStreakRow({ streakCount, onPress }: Props) {
           style={[
             styles.container,
             {
-              backgroundColor: colors.inputBackground,
+              backgroundColor: Platform.OS === 'ios'
+                ? alpha(colors.inputBackground, 0.6)
+                : alpha(colors.inputBackground, 0.85),
               borderColor:
                 streakCount > 0
                   ? alpha(colors.accent, 0.08)
@@ -45,6 +48,15 @@ export function CompactStreakRow({ streakCount, onPress }: Props) {
             },
           ]}
         >
+          {/* Frosted glass blur (iOS only) */}
+          {Platform.OS === 'ios' && (
+            <BlurView
+              intensity={80}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+
           {/* Sun icon */}
           <SunIcon
             size={20}
@@ -105,6 +117,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
     borderRadius: Radius.lg,
     borderWidth: 1,
+    overflow: 'hidden',
     gap: 6,
   },
   countText: {

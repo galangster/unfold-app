@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -8,10 +9,11 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 export function BentoGrid() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const { entering } = useAccessibleAnimation();
 
@@ -45,11 +47,21 @@ export function BentoGrid() {
             style={[
               styles.box,
               {
-                backgroundColor: colors.inputBackground,
+                backgroundColor: Platform.OS === 'ios'
+                  ? alpha(colors.inputBackground, 0.6)
+                  : alpha(colors.inputBackground, 0.85),
                 borderColor: colors.border,
               },
             ]}
           >
+            {/* Frosted glass blur (iOS only) */}
+            {Platform.OS === 'ios' && (
+              <BlurView
+                intensity={80}
+                tint={isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <item.icon size={20} color={colors.textMuted} weight="light" />
             <Text
               style={[styles.label, { color: colors.text }]}
@@ -78,6 +90,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['4'],
     borderRadius: Radius.card,
     borderWidth: 1,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing['2'],
