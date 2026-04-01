@@ -55,15 +55,9 @@ export default function RevealScreen() {
       totalDays: string;
     }>();
 
-  const setLastRevealShownDate = useUnfoldStore((s) => s.setLastRevealShownDate);
+  const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
-
-  // Mark today as revealed on mount
-  useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    setLastRevealShownDate(today);
-  }, [setLastRevealShownDate]);
 
   // ─── Entrance stagger state ────────────────────────────────────
   const eyebrowOpacity = useSharedValue(0);
@@ -138,6 +132,10 @@ export default function RevealScreen() {
     if (hasNavigated.current) return;
     hasNavigated.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Mark this day as revealed — teaser card won't show again
+    if (devotionalId && dayNumber) {
+      markDayAsRevealed(devotionalId, Number(dayNumber));
+    }
     if (devotionalId) {
       setCurrentDevotional(devotionalId);
       // Set resume context so the home screen auto-navigates to reading
@@ -152,7 +150,7 @@ export default function RevealScreen() {
     }
     // Navigate to the home tab — it will detect resumeContext and push to reading
     router.replace('/(tabs)/(today)');
-  }, [devotionalId, dayNumber, dayTitle, router, setCurrentDevotional, setResumeContext]);
+  }, [devotionalId, dayNumber, dayTitle, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();
