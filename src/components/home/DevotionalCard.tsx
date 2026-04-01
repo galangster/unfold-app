@@ -269,10 +269,8 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
         entering={entering(FadeIn.duration(500).delay(80))}
         style={styles.returningContent}
       >
-        <View style={[styles.returningAccentBar, { backgroundColor: colors.accent }]} />
-
         <Text style={[styles.returningTitle, { color: colors.text }]}>
-          Ready for your{'\n'}next study?
+          Ready for your next study?
         </Text>
 
         <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>
@@ -773,27 +771,20 @@ const styles = StyleSheet.create({
   },
   returningContent: {
     padding: Spacing['7'],
-    alignItems: 'center',
-  },
-  returningAccentBar: {
-    width: 28,
-    height: 1.5,
-    borderRadius: 1,
-    marginBottom: Spacing['6'],
   },
   returningTitle: {
     fontFamily: FontFamily.display,
     fontSize: 32,
     lineHeight: 40,
     letterSpacing: -0.5,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['3'],
   },
   returningSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,
-    textAlign: 'center',
+    textAlign: 'left',
     marginBottom: Spacing['7'],
   },
   returningCta: {
