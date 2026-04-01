@@ -2,7 +2,7 @@
  * DevotionalCard — 6-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | unread | complete-today | tomorrow-locked | journey-complete
+ *   empty | preparing | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -305,6 +305,53 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
         </TouchableOpacity>
       </Animated.View>
     </View>
+  );
+}
+
+// ─── Reveal-ready teaser card ──────────────────────────────────
+
+function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { type: 'reveal-ready' }> }) {
+  const { colors, isDark } = useTheme();
+  const { entering } = useAccessibleAnimation();
+  const isYesterday = state.dayLabel === 'Yesterday';
+
+  return (
+    <Animated.View entering={entering(FadeIn.duration(400))}>
+      <View style={[styles.revealCard, {
+        backgroundColor: Platform.OS === 'ios'
+          ? alpha(colors.backgroundElevated, 0.6)
+          : alpha(colors.backgroundElevated, 0.85),
+        borderColor: alpha(colors.accent, 0.12),
+        overflow: 'hidden',
+      }]}>
+        {Platform.OS === 'ios' && (
+          <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+        )}
+
+        <Text style={[styles.revealSeriesInfo, { color: colors.textMuted }]}>
+          {state.seriesTitle} · Day {state.dayNumber} of {state.totalDays}
+        </Text>
+
+        <Text style={[styles.revealMessage, { color: colors.text }]}>
+          {isYesterday ? 'You have an unread devotional.' : 'Your new reading is ready.'}
+        </Text>
+
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={state.onReveal}
+          accessibilityRole="button"
+          accessibilityLabel={isYesterday ? "Catch up on yesterday's reading" : "Reveal today's devotional"}
+        >
+          <AccentGlow color={colors.accent} intensity="medium" active style={{ borderRadius: Radius.md }}>
+            <View style={[styles.revealCta, { backgroundColor: colors.accent }]}>
+              <Text style={[styles.revealCtaText, { color: colors.background }]}>
+                {isYesterday ? "Catch Up on Yesterday's Reading" : "Reveal Today's Devotional"}
+              </Text>
+            </View>
+          </AccentGlow>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -731,6 +778,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
       {state.type === 'journey-complete' && (
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
       )}
+      {state.type === 'reveal-ready' && <RevealReadyState state={state} />}
       {(state.type === 'unread' ||
         state.type === 'complete-today' ||
         state.type === 'tomorrow-locked') && <MainCard state={state} />}
@@ -842,6 +890,35 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.uiMedium,
     fontSize: 15,
     letterSpacing: 0.3,
+  },
+
+  // Reveal-ready teaser card
+  revealCard: {
+    borderRadius: Radius.card,
+    borderWidth: 1,
+    padding: Spacing['5'],
+  },
+  revealSeriesInfo: {
+    fontFamily: FontFamily.ui,
+    fontSize: 13,
+    marginBottom: Spacing['3'],
+  },
+  revealMessage: {
+    fontFamily: FontFamily.body,
+    fontSize: 17,
+    lineHeight: 24,
+    marginBottom: Spacing['5'],
+  },
+  revealCta: {
+    paddingVertical: Spacing['3.5'],
+    paddingHorizontal: Spacing['4'],
+    borderRadius: Radius.md,
+    alignItems: 'center' as const,
+  },
+  revealCtaText: {
+    fontFamily: FontFamily.ui,
+    fontSize: 15,
+    fontWeight: '600' as const,
   },
 
   // Preparing state
