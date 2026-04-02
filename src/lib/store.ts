@@ -78,6 +78,9 @@ export type ContentDepth = 'simple' | 'balanced' | 'theological';
 export type FaithBackground = 'new' | 'growing' | 'mature';
 export type LifeStage = 'student' | 'building' | 'midlife' | 'reflective';
 
+export type RelationshipWithGod = 'close' | 'ups-and-downs' | 'distant' | 'starting';
+export type BibleFrequency = 'daily' | 'few-times-week' | 'weekly' | 'couple-times-month' | 'rarely' | 'never';
+
 export interface WritingStylePreferences {
   tone: WritingTone;
   depth: ContentDepth;
@@ -154,6 +157,12 @@ export interface UserProfile {
   selectedStudySubject?: string;
   // Profile picture (local file URI)
   profilePicture?: string | null;
+  // Onboarding redesign fields
+  relationshipWithGod?: RelationshipWithGod;
+  bibleFrequency?: BibleFrequency;
+  growthGoals?: string[];
+  obstacles?: string[];
+  companionName?: string;
 }
 
 export interface Quote {
@@ -1033,7 +1042,11 @@ export const useUnfoldStore = create<UnfoldState>()(
       addUsedScriptures: (scriptures) =>
         set((state) => {
           const now = new Date().toISOString();
-          const timestamped = scriptures.map((s) => ({ ...s, updatedAt: now }));
+          const timestamped = scriptures.map((s) => ({
+            ...s,
+            id: s.id ?? `us_${s.devotionalId}_${s.reference}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
+            updatedAt: now,
+          }));
           const combined = [...state.usedScriptures, ...timestamped];
           // Cap at 200 most recent scriptures to prevent unbounded growth
           const MAX_SCRIPTURES = 200;
@@ -1512,6 +1525,7 @@ export const useUnfoldStore = create<UnfoldState>()(
           const now = new Date().toISOString();
           const newEntry: BibleReadingPosition = {
             ...position,
+            id: position.id ?? `brp_${position.bookId}_${position.chapter}_${position.translation}`,
             lastReadAt: now,
             updatedAt: now,
           };
@@ -1703,7 +1717,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 32, // v32: Add isRevealed to DevotionalDay, remove lastRevealShownDate
+      version: 33, // v33: Backfill sync IDs on usedScriptures + bibleReadingHistory
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2157,6 +2171,25 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v31→32: Added isRevealed, removed lastRevealShownDate');
           } catch (err) {
             console.error('[store] Migration v31→32 failed:', err);
+          }
+        }
+
+        // Migration from version 32 to 33: Backfill sync IDs on usedScriptures + bibleReadingHistory
+        if (version < 33) {
+          try {
+            for (const us of (state as any).usedScriptures ?? []) {
+              if (!us.id) {
+                us.id = `us_${us.devotionalId}_${us.reference}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+              }
+            }
+            for (const brp of (state as any).bibleReadingHistory ?? []) {
+              if (!brp.id) {
+                brp.id = `brp_${brp.bookId}_${brp.chapter}_${brp.translation}`;
+              }
+            }
+            logger.log('[store] Migration v32→33: Backfilled sync IDs on usedScriptures + bibleReadingHistory');
+          } catch (err) {
+            console.error('[store] Migration v32→33 failed:', err);
           }
         }
 
