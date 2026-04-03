@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
@@ -209,11 +209,6 @@ export default function ReadingScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
   const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
-  const [showContinuationPrompt, setShowContinuationPrompt] = useState(false);
-  const [continuationReason, setContinuationReason] = useState('');
-  const [continuationDays, setContinuationDays] = useState(0);
-  const [isExtendingArc, setIsExtendingArc] = useState(false);
-  const [extensionError, setExtensionError] = useState(false);
   const [bridgeText, setBridgeText] = useState<string | null>(null);
   const [isBridgeLoading, setIsBridgeLoading] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
@@ -221,7 +216,6 @@ export default function ReadingScreen() {
   const mountedRef = useRef(true);
   const bookmarkToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
-  const continuationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
@@ -303,12 +297,11 @@ export default function ReadingScreen() {
     return firstSentence ? firstSentence[0].trim() : stripped.slice(0, 130) + '\u2026';
   }, [tomorrowDayData]);
 
-  // Cleanup mounted ref and continuation timer on unmount
+  // Cleanup mounted ref and timers on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
       if (bookmarkToastTimerRef.current) clearTimeout(bookmarkToastTimerRef.current);
     };
@@ -750,19 +743,6 @@ export default function ReadingScreen() {
         }
       }
 
-      // Phase 5: Evaluate series extension for progressive devotionals completing last day
-      // Server-side handles extension evaluation — submit a job for it
-      const isProgressiveLastDay = completingLastDay && currentDevotional?.generationMode === 'progressive';
-      if (isProgressiveLastDay) {
-        submitGenerationJob({
-          devotionalId: currentDevotionalId,
-          dayNumber: viewingDay,
-          jobType: 'extension_eval',
-        }).catch(() => {
-          // Silent fail — extension is optional
-        });
-      }
-
       // Record streak read & sync widgets
       recordStreakRead();
       syncWidgets();
@@ -803,39 +783,6 @@ export default function ReadingScreen() {
       }
     }
   }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
-
-  // Phase 5: Handle "Keep Going" from continuation prompt
-  // Server-side handles arc extension and next-day generation
-  const handleContinueJourney = useCallback(async () => {
-    if (!currentDevotionalId || continuationDays <= 0) return;
-    setIsExtendingArc(true);
-    setExtensionError(false);
-    try {
-      // Submit server-side arc extension + generation job
-      await submitGenerationJob({
-        devotionalId: currentDevotionalId,
-        dayNumber: continuationDays,
-        jobType: 'arc_extension',
-      });
-      if (!mountedRef.current) return;
-      advanceDay(currentDevotionalId);
-      setIsPreparingNextDay(true);
-      setShowContinuationPrompt(false);
-      setContinuationDays(0);
-      setContinuationReason('');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      logBugError('progressive-gen', err instanceof Error ? err : new Error(String(err)), {
-        action: 'continue-journey',
-        devotionalId: currentDevotionalId,
-      });
-      // Show error state — user can retry or dismiss
-      setExtensionError(true);
-    } finally {
-      if (mountedRef.current) setIsExtendingArc(false);
-    }
-  }, [currentDevotionalId, continuationDays, advanceDay]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -1915,12 +1862,6 @@ export default function ReadingScreen() {
         visible={showCelebration}
         onDismiss={() => {
           setShowCelebration(false);
-          // Show continuation prompt if extension was evaluated during celebration
-          if (continuationDays > 0 && continuationReason) {
-            continuationTimerRef.current = setTimeout(() => {
-              if (mountedRef.current) setShowContinuationPrompt(true);
-            }, 400);
-          }
         }}
         type={celebrationType}
         seriesReflectionSummary={
@@ -1929,62 +1870,6 @@ export default function ReadingScreen() {
             : undefined
         }
       />
-
-      {/* Phase 5: Continuation Prompt */}
-      <Modal visible={showContinuationPrompt} transparent animationType="fade" statusBarTranslucent>
-        <View style={{ flex: 1, backgroundColor: 'rgba(8, 8, 8, 0.92)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
-          <View style={{ backgroundColor: colors.backgroundElevated, borderRadius: Radius.xl, padding: Spacing['7'], width: '100%', maxWidth: 340, alignItems: 'center' }}>
-            <Text style={{ fontFamily: FontFamily.display, fontSize: 28, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'], letterSpacing: -0.5 }}>
-              Your series{'\n'}could continue
-            </Text>
-            <View style={{ width: 32, height: 1.5, backgroundColor: colors.accent, marginBottom: Spacing['4'], borderRadius: 1 }} />
-            <Text style={{ fontFamily: FontFamily.bodyItalic, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>
-              {continuationReason}
-            </Text>
-            {extensionError && (
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: '#E55', textAlign: 'center', marginBottom: Spacing['3'] }}>
-                Something went wrong. Try again?
-              </Text>
-            )}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleContinueJourney}
-              style={{ backgroundColor: colors.accent, borderRadius: Radius.card, paddingVertical: 14, paddingHorizontal: Spacing['8'], width: '100%', alignItems: 'center', marginBottom: Spacing['3'], opacity: isExtendingArc ? 0.7 : 1 }}
-              disabled={isExtendingArc}
-              accessibilityRole="button"
-              accessibilityLabel="Continue your series"
-              accessibilityState={{ disabled: isExtendingArc }}
-            >
-              {isExtendingArc ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: FontSize.base, color: '#fff' }}>
-                  {extensionError ? 'Retry' : `Keep Going \u00B7 ${continuationDays} more days`}
-                </Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.6}
-              onPress={() => {
-                if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
-                setShowContinuationPrompt(false);
-                setContinuationDays(0);
-                setContinuationReason('');
-                setExtensionError(false);
-              }}
-              style={{ paddingVertical: 10, opacity: isExtendingArc ? 0.5 : 1 }}
-              disabled={isExtendingArc}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss continuation prompt"
-              accessibilityState={{ disabled: isExtendingArc }}
-            >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.sm, color: colors.textMuted }}>
-                I'm good for now
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Share: now navigates to /share-card route */}
 

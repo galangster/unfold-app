@@ -53,7 +53,7 @@ export interface GenerationJobResponse {
 export async function submitGenerationJob(params: {
   devotionalId?: string;
   dayNumber: number;
-  jobType: "initial_arc" | "day" | "extension_eval" | "arc_extension";
+  jobType: "initial_arc" | "day";
   userContext?: {
     name: string;
     aboutMe: string;
