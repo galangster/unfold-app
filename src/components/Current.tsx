@@ -24,7 +24,7 @@ import {
   TileMode,
   useClock,
 } from '@shopify/react-native-skia';
-import { useDerivedValue } from 'react-native-reanimated';
+import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
 import type { SkImage, SkRect, SkRSXform } from '@shopify/react-native-skia';
 
@@ -34,7 +34,7 @@ const { width: SW, height: SH } = Dimensions.get('window');
 // Element configs — seed generation parameters (NOT worklet functions)
 // ---------------------------------------------------------------------------
 
-export type CurrentType = 'wind' | 'storm' | 'warmth' | 'stillwater' | 'spirit' | 'joy' | 'chaos' | 'trinity';
+export type CurrentType = 'wind' | 'storm' | 'warmth' | 'stillwater' | 'spirit' | 'joy' | 'chaos' | 'rise' | 'trinity';
 
 interface ElementConfig {
   count: number;
@@ -108,6 +108,19 @@ const CONFIGS: Record<CurrentType, ElementConfig> = {
     opacityRange: [0.12, 0.35],
     fadeIn: 0.15,
     fadeOut: 0.2,
+  },
+
+  /**
+   * Rise — particles rushing upward with purpose. Energy, growth, acceleration.
+   * Used after stillness to show that the answer has arrived.
+   */
+  rise: {
+    count: 50,
+    durationRange: [1500, 3000],
+    sizeRange: [2, 4.5],
+    opacityRange: [0.1, 0.3],
+    fadeIn: 0.1,
+    fadeOut: 0.15,
   },
 
   /**
@@ -216,9 +229,13 @@ interface CurrentProps {
   centerY?: number;
   /** Scale factor for focused effects (defaults to 1) */
   scale?: number;
+  /** Reanimated shared value 0-1 controlling animation speed. 1 = full speed, 0 = frozen. */
+  speed?: { value: number };
+  /** Reanimated shared value for vertical drift. Positive = downward, negative = upward. Applied as pixels per frame. */
+  drift?: { value: number };
 }
 
-export function Current({ type, color, intensity = 1, centerX, centerY, scale = 1 }: CurrentProps) {
+export function Current({ type, color, intensity = 1, centerX, centerY, scale = 1, speed, drift }: CurrentProps) {
   const config = CONFIGS[type];
 
   const sprite = useMemo(() => createSprite(color), [color]);
@@ -236,9 +253,27 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
 
   const clock = useClock();
 
+  // Track accumulated time that respects speed changes
+  const prevClock = useSharedValue(0);
+  const accumulatedTime = useSharedValue(0);
+  // Track accumulated vertical drift offset
+  const driftOffset = useSharedValue(0);
+
   const transforms = useDerivedValue<SkRSXform[]>(() => {
     'worklet';
-    const t = clock.value;
+    const rawT = clock.value;
+    const dt = rawT - prevClock.value;
+    prevClock.value = rawT;
+
+    // Scale dt by speed (default 1 = full speed, 0 = frozen)
+    const spd = speed ? speed.value : 1;
+    accumulatedTime.value += dt * spd;
+
+    // Accumulate vertical drift (negative = upward)
+    const driftVal = drift ? drift.value : 0;
+    driftOffset.value += driftVal * (dt / 16.67); // normalize to ~60fps
+
+    const t = accumulatedTime.value;
     const w = SCREEN_W;
     const h = SCREEN_H;
 
@@ -282,6 +317,10 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
         py = seed.baseY + p * dy * 0.5;
         px += Math.sin(p * Math.PI * 4 * seed.freq) * seed.amplitude * 0.3;
         py += Math.cos(p * Math.PI * 3 * seed.freq) * seed.amplitude * 0.3;
+      } else if (elementType === 'rise') {
+        // Rush upward from bottom — fast, purposeful, slight horizontal scatter
+        px = seed.baseX + Math.sin(p * Math.PI * 2 * seed.freq) * 15;
+        py = h + 40 - p * (h + 80); // Bottom to top, bleeds off both edges
       } else if (elementType === 'trinity') {
         // Three-Petal Spiral: hypotrochoid R=3, r=1, d=3
         // Slow rotation via clock time
@@ -301,7 +340,7 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
       const sizeScale = (seed.size / SPRITE_SIZE) * breathe * _intensity;
 
       const tx = px - HALF_SPRITE * sizeScale;
-      const ty = py - HALF_SPRITE * sizeScale;
+      const ty = py + driftOffset.value - HALF_SPRITE * sizeScale;
 
       return Skia.RSXform(sizeScale, 0, tx, ty);
     });

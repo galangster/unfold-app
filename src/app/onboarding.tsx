@@ -238,8 +238,10 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
 const ALL_STEPS = [
   // HOOK: Opening question — problem-naming with an obvious "yes"
   { id: 'hook', question: '', subtext: '', type: 'hook' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // SOLUTION: Introduce Unfold + companion (Trinity Icon) + companion naming
+  // SOLUTION: The feeling — chaos freezes on "still"
   { id: 'solution', question: '', subtext: '', type: 'solution' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // UNFOLD INTRO: The answer — what Unfold is, particles rise
+  { id: 'unfoldIntro', question: '', subtext: '', type: 'unfoldIntro' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
@@ -271,7 +273,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -499,6 +501,30 @@ export default function OnboardingScreen() {
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('hook');
+
+  // Chaos particle speed — shared value so Current can freeze smoothly
+  const chaosSpeed = useSharedValue(1);
+  // Vertical drift — negative = upward. Used on Screen 3.
+  const chaosDrift = useSharedValue(0);
+
+  // Screen 2: "still." reveal state
+  const [showStillWord, setShowStillWord] = useState(false);
+
+  // Gate taps — prevents advancing while animations are still playing
+  const [screenReady, setScreenReady] = useState(false);
+
+  // Drive particle transitions when entering screens
+  useEffect(() => {
+    if (currentStepId === 'unfoldIntro') {
+      // Screen 3: frozen particles begin rising upward
+      chaosSpeed.value = withTiming(0.4, { duration: 800, easing: Easing.out(Easing.cubic) });
+      chaosDrift.value = withTiming(-1.5, { duration: 1200, easing: Easing.out(Easing.cubic) });
+    } else if (currentStepId === 'hook') {
+      // Reset everything for Screen 1
+      chaosSpeed.value = 1;
+      chaosDrift.value = 0;
+    }
+  }, [currentStepId]);
 
   // Track pending auth data to merge into completeOnboarding's setUser/updateUser call.
   const pendingAuthDataRef = useRef<Partial<UserProfile> | null>(null);
@@ -856,6 +882,8 @@ export default function OnboardingScreen() {
     });
 
     setCurrentStepId(nextStepId);
+    setScreenReady(false);
+    setShowStillWord(false);
     setShowInput(false);
     setShowListScrollHint(true);
     inputOpacity.value = 0;
@@ -1023,6 +1051,12 @@ export default function OnboardingScreen() {
         delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
       });
 
+      // Reset particle + animation state when navigating back
+      chaosSpeed.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
+      chaosDrift.value = withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) });
+      setShowStillWord(false);
+      setScreenReady(false);
+
       setCurrentStepId(prevStepId);
       setShowInput(false);
       inputOpacity.value = 0;
@@ -1178,9 +1212,15 @@ export default function OnboardingScreen() {
     // Screen 1: Hook question — chaos particles, scatter title, pulsing CTA
     if (step.type === 'hook') {
       return (
-        <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
-          <Current type="chaos" color={colors.accent} />
-
+        <TouchableOpacity
+          activeOpacity={1}
+          disabled={!screenReady}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            advanceToNextStep();
+          }}
+          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
+        >
           {/* Heading — left-aligned, scatter letter animation */}
           <View style={{ flex: 1, justifyContent: 'center' }}>
             <ScatterTitle
@@ -1189,26 +1229,16 @@ export default function OnboardingScreen() {
               baseDelay={400}
               stagger={60}
               color={colors.text}
+              onComplete={() => setScreenReady(true)}
             />
 
-            {/* Tap to continue — close below heading, slow pulse */}
-            <Animated.View
-              entering={FadeIn.delay(3200).duration(600)}
-              style={{ marginTop: Spacing['4'] }}
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  advanceToNextStep();
-                }}
-                activeOpacity={0.7}
-              >
-                <PulsingText
-                  text="Tap to continue"
-                  style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
-                />
-              </TouchableOpacity>
-            </Animated.View>
+            {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
+            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+              <PulsingText
+                text="Tap anywhere to continue"
+                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+              />
+            </View>
           </View>
 
           {/* Sign in link — bottom of screen */}
@@ -1217,141 +1247,136 @@ export default function OnboardingScreen() {
             style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
           >
             <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } })}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } });
+              }}
               activeOpacity={0.7}
             >
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
-                Already have an account? Sign in
+                Already have an account? <Text style={{ textDecorationLine: 'underline' }}>Sign in</Text>
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </View>
+        </TouchableOpacity>
       );
     }
 
-    // Screen 2: Solution — Unfold intro + Trinity Icon companion + naming
-    // Particles: chaos settling into wind — direction emerging from disorder
+    // Screen 2: The feeling — chaos freezes on "still."
+    // Typewriter runs the full text. "still." is gold via lastWordColor.
+    // Chaos slows during "..." then freezes with haptic on "still."
     if (step.type === 'solution') {
       return (
-        <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
-          <Current type="wind" color={colors.accent} intensity={0.5} />
-
-          <KeyboardAwareScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 100 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Solution text */}
-            <Animated.Text
-              entering={FadeIn.delay(300).duration(800)}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 18,
-                color: colors.text,
-                lineHeight: 28,
-                marginBottom: Spacing['8'],
+        <TouchableOpacity
+          activeOpacity={1}
+          disabled={!screenReady}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            advanceToNextStep();
+          }}
+          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
+        >
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <TypewriterText
+              text="All that noise. The searching. The not knowing. You just want to be... still."
+              style={{ fontSize: 32, lineHeight: 42, color: colors.text }}
+              charDelay={40}
+              delay={300}
+              lastWordColor={colors.accent}
+              lastWordPause={800}
+              onLastWordStart={() => {
+                // Pause starts — slow particles down as tension builds
+                chaosSpeed.value = withTiming(0.15, { duration: 1000, easing: Easing.out(Easing.cubic) });
+                // Freeze + haptic when "still." actually appears (after the pause + a beat)
+                setTimeout(() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                  chaosSpeed.value = withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) });
+                }, 1800); // well after lastWordPause so "still." is fully visible when freeze hits
               }}
-            >
-              Unfold is the only app that writes God's word into your story. Every word shaped by your life, your struggles, your season.
-            </Animated.Text>
-
-            {/* Trinity Icon — the companion */}
-            <Animated.View
-              entering={FadeIn.delay(800).duration(600)}
-              style={{ height: 160, marginBottom: Spacing['6'] }}
-            >
-              <Current type="trinity" color={colors.accent} centerY={80} scale={1.2} />
-            </Animated.View>
-
-            {/* Companion intro */}
-            <Animated.Text
-              entering={FadeIn.delay(1200).duration(500)}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 15,
-                color: colors.textMuted,
-                lineHeight: 22,
-                marginBottom: Spacing['6'],
+              onComplete={() => {
+                setShowStillWord(true);
+                setScreenReady(true);
               }}
-            >
-              This is your companion. They'll walk with you through every word.
-            </Animated.Text>
+            />
 
-            {/* Companion name input */}
-            <Animated.View entering={FadeIn.delay(1500).duration(400)}>
-              <Text style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 14,
-                color: colors.textMuted,
-                marginBottom: Spacing['2'],
-              }}>
-                What should we call them?
-              </Text>
-              <TextInput
-                value={companionNameInput}
-                onChangeText={setCompanionNameInput}
-                placeholder="e.g., Eli, Grace, Scout..."
-                placeholderTextColor={alpha(colors.textMuted, 0.5)}
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                  borderRadius: Radius.lg,
-                  paddingVertical: Spacing['3'],
-                  paddingHorizontal: Spacing['5'],
-                  fontFamily: FontFamily.body,
-                  fontSize: 17,
-                  color: colors.text,
-                }}
-                autoCapitalize="words"
-                maxLength={20}
-                onSubmitEditing={() => {
-                  if (companionNameInput.trim().length > 0) {
-                    advanceToNextStep();
-                  }
-                }}
-                returnKeyType="done"
+            {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
+            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+              <PulsingText
+                text="Tap anywhere to continue"
+                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
               />
-            </Animated.View>
-
-            {/* Tap to continue — appears after companion name has content */}
-            {companionNameInput.trim().length > 0 && (
-              <Animated.View
-                entering={FadeIn.duration(400)}
-                style={{ marginTop: Spacing['4'] }}
-              >
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    advanceToNextStep();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <PulsingText
-                    text="Tap to continue"
-                    style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
-                  />
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-          </KeyboardAwareScrollView>
+            </View>
+          </View>
 
           {/* Sign in link — bottom */}
           <Animated.View
-            entering={FadeIn.delay(2000).duration(300)}
+            entering={FadeIn.delay(1000).duration(300)}
             style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
           >
             <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } })}
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } });
+              }}
               activeOpacity={0.7}
             >
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
-                Already have an account? Sign in
+                Already have an account? <Text style={{ textDecorationLine: 'underline' }}>Sign in</Text>
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </View>
+        </TouchableOpacity>
+      );
+    }
+
+    // Screen 3: Unfold intro — the answer. Particles rise. Gradient fades in.
+    if (step.type === 'unfoldIntro') {
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          disabled={!screenReady}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            advanceToNextStep();
+          }}
+          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
+        >
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <TypewriterText
+              text="That's why we built Unfold. God's word, written into your story — so every time you open it, you're already home."
+              style={{ fontSize: 32, lineHeight: 42, color: colors.text }}
+              charDelay={35}
+              delay={400}
+              onComplete={() => setScreenReady(true)}
+            />
+
+            {/* Tap anywhere — always rendered to reserve space, opacity controlled */}
+            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+              <PulsingText
+                text="Tap anywhere to continue"
+                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+              />
+            </View>
+          </View>
+
+          {/* Sign in link — bottom */}
+          <Animated.View
+            entering={FadeIn.delay(1000).duration(300)}
+            style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
+          >
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation();
+                router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } });
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
+                Already have an account? <Text style={{ textDecorationLine: 'underline' }}>Sign in</Text>
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
       );
     }
 
@@ -2762,6 +2787,20 @@ export default function OnboardingScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+      {/* Currents — one continuous particle layer across intro screens */}
+      {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro') && (
+        <Current type="chaos" color={colors.accent} speed={chaosSpeed} drift={chaosDrift} />
+      )}
+
+      {/* Accent gradient — fades in on Screen 3 (unfoldIntro) */}
+      {currentStepId === 'unfoldIntro' && (
+        <Animated.View entering={FadeIn.duration(1500)} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1 }} pointerEvents="none">
+          <LinearGradient
+            colors={['transparent', `${colors.accent}20`, `${colors.accent}40`]}
+            style={{ height: 350 }}
+          />
+        </Animated.View>
+      )}
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
@@ -2790,7 +2829,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2818,7 +2857,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
