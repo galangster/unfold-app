@@ -57,38 +57,10 @@ import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
 import { EmberParticles } from '@/components/EmberParticles';
-import { Current } from '@/components/Current';
-import { ScatterTitle } from '@/components/ScatterTitle';
 import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
 
-
-// Slow-pulsing text — opacity breathes in and out gently
-function PulsingText({ text, style }: { text: string; style: any }) {
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.3, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-      ),
-      -1,
-      false,
-    );
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.Text style={[style, animStyle]}>
-      {text}
-    </Animated.Text>
-  );
-}
 
 // Types with subject selection
 const TYPES_WITH_SUBJECT_SELECTION = ['book_study', 'character_study'];
@@ -238,8 +210,6 @@ function getIconMap(accent: string): Record<string, React.ReactNode> {
 const ALL_STEPS = [
   // HOOK: Opening question — problem-naming with an obvious "yes"
   { id: 'hook', question: '', subtext: '', type: 'hook' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // SOLUTION: Introduce Unfold + companion (Trinity Icon) + companion naming
-  { id: 'solution', question: '', subtext: '', type: 'solution' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
   { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
@@ -271,7 +241,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -373,11 +343,12 @@ interface OnboardingData {
 
 // Progress indicator component
 function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentStepIndex: number; totalSteps: number; colors: any }) {
-  // Hidden for now — keeping the slot for future use
-  void currentStepIndex;
-  void totalSteps;
-  void colors;
-  return null;
+  const progress = (currentStepIndex + 1) / totalSteps;
+  return (
+    <View style={{ height: 3, backgroundColor: alpha(colors.accent, 0.15), width: '100%' }}>
+      <View style={{ height: '100%', backgroundColor: colors.accent, borderRadius: 1.5, width: `${progress * 100}%` }} />
+    </View>
+  );
 }
 
 export default function OnboardingScreen() {
@@ -1175,172 +1146,46 @@ export default function OnboardingScreen() {
   const renderInput = () => {
     if (!step) return null;
 
-    // Screen 1: Hook question — chaos particles, scatter title, pulsing CTA
+    // Screen 1: Hook question — "ever open your Bible and not know where to start?"
     if (step.type === 'hook') {
       return (
-        <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
-          <Current type="chaos" color={colors.accent} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['6'] }}>
+          <EmberParticles color={colors.accent} count={10} />
 
-          {/* Heading — left-aligned, scatter letter animation */}
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            <ScatterTitle
-              text="Ever open your Bible and not know where to start?"
-              fontSize={32}
-              baseDelay={400}
-              stagger={60}
-              color={colors.text}
-            />
+          <Animated.Text
+            entering={FadeIn.delay(300).duration(800)}
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 28,
+              color: colors.text,
+              textAlign: 'center',
+              lineHeight: 38,
+            }}
+          >
+            ever open your Bible{'\n'}and not know where{'\n'}to start?
+          </Animated.Text>
 
-            {/* Tap to continue — close below heading, slow pulse */}
-            <Animated.View
-              entering={FadeIn.delay(3200).duration(600)}
-              style={{ marginTop: Spacing['4'] }}
-            >
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  advanceToNextStep();
-                }}
-                activeOpacity={0.7}
-              >
-                <PulsingText
-                  text="Tap to continue"
-                  style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
-                />
-              </TouchableOpacity>
-            </Animated.View>
-          </View>
-
-          {/* Sign in link — bottom of screen */}
           <Animated.View
-            entering={FadeIn.delay(3500).duration(300)}
-            style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
+            entering={FadeIn.delay(1200).duration(400)}
+            style={{ position: 'absolute', bottom: Spacing['8'], alignSelf: 'center' }}
           >
             <TouchableOpacity
-              onPress={() => router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } })}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                advanceToNextStep();
+              }}
               activeOpacity={0.7}
             >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
-                Already have an account? Sign in
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>
+                tap to continue
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </View>
-      );
-    }
 
-    // Screen 2: Solution — Unfold intro + Trinity Icon companion + naming
-    // Particles: chaos settling into wind — direction emerging from disorder
-    if (step.type === 'solution') {
-      return (
-        <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
-          <Current type="wind" color={colors.accent} intensity={0.5} />
-
-          <KeyboardAwareScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 100 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Solution text */}
-            <Animated.Text
-              entering={FadeIn.delay(300).duration(800)}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 18,
-                color: colors.text,
-                lineHeight: 28,
-                marginBottom: Spacing['8'],
-              }}
-            >
-              Unfold is the only app that writes God's word into your story. Every word shaped by your life, your struggles, your season.
-            </Animated.Text>
-
-            {/* Trinity Icon — the companion */}
-            <Animated.View
-              entering={FadeIn.delay(800).duration(600)}
-              style={{ height: 160, marginBottom: Spacing['6'] }}
-            >
-              <Current type="trinity" color={colors.accent} centerY={80} scale={1.2} />
-            </Animated.View>
-
-            {/* Companion intro */}
-            <Animated.Text
-              entering={FadeIn.delay(1200).duration(500)}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: 15,
-                color: colors.textMuted,
-                lineHeight: 22,
-                marginBottom: Spacing['6'],
-              }}
-            >
-              This is your companion. They'll walk with you through every word.
-            </Animated.Text>
-
-            {/* Companion name input */}
-            <Animated.View entering={FadeIn.delay(1500).duration(400)}>
-              <Text style={{
-                fontFamily: FontFamily.ui,
-                fontSize: 14,
-                color: colors.textMuted,
-                marginBottom: Spacing['2'],
-              }}>
-                What should we call them?
-              </Text>
-              <TextInput
-                value={companionNameInput}
-                onChangeText={setCompanionNameInput}
-                placeholder="e.g., Eli, Grace, Scout..."
-                placeholderTextColor={alpha(colors.textMuted, 0.5)}
-                style={{
-                  backgroundColor: colors.inputBackground,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                  borderRadius: Radius.lg,
-                  paddingVertical: Spacing['3'],
-                  paddingHorizontal: Spacing['5'],
-                  fontFamily: FontFamily.body,
-                  fontSize: 17,
-                  color: colors.text,
-                }}
-                autoCapitalize="words"
-                maxLength={20}
-                onSubmitEditing={() => {
-                  if (companionNameInput.trim().length > 0) {
-                    advanceToNextStep();
-                  }
-                }}
-                returnKeyType="done"
-              />
-            </Animated.View>
-
-            {/* Tap to continue — appears after companion name has content */}
-            {companionNameInput.trim().length > 0 && (
-              <Animated.View
-                entering={FadeIn.duration(400)}
-                style={{ marginTop: Spacing['4'] }}
-              >
-                <TouchableOpacity
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    advanceToNextStep();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <PulsingText
-                    text="Tap to continue"
-                    style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
-                  />
-                </TouchableOpacity>
-              </Animated.View>
-            )}
-          </KeyboardAwareScrollView>
-
-          {/* Sign in link — bottom */}
+          {/* Returning user sign-in link */}
           <Animated.View
-            entering={FadeIn.delay(2000).duration(300)}
-            style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
+            entering={FadeIn.delay(1500).duration(300)}
+            style={{ position: 'absolute', top: Spacing['2'], alignSelf: 'center' }}
           >
             <TouchableOpacity
               onPress={() => router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } })}
@@ -2790,7 +2635,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2818,7 +2663,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' ? (
+            {step?.type === 'hook' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>

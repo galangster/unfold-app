@@ -98,6 +98,8 @@ interface ScatterTitleProps {
   baseDelay?: number;
   stagger?: number;
   onComplete?: () => void;
+  /** Override the final text color (defaults to accent) */
+  color?: string;
 }
 
 export function ScatterTitle({
@@ -106,8 +108,10 @@ export function ScatterTitle({
   baseDelay = 500,
   stagger = 80,
   onComplete,
+  color,
 }: ScatterTitleProps) {
   const { colors } = useTheme();
+  const endColor = color ?? colors.accent;
   const reducedMotion = useReducedMotion();
 
   const chars = useMemo(() => text.split(''), [text]);
@@ -158,7 +162,7 @@ export function ScatterTitle({
                   fontFamily: FontFamily.display,
                   fontSize,
                   lineHeight: 50,
-                  color: colors.accent,
+                  color: endColor,
                 }}
               >
                 {char}
@@ -171,7 +175,7 @@ export function ScatterTitle({
                   fontFamily: FontFamily.display,
                   fontSize,
                   lineHeight: 50,
-                  color: colors.accent,
+                  color: endColor,
                 }}
               >
                 {' '}
@@ -195,7 +199,7 @@ export function ScatterTitle({
                 char={char}
                 animDelay={charDelays[globalIndex]}
                 startColor={colors.background}
-                endColor={colors.accent}
+                endColor={endColor}
                 fontSize={fontSize}
               />
             );
