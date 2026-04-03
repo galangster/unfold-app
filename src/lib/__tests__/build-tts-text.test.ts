@@ -3,7 +3,7 @@ jest.mock('expo-file-system', () => ({ File: jest.fn(), Paths: { cache: '' }, Di
 jest.mock('expo-file-system/legacy', () => ({ downloadAsync: jest.fn(), getInfoAsync: jest.fn() }));
 jest.mock('@/lib/logger', () => ({ logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() } }));
 jest.mock('@/lib/report-error', () => ({ reportError: jest.fn() }));
-jest.mock('@/lib/api-config', () => ({ getAuthHeaders: jest.fn(), RAILWAY_BACKEND_URL: 'http://test' }));
+jest.mock('@/lib/api-config', () => ({ getAuthHeaders: jest.fn(), PRIMARY_BACKEND_URL: 'http://test' }));
 jest.mock('@/lib/rate-limit', () => ({ checkRateLimit: jest.fn(), incrementRateLimit: jest.fn() }));
 
 import { buildTtsText, humanizeReference } from '../tts-service';

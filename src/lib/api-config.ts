@@ -4,24 +4,23 @@
  * Single source of truth for backend URLs and authenticated request headers.
  * All service files should import from here instead of defining their own URLs.
  */
+import { Platform } from 'react-native';
 import { logger } from '@/lib/logger';
 import { getClerkToken } from '@/lib/clerk';
 
+// Custom User-Agent for Cloudflare WAF allowlisting
+const APP_USER_AGENT = `Unfold/1.0.0 (${Platform.OS}; ${Platform.Version})`;
+
 // ---------------------------------------------------------------------------
 // Backend URL (single definition — used by all service files)
+// Routes through Cloudflare WAF → Railway. Never expose the raw Railway URL.
 // ---------------------------------------------------------------------------
 
-export const RAILWAY_BACKEND_URL = 'https://unfold-backend-production.up.railway.app';
-
 export const PRIMARY_BACKEND_URL =
-  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || RAILWAY_BACKEND_URL;
+  process.env.EXPO_PUBLIC_BACKEND_URL?.trim() || 'https://api.unfoldapp.co';
 
 export function getBackendCandidates(): string[] {
-  const candidates = [PRIMARY_BACKEND_URL];
-  if (!candidates.includes(RAILWAY_BACKEND_URL)) {
-    candidates.push(RAILWAY_BACKEND_URL);
-  }
-  return candidates;
+  return [PRIMARY_BACKEND_URL];
 }
 
 // ---------------------------------------------------------------------------
@@ -36,6 +35,7 @@ export async function getAuthHeaders(
 ): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'User-Agent': APP_USER_AGENT,
   };
 
   try {

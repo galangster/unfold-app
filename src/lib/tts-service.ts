@@ -8,12 +8,12 @@ import { File, Paths, Directory } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import { logger } from '@/lib/logger';
 import { reportError } from '@/lib/report-error';
-import { getAuthHeaders, RAILWAY_BACKEND_URL } from '@/lib/api-config';
+import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 // Debug instrumentation available at '@/lib/tts-debug' if needed
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { recordCachedFile, touchCachedFile, saveMetadata } from '@/lib/audio-cache';
 
-const TTS_PROXY_URL = `${RAILWAY_BACKEND_URL}/api/tts`;
+const TTS_PROXY_URL = `${PRIMARY_BACKEND_URL}/api/tts`;
 
 // ─── Voice catalog ────────────────────────────────────────────
 
@@ -179,7 +179,7 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     // Step 2: Native download — prefer R2 URL, fall back to legacy CDN/download endpoints
     const DOWNLOAD_TIMEOUT = 30_000;
     const downloadUrl = audioUrl
-      ?? (audioHash ? `${RAILWAY_BACKEND_URL}/api/audio/${audioHash}` : `${RAILWAY_BACKEND_URL}/api/tts-download/${downloadId}`);
+      ?? (audioHash ? `${PRIMARY_BACKEND_URL}/api/audio/${audioHash}` : `${PRIMARY_BACKEND_URL}/api/tts-download/${downloadId}`);
     const downloadPromise = FileSystem.downloadAsync(
       downloadUrl,
       cachedFile.uri,
