@@ -290,9 +290,9 @@ export function DevotionalContent({
               <Text
                 style={{
                   fontFamily: readingFont.bodyItalic,
-                  fontSize: fontSizes.body - 1,
+                  fontSize: Math.round(fontSizes.body * 1.15),
                   color: colors.textMuted,
-                  lineHeight: (fontSizes.body - 1) * 1.7,
+                  lineHeight: Math.round(fontSizes.body * 1.15) * 1.7,
                 }}
               >
                 {`\u201C${preventOrphan(ref.text)}\u201D`}
@@ -336,9 +336,9 @@ export function DevotionalContent({
                     <Text
                       style={{
                         fontFamily: readingFont.bodyItalic,
-                        fontSize: fontSizes.body,
+                        fontSize: Math.round(fontSizes.body * 1.1),
                         color: colors.text,
-                        lineHeight: fontSizes.body * 1.7,
+                        lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,
                         flex: 1,
                         opacity: 0.9,
                       }}
@@ -364,7 +364,7 @@ export function DevotionalContent({
               fontSize: fontSizes.body,
               color: colors.text,
               lineHeight: fontSizes.body * 1.8,
-              textAlign: 'center',
+              textAlign: 'left',
               paddingHorizontal: 16,
               opacity: 0.9,
             }}
@@ -487,7 +487,7 @@ const dcStyles = StyleSheet.create({
   },
   crossRefReference: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 10.5,
+    fontSize: 12,
     letterSpacing: 1.2,
     marginBottom: 8,
     opacity: 0.7,

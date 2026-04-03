@@ -5,13 +5,9 @@ import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controlle
 import Animated, {
   FadeIn,
   FadeInDown,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CheckCircleIcon, PencilSimpleLineIcon, ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize as FontSizeTokens } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -337,21 +333,6 @@ function ReflectionQuestionCard({
   fontSizes: { body: number; scripture: number; title: number };
   scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
 }) {
-  // Animate border accent
-  const borderProgress = useSharedValue(isAnswered ? 1 : 0);
-
-  useEffect(() => {
-    borderProgress.value = withTiming(isAnswered ? 1 : 0, {
-      duration: Duration.slow,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [isAnswered]);
-
-  const borderInactive = alpha(colors.border, 0.38);
-  const borderStyle = useAnimatedStyle(() => ({
-    borderLeftColor: borderProgress.value > 0.5 ? colors.accent : borderInactive,
-  }));
-
   return (
     <Animated.View
       entering={FadeInDown.duration(400).delay(index * 120)}
@@ -374,32 +355,17 @@ function ReflectionQuestionCard({
               paddingLeft: 18,
               paddingRight: 8,
               paddingVertical: 4,
-              borderLeftWidth: 2.5,
             },
-            borderStyle,
           ]}
         >
-          {/* Status icon */}
-          <View style={{ marginTop: 3, marginRight: Spacing['3'], width: 18 }}>
-            {isAnswered ? (
-              <CheckCircleIcon size={16} color={colors.accent} weight="fill" />
-            ) : (
-              <PencilSimpleLineIcon
-                size={15}
-                color={isExpanded ? colors.accent : colors.textHint}
-                weight="light"
-              />
-            )}
-          </View>
-
           {/* Question text */}
           <Text
             style={{
               flex: 1,
               fontFamily: readingFont.bodyItalic,
-              fontSize: fontSizes.body,
+              fontSize: Math.round(fontSizes.body * 1.1),
               color: colors.text,
-              lineHeight: fontSizes.body * 1.7,
+              lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,
               opacity: 0.9,
             }}
           >
