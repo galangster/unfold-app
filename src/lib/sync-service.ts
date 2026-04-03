@@ -146,6 +146,7 @@ class SyncService {
       for (const record of curr) {
         if (!record?.updatedAt) continue;
         const id = getId(record);
+        if (!id) continue; // Skip records without an id — can't sync without one
         const old = prevMap.get(id);
         if (!old || old.updatedAt !== record.updatedAt) {
           this.markDirty(table, id, record.updatedAt);
