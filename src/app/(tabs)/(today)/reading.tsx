@@ -142,7 +142,6 @@ export default function ReadingScreen() {
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
-  const advanceDay = useUnfoldStore((s) => s.advanceDay);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
@@ -728,19 +727,7 @@ export default function ReadingScreen() {
       AccessibilityInfo.announceForAccessibility(announcement);
 
       if (viewingDay < expectedTotal) {
-        advanceDay(currentDevotionalId);
         refreshDailyReminder();
-
-        // Progressive mode: fire-and-forget server-side generation for the next day
-        if (currentDevotional?.generationMode === 'progressive') {
-          submitGenerationJob({
-            devotionalId: currentDevotionalId,
-            dayNumber: viewingDay + 1,
-            jobType: 'day',
-          }).catch((err) => {
-            console.warn('[day-complete] Failed to submit next-day server job:', err);
-          });
-        }
       }
 
       // Record streak read & sync widgets
@@ -782,7 +769,7 @@ export default function ReadingScreen() {
         }
       }
     }
-  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
