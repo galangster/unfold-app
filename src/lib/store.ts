@@ -234,6 +234,8 @@ export interface Devotional {
   generationMode: 'batch' | 'progressive';
   // Story deduplication
   usedStoryIds?: string[];
+  // Calendar-based day progression anchor
+  seriesStartDate?: string; // ISO timestamp — set when day 1 is generated
   // Sync fields
   updatedAt?: string; // ISO timestamp
 }

@@ -1814,6 +1814,7 @@ export function createDevotionalFromGenerated(
     currentDay: 1,
     days: generated.days,
     createdAt: new Date().toISOString(),
+    seriesStartDate: new Date().toISOString(),
     userContext: {
       name: context.name,
       aboutMe: context.aboutMe,
