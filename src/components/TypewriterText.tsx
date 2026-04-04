@@ -6,6 +6,8 @@ import Animated, {
   withTiming,
   withSpring,
   withDelay,
+  withRepeat,
+  withSequence,
   Easing,
   cancelAnimation,
   interpolateColor,
@@ -28,6 +30,10 @@ interface TypewriterTextProps {
   lastWordColor?: string;
   /** Extra pause in ms before the last word (default 0) */
   lastWordPause?: number;
+  /** Highlight a specific word with this color (stays colored, doesn't fade) */
+  highlightWord?: string;
+  /** Color for the highlighted word */
+  highlightColor?: string;
 }
 
 // ─── Magical character that animates on mount ──────────────────────
@@ -37,17 +43,20 @@ const MagicalChar = React.memo(({
   textColor,
   style,
   isWordStart,
+  shimmer,
 }: {
   char: string;
   accentColor: string;
   textColor: string;
   style?: TextStyle;
   isWordStart: boolean;
+  shimmer?: boolean;
 }) => {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(6);
   const scale = useSharedValue(0.85);
   const colorProgress = useSharedValue(0);
+  const shimmerOpacity = useSharedValue(1);
 
   useEffect(() => {
     Haptics.selectionAsync();
@@ -75,16 +84,32 @@ const MagicalChar = React.memo(({
       withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }),
     );
 
+    // Shimmer — gentle brightness pulse after appearing
+    if (shimmer) {
+      shimmerOpacity.value = withDelay(
+        800,
+        withRepeat(
+          withSequence(
+            withTiming(0.6, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+            withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          ),
+          -1,
+          false,
+        ),
+      );
+    }
+
     return () => {
       cancelAnimation(opacity);
       cancelAnimation(translateY);
       cancelAnimation(scale);
       cancelAnimation(colorProgress);
+      cancelAnimation(shimmerOpacity);
     };
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
+    opacity: shimmer ? opacity.value * shimmerOpacity.value : opacity.value,
     transform: [{ translateY: translateY.value }, { scale: scale.value }],
     color: interpolateColor(
       colorProgress.value,
@@ -119,6 +144,8 @@ export function TypewriterText({
   style,
   lastWordColor,
   lastWordPause = 0,
+  highlightWord,
+  highlightColor,
 }: TypewriterTextProps) {
   const { colors } = useTheme();
   const normalizedText = useMemo(() => text.replace(/\s+/g, ' ').trim(), [text]);
@@ -251,6 +278,10 @@ export function TypewriterText({
 
         // Check if this word is the last word (stays gold)
         const isLastWord = lastWordColor && lastWordStart >= 0 && wordStart >= lastWordStart;
+        // Check if this word matches the highlight word
+        const isHighlighted = highlightWord && highlightColor && segment.toLowerCase().includes(highlightWord.toLowerCase());
+
+        const wordColor = isHighlighted ? highlightColor : isLastWord ? lastWordColor : textColor;
 
         return (
           <View key={`w-${wordStart}`} style={{ flexDirection: 'row' }}>
@@ -259,9 +290,10 @@ export function TypewriterText({
                 key={`c-${wordStart + charIdx}`}
                 char={char}
                 accentColor={colors.accent}
-                textColor={isLastWord ? lastWordColor : textColor}
+                textColor={wordColor || textColor}
                 style={style}
                 isWordStart={charIdx === 0}
+                shimmer={!!isHighlighted}
               />
             ))}
           </View>

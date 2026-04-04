@@ -340,7 +340,13 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
       const sizeScale = (seed.size / SPRITE_SIZE) * breathe * _intensity;
 
       const tx = px - HALF_SPRITE * sizeScale;
-      const ty = py + driftOffset.value - HALF_SPRITE * sizeScale;
+      // Apply drift + wrap vertically so particles reappear at bottom when drifting off top
+      let finalY = py + driftOffset.value;
+      if (driftOffset.value !== 0) {
+        const totalH = h + 80; // include bleed
+        finalY = ((finalY % totalH) + totalH) % totalH - 40; // wrap with bleed margin
+      }
+      const ty = finalY - HALF_SPRITE * sizeScale;
 
       return Skia.RSXform(sizeScale, 0, tx, ty);
     });

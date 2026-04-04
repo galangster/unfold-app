@@ -516,9 +516,14 @@ export default function OnboardingScreen() {
   // Drive particle transitions when entering screens
   useEffect(() => {
     if (currentStepId === 'unfoldIntro') {
-      // Screen 3: frozen particles begin rising upward
-      chaosSpeed.value = withTiming(0.4, { duration: 800, easing: Easing.out(Easing.cubic) });
-      chaosDrift.value = withTiming(-1.5, { duration: 1200, easing: Easing.out(Easing.cubic) });
+      // Screen 3: wait a beat, then gently wake particles and drift upward
+      // Delay prevents the visual "jump" at transition
+      setTimeout(() => {
+        chaosSpeed.value = withTiming(0.5, { duration: 4000, easing: Easing.out(Easing.quad) });
+      }, 600);
+      setTimeout(() => {
+        chaosDrift.value = withTiming(-2.5, { duration: 5000, easing: Easing.out(Easing.quad) });
+      }, 1200);
     } else if (currentStepId === 'hook') {
       // Reset everything for Screen 1
       chaosSpeed.value = 1;
@@ -1308,23 +1313,6 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
-          {/* Sign in link — bottom */}
-          <Animated.View
-            entering={FadeIn.delay(1000).duration(300)}
-            style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
-          >
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } });
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
-                Already have an account? <Text style={{ textDecorationLine: 'underline' }}>Sign in</Text>
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
         </TouchableOpacity>
       );
     }
@@ -1347,6 +1335,8 @@ export default function OnboardingScreen() {
               style={{ fontSize: 32, lineHeight: 42, color: colors.text }}
               charDelay={35}
               delay={400}
+              highlightWord="Unfold"
+              highlightColor={colors.accent}
               onComplete={() => setScreenReady(true)}
             />
 
@@ -1359,23 +1349,6 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
-          {/* Sign in link — bottom */}
-          <Animated.View
-            entering={FadeIn.delay(1000).duration(300)}
-            style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
-          >
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } });
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
-                Already have an account? <Text style={{ textDecorationLine: 'underline' }}>Sign in</Text>
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
         </TouchableOpacity>
       );
     }

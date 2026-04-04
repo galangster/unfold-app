@@ -294,6 +294,19 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
       <View style={styles.content}>
+        {/* Close button */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.dismiss();
+          }}
+          activeOpacity={0.7}
+          style={{ position: 'absolute', top: Spacing['2'], right: Spacing['4'], zIndex: 10, padding: Spacing['2'] }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>Close</Text>
+        </TouchableOpacity>
+
         {/* Top spacer — pushes header to ~30% from top */}
         <View style={{ flex: 0.35 }} />
 
