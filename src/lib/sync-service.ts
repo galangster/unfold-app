@@ -290,7 +290,10 @@ class SyncService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ changes }),
+        body: JSON.stringify({
+          changes,
+          deviceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
       });
 
       if (!res.ok) {
