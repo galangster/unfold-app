@@ -67,7 +67,6 @@ export interface ComputeInput {
   currentDevotional: Devotional | null;
   currentDayData: DevotionalDay | null;
   hasReadToday: boolean;
-  isCatchUp: boolean;
   dayLabel: DayLabel;
   isJourneyComplete: boolean;
   isPreparing: boolean;
@@ -101,7 +100,6 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     currentDevotional,
     currentDayData,
     hasReadToday,
-    isCatchUp,
     dayLabel,
     isJourneyComplete,
     isPreparing,
@@ -140,9 +138,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   }
 
   // 4. Today's reading done but series not complete — locked until tomorrow
-  //    UNLESS the user is catching up on an overdue day, in which case the
-  //    current content is available now (don't lock them out of today's reading).
-  if (hasReadToday && !currentDayData.isRead && !isCatchUp) {
+  if (hasReadToday && !currentDayData.isRead) {
     return {
       type: 'tomorrow-locked',
       dayData: currentDayData,

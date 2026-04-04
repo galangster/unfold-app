@@ -37,7 +37,6 @@ const baseInput: ComputeInput = {
   currentDevotional: makeDevotional(),
   currentDayData: makeDayData(),
   hasReadToday: false,
-  isCatchUp: false,
   dayLabel: 'Today',
   isJourneyComplete: false,
   isPreparing: false,
@@ -209,11 +208,10 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('reveal-ready');
   });
 
-  it('returns reveal-ready (not tomorrow-locked) when catching up on missed days', () => {
+  it('returns reveal-ready when day is unrevealed (server controls day pacing)', () => {
     const state = computeDevotionalState({
       ...baseInput,
       hasReadToday: true,
-      isCatchUp: true,
       currentDayData: makeDayData({ dayNumber: 3, isRead: false, isRevealed: false }),
       daysCompleted: 2,
     });

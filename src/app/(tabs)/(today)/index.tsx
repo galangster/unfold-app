@@ -637,25 +637,11 @@ export default function HomeScreen() {
     timeAgo: formatResumeRelativeTime(resumeContext.touchedAt),
   } : undefined;
 
-  // Detect catch-up: user read an overdue day today (content generated before today).
-  // When catching up, the next day should NOT be locked as "tomorrow".
-  const isCatchUp = useMemo(() => {
-    if (!hasReadToday || !currentDevotional) return false;
-    const todayStr = new Date().toDateString();
-    // Find the day(s) the user read today
-    const readToday = (currentDevotional.days ?? []).filter(
-      d => d.isRead && d.readAt && new Date(d.readAt).toDateString() === todayStr
-    );
-    // If any day read today was generated on a different (earlier) date, user is catching up
-    return readToday.some(d => d.generatedAt && new Date(d.generatedAt).toDateString() !== todayStr);
-  }, [hasReadToday, currentDevotional, devotionals]);
-
   // Compute devotional card state
   const devotionalState = computeDevotionalState({
     currentDevotional: currentDevotional ?? null,
     currentDayData,
     hasReadToday,
-    isCatchUp,
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
     isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional)),
