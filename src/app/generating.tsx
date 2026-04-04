@@ -387,6 +387,7 @@ export default function GeneratingScreen() {
         currentDay: 1,
         days: [day1],
         createdAt: new Date().toISOString(),
+        seriesStartDate: new Date().toISOString(),
         userContext: {
           name: user?.name ?? '',
           aboutMe: user?.aboutMe ?? '',
