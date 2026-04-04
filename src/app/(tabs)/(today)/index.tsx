@@ -399,9 +399,11 @@ export default function HomeScreen() {
 
     const todayStr = new Date().toDateString();
 
-    // Case 1: Current day already read today → previewing tomorrow's content
+    // Case 1: Current day already read today — it's today's completed reading.
+    // (In the old system this returned 'Tomorrow' because currentDay advanced immediately.
+    // Now currentDay stays put until the server cron advances it overnight.)
     if (dayData.isRead && dayData.readAt && new Date(dayData.readAt).toDateString() === todayStr) {
-      return 'Tomorrow';
+      return 'Today';
     }
 
     // Case 2: Current day NOT read — check if it's overdue
