@@ -30,8 +30,6 @@ import { submitGenerationJob, pollJobStatus, retryJob } from '@/lib/generation-a
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
-  sendDevotionalReadyNotification,
-  sendDay1ReadyNotification,
 } from '@/lib/notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -245,18 +243,13 @@ export default function GeneratingScreen() {
   const [wasInBackground, setWasInBackground] = useState(false);
   const [pendingNotification, setPendingNotification] = useState<{ title: string } | null>(null);
 
+  // Local notifications removed — server push handles delivery.
+  // Clear pending state if generation completes.
   useEffect(() => {
     if (pendingNotification && wasInBackground) {
-      sendDevotionalReadyNotification(pendingNotification.title);
       setPendingNotification(null);
     }
   }, [pendingNotification, wasInBackground]);
-
-  useEffect(() => {
-    if (isComplete && currentSeriesTitle) {
-      sendDay1ReadyNotification(currentSeriesTitle);
-    }
-  }, [isComplete, currentSeriesTitle]);
 
   // ========== AppState: resume polling on foreground ==========
   useEffect(() => {

@@ -127,10 +127,13 @@ export function setupNotificationListeners(): () => void {
       logger.log('[push] Notification tapped, data:', data);
 
       if (data?.type === 'devotional_ready') {
-        const { devotionalId, dayNumber } = data as {
+        const { devotionalId, dayNumber, dayTitle, seriesTitle, totalDays } = data as {
           type: string;
           devotionalId?: string;
           dayNumber?: number;
+          dayTitle?: string;
+          seriesTitle?: string;
+          totalDays?: number;
         };
 
         if (devotionalId && dayNumber != null) {
@@ -139,6 +142,9 @@ export function setupNotificationListeners(): () => void {
             params: {
               devotionalId: String(devotionalId),
               dayNumber: String(dayNumber),
+              seriesTitle: seriesTitle ?? '',
+              dayTitle: dayTitle ?? '',
+              totalDays: String(totalDays ?? 0),
             },
           });
         }
