@@ -244,10 +244,24 @@ export default function HomeScreen() {
 
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).
+  // Never show "preparing" for days beyond today's calendar position — those are
+  // tomorrow's content and shouldn't trigger auto-generation.
   const isPreparingCurrentDay = useMemo(() => {
     if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return false;
     const dayExists = (currentDevotional.days ?? []).some(d => d.dayNumber === currentDevotional.currentDay);
-    return !dayExists;
+    if (dayExists) return false;
+
+    // Calendar gate: don't prepare days beyond today's position
+    if (currentDevotional.seriesStartDate) {
+      const startDate = new Date(currentDevotional.seriesStartDate);
+      const now = new Date();
+      const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const calendarDay = Math.floor((today.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+      if (currentDevotional.currentDay > calendarDay) return false;
+    }
+
+    return true;
   }, [currentDevotional]);
 
   // Content discovery flow: check for server-generated content before submitting a new job.
