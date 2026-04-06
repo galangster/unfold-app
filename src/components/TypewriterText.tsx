@@ -213,9 +213,8 @@ export function TypewriterText({
     };
   }, [normalizedText, delay, charDelay, totalChars]);
 
-  // Build visible segments
-  const visibleText = normalizedText.slice(0, visibleCount);
-  const segments = visibleText.split(/(\s+)/);
+  // Split full text into word/space segments once
+  const segments = normalizedText.split(/(\s+)/);
 
   // Determine text color from style or theme
   const textColor = (style?.color as string) || colors.text;
@@ -231,27 +230,14 @@ export function TypewriterText({
 
   return (
     <View>
-      {/* Invisible full text in normal flow to reserve layout height */}
-      <Animated.Text
-        style={[
-          {
-            fontFamily: FontFamily.display,
-            fontSize: 28,
-            color: 'transparent',
-          },
-          style,
-          { color: 'transparent' },
-        ]}
-      >
-        {normalizedText}
-      </Animated.Text>
-
-      {/* Visible animated characters — overlaid on the reserved space */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
+      {/* All characters rendered inline with flexWrap.
+          Unrevealed chars are invisible placeholders that reserve width,
+          preventing words from reflowing as characters appear. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
       {segments.map((segment, segIndex) => {
         if (!segment) return null;
 
-        // Space segments
+        // Space segments — only show if at least one char on each side is visible
         if (/^\s+$/.test(segment)) {
           const idx = globalIdx;
           globalIdx += segment.length;
@@ -262,9 +248,10 @@ export function TypewriterText({
                 {
                   fontFamily: FontFamily.display,
                   fontSize: 28,
-                  color: textColor,
+                  color: idx < visibleCount ? textColor : 'transparent',
                 },
                 style,
+                idx >= visibleCount ? { color: 'transparent' } : undefined,
               ]}
             >
               {segment}
@@ -272,7 +259,7 @@ export function TypewriterText({
           );
         }
 
-        // Word segments — each char is a MagicalChar
+        // Word segments — always render all chars to reserve full word width
         const wordStart = globalIdx;
         globalIdx += segment.length;
 
@@ -285,17 +272,40 @@ export function TypewriterText({
 
         return (
           <View key={`w-${wordStart}`} style={{ flexDirection: 'row' }}>
-            {segment.split('').map((char, charIdx) => (
-              <MagicalChar
-                key={`c-${wordStart + charIdx}`}
-                char={char}
-                accentColor={colors.accent}
-                textColor={wordColor || textColor}
-                style={style}
-                isWordStart={charIdx === 0}
-                shimmer={!!isHighlighted}
-              />
-            ))}
+            {segment.split('').map((char, charIdx) => {
+              const charGlobalIdx = wordStart + charIdx;
+              if (charGlobalIdx < visibleCount) {
+                // Revealed — animate in
+                return (
+                  <MagicalChar
+                    key={`c-${charGlobalIdx}`}
+                    char={char}
+                    accentColor={colors.accent}
+                    textColor={wordColor || textColor}
+                    style={style}
+                    isWordStart={charIdx === 0}
+                    shimmer={!!isHighlighted}
+                  />
+                );
+              }
+              // Unrevealed — invisible placeholder reserving width
+              return (
+                <Animated.Text
+                  key={`c-${charGlobalIdx}`}
+                  style={[
+                    {
+                      fontFamily: FontFamily.display,
+                      fontSize: 28,
+                      color: 'transparent',
+                    },
+                    style,
+                    { color: 'transparent' },
+                  ]}
+                >
+                  {char}
+                </Animated.Text>
+              );
+            })}
           </View>
         );
       })}

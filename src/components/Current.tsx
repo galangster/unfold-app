@@ -344,7 +344,8 @@ export function Current({ type, color, intensity = 1, centerX, centerY, scale = 
       let finalY = py + driftOffset.value;
       if (driftOffset.value !== 0) {
         const totalH = h + 80; // include bleed
-        finalY = ((finalY % totalH) + totalH) % totalH - 40; // wrap with bleed margin
+        // Offset before modulo so wrapping is identity for on-screen positions
+        finalY = (((finalY + 40) % totalH) + totalH) % totalH - 40;
       }
       const ty = finalY - HALF_SPRITE * sizeScale;
 
