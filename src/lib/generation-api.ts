@@ -59,6 +59,7 @@ export async function submitGenerationJob(params: {
     aboutMe: string;
     situation: string;
     emotion: string;
+    faith: string;
     seeking: string;
     themeCategory: string;
     devotionalType: string;

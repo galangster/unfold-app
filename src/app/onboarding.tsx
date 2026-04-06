@@ -15,7 +15,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -59,7 +59,6 @@ import { alpha } from '@/components/ui';
 import { EmberParticles } from '@/components/EmberParticles';
 import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
-import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
 
@@ -260,7 +259,9 @@ const ALL_STEPS = [
   { id: 'currentSituation', question: "What's been on your\u00A0heart\u00A0lately?", subtext: "The thing that's there when the noise\u00A0quiets\u00A0down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   // DISCOVERY STEP 2: Going deeper - What's underneath? (contextual based on study type)
   { id: 'emotionalState', question: "And what's underneath\u00A0that?", subtext: "There's usually something deeper. Take\u00A0your\u00A0time.", type: 'multiline' as const, placeholder: "When I sit with it, I realize...", adaptive: true, skipIfHasValue: false, hasVariations: true },
-  // DISCOVERY STEP 3: The longing - What would breakthrough look like? (contextual based on study type)
+  // DISCOVERY STEP 3: Faith bridge - How is this showing up in your faith? (adaptive)
+  { id: 'faithImpact', question: "How has this been showing up in your walk with\u00A0God?", subtext: "No right answers here. Just\u00A0honesty.", type: 'multiline' as const, placeholder: "In my faith, this has been...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  // DISCOVERY STEP 4: The longing - What would breakthrough look like? (contextual based on study type)
   { id: 'spiritualSeeking', question: "What would feel like a breath of fresh air\u00A0right\u00A0now?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "Each day is crafted to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
@@ -273,21 +274,26 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'faithImpact' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
 // Default discovery chips — used as fallback when AI chips aren't available
 const DISCOVERY_CHIPS: Record<string, string[]> = {
   currentSituation: [
-    'Anxious', 'Grateful', 'Searching', 'Tired', 'Hopeful',
-    'Overwhelmed', 'Growing', 'Waiting', 'Restless', 'At peace',
-    'In transition', 'Grieving',
+    'A relationship', 'My future', 'Work stress', 'A loss',
+    'Big changes', 'Starting over', 'Feeling stuck', 'Health',
+    'Loneliness', 'Family', 'A decision', 'Letting go',
+    'Faith doubts', 'Finding purpose', 'Need rest', 'Forgiveness',
   ],
   emotionalState: [
     'Fear', 'Loneliness', 'Doubt', 'Grief', 'Anger',
     'Shame', 'Restlessness', 'Yearning', 'Emptiness',
     'Burnout', 'Confusion', 'Numbness',
+  ],
+  faithImpact: [
+    'Distant from God', 'Praying but not hearing', 'Avoiding it', 'Bringing it to Him',
+    'Questioning everything', 'Trusting anyway', 'Going through the motions', 'Wrestling',
   ],
   spiritualSeeking: [
     'Peace', 'Clarity', 'Direction', 'Healing', 'Purpose',
@@ -366,6 +372,7 @@ interface OnboardingData {
   selectedStudySubject?: string;
   currentSituation: string;
   emotionalState: string;
+  faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
@@ -424,6 +431,7 @@ export default function OnboardingScreen() {
     selectedStudySubject: undefined,
     currentSituation: '',
     emotionalState: '',
+    faithImpact: '',
     spiritualSeeking: '',
     readingDuration: 15,
     devotionalLength: 7,
@@ -455,8 +463,6 @@ export default function OnboardingScreen() {
   const trialPurchaseMutation = useMutation({
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
   });
-
-  const { isSignedIn } = useClerkAuth();
 
   // Premium gating state for duration/length options in onboarding
   const [premiumGateFeature, setPremiumGateFeature] = useState<'devotionalLength' | 'readingDuration' | null>(null);
@@ -497,7 +503,7 @@ export default function OnboardingScreen() {
     const closing = `Over the next ${daysText}, each devotional will be written for exactly where you\u00A0are.`;
 
     return { opening, verse: scripture.text, verseRef: scripture.ref, closing };
-  }, [data?.selectedThemes, data?.emotionalState, data?.currentSituation, data?.spiritualSeeking, data?.devotionalLength]);
+  }, [data?.selectedThemes, data?.emotionalState, data?.currentSituation, data?.faithImpact, data?.spiritualSeeking, data?.devotionalLength]);
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('hook');
@@ -533,7 +539,6 @@ export default function OnboardingScreen() {
 
   // Track pending auth data to merge into completeOnboarding's setUser/updateUser call.
   const pendingAuthDataRef = useRef<Partial<UserProfile> | null>(null);
-  const awaitingSignInReturn = useRef(false);
 
   // Track if user is in theme sub-selection mode
   const [themeSelectionMode, setThemeSelectionMode] = useState<'none' | 'theme' | 'type'>('none');
@@ -557,6 +562,7 @@ export default function OnboardingScreen() {
   const [selectedChips, setSelectedChips] = useState<Record<string, string[]>>({
     currentSituation: [],
     emotionalState: [],
+    faithImpact: [],
     spiritualSeeking: [],
   });
 
@@ -628,6 +634,7 @@ export default function OnboardingScreen() {
         selectedType: data.selectedType,
         emotionalState: data.emotionalState,
         currentSituation: data.currentSituation,
+        faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
         devotionalLength: data.devotionalLength,
         name: data.name,
@@ -667,8 +674,8 @@ export default function OnboardingScreen() {
         }
       }
       
-      // Skip AI consent if already consented
-      if (step.id === 'aiConsent' && hasConsentedToAI) {
+      // Always skip AI consent screen — privacy info is available in settings
+      if (step.id === 'aiConsent') {
         return false;
       }
 
@@ -807,6 +814,7 @@ export default function OnboardingScreen() {
         aboutMe: data.aboutMe,
         currentSituation: data.currentSituation,
         emotionalState: data.emotionalState,
+        faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
         readingDuration: data.readingDuration,
         devotionalLength: data.devotionalLength,
@@ -827,6 +835,7 @@ export default function OnboardingScreen() {
         personaTraits: [],
         currentSituation: data.currentSituation,
         emotionalState: data.emotionalState,
+        faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
         readingDuration: data.readingDuration,
         devotionalLength: data.devotionalLength,
@@ -857,16 +866,8 @@ export default function OnboardingScreen() {
   }, [router, saveOnboardingData]);
 
   const completeOnboarding = useCallback(() => {
-    if (!isSignedIn) {
-      awaitingSignInReturn.current = true;
-      router.push({
-        pathname: '/(onboarding)/sign-in',
-        params: { source: 'onboarding' },
-      });
-      return;
-    }
     proceedToGeneration();
-  }, [isSignedIn, proceedToGeneration, router]);
+  }, [proceedToGeneration]);
 
   // Advance to next step
   const advanceToNextStep = useCallback(() => {
@@ -894,18 +895,6 @@ export default function OnboardingScreen() {
     inputOpacity.value = 0;
   }, [STEPS, currentStepId, inputOpacity, completeOnboarding]);
 
-  // Auto-advance when user returns from sign-in screen (only if signed in)
-  useFocusEffect(
-    useCallback(() => {
-      if (awaitingSignInReturn.current) {
-        awaitingSignInReturn.current = false;
-        if (isSignedIn) {
-          proceedToGeneration();
-        }
-        // If not signed in (user hit back), stay on current step
-      }
-    }, [isSignedIn, proceedToGeneration])
-  );
 
   // Handle next button press
   const handleNext = () => {
@@ -973,7 +962,7 @@ export default function OnboardingScreen() {
     // Merge discovery chips into the text value before advancing
     // Also compute the merged value synchronously for adaptive question generation
     let mergedCurrentAnswer: string | undefined;
-    const discoveryStepIds = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
+    const discoveryStepIds = ['currentSituation', 'emotionalState', 'faithImpact', 'spiritualSeeking'];
     if (discoveryStepIds.includes(currentStepId)) {
       const chips = selectedChips[currentStepId] ?? [];
       const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
@@ -1002,7 +991,8 @@ export default function OnboardingScreen() {
     // If leaving an adaptive discovery step, generate the next adaptive question
     const adaptiveNextMap: Record<string, string> = {
       currentSituation: 'emotionalState',
-      emotionalState: 'spiritualSeeking',
+      emotionalState: 'faithImpact',
+      faithImpact: 'spiritualSeeking',
     };
     const nextAdaptiveStepId = adaptiveNextMap[currentStepId];
     if (nextAdaptiveStepId && baseStep?.adaptive) {
@@ -1133,7 +1123,7 @@ export default function OnboardingScreen() {
   // since setData is async and data[currentStepId] won't reflect the merge yet
   const generateNextAdaptiveQuestion = async (nextStepId: string, currentAnswerOverride?: string) => {
     // Collect previous Q&A from all answered discovery steps
-    const discoverySteps = ['currentSituation', 'emotionalState', 'spiritualSeeking'];
+    const discoverySteps = ['currentSituation', 'emotionalState', 'faithImpact', 'spiritualSeeking'];
     const previousAnswers: { question: string; answer: string }[] = [];
 
     // The step immediately before nextStepId is the one we're leaving
@@ -1159,9 +1149,10 @@ export default function OnboardingScreen() {
     if (previousAnswers.length === 0) return; // No context to adapt from
 
     // Determine step position for the prompt
-    const positionMap: Record<string, 'opening' | 'depth' | 'longing'> = {
+    const positionMap: Record<string, 'opening' | 'depth' | 'bridge' | 'longing'> = {
       currentSituation: 'opening',
       emotionalState: 'depth',
+      faithImpact: 'bridge',
       spiritualSeeking: 'longing',
     };
     const stepPosition = positionMap[nextStepId] ?? 'depth';
@@ -1246,23 +1237,8 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
-          {/* Sign in link — bottom of screen */}
-          <Animated.View
-            entering={FadeIn.delay(3500).duration(300)}
-            style={{ paddingBottom: Spacing['8'], alignItems: 'center' }}
-          >
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'onboarding' } });
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted }}>
-                Already have an account? <Text style={{ textDecorationLine: 'underline' }}>Sign in</Text>
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* Bottom spacer */}
+          <View style={{ paddingBottom: Spacing['8'] }} />
         </TouchableOpacity>
       );
     }
@@ -1890,8 +1866,8 @@ export default function OnboardingScreen() {
                 fontFamily: FontFamily.body,
                 fontSize: 17,
                 color: colors.text,
-                lineHeight: 26,
                 textAlignVertical: 'top',
+                paddingTop: 0,
                 minHeight: isDiscoveryStep ? 60 : undefined,
               }}
               multiline
@@ -2334,7 +2310,7 @@ export default function OnboardingScreen() {
           </View>
 
           {/* Bottom Continue button */}
-          <Animated.View entering={FadeIn.delay(1800).duration(600)} style={{ paddingBottom: Spacing['4'] }}>
+          <Animated.View entering={FadeIn.delay(1800).duration(600)} style={{ paddingTop: Spacing['6'], paddingBottom: Spacing['4'] }}>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleNext}

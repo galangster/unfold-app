@@ -130,6 +130,7 @@ export interface UserProfile {
   personaTraits: string[];
   currentSituation: string;
   emotionalState: string;
+  faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
@@ -223,6 +224,7 @@ export interface Devotional {
     aboutMe: string;
     currentSituation: string;
     emotionalState: string;
+    faithImpact?: string;
   };
   // Theme and type categorization
   themeCategory?: ThemeCategory;
@@ -507,6 +509,7 @@ interface UnfoldState {
   updateDevotionalDays: (devotionalId: string, days: DevotionalDay[], title?: string) => void;
   setCurrentDevotional: (id: string) => void;
   archiveCurrentDevotional: () => void;
+  hasEverCreatedDevotional: boolean;
   isReturningUser: () => boolean;
   markDayAsRead: (devotionalId: string, dayNumber: number) => void;
   markDayAsRevealed: (devotionalId: string, dayNumber: number) => void;
@@ -717,6 +720,7 @@ const initialState = {
   user: null,
   devotionals: [],
   currentDevotionalId: null,
+  hasEverCreatedDevotional: false,
   journalEntries: [],
   usedScriptures: [] as UsedScripture[],
   highlights: [] as Highlight[],
@@ -800,11 +804,12 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => {
           // Prevent duplicate entries with the same ID
           if (state.devotionals.some((d) => d.id === devotional.id)) {
-            return { currentDevotionalId: devotional.id };
+            return { currentDevotionalId: devotional.id, hasEverCreatedDevotional: true };
           }
           return {
             devotionals: [{ ...devotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
             currentDevotionalId: devotional.id,
+            hasEverCreatedDevotional: true,
           };
         }),
 
@@ -871,7 +876,7 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       setCurrentDevotional: (id) => set({ currentDevotionalId: id }),
       archiveCurrentDevotional: () => set({ currentDevotionalId: null }),
-      isReturningUser: () => get().devotionals.length > 0,
+      isReturningUser: () => get().hasEverCreatedDevotional || get().devotionals.length > 0,
 
       markDayAsRead: (devotionalId, dayNumber) =>
         set((state) => {
@@ -1719,7 +1724,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 33, // v33: Backfill sync IDs on usedScriptures + bibleReadingHistory
+      version: 35, // v35: Add hasEverCreatedDevotional flag for returning user detection
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2192,6 +2197,30 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v32→33: Backfilled sync IDs on usedScriptures + bibleReadingHistory');
           } catch (err) {
             console.error('[store] Migration v32→33 failed:', err);
+          }
+        }
+
+        // Migration from version 33 to 34: Add faithImpact field
+        if (version < 34) {
+          try {
+            const user = (state as any).user;
+            if (user && user.faithImpact === undefined) {
+              user.faithImpact = '';
+            }
+            logger.log('[store] Migration v33→34: Added faithImpact field');
+          } catch (err) {
+            console.error('[store] Migration v33→34 failed:', err);
+          }
+        }
+
+        // Migration from version 34 to 35: Add hasEverCreatedDevotional flag
+        if (version < 35) {
+          try {
+            const devos = (state as any).devotionals ?? [];
+            (state as any).hasEverCreatedDevotional = devos.length > 0;
+            logger.log('[store] Migration v34→35: Added hasEverCreatedDevotional flag');
+          } catch (err) {
+            console.error('[store] Migration v34→35 failed:', err);
           }
         }
 

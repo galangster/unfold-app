@@ -18,7 +18,7 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight } from '@/lib/store';
+import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, HighlightColor } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
 import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
@@ -31,6 +31,7 @@ interface DevotionalContentProps {
   isBookmarked?: boolean;
   onToggleBookmark?: () => void;
   onQuoteSelected?: (quote: { text: string; context: string }) => void;
+  onHighlightRemoved?: (event: { text: string; color: HighlightColor; context: string }) => void;
   existingHighlights?: Highlight[];
   onScriptureTap?: (reference: string) => void;
   devotionalId?: string;
@@ -79,6 +80,7 @@ export function DevotionalContent({
   isBookmarked,
   onToggleBookmark,
   onQuoteSelected,
+  onHighlightRemoved,
   existingHighlights,
   onScriptureTap,
   devotionalId,
@@ -257,6 +259,7 @@ export function DevotionalContent({
         day={day}
         fontSize={fontSize}
         onQuoteSelected={onQuoteSelected}
+        onHighlightRemoved={onHighlightRemoved}
         existingHighlights={existingHighlights}
         onScriptureTap={onScriptureTap}
         devotionalId={devotionalId}

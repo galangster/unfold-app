@@ -57,7 +57,7 @@ export default function RevealScreen() {
 
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
-  const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
+
 
   // ─── Entrance stagger state ────────────────────────────────────
   const eyebrowOpacity = useSharedValue(0);
@@ -138,19 +138,13 @@ export default function RevealScreen() {
     }
     if (devotionalId) {
       setCurrentDevotional(devotionalId);
-      // Set resume context so the home screen auto-navigates to reading
-      // without a visible flash (avoids the tab hierarchy mounting home first)
-      setResumeContext({
-        route: 'reading',
-        devotionalId,
-        dayNumber: dayNumber ? Number(dayNumber) : 1,
-        dayTitle: dayTitle || undefined,
-        touchedAt: new Date().toISOString(),
-      });
     }
-    // Navigate to the home tab — it will detect resumeContext and push to reading
-    router.replace('/(tabs)/(today)');
-  }, [devotionalId, dayNumber, dayTitle, router, markDayAsRevealed, setCurrentDevotional, setResumeContext]);
+    // Navigate directly to reading — skips the home screen entirely
+    router.replace({
+      pathname: '/(tabs)/(today)/reading',
+      params: { dayNumber: String(dayNumber ?? '1') },
+    });
+  }, [devotionalId, dayNumber, router, markDayAsRevealed, setCurrentDevotional]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();

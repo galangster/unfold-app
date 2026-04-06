@@ -2520,90 +2520,143 @@ export default function SettingsScreen() {
                 marginBottom: Spacing['6'],
               }}
             >
-              {/* Signed-in user info */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: Spacing['4'],
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: alpha(colors.accent, 0.12),
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <UserCircleIcon size={20} color={colors.accent} weight="light" />
-                </View>
-                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                  <Text
+              {isAuthenticated ? (
+                <>
+                  {/* Signed-in user info */}
+                  <View
                     style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 15,
-                      color: colors.text,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: Spacing['4'],
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
                     }}
                   >
-                    {email ?? 'Signed in'}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.xs,
-                      color: colors.textMuted,
-                      marginTop: Spacing['0.5'],
-                    }}
-                  >
-                    {authProvider === 'apple' ? 'Apple' : authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : 'Signed in'}
-                  </Text>
-                </View>
-              </View>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        backgroundColor: alpha(colors.accent, 0.12),
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <UserCircleIcon size={20} color={colors.accent} weight="light" />
+                    </View>
+                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.ui,
+                          fontSize: 15,
+                          color: colors.text,
+                        }}
+                      >
+                        {email ?? 'Signed in'}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.ui,
+                          fontSize: FontSize.xs,
+                          color: colors.textMuted,
+                          marginTop: Spacing['0.5'],
+                        }}
+                      >
+                        {authProvider === 'apple' ? 'Apple' : authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : 'Signed in'}
+                      </Text>
+                    </View>
+                  </View>
 
-              {/* Sign out */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={handleSignOut}
-                disabled={isSigningOut}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: Spacing['4'],
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    backgroundColor: colors.buttonBackground,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  {isSigningOut ? (
-                    <ActivityIndicator size="small" color={colors.textMuted} />
-                  ) : (
-                    <SignOutIcon size={18} color={colors.textMuted} weight="light" />
-                  )}
-                </View>
-                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                  <Text
+                  {/* Sign out */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={handleSignOut}
+                    disabled={isSigningOut}
                     style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 15,
-                      color: colors.text,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: Spacing['4'],
                     }}
                   >
-                    {isSigningOut ? 'Signing out...' : 'Sign out'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                    <View
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundColor: colors.buttonBackground,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      {isSigningOut ? (
+                        <ActivityIndicator size="small" color={colors.textMuted} />
+                      ) : (
+                        <SignOutIcon size={18} color={colors.textMuted} weight="light" />
+                      )}
+                    </View>
+                    <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.ui,
+                          fontSize: 15,
+                          color: colors.text,
+                        }}
+                      >
+                        {isSigningOut ? 'Signing out...' : 'Sign out'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                /* Anonymous user — offer sign-in */
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    router.push({ pathname: '/(onboarding)/sign-in', params: { source: 'settings' } });
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    padding: Spacing['4'],
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: alpha(colors.accent, 0.12),
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <UserCircleIcon size={20} color={colors.accent} weight="light" />
+                  </View>
+                  <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: 15,
+                        color: colors.text,
+                      }}
+                    >
+                      Sign in
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: FontSize.xs,
+                        color: colors.textMuted,
+                        marginTop: Spacing['0.5'],
+                      }}
+                    >
+                      Sync your data across devices
+                    </Text>
+                  </View>
+                  <CaretRightIcon size={16} color={colors.textMuted} weight="light" />
+                </TouchableOpacity>
+              )}
             </View>
           </Animated.View>
 

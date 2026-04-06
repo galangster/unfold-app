@@ -338,110 +338,115 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Messages or empty state — tap to dismiss keyboard */}
-      <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
-        {isEmpty ? (
-            <CompanionEmptyState onSelectStarter={handleSend} />
-          ) : (
-            <>
-              <FlatList
-                ref={listRef}
-                data={invertedMessages}
-                renderItem={renderItem}
-                keyExtractor={keyExtractor}
-                inverted
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
-                keyboardDismissMode="interactive"
-                keyboardShouldPersistTaps="handled"
-                initialNumToRender={15}
-                maxToRenderPerBatch={10}
-                windowSize={11}
-                removeClippedSubviews
-                contentContainerStyle={{
-                  paddingBottom: Spacing['2'],
-                  paddingTop: Spacing['2'],
+      {/* Messages or empty state.
+          Empty state: Pressable wrapper dismisses keyboard on tap.
+          List state: FlatList's keyboardShouldPersistTaps="handled" dismisses keyboard
+          on unhandled taps; wrapping the list in a Pressable breaks the scroll
+          responder after keyboard dismissal and swallows FAB taps. */}
+      {isEmpty ? (
+        <Pressable onPress={Keyboard.dismiss} style={{ flex: 1 }}>
+          <CompanionEmptyState onSelectStarter={handleSend} />
+        </Pressable>
+      ) : (
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={listRef}
+            data={invertedMessages}
+            renderItem={renderItem}
+            keyExtractor={keyExtractor}
+            inverted
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={11}
+            removeClippedSubviews
+            contentContainerStyle={{
+              paddingBottom: Spacing['2'],
+              paddingTop: Spacing['2'],
+            }}
+          />
+
+          {/* Scroll-to-bottom FAB */}
+          {showScrollButton && (
+            <Animated.View
+              style={[
+                {
+                  position: 'absolute',
+                  bottom: 16,
+                  right: 16,
+                },
+                scrollButtonStyle,
+              ]}
+            >
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={scrollToBottom}
+                accessibilityLabel="Scroll to bottom"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: colors.backgroundElevated,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  ...Shadow.sm,
                 }}
-                ListHeaderComponent={
-                  <>
-                    {/* Typing indicator */}
-                    {showTyping && (
-                      <View style={{ paddingVertical: 8 }}>
-                        <TypingIndicator />
-                      </View>
-                    )}
-                    {/* Suggestion chips */}
-                    {showSuggestions && (
-                      <SuggestionChips
-                        suggestions={suggestions}
-                        onSelect={handleChipSelect}
-                        visible
-                      />
-                    )}
-                  </>
-                }
-              />
-
-              {/* Error banner */}
-              {error && (
-                <View
-                  style={{
-                    marginHorizontal: Spacing['4'],
-                    marginBottom: Spacing['2'],
-                    backgroundColor: alpha(colors.error, 0.10),
-                    borderRadius: Radius.md,
-                    padding: Spacing['3'],
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.body,
-                      fontSize: FontSize.sm,
-                      color: colors.error,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {error}
-                  </Text>
-                </View>
-              )}
-
-              {/* Scroll-to-bottom FAB */}
-              {showScrollButton && (
-                <Animated.View
-                  style={[
-                    {
-                      position: 'absolute',
-                      bottom: 16,
-                      right: 16,
-                    },
-                    scrollButtonStyle,
-                  ]}
-                >
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={scrollToBottom}
-                    accessibilityLabel="Scroll to bottom"
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      backgroundColor: colors.backgroundElevated,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      ...Shadow.sm,
-                    }}
-                  >
-                    <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-            </>
+              >
+                <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
+              </TouchableOpacity>
+            </Animated.View>
           )}
-      </Pressable>
+        </View>
+      )}
+
+      {/* Typing indicator — pinned above input (was inside FlatList header; moved
+          out so horizontal chip drags don't interact with the list's pan gesture
+          recognizer, which was triggering keyboardDismissMode="interactive"). */}
+      {!isEmpty && showTyping && (
+        <View style={{ paddingVertical: 8, paddingHorizontal: Spacing['4'] }}>
+          <TypingIndicator />
+        </View>
+      )}
+
+      {/* Suggestion chips — pinned above input, outside FlatList to keep their
+          horizontal scroll isolated from the parent list's pan recognizer. */}
+      {!isEmpty && showSuggestions && (
+        <SuggestionChips
+          suggestions={suggestions}
+          onSelect={handleChipSelect}
+          visible
+        />
+      )}
+
+      {/* Error banner */}
+      {!isEmpty && error && (
+        <View
+          style={{
+            marginHorizontal: Spacing['4'],
+            marginBottom: Spacing['2'],
+            backgroundColor: alpha(colors.error, 0.10),
+            borderRadius: Radius.md,
+            padding: Spacing['3'],
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: FontSize.sm,
+              color: colors.error,
+              textAlign: 'center',
+            }}
+          >
+            {error}
+          </Text>
+        </View>
+      )}
 
       {/* Daily limit indicator for free users */}
       {!isPremium && dailyRemaining <= FREE_COMPANION_DAILY_LIMIT && (

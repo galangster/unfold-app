@@ -60,7 +60,31 @@ export const DEPTH_QUESTIONS = {
   ],
 };
 
-// STEP 3: THE LONGING - "What would breakthrough look like?"
+// STEP 3: THE FAITH BRIDGE - "How is this showing up in your faith?"
+// These questions connect the emotional reality to the user's spiritual life
+export const BRIDGE_QUESTIONS = {
+  faithWalk: [
+    { question: "How has this been showing up in your walk with God?", subtext: "No right answers here. Just honesty." },
+    { question: "Where is God in this for you right now?", subtext: "Close, far, silent, present—all of it counts." },
+    { question: "How has this affected the way you pray?", subtext: "Or whether you pray at all. Both are honest." },
+    { question: "When you bring this to God, what happens?", subtext: "Words, silence, tears, nothing—it all matters." },
+    { question: "Does your faith feel like a help or a weight right now?", subtext: "Sometimes it's both at once." },
+  ],
+  spiritual: [
+    { question: "Where do you sense God in the middle of this?", subtext: "Even if the answer is 'I don't.'" },
+    { question: "What has this done to your trust in God?", subtext: "Strengthened it, shaken it, or something in between." },
+    { question: "How honest have you been with God about this?", subtext: "He can handle the unfiltered version." },
+    { question: "Has this changed the way you see God?", subtext: "Sometimes hard seasons reshape our picture of Him." },
+  ],
+  practice: [
+    { question: "How has this affected your time with God?", subtext: "More of it, less of it, or different." },
+    { question: "What does your faith feel like right now?", subtext: "Alive, dry, fragile, fierce—all are valid." },
+    { question: "Are you running toward God with this or away?", subtext: "Neither is wrong to name." },
+    { question: "What spiritual practice feels most real to you right now?", subtext: "Prayer, silence, worship, journaling, nothing..." },
+  ],
+};
+
+// STEP 4: THE LONGING - "What would breakthrough look like?"
 // These questions help users articulate what they're actually hoping for
 export const LONGING_QUESTIONS = {
   breakthrough: [
@@ -124,6 +148,13 @@ export function getRandomDepthQuestion(variationIndex: number): { question: stri
   return pickRandomFromArray(DEPTH_QUESTIONS[category]);
 }
 
+export function getRandomBridgeQuestion(variationIndex: number): { question: string; subtext: string } {
+  const categories = Object.keys(BRIDGE_QUESTIONS) as (keyof typeof BRIDGE_QUESTIONS)[];
+  const categoryIndex = variationIndex % categories.length;
+  const category = categories[categoryIndex];
+  return pickRandomFromArray(BRIDGE_QUESTIONS[category]);
+}
+
 export function getRandomLongingQuestion(variationIndex: number): { question: string; subtext: string } {
   const categories = Object.keys(LONGING_QUESTIONS) as (keyof typeof LONGING_QUESTIONS)[];
   const categoryIndex = variationIndex % categories.length;
@@ -142,6 +173,7 @@ export function getRandomReadingSubtext(minutes: 5 | 15 | 30): string {
 export function pickRandomVariation(stepId: string, variationIndex: number): { question: string; subtext: string } | null {
   if (stepId === 'currentSituation') return getRandomEntryQuestion(variationIndex);
   if (stepId === 'emotionalState') return getRandomDepthQuestion(variationIndex);
+  if (stepId === 'faithImpact') return getRandomBridgeQuestion(variationIndex);
   if (stepId === 'spiritualSeeking') return getRandomLongingQuestion(variationIndex);
   return null;
 }

@@ -125,12 +125,13 @@ export default function GeneratingScreen() {
   const completeGenerationSession = useUnfoldStore((s) => s.completeGenerationSession);
   const failGenerationSession = useUnfoldStore((s) => s.failGenerationSession);
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
-  // Safety guard: redirect if AI consent is missing
+  // AI consent is implied by using the app — consent screen removed from onboarding.
+  // Auto-set the flag on first generation so persisted state stays consistent.
   useEffect(() => {
     if (!hasConsentedToAI) {
-      router.replace('/onboarding');
+      useUnfoldStore.getState().setHasConsentedToAI(true);
     }
-  }, [hasConsentedToAI, router]);
+  }, [hasConsentedToAI]);
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');
@@ -536,6 +537,7 @@ export default function GeneratingScreen() {
             aboutMe: user.aboutMe,
             situation: user.currentSituation,
             emotion: user.emotionalState,
+            faith: user.faithImpact ?? '',
             seeking: user.spiritualSeeking,
             themeCategory: user.selectedTheme ?? '',
             devotionalType: user.selectedType ?? 'personal',
@@ -656,6 +658,7 @@ export default function GeneratingScreen() {
               aboutMe: user.aboutMe,
               situation: user.currentSituation,
               emotion: user.emotionalState,
+              faith: user.faithImpact ?? '',
               seeking: user.spiritualSeeking,
               themeCategory: user.selectedTheme ?? '',
               devotionalType: user.selectedType ?? 'personal',

@@ -47,9 +47,9 @@ export function BentoGrid() {
             style={[
               styles.box,
               {
-                backgroundColor: Platform.OS === 'ios'
-                  ? alpha(colors.inputBackground, 0.6)
-                  : alpha(colors.inputBackground, 0.85),
+                backgroundColor: isDark
+                  ? (Platform.OS === 'ios' ? 'rgba(245, 240, 235, 0.06)' : 'rgba(245, 240, 235, 0.10)')
+                  : (Platform.OS === 'ios' ? 'rgba(28, 23, 16, 0.04)' : 'rgba(28, 23, 16, 0.08)'),
                 borderColor: colors.border,
               },
             ]}

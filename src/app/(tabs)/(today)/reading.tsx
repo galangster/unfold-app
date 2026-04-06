@@ -149,6 +149,7 @@ export default function ReadingScreen() {
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
   const removeBookmark = useUnfoldStore((s) => s.removeBookmark);
   const addHighlight = useUnfoldStore((s) => s.addHighlight);
+  const removeHighlight = useUnfoldStore((s) => s.removeHighlight);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
@@ -591,6 +592,24 @@ export default function ReadingScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, addHighlight]);
+
+  const handleHighlightRemoved = useCallback((event: { text: string; color: string; context: string }) => {
+    if (!currentDevotionalId) return;
+    // Match by devotional + day + text + color. Context is a tiebreaker when the
+    // same phrase is highlighted twice in different paragraphs (rare but possible).
+    const match = currentDayHighlights.find(
+      (h) =>
+        h.highlightedText === event.text &&
+        h.color === event.color &&
+        (h.contextBefore ? event.context.includes(h.contextBefore.slice(0, 30)) : true),
+    ) ?? currentDayHighlights.find(
+      (h) => h.highlightedText === event.text && h.color === event.color,
+    );
+    if (match) {
+      removeHighlight(match.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [currentDevotionalId, currentDayHighlights, removeHighlight]);
 
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -1457,6 +1476,7 @@ export default function ReadingScreen() {
                 onToggleBookmark={handleToggleBookmark}
                 onStudyMethodPress={handleStudyMethodPress}
                 onQuoteSelected={handleQuoteSelected}
+                onHighlightRemoved={handleHighlightRemoved}
                 existingHighlights={currentDayHighlights}
                 scrollViewRef={scrollViewRef}
                 onScriptureTap={(ref) => {

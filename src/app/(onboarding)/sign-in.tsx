@@ -170,10 +170,11 @@ export default function SignInScreen() {
   const navigateAfterAuth = useCallback(() => {
     // Always dismiss the modal first — router.replace() from inside a
     // fullScreenModal doesn't dismiss the modal, leaving it stuck on screen.
-    // After dismissing, the underlying screen (index.tsx) will detect the
-    // user's auth state and navigate to tabs if hasCompletedOnboarding.
     if (source === 'onboarding') {
       router.back();
+    } else if (source === 'settings') {
+      // Return to settings — useAuth hook will pick up the new auth state
+      router.dismiss();
     } else {
       router.dismiss();
       // Small delay to let the modal animation complete before replacing

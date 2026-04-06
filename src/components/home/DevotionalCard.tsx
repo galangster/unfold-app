@@ -185,7 +185,7 @@ function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
           activeOpacity={0.7}
           onPress={onCreateNew}
           accessibilityRole="button"
-          accessibilityLabel="Begin your first devotional"
+          accessibilityLabel="Start a new devotional series"
         >
           <View
             style={[
@@ -197,7 +197,7 @@ function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
             ]}
           >
             <Text style={[styles.emptyCtaText, { color: colors.background }]}>
-              Begin Your First Devotional
+              Start a New Series
             </Text>
           </View>
         </TouchableOpacity>
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.lg,
     textAlign: 'center',
     lineHeight: 28,
-    marginBottom: 56,
+    marginBottom: 32,
   },
   emptyCta: {
     paddingVertical: 18,

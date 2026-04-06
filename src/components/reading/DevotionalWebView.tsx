@@ -15,10 +15,17 @@ interface Quote {
   color?: HighlightColor;
 }
 
+interface HighlightRemovedEvent {
+  text: string;
+  color: HighlightColor;
+  context: string;
+}
+
 interface DevotionalWebViewProps {
   day: DevotionalDay;
   fontSize: FontSize;
   onQuoteSelected?: (quote: Quote) => void;
+  onHighlightRemoved?: (event: HighlightRemovedEvent) => void;
   existingHighlights?: Highlight[];
   onScriptureTap?: (reference: string) => void;
   devotionalId?: string;
@@ -43,6 +50,7 @@ export function DevotionalWebView({
   day,
   fontSize,
   onQuoteSelected,
+  onHighlightRemoved,
   existingHighlights = [],
   onScriptureTap,
   devotionalId,
@@ -226,6 +234,98 @@ export function DevotionalWebView({
       function hideToolbar() {
         toolbarShown = false;
         toolbar.classList.remove('visible');
+        toolbar.classList.remove('edit-mode');
+        document.querySelectorAll('.color-btn').forEach(function(b) {
+          b.classList.remove('remove-mode');
+        });
+        isEditMode = false;
+        editingMark = null;
+        editingColor = '';
+        editingText = '';
+        editingContext = '';
+      }
+
+      // Edit-mode state (tap-to-unhighlight)
+      let isEditMode = false;
+      let editingMark = null;
+      let editingColor = '';
+      let editingText = '';
+      let editingContext = '';
+
+      function positionToolbarOverEl(el) {
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        let top = rect.bottom + 12;
+        if (top > window.innerHeight - 60) top = rect.top - 60;
+        if (top < 10) top = 10;
+        toolbar.style.top = top + 'px';
+      }
+
+      function enterEditMode(markEl, color) {
+        isEditMode = true;
+        editingMark = markEl;
+        editingColor = color;
+        editingText = markEl.textContent || '';
+        // Capture ~100 chars of parent context around the mark for matching on the RN side.
+        const parent = markEl.parentElement;
+        const parentText = (parent && parent.textContent) || '';
+        const markStart = parentText.indexOf(editingText);
+        if (markStart >= 0) {
+          const ctxStart = Math.max(0, markStart - 50);
+          const ctxEnd = Math.min(parentText.length, markStart + editingText.length + 50);
+          editingContext = parentText.substring(ctxStart, ctxEnd);
+        } else {
+          editingContext = editingText.substring(0, 100);
+        }
+
+        // Mark matching color button, hide others via .edit-mode class
+        document.querySelectorAll('.color-btn').forEach(function(b) {
+          b.classList.remove('remove-mode');
+        });
+        const matchBtn = toolbar.querySelector('.color-btn[data-color="' + color + '"]');
+        if (matchBtn) matchBtn.classList.add('remove-mode');
+        toolbar.classList.add('edit-mode');
+
+        positionToolbarOverEl(markEl);
+        showToolbar();
+      }
+
+      function removeEditHighlight() {
+        if (!editingMark) return;
+        const removedText = editingText;
+        const removedColor = editingColor;
+        const removedContext = editingContext;
+
+        try {
+          if (window.rangyHighlighter && window.rangyHighlighter.getHighlightForElement) {
+            var rangyHl = window.rangyHighlighter.getHighlightForElement(editingMark);
+            if (rangyHl) {
+              window.rangyHighlighter.removeHighlights([rangyHl]);
+            } else {
+              // Fallback: manually unwrap the mark
+              const parent = editingMark.parentNode;
+              if (parent) {
+                while (editingMark.firstChild) {
+                  parent.insertBefore(editingMark.firstChild, editingMark);
+                }
+                parent.removeChild(editingMark);
+                parent.normalize && parent.normalize();
+              }
+            }
+          }
+        } catch (err) {
+          console.log('Remove highlight failed:', err);
+        }
+
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HAPTIC_IMPACT' }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'HIGHLIGHT_REMOVED',
+          text: removedText,
+          color: removedColor,
+          context: removedContext
+        }));
+
+        hideToolbar();
       }
 
       function checkSelection() {
@@ -267,14 +367,33 @@ export function DevotionalWebView({
       // Handle color button taps via BOTH touchend and click for reliability.
       // On iOS WebViews, touchend can be swallowed when the native selection
       // callout is present, so we also listen for click as a fallback.
+      //
+      // CRITICAL: We snapshot the selection at touchstart time into btn._snap.
+      // Reason: when the user taps a color button on iOS, the native callout
+      // dismisses the text selection, which fires selectionchange, which calls
+      // checkSelection() ~50ms later and clears selectedText + hides toolbar.
+      // If click fires AFTER that clear (common on iOS WKWebView, 100-200ms
+      // after touchstart), handleColorTap would see empty selectedText and
+      // silently return. The snapshot keeps the text+range frozen for the
+      // duration of the tap sequence.
       function handleColorTap(btn, e) {
         // Safe event suppression — e may be a passive touchstart event
         // where preventDefault() throws, so wrap in try/catch.
         try { e.preventDefault(); } catch(_) {}
         try { e.stopPropagation(); } catch(_) {}
 
+        // Edit mode: the only visible button is the current-color X — tapping it removes.
+        if (isEditMode) {
+          removeEditHighlight();
+          btn._snap = null;
+          return;
+        }
+
         var color = btn.dataset.color;
-        if (!selectedText || !window.rangyHighlighter) return;
+        var snap = btn._snap;
+        var snapText = (snap && snap.text) || selectedText;
+        var snapRange = (snap && snap.range) || selectionRange;
+        if (!snapText || !window.rangyHighlighter) return;
 
         // Haptic feedback for color tap
         window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -282,8 +401,8 @@ export function DevotionalWebView({
         }));
 
         var context = '';
-        if (selectionRange) {
-          var container = selectionRange.commonAncestorContainer;
+        if (snapRange) {
+          var container = snapRange.commonAncestorContainer;
           var element = container.nodeType === 3 ? container.parentElement : container;
           context = element && element.textContent ? element.textContent.substring(0, 150) : '';
         }
@@ -293,9 +412,9 @@ export function DevotionalWebView({
 
         try {
           var selection = window.getSelection();
-          if (selectionRange) {
+          if (snapRange) {
             selection.removeAllRanges();
-            selection.addRange(selectionRange);
+            selection.addRange(snapRange);
           }
 
           // Capture serialization BEFORE to extract only the new highlight
@@ -323,7 +442,7 @@ export function DevotionalWebView({
 
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'QUOTE_SELECTED',
-          text: selectedText,
+          text: snapText,
           context: context,
           highlightApplied: highlightApplied,
           serializedRange: serializedHighlight,
@@ -333,6 +452,7 @@ export function DevotionalWebView({
         window.getSelection().removeAllRanges();
         hideToolbar();
         selectedText = '';
+        btn._snap = null;
       }
 
       document.querySelectorAll('.color-btn').forEach(function(btn) {
@@ -340,16 +460,16 @@ export function DevotionalWebView({
 
         // touchstart: stop propagation to keep selection alive, but do NOT
         // preventDefault — that kills the click event which is our primary
-        // handler on iOS WKWebView. Save color as a backup for the setTimeout
-        // fallback in case both touchend and click get swallowed.
+        // handler on iOS WKWebView. Snapshot the current selection so it
+        // survives iOS callout dismissal before click fires.
         btn.addEventListener('touchstart', function(e) {
           e.stopPropagation();
           handled = false;
-          var pendingColor = btn.dataset.color;
+          btn._snap = { text: selectedText, range: selectionRange };
           // Ultimate fallback: if neither touchend nor click fires within
-          // 200ms, trigger handleColorTap directly.
+          // 200ms, trigger handleColorTap directly using the snapshot.
           setTimeout(function() {
-            if (!handled && pendingColor) {
+            if (!handled && btn._snap && btn._snap.text) {
               handled = true;
               handleColorTap(btn, e);
             }
@@ -377,6 +497,9 @@ export function DevotionalWebView({
       document.addEventListener('touchend', function(e) {
         if (!e.target.closest('#highlight-toolbar')) {
           setTimeout(function() {
+            // Edit mode is dismissed by the mark-click handler (tap outside marks).
+            // Don't let the idle-selection check race with it.
+            if (isEditMode) return;
             var selection = window.getSelection();
             if (!selection || !selection.toString().trim()) {
               hideToolbar();
@@ -385,6 +508,39 @@ export function DevotionalWebView({
           }, 200);
         }
       });
+
+      // Tap-to-edit existing highlights. Runs in capture phase so it intercepts
+      // before scripture-ref/bookmark handlers. Tapping a <mark class="highlight-*">
+      // enters edit mode; tapping anywhere else (not toolbar, not mark) dismisses.
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('#highlight-toolbar')) return;
+
+        // Don't interfere mid-selection
+        var sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 5) return;
+
+        var mark = e.target.closest('mark[class*="highlight-"]');
+        if (mark) {
+          var foundColor = '';
+          for (var i = 0; i < mark.classList.length; i++) {
+            var cls = mark.classList[i];
+            if (cls.indexOf('highlight-') === 0) {
+              foundColor = cls.replace('highlight-', '');
+              break;
+            }
+          }
+          if (!foundColor) return;
+          e.preventDefault();
+          e.stopPropagation();
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'HAPTIC_SELECTION' }));
+          enterEditMode(mark, foundColor);
+          return;
+        }
+
+        if (isEditMode) {
+          hideToolbar();
+        }
+      }, true);
 
       // Bookmark button handler for quotes, context boxes, and word study boxes
       window.handleBookmark = function(el) {
@@ -865,6 +1021,25 @@ export function DevotionalWebView({
     .color-btn.purple { background: linear-gradient(135deg, #E599F7, #DA77F2); }
     .color-btn.red { background: linear-gradient(135deg, #FF8787, #FF6B6B); }
 
+    /* Edit mode — tapping an existing highlight shows only its color with an X */
+    #highlight-toolbar.edit-mode .color-btn { display: none; }
+    #highlight-toolbar.edit-mode .color-btn.remove-mode {
+      display: block;
+      position: relative;
+    }
+    #highlight-toolbar.edit-mode .color-btn.remove-mode::after {
+      content: '×';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 22px;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.75);
+      line-height: 1;
+      pointer-events: none;
+    }
+
     /* Scripture reference links */
     .scripture-ref {
       color: ${accentColor};
@@ -906,6 +1081,12 @@ export function DevotionalWebView({
           context: data.context,
           serializedRange: data.serializedRange,
           color: data.color,
+        });
+      } else if (data.type === 'HIGHLIGHT_REMOVED' && onHighlightRemoved) {
+        onHighlightRemoved({
+          text: data.text,
+          color: data.color as HighlightColor,
+          context: data.context,
         });
       } else if (data.type === 'SCRIPTURE_TAP' && onScriptureTap) {
         onScriptureTap(data.reference);

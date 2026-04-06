@@ -350,6 +350,7 @@ export interface GenerationContext {
   aboutMe: string;
   currentSituation: string;
   emotionalState: string;
+  faithImpact: string;
   spiritualSeeking: string;
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
@@ -1069,6 +1070,7 @@ PERSONALIZATION GUIDELINES:
 About them: ${context.aboutMe}
 What they're walking through: ${context.currentSituation}
 How they're feeling: ${context.emotionalState}
+How this is showing up in their faith: ${context.faithImpact}
 What they're seeking: ${context.spiritualSeeking}
 --- END READER CONTEXT ---
 
@@ -1524,6 +1526,7 @@ function buildFullGenerationRequestKey(context: GenerationContext): string {
     sanitizeForPrompt(context.aboutMe, 120),
     sanitizeForPrompt(context.currentSituation, 120),
     sanitizeForPrompt(context.emotionalState, 120),
+    sanitizeForPrompt(context.faithImpact, 120),
     sanitizeForPrompt(context.spiritualSeeking, 120),
   ].join('|');
 }
@@ -1686,6 +1689,7 @@ export async function continueGeneratingDays(
   devotional: Devotional,
   user: {
     spiritualSeeking: string;
+    faithImpact?: string;
     readingDuration: 5 | 15 | 30;
     bibleTranslation: BibleTranslation;
   },
@@ -1725,6 +1729,7 @@ export async function continueGeneratingDays(
         aboutMe: devotional.userContext.aboutMe,
         currentSituation: devotional.userContext.currentSituation,
         emotionalState: devotional.userContext.emotionalState,
+        faithImpact: devotional.userContext.faithImpact ?? user.faithImpact ?? '',
         spiritualSeeking: user.spiritualSeeking,
         readingDuration: user.readingDuration,
         devotionalLength: targetDays as 3 | 7 | 14 | 30,
@@ -1820,6 +1825,7 @@ export function createDevotionalFromGenerated(
       aboutMe: context.aboutMe,
       currentSituation: context.currentSituation,
       emotionalState: context.emotionalState,
+      faithImpact: context.faithImpact,
     },
     // Include theme and type if provided
     themeCategory: context.themeCategory,
@@ -1833,7 +1839,7 @@ export function createDevotionalFromGenerated(
 export async function generateAdaptiveQuestion(
   previousAnswers: { question: string; answer: string }[],
   nextQuestionBase: { question: string; subtext: string },
-  stepPosition?: 'opening' | 'depth' | 'longing'
+  stepPosition?: 'opening' | 'depth' | 'bridge' | 'longing'
 ): Promise<{ question: string; subtext: string; chips?: string[]; source: 'backend' | 'fallback'; backendUrl?: string }> {
   if (previousAnswers.length === 0) {
     return { ...nextQuestionBase, source: 'fallback' };
@@ -2091,6 +2097,7 @@ export async function generateMirrorBackText(
     selectedType?: string;
     emotionalState?: string;
     currentSituation?: string;
+    faithImpact?: string;
     spiritualSeeking?: string;
     devotionalLength?: number;
     name?: string;
@@ -2115,6 +2122,9 @@ export async function generateMirrorBackText(
     }
     if (onboardingData.currentSituation) {
       contextParts.push(`Their current situation: ${onboardingData.currentSituation}`);
+    }
+    if (onboardingData.faithImpact) {
+      contextParts.push(`How this is showing up in their faith: ${onboardingData.faithImpact}`);
     }
     if (onboardingData.spiritualSeeking) {
       contextParts.push(`What they're seeking: ${onboardingData.spiritualSeeking}`);
@@ -2217,7 +2227,7 @@ RULES:
 }
 
 // Fallback mirror-back content when AI generation fails
-function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; spiritualSeeking?: string; devotionalLength?: number }): MirrorBackContent {
+function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; faithImpact?: string; spiritualSeeking?: string; devotionalLength?: number }): MirrorBackContent {
   const daysText = data.devotionalLength ? `${data.devotionalLength} days` : 'the days ahead';
   const hasEmotional = !!(data.emotionalState || data.currentSituation);
   const hasSeeking = !!data.spiritualSeeking;

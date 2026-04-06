@@ -1,13 +1,13 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, Keyboard, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -78,9 +78,34 @@ const ANIM = {
 const FLASH_SPRING = { damping: 20, stiffness: 400 };
 const EASE_OUT_QUART = Easing.bezier(0.165, 0.84, 0.44, 1);
 
+// ─── Chapter swipe config ─────────────────────────────────────────────────
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Activate horizontal swipe only after deliberate 20px intent (protects taps + text selection)
+const SWIPE_ACTIVATE_X = 20;
+// Fail the pan gesture promptly if vertical scroll starts — ScrollView wins
+const SWIPE_FAIL_Y = 15;
+// Commit threshold: ~25% of screen OR a strong flick
+const SWIPE_DISTANCE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const SWIPE_VELOCITY_THRESHOLD = 500;
+// Rubber-band divisor when there's no chapter to navigate to
+const EDGE_RESISTANCE = 3;
+// Drag distance at which edge arrow indicators are fully revealed
+const ARROW_REVEAL_DISTANCE = 60;
+// Duration of the "slide off screen" exit after commit
+const NAV_EXIT_DURATION = 180;
+// Spring back when gesture ends without commit (critically damped, no bounce)
+const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9 };
+
 // ─── Verse Item with per-line highlight via onTextLayout ────────────────────
 
 type TextLine = { x: number; y: number; width: number; height: number };
+
+// Max finger movement (px) before a tap is cancelled — prevents verse selection
+// during swipe attempts. Creates clear zones:
+//   0-8px  → tap (verse selected)
+//   8-20px → dead zone (nothing fires)
+//   20px+  → Pan activates (chapter swipe)
+const VERSE_TAP_MAX_DISTANCE = 8;
 
 const VerseItem = React.memo(({
   verse,
@@ -129,6 +154,31 @@ const VerseItem = React.memo(({
     opacity: flashOpacity.value,
   }));
 
+  // Press-down opacity feedback (replaces TouchableOpacity's activeOpacity)
+  const pressOpacity = useSharedValue(1);
+  const pressStyle = useAnimatedStyle(() => ({
+    opacity: pressOpacity.value,
+  }));
+
+  // Tap gesture with maxDistance — cancels if finger moves >8px (swipe intent)
+  const tapGesture = useMemo(() =>
+    Gesture.Tap()
+      .maxDistance(VERSE_TAP_MAX_DISTANCE)
+      .onBegin(() => {
+        'worklet';
+        pressOpacity.value = withTiming(0.8, { duration: 80 });
+      })
+      .onEnd(() => {
+        'worklet';
+        runOnJS(onPress)();
+      })
+      .onFinalize(() => {
+        'worklet';
+        pressOpacity.value = withTiming(1, { duration: 120 });
+      }),
+    [onPress, pressOpacity],
+  );
+
   const hasOverlay = isSelected || !!highlightColor;
 
   // Selection: inverted colors
@@ -160,13 +210,12 @@ const VerseItem = React.memo(({
   const verseNumSize = Math.max(9, Math.round(fontSize * 0.55));
 
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.8}
-      style={styles.verseRow}
-      accessibilityLabel={`Verse ${verse.verse}: ${verse.text}`}
-    >
-      <View>
+    <GestureDetector gesture={tapGesture}>
+      <Animated.View
+        style={[styles.verseRow, pressStyle]}
+        accessible
+        accessibilityLabel={`Verse ${verse.verse}: ${verse.text}`}
+      >
         {/* Flash highlight overlay (full row, fades in then out) — always mounted so animation plays */}
         <Animated.View
           style={[
@@ -215,8 +264,8 @@ const VerseItem = React.memo(({
           </Text>
           {verse.text}
         </Text>
-      </View>
-    </TouchableOpacity>
+      </Animated.View>
+    </GestureDetector>
   );
 });
 
@@ -266,8 +315,18 @@ export default function BibleReaderScreen() {
   const [scrollToVerse, setScrollToVerse] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const verseLayoutsRef = useRef<Record<number, number>>({});
+  const verseLayoutsChapterRef = useRef<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollYRef = useRef(0);
+
+  // Invalidate cached verse Y positions when chapter changes. onLayout Ys are
+  // specific to the rendered verses; carrying them across chapters would make
+  // scroll-to-verse land on the wrong position (e.g., verse 9 of old chapter).
+  const chapterKey = `${bookId}:${chapter}`;
+  if (verseLayoutsChapterRef.current !== chapterKey) {
+    verseLayoutsRef.current = {};
+    verseLayoutsChapterRef.current = chapterKey;
+  }
 
   // Context bar slide-up animation
   const contextBarSlideY = useSharedValue(8);
@@ -609,22 +668,88 @@ export default function BibleReaderScreen() {
   }, [sectionHeadings]);
 
   // ─── Swipe gesture for chapter navigation ─────────────────────────────────
+  // Drag-following: content translates with finger + edge arrow indicators
+  // reveal as drag progresses. Commit on distance OR velocity threshold.
+
+  const dragX = useSharedValue(0);
+
+  // Reset drag position whenever chapter changes (after navigation completes
+  // or if the user jumps via the navigator). Guarantees new chapter content
+  // renders centered, not off-screen from a prior swipe exit.
+  useEffect(() => {
+    dragX.value = 0;
+  }, [bookId, chapter, dragX]);
+
+  const contentTranslateStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragX.value }],
+  }));
+
+  // Left arrow fades in when dragging RIGHT (revealing previous chapter)
+  const leftArrowStyle = useAnimatedStyle(() => {
+    const progress = Math.min(1, Math.max(0, dragX.value) / ARROW_REVEAL_DISTANCE);
+    return {
+      opacity: progress,
+      transform: [
+        { translateX: -16 + progress * 16 },
+        { scale: 0.85 + progress * 0.15 },
+      ],
+    };
+  });
+
+  // Right arrow fades in when dragging LEFT (revealing next chapter)
+  const rightArrowStyle = useAnimatedStyle(() => {
+    const progress = Math.min(1, Math.max(0, -dragX.value) / ARROW_REVEAL_DISTANCE);
+    return {
+      opacity: progress,
+      transform: [
+        { translateX: 16 - progress * 16 },
+        { scale: 0.85 + progress * 0.15 },
+      ],
+    };
+  });
+
   const swipeGesture = useMemo(() =>
     Gesture.Pan()
-      .activeOffsetX([-30, 30])
-      .failOffsetY([-10, 10])
+      .activeOffsetX([-SWIPE_ACTIVATE_X, SWIPE_ACTIVATE_X])
+      .failOffsetY([-SWIPE_FAIL_Y, SWIPE_FAIL_Y])
+      .onUpdate((e) => {
+        'worklet';
+        let tx = e.translationX;
+        // Apply rubber-band resistance when there's no chapter to go to
+        if (tx > 0 && !prevChapter) {
+          tx = tx / EDGE_RESISTANCE;
+        } else if (tx < 0 && !nextChapter) {
+          tx = tx / EDGE_RESISTANCE;
+        }
+        dragX.value = tx;
+      })
       .onEnd((e) => {
         'worklet';
-        // Require significant horizontal velocity + distance
-        if (Math.abs(e.velocityX) > 400 && Math.abs(e.translationX) > 50) {
-          if (e.translationX > 0 && prevChapter) {
-            runOnJS(navigateChapter)(-1);
-          } else if (e.translationX < 0 && nextChapter) {
-            runOnJS(navigateChapter)(1);
-          }
+        const tx = e.translationX;
+        const vx = e.velocityX;
+        const goPrev = !!prevChapter && (tx > SWIPE_DISTANCE_THRESHOLD || vx > SWIPE_VELOCITY_THRESHOLD);
+        const goNext = !!nextChapter && (tx < -SWIPE_DISTANCE_THRESHOLD || vx < -SWIPE_VELOCITY_THRESHOLD);
+
+        if (goPrev && tx > 0) {
+          // Slide current chapter off to the right, then navigate
+          dragX.value = withTiming(
+            SCREEN_WIDTH,
+            { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
+            () => { runOnJS(navigateChapter)(-1); },
+          );
+        } else if (goNext && tx < 0) {
+          // Slide current chapter off to the left, then navigate
+          dragX.value = withTiming(
+            -SCREEN_WIDTH,
+            { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
+            () => { runOnJS(navigateChapter)(1); },
+          );
+        } else {
+          // No commit — spring back to center (critically damped)
+          dragX.value = withSpring(0, SWIPE_SPRING_BACK);
         }
       }),
-    [prevChapter, nextChapter, navigateChapter],
+    [prevChapter, nextChapter, navigateChapter, dragX],
   );
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
@@ -728,6 +853,7 @@ export default function BibleReaderScreen() {
 
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
       <GestureDetector gesture={swipeGesture}>
+      <Animated.View style={[styles.flex, contentTranslateStyle]}>
       <ScrollView
         ref={scrollRef}
         onScroll={handleScroll}
@@ -827,7 +953,32 @@ export default function BibleReaderScreen() {
           </Animated.View>
         )}
       </ScrollView>
+      </Animated.View>
       </GestureDetector>
+
+      {/* ─── Edge arrow indicators (appear during horizontal drag) ───────── */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.edgeArrow, styles.edgeArrowLeft, leftArrowStyle]}
+      >
+        <View style={[styles.edgeArrowPill, {
+          backgroundColor: isDark ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.82)',
+          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        }]}>
+          <CaretLeftIcon size={18} color={colors.textMuted} weight="regular" />
+        </View>
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.edgeArrow, styles.edgeArrowRight, rightArrowStyle]}
+      >
+        <View style={[styles.edgeArrowPill, {
+          backgroundColor: isDark ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.82)',
+          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        }]}>
+          <CaretRightIcon size={18} color={colors.textMuted} weight="regular" />
+        </View>
+      </Animated.View>
 
       {/* ─── Context Bar — replaces bottom tab bar when verses selected ──── */}
       {/* No exiting animation — tab bar snaps on top instantly, so exit plays behind it invisibly */}
@@ -1120,6 +1271,24 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
+  },
+
+  // Edge arrow indicators (shown during horizontal chapter drag)
+  edgeArrow: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -20,
+    zIndex: 5,
+  },
+  edgeArrowLeft: { left: Spacing['3'] },
+  edgeArrowRight: { right: Spacing['3'] },
+  edgeArrowPill: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
 
   // Toast

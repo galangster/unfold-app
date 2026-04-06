@@ -7,6 +7,7 @@
 import { Platform } from 'react-native';
 import { logger } from '@/lib/logger';
 import { getClerkToken } from '@/lib/clerk';
+import { getDeviceId } from '@/lib/mmkv-storage';
 
 // Custom User-Agent for Cloudflare WAF allowlisting
 const APP_USER_AGENT = `Unfold/1.0.0 (${Platform.OS}; ${Platform.Version})`;
@@ -36,6 +37,7 @@ export async function getAuthHeaders(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': APP_USER_AGENT,
+    'X-Device-ID': getDeviceId(),
   };
 
   try {
@@ -44,10 +46,37 @@ export async function getAuthHeaders(
       headers['Authorization'] = `Bearer ${token}`;
     }
   } catch {
-    // No token available — requests will get 401 on protected endpoints
+    // No token available — anonymous requests use X-Device-ID only
   }
 
   return headers;
+}
+
+// ---------------------------------------------------------------------------
+// Anonymous → signed-in data migration
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge anonymous device data into a newly signed-in Clerk account.
+ * Called once after the user signs in for the first time.
+ * The backend uses the deviceId to locate anonymous data and reassign it.
+ */
+export async function migrateAnonymousData(clerkUserId: string): Promise<void> {
+  try {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${PRIMARY_BACKEND_URL}/auth/migrate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ deviceId: getDeviceId(), clerkUserId }),
+    });
+    if (!res.ok) {
+      logger.warn('[Auth] migrate failed:', res.status, await res.text().catch(() => ''));
+    } else {
+      logger.log('[Auth] Anonymous data migrated for', clerkUserId);
+    }
+  } catch (err) {
+    logger.warn('[Auth] migrate request error:', err);
+  }
 }
 
 // ---------------------------------------------------------------------------

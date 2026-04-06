@@ -97,7 +97,23 @@ function sanitizeBridgeText(text: string): string {
   cleaned = cleaned.replace(/,\s*,/g, ',');
   cleaned = cleaned.replace(/\s{2,}/g, ' ');
   cleaned = cleaned.replace(/,\s*\./g, '.');
-  return cleaned.trim();
+  cleaned = cleaned.trim();
+
+  // If the text was truncated mid-sentence (no terminal punctuation), trim
+  // back to the last complete sentence rather than display a dangling fragment.
+  if (cleaned.length > 20 && !/[.!?…"']$/.test(cleaned)) {
+    const lastTerminal = Math.max(
+      cleaned.lastIndexOf('.'),
+      cleaned.lastIndexOf('!'),
+      cleaned.lastIndexOf('?'),
+      cleaned.lastIndexOf('…'),
+    );
+    if (lastTerminal > 20) {
+      cleaned = cleaned.slice(0, lastTerminal + 1).trim();
+    }
+  }
+
+  return cleaned;
 }
 
 /**
@@ -216,7 +232,7 @@ async function postBridgeRequest(
 // Bridge prompt construction
 // ---------------------------------------------------------------------------
 
-const BRIDGE_INSTRUCTIONS = `TASK: Write a short text message (2-3 sentences, 30-50 words) introducing today's devotional topic to the reader.
+const BRIDGE_INSTRUCTIONS = `TASK: Write a short text message (2-4 sentences, 40-80 words) introducing today's devotional topic to the reader.
 
 You are a companion who helped craft today's devotional for this specific person. You know what's inside and you're genuinely excited to hand it to them. Your job is to create ANTICIPATION about the content, like handing someone a gift you picked out for them.
 
@@ -332,7 +348,7 @@ export async function generateBridge(
   try {
     const result = await postBridgeRequest({
       model: 'grok-4-1-fast-non-reasoning',
-      max_tokens: 300,
+      max_tokens: 500,
       temperature: 0.7,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],

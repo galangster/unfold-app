@@ -112,44 +112,66 @@ export async function registerPushToken(): Promise<void> {
 }
 
 /**
+ * Navigate to the reveal screen from a notification's data payload.
+ */
+function handleNotificationNavigation(data: Record<string, unknown>): void {
+  if (data?.type !== 'devotional_ready') return;
+
+  const { devotionalId, dayNumber, dayTitle, seriesTitle, totalDays } = data as {
+    type: string;
+    devotionalId?: string;
+    dayNumber?: number;
+    dayTitle?: string;
+    seriesTitle?: string;
+    totalDays?: number;
+  };
+
+  if (devotionalId && dayNumber != null) {
+    // replace prevents the home screen from showing underneath
+    router.replace({
+      pathname: '/reveal',
+      params: {
+        devotionalId: String(devotionalId),
+        dayNumber: String(dayNumber),
+        seriesTitle: seriesTitle ?? '',
+        dayTitle: dayTitle ?? '',
+        totalDays: String(totalDays ?? 0),
+      },
+    });
+  }
+}
+
+/**
  * Set up a listener for notification taps (user opens a notification).
- *
- * Currently handles:
- * - `devotional_ready` — navigates to the reveal screen for the given day
+ * Handles both warm start (listener fires immediately) and cold start
+ * (notification arrived before listener was registered).
  *
  * Returns a cleanup function to remove the listener.
  */
 export function setupNotificationListeners(): () => void {
+  // Warm start: listen for future taps
   const subscription =
     Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
-
-      logger.log('[push] Notification tapped, data:', data);
-
-      if (data?.type === 'devotional_ready') {
-        const { devotionalId, dayNumber, dayTitle, seriesTitle, totalDays } = data as {
-          type: string;
-          devotionalId?: string;
-          dayNumber?: number;
-          dayTitle?: string;
-          seriesTitle?: string;
-          totalDays?: number;
-        };
-
-        if (devotionalId && dayNumber != null) {
-          router.push({
-            pathname: '/reveal',
-            params: {
-              devotionalId: String(devotionalId),
-              dayNumber: String(dayNumber),
-              seriesTitle: seriesTitle ?? '',
-              dayTitle: dayTitle ?? '',
-              totalDays: String(totalDays ?? 0),
-            },
-          });
-        }
-      }
+      if (!data) return;
+      logger.log('[push] Notification tapped (warm), data:', data);
+      handleNotificationNavigation(data);
     });
+
+  // Cold start: check if a notification launched the app
+  Notifications.getLastNotificationResponseAsync().then((response) => {
+    if (!response) return;
+
+    // Only handle if the notification was tapped recently (within 5s of app start)
+    const tappedAt = response.notification.date;
+    const now = Date.now();
+    if (now - tappedAt > 5000) return;
+
+    const data = response.notification.request.content.data;
+    if (!data) return;
+    logger.log('[push] Notification tapped (cold start), data:', data);
+    handleNotificationNavigation(data);
+  });
 
   return () => subscription.remove();
 }

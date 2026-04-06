@@ -73,8 +73,8 @@ const StepTabs = React.memo(({
   colors: any;
   isDark: boolean;
 }) => {
-  const trackBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  const pillBg = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)';
+  const trackBg = isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)';
+  const pillBg = isDark ? 'rgba(245, 240, 235, 0.18)' : 'rgba(28, 23, 16, 0.12)';
 
   return (
     <View style={[styles.tabBar, { backgroundColor: trackBg, padding: TAB_PADDING }]}>
@@ -284,7 +284,7 @@ export function BookChapterNavigator({
   const hasSearchResults = shouldSearch && searchResults.length > 0;
   const showSearchLoading = shouldSearch && isSearching;
 
-  const chipBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+  const chipBg = isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)';
 
   // ── Render: Search bar ────────────────────────────────────────────────
 
@@ -292,7 +292,7 @@ export function BookChapterNavigator({
     <View
       style={[
         styles.searchBarContainer,
-        { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)' },
+        { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)' },
       ]}
     >
       <MagnifyingGlassIcon size={16} color={colors.textSubtle} weight="light" />
@@ -326,7 +326,7 @@ export function BookChapterNavigator({
         {parsedRef && (
           <TouchableOpacity
             onPress={handleGoToRef}
-            style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}
+            style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.05)' : 'rgba(28, 23, 16, 0.04)' }]}
             accessibilityLabel={`Go to ${BIBLE_BOOKS.find((b) => b.id === parsedRef.bookId)?.name} ${parsedRef.chapter}`}
           >
             <ArrowBendUpRightIcon size={18} color={colors.accent} weight="light" style={styles.suggestionIcon} />
@@ -342,7 +342,7 @@ export function BookChapterNavigator({
             <TouchableOpacity
               key={book.id}
               onPress={() => { handleBookSelect(book); setSearchQuery(''); }}
-              style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}
+              style={[styles.suggestionRow, { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.05)' : 'rgba(28, 23, 16, 0.04)' }]}
               accessibilityLabel={`Navigate to ${book.name}`}
             >
               <BookBookmarkIcon size={18} color={colors.textSubtle} weight="light" style={styles.suggestionIcon} />
@@ -359,7 +359,7 @@ export function BookChapterNavigator({
                 Keyboard.dismiss();
                 onSelect(result.bookId, result.chapter);
               }}
-              style={[styles.searchResultRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)' }]}
+              style={[styles.searchResultRow, { borderBottomColor: isDark ? 'rgba(245, 240, 235, 0.05)' : 'rgba(28, 23, 16, 0.05)' }]}
               accessibilityLabel={`${result.reference}: ${result.text}`}
             >
               <Text style={[styles.searchRef, { color: colors.accent }]}>{result.reference}</Text>
@@ -510,7 +510,7 @@ export function BookChapterNavigator({
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+          backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF',
           paddingTop: insets.top + 4,
           paddingBottom: insets.bottom,
         },
@@ -533,7 +533,7 @@ export function BookChapterNavigator({
         <TouchableOpacity
           onPress={onClose}
           accessibilityLabel="Close navigator"
-          style={[styles.closeButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}
+          style={[styles.closeButton, { backgroundColor: isDark ? 'rgba(245, 240, 235, 0.10)' : 'rgba(28, 23, 16, 0.07)' }]}
           hitSlop={8}
         >
           <XIcon size={16} color={colors.textSubtle} weight="bold" />

@@ -12,6 +12,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { setUserId as rcSetUserId, logoutUser as rcLogoutUser, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { Analytics } from '@/lib/analytics';
+import { migrateAnonymousData } from '@/lib/api-config';
 
 export function useAuth() {
   const { isSignedIn, isLoaded, userId: clerkUserId } = useClerkAuth();
@@ -80,6 +81,9 @@ export function useAuth() {
 
       // Sentry context
       Sentry.setUser({ id: newUserId, email: email ?? undefined });
+
+      // Migrate anonymous device data to the signed-in account (fire-and-forget)
+      migrateAnonymousData(newUserId);
 
       logger.log('[useAuth] Clerk user synced:', newUserId);
     } else if (!isSignedIn) {

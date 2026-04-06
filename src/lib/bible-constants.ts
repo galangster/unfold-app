@@ -142,18 +142,18 @@ export const CATEGORY_LABELS: Record<BibleCategory, string> = {
   prophecy: 'Prophecy',
 };
 
-/** Category text colors — muted tones that work on dark chip backgrounds */
+/** Category text colors — brighter tones that pop on deep black backgrounds */
 export const CATEGORY_COLORS_DARK: Record<BibleCategory, string> = {
-  pentateuch: '#E8836B',
-  historical: '#A09A90',
-  wisdom: '#8DAA7B',
-  majorProphets: '#7B9EC0',
-  minorProphets: '#6DB5A8',
-  gospels: '#E8836B',
-  acts: '#6DB5A8',
-  paulineEpistles: '#B088C4',
-  generalEpistles: '#8A9DD0',
-  prophecy: '#6BC08B',
+  pentateuch: '#F59378',
+  historical: '#B8B0A2',
+  wisdom: '#A3C489',
+  majorProphets: '#8DB6D8',
+  minorProphets: '#7ED0BE',
+  gospels: '#F59378',
+  acts: '#7ED0BE',
+  paulineEpistles: '#C79BD9',
+  generalEpistles: '#9EB2E0',
+  prophecy: '#7DD5A0',
 };
 
 /** Category text colors — deeper tones for light backgrounds */

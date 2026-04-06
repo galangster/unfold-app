@@ -17,6 +17,7 @@ import { MMKV } from 'react-native-mmkv';
 import type { StateStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -121,6 +122,26 @@ migrateData();
  */
 export function getSharedEncryptionKey(): string | undefined {
   return encryptionKey;
+}
+
+// ---------------------------------------------------------------------------
+// Device ID — stable anonymous identifier, generated once on first launch
+// ---------------------------------------------------------------------------
+
+const DEVICE_ID_KEY = 'unfold-device-id';
+
+/**
+ * Get or create a stable device ID (UUID v4) for anonymous identification.
+ * Stored in the encrypted MMKV instance — persists across app restarts.
+ */
+export function getDeviceId(): string {
+  let id = mmkv.getString(DEVICE_ID_KEY);
+  if (id) return id;
+
+  id = uuidv4();
+  mmkv.set(DEVICE_ID_KEY, id);
+  logger.log('[MMKV] Generated new device ID:', id);
+  return id;
 }
 
 /**
