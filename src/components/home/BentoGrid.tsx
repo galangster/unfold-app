@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -9,7 +8,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
-import { alpha } from '@/components/ui';
+
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
 export function BentoGrid() {
@@ -48,20 +47,13 @@ export function BentoGrid() {
               styles.box,
               {
                 backgroundColor: isDark
-                  ? (Platform.OS === 'ios' ? 'rgba(245, 240, 235, 0.06)' : 'rgba(245, 240, 235, 0.10)')
-                  : (Platform.OS === 'ios' ? 'rgba(28, 23, 16, 0.04)' : 'rgba(28, 23, 16, 0.08)'),
+                  ? 'rgba(245, 240, 235, 0.08)'
+                  : 'rgba(28, 23, 16, 0.06)',
                 borderColor: colors.border,
               },
             ]}
           >
-            {/* Frosted glass blur (iOS only) */}
-            {Platform.OS === 'ios' && (
-              <BlurView
-                intensity={80}
-                tint={isDark ? 'dark' : 'light'}
-                style={StyleSheet.absoluteFill}
-              />
-            )}
+            {/* BlurView removed — was causing edge artifacts on rounded corners */}
             <item.icon size={20} color={colors.textMuted} weight="light" />
             <Text
               style={[styles.label, { color: colors.text }]}
