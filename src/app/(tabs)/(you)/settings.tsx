@@ -2660,6 +2660,27 @@ export default function SettingsScreen() {
             </View>
           </Animated.View>
 
+          {/* DEV: Replay onboarding */}
+          {__DEV__ && (
+            <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => router.push('/onboarding')}
+                style={{
+                  padding: Spacing['4'],
+                  borderRadius: Radius.md,
+                  backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                  alignItems: 'center',
+                  marginBottom: Spacing['4'],
+                }}
+              >
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                  Replay Onboarding (Dev)
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
           {/* Danger zone */}
           <Animated.View entering={FadeInDown.duration(400).delay(200)}>
             <Text

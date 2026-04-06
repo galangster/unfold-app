@@ -230,36 +230,28 @@ export function TypewriterText({
 
   return (
     <View>
-      {/* All characters rendered inline with flexWrap.
+      {/* Text wrapper handles line-breaking and space collapsing natively.
           Unrevealed chars are invisible placeholders that reserve width,
           preventing words from reflowing as characters appear. */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
+      <Animated.Text style={[{ fontFamily: FontFamily.display, fontSize: 28 }, style]}>
       {segments.map((segment, segIndex) => {
         if (!segment) return null;
 
-        // Space segments — only show if at least one char on each side is visible
+        // Space segments
         if (/^\s+$/.test(segment)) {
           const idx = globalIdx;
           globalIdx += segment.length;
           return (
             <Animated.Text
               key={`s-${idx}`}
-              style={[
-                {
-                  fontFamily: FontFamily.display,
-                  fontSize: 28,
-                  color: idx < visibleCount ? textColor : 'transparent',
-                },
-                style,
-                idx >= visibleCount ? { color: 'transparent' } : undefined,
-              ]}
+              style={{ color: idx < visibleCount ? textColor : 'transparent' }}
             >
               {segment}
             </Animated.Text>
           );
         }
 
-        // Word segments — always render all chars to reserve full word width
+        // Word segments — render all chars to reserve full word width
         const wordStart = globalIdx;
         globalIdx += segment.length;
 
@@ -270,47 +262,35 @@ export function TypewriterText({
 
         const wordColor = isHighlighted ? highlightColor : isLastWord ? lastWordColor : textColor;
 
-        return (
-          <View key={`w-${wordStart}`} style={{ flexDirection: 'row' }}>
-            {segment.split('').map((char, charIdx) => {
-              const charGlobalIdx = wordStart + charIdx;
-              if (charGlobalIdx < visibleCount) {
-                // Revealed — animate in
-                return (
-                  <MagicalChar
-                    key={`c-${charGlobalIdx}`}
-                    char={char}
-                    accentColor={colors.accent}
-                    textColor={wordColor || textColor}
-                    style={style}
-                    isWordStart={charIdx === 0}
-                    shimmer={!!isHighlighted}
-                  />
-                );
-              }
-              // Unrevealed — invisible placeholder reserving width
-              return (
-                <Animated.Text
-                  key={`c-${charGlobalIdx}`}
-                  style={[
-                    {
-                      fontFamily: FontFamily.display,
-                      fontSize: 28,
-                      color: 'transparent',
-                    },
-                    style,
-                    { color: 'transparent' },
-                  ]}
-                >
-                  {char}
-                </Animated.Text>
-              );
-            })}
-          </View>
-        );
+        return segment.split('').map((char, charIdx) => {
+          const charGlobalIdx = wordStart + charIdx;
+          if (charGlobalIdx < visibleCount) {
+            // Revealed — animate in
+            return (
+              <MagicalChar
+                key={`c-${charGlobalIdx}`}
+                char={char}
+                accentColor={colors.accent}
+                textColor={wordColor || textColor}
+                style={style}
+                isWordStart={charIdx === 0}
+                shimmer={!!isHighlighted}
+              />
+            );
+          }
+          // Unrevealed — invisible placeholder reserving width
+          return (
+            <Animated.Text
+              key={`c-${charGlobalIdx}`}
+              style={{ color: 'transparent' }}
+            >
+              {char}
+            </Animated.Text>
+          );
+        });
       })}
 
-      </View>
+      </Animated.Text>
     </View>
   );
 }

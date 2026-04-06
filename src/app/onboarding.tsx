@@ -508,6 +508,9 @@ export default function OnboardingScreen() {
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('hook');
 
+  // Dev: step picker visibility
+  const [devStepPickerVisible, setDevStepPickerVisible] = useState(false);
+
   // Chaos particle speed — shared value so Current can freeze smoothly
   const chaosSpeed = useSharedValue(1);
   // Vertical drift — negative = upward. Used on Screen 3.
@@ -2931,6 +2934,74 @@ export default function OnboardingScreen() {
         onClose={() => setPremiumGateFeature(null)}
         feature={premiumGateFeature ?? 'general'}
       />
+
+      {/* DEV: Floating step picker — jump to any onboarding screen */}
+      {__DEV__ && (
+        <>
+          <TouchableOpacity
+            onPress={() => setDevStepPickerVisible(!devStepPickerVisible)}
+            style={{
+              position: 'absolute',
+              bottom: 50,
+              right: 16,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: 'rgba(200, 165, 92, 0.3)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 999,
+            }}
+          >
+            <Text style={{ fontSize: 14, color: colors.accent }}>⚙</Text>
+          </TouchableOpacity>
+
+          {devStepPickerVisible && (
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 95,
+                right: 16,
+                width: 220,
+                maxHeight: 400,
+                backgroundColor: 'rgba(20, 18, 16, 0.95)',
+                borderRadius: Radius.md,
+                borderWidth: 1,
+                borderColor: 'rgba(200, 165, 92, 0.2)',
+                zIndex: 999,
+                overflow: 'hidden',
+              }}
+            >
+              <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                {ALL_STEPS.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => {
+                      setCurrentStepId(s.id as StepId);
+                      setShowInput(false);
+                      setScreenReady(false);
+                      setDevStepPickerVisible(false);
+                    }}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      backgroundColor: currentStepId === s.id ? 'rgba(200, 165, 92, 0.15)' : 'transparent',
+                    }}
+                  >
+                    <Text style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 12,
+                      color: currentStepId === s.id ? colors.accent : colors.textMuted,
+                    }}>
+                      {s.id}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </>
+      )}
     </View>
   );
 }
