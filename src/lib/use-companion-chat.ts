@@ -15,11 +15,7 @@ import {
 import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
-import {
-  updateCompanionMemory,
-  getCompanionMemory,
-  pruneExpiredMemory,
-} from './companion-memory';
+import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
@@ -39,7 +35,6 @@ function buildCompanionContext(
   devotional: { title?: string; currentDay?: number; totalDays?: number } | null,
   streakDays: number
 ) {
-  const memory = getCompanionMemory();
   return {
     userName: userName ?? undefined,
     companionName: companionName ?? undefined,
@@ -48,15 +43,7 @@ function buildCompanionContext(
     devotionalTotal: devotional?.totalDays ?? undefined,
     streakDays: streakDays ?? 0,
     timeOfDay: getTimeOfDay(),
-    conversationMemory: memory
-      ? {
-          topics: (memory.topics ?? []).map(t => typeof t === 'string' ? t : t.text),
-          versesMentioned: (memory.versesMentioned ?? []).map(v => typeof v === 'string' ? v : v.text),
-          prayerRequests: (memory.prayerRequests ?? []).map((p) =>
-            typeof p === 'string' ? p : p.text
-          ),
-        }
-      : undefined,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Los_Angeles',
   };
 }
 
@@ -64,6 +51,7 @@ function buildCompanionContext(
 
 interface SSECallbacks {
   onToken: (text: string) => void;
+  onThinking: () => void;
   onDone: (suggestions: string[], cleanText?: string) => void;
   onError: (message: string) => void;
 }
@@ -75,7 +63,7 @@ async function consumeSSE(
   signal: AbortSignal,
   callbacks: SSECallbacks
 ): Promise<boolean> {
-  const { onToken, onDone, onError } = callbacks;
+  const { onToken, onThinking, onDone, onError } = callbacks;
 
   const response = await fetch(url, {
     method: 'POST',
@@ -116,6 +104,7 @@ async function consumeSSE(
 
         try {
           const event = JSON.parse(json);
+          if (event.thinking) { onThinking(); continue; }
           if (event.t) onToken(event.t);
           if (event.d) onDone(event.s || [], event.ct);
           if (event.error) onError(event.error);
@@ -196,6 +185,7 @@ export function useCompanionChat() {
   const activeConversationId = useCompanionChatStore((s) => s.activeConversationId);
 
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,11 +207,6 @@ export function useCompanionChat() {
   useEffect(() => {
     checkAndArchiveStale();
   }, [checkAndArchiveStale]);
-
-  // Prune expired memory entries (>30 days old) on mount
-  useEffect(() => {
-    pruneExpiredMemory();
-  }, []);
 
   // ── Send message ───────────────────────────────────────────────────────
 
@@ -327,12 +312,18 @@ export function useCompanionChat() {
             abortController.signal,
             {
               onToken: (token) => {
+                // Clear searching state on first real token
+                if (isSearching) setIsSearching(false);
                 accumulatedText += token;
                 throttledUpdate(companionId, accumulatedText);
               },
+              onThinking: () => {
+                setIsSearching(true);
+              },
               onDone: (sug, cleanText) => {
                 cancelThrottle();
-                const finalText = cleanText || accumulatedText;
+                setIsSearching(false);
+                const rawText = cleanText || accumulatedText;
                 const finalSuggestions =
                   sug.length > 0
                     ? sug
@@ -342,8 +333,12 @@ export function useCompanionChat() {
                         'Help me with a prayer',
                       ];
 
+                // Extract deep links from response
+                const { cleanContent, deepLinks } = parseDeepLinks(rawText);
+
                 updateMessage(companionId, {
-                  content: finalText,
+                  content: cleanContent,
+                  deepLinks: deepLinks.length > 0 ? deepLinks : undefined,
                   status: 'complete',
                   suggestions: finalSuggestions,
                 });
@@ -375,20 +370,17 @@ export function useCompanionChat() {
             }
           );
 
+          // Extract deep links from fallback response
+          const { cleanContent: fallbackClean, deepLinks: fallbackLinks } = parseDeepLinks(result.responseText);
+
           updateMessage(companionId, {
-            content: result.responseText,
+            content: fallbackClean,
+            deepLinks: fallbackLinks.length > 0 ? fallbackLinks : undefined,
             status: 'complete',
             suggestions: result.suggestions,
           });
           setSuggestions(result.suggestions);
         }
-
-        // Phase 4: Update conversation memory
-        const finalMessages = selectActiveMessages(useCompanionChatStore.getState());
-        const completedMessages = finalMessages
-          .filter((m) => m.status === 'sent' || m.status === 'complete')
-          .map((m) => ({ role: m.role, content: m.content }));
-        updateCompanionMemory(completedMessages);
 
         // Generate title after first exchange (user + companion)
         const convId = useCompanionChatStore.getState().activeConversationId;
@@ -459,6 +451,7 @@ export function useCompanionChat() {
   return {
     messages,
     isStreaming,
+    isSearching,
     suggestions,
     error,
     sendMessage,
