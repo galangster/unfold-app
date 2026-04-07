@@ -45,13 +45,13 @@ export function DevotionalCard({ data }: Props) {
     <Pressable
       onPress={handlePress}
       style={({ pressed }) => ({
-        backgroundColor: alpha(colors.primary, pressed ? 0.12 : 0.06),
+        backgroundColor: alpha(colors.accent, pressed ? 0.12 : 0.06),
         borderRadius: Radius.md,
         paddingHorizontal: Spacing['3'],
         paddingVertical: Spacing['2'],
         marginVertical: Spacing['1'],
         borderLeftWidth: 3,
-        borderLeftColor: alpha(colors.primary, 0.4),
+        borderLeftColor: alpha(colors.accent, 0.4),
       })}
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
