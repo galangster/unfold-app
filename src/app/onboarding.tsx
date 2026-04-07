@@ -61,6 +61,7 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
+import { ShockStat } from '@/components/onboarding/ShockStat';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -1360,6 +1361,33 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
+        </TouchableOpacity>
+      );
+    }
+
+    // Screen 9: Shock stat — pure problem, sit in it
+    if (step.type === 'shockStat') {
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          disabled={!screenReady}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            advanceToNextStep();
+          }}
+          style={{ flex: 1 }}
+        >
+          <ShockStat
+            colors={colors}
+            onReady={() => setScreenReady(true)}
+          />
+
+          <View style={{ paddingBottom: Spacing['8'], paddingHorizontal: Spacing['6'], opacity: screenReady ? 1 : 0 }}>
+            <PulsingText
+              text="Tap anywhere to continue"
+              style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+            />
+          </View>
         </TouchableOpacity>
       );
     }
