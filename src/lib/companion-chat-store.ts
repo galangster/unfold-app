@@ -6,6 +6,7 @@
  * v2: Multi-conversation model — conversations[], auto-archive, summaries.
  * v3: Add updatedAt for cloud sync.
  * v4: Rename summary to title, add updateConversation/setActiveConversation.
+ * v5: Add deepLinks to CompanionMessage.
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -13,6 +14,7 @@ import { mmkvStorage } from './mmkv-storage';
 
 import { getTopicTags } from './companion-memory';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import type { DeepLinkData } from './parse-deep-links';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,7 @@ export interface CompanionMessage {
   citations?: Citation[];
   suggestions?: string[];
   feedback?: 'positive' | 'negative' | null;
+  deepLinks?: DeepLinkData[];
   updatedAt?: string; // ISO timestamp for sync
 }
 
@@ -347,7 +350,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
     {
       name: 'unfold-companion-chat',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 4, // v4: Rename summary to title, add updateConversation/setActiveConversation
+      version: 5, // v5: Add deepLinks to CompanionMessage
       // Skip persisting streaming message content to avoid expensive serialization during SSE
       partialize: (state) => ({
         ...state,
@@ -395,6 +398,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
         }
 
         // v3 → v4: Rename summary to title
+        // v4 → v5: Add deepLinks (optional field, no data migration needed)
         if (version < 4) {
           const conversations = (state as any).conversations ?? [];
           for (const conv of conversations) {
