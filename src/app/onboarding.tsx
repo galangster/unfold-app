@@ -44,7 +44,7 @@ import { INPUT_LIMITS } from '@/lib/validation';
 import { TypewriterText } from '@/components/TypewriterText';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
-import { useUnfoldStore, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage } from '@/lib/store';
+import { useUnfoldStore, UserProfile, BibleTranslation, ThemeCategory, DevotionalType, ACCENT_THEMES, WritingTone, ContentDepth, FaithBackground, LifeStage, RelationshipWithGod, BibleFrequency } from '@/lib/store';
 import { generateAdaptiveQuestion, generateMirrorBackText, type MirrorBackContent } from '@/lib/devotional-service';
 import { THEME_CATEGORIES, DEVOTIONAL_TYPES, BIBLICAL_CHARACTERS, BIBLE_BOOKS_FOR_STUDY, ThemeCategoryInfo, DevotionalTypeInfo, getThemeById, getDevotionalTypeById } from '@/constants/devotional-types';
 import {
@@ -247,6 +247,26 @@ const ALL_STEPS = [
   { id: 'stylePreferences1', question: "Your walk right\u00A0now.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // STYLE PREFERENCES: Tone + depth
   { id: 'stylePreferences2', question: "Your reading\u00A0style.", subtext: 'The tone and depth that serves you best. You can always change this in settings.', type: 'stylePreferences2' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // CONFRONT: Relationship with God — problem reinforcement
+  { id: 'relationshipWithGod', question: "How would you describe your relationship with God right\u00A0now?", subtext: '', type: 'choice' as const, adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+    { value: 'close', label: 'Close and consistent' },
+    { value: 'ups-and-downs', label: 'Has its ups and downs' },
+    { value: 'distant', label: 'Feeling distant lately' },
+    { value: 'starting', label: 'Just starting or rebuilding' },
+  ]},
+  // CONFRONT: Bible reading frequency — feeds shock stat
+  { id: 'bibleFrequency', question: "How often do you spend time in God's\u00A0word?", subtext: '', type: 'choice' as const, adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+    { value: 'daily', label: 'Every day' },
+    { value: 'few-times-week', label: 'A few times a week' },
+    { value: 'weekly', label: 'Once a week' },
+    { value: 'couple-times-month', label: 'A couple times a month' },
+    { value: 'rarely', label: 'Rarely' },
+    { value: 'never', label: 'Never' },
+  ]},
+  // CONFRONT: Shock stat — pure problem, 93%/11% gap
+  { id: 'shockStat', question: '', subtext: '', type: 'shockStat' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // CONFRONT: Growth graph — the turn, hope arrives
+  { id: 'growthGraph', question: '', subtext: '', type: 'growthGraph' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION: Intro + naming on a single screen
@@ -274,7 +294,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'faithImpact' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'faithImpact' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -374,6 +394,8 @@ interface OnboardingData {
   emotionalState: string;
   faithImpact: string;
   spiritualSeeking: string;
+  relationshipWithGod?: RelationshipWithGod;
+  bibleFrequency?: BibleFrequency;
   readingDuration: 5 | 15 | 30;
   devotionalLength: 3 | 7 | 14 | 30;
   reminderTime: string;
@@ -433,6 +455,8 @@ export default function OnboardingScreen() {
     emotionalState: '',
     faithImpact: '',
     spiritualSeeking: '',
+    relationshipWithGod: undefined,
+    bibleFrequency: undefined,
     readingDuration: 15,
     devotionalLength: 7,
     reminderTime: '8:00 AM',
@@ -508,8 +532,9 @@ export default function OnboardingScreen() {
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('hook');
 
-  // Dev: step picker visibility
+  // Dev: step picker visibility + show-all toggle
   const [devStepPickerVisible, setDevStepPickerVisible] = useState(false);
+  const [devShowAllSteps, setDevShowAllSteps] = useState(false);
 
   // Chaos particle speed — shared value so Current can freeze smoothly
   const chaosSpeed = useSharedValue(1);
@@ -660,6 +685,9 @@ export default function OnboardingScreen() {
   
   // Filter steps based on what we already know
   const STEPS = useMemo(() => {
+    // Dev: bypass all filtering to show every screen
+    if (__DEV__ && devShowAllSteps) return ALL_STEPS;
+
     const filtered = ALL_STEPS.filter((step) => {
       // Skip study subject if user selected themes or guided mode (not a study type)
       if (step.id === 'studySubject') {
@@ -700,7 +728,7 @@ export default function OnboardingScreen() {
     });
     
     return filtered;
-  }, [existingUser, data.selectedMainOption, data.selectedType, hasConsentedToAI]);
+  }, [existingUser, data.selectedMainOption, data.selectedType, hasConsentedToAI, devShowAllSteps]);
   
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
@@ -790,8 +818,8 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back, AI consent, founder note, companion naming, style preferences, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'aiConsent' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase') {
+    // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and premium showcase always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'aiConsent' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph') {
       return true;
     }
 
@@ -819,6 +847,8 @@ export default function OnboardingScreen() {
         emotionalState: data.emotionalState,
         faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
+        relationshipWithGod: data.relationshipWithGod,
+        bibleFrequency: data.bibleFrequency,
         readingDuration: data.readingDuration,
         devotionalLength: data.devotionalLength,
         reminderTime: data.reminderTime,
@@ -840,6 +870,8 @@ export default function OnboardingScreen() {
         emotionalState: data.emotionalState,
         faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
+        relationshipWithGod: data.relationshipWithGod,
+        bibleFrequency: data.bibleFrequency,
         readingDuration: data.readingDuration,
         devotionalLength: data.devotionalLength,
         reminderTime: data.reminderTime,
@@ -2781,7 +2813,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2809,7 +2841,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
@@ -2972,8 +3004,29 @@ export default function OnboardingScreen() {
                 overflow: 'hidden',
               }}
             >
-              <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
-                {ALL_STEPS.map((s) => (
+              <TouchableOpacity
+                onPress={() => setDevShowAllSteps(!devShowAllSteps)}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(200, 165, 92, 0.15)',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontFamily: FontFamily.ui, fontSize: 11, color: colors.accent }}>
+                  Show all steps
+                </Text>
+                <Text style={{ fontSize: 11, color: devShowAllSteps ? colors.accent : colors.textHint }}>
+                  {devShowAllSteps ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+                {ALL_STEPS.map((s) => {
+                  const isFiltered = !STEPS.find((fs) => fs.id === s.id);
+                  return (
                   <TouchableOpacity
                     key={s.id}
                     onPress={() => {
@@ -2986,17 +3039,19 @@ export default function OnboardingScreen() {
                       paddingVertical: 8,
                       paddingHorizontal: 12,
                       backgroundColor: currentStepId === s.id ? 'rgba(200, 165, 92, 0.15)' : 'transparent',
+                      opacity: isFiltered && !devShowAllSteps ? 0.35 : 1,
                     }}
                   >
                     <Text style={{
                       fontFamily: FontFamily.ui,
                       fontSize: 12,
-                      color: currentStepId === s.id ? colors.accent : colors.textMuted,
+                      color: currentStepId === s.id ? colors.accent : isFiltered ? colors.textHint : colors.textMuted,
                     }}>
-                      {s.id}
+                      {s.id}{isFiltered ? ' (skipped)' : ''}
                     </Text>
                   </TouchableOpacity>
-                ))}
+                  );
+                })}
               </ScrollView>
             </View>
           )}
