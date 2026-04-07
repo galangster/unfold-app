@@ -2085,10 +2085,10 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
 
 // Generate AI mirror-back text for onboarding — acts as a teaser for the devotional
 export interface MirrorBackContent {
-  opening: string;
+  reflection: string;
   verse: string;
   verseRef: string;
-  closing: string;
+  anticipation: string;
 }
 
 export async function generateMirrorBackText(
@@ -2099,8 +2099,11 @@ export async function generateMirrorBackText(
     currentSituation?: string;
     faithImpact?: string;
     spiritualSeeking?: string;
-    devotionalLength?: number;
     name?: string;
+    aboutMe?: string;
+    relationshipWithGod?: string;
+    growthGoals?: string[];
+    obstacles?: string[];
   }
 ): Promise<{ content: MirrorBackContent; source: 'backend' | 'fallback' }> {
   const rateLimit = await checkRateLimit('adaptive-question');
@@ -2117,6 +2120,18 @@ export async function generateMirrorBackText(
     if (onboardingData.selectedType) {
       contextParts.push(`Study type: ${onboardingData.selectedType}`);
     }
+    if (onboardingData.aboutMe) {
+      contextParts.push(`About them: ${onboardingData.aboutMe}`);
+    }
+    if (onboardingData.relationshipWithGod) {
+      contextParts.push(`Relationship with God: ${onboardingData.relationshipWithGod}`);
+    }
+    if (onboardingData.growthGoals?.length) {
+      contextParts.push(`Growth goals: ${onboardingData.growthGoals.join(', ')}`);
+    }
+    if (onboardingData.obstacles?.length) {
+      contextParts.push(`Obstacles: ${onboardingData.obstacles.join(', ')}`);
+    }
     if (onboardingData.emotionalState) {
       contextParts.push(`How they're feeling: ${onboardingData.emotionalState}`);
     }
@@ -2129,39 +2144,35 @@ export async function generateMirrorBackText(
     if (onboardingData.spiritualSeeking) {
       contextParts.push(`What they're seeking: ${onboardingData.spiritualSeeking}`);
     }
-    const daysText = onboardingData.devotionalLength ? `${onboardingData.devotionalLength} days` : 'the days ahead';
 
-    const systemPrompt = `You write intimate, poetic mirror-back reflections for a Christian devotional app. The user just completed onboarding and shared personal details about where they are spiritually and emotionally. Your job is to write a short, beautiful reflection that makes them feel SEEN — like something sacred is about to begin.
+    const systemPrompt = `You write intimate, poetic mirror-back reflections for a Christian devotional app called Unfold. The user just completed onboarding and shared deeply personal details. Your job is to write a reflection that makes them feel SEEN — like something sacred is about to begin.
 
-This is NOT a summary of their answers. This is a mini devotional moment that speaks to the heart of what they shared.
+This is NOT a summary of their answers. This is a mini devotional moment that speaks to the HEART of what they shared. Weave their words into something they didn't know they needed to hear.
 
-VOICE: Warm, unhurried, intimate. Like a trusted spiritual director speaking gently. No exclamation marks. No hype. No Christian clichés ("season of life", "walk with God", "journey"). Write like a poet, not a pastor.
+VOICE: Warm, unhurried, intimate. Like a trusted spiritual director speaking gently. No exclamation marks. No hype. Write like a poet, not a pastor.
 
-STRUCTURE — return valid JSON with these four fields:
+STRUCTURE — return valid JSON:
 {
-  "opening": "1-2 sentences that acknowledge where they are without parroting their words back. Speak to the emotional undercurrent, not the surface details. Make them feel understood.",
-  "verse": "A single Bible verse (just the text, no quotes) that speaks directly to their situation. Choose something unexpected when possible — not the obvious verse for their theme. ESV translation.",
-  "verseRef": "Book chapter:verse (e.g. 'Isaiah 43:19')",
-  "closing": "1 sentence about what the next ${daysText} will hold for them. Create anticipation. Make it feel like something is being crafted specifically for them."
+  "reflection": "2-4 sentences. Acknowledge where they are without parroting their words back. Speak to the emotional undercurrent, not the surface details. Use their name once, naturally. Make them feel understood at a level that surprises them.",
+  "verse": "A single Bible verse text (BSB translation). Choose something that speaks to the intersection of their obstacles and aspirations. Prefer lesser-known passages.",
+  "verseRef": "Book Chapter:Verse",
+  "anticipation": "1-2 sentences. Something is being crafted specifically for them right now. Create excitement. Use language that implies this is a beginning, not a product pitch."
 }
 
 RULES:
-- opening: 1-2 sentences, max 180 characters. No questions. Speak WITH them, not AT them.
-- verse: Pick a verse that will surprise and move them. Avoid overused verses (Jeremiah 29:11, Philippians 4:13, Romans 8:28) unless truly perfect. Use lesser-known passages when possible.
-- verseRef: Standard format, ESV translation
-- closing: 1 sentence, max 120 characters. Reference "${daysText}" naturally.
-- NEVER use the person's name
-- NEVER reference specific biographical details (job, family role, location)
-- Speak to the emotional truth, not the facts
+- reflection: 2-4 sentences. Use the person's name ONCE. No questions.
+- verse: BSB translation. Avoid Jeremiah 29:11, Philippians 4:13, Romans 8:28 unless truly perfect.
+- anticipation: 1-2 sentences. Reference that something is being written for them.
+- Speak to the emotional truth, not the biographical facts.
 - RESPOND WITH VALID JSON ONLY`;
 
-    const userPrompt = `Here is what this person shared during onboarding:\n\n${contextParts.join('\n')}\n\nWrite a mirror-back reflection that makes them feel seen and creates anticipation for the ${daysText} ahead.`;
+    const userPrompt = `Here is what ${onboardingData.name || 'this person'} shared during onboarding:\n\n${contextParts.join('\n')}\n\nWrite a mirror-back reflection that makes them feel seen and creates anticipation for what's being written for them right now.`;
 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'grok-4-1-fast-non-reasoning',
-        max_tokens: 350,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 750,
         temperature: 0.8,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
@@ -2179,14 +2190,14 @@ RULES:
     const data = await response.json();
 
     // Try direct structured response
-    if (typeof data?.opening === 'string' && data.opening.trim()) {
+    if (typeof data?.reflection === 'string' && data.reflection.trim()) {
       await incrementRateLimit('adaptive-question');
       return {
         content: {
-          opening: data.opening.trim(),
+          reflection: data.reflection.trim(),
           verse: data.verse?.trim() || 'Be still, and know that I am God.',
           verseRef: data.verseRef?.trim() || 'Psalm 46:10',
-          closing: data.closing?.trim() || `Over the next ${daysText}, each devotional will be written for exactly where you are.`,
+          anticipation: data.anticipation?.trim() || 'Something is being written for you right now — crafted for exactly where you are.',
         },
         source: 'backend',
       };
@@ -2204,14 +2215,14 @@ RULES:
       }
 
       const parsed = JSON.parse(jsonText);
-      if (parsed?.opening) {
+      if (parsed?.reflection) {
         await incrementRateLimit('adaptive-question');
         return {
           content: {
-            opening: parsed.opening.trim(),
+            reflection: parsed.reflection.trim(),
             verse: parsed.verse?.trim() || 'Be still, and know that I am God.',
             verseRef: parsed.verseRef?.trim() || 'Psalm 46:10',
-            closing: parsed.closing?.trim() || `Over the next ${daysText}, each devotional will be written for exactly where you are.`,
+            anticipation: parsed.anticipation?.trim() || 'Something is being written for you right now — crafted for exactly where you are.',
           },
           source: 'backend',
         };
@@ -2227,35 +2238,35 @@ RULES:
 }
 
 // Fallback mirror-back content when AI generation fails
-function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; faithImpact?: string; spiritualSeeking?: string; devotionalLength?: number }): MirrorBackContent {
-  const daysText = data.devotionalLength ? `${data.devotionalLength} days` : 'the days ahead';
+function buildFallbackMirrorBack(data: { emotionalState?: string; currentSituation?: string; faithImpact?: string; spiritualSeeking?: string; name?: string }): MirrorBackContent {
   const hasEmotional = !!(data.emotionalState || data.currentSituation);
   const hasSeeking = !!data.spiritualSeeking;
   const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+  const nameClause = data.name ? `${data.name}, ` : '';
 
-  let opening: string;
+  let reflection: string;
   if (hasEmotional && hasSeeking) {
-    opening = pick([
-      'Something real brought you here — a weight you\'ve been carrying, and a hope you haven\'t let go of.',
-      'Between where you are and where you\'re reaching, God is already at work.',
+    reflection = pick([
+      `${nameClause}something real brought you here — a weight you've been carrying, and a hope you haven't let go of.`,
+      `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at work.`,
     ]);
   } else if (hasEmotional) {
-    opening = pick([
-      'You named something that matters. That kind of honesty is where God meets us.',
-      'What you shared took courage. It\'s exactly the right place to begin.',
+    reflection = pick([
+      `${nameClause}you named something that matters. That kind of honesty is where God meets us.`,
+      `What you shared took courage, ${nameClause.toLowerCase() || ''}and it's exactly the right place to begin.`,
     ]);
   } else {
-    opening = pick([
-      'Something drew you here today. Whatever the reason — you\'re in the right place.',
-      'You showed up. That\'s the beginning of everything.',
+    reflection = pick([
+      `${nameClause}something drew you here today. Whatever the reason — you're in the right place.`,
+      `You showed up${data.name ? `, ${data.name}` : ''}. That's the beginning of everything.`,
     ]);
   }
 
   return {
-    opening,
+    reflection,
     verse: 'Be still, and know that I am God.',
     verseRef: 'Psalm 46:10',
-    closing: `Over the next ${daysText}, each devotional will be written for exactly where you are.`,
+    anticipation: 'Something is being written for you right now — crafted for exactly where you are.',
   };
 }
 

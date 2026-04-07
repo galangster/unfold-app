@@ -303,14 +303,10 @@ const ALL_STEPS = [
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
   { id: 'studySubject', question: 'Which would you like to study?', subtext: 'Pick one to walk through together.', type: 'studySubject' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, conditionalOn: 'selectedType' },
-  // DISCOVERY STEP 1: Opening - Where are you right now? (contextual based on study type)
+  // DISCOVERY STEP 1: Opening - Where are you right now?
   { id: 'currentSituation', question: "What's been on your\u00A0heart\u00A0lately?", subtext: "The thing that's there when the noise\u00A0quiets\u00A0down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
-  // DISCOVERY STEP 2: Going deeper - What's underneath? (contextual based on study type)
-  { id: 'emotionalState', question: "And what's underneath\u00A0that?", subtext: "There's usually something deeper. Take\u00A0your\u00A0time.", type: 'multiline' as const, placeholder: "When I sit with it, I realize...", adaptive: true, skipIfHasValue: false, hasVariations: true },
-  // DISCOVERY STEP 3: Faith bridge - How is this showing up in your faith? (adaptive)
-  { id: 'faithImpact', question: "How has this been showing up in your walk with\u00A0God?", subtext: "No right answers here. Just\u00A0honesty.", type: 'multiline' as const, placeholder: "In my faith, this has been...", adaptive: true, skipIfHasValue: false, hasVariations: true },
-  // DISCOVERY STEP 4: The longing - What would breakthrough look like? (contextual based on study type)
-  { id: 'spiritualSeeking', question: "What would feel like a breath of fresh air\u00A0right\u00A0now?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  // DISCOVERY STEP 2: The longing - What would breakthrough look like?
+  { id: 'spiritualSeeking', question: "When you imagine your faith 6 months from now, what's\u00A0different?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "Each day is crafted to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
@@ -322,7 +318,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'faithImpact' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -333,15 +329,6 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
     'Big changes', 'Starting over', 'Feeling stuck', 'Health',
     'Loneliness', 'Family', 'A decision', 'Letting go',
     'Faith doubts', 'Finding purpose', 'Need rest', 'Forgiveness',
-  ],
-  emotionalState: [
-    'Fear', 'Loneliness', 'Doubt', 'Grief', 'Anger',
-    'Shame', 'Restlessness', 'Yearning', 'Emptiness',
-    'Burnout', 'Confusion', 'Numbness',
-  ],
-  faithImpact: [
-    'Distant from God', 'Praying but not hearing', 'Avoiding it', 'Bringing it to Him',
-    'Questioning everything', 'Trusting anyway', 'Going through the motions', 'Wrestling',
   ],
   spiritualSeeking: [
     'Peace', 'Clarity', 'Direction', 'Healing', 'Purpose',
@@ -419,8 +406,6 @@ interface OnboardingData {
   selectedType?: DevotionalType;
   selectedStudySubject?: string;
   currentSituation: string;
-  emotionalState: string;
-  faithImpact: string;
   spiritualSeeking: string;
   growthGoals: string[];
   obstacles: string[];
@@ -482,8 +467,6 @@ export default function OnboardingScreen() {
     selectedType: undefined,
     selectedStudySubject: undefined,
     currentSituation: '',
-    emotionalState: '',
-    faithImpact: '',
     spiritualSeeking: '',
     growthGoals: [],
     obstacles: [],
@@ -528,38 +511,38 @@ export default function OnboardingScreen() {
   // Mirror-back content — structured for the redesigned screen
   const mirrorBackContent = useMemo<MirrorBackContent>(() => {
     const themeId = (data?.selectedThemes?.length ?? 0) > 0 ? data.selectedThemes[0] : null;
-    const daysText = data?.devotionalLength ? `${data.devotionalLength} days` : 'the days ahead';
-    const hasEmotional = !!(data?.emotionalState || data?.currentSituation);
+    const hasEmotional = !!data?.currentSituation;
     const hasSeeking = !!data?.spiritualSeeking;
+    const nameClause = data?.name ? `${data.name}, ` : '';
 
     // Pick scripture based on selected theme
     const scripture = themeId && THEME_SCRIPTURE[themeId]
       ? THEME_SCRIPTURE[themeId]
       : pickRandom(DEFAULT_SCRIPTURES);
 
-    let opening: string;
+    let reflection: string;
     if (hasEmotional && hasSeeking) {
-      opening = pickRandom([
-        'Something real brought you here\u00A0— a weight you\'ve been carrying, and a hope you haven\'t let go\u00A0of.',
-        'Between where you are and where you\'re reaching, God is already at\u00A0work.',
-        'You named what many people never pause long enough to say out\u00A0loud.',
+      reflection = pickRandom([
+        `${nameClause}something real brought you here\u00A0\u2014 a weight you've been carrying, and a hope you haven't let go\u00A0of.`,
+        `Between where you are and where you're reaching, ${nameClause.toLowerCase() || ''}God is already at\u00A0work.`,
+        `${nameClause}you named what many people never pause long enough to say out\u00A0loud.`,
       ]);
     } else if (hasEmotional) {
-      opening = pickRandom([
-        'You named something that matters. That kind of honesty is where God meets\u00A0us.',
-        'What you shared took courage. It\'s exactly the right place to\u00A0begin.',
+      reflection = pickRandom([
+        `${nameClause}you named something that matters. That kind of honesty is where God meets\u00A0us.`,
+        `What you shared took courage${data?.name ? `, ${data.name}` : ''}. It's exactly the right place to\u00A0begin.`,
       ]);
     } else {
-      opening = pickRandom([
-        'Something drew you here today. Whatever the reason\u00A0— known or not yet named\u00A0— you\'re in the right\u00A0place.',
-        'You showed up. That\'s the beginning of\u00A0everything.',
+      reflection = pickRandom([
+        `${nameClause}something drew you here today. Whatever the reason\u00A0\u2014 you're in the right\u00A0place.`,
+        `You showed up${data?.name ? `, ${data.name}` : ''}. That's the beginning of\u00A0everything.`,
       ]);
     }
 
-    const closing = `Over the next ${daysText}, each devotional will be written for exactly where you\u00A0are.`;
+    const anticipation = 'Something is being written for you right now\u00A0\u2014 crafted for exactly where you\u00A0are.';
 
-    return { opening, verse: scripture.text, verseRef: scripture.ref, closing };
-  }, [data?.selectedThemes, data?.emotionalState, data?.currentSituation, data?.faithImpact, data?.spiritualSeeking, data?.devotionalLength]);
+    return { reflection, verse: scripture.text, verseRef: scripture.ref, anticipation };
+  }, [data?.selectedThemes, data?.currentSituation, data?.spiritualSeeking, data?.name]);
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>('hook');
@@ -632,8 +615,6 @@ export default function OnboardingScreen() {
   // Discovery chips — multi-select state per step
   const [selectedChips, setSelectedChips] = useState<Record<string, string[]>>({
     currentSituation: [],
-    emotionalState: [],
-    faithImpact: [],
     spiritualSeeking: [],
   });
 
@@ -703,12 +684,15 @@ export default function OnboardingScreen() {
       generateMirrorBackText({
         selectedThemes: data.selectedThemes,
         selectedType: data.selectedType,
-        emotionalState: data.emotionalState,
+        emotionalState: '',
         currentSituation: data.currentSituation,
-        faithImpact: data.faithImpact,
+        faithImpact: '',
         spiritualSeeking: data.spiritualSeeking,
-        devotionalLength: data.devotionalLength,
         name: data.name,
+        aboutMe: data.aboutMe,
+        relationshipWithGod: data.relationshipWithGod,
+        growthGoals: data.growthGoals,
+        obstacles: data.obstacles,
       })
         .then(({ content }) => {
           setAiMirrorBack(content);
@@ -893,8 +877,8 @@ export default function OnboardingScreen() {
         name: data.name,
         aboutMe: data.aboutMe,
         currentSituation: data.currentSituation,
-        emotionalState: data.emotionalState,
-        faithImpact: data.faithImpact,
+        emotionalState: '',
+        faithImpact: '',
         spiritualSeeking: data.spiritualSeeking,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
@@ -918,8 +902,8 @@ export default function OnboardingScreen() {
         aboutMe: data.aboutMe,
         personaTraits: [],
         currentSituation: data.currentSituation,
-        emotionalState: data.emotionalState,
-        faithImpact: data.faithImpact,
+        emotionalState: '',
+        faithImpact: '',
         spiritualSeeking: data.spiritualSeeking,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
@@ -1050,7 +1034,7 @@ export default function OnboardingScreen() {
     // Merge discovery chips into the text value before advancing
     // Also compute the merged value synchronously for adaptive question generation
     let mergedCurrentAnswer: string | undefined;
-    const discoveryStepIds = ['currentSituation', 'emotionalState', 'faithImpact', 'spiritualSeeking'];
+    const discoveryStepIds = ['currentSituation', 'spiritualSeeking'];
     if (discoveryStepIds.includes(currentStepId)) {
       const chips = selectedChips[currentStepId] ?? [];
       const currentText = (data[currentStepId as keyof OnboardingData] as string || '').trim();
@@ -1078,9 +1062,7 @@ export default function OnboardingScreen() {
 
     // If leaving an adaptive discovery step, generate the next adaptive question
     const adaptiveNextMap: Record<string, string> = {
-      currentSituation: 'emotionalState',
-      emotionalState: 'faithImpact',
-      faithImpact: 'spiritualSeeking',
+      currentSituation: 'spiritualSeeking',
     };
     const nextAdaptiveStepId = adaptiveNextMap[currentStepId];
     if (nextAdaptiveStepId && baseStep?.adaptive) {
@@ -1211,7 +1193,7 @@ export default function OnboardingScreen() {
   // since setData is async and data[currentStepId] won't reflect the merge yet
   const generateNextAdaptiveQuestion = async (nextStepId: string, currentAnswerOverride?: string) => {
     // Collect previous Q&A from all answered discovery steps
-    const discoverySteps = ['currentSituation', 'emotionalState', 'faithImpact', 'spiritualSeeking'];
+    const discoverySteps = ['currentSituation', 'spiritualSeeking'];
     const previousAnswers: { question: string; answer: string }[] = [];
 
     // The step immediately before nextStepId is the one we're leaving
@@ -1239,8 +1221,6 @@ export default function OnboardingScreen() {
     // Determine step position for the prompt
     const positionMap: Record<string, 'opening' | 'depth' | 'bridge' | 'longing'> = {
       currentSituation: 'opening',
-      emotionalState: 'depth',
-      faithImpact: 'bridge',
       spiritualSeeking: 'longing',
     };
     const stepPosition = positionMap[nextStepId] ?? 'depth';
@@ -2236,7 +2216,7 @@ export default function OnboardingScreen() {
                 color: colors.text,
                 lineHeight: 30,
               }}>
-                {displayContent.opening}
+                {displayContent.reflection}
               </Text>
             </Animated.View>
 
@@ -2267,7 +2247,7 @@ export default function OnboardingScreen() {
               </Text>
             </Animated.View>
 
-            {/* Closing */}
+            {/* Anticipation */}
             <Animated.View entering={FadeIn.duration(800).delay(1200)}>
               <Text style={{
                 fontFamily: FontFamily.body,
@@ -2275,7 +2255,7 @@ export default function OnboardingScreen() {
                 color: colors.textMuted,
                 lineHeight: 24,
               }}>
-                {displayContent.closing}
+                {displayContent.anticipation}
               </Text>
             </Animated.View>
           </View>
