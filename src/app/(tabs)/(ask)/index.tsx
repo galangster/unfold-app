@@ -374,40 +374,6 @@ export default function CompanionScreen() {
             }}
           />
 
-          {/* Scroll-to-bottom FAB */}
-          {showScrollButton && (
-            <Animated.View
-              style={[
-                {
-                  position: 'absolute',
-                  bottom: 16,
-                  right: 16,
-                  zIndex: 10,
-                },
-                scrollButtonStyle,
-              ]}
-            >
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={scrollToBottom}
-                accessibilityLabel="Scroll to bottom"
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: colors.backgroundElevated,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  ...Shadow.sm,
-                }}
-              >
-                <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-              </TouchableOpacity>
-            </Animated.View>
-          )}
         </View>
       )}
 
@@ -504,6 +470,42 @@ export default function CompanionScreen() {
             </Text>
           )}
         </TouchableOpacity>
+      )}
+
+      {/* Scroll-to-bottom FAB — positioned here (after chips/typing) so it renders on top */}
+      {!isEmpty && showScrollButton && (
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              bottom: 120,
+              right: 16,
+              zIndex: 50,
+            },
+            scrollButtonStyle,
+          ]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={scrollToBottom}
+            accessibilityLabel="Scroll to bottom"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: colors.backgroundElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...Shadow.sm,
+            }}
+          >
+            <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
+          </TouchableOpacity>
+        </Animated.View>
       )}
 
       {/* Input bar */}
