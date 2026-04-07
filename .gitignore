@@ -90,3 +90,4 @@ AUDIO_PLUGIN_NEEDED.md
 # Bible DB build artifacts
 .bible-cache/
 unfold-bible-v1.db
+.superpowers/

@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+// react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CaretDownIcon,
@@ -30,7 +30,6 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -357,6 +356,38 @@ export default function CompanionScreen() {
         </Pressable>
       ) : (
         <View style={{ flex: 1 }}>
+          {/* Scroll-to-latest banner — inside normal flow, no gesture conflicts */}
+          {showScrollButton && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                scrollToBottom();
+              }}
+              style={{
+                alignSelf: 'center',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingVertical: 6,
+                paddingHorizontal: 14,
+                borderRadius: 16,
+                backgroundColor: colors.backgroundElevated,
+                borderWidth: 1,
+                borderColor: colors.border,
+                ...Shadow.sm,
+              }}
+            >
+              <Text style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: 12,
+                color: colors.textMuted,
+              }}>
+                Scroll to latest
+              </Text>
+              <CaretDownIcon size={12} color={colors.textMuted} weight="bold" />
+            </TouchableOpacity>
+          )}
           <FlatList
             ref={listRef}
             data={invertedMessages}
@@ -509,44 +540,7 @@ export default function CompanionScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature="companion"
       />
-      {/* Scroll-to-bottom FAB — uses RNGH GestureDetector with Gesture.Tap()
-          to create a native tap recognizer that competes with the FlatList's
-          scroll recognizer at the native gesture layer. */}
-      {!isEmpty && showScrollButton && (
-        <Animated.View
-          pointerEvents="box-none"
-          style={[
-            StyleSheet.absoluteFill,
-            { zIndex: 100, elevation: 10, justifyContent: 'flex-end', alignItems: 'flex-end', paddingRight: 16, paddingBottom: tabBarHeight + 100 },
-          ]}
-        >
-          <GestureDetector gesture={Gesture.Tap().onEnd(() => {
-            'worklet';
-            runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
-            runOnJS(scrollToBottom)();
-          })}>
-            <Animated.View
-              style={[
-                {
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: colors.backgroundElevated,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  ...Shadow.sm,
-                },
-                scrollButtonStyle,
-              ]}
-              accessibilityLabel="Scroll to bottom"
-            >
-              <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-            </Animated.View>
-          </GestureDetector>
-        </Animated.View>
-      )}
+      {/* Removed: floating FAB approach failed due to FlatList gesture conflicts */}
     </KeyboardAvoidingView>
   );
 }
