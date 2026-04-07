@@ -63,6 +63,7 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
 import { ShockStat } from '@/components/onboarding/ShockStat';
 import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
+import { MultiSelectPills } from '@/components/onboarding/MultiSelectPills';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -269,6 +270,31 @@ const ALL_STEPS = [
   { id: 'shockStat', question: '', subtext: '', type: 'shockStat' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // CONFRONT: Growth graph — the turn, hope arrives
   { id: 'growthGraph', question: '', subtext: '', type: 'growthGraph' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // ASPIRATIONS: What do you want to grow in? (multi-select pills, max 3)
+  { id: 'growthGoals', question: "What do you want to\u00A0grow\u00A0in?", subtext: 'Pick up to 3 that resonate most.', type: 'multiSelect' as const, adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+    { value: 'prayer', label: 'Prayer life' },
+    { value: 'scripture', label: 'Scripture knowledge' },
+    { value: 'trust', label: 'Trusting God' },
+    { value: 'peace', label: 'Finding peace' },
+    { value: 'community', label: 'Community' },
+    { value: 'discipline', label: 'Spiritual discipline' },
+    { value: 'purpose', label: 'Sense of purpose' },
+    { value: 'forgiveness', label: 'Forgiveness' },
+    { value: 'gratitude', label: 'Gratitude' },
+    { value: 'patience', label: 'Patience' },
+  ], maxCount: 3 },
+  // OBSTACLES: What gets in the way? (multi-select pills, no max)
+  { id: 'obstacles', question: "What gets in the\u00A0way?", subtext: 'Select any that feel true right now.', type: 'multiSelect' as const, adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+    { value: 'busy', label: 'Too busy' },
+    { value: 'distracted', label: 'Easily distracted' },
+    { value: 'alone', label: 'Doing it alone' },
+    { value: 'doubt', label: 'Doubt & questions' },
+    { value: 'consistency', label: 'Staying consistent' },
+    { value: 'boring', label: 'Bible feels dry' },
+    { value: 'guilt', label: 'Guilt or shame' },
+    { value: 'understanding', label: "Don't know where to start" },
+    { value: 'motivation', label: 'Lack of motivation' },
+  ] },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION: Intro + naming on a single screen
@@ -296,7 +322,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'faithImpact' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'themeType' | 'studySubject' | 'currentSituation' | 'emotionalState' | 'faithImpact' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -396,6 +422,8 @@ interface OnboardingData {
   emotionalState: string;
   faithImpact: string;
   spiritualSeeking: string;
+  growthGoals: string[];
+  obstacles: string[];
   relationshipWithGod?: RelationshipWithGod;
   bibleFrequency?: BibleFrequency;
   readingDuration: 5 | 15 | 30;
@@ -457,6 +485,8 @@ export default function OnboardingScreen() {
     emotionalState: '',
     faithImpact: '',
     spiritualSeeking: '',
+    growthGoals: [],
+    obstacles: [],
     relationshipWithGod: undefined,
     bibleFrequency: undefined,
     readingDuration: 15,
@@ -814,6 +844,12 @@ export default function OnboardingScreen() {
       return !!data.selectedStudySubject;
     }
     
+    // For multiSelect inputs — at least 1 pill selected
+    if (step.type === 'multiSelect') {
+      const arr = data[step.id as keyof OnboardingData];
+      return Array.isArray(arr) && arr.length > 0;
+    }
+
     // For text/multiline inputs
     if (step.type === 'text' || step.type === 'multiline') {
       const value = data[step.id as keyof OnboardingData];
@@ -860,6 +896,8 @@ export default function OnboardingScreen() {
         emotionalState: data.emotionalState,
         faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
+        growthGoals: data.growthGoals,
+        obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
         bibleFrequency: data.bibleFrequency,
         readingDuration: data.readingDuration,
@@ -883,6 +921,8 @@ export default function OnboardingScreen() {
         emotionalState: data.emotionalState,
         faithImpact: data.faithImpact,
         spiritualSeeking: data.spiritualSeeking,
+        growthGoals: data.growthGoals,
+        obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
         bibleFrequency: data.bibleFrequency,
         readingDuration: data.readingDuration,
@@ -2057,6 +2097,37 @@ export default function OnboardingScreen() {
               The more you share, the more personal your devotional becomes.
             </Text>
           )}
+        </View>
+      );
+    }
+
+    // Multi-select pill steps (growthGoals, obstacles)
+    if (step.type === 'multiSelect') {
+      const pillOptions: { value: string; label: string }[] = (step as any).options ?? [];
+      const maxCount: number | undefined = (step as any).maxCount;
+      const selected: string[] = (data[step.id as keyof OnboardingData] as string[]) ?? [];
+
+      const handleToggle = (value: string) => {
+        setData((prev) => {
+          const current = (prev[step.id as keyof OnboardingData] as string[]) ?? [];
+          if (current.includes(value)) {
+            return { ...prev, [step.id]: current.filter((v) => v !== value) };
+          }
+          if (maxCount && current.length >= maxCount) return prev;
+          return { ...prev, [step.id]: [...current, value] };
+        });
+      };
+
+      return (
+        <View style={{ marginTop: Spacing['2'] }}>
+          <MultiSelectPills
+            options={pillOptions}
+            selected={selected}
+            onToggle={handleToggle}
+            maxCount={maxCount}
+            colors={colors}
+            isDark={isDark}
+          />
         </View>
       );
     }
