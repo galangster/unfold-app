@@ -53,7 +53,7 @@ export interface GenerationJobResponse {
 export async function submitGenerationJob(params: {
   devotionalId?: string;
   dayNumber: number;
-  jobType: "initial_arc" | "day";
+  jobType: "initial_arc" | "day" | "onboarding";
   userContext?: {
     name: string;
     aboutMe: string;
@@ -68,6 +68,9 @@ export async function submitGenerationJob(params: {
     devotionalLength?: number;
     bibleTranslation?: string;
     writingStyle?: Record<string, string>;
+    relationshipWithGod?: string;
+    growthGoals?: string[];
+    obstacles?: string[];
   };
 }): Promise<{ jobId: string; status: string }> {
   const headers = await getAuthHeaders();

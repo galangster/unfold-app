@@ -61,6 +61,7 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
+import { submitGenerationJob } from '@/lib/generation-api';
 import { ShockStat } from '@/components/onboarding/ShockStat';
 import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
 import { MultiSelectPills } from '@/components/onboarding/MultiSelectPills';
@@ -633,6 +634,7 @@ export default function OnboardingScreen() {
   const [showListScrollHint, setShowListScrollHint] = useState(true);
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
+  const onboardingJobIdRef = useRef<string | null>(null);
   
   // Animated styles
   const inputAnimatedStyle = useAnimatedStyle(() => ({
@@ -1051,6 +1053,36 @@ export default function OnboardingScreen() {
       }
     }
 
+    // Fire-and-forget: trigger onboarding devotional generation after spiritualSeeking
+    // so content generates in the background while the user continues through buffer screens.
+    if (currentStepId === 'spiritualSeeking') {
+      const seekingValue = mergedCurrentAnswer || data.spiritualSeeking || '';
+      submitGenerationJob({
+        jobType: 'onboarding',
+        dayNumber: 1,
+        userContext: {
+          name: data.name || existingUser?.name || '',
+          aboutMe: data.aboutMe || existingUser?.aboutMe || '',
+          situation: data.currentSituation || '',
+          emotion: '',
+          faith: '',
+          seeking: seekingValue,
+          themeCategory: '',
+          devotionalType: '',
+          readingDuration: 5,
+          bibleTranslation: existingUser?.bibleTranslation || 'BSB',
+          relationshipWithGod: data.relationshipWithGod || 'ups-and-downs',
+          growthGoals: data.growthGoals || [],
+          obstacles: data.obstacles || [],
+        },
+      }).then(({ jobId }) => {
+        onboardingJobIdRef.current = jobId;
+        console.log('[Onboarding] Generation triggered, jobId:', jobId);
+      }).catch((err) => {
+        console.warn('[Onboarding] Background generation failed:', err);
+      });
+    }
+
     // Save companion name when leaving the companion naming step
     if (currentStepId === 'companionNaming') {
       const trimmed = companionNameInput.trim();
@@ -1234,7 +1266,11 @@ export default function OnboardingScreen() {
 
     setIsLoadingAdaptive(true);
     try {
-      const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition);
+      const result = await generateAdaptiveQuestion(previousAnswers, fallbackQuestion, stepPosition, {
+        growthGoals: data.growthGoals,
+        obstacles: data.obstacles,
+        relationshipWithGod: data.relationshipWithGod,
+      });
       setAdaptedSteps((prev) => ({
         ...prev,
         [nextStepId]: { question: result.question, subtext: result.subtext, chips: result.chips },
