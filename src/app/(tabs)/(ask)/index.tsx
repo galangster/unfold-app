@@ -382,6 +382,7 @@ export default function CompanionScreen() {
                   position: 'absolute',
                   bottom: 16,
                   right: 16,
+                  zIndex: 10,
                 },
                 scrollButtonStyle,
               ]}
