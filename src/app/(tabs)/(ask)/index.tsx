@@ -14,8 +14,8 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { FlatList } from 'react-native-gesture-handler';
-import { ListRenderItemInfo } from 'react-native';
+import { FlatList, ListRenderItemInfo } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CaretDownIcon,
@@ -526,7 +526,7 @@ export default function CompanionScreen() {
               scrollButtonStyle,
             ]}
           >
-            <Pressable
+            <GHPressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 scrollToBottom();
@@ -546,7 +546,7 @@ export default function CompanionScreen() {
               }}
             >
               <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-            </Pressable>
+            </GHPressable>
           </Animated.View>
         </Animated.View>
       )}
