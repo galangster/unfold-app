@@ -7,6 +7,10 @@
  *   3. retryJob            — POST /api/jobs/:jobId/retry
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
+import { mmkvStorage } from "./mmkv-storage";
+
+/** MMKV key for caching the active dynamic prompt example */
+export const DYNAMIC_EXAMPLE_KEY = 'active-dynamic-example';
 
 export class ApiError extends Error {
   constructor(
@@ -73,10 +77,22 @@ export async function submitGenerationJob(params: {
     obstacles?: string[];
   };
 }): Promise<{ jobId: string; status: string }> {
+  // Read cached dynamic prompt example (if any) for self-improving generation quality
+  let dynamicExample: { rule: string; badText: string; goodText: string } | undefined;
+  try {
+    const cached = mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY);
+    if (cached) {
+      dynamicExample = JSON.parse(cached);
+    }
+  } catch {
+    // Silent -- example is best-effort enrichment
+  }
+
   const headers = await getAuthHeaders();
+  const body = dynamicExample ? { ...params, dynamicExample } : params;
   const response = await fetchWithTimeout(
     `${PRIMARY_BACKEND_URL}/api/jobs/generate-day`,
-    { method: "POST", headers, body: JSON.stringify(params) },
+    { method: "POST", headers, body: JSON.stringify(body) },
     15_000
   );
 

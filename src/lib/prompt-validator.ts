@@ -12,6 +12,8 @@ import { postJsonWithBackendFallback } from './devotional-service';
 import { VALIDATION_RULES } from '@/constants/prompt-rules';
 import { logger } from '@/lib/logger';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -152,7 +154,17 @@ export async function logGenerationToBackend(params: {
       body: JSON.stringify(params),
     });
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      // Cache the active dynamic example for injection into future generation requests
+      if (data.activeDynamicExample) {
+        try {
+          mmkvStorage.setItem(DYNAMIC_EXAMPLE_KEY, JSON.stringify(data.activeDynamicExample));
+          logger.log('[Validator] Cached active dynamic example for rule:', data.activeDynamicExample.rule);
+        } catch {
+          // Silent -- caching is best-effort
+        }
+      }
+      return data;
     }
   } catch {
     // Silent -- logging is best-effort
