@@ -297,7 +297,7 @@ Try to include at least 1-2 primary passages from these regions. Great options: 
   // List previously used references (compact) so the model can simply avoid exact duplicates
   if (usedScriptures.length > 0) {
     const recentRefs = usedScriptures
-      .slice(0, 80)
+      .slice(0, 60)
       .map((s) => s.reference);
     // Deduplicate
     const uniqueRefs = [...new Set(recentRefs)];
