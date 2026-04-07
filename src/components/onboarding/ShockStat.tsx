@@ -1,10 +1,77 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+  interpolateColor,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import type { ColorTheme } from '@/constants/colors';
+
+// Single character that animates in with gold → text color fade
+function StatChar({ char, delay, fontSize, colors }: {
+  char: string;
+  delay: number;
+  fontSize: number;
+  colors: ColorTheme;
+}) {
+  const opacity = useSharedValue(0);
+  const colorProgress = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }));
+    colorProgress.value = withDelay(delay + 50, withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) }));
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(colorProgress);
+    };
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    color: interpolateColor(colorProgress.value, [0, 1], [colors.accent, colors.accent]),
+  }));
+
+  return (
+    <Animated.Text style={[{
+      fontFamily: FontFamily.display,
+      fontSize,
+      letterSpacing: -2,
+      lineHeight: fontSize * 1.05,
+    }, style]}>
+      {char}
+    </Animated.Text>
+  );
+}
+
+// Typewriter-style number reveal
+function TypewriterNumber({ text, startDelay, fontSize, colors }: {
+  text: string;
+  startDelay: number;
+  fontSize: number;
+  colors: ColorTheme;
+}) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+      {text.split('').map((char, i) => (
+        <StatChar
+          key={`${char}-${i}`}
+          char={char}
+          delay={startDelay + i * 100}
+          fontSize={fontSize}
+          colors={colors}
+        />
+      ))}
+    </View>
+  );
+}
 
 interface ShockStatProps {
   colors: ColorTheme;
@@ -13,54 +80,84 @@ interface ShockStatProps {
 
 export function ShockStat({ colors, onReady }: ShockStatProps) {
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // Haptic when 11% finishes revealing
+    const timer1 = setTimeout(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, 800); // after 93% lands
+    const timer2 = setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       onReady?.();
-    }, 1600);
-    return () => clearTimeout(timer);
+    }, 2800); // after 11% + description lands
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
   }, []);
 
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}>
-      <Animated.View entering={FadeIn.duration(600)} style={{ marginBottom: Spacing['6'] }}>
-        <Text style={{
-          fontFamily: FontFamily.display,
-          fontSize: 40,
-          color: colors.accent,
-          letterSpacing: -1,
-        }}>
-          93%
-        </Text>
-        <Text style={{
-          fontFamily: FontFamily.body,
-          fontSize: 15,
-          color: colors.textMuted,
-          lineHeight: 22,
-          marginTop: Spacing['1'],
-        }}>
-          of Christians want a deeper relationship with God.
-        </Text>
-      </Animated.View>
+  // Sequence:
+  // t=0      93% typewriter starts (3 chars + % = ~400ms)
+  // t=600    "of Christians..." fades in
+  // t=1600   11% typewriter starts
+  // t=2200   "read the Bible daily." fades in
+  // t=2800   haptic + onReady
 
-      <Animated.View entering={FadeIn.delay(800).duration(600)}>
-        <Text style={{
-          fontFamily: FontFamily.display,
-          fontSize: 40,
-          color: colors.accent,
-          letterSpacing: -1,
-        }}>
-          11%
-        </Text>
-        <Text style={{
-          fontFamily: FontFamily.body,
-          fontSize: 15,
-          color: colors.textMuted,
-          lineHeight: 22,
-          marginTop: Spacing['1'],
-        }}>
+  return (
+    <View style={{ flex: 1 }}>
+      {/* 93% — top-left, desire */}
+      <View style={{
+        position: 'absolute',
+        top: '25%',
+        left: Spacing['6'],
+      }}>
+        <TypewriterNumber
+          text="93%"
+          startDelay={200}
+          fontSize={72}
+          colors={colors}
+        />
+        <Animated.Text
+          entering={FadeIn.delay(700).duration(500)}
+          style={{
+            fontFamily: FontFamily.body,
+            fontSize: 16,
+            color: colors.textMuted,
+            lineHeight: 24,
+            marginTop: Spacing['2'],
+            maxWidth: 260,
+          }}
+        >
+          of Christians want a deeper{'\n'}relationship with God.
+        </Animated.Text>
+      </View>
+
+      {/* 11% — bottom-right, reality */}
+      <View style={{
+        position: 'absolute',
+        bottom: '25%',
+        right: Spacing['6'],
+        alignItems: 'flex-end',
+      }}>
+        <TypewriterNumber
+          text="11%"
+          startDelay={1600}
+          fontSize={72}
+          colors={colors}
+        />
+        <Animated.Text
+          entering={FadeIn.delay(2200).duration(500)}
+          style={{
+            fontFamily: FontFamily.body,
+            fontSize: 16,
+            color: colors.textMuted,
+            lineHeight: 24,
+            marginTop: Spacing['2'],
+            textAlign: 'right',
+            maxWidth: 260,
+          }}
+        >
           read the Bible daily.
-        </Text>
-      </Animated.View>
+        </Animated.Text>
+      </View>
     </View>
   );
 }

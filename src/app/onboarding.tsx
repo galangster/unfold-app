@@ -1448,6 +1448,7 @@ export default function OnboardingScreen() {
           <Animated.View entering={FadeIn.delay(1400).duration(400)}>
             <GrowthGraph
               colors={colors}
+              animationDelay={600}
               onDrawComplete={() => {
                 setTimeout(() => setScreenReady(true), 1800);
               }}
