@@ -43,29 +43,37 @@ function stripLineMarkdown(line: string): string {
 // ── Pre-process full text: strip markdown line-level syntax ──────────────
 
 function preprocessMarkdown(text: string): string {
+  // Split into paragraphs first (double newline), then process lines within each
   return text
-    .split('\n')
-    .map((line) => {
-      const trimmed = line.trim();
-      // Convert unordered list items: - item or * item → bullet
-      if (/^[-*]\s+/.test(trimmed)) {
-        return '\u2022 ' + trimmed.replace(/^[-*]\s+/, '');
-      }
-      // Convert numbered list items: 1. item → bullet (keeps numbering simple)
-      if (/^\d+\.\s+/.test(trimmed)) {
-        return '\u2022 ' + trimmed.replace(/^\d+\.\s+/, '');
-      }
-      // Preserve headers as separate blocks by adding double newlines
-      if (/^#{1,6}\s+/.test(trimmed)) {
-        const headerText = trimmed.replace(/^#{1,6}\s+/, '');
-        return `\n\n__HEADER__${headerText}__HEADER__\n\n`;
-      }
-      // Remove horizontal rules
-      if (/^[-*_]{3,}\s*$/.test(trimmed)) return '';
-      return trimmed;
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      return paragraph
+        .split('\n')
+        .map((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return '';
+          // Convert unordered list items: - item or * item → bullet
+          if (/^[-*]\s+/.test(trimmed)) {
+            return '\u2022 ' + trimmed.replace(/^[-*]\s+/, '');
+          }
+          // Convert numbered list items: 1. item → bullet
+          if (/^\d+\.\s+/.test(trimmed)) {
+            return '\u2022 ' + trimmed.replace(/^\d+\.\s+/, '');
+          }
+          // Preserve headers as separate blocks
+          if (/^#{1,6}\s+/.test(trimmed)) {
+            const headerText = trimmed.replace(/^#{1,6}\s+/, '');
+            return `__HEADER__${headerText}__HEADER__`;
+          }
+          // Remove horizontal rules
+          if (/^[-*_]{3,}\s*$/.test(trimmed)) return '';
+          return trimmed;
+        })
+        .filter((line) => line !== '')
+        .join(' '); // Join lines within a paragraph with space (not newline)
     })
-    .filter((line) => line !== '')
-    .join('\n');
+    .filter((para) => para !== '')
+    .join('\n\n'); // Rejoin paragraphs with double newlines (preserved!)
 }
 
 // ── Parse text into segments with bold, italic, and verse refs ───────────
