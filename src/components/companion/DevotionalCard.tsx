@@ -24,12 +24,12 @@ export function DevotionalCard({ data }: Props) {
     if (data.type === "journal") {
       router.push({
         pathname: "/(tabs)/(today)/journal",
-        params: { devotionalId: data.devotionalId, day: data.dayNumber },
+        params: { devotionalId: data.devotionalId, dayNumber: data.dayNumber },
       });
     } else {
       router.push({
         pathname: "/(tabs)/(today)/reading",
-        params: { devotionalId: data.devotionalId, day: data.dayNumber },
+        params: { devotionalId: data.devotionalId, dayNumber: data.dayNumber },
       });
     }
   };
