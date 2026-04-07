@@ -474,40 +474,6 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Scroll-to-latest — above input bar, in normal flow */}
-      {!isEmpty && showScrollButton && (
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            scrollToBottom();
-          }}
-          style={{
-            alignSelf: 'center',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            paddingVertical: 8,
-            paddingHorizontal: 16,
-            marginVertical: 4,
-            borderRadius: 16,
-            backgroundColor: colors.backgroundElevated,
-            borderWidth: 1,
-            borderColor: colors.border,
-            ...Shadow.sm,
-          }}
-        >
-          <Text style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: 12,
-            color: colors.textMuted,
-          }}>
-            Scroll to latest
-          </Text>
-          <CaretDownIcon size={12} color={colors.textMuted} weight="bold" />
-        </TouchableOpacity>
-      )}
-
       {/* Input bar */}
       <CompanionInput
         onSend={handleSend}
