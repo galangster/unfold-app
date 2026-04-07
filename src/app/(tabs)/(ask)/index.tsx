@@ -472,42 +472,6 @@ export default function CompanionScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Scroll-to-bottom FAB — positioned here (after chips/typing) so it renders on top */}
-      {!isEmpty && showScrollButton && (
-        <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              bottom: 120,
-              right: 16,
-              zIndex: 50,
-            },
-            scrollButtonStyle,
-          ]}
-          pointerEvents="box-none"
-        >
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={scrollToBottom}
-            accessibilityLabel="Scroll to bottom"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: colors.backgroundElevated,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-              ...Shadow.sm,
-            }}
-          >
-            <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
       {/* Input bar */}
       <CompanionInput
         onSend={handleSend}
@@ -542,6 +506,43 @@ export default function CompanionScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature="companion"
       />
+      {/* Scroll-to-bottom FAB — top level so it's above all layers */}
+      {!isEmpty && showScrollButton && (
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              right: 16,
+              bottom: tabBarHeight + 60,
+              zIndex: 100,
+              elevation: 10,
+            },
+            scrollButtonStyle,
+          ]}
+        >
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              scrollToBottom();
+            }}
+            accessibilityLabel="Scroll to bottom"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: colors.backgroundElevated,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...Shadow.sm,
+            }}
+          >
+            <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
+          </Pressable>
+        </Animated.View>
+      )}
     </KeyboardAvoidingView>
   );
 }

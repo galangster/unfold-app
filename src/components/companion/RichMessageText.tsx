@@ -43,37 +43,76 @@ function stripLineMarkdown(line: string): string {
 // ── Pre-process full text: strip markdown line-level syntax ──────────────
 
 function preprocessMarkdown(text: string): string {
-  // Split into paragraphs first (double newline), then process lines within each
-  return text
-    .split(/\n{2,}/)
-    .map((paragraph) => {
-      return paragraph
-        .split('\n')
-        .map((line) => {
-          const trimmed = line.trim();
-          if (!trimmed) return '';
-          // Convert unordered list items: - item or * item → bullet
-          if (/^[-*]\s+/.test(trimmed)) {
-            return '\u2022 ' + trimmed.replace(/^[-*]\s+/, '');
-          }
-          // Convert numbered list items: 1. item → bullet
-          if (/^\d+\.\s+/.test(trimmed)) {
-            return '\u2022 ' + trimmed.replace(/^\d+\.\s+/, '');
-          }
-          // Preserve headers as separate blocks
-          if (/^#{1,6}\s+/.test(trimmed)) {
-            const headerText = trimmed.replace(/^#{1,6}\s+/, '');
-            return `__HEADER__${headerText}__HEADER__`;
-          }
-          // Remove horizontal rules
-          if (/^[-*_]{3,}\s*$/.test(trimmed)) return '';
-          return trimmed;
-        })
-        .filter((line) => line !== '')
-        .join(' '); // Join lines within a paragraph with space (not newline)
-    })
-    .filter((para) => para !== '')
-    .join('\n\n'); // Rejoin paragraphs with double newlines (preserved!)
+  // Process line by line, building paragraphs. Headers and blank lines create paragraph breaks.
+  const lines = text.split('\n');
+  const paragraphs: string[] = [];
+  let currentLines: string[] = [];
+
+  const flushCurrent = () => {
+    if (currentLines.length > 0) {
+      paragraphs.push(currentLines.join(' '));
+      currentLines = [];
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Blank line = paragraph break
+    if (!trimmed) {
+      flushCurrent();
+      continue;
+    }
+
+    // Markdown headers (# Header) become their own paragraph block
+    if (/^#{1,6}\s+/.test(trimmed)) {
+      flushCurrent();
+      const headerText = trimmed.replace(/^#{1,6}\s+/, '');
+      paragraphs.push(`__HEADER__${headerText}__HEADER__`);
+      continue;
+    }
+
+    // Bold-only lines (**Header Text**) also become headers
+    if (/^\*\*[^*]+\*\*$/.test(trimmed)) {
+      flushCurrent();
+      const headerText = trimmed.replace(/^\*\*/, '').replace(/\*\*$/, '');
+      paragraphs.push(`__HEADER__${headerText}__HEADER__`);
+      continue;
+    }
+
+    // Lines starting with bold (**Header:** body text) — split into header + body
+    const boldStartMatch = trimmed.match(/^\*\*([^*]+)\*\*\s*(.+)/);
+    if (boldStartMatch) {
+      flushCurrent();
+      paragraphs.push(`__HEADER__${boldStartMatch[1]}__HEADER__`);
+      currentLines.push(boldStartMatch[2]);
+      continue;
+    }
+
+    // Horizontal rules
+    if (/^[-*_]{3,}\s*$/.test(trimmed)) {
+      flushCurrent();
+      continue;
+    }
+
+    // Bullet lists: - item or * item
+    if (/^[-*]\s+/.test(trimmed)) {
+      currentLines.push('\u2022 ' + trimmed.replace(/^[-*]\s+/, ''));
+      continue;
+    }
+
+    // Numbered lists: 1. item
+    if (/^\d+\.\s+/.test(trimmed)) {
+      currentLines.push('\u2022 ' + trimmed.replace(/^\d+\.\s+/, ''));
+      continue;
+    }
+
+    // Regular text line — accumulate into current paragraph
+    currentLines.push(trimmed);
+  }
+
+  flushCurrent();
+  return paragraphs.join('\n\n');
 }
 
 // ── Parse text into segments with bold, italic, and verse refs ───────────
