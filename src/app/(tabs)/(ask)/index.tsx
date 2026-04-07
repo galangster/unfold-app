@@ -294,20 +294,23 @@ export default function CompanionScreen() {
           justifyContent: 'space-between',
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              handleDrawerOpen();
-            }}
-            hitSlop={8}
-            activeOpacity={0.7}
-            accessibilityLabel="Open conversation history"
-            accessibilityRole="button"
-          >
-            <List size={24} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
+        {/* Left: drawer toggle */}
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            handleDrawerOpen();
+          }}
+          hitSlop={8}
+          activeOpacity={0.7}
+          accessibilityLabel="Open conversation history"
+          accessibilityRole="button"
+          style={{ width: 40 }}
+        >
+          <List size={24} color={colors.textMuted} weight="light" />
+        </TouchableOpacity>
 
+        {/* Center: orb + name */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <CompanionOrb
             accentColor={colors.accent}
             size={32}
@@ -324,6 +327,7 @@ export default function CompanionScreen() {
           </Text>
         </View>
 
+        {/* Right: new chat — fixed width to balance center */}
         <TouchableOpacity
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -333,6 +337,7 @@ export default function CompanionScreen() {
           activeOpacity={0.7}
           accessibilityLabel="New conversation"
           accessibilityRole="button"
+          style={{ width: 40, alignItems: 'flex-end' }}
         >
           <NotePencil size={22} color={colors.textMuted} weight="light" />
         </TouchableOpacity>

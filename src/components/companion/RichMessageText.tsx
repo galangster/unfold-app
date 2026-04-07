@@ -55,7 +55,14 @@ function preprocessMarkdown(text: string): string {
       if (/^\d+\.\s+/.test(trimmed)) {
         return '\u2022 ' + trimmed.replace(/^\d+\.\s+/, '');
       }
-      return stripLineMarkdown(trimmed);
+      // Preserve headers as separate blocks by adding double newlines
+      if (/^#{1,6}\s+/.test(trimmed)) {
+        const headerText = trimmed.replace(/^#{1,6}\s+/, '');
+        return `\n\n__HEADER__${headerText}__HEADER__\n\n`;
+      }
+      // Remove horizontal rules
+      if (/^[-*_]{3,}\s*$/.test(trimmed)) return '';
+      return trimmed;
     })
     .filter((line) => line !== '')
     .join('\n');
@@ -256,6 +263,12 @@ export function RichMessageText({ text, onVersePress }: Props) {
         const trimmed = para.trim();
         if (!trimmed) return null;
 
+        // Detect headers (from preprocessMarkdown markers)
+        const headerMatch = trimmed.match(/^__HEADER__(.+?)__HEADER__$/);
+        if (headerMatch) {
+          return { type: 'header' as const, content: headerMatch[1] };
+        }
+
         // Detect blockquotes: starts with > or opening quote
         if (
           trimmed.startsWith('>') ||
@@ -278,6 +291,21 @@ export function RichMessageText({ text, onVersePress }: Props) {
     <View>
       {blocks.map((block, i) => {
         if (!block) return null;
+
+        if (block.type === 'header') {
+          return (
+            <View key={i} style={{ marginTop: i > 0 ? Spacing['5'] : 0, marginBottom: Spacing['1'] }}>
+              <Text style={{
+                fontFamily: FontFamily.bodyBold ?? FontFamily.uiSemiBold,
+                fontSize: FontSize.base,
+                lineHeight: 24,
+                color: colors.text,
+              }}>
+                {block.content}
+              </Text>
+            </View>
+          );
+        }
 
         if (block.type === 'blockquote') {
           return (

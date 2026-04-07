@@ -79,7 +79,11 @@ type ListItem =
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function getConversationTitle(conv: Conversation): string {
-  if (conv.title) return conv.title;
+  // Use AI-generated title if available (capped at 60 chars for safety)
+  if (conv.title) {
+    return conv.title.length > 60 ? conv.title.slice(0, 57) + '…' : conv.title;
+  }
+  // Fallback: first user message, truncated
   const firstUser = (conv.messages ?? []).find(m => m.role === 'user');
   if (firstUser) {
     const truncated = firstUser.content.slice(0, 40);
