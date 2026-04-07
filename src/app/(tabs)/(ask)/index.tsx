@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
-import { Pressable as GHPressable } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CaretDownIcon,
@@ -30,6 +30,7 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -508,46 +509,42 @@ export default function CompanionScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature="companion"
       />
-      {/* Scroll-to-bottom FAB — dedicated overlay layer so only the button itself
-          participates in hit testing while the rest of the screen passes through. */}
-      {!isEmpty && (
+      {/* Scroll-to-bottom FAB — uses RNGH GestureDetector with Gesture.Tap()
+          to create a native tap recognizer that competes with the FlatList's
+          scroll recognizer at the native gesture layer. */}
+      {!isEmpty && showScrollButton && (
         <Animated.View
           pointerEvents="box-none"
-          style={[StyleSheet.absoluteFill, { zIndex: 100, elevation: 10 }]}
+          style={[
+            StyleSheet.absoluteFill,
+            { zIndex: 100, elevation: 10, justifyContent: 'flex-end', alignItems: 'flex-end', paddingRight: 16, paddingBottom: tabBarHeight + 100 },
+          ]}
         >
-          <Animated.View
-            pointerEvents={showScrollButton ? 'auto' : 'none'}
-            style={[
-              {
-                position: 'absolute',
-                right: 16,
-                bottom: tabBarHeight + 100,
-              },
-              scrollButtonStyle,
-            ]}
-          >
-            <GHPressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                scrollToBottom();
-              }}
+          <GestureDetector gesture={Gesture.Tap().onEnd(() => {
+            'worklet';
+            runOnJS(Haptics.impactAsync)(Haptics.ImpactFeedbackStyle.Light);
+            runOnJS(scrollToBottom)();
+          })}>
+            <Animated.View
+              style={[
+                {
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: colors.backgroundElevated,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  ...Shadow.sm,
+                },
+                scrollButtonStyle,
+              ]}
               accessibilityLabel="Scroll to bottom"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: colors.backgroundElevated,
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: 'center',
-                justifyContent: 'center',
-                ...Shadow.sm,
-              }}
             >
               <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-            </GHPressable>
-          </Animated.View>
+            </Animated.View>
+          </GestureDetector>
         </Animated.View>
       )}
     </KeyboardAvoidingView>

@@ -238,7 +238,7 @@ function InlineText({
   return (
     <Text
       style={{
-        fontFamily: isBlockquote ? FontFamily.display : FontFamily.body,
+        fontFamily: isBlockquote ? FontFamily.bodyItalic : FontFamily.body,
         fontSize: FontSize.base,
         lineHeight: isBlockquote ? 26 : 27.2,
         color: colors.text,
