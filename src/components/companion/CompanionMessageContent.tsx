@@ -17,7 +17,9 @@ import { Spacing } from '@/constants/spacing';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { RichMessageText } from './RichMessageText';
+import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
+import type { DeepLinkData } from '@/lib/parse-deep-links';
 
 /** Lightweight markdown strip for streaming text — removes syntax chars only */
 function stripMarkdownLight(text: string): string {
@@ -34,6 +36,7 @@ interface Props {
   message: CompanionMessage;
   showIcon: boolean;
   isStreaming: boolean;
+  isSearching?: boolean;
   onVersePress?: (reference: string) => void;
 }
 
@@ -63,10 +66,16 @@ function StreamingText({ content, color }: { content: string; color: string }) {
   );
 }
 
-export function CompanionMessageContent({ message, showIcon, isStreaming, onVersePress }: Props) {
+export function CompanionMessageContent({ message, showIcon, isStreaming, isSearching, onVersePress }: Props) {
   const { colors } = useTheme();
 
   const isComplete = message.status === 'complete';
+
+  // Build deep link segments for completed messages with deep links
+  const deepLinkCards = useMemo(() => {
+    if (!message.deepLinks?.length) return null;
+    return message.deepLinks;
+  }, [message.deepLinks]);
 
   return (
     <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
@@ -100,15 +109,32 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, onVers
           </View>
         ) : isComplete && onVersePress ? (
           // Complete message — rich text with verse pills + blockquotes
-          <RichMessageText
-            text={message.content}
-            onVersePress={onVersePress}
-          />
+          <>
+            <RichMessageText
+              text={message.content}
+              onVersePress={onVersePress}
+            />
+            {deepLinkCards?.map((dl, i) => (
+              <DevotionalCard key={`dl-${i}`} data={dl} />
+            ))}
+          </>
         ) : (
           // Streaming or pending — lightly stripped text (typing dots handle indicator)
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <StreamingText content={message.content} color={colors.text} />
           </View>
+        )}
+
+        {isSearching && (
+          <Text style={{
+            fontFamily: FontFamily.body,
+            fontSize: FontSize.xs,
+            color: alpha(colors.text, 0.4),
+            fontStyle: 'italic',
+            marginTop: Spacing['1'],
+          }}>
+            Looking something up...
+          </Text>
         )}
       </View>
     </Animated.View>
