@@ -372,10 +372,12 @@ export function CompanionDrawer({
     [allWithMessages, updateConversation],
   );
 
-  // Scrim animated style — opacity interpolated from translateX
+  // Scrim animated style — opacity only. pointerEvents controlled by isOpen prop.
+  // IMPORTANT: Do NOT set pointerEvents in animated style — it conflicts with
+  // the prop and can leave the scrim touch-active when the drawer is closed
+  // (spring animation doesn't settle to exact target value).
   const scrimStyle = useAnimatedStyle(() => ({
     opacity: interpolate(translateX.value, [-DRAWER_WIDTH, 0], [0, 0.5]),
-    pointerEvents: (translateX.value > -DRAWER_WIDTH + 1 ? 'auto' : 'none') as 'auto' | 'none',
   }));
 
   // Drawer animated style — slides in from left
