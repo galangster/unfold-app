@@ -20,6 +20,8 @@ import {
   LightbulbIcon,
   MagnifyingGlassIcon,
   CrossIcon,
+  ClockCounterClockwiseIcon,
+  HandsPrayingIcon,
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -137,8 +139,20 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
     return GREETINGS_NO_NAME[idx];
   }, [userName]);
 
+  const hasHistory = useUnfoldStore((s) => (s.devotionals?.length ?? 0) > 0);
+
   const cards: StarterCard[] = useMemo(() => {
+    if (todayTheme && hasHistory) {
+      // Returning user with active devotional — show memory-aware chips
+      return [
+        { icon: BookOpenTextIcon, text: `Walk me through today's reading` },
+        { icon: ClockCounterClockwiseIcon, text: 'What have I been learning this week?' },
+        { icon: HandsPrayingIcon, text: 'How are my prayer requests going?' },
+        { icon: LightbulbIcon, text: 'Help me put my prayer into words' },
+      ];
+    }
     if (todayTheme) {
+      // Active devotional but no history yet
       return [
         { icon: BookOpenTextIcon, text: `Walk me through today's reading` },
         { icon: HeartIcon, text: 'I need encouragement right now' },
@@ -152,7 +166,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
       { icon: CrossIcon, text: 'I have a question about my faith' },
       { icon: LightbulbIcon, text: 'Help me put my prayer into words' },
     ];
-  }, [todayTheme]);
+  }, [todayTheme, hasHistory]);
 
   return (
     <Animated.View
