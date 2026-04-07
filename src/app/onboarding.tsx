@@ -332,9 +332,8 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
     'Faith doubts', 'Finding purpose', 'Need rest', 'Forgiveness',
   ],
   spiritualSeeking: [
-    'Peace', 'Clarity', 'Direction', 'Healing', 'Purpose',
-    'Forgiveness', 'Strength', 'Rest', 'Joy', 'Community',
-    'Patience', 'Hope',
+    'Consistent rhythm', 'Peace in uncertainty', 'Hearing God clearly',
+    'Deeper relationships', 'Freedom from guilt', 'Bible feels alive',
   ],
 };
 

@@ -1839,7 +1839,8 @@ export function createDevotionalFromGenerated(
 export async function generateAdaptiveQuestion(
   previousAnswers: { question: string; answer: string }[],
   nextQuestionBase: { question: string; subtext: string },
-  stepPosition?: 'opening' | 'depth' | 'bridge' | 'longing'
+  stepPosition?: 'opening' | 'depth' | 'bridge' | 'longing',
+  userContext?: { growthGoals?: string[]; obstacles?: string[]; relationshipWithGod?: string }
 ): Promise<{ question: string; subtext: string; chips?: string[]; source: 'backend' | 'fallback'; backendUrl?: string }> {
   if (previousAnswers.length === 0) {
     return { ...nextQuestionBase, source: 'fallback' };
@@ -1964,13 +1965,33 @@ CHIPS: Generate 6-8 short quick-select response options (1-3 words each) that ar
 
 RESPOND WITH VALID JSON ONLY: {"question": "...", "subtext": "...", "chips": ["...", "..."]}`;
 
+    // Build user context section if growth goals / obstacles / relationship are available
+    let userContextSection = '';
+    if (userContext) {
+      const parts: string[] = [];
+      if (userContext.relationshipWithGod) {
+        parts.push(`Relationship with God: ${userContext.relationshipWithGod}`);
+      }
+      if (userContext.growthGoals?.length) {
+        parts.push(`Growth goals: ${userContext.growthGoals.join(', ')}`);
+      }
+      if (userContext.obstacles?.length) {
+        parts.push(`Obstacles: ${userContext.obstacles.join(', ')}`);
+      }
+      if (parts.length > 0) {
+        userContextSection = `\n\nAdditional context about this person:\n${parts.join('\n')}`;
+      }
+    }
+
     const adaptiveUserPrompt = `Here's what this person has shared so far:
 
-${contextStr}
+${contextStr}${userContextSection}
 
 Generate the next question in this conversation. It should feel like it emerges directly from what they just said — not like a generic template.
 
 IMPORTANT: If they chose a specific study type, book, character, or theme, YOUR QUESTION MUST DIRECTLY REFERENCE AND CONNECT TO THAT CHOICE. Do not ignore what they selected. The question should make them feel like you're paying attention to what they picked and are genuinely curious about why.
+
+If you know their growth goals and obstacles, weave that tension into the question naturally — e.g. "You want trust and peace, but focus keeps slipping. What's underneath that?" Don't list their selections back to them; use them to ask something that cuts deeper.
 
 Make them feel heard. Do NOT ask a question that steers them toward a predetermined answer.`;
 
