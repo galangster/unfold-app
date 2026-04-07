@@ -62,6 +62,7 @@ import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
 import { ShockStat } from '@/components/onboarding/ShockStat';
+import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -563,6 +564,17 @@ export default function OnboardingScreen() {
       // Reset everything for Screen 1
       chaosSpeed.value = 1;
       chaosDrift.value = 0;
+    } else if (currentStepId === 'shockStat') {
+      // Screen 9: keep particles frozen — pure problem, no hope yet
+      chaosSpeed.value = withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) });
+    } else if (currentStepId === 'growthGraph') {
+      // Screen 10: hope arriving — particles begin slow warm drift upward
+      setTimeout(() => {
+        chaosSpeed.value = withTiming(0.4, { duration: 3000, easing: Easing.out(Easing.quad) });
+      }, 800);
+      setTimeout(() => {
+        chaosDrift.value = withTiming(-1.5, { duration: 4000, easing: Easing.out(Easing.quad) });
+      }, 1500);
     }
   }, [currentStepId]);
 
@@ -1388,6 +1400,95 @@ export default function OnboardingScreen() {
               style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
             />
           </View>
+        </TouchableOpacity>
+      );
+    }
+
+    // Screen 10: Growth graph — the turn, hope arrives
+    if (step.type === 'growthGraph') {
+      const userName = data.name || existingUser?.name || '';
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          disabled={!screenReady}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            advanceToNextStep();
+          }}
+          style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}
+        >
+          {/* Personal pivot — first time the app uses their name */}
+          <Animated.Text
+            entering={FadeIn.duration(800)}
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 28,
+              color: colors.text,
+              lineHeight: 36,
+              marginBottom: Spacing['2'],
+            }}
+          >
+            For you{userName ? `, ${userName}` : ''}, that changes today.
+          </Animated.Text>
+
+          <Animated.Text
+            entering={FadeIn.delay(600).duration(600)}
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 16,
+              color: colors.textMuted,
+              lineHeight: 24,
+              marginBottom: Spacing['8'],
+            }}
+          >
+            Unfold writes devotionals around your life — every day more personal than the last.
+          </Animated.Text>
+
+          {/* Growth graph — draws after copy lands */}
+          <Animated.View entering={FadeIn.delay(1400).duration(400)}>
+            <GrowthGraph
+              colors={colors}
+              onDrawComplete={() => {
+                setTimeout(() => setScreenReady(true), 1800);
+              }}
+            />
+          </Animated.View>
+
+          {/* Graph narration copy */}
+          <Animated.Text
+            entering={FadeIn.delay(3200).duration(600)}
+            style={{
+              fontFamily: FontFamily.bodyItalic,
+              fontSize: 17,
+              color: colors.text,
+              lineHeight: 26,
+              marginTop: Spacing['6'],
+            }}
+          >
+            Day 1, it's good. Day 7, it knows your story. Day 30, it feels like it was written by someone who's been walking beside you the whole time.
+          </Animated.Text>
+
+          {/* Closer */}
+          <Animated.Text
+            entering={FadeIn.delay(3800).duration(600)}
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 14,
+              color: colors.textMuted,
+              lineHeight: 22,
+              marginTop: Spacing['3'],
+            }}
+          >
+            No other devotional does this. Unfold is the only one that grows with you.
+          </Animated.Text>
+
+          {/* Tap anywhere */}
+          <Animated.View entering={FadeIn.delay(4400).duration(400)} style={{ marginTop: Spacing['8'] }}>
+            <PulsingText
+              text="Tap anywhere to continue"
+              style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+            />
+          </Animated.View>
         </TouchableOpacity>
       );
     }
@@ -2800,7 +2901,7 @@ export default function OnboardingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {/* Currents — one continuous particle layer across intro screens */}
-      {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro') && (
+      {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (
         <Current type="chaos" color={colors.accent} speed={chaosSpeed} drift={chaosDrift} />
       )}
 
