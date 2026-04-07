@@ -356,38 +356,6 @@ export default function CompanionScreen() {
         </Pressable>
       ) : (
         <View style={{ flex: 1 }}>
-          {/* Scroll-to-latest banner — inside normal flow, no gesture conflicts */}
-          {showScrollButton && (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                scrollToBottom();
-              }}
-              style={{
-                alignSelf: 'center',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingVertical: 6,
-                paddingHorizontal: 14,
-                borderRadius: 16,
-                backgroundColor: colors.backgroundElevated,
-                borderWidth: 1,
-                borderColor: colors.border,
-                ...Shadow.sm,
-              }}
-            >
-              <Text style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 12,
-                color: colors.textMuted,
-              }}>
-                Scroll to latest
-              </Text>
-              <CaretDownIcon size={12} color={colors.textMuted} weight="bold" />
-            </TouchableOpacity>
-          )}
           <FlatList
             ref={listRef}
             data={invertedMessages}
@@ -503,6 +471,40 @@ export default function CompanionScreen() {
               {dailyRemaining} of {FREE_COMPANION_DAILY_LIMIT} free messages left today
             </Text>
           )}
+        </TouchableOpacity>
+      )}
+
+      {/* Scroll-to-latest — above input bar, in normal flow */}
+      {!isEmpty && showScrollButton && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            scrollToBottom();
+          }}
+          style={{
+            alignSelf: 'center',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            marginVertical: 4,
+            borderRadius: 16,
+            backgroundColor: colors.backgroundElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+            ...Shadow.sm,
+          }}
+        >
+          <Text style={{
+            fontFamily: FontFamily.uiMedium,
+            fontSize: 12,
+            color: colors.textMuted,
+          }}>
+            Scroll to latest
+          </Text>
+          <CaretDownIcon size={12} color={colors.textMuted} weight="bold" />
         </TouchableOpacity>
       )}
 
