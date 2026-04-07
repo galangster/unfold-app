@@ -316,16 +316,10 @@ export function RichMessageText({ text, onVersePress }: Props) {
           return { type: 'header' as const, content: headerMatch[1] };
         }
 
-        // Detect blockquotes: starts with > or opening quote
-        if (
-          trimmed.startsWith('>') ||
-          trimmed.startsWith('"') ||
-          trimmed.startsWith('\u201C')
-        ) {
-          const cleanText = trimmed
-            .replace(/^>\s*/, '')
-            .replace(/^["\u201C]/, '')
-            .replace(/["\u201D]$/, '');
+        // Detect blockquotes: only markdown > prefix (not opening quotes —
+        // those are too greedy when AI mixes scripture with commentary)
+        if (trimmed.startsWith('>')) {
+          const cleanText = trimmed.replace(/^>\s*/, '');
           return { type: 'blockquote' as const, content: cleanText };
         }
 
