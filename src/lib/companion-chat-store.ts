@@ -12,7 +12,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage } from './mmkv-storage';
 
-import { getTopicTags } from './companion-memory';
 import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 import type { DeepLinkData } from './parse-deep-links';
 
@@ -233,7 +232,7 @@ export const useCompanionChatStore = create<CompanionChatState>()(
           // Archive current if it has messages
           const activeMessages = active?.messages ?? [];
           if (active && activeMessages.length > 0) {
-            const tags = getTopicTags();
+            const tags: string[] = []; // Topic tags now handled server-side
             conversations = conversations.map(c =>
               c.id === active.id
                 ? { ...c, archived: true, topicTags: tags, title: generateTitle({ ...c, topicTags: tags }), updatedAt: now }
