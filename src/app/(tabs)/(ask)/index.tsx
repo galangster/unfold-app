@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  StyleSheet,
   TouchableOpacity,
 } from 'react-native';
 import { FlatList, ListRenderItemInfo } from 'react-native';
@@ -362,8 +363,8 @@ export default function CompanionScreen() {
             inverted
             onScroll={handleScroll}
             scrollEventThrottle={16}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="always"
             initialNumToRender={15}
             maxToRenderPerBatch={10}
             windowSize={11}
@@ -506,41 +507,46 @@ export default function CompanionScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature="companion"
       />
-      {/* Scroll-to-bottom FAB — top level so it's above all layers */}
-      {!isEmpty && showScrollButton && (
+      {/* Scroll-to-bottom FAB — dedicated overlay layer so only the button itself
+          participates in hit testing while the rest of the screen passes through. */}
+      {!isEmpty && (
         <Animated.View
-          style={[
-            {
-              position: 'absolute',
-              right: 16,
-              bottom: tabBarHeight + 60,
-              zIndex: 100,
-              elevation: 10,
-            },
-            scrollButtonStyle,
-          ]}
+          pointerEvents="box-none"
+          style={[StyleSheet.absoluteFill, { zIndex: 100, elevation: 10 }]}
         >
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              scrollToBottom();
-            }}
-            accessibilityLabel="Scroll to bottom"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: colors.backgroundElevated,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-              ...Shadow.sm,
-            }}
+          <Animated.View
+            pointerEvents={showScrollButton ? 'auto' : 'none'}
+            style={[
+              {
+                position: 'absolute',
+                right: 16,
+                bottom: tabBarHeight + 100,
+              },
+              scrollButtonStyle,
+            ]}
           >
-            <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
-          </Pressable>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                scrollToBottom();
+              }}
+              accessibilityLabel="Scroll to bottom"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: colors.backgroundElevated,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: 'center',
+                justifyContent: 'center',
+                ...Shadow.sm,
+              }}
+            >
+              <CaretDownIcon size={18} color={colors.textMuted} weight="bold" />
+            </Pressable>
+          </Animated.View>
         </Animated.View>
       )}
     </KeyboardAvoidingView>
