@@ -476,6 +476,13 @@ class SyncService {
       if (devo) {
         // Ensure days array exists (server-synced devotionals may not include it)
         if (!Array.isArray(devo.days)) devo.days = [];
+        // Flatten the content JSONB into top-level properties so the client
+        // can read day.reflectionQuestions, day.quotes, etc. directly
+        if (data.content && typeof data.content === 'object') {
+          const { content, ...rest } = data;
+          Object.assign(rest, content);
+          data = rest;
+        }
         // Match by id first, fall back to (devotionalId, dayNumber) to merge
         // server-generated days that were applied from find-completed without a sync id
         let dayIdx = devo.days.findIndex((d: any) => d.id === data.id);
