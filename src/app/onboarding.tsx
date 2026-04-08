@@ -28,8 +28,11 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
+  interpolate,
   type SharedValue,
 } from 'react-native-reanimated';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, XIcon, HandIcon, FingerprintIcon, MoonIcon, CompassIcon, HeartIcon, EyeIcon, FireIcon, SparkleIcon, CloudRainIcon, ScalesIcon, CrosshairIcon, BookOpenIcon, UsersIcon, MusicNotesIcon, CrownIcon, LeafIcon, ChatCircleIcon, CalendarIcon, MagicWandIcon, SmileyIcon, GiftIcon, BinocularsIcon, CloudIcon, ShieldIcon, ShieldCheckIcon, SpeakerHighIcon, LockIcon, GavelIcon } from 'phosphor-react-native';
 import { logger } from '@/lib/logger';
@@ -298,6 +301,8 @@ const ALL_STEPS = [
   ] },
   // ASPIRATION: What would breakthrough look like? (text + pill starters)
   { id: 'aspiration', question: "When you imagine your faith 6\u00A0months from now, what\u2019s\u00A0different?", subtext: "If something could shift, what would you hope it would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  // VULNERABILITY VALIDATION: The exhale — acknowledge their courage before mirror-back
+  { id: 'vulnerabilityValidation', question: '', subtext: '', type: 'vulnerabilityValidation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION: Intro + naming on a single screen
@@ -321,7 +326,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -432,6 +437,43 @@ function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentSt
   void totalSteps;
   void colors;
   return null;
+}
+
+/** Single twinkling star — extracted to avoid hooks-in-map violation */
+function TwinklingStar({ x, y, size, delay, duration, brightness }: {
+  x: number; y: number; size: number; delay: number; duration: number; brightness: number;
+}) {
+  const appear = useSharedValue(0);
+  const twinkle = useSharedValue(brightness);
+
+  useEffect(() => {
+    appear.value = withDelay(delay, withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }));
+    twinkle.value = withDelay(
+      delay + 400,
+      withRepeat(
+        withSequence(
+          withTiming(brightness * 0.25, { duration: duration * 0.4, easing: Easing.inOut(Easing.sin) }),
+          withTiming(brightness, { duration: duration * 0.6, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
+      ),
+    );
+  }, [appear, twinkle, delay, duration, brightness]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: appear.value * twinkle.value,
+    transform: [{ scale: interpolate(twinkle.value, [brightness * 0.25, brightness], [0.7, 1.0]) }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        { position: 'absolute', left: x, top: y, width: size, height: size, borderRadius: size / 2, backgroundColor: '#F5F0EB' },
+        style,
+      ]}
+    />
+  );
 }
 
 export default function OnboardingScreen() {
@@ -863,7 +905,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'aiConsent' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph') {
+    if (step.type === 'mirrorBack' || step.type === 'aiConsent' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation') {
       return true;
     }
 
@@ -2480,6 +2522,111 @@ export default function OnboardingScreen() {
                   I understand, let's continue
                 </Text>
               </View>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      );
+    }
+
+    // Vulnerability validation: the exhale — acknowledge courage with scripture
+    if (step.type === 'vulnerabilityValidation') {
+      // Verse mapping based on relationship with God
+      const VALIDATION_VERSES: Record<string, { text: string; ref: string }> = {
+        close: { text: 'He who began a good work in you will carry it on to completion.', ref: 'Philippians 1:6' },
+        'ups-and-downs': { text: 'The Lord is close to the brokenhearted and saves those who are crushed in spirit.', ref: 'Psalm 34:18' },
+        distant: { text: 'Come near to God and He will come near to you.', ref: 'James 4:8' },
+        starting: { text: 'See, I am doing a new thing! Now it springs up; do you not perceive it?', ref: 'Isaiah 43:19' },
+      };
+      const defaultVerse = { text: 'The Lord is close to the brokenhearted and saves those who are crushed in spirit.', ref: 'Psalm 34:18' };
+      const verse = VALIDATION_VERSES[data.relationshipWithGod ?? ''] ?? defaultVerse;
+      const userName = data.name || '';
+
+      // Stars data — generate once per mount
+      const stars = useMemo(() => {
+        const count = 40;
+        return Array.from({ length: count }, (_, i) => ({
+          x: Math.random() * SCREEN_WIDTH,
+          y: Math.random() * SCREEN_HEIGHT,
+          size: 1.5 + Math.random() * 2,
+          delay: 200 + Math.random() * 1800,
+          duration: 2000 + Math.random() * 3000,
+          brightness: 0.4 + Math.random() * 0.6,
+        }));
+      }, []);
+
+      return (
+        <View style={{ flex: 1, position: 'relative', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+          {/* Twinkling stars background */}
+          <View style={StyleSheet.absoluteFill}>
+            {stars.map((star, i) => (
+              <TwinklingStar key={i} {...star} />
+            ))}
+          </View>
+
+          {/* Line 1: Thank you */}
+          <Animated.Text
+            entering={FadeIn.duration(600).delay(200)}
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 22,
+              color: colors.text,
+              textAlign: 'center',
+              lineHeight: 30,
+            }}
+          >
+            Thank you for sharing that{userName ? `, ${userName}` : ''}.
+          </Animated.Text>
+
+          {/* Line 2: Scripture verse */}
+          <Animated.View entering={FadeIn.duration(600).delay(1700)}>
+            <Text
+              style={{
+                fontFamily: FontFamily.bodyItalic,
+                fontSize: 16,
+                color: colors.textMuted,
+                textAlign: 'center',
+                lineHeight: 24,
+                marginTop: Spacing['6'],
+              }}
+            >
+              {`\u201C${verse.text}\u201D`}
+            </Text>
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.accent,
+                textAlign: 'center',
+                marginTop: Spacing['2'],
+              }}
+            >
+              {verse.ref}
+            </Text>
+          </Animated.View>
+
+          {/* Delayed Continue button */}
+          <Animated.View
+            entering={FadeIn.duration(400).delay(3500)}
+            style={{ position: 'absolute', bottom: Spacing['12'], alignSelf: 'center' }}
+          >
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                advanceToNextStep();
+              }}
+              style={{
+                paddingHorizontal: Spacing['6'],
+                paddingVertical: Spacing['3'],
+              }}
+            >
+              <Text style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.sm,
+                color: colors.textSubtle,
+              }}>
+                Continue
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
