@@ -296,6 +296,8 @@ const ALL_STEPS = [
     { value: 'understanding', label: "Don't know where to start" },
     { value: 'motivation', label: 'Lack of motivation' },
   ] },
+  // ASPIRATION: What would breakthrough look like? (text + pill starters)
+  { id: 'aspiration', question: "When you imagine your faith 6\u00A0months from now, what\u2019s\u00A0different?", subtext: "If something could shift, what would you hope it would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION: Intro + naming on a single screen
@@ -319,7 +321,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -334,6 +336,11 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
   spiritualSeeking: [
     'Consistent rhythm', 'Peace in uncertainty', 'Hearing God clearly',
     'Deeper relationships', 'Freedom from guilt', 'Bible feels alive',
+  ],
+  aspiration: [
+    'Consistent rhythm', 'Peace in uncertainty', 'Hearing God clearly',
+    'Deeper relationships', 'Freedom from guilt', 'Bible feels alive',
+    'Trusting more', 'Less anxiety', 'Stronger prayer life', 'Knowing my purpose',
   ],
 };
 
@@ -407,6 +414,7 @@ interface OnboardingData {
   selectedStudySubject?: string;
   currentSituation: string;
   spiritualSeeking: string;
+  aspiration: string;
   growthGoals: string[];
   obstacles: string[];
   relationshipWithGod?: RelationshipWithGod;
@@ -468,6 +476,7 @@ export default function OnboardingScreen() {
     selectedStudySubject: undefined,
     currentSituation: '',
     spiritualSeeking: '',
+    aspiration: '',
     growthGoals: [],
     obstacles: [],
     relationshipWithGod: undefined,
@@ -616,6 +625,7 @@ export default function OnboardingScreen() {
   const [selectedChips, setSelectedChips] = useState<Record<string, string[]>>({
     currentSituation: [],
     spiritualSeeking: [],
+    aspiration: [],
   });
 
   // Track whether the user has already seen the paywall during onboarding
@@ -688,7 +698,7 @@ export default function OnboardingScreen() {
         emotionalState: '',
         currentSituation: data.currentSituation,
         faithImpact: '',
-        spiritualSeeking: data.spiritualSeeking,
+        spiritualSeeking: data.spiritualSeeking || data.aspiration,
         name: data.name,
         aboutMe: data.aboutMe,
         relationshipWithGod: data.relationshipWithGod,
@@ -880,7 +890,7 @@ export default function OnboardingScreen() {
         currentSituation: data.currentSituation,
         emotionalState: '',
         faithImpact: '',
-        spiritualSeeking: data.spiritualSeeking,
+        spiritualSeeking: data.spiritualSeeking || data.aspiration,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
@@ -905,7 +915,7 @@ export default function OnboardingScreen() {
         currentSituation: data.currentSituation,
         emotionalState: '',
         faithImpact: '',
-        spiritualSeeking: data.spiritualSeeking,
+        spiritualSeeking: data.spiritualSeeking || data.aspiration,
         growthGoals: data.growthGoals,
         obstacles: data.obstacles,
         relationshipWithGod: data.relationshipWithGod,
