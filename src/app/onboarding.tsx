@@ -2308,8 +2308,21 @@ export default function OnboardingScreen() {
             </Animated.View>
           </View>
 
+          {/* Confirmation prompt */}
+          <Animated.View entering={FadeIn.duration(600).delay(1400)}>
+            <Text style={{
+              fontFamily: FontFamily.bodyItalic,
+              fontSize: FontSize.sm,
+              color: colors.textSubtle,
+              lineHeight: 20,
+              marginTop: Spacing['8'],
+            }}>
+              Does this feel like where you are right now?
+            </Text>
+          </Animated.View>
+
           {/* CTA buttons */}
-          <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['10'], gap: Spacing['3'] }}>
+          <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
             <TouchableOpacity activeOpacity={0.7}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
