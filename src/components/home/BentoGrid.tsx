@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { BookOpenIcon, BookmarksSimpleIcon } from 'phosphor-react-native';
@@ -46,14 +47,17 @@ export function BentoGrid() {
             style={[
               styles.box,
               {
-                backgroundColor: isDark
-                  ? 'rgba(245, 240, 235, 0.08)'
-                  : 'rgba(28, 23, 16, 0.06)',
+                backgroundColor: 'transparent',
                 borderColor: colors.border,
+                overflow: 'hidden',
               },
             ]}
           >
-            {/* BlurView removed — was causing edge artifacts on rounded corners */}
+            <BlurView
+              intensity={isDark ? 40 : 30}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
             <item.icon size={20} color={colors.textMuted} weight="light" />
             <Text
               style={[styles.label, { color: colors.text }]}

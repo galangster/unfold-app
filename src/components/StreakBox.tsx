@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import Animated, {
   FadeInDown,
@@ -138,16 +139,17 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           style={[
             styles.card,
             {
-              backgroundColor: colors.inputBackground,
+              backgroundColor: 'transparent',
               borderColor: streakCount > 0 ? alpha(colors.accent, 0.08) : colors.border,
-              shadowColor: streakCount > 0 ? colors.accent : '#000',
-              shadowOffset: { width: 0, height: streakCount > 0 ? 3 : 2 },
-              shadowOpacity: streakCount > 0 ? 0.12 : 0.05,
-              shadowRadius: streakCount > 0 ? 12 : 8,
-              elevation: streakCount > 0 ? 3 : 2,
+              overflow: 'hidden',
             },
           ]}
         >
+          <BlurView
+            intensity={40}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
           {/* Header row - Current Streak label on left, streak count on right */}
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
