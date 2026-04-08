@@ -3082,7 +3082,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
