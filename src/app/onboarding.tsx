@@ -66,6 +66,7 @@ import { ShockStat } from '@/components/onboarding/ShockStat';
 import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
 import { MultiSelectPills } from '@/components/onboarding/MultiSelectPills';
 import { VulnerabilityValidation } from '@/components/onboarding/VulnerabilityValidation';
+import { FeatureSummaryCarousel } from '@/components/onboarding/FeatureSummaryCarousel';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -303,10 +304,8 @@ const ALL_STEPS = [
   { id: 'vulnerabilityValidation', question: '', subtext: '', type: 'vulnerabilityValidation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // MIRROR-BACK: Poetic reflection — like a book introduction
   { id: 'mirrorBack', question: "Written for\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
-  { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // COMPANION: Intro + naming on a single screen
-  { id: 'companionNaming', question: "Meet your\u00A0companion.", subtext: 'Your companion checks in daily, learns what matters to you, and shapes every devotional and reflection around where you are right\u00A0now.', type: 'companionNaming' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // FEATURE SUMMARY: How-it-works carousel with companion naming
+  { id: 'featureSummary', question: '', subtext: '', type: 'featureSummary' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -324,7 +323,7 @@ const ALL_STEPS = [
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'aiConsent' | 'companionNaming' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'featureSummary' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'founderNote' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -746,15 +745,10 @@ export default function OnboardingScreen() {
         }
       }
       
-      // Always skip AI consent screen — privacy info is available in settings
-      if (step.id === 'aiConsent') {
-        return false;
-      }
-
       // Skip first-time-only steps for returning users
       // These are first-time onboarding only — not shown when building new devotionals
       if (existingUser?.hasCompletedOnboarding) {
-        if (step.id === 'founderNote' || step.id === 'companionNaming' || step.id === 'premiumShowcase' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
+        if (step.id === 'founderNote' || step.id === 'featureSummary' || step.id === 'premiumShowcase' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
           return false;
         }
       }
@@ -866,7 +860,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'aiConsent' || step.type === 'founderNote' || step.type === 'companionNaming' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation') {
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation') {
       return true;
     }
 
@@ -1095,8 +1089,8 @@ export default function OnboardingScreen() {
       });
     }
 
-    // Save companion name when leaving the companion naming step
-    if (currentStepId === 'companionNaming') {
+    // Save companion name when leaving the feature summary step (companion naming is inside the carousel)
+    if (currentStepId === 'featureSummary') {
       const trimmed = companionNameInput.trim();
       setCompanionName(trimmed.length > 0 ? trimmed : null);
     }
@@ -2514,6 +2508,19 @@ export default function OnboardingScreen() {
       );
     }
 
+    // Feature summary: how-it-works carousel with companion naming
+    if (step.type === 'featureSummary') {
+      return (
+        <FeatureSummaryCarousel
+          colors={colors}
+          isDark={isDark}
+          companionName={companionNameInput}
+          onCompanionNameChange={setCompanionNameInput}
+          onComplete={advanceToNextStep}
+        />
+      );
+    }
+
     // Founder's note step: a personal letter from Nick
     if (step.type === 'founderNote') {
       return (
@@ -3067,7 +3074,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'aiConsent' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -3095,7 +3102,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
