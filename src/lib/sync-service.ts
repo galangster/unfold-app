@@ -480,8 +480,7 @@ class SyncService {
         // can read day.reflectionQuestions, day.quotes, etc. directly
         if (data.content && typeof data.content === 'object') {
           const { content, ...rest } = data;
-          Object.assign(rest, content);
-          data = rest;
+          data = { ...content, ...rest }; // DB columns (rest) overwrite stale JSONB (content)
         }
         // Match by id first, fall back to (devotionalId, dayNumber) to merge
         // server-generated days that were applied from find-completed without a sync id
