@@ -379,9 +379,8 @@ function ReflectionQuestionCard({
         <Animated.View
           entering={FadeInDown.duration(Duration.normal)}
           style={{
-            marginLeft: 18,
             marginTop: Spacing['3'],
-            paddingLeft: 30,
+            paddingHorizontal: 18,
           }}
         >
           <View

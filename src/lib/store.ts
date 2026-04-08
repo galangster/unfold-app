@@ -793,11 +793,19 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // User actions
       setUser: (user) => set({ user }),
-      updateUser: (updates) =>
+      updateUser: (updates) => {
+        const current = get().user;
+        if (!current) return;
+        // Skip update if all values are already identical (prevents infinite re-render loops)
+        const hasChange = Object.entries(updates).some(
+          ([key, val]) => current[key as keyof typeof current] !== val
+        );
+        if (!hasChange) return;
         set((state) => ({
           user: state.user ? { ...state.user, ...updates } : null,
           userUpdatedAt: new Date().toISOString(),
-        })),
+        }));
+      },
 
       // Devotional actions
       addDevotional: (devotional) =>

@@ -1305,13 +1305,23 @@ export default function JournalHubScreen() {
                       </View>
 
                       {/* Latest 4 series as simple rows */}
-                      {seriesWithEntries.slice(0, 4).map((series) => (
+                      {seriesWithEntries.slice(0, 4).map((series) => {
+                        // Find the latest journal entry's dayNumber for this devotional
+                        const latestJournalDay = journalEntries
+                          .filter((e) => e.devotionalId === series.devotional.id)
+                          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]?.dayNumber
+                          ?? series.devotional.currentDay;
+                        return (
                         <TouchableOpacity
                           key={series.devotional.id}
                           onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             router.push({
-                              pathname: '/(tabs)/(you)/past-devotionals' as any,
+                              pathname: '/(tabs)/(journal)/entry',
+                              params: {
+                                devotionalId: series.devotional.id,
+                                dayNumber: String(latestJournalDay),
+                              },
                             });
                           }}
                           activeOpacity={0.7}
@@ -1346,7 +1356,8 @@ export default function JournalHubScreen() {
                               : ''}
                           </Text>
                         </TouchableOpacity>
-                      ))}
+                      );
+                      })}
                     </>
                   ) : (
                     <View

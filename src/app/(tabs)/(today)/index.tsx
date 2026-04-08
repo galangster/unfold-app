@@ -203,11 +203,7 @@ export default function HomeScreen() {
 
   const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
 
-  useEffect(() => {
-    if (premiumResult?.ok && premiumResult.data !== user?.isPremium) {
-      updateUser({ isPremium: premiumResult.data });
-    }
-  }, [premiumResult, user?.isPremium, updateUser]);
+  // Premium sync handled globally by useRevenueCatSync in _layout.tsx
 
   // Premium nudge system
   const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'home' });
