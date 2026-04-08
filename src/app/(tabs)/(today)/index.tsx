@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
 import { StreakBox } from '@/components/StreakBox';
-import { HomeOnboardingTooltips, type TargetRect } from '@/components/HomeOnboardingTooltips';
+import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
@@ -112,26 +112,10 @@ export default function HomeScreen() {
   // Safe area insets for tooltip y-offset calculation
   const insets = useSafeAreaInsets();
 
-  // Tooltip target rects — captured via onLayout on non-animated wrapper Views
-  // that are direct children of the ScrollView content container.
-  // Refs don't work inside Animated.ScrollView on RN 0.83 / Fabric,
-  // so we use onLayout + safe area offset instead.
-  const [readingRect, setReadingRect] = useState<TargetRect | null>(null);
-  const [streakRect, setStreakRect] = useState<TargetRect | null>(null);
-
-  const onReadingLayout = useCallback((e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
-    const { x, y, width, height } = e.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      setReadingRect({ x, y, width, height });
-    }
-  }, []);
-
-  const onStreakLayout = useCallback((e: { nativeEvent: { layout: { x: number; y: number; width: number; height: number } } }) => {
-    const { x, y, width, height } = e.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      setStreakRect({ x, y, width, height });
-    }
-  }, []);
+  // Tooltip target refs — measured via measureInWindow after a delay
+  // so entering animations have settled (onLayout fires too early on Fabric).
+  const readingRef = useRef<View>(null);
+  const streakRef = useRef<View>(null);
 
   // Scroll tracking for AmbientArtCanvas fade
   const scrollY = useSharedValue(0);
@@ -707,7 +691,7 @@ export default function HomeScreen() {
           <RememberThisCard />
 
           {/* Zone 3: Hero Devotional — single card */}
-          <View onLayout={onReadingLayout} collapsable={false}>
+          <View ref={readingRef} collapsable={false}>
             <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
               <DevotionalCard
                 state={devotionalState}
@@ -782,7 +766,7 @@ export default function HomeScreen() {
           )}
 
           {/* Zone 6: Streak */}
-          <View onLayout={onStreakLayout} collapsable={false}>
+          <View ref={streakRef} collapsable={false}>
             <Animated.View
               entering={entering(FadeIn.delay(200).duration(400))}
               style={styles.streakWrapper}
@@ -841,8 +825,8 @@ export default function HomeScreen() {
 
       {/* First-time onboarding tooltips — shown once, persisted in store */}
       <HomeOnboardingTooltips
-        layoutRects={{ reading: readingRect, streak: streakRect }}
-        yOffset={insets.top}
+        readingRef={readingRef}
+        streakRef={streakRef}
       />
     </View>
   );

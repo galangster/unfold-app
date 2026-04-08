@@ -1,4 +1,4 @@
-import { useState, useCallback, type RefObject } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -23,24 +23,18 @@ export interface TargetRect {
   height: number;
 }
 
+type TargetKey = 'reading' | 'companion' | 'bible' | 'journal' | 'streak';
+
 interface TooltipStep {
   title: string;
   message: string;
-  targetKey: 'reading' | 'streak';
-  /** Where the tooltip appears relative to the spotlight */
+  targetKey: TargetKey;
   placement: 'below' | 'above';
 }
 
-/** Layout rects captured via onLayout in the parent ScrollView */
 export interface OnboardingLayoutRects {
   reading: TargetRect | null;
   streak: TargetRect | null;
-}
-
-// Keep for backward compat
-export interface OnboardingTargets {
-  reading: RefObject<View | null>;
-  streak: RefObject<View | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,10 +43,28 @@ export interface OnboardingTargets {
 
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
-    title: 'Today\u2019s Reading',
-    message: 'Made for you, based on what you shared. Tap the card to begin.',
+    title: 'Your Daily Reading',
+    message: 'Made for you, based on what you shared. Tap here to start today\u2019s devotional.',
     targetKey: 'reading',
     placement: 'below',
+  },
+  {
+    title: 'Your Companion',
+    message: 'Ask questions, go deeper, or just talk about what you\u2019re reading.',
+    targetKey: 'companion',
+    placement: 'above',
+  },
+  {
+    title: 'Your Bible',
+    message: 'The full Bible is here. Highlight verses, take notes, and pick up where you left off.',
+    targetKey: 'bible',
+    placement: 'above',
+  },
+  {
+    title: 'Your Journal',
+    message: 'Reflect on what you\u2019re reading. Entries are linked to each day.',
+    targetKey: 'journal',
+    placement: 'above',
   },
   {
     title: 'Your Streak',
@@ -145,16 +157,37 @@ function Arrow({ direction, color }: { direction: 'up' | 'down'; color: string }
 const TAB_BAR_HEIGHT = 49;
 const TOOLTIP_ESTIMATED_HEIGHT = 110;
 
-interface HomeOnboardingTooltipsProps {
-  /** @deprecated — refs don't work in Animated.ScrollView on Fabric */
-  targets?: OnboardingTargets;
-  /** Pre-measured layout rects from onLayout in the parent screen */
-  layoutRects?: OnboardingLayoutRects;
-  /** Offset to convert ScrollView-content y to screen-absolute y (safe area top) */
-  yOffset?: number;
+/** Compute tab bar item rects from screen dimensions — tabs are fixed at bottom */
+function computeTabRects(screenW: number, screenH: number, bottomInset: number): Record<string, TargetRect> {
+  // 4 visible tabs: Today(0), Bible(1), Companion(2), Journal(3)
+  const tabCount = 4;
+  const tabWidth = screenW / tabCount;
+  const tabBarTop = screenH - TAB_BAR_HEIGHT - bottomInset;
+  const iconSize = 28;
+
+  const makeTabRect = (index: number): TargetRect => ({
+    x: tabWidth * index + (tabWidth - iconSize) / 2,
+    y: tabBarTop + 6,
+    width: iconSize,
+    height: iconSize,
+  });
+
+  return {
+    bible: makeTabRect(1),
+    companion: makeTabRect(2),
+    journal: makeTabRect(3),
+  };
 }
 
-export function HomeOnboardingTooltips({ layoutRects, yOffset = 0 }: HomeOnboardingTooltipsProps) {
+interface HomeOnboardingTooltipsProps {
+  /** Pre-measured layout rects from ref.measureInWindow */
+  layoutRects?: OnboardingLayoutRects;
+  /** Refs to measure after delay — used instead of onLayout for Fabric compatibility */
+  readingRef?: React.RefObject<View | null>;
+  streakRef?: React.RefObject<View | null>;
+}
+
+export function HomeOnboardingTooltips({ layoutRects, readingRef, streakRef }: HomeOnboardingTooltipsProps) {
   const { colors, isDark } = useTheme();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -163,6 +196,44 @@ export function HomeOnboardingTooltips({ layoutRects, yOffset = 0 }: HomeOnboard
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const [measuredRects, setMeasuredRects] = useState<Record<string, TargetRect>>({});
+  const hasMeasured = useRef(false);
+
+  // Measure targets after a delay so entering animations have settled
+  useEffect(() => {
+    if (hasSeenHomeTooltips || hasMeasured.current) return;
+
+    const timer = setTimeout(() => {
+      const rects: Record<string, TargetRect> = {};
+
+      // Compute tab bar positions (fixed, no measurement needed)
+      const tabRects = computeTabRects(screenW, screenH, insets.bottom);
+      Object.assign(rects, tabRects);
+
+      // Measure scroll content elements via ref.measureInWindow
+      const measureRef = (ref: React.RefObject<View | null> | undefined, key: string) => {
+        if (ref?.current) {
+          (ref.current as any).measureInWindow((x: number, y: number, w: number, h: number) => {
+            if (w > 0 && h > 0) {
+              setMeasuredRects((prev) => ({ ...prev, [key]: { x, y, width: w, height: h } }));
+            }
+          });
+        }
+      };
+
+      measureRef(readingRef, 'reading');
+      measureRef(streakRef, 'streak');
+
+      // Also accept pre-computed layout rects as fallback
+      if (layoutRects?.reading) rects.reading = layoutRects.reading;
+      if (layoutRects?.streak) rects.streak = layoutRects.streak;
+
+      setMeasuredRects((prev) => ({ ...prev, ...rects }));
+      hasMeasured.current = true;
+    }, 800); // Wait for entering animations to complete
+
+    return () => clearTimeout(timer);
+  }, [hasSeenHomeTooltips, readingRef, streakRef, layoutRects, screenW, screenH, insets.bottom]);
 
   const step = TOOLTIP_STEPS[currentStep];
 
@@ -185,39 +256,16 @@ export function HomeOnboardingTooltips({ layoutRects, yOffset = 0 }: HomeOnboard
     dismiss();
   }, [dismiss]);
 
-  // Don't render if already seen, dismissed, or step out of bounds
+  // Don't render if already seen or dismissed
   if (hasSeenHomeTooltips || !isVisible || !step) return null;
 
-  // Get the target rect for the current step from layout rects
-  const rawRect = layoutRects?.[step.targetKey] ?? null;
-
-  // Apply yOffset to convert from ScrollView-content-relative to screen-absolute
-  const targetRect: TargetRect | null = rawRect
-    ? { ...rawRect, y: rawRect.y + yOffset }
-    : null;
+  // Don't render until we have the current step's target measured
+  const targetRect = measuredRects[step.targetKey] ?? null;
+  if (!targetRect) return null; // No dim-only fallback — wait for measurement
 
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
   const tooltipBg = isDark ? colors.inputBackground : colors.background;
   const tooltipBorder = colors.border;
-
-  // While waiting for layout data, show just the backdrop
-  if (!targetRect) {
-    return (
-      <Animated.View
-        entering={FadeIn.duration(Duration.slow)}
-        style={styles.overlay}
-        pointerEvents="box-none"
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={[styles.backdrop, { backgroundColor: `rgba(0, 0, 0, ${BACKDROP_OPACITY})` }]}
-          onPress={handleOverlayPress}
-          accessibilityRole="button"
-          accessibilityLabel="Skip onboarding"
-        />
-      </Animated.View>
-    );
-  }
 
   // Calculate tooltip position
   const GAP = 12;
@@ -399,9 +447,6 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
   },
   tooltipCard: {
     position: 'absolute',
