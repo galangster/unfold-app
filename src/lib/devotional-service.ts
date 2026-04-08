@@ -1998,7 +1998,7 @@ Make them feel heard. Do NOT ask a question that steers them toward a predetermi
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/adaptive-question',
       {
-        model: 'grok-4-1-fast-non-reasoning',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 220,
         temperature: 0.7,
         system: adaptiveSystemPrompt,
@@ -2343,7 +2343,7 @@ Extract the top ${count} most shareable quotes from this devotional day. Return 
     const backendResult = await postJsonWithBackendFallback(
       '/api/generate/extract-quotes',
       {
-        model: 'grok-4-1-fast-non-reasoning',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 500,
         system: extractionSystemPrompt,
         messages: [

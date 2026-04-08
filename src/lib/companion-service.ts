@@ -152,7 +152,7 @@ Generate a short, personal companion response and 2 suggestion pills.`;
           method: 'POST',
           headers: await getAuthHeaders(),
           body: JSON.stringify({
-            model: 'grok-4-1-fast-non-reasoning',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 150,
             temperature: 0.8,
             system: systemPrompt,

@@ -155,7 +155,7 @@ async function postToBackend(
   let lastError: unknown = null;
 
   const payload = {
-    model: 'grok-4-1-fast-non-reasoning',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 2000,
     temperature: 0.7,
     system: EXAMEN_SYSTEM_PROMPT,

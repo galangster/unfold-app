@@ -640,7 +640,7 @@ Their journal entry:
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify({
-          model: 'grok-4-1-fast-non-reasoning',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 400,
           temperature: 0.8,
           system: systemPrompt,
