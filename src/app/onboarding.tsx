@@ -67,6 +67,8 @@ import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
 import { MultiSelectPills } from '@/components/onboarding/MultiSelectPills';
 import { VulnerabilityValidation } from '@/components/onboarding/VulnerabilityValidation';
 import { FeatureSummaryCarousel } from '@/components/onboarding/FeatureSummaryCarousel';
+import { DevotionalSegue } from '@/components/onboarding/DevotionalSegue';
+import { ReadDevotionalStep } from '@/components/onboarding/ReadDevotionalStep';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -306,6 +308,8 @@ const ALL_STEPS = [
   { id: 'mirrorBack', question: "Written for\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FEATURE SUMMARY: How-it-works carousel with companion naming
   { id: 'featureSummary', question: '', subtext: '', type: 'featureSummary' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // FOUNDER NOTE: A personal letter from the founder
+  { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // EXPLORATION: Theme/topic selection (optional)
   { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
@@ -317,13 +321,15 @@ const ALL_STEPS = [
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "Each day is crafted to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
-  // FOUNDER NOTE: A personal letter from the founder
-  { id: 'founderNote', question: 'A note from the\u00A0founder', subtext: '', type: 'founderNote' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // SEGUE: Build anticipation before the first devotional reveal
+  { id: 'devotionalSegue', question: '', subtext: '', type: 'devotionalSegue' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // READ THE DEVOTIONAL: The actual first reading experience during onboarding
+  { id: 'readDevotional', question: '', subtext: '', type: 'readDevotional' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // PREMIUM SHOWCASE: Final premium pitch before generating — shown to ALL users
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'featureSummary' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'mirrorBack' | 'founderNote' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -860,7 +866,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation') {
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation') {
       return true;
     }
 
@@ -2401,6 +2407,27 @@ export default function OnboardingScreen() {
       );
     }
 
+    // Devotional segue: build anticipation before the reveal
+    if (step.type === 'devotionalSegue') {
+      return (
+        <DevotionalSegue
+          name={data.name}
+          colors={colors}
+          onContinue={advanceToNextStep}
+        />
+      );
+    }
+
+    // Read devotional: the first reading experience
+    if (step.type === 'readDevotional') {
+      return (
+        <ReadDevotionalStep
+          colors={colors}
+          onContinue={advanceToNextStep}
+        />
+      );
+    }
+
     // Founder's note step: a personal letter from Nick
     if (step.type === 'founderNote') {
       return (
@@ -2954,7 +2981,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2982,7 +3009,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
