@@ -347,7 +347,7 @@ export async function generateBridge(
 
   try {
     const result = await postBridgeRequest({
-      model: 'grok-4-1-fast-non-reasoning',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
       temperature: 0.7,
       system: systemPrompt,

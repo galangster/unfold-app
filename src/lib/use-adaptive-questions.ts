@@ -125,7 +125,7 @@ export function useAdaptiveQuestions({
           headers: await getAuthHeaders(),
           signal: controller.signal,
           body: JSON.stringify({
-            model: 'grok-4-1-fast-non-reasoning',
+            model: 'claude-haiku-4-5-20251001',
             max_tokens: 300,
             temperature: 0.8,
             system: `${PERSONA_BRIEF}
