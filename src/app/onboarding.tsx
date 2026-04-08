@@ -299,8 +299,6 @@ const ALL_STEPS = [
   ] },
   // ASPIRATION: What would breakthrough look like? (text + pill starters)
   { id: 'aspiration', question: "When you imagine your faith 6\u00A0months from now, what\u2019s\u00A0different?", subtext: "If something could shift, what would you hope it would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
-  // VULNERABILITY VALIDATION: The exhale — acknowledge their courage before mirror-back
-  { id: 'vulnerabilityValidation', question: '', subtext: '', type: 'vulnerabilityValidation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // AI CONSENT: Disclose AI providers and get consent (App Store Guideline 5.1.2(i)) — shown early, before exploration
   { id: 'aiConsent', question: "How your data is\u00A0used.", subtext: '', type: 'aiConsent' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMPANION: Intro + naming on a single screen
@@ -316,6 +314,8 @@ const ALL_STEPS = [
   { id: 'readingDuration', question: 'How long should each devotional be?', subtext: "Each day is crafted to fit your rhythm.", type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
   { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
   { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: "A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.", type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
+  // VULNERABILITY VALIDATION: The exhale — acknowledge their courage before mirror-back
+  { id: 'vulnerabilityValidation', question: '', subtext: '', type: 'vulnerabilityValidation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // MIRROR-BACK: Poetic reflection before building — like a book introduction
   { id: 'mirrorBack', question: "Written for\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
