@@ -72,6 +72,7 @@ import { ReadDevotionalStep } from '@/components/onboarding/ReadDevotionalStep';
 import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
 import { ReviewPromptStep } from '@/components/onboarding/ReviewPromptStep';
 import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
+import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -336,11 +337,11 @@ const ALL_STEPS = [
   { id: 'commitment1', question: "How committed are you to making space for this?", subtext: '', type: 'commitment1' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMMITMENT 2: Personalized affirmation
   { id: 'commitment2', question: '', subtext: '', type: 'commitment2' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // PREMIUM SHOWCASE: Final premium pitch before generating — shown to ALL users
-  { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // THREE STEP PAYWALL: Final premium pitch before generating — shown to ALL users
+  { id: 'threeStepPaywall', question: '', subtext: '', type: 'threeStepPaywall' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'reviewPrompt' | 'commitment1' | 'commitment2' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'reviewPrompt' | 'commitment1' | 'commitment2' | 'threeStepPaywall';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -506,7 +507,7 @@ export default function OnboardingScreen() {
     mirrorBackCommitted: false,
   });
 
-  // RevenueCat — fetch offerings for direct purchase from premiumShowcase
+  // RevenueCat — fetch offerings for direct purchase from threeStepPaywall
   const { data: offeringsResult } = useQuery({
     queryKey: ['revenuecat', 'offerings'],
     queryFn: getOfferings,
@@ -769,7 +770,7 @@ export default function OnboardingScreen() {
       // Skip first-time-only steps for returning users
       // These are first-time onboarding only — not shown when building new devotionals
       if (existingUser?.hasCompletedOnboarding) {
-        if (step.id === 'founderNote' || step.id === 'featureSummary' || step.id === 'premiumShowcase' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
+        if (step.id === 'founderNote' || step.id === 'featureSummary' || step.id === 'threeStepPaywall' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
           return false;
         }
       }
@@ -880,8 +881,8 @@ export default function OnboardingScreen() {
       return value !== undefined && value !== '';
     }
 
-    // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'reviewPrompt' || step.type === 'commitment1' || step.type === 'commitment2') {
+    // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and three-step paywall always allow proceeding
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'reviewPrompt' || step.type === 'commitment1' || step.type === 'commitment2') {
       return true;
     }
 
@@ -2847,130 +2848,42 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Premium showcase step: final premium pitch before generating
-    if (step.type === 'premiumShowcase') {
-      const features = [
-        { title: 'Unlimited devotionals', description: 'Create as many series as you want' },
-        { title: 'AI companion', description: 'Learns your story and shapes tomorrow\u2019s reading' },
-        { title: 'A rhythm, morning to night', description: 'Check-ins and reflections that adapt your next devotional to your responses' },
-        { title: 'Thousands of resources', description: 'Stories, commentaries, and encyclopedias curated for you' },
-        { title: '40+ study methods', description: 'Lectio Divina, SOAP, verse mapping + guided prompts' },
-        { title: 'Longer, deeper content', description: 'Extended devotionals and longer series' },
-        { title: 'Guided journal prompts', description: 'Reflection questions shaped by your story and today\u2019s reading' },
-        { title: 'Themes, fonts & colors', description: 'Make the app feel like yours' },
-      ];
+    // Three-step paywall: final premium pitch before generating
+    if (step.type === 'threeStepPaywall') {
+      const monthlyPkg = rcOfferings?.current?.availablePackages.find(
+        (pkg) => pkg.identifier === '$rc_monthly'
+      );
+      const mPrice = monthlyPkg?.product.priceString ?? '$8.99';
+      const mRaw = monthlyPkg?.product.price ?? 8.99;
+      const yRaw = yearlyPackage?.product.price ?? 74.99;
+      const tDays = (() => {
+        const intro = yearlyPackage?.product.introPrice;
+        if (!intro || intro.price !== 0) return 7;
+        const unit = intro.periodUnit.toLowerCase();
+        if (unit === 'day') return intro.periodNumberOfUnits;
+        if (unit === 'week') return intro.periodNumberOfUnits * 7;
+        return 7;
+      })();
+
       return (
-        <View style={{ gap: Spacing['4'], marginTop: Spacing['1'] }}>
-          {/* Embers + gradient overlay */}
-          <View style={{ position: 'absolute', top: -200, left: -Spacing['6'], right: -Spacing['6'], bottom: -100, pointerEvents: 'none' }}>
-            <EmberParticles color={colors.accent} count={14} bidirectional />
-            <LinearGradient
-              colors={['transparent', `${colors.accent}15`, `${colors.accent}30`]}
-              style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 }}
-            />
-          </View>
-
-          <Animated.View entering={FadeIn.delay(200).duration(600)} style={{ gap: Spacing['2'] }}>
-            {features.map((feature, index) => (
-              <Animated.View
-                key={feature.title}
-                entering={FadeIn.delay(300 + index * 80).duration(500)}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: Spacing['3'],
-                  paddingVertical: Spacing['2.5'], paddingHorizontal: Spacing['3.5'],
-                  backgroundColor: alpha(colors.accent, 0.06),
-                  borderRadius: Radius.md,
-                  borderWidth: 1,
-                  borderColor: alpha(colors.accent, 0.08),
-                }}
-              >
-                <View style={{
-                  width: 6, height: 6, borderRadius: 3,
-                  backgroundColor: colors.accent,
-                }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 15, color: colors.text }}>{feature.title}</Text>
-                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 13, color: colors.textMuted, marginTop: 2 }}>{feature.description}</Text>
-                </View>
-              </Animated.View>
-            ))}
-          </Animated.View>
-
-          {/* CTA: Start free trial — purchases directly via RevenueCat */}
-          <Animated.View entering={FadeIn.delay(800).duration(400)}>
-            <TouchableOpacity activeOpacity={0.7}
-              disabled={trialPurchaseMutation.isPending}
-              onPress={async () => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                hasSeenPaywallRef.current = true;
-                if (!yearlyPackage) {
-                  // Fallback: if offerings haven't loaded, go to full paywall
-                  saveOnboardingData();
-                  router.push({ pathname: '/paywall', params: { source: 'onboarding' } });
-                  return;
-                }
-                try {
-                  const result = await trialPurchaseMutation.mutateAsync(yearlyPackage);
-                  if (result.ok) {
-                    updateUser({ isPremium: true });
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    completeOnboarding();
-                  } else {
-                    // User cancelled or purchase didn't complete — no action needed
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                  }
-                } catch (e) {
-                  logger.log('[Onboarding] Purchase error:', e);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                }
-              }}
-            >
-              <View style={{
-                backgroundColor: colors.accent,
-                paddingVertical: Spacing['4'], paddingHorizontal: Spacing['6'], borderRadius: Radius.lg,
-                alignItems: 'center',
-                shadowColor: colors.accent, shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.5, shadowRadius: 20, elevation: 8,
-                opacity: trialPurchaseMutation.isPending ? 0.7 : 1,
-              }}>
-                {trialPurchaseMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: FontSize.base, color: '#FFFFFF' }}>
-                    Start {yearlyTrialDuration} free trial
-                  </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-
-            {/* Billing terms */}
-            <Text style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textSubtle,
-              textAlign: 'center',
-              marginTop: Spacing['2.5'],
-              lineHeight: 18,
-            }}>
-              After your free trial, {yearlyPrice}/year. Cancel anytime.
-            </Text>
-          </Animated.View>
-
-          {/* Skip option */}
-          <Animated.View entering={FadeIn.delay(950).duration(400)}>
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                completeOnboarding();
-              }}
-              style={{ alignItems: 'center', paddingVertical: Spacing['2'] }}
-            >
-              <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}>
-                Maybe later
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
+        <ThreeStepPaywall
+          colors={colors}
+          isDark={isDark}
+          yearlyPackage={yearlyPackage}
+          monthlyPackage={monthlyPkg}
+          yearlyPrice={yearlyPrice}
+          monthlyPrice={mPrice}
+          yearlyRaw={yRaw}
+          monthlyRaw={mRaw}
+          trialDuration={yearlyTrialDuration}
+          trialDays={tDays}
+          onPurchaseSuccess={() => {
+            setPurchasedDuringOnboarding(true);
+            updateUser({ isPremium: true });
+            advanceToNextStep();
+          }}
+          onSkip={advanceToNextStep}
+        />
       );
     }
 
@@ -3053,7 +2966,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'reviewPrompt' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'threeStepPaywall' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'reviewPrompt' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
