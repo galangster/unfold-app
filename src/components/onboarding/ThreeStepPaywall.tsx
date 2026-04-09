@@ -208,8 +208,10 @@ function ScreenTrialReminder({
           loop
           style={styles.bellLottie}
           colorFilters={[
+            { keypath: 'Pre-comp 1', color: colors.accent },
             { keypath: 'Bell Frame', color: colors.accent },
             { keypath: 'Bell Bottom', color: colors.accent },
+            { keypath: 'Mask', color: colors.accent },
           ]}
         />
       </View>
