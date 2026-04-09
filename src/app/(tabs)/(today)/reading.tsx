@@ -690,7 +690,7 @@ export default function ReadingScreen() {
     }
 
     router.push({
-      pathname: '/(tabs)/(today)/journal',
+      pathname: '/(tabs)/(journal)/entry',
       params: {
         devotionalId: currentDevotionalId ?? '',
         dayNumber: journalDay.toString(),
