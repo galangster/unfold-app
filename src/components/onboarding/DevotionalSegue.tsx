@@ -401,16 +401,17 @@ export function DevotionalSegue({
 
   return (
     <View style={[styles.container, { paddingHorizontal: Spacing['6'] }]}>
-      {/* Top spacer */}
-      <View style={styles.flex1} />
+      {/* Top spacer — smaller so content sits in upper-middle */}
+      <View style={{ flex: 0.6 }} />
 
-      {/* Orbital animation */}
-      <OrbitalLoader accent={colors.accent} isSettled={showReadyReveal} />
-
-      {/* Phase 1: Theatrical reveal */}
+      {/* Phase 1: Theatrical reveal — heading above orbital */}
       {!showReadyReveal && (
         <Animated.View style={phase1Style}>
           <TypewriterText text={OPENING_LINE} colors={colors} />
+
+          <View style={{ marginTop: Spacing['6'] }}>
+            <OrbitalLoader accent={colors.accent} isSettled={false} />
+          </View>
 
           <CyclingStatusLines
             colors={colors}
@@ -420,15 +421,15 @@ export function DevotionalSegue({
         </Animated.View>
       )}
 
-      {/* Phase 2: Ready reveal */}
+      {/* Phase 2: Ready reveal — larger heading, upper-middle */}
       {showReadyReveal && (
         <Animated.View entering={FadeIn.duration(300).delay(200)}>
           <Text
             style={{
               fontFamily: FontFamily.display,
-              fontSize: 28,
+              fontSize: 34,
               color: colors.text,
-              lineHeight: Math.round(28 * 1.3),
+              lineHeight: Math.round(34 * 1.25),
             }}
           >
             Your first devotional is ready.
@@ -437,9 +438,9 @@ export function DevotionalSegue({
           <Text
             style={{
               fontFamily: FontFamily.body,
-              fontSize: 15,
+              fontSize: 16,
               color: colors.textMuted,
-              lineHeight: 22,
+              lineHeight: 24,
               marginTop: Spacing['4'],
             }}
           >
@@ -449,7 +450,7 @@ export function DevotionalSegue({
         </Animated.View>
       )}
 
-      {/* Bottom spacer */}
+      {/* Bottom spacer — larger to push content upward */}
       <View style={styles.flex1} />
 
       {/* CTA Button — only in Phase 2 */}
