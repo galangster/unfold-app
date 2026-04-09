@@ -163,41 +163,50 @@ function StackCard({
     const active = activeIndex.value;
     const relativePos = ((index - active) % total + total) % total;
 
+    // How far the front card has been dragged (0 to -SCREEN_WIDTH)
+    const progress = Math.min(Math.abs(dismissX.value) / SCREEN_WIDTH, 1);
+
     if (relativePos === 0) {
-      // Front card -- follows swipe dismissal
+      // Front card -- follows swipe with rotation for natural feel
+      const rotate = (dismissX.value / SCREEN_WIDTH) * 12; // tilts up to 12deg
       return {
         zIndex: total,
-        opacity: 1,
+        opacity: 1 - progress * 0.3,
         transform: [
           { translateX: dismissX.value },
-          { translateY: 0 },
+          { translateY: progress * -30 }, // lifts slightly as it swipes
+          { rotate: `${rotate}deg` },
           { scale: 1 },
         ],
       };
     }
 
     if (relativePos === 1) {
-      // Second card
+      // Second card — scales up as front card leaves
+      const scale = (1 - STACK_SCALE_STEP) + STACK_SCALE_STEP * progress;
+      const translateY = STACK_OFFSET_Y * (1 - progress);
       return {
         zIndex: total - 1,
         opacity: 1,
         transform: [
           { translateX: 0 },
-          { translateY: STACK_OFFSET_Y },
-          { scale: 1 - STACK_SCALE_STEP },
+          { translateY },
+          { scale },
         ],
       };
     }
 
     if (relativePos === 2) {
-      // Third card -- fully opaque, stacked behind
+      // Third card — moves up as second card promotes
+      const scale = (1 - STACK_SCALE_STEP * 2) + STACK_SCALE_STEP * progress;
+      const translateY = STACK_OFFSET_Y * 2 + STACK_OFFSET_Y * -1 * progress;
       return {
         zIndex: total - 2,
         opacity: 1,
         transform: [
           { translateX: 0 },
-          { translateY: STACK_OFFSET_Y * 2 },
-          { scale: 1 - STACK_SCALE_STEP * 2 },
+          { translateY },
+          { scale },
         ],
       };
     }
@@ -216,7 +225,7 @@ function StackCard({
         styles.stackCard,
         {
           width: STACK_CARD_WIDTH,
-          backgroundColor: colors.inputBackground,
+          backgroundColor: colors.backgroundElevated,
           borderWidth: 1,
           borderColor: colors.border,
         },
@@ -495,16 +504,14 @@ function ScreenPricing({
     .activeOffsetX([-12, 12])
     .onUpdate((e) => {
       'worklet';
-      // Only allow left swipe (negative translationX)
-      if (e.translationX < 0) {
-        dismissX.value = e.translationX;
-      }
+      dismissX.value = e.translationX;
     })
     .onEnd((e) => {
       'worklet';
-      if (e.translationX < SWIPE_THRESHOLD) {
-        // Dismiss: animate card off screen, then advance
-        dismissX.value = withTiming(-SCREEN_WIDTH, { duration: 200 }, () => {
+      if (Math.abs(e.translationX) > Math.abs(SWIPE_THRESHOLD)) {
+        // Dismiss: animate card off in the direction of swipe
+        const direction = e.translationX < 0 ? -1 : 1;
+        dismissX.value = withTiming(direction * SCREEN_WIDTH, { duration: 200 }, () => {
           activeIndex.value = (activeIndex.value + 1) % REVIEWS.length;
           dismissX.value = 0;
           runOnJS(advanceCard)();
@@ -1169,7 +1176,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginTop: Spacing['2.5'],
+    marginTop: Spacing['8'],
   },
   stackDot: {
     width: 5,
