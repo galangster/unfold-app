@@ -1549,7 +1549,7 @@ export default function OnboardingScreen() {
               marginTop: Spacing['3'],
             }}
           >
-            No other devotional does this. Unfold is the only one that grows with you.
+            This is the first adaptive Bible app in the world. Unfold is the only one that grows with you.
           </Animated.Text>
 
           {/* Tap anywhere */}
