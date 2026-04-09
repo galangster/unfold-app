@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { XIcon, CheckIcon, BookOpenIcon, StarIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -139,39 +140,56 @@ function FiveStars({ color }: { color: string }) {
 
 function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
   return (
-    <View style={styles.screenCenter}>
-      {/* Headline */}
+    <View style={{ flex: 1, overflow: 'hidden' }}>
+      {/* Headline — near the top */}
       <Text
         style={[
           styles.headline,
-          { color: colors.text },
+          { color: colors.text, paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] },
         ]}
       >
         We want you to try Unfold for free.
       </Text>
 
-      {/* Device bezel */}
-      <View
-        style={[
-          styles.deviceBezel,
-          {
-            width: DEVICE_BEZEL_WIDTH,
-            borderColor: '#2A2A2A',
-          },
-        ]}
-      >
-        <View style={styles.deviceInner}>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.sm,
-              color: colors.accent,
-            }}
-          >
-            Preview coming soon
-          </Text>
+      {/* Device bezel — extends off the bottom of the screen */}
+      <View style={{ flex: 1, alignItems: 'center', marginTop: Spacing['5'] }}>
+        <View
+          style={[
+            styles.deviceBezel,
+            {
+              width: DEVICE_BEZEL_WIDTH,
+              borderColor: '#2A2A2A',
+              // No fixed height — let it extend beyond the parent
+              height: DEVICE_BEZEL_WIDTH / (9 / 19.5) + 100,
+            },
+          ]}
+        >
+          <View style={[styles.deviceInner, { aspectRatio: undefined, flex: 1 }]}>
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSize.sm,
+                color: colors.accent,
+              }}
+            >
+              Preview coming soon
+            </Text>
+          </View>
         </View>
       </View>
+
+      {/* Gradient fade at the bottom — feathers the bezel into black */}
+      <LinearGradient
+        colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.8)', 'rgba(10,10,10,1)']}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 200,
+        }}
+        pointerEvents="none"
+      />
     </View>
   );
 }
