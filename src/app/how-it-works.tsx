@@ -55,11 +55,6 @@ export const FEATURE_PAGES: FeatureCard[] = [
     animation: 'heartbeat',
   },
   {
-    headline: "Listen, don't just read",
-    body: 'Full audio narration in voices that feel like someone sitting across from you.',
-    animation: 'waveform',
-  },
-  {
     headline: 'Build a rhythm',
     body: 'Streaks that matter. A gentle push to show up, even when it\u2019s hard.',
     animation: 'weekCircles',
