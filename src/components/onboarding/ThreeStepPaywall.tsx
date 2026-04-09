@@ -190,10 +190,8 @@ function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
 
 function ScreenTrialReminder({
   colors,
-  trialDays,
 }: {
   colors: ColorTheme;
-  trialDays: number;
 }) {
   return (
     <View style={styles.screen2Root}>
@@ -214,27 +212,6 @@ function ScreenTrialReminder({
             { keypath: 'Bell Bottom', color: colors.accent },
           ]}
         />
-
-        {/* Day badge */}
-        <View
-          style={[
-            styles.dayBadge,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.sm,
-              color: colors.textMuted,
-            }}
-          >
-            Day {trialDays - 1}
-          </Text>
-        </View>
       </View>
     </View>
   );
@@ -557,17 +534,18 @@ function BottomCTA({
         </View>
       </TouchableOpacity>
 
-      {/* Renewal disclosure */}
+      {/* Renewal disclosure — must fit one line */}
       <Text
+        numberOfLines={1}
         style={{
           fontFamily: FontFamily.ui,
-          fontSize: FontSize.sm,
+          fontSize: FontSize.xs,
           color: colors.textMuted,
           textAlign: 'center',
-          marginTop: Spacing['3'],
+          marginTop: Spacing['2'],
         }}
       >
-        {trialDays} days free, then {yearlyPrice}/year. Cancel anytime.
+        {trialDays} days free, then {yearlyPrice}/yr. Cancel anytime.
       </Text>
     </View>
   );
@@ -687,8 +665,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         </Text>
       </TouchableOpacity>
 
-      {/* Page content — paddingTop positions content at ~25-30% from top */}
-      <View style={[styles.flex1, { paddingTop: insets.top + Spacing['6'] }]}>
+      {/* Page content — starts immediately below the restore button */}
+      <View style={styles.flex1}>
         <Animated.View
           key={currentPage}
           entering={FadeIn.duration(Duration.normal)}
@@ -698,7 +676,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             <ScreenProductInAction colors={colors} />
           )}
           {currentPage === 1 && (
-            <ScreenTrialReminder colors={colors} trialDays={trialDays} />
+            <ScreenTrialReminder colors={colors} />
           )}
           {currentPage === 2 && (
             <ScreenPricing
@@ -776,8 +754,8 @@ const styles = StyleSheet.create({
   screen2Root: {
     flex: 1,
     paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['6'],
-    gap: Spacing['8'],
+    paddingTop: Spacing['4'],
+    gap: Spacing['6'],
   },
 
   // Headlines
@@ -822,7 +800,8 @@ const styles = StyleSheet.create({
   screen3Root: {
     flex: 1,
     paddingHorizontal: Spacing['6'],
-    gap: Spacing['5'],
+    paddingTop: Spacing['2'],
+    gap: Spacing['4'],
   },
   screen3Header: {
     alignItems: 'center',

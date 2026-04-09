@@ -9,7 +9,7 @@
 import { useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
+// LinearGradient removed — button is now inline, not fixed with gradient
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
@@ -66,30 +66,20 @@ export function ReadDevotionalStep({ devotionalDay, devotionalId, colors, onComp
   return (
     <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + Spacing['8'], 40) }]}
         showsVerticalScrollIndicator={false}
       >
-        <DevotionalContent
-          day={devotionalDay}
-          fontSize="medium"
-          devotionalId={devotionalId}
-        />
-      </ScrollView>
+        {/* Devotional content with horizontal padding */}
+        <View style={{ paddingHorizontal: Spacing['6'] }}>
+          <DevotionalContent
+            day={devotionalDay}
+            fontSize="medium"
+            devotionalId={devotionalId}
+          />
+        </View>
 
-      {/* Fixed bottom button with gradient fade */}
-      <View
-        style={[
-          styles.bottomBar,
-          { paddingBottom: Math.max(insets.bottom, Spacing['4']) },
-        ]}
-        pointerEvents="box-none"
-      >
-        <LinearGradient
-          colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)', 'rgba(10,10,10,1)']}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={styles.buttonWrapper}>
+        {/* Complete button — inline at end of content, not fixed */}
+        <View style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['8'] }}>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleComplete}
@@ -100,7 +90,7 @@ export function ReadDevotionalStep({ devotionalDay, devotionalId, colors, onComp
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -122,18 +112,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 120,
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['10'],
-  },
-  buttonWrapper: {
-    position: 'relative',
   },
   button: {
     paddingVertical: Spacing['4'],
