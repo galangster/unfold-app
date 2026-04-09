@@ -2333,11 +2333,9 @@ export default function OnboardingScreen() {
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
-                setTimeout(() => {
-                  setShowInput(false);
-                  inputOpacity.value = 0;
-                  setTimeout(() => advanceToNextStep(), 50);
-                }, 400);
+                // Advance immediately — the feature summary is a full-screen step
+                // that replaces the entire view, so no need for input fade-out
+                advanceToNextStep();
               }}
             >
               <View style={{
