@@ -74,27 +74,36 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
     };
   });
 
-  // Dot position — travels along the cubic bezier curve with the clip reveal
-  // Control points match buildCurvePath exactly:
-  // P0=(0, h*0.92), P1=(w*0.35, h*0.85), P2=(w*0.5, h*0.4), P3=(w, h*0.08)
+  // Dot position — tracks the clip rect's leading edge exactly.
+  // dotX = clipProgress * GRAPH_WIDTH (same as the clip rect width).
+  // dotY = solve the bezier y for that x by finding the t that produces dotX,
+  // then evaluating y at that t. We use Newton's method (3 iterations) to invert
+  // the bezier x(t) → t, then evaluate y(t).
   const dotX = useDerivedValue(() => {
-    const t = clipProgress.value;
-    const mt = 1 - t;
-    const p0 = 0;
-    const p1 = GRAPH_WIDTH * 0.35;
-    const p2 = GRAPH_WIDTH * 0.5;
-    const p3 = GRAPH_WIDTH;
-    return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+    return clipProgress.value * GRAPH_WIDTH;
   });
 
   const dotY = useDerivedValue(() => {
-    const t = clipProgress.value;
+    const targetX = clipProgress.value * GRAPH_WIDTH;
+    // Bezier control points (x-coordinates)
+    const x0 = 0, x1 = GRAPH_WIDTH * 0.35, x2 = GRAPH_WIDTH * 0.5, x3 = GRAPH_WIDTH;
+    // Bezier control points (y-coordinates)
+    const y0 = GRAPH_HEIGHT * 0.92, y1 = GRAPH_HEIGHT * 0.85, y2 = GRAPH_HEIGHT * 0.4, y3 = GRAPH_HEIGHT * 0.08;
+
+    // Newton's method: find t where bezierX(t) = targetX
+    let t = clipProgress.value; // good initial guess
+    for (let i = 0; i < 5; i++) {
+      const mt = 1 - t;
+      const bx = mt * mt * mt * x0 + 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t * x3;
+      // Derivative of bezier x w.r.t. t
+      const dx = 3 * mt * mt * (x1 - x0) + 6 * mt * t * (x2 - x1) + 3 * t * t * (x3 - x2);
+      if (Math.abs(dx) < 0.001) break;
+      t = t - (bx - targetX) / dx;
+      t = Math.max(0, Math.min(1, t));
+    }
+
     const mt = 1 - t;
-    const p0 = GRAPH_HEIGHT * 0.92;
-    const p1 = GRAPH_HEIGHT * 0.85;
-    const p2 = GRAPH_HEIGHT * 0.4;
-    const p3 = GRAPH_HEIGHT * 0.08;
-    return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+    return mt * mt * mt * y0 + 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t * y3;
   });
 
   // Pulsing glow for the dot (blink effect)
