@@ -145,9 +145,9 @@ function PencilWriting({ accent }: { accent: string }) {
   const LINE_W2 = 110;
   const LINE_W3 = 80;
   const ICON_SIZE = 32;
-  // Pencil tip offset: the icon's bottom-left corner is roughly where the tip is
-  const TIP_OFFSET_X = -2;
-  const TIP_OFFSET_Y = ICON_SIZE - 6;
+  // Pencil tip offset: position so the tip leads the line
+  const TIP_OFFSET_X = ICON_SIZE * 0.15;
+  const TIP_OFFSET_Y = ICON_SIZE - 4;
 
   useEffect(() => {
     fadeIn.value = withTiming(1, { duration: 500 });
@@ -221,7 +221,7 @@ function PencilWriting({ accent }: { accent: string }) {
     return {
       opacity: fadeIn.value * (p <= 3.3 ? 1 : interpolate(p, [3.3, 3.8], [1, 0.3])),
       transform: [
-        { translateX: x + TIP_OFFSET_X - ICON_SIZE / 2 },
+        { translateX: x + TIP_OFFSET_X - ICON_SIZE * 0.3 },
         { translateY: y - TIP_OFFSET_Y },
       ],
     };
