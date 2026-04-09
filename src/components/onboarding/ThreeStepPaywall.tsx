@@ -1,21 +1,19 @@
-import { useState, useCallback, memo, useMemo } from 'react';
+import { useState, useCallback, memo, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  Linking,
-  ScrollView,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
-import { XIcon, CheckIcon, BookOpenIcon, StarIcon } from 'phosphor-react-native';
+import { CheckIcon, BookOpenIcon, StarIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -48,12 +46,9 @@ interface ThreeStepPaywallProps {
 // ---------------------------------------------------------------------------
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
-const SWIPE_VELOCITY = 500;
 const TOTAL_PAGES = 3;
 
 const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.7;
-const DEVICE_BEZEL_ASPECT = 9 / 19.5;
 
 const REVIEWS = [
   {
@@ -76,8 +71,7 @@ const REVIEWS = [
   },
 ] as const;
 
-const TERMS_URL = 'https://unfoldapp.co/terms';
-const PRIVACY_URL = 'https://unfoldapp.co/privacy';
+const REVIEW_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,36 +87,6 @@ function ctaLabel(page: number): string {
 // Sub-components (inline, single file)
 // ---------------------------------------------------------------------------
 
-/** Dot indicators for the three pages. */
-function PageDots({
-  current,
-  total,
-  accentColor,
-  borderColor,
-}: {
-  current: number;
-  total: number;
-  accentColor: string;
-  borderColor: string;
-}) {
-  return (
-    <View style={styles.dotsRow}>
-      {Array.from({ length: total }).map((_, i) => (
-        <View
-          key={i}
-          style={[
-            styles.dot,
-            {
-              width: i === current ? 20 : 6,
-              backgroundColor: i <= current ? accentColor : borderColor,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
 /** Five filled stars rendered inline. */
 function FiveStars({ color }: { color: string }) {
   return (
@@ -134,32 +98,64 @@ function FiveStars({ color }: { color: string }) {
   );
 }
 
+/** Small dot indicators for the review carousel. */
+function ReviewDots({
+  current,
+  total,
+  accentColor,
+  borderColor,
+}: {
+  current: number;
+  total: number;
+  accentColor: string;
+  borderColor: string;
+}) {
+  return (
+    <View style={styles.reviewDotsRow}>
+      {Array.from({ length: total }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.reviewDot,
+            {
+              backgroundColor: i === current ? accentColor : borderColor,
+            },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Screen 1: Product in Action
 // ---------------------------------------------------------------------------
 
 function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
   return (
-    <View style={{ flex: 1, overflow: 'hidden' }}>
-      {/* Headline — near the top */}
+    <View style={styles.screen1Root}>
+      {/* Headline -- near the top */}
       <Text
         style={[
           styles.headline,
-          { color: colors.text, paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] },
+          {
+            color: colors.text,
+            paddingHorizontal: Spacing['6'],
+            marginTop: Spacing['4'],
+          },
         ]}
       >
         We want you to try Unfold for free.
       </Text>
 
-      {/* Device bezel — extends off the bottom of the screen */}
-      <View style={{ flex: 1, alignItems: 'center', marginTop: Spacing['5'] }}>
+      {/* Device bezel -- extends off the bottom of the screen */}
+      <View style={styles.screen1DeviceWrapper}>
         <View
           style={[
             styles.deviceBezel,
             {
               width: DEVICE_BEZEL_WIDTH,
               borderColor: '#2A2A2A',
-              // No fixed height — let it extend beyond the parent
               height: DEVICE_BEZEL_WIDTH / (9 / 19.5) + 100,
             },
           ]}
@@ -178,16 +174,10 @@ function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
         </View>
       </View>
 
-      {/* Gradient fade at the bottom — feathers the bezel into black */}
+      {/* Gradient fade at the bottom -- feathers the bezel into black */}
       <LinearGradient
         colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.8)', 'rgba(10,10,10,1)']}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 200,
-        }}
+        style={styles.screen1Gradient}
         pointerEvents="none"
       />
     </View>
@@ -206,14 +196,9 @@ function ScreenTrialReminder({
   trialDays: number;
 }) {
   return (
-    <View style={styles.screenCenter}>
+    <View style={styles.screen2Root}>
       {/* Headline */}
-      <Text
-        style={[
-          styles.headline,
-          { color: colors.text },
-        ]}
-      >
+      <Text style={[styles.headline, { color: colors.text }]}>
         We'll send you a reminder before your free trial ends
       </Text>
 
@@ -265,43 +250,42 @@ function ScreenPricing({
   monthlyPrice,
   yearlyRaw,
   monthlyRaw,
-  trialDays,
   selectedPlan,
   onSelectPlan,
-  onRestore,
 }: {
   colors: ColorTheme;
   yearlyPrice: string;
   monthlyPrice: string;
   yearlyRaw: number;
   monthlyRaw: number;
-  trialDays: number;
   selectedPlan: 'yearly' | 'monthly';
   onSelectPlan: (plan: 'yearly' | 'monthly') => void;
-  onRestore: () => void;
 }) {
   const savings = Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100);
   const yearlyMonthlyEquivalent =
-    monthlyRaw > 0
-      ? `$${(yearlyRaw / 12).toFixed(2)}/mo`
-      : yearlyPrice;
+    monthlyRaw > 0 ? `$${(yearlyRaw / 12).toFixed(2)}/mo` : yearlyPrice;
+
+  const [activeReviewIndex, setActiveReviewIndex] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+
+  const onReviewScroll = useCallback(
+    (e: { nativeEvent: { contentOffset: { x: number } } }) => {
+      const index = Math.round(
+        e.nativeEvent.contentOffset.x / REVIEW_CARD_WIDTH,
+      );
+      if (index >= 0 && index < REVIEWS.length) {
+        setActiveReviewIndex(index);
+      }
+    },
+    [],
+  );
 
   return (
-    <ScrollView
-      style={styles.flex1}
-      contentContainerStyle={styles.screen3Content}
-      showsVerticalScrollIndicator={false}
-      bounces={false}
-    >
+    <View style={styles.screen3Root}>
       {/* Logo + headline */}
       <View style={styles.screen3Header}>
         <BookOpenIcon size={32} color={colors.accent} weight="light" />
-        <Text
-          style={[
-            styles.screen3Headline,
-            { color: colors.text },
-          ]}
-        >
+        <Text style={[styles.screen3Headline, { color: colors.text }]}>
           Your personal Bible experience
         </Text>
 
@@ -340,51 +324,68 @@ function ScreenPricing({
         </View>
       </View>
 
-      {/* Review cards */}
-      <View style={styles.reviewsContainer}>
-        {REVIEWS.map((review) => (
-          <View
-            key={review.name}
-            style={[
-              styles.reviewCard,
-              {
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.sm,
-                color: colors.text,
-              }}
+      {/* Horizontal review carousel */}
+      <View>
+        <FlatList
+          ref={flatListRef}
+          data={REVIEWS}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={REVIEW_CARD_WIDTH}
+          decelerationRate="fast"
+          onMomentumScrollEnd={onReviewScroll}
+          keyExtractor={(item) => item.name}
+          contentContainerStyle={styles.reviewFlatListContent}
+          renderItem={({ item: review }) => (
+            <View
+              style={[
+                styles.reviewCard,
+                {
+                  width: REVIEW_CARD_WIDTH,
+                  backgroundColor: colors.inputBackground,
+                },
+              ]}
             >
-              {review.name}
-            </Text>
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: FontSize.xs,
-                color: colors.textMuted,
-                marginTop: Spacing['0.5'],
-              }}
-            >
-              {review.location}
-            </Text>
-            <Text
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: FontSize.sm,
-                color: colors.textMuted,
-                marginTop: Spacing['2'],
-                lineHeight: 20,
-              }}
-            >
-              "{review.quote}"
-            </Text>
-          </View>
-        ))}
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.sm,
+                  color: colors.text,
+                }}
+              >
+                {review.name}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: FontSize.xs,
+                  color: colors.textMuted,
+                  marginTop: Spacing['0.5'],
+                }}
+              >
+                {review.location}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: FontSize.sm,
+                  color: colors.textMuted,
+                  marginTop: Spacing['2'],
+                  lineHeight: 20,
+                }}
+              >
+                &ldquo;{review.quote}&rdquo;
+              </Text>
+            </View>
+          )}
+        />
+        <ReviewDots
+          current={activeReviewIndex}
+          total={REVIEWS.length}
+          accentColor={colors.accent}
+          borderColor={colors.border}
+        />
       </View>
 
       {/* Pricing cards */}
@@ -418,124 +419,62 @@ function ScreenPricing({
             style={{
               fontFamily: FontFamily.uiSemiBold,
               fontSize: FontSize.lg,
-              color: selectedPlan === 'monthly' ? colors.accent : colors.text,
-              marginTop: Spacing['2'],
+              color:
+                selectedPlan === 'monthly' ? colors.accent : colors.text,
+              marginTop: Spacing['1.5'],
             }}
           >
             {monthlyPrice}/mo
           </Text>
         </TouchableOpacity>
 
-        {/* Yearly */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => onSelectPlan('yearly')}
-          style={[
-            styles.pricingCard,
-            {
-              backgroundColor: colors.inputBackground,
-              borderColor:
-                selectedPlan === 'yearly' ? colors.accent : colors.border,
-              borderWidth: selectedPlan === 'yearly' ? 1.5 : 1,
-            },
-          ]}
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-            }}
-          >
-            Yearly
-          </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiSemiBold,
-              fontSize: FontSize.lg,
-              color: selectedPlan === 'yearly' ? colors.accent : colors.text,
-              marginTop: Spacing['2'],
-            }}
-          >
-            {yearlyMonthlyEquivalent}
-          </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-              marginTop: Spacing['1'],
-            }}
-          >
-            {yearlyPrice}/year
-          </Text>
-
-          {/* Badges */}
-          <View style={styles.badgeRow}>
-            {savings > 0 && (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: colors.accent },
-                ]}
-              >
-                <Text style={styles.badgeText}>SAVE {savings}%</Text>
-              </View>
-            )}
-            <View
-              style={[
-                styles.badge,
-                { backgroundColor: colors.accent },
-              ]}
-            >
-              <Text style={styles.badgeText}>
-                {trialDays}-DAY FREE TRIAL
-              </Text>
+        {/* Yearly — with SAVE badge on top border */}
+        <View style={styles.yearlyCardWrapper}>
+          {/* SAVE badge overlapping top border */}
+          {savings > 0 && (
+            <View style={[styles.saveBadge, { backgroundColor: colors.accent }]}>
+              <Text style={styles.saveBadgeText}>SAVE {savings}%</Text>
             </View>
-          </View>
-        </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => onSelectPlan('yearly')}
+            style={[
+              styles.pricingCard,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor:
+                  selectedPlan === 'yearly' ? colors.accent : colors.border,
+                borderWidth: selectedPlan === 'yearly' ? 1.5 : 1,
+              },
+            ]}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSize.xs,
+                color: colors.textMuted,
+                textTransform: 'uppercase',
+                letterSpacing: 1,
+              }}
+            >
+              Yearly
+            </Text>
+            <Text
+              style={{
+                fontFamily: FontFamily.uiSemiBold,
+                fontSize: FontSize.lg,
+                color:
+                  selectedPlan === 'yearly' ? colors.accent : colors.text,
+                marginTop: Spacing['1.5'],
+              }}
+            >
+              {yearlyMonthlyEquivalent}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      {/* Links row */}
-      <View style={styles.linksRow}>
-        <TouchableOpacity
-          onPress={() => Linking.openURL(TERMS_URL)}
-          hitSlop={8}
-        >
-          <Text style={[styles.linkText, { color: colors.textHint }]}>
-            Terms of use
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={[styles.linkSeparator, { color: colors.textHint }]}>
-          {'\u00B7'}
-        </Text>
-
-        <TouchableOpacity
-          onPress={() => Linking.openURL(PRIVACY_URL)}
-          hitSlop={8}
-        >
-          <Text style={[styles.linkText, { color: colors.textHint }]}>
-            Privacy policy
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={[styles.linkSeparator, { color: colors.textHint }]}>
-          {'\u00B7'}
-        </Text>
-
-        <TouchableOpacity
-          onPress={onRestore}
-          hitSlop={8}
-        >
-          <Text style={[styles.linkText, { color: colors.textHint }]}>
-            Restore
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -599,10 +538,7 @@ function BottomCTA({
         disabled={isLoading}
       >
         <View
-          style={[
-            styles.ctaButton,
-            { backgroundColor: colors.accent },
-          ]}
+          style={[styles.ctaButton, { backgroundColor: colors.accent }]}
         >
           {isLoading ? (
             <ActivityIndicator color={colors.background} size="small" />
@@ -664,38 +600,13 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   );
 
   // -----------------------------------------------------------------------
-  // Navigation
+  // Navigation — CTA buttons only, no swipe
   // -----------------------------------------------------------------------
 
   const nextPage = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setCurrentPage((p) => Math.min(p + 1, TOTAL_PAGES - 1));
   }, []);
-
-  const prevPage = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentPage((p) => Math.max(p - 1, 0));
-  }, []);
-
-  const swipeGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-20, 20])
-        .onEnd((e) => {
-          if (
-            e.translationX < -SWIPE_THRESHOLD ||
-            e.velocityX < -SWIPE_VELOCITY
-          ) {
-            runOnJS(nextPage)();
-          } else if (
-            e.translationX > SWIPE_THRESHOLD ||
-            e.velocityX > SWIPE_VELOCITY
-          ) {
-            runOnJS(prevPage)();
-          }
-        }),
-    [nextPage, prevPage],
-  );
 
   // -----------------------------------------------------------------------
   // Purchase / Restore
@@ -757,66 +668,59 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Close button */}
+      {/* Restore button — top-right on all screens */}
       <TouchableOpacity
-        onPress={onSkip}
+        onPress={handleRestore}
         hitSlop={12}
-        style={[styles.closeButton, { top: insets.top + Spacing['2'] }]}
+        style={[styles.restoreButton, { top: insets.top + Spacing['2'] }]}
         accessibilityRole="button"
-        accessibilityLabel="Close"
+        accessibilityLabel="Restore purchases"
       >
-        <XIcon size={24} color={colors.textMuted} weight="regular" />
+        <Text
+          style={{
+            fontFamily: FontFamily.ui,
+            fontSize: FontSize.sm,
+            color: colors.textMuted,
+          }}
+        >
+          Restore
+        </Text>
       </TouchableOpacity>
 
-      {/* Page content */}
-      <GestureDetector gesture={swipeGesture}>
-        <View style={[styles.flex1, { paddingTop: insets.top + Spacing['12'] }]}>
-          <Animated.View
-            key={currentPage}
-            entering={FadeIn.duration(Duration.normal)}
-            exiting={FadeOut.duration(Duration.fast)}
-            style={styles.flex1}
-          >
-            {currentPage === 0 && (
-              <ScreenProductInAction colors={colors} />
-            )}
-            {currentPage === 1 && (
-              <ScreenTrialReminder
-                colors={colors}
-                trialDays={trialDays}
-              />
-            )}
-            {currentPage === 2 && (
-              <ScreenPricing
-                colors={colors}
-                yearlyPrice={yearlyPrice}
-                monthlyPrice={monthlyPrice}
-                yearlyRaw={yearlyRaw}
-                monthlyRaw={monthlyRaw}
-                trialDays={trialDays}
-                selectedPlan={selectedPlan}
-                onSelectPlan={setSelectedPlan}
-                onRestore={handleRestore}
-              />
-            )}
-          </Animated.View>
-        </View>
-      </GestureDetector>
+      {/* Page content — paddingTop positions content at ~25-30% from top */}
+      <View style={[styles.flex1, { paddingTop: insets.top + Spacing['6'] }]}>
+        <Animated.View
+          key={currentPage}
+          entering={FadeIn.duration(Duration.normal)}
+          style={styles.flex1}
+        >
+          {currentPage === 0 && (
+            <ScreenProductInAction colors={colors} />
+          )}
+          {currentPage === 1 && (
+            <ScreenTrialReminder colors={colors} trialDays={trialDays} />
+          )}
+          {currentPage === 2 && (
+            <ScreenPricing
+              colors={colors}
+              yearlyPrice={yearlyPrice}
+              monthlyPrice={monthlyPrice}
+              yearlyRaw={yearlyRaw}
+              monthlyRaw={monthlyRaw}
+              selectedPlan={selectedPlan}
+              onSelectPlan={setSelectedPlan}
+            />
+          )}
+        </Animated.View>
+      </View>
 
-      {/* Bottom section: dots + CTA */}
+      {/* Bottom section: CTA (no dots) */}
       <View
         style={[
           styles.bottomSection,
           { paddingBottom: Math.max(insets.bottom, Spacing['4']) },
         ]}
       >
-        <PageDots
-          current={currentPage}
-          total={TOTAL_PAGES}
-          accentColor={colors.accent}
-          borderColor={colors.border}
-        />
-
         <BottomCTA
           colors={colors}
           currentPage={currentPage}
@@ -843,18 +747,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Close button
-  closeButton: {
+  // Restore button (top-right)
+  restoreButton: {
     position: 'absolute',
     right: Spacing['5'],
     zIndex: 10,
   },
 
-  // Screen layout
-  screenCenter: {
+  // Screen 1
+  screen1Root: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  screen1DeviceWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    marginTop: Spacing['5'],
+  },
+  screen1Gradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+  },
+
+  // Screen 2
+  screen2Root: {
     flex: 1,
     paddingHorizontal: Spacing['6'],
-    justifyContent: 'center',
+    paddingTop: Spacing['6'],
     gap: Spacing['8'],
   },
 
@@ -874,7 +796,7 @@ const styles = StyleSheet.create({
   },
   deviceInner: {
     width: '100%',
-    aspectRatio: DEVICE_BEZEL_ASPECT,
+    aspectRatio: 9 / 19.5,
     backgroundColor: '#111111',
     justifyContent: 'center',
     alignItems: 'center',
@@ -897,10 +819,10 @@ const styles = StyleSheet.create({
   },
 
   // Screen 3
-  screen3Content: {
+  screen3Root: {
+    flex: 1,
     paddingHorizontal: Spacing['6'],
-    paddingBottom: Spacing['4'],
-    gap: Spacing['6'],
+    gap: Spacing['5'],
   },
   screen3Header: {
     alignItems: 'center',
@@ -921,14 +843,25 @@ const styles = StyleSheet.create({
     gap: 2,
   },
 
-  // Reviews
-  reviewsContainer: {
-    gap: Spacing['3'],
+  // Review carousel
+  reviewFlatListContent: {
+    // No horizontal padding — cards are full width
   },
   reviewCard: {
     borderRadius: Radius.card,
     padding: Spacing['4'],
-    borderWidth: 1,
+  },
+  reviewDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Spacing['3'],
+  },
+  reviewDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   // Pricing
@@ -939,54 +872,27 @@ const styles = StyleSheet.create({
   pricingCard: {
     flex: 1,
     borderRadius: Radius.card,
-    padding: Spacing['4'],
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3.5'],
   },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing['1.5'],
-    marginTop: Spacing['3'],
+  yearlyCardWrapper: {
+    flex: 1,
+    position: 'relative',
   },
-  badge: {
-    paddingHorizontal: Spacing['2'],
-    paddingVertical: Spacing['1'],
-    borderRadius: Radius.sm,
+  saveBadge: {
+    position: 'absolute',
+    top: -10,
+    alignSelf: 'center',
+    zIndex: 1,
+    paddingHorizontal: Spacing['2.5'],
+    paddingVertical: Spacing['0.5'],
+    borderRadius: Radius.full,
   },
-  badgeText: {
+  saveBadgeText: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 10,
     color: '#FFFFFF',
     letterSpacing: 0.5,
-  },
-
-  // Links
-  linksRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    paddingTop: Spacing['2'],
-  },
-  linkText: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-  },
-  linkSeparator: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-  },
-
-  // Dots
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: Spacing['4'],
-  },
-  dot: {
-    height: 6,
-    borderRadius: 3,
   },
 
   // Bottom CTA
