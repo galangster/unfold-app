@@ -219,30 +219,9 @@ export default function WelcomeScreen() {
       return;
     }
 
-    if (phase === 'welcome') {
-      setPhase('cutscene');
-      // Fade out welcome title + subtitle + button
-      welcomeTextOpacity.value = withTiming(0, { duration: 500, easing: EASE });
-      buttonOpacity.value = withTiming(0, { duration: 400, easing: EASE });
-      // Fade in cutscene text
-      cutsceneTextOpacity.value = withDelay(600, withTiming(1, { duration: 800, easing: EASE }));
-      // Fade in cutscene Continue button
-      cutsceneButtonOpacity.value = withDelay(2200, withTiming(1, { duration: 600, easing: EASE }));
-      cutsceneButtonTranslateY.value = withDelay(2200, withTiming(0, { duration: 600, easing: EASE }));
-    } else if (phase === 'cutscene') {
-      setPhase('features');
-      // Icon + cutscene text unmount instantly via conditional render.
-      // Fade in features carousel after a brief pause (just embers visible).
-      const easeOut = Easing.out(Easing.cubic);
-      featuresOpacity.value = withDelay(300, withTiming(1, { duration: 400, easing: easeOut }));
-    } else {
-      // Features phase
-      if (isLastFeaturePage) {
-        router.replace('/onboarding');
-      } else {
-        setFeaturePage((p) => p + 1);
-      }
-    }
+    // Go directly to onboarding — cutscene and features carousel are now
+    // embedded within the onboarding flow (featureSummary step after mirror-back)
+    router.replace('/onboarding');
   }, [user, router, phase, isLastFeaturePage]);
 
   const handleSkip = useCallback(() => {
