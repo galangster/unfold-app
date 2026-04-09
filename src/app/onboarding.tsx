@@ -2415,6 +2415,29 @@ export default function OnboardingScreen() {
           name={data.name}
           colors={colors}
           jobId={onboardingJobIdRef.current}
+          submitFallback={!onboardingJobIdRef.current ? async () => {
+            const { jobId } = await submitGenerationJob({
+              jobType: 'onboarding',
+              dayNumber: 1,
+              userContext: {
+                name: data.name || existingUser?.name || '',
+                aboutMe: data.aboutMe || existingUser?.aboutMe || '',
+                situation: '',
+                emotion: '',
+                faith: '',
+                seeking: data.aspiration || data.spiritualSeeking || '',
+                themeCategory: '',
+                devotionalType: '',
+                readingDuration: 5,
+                bibleTranslation: existingUser?.bibleTranslation || 'BSB',
+                relationshipWithGod: data.relationshipWithGod || 'ups-and-downs',
+                growthGoals: data.growthGoals || [],
+                obstacles: data.obstacles || [],
+              },
+            });
+            onboardingJobIdRef.current = jobId;
+            return jobId;
+          } : undefined}
           onDevotionalReady={(result) => {
             onboardingDevotionalResultRef.current = result;
             if (result?.devotionalDay) {

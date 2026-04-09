@@ -27,6 +27,8 @@ interface Props {
   name: string;
   colors: ColorTheme;
   jobId: string | null;
+  /** If no jobId was provided, call this to submit the generation job and get one */
+  submitFallback?: () => Promise<string>;
   onDevotionalReady: (result: any) => void;
   onContinue: () => void;
 }
@@ -306,6 +308,7 @@ export function DevotionalSegue({
   name,
   colors,
   jobId,
+  submitFallback,
   onDevotionalReady,
   onContinue,
 }: Props) {
@@ -315,21 +318,32 @@ export function DevotionalSegue({
   const [isReady, setIsReady] = useState(false);
   const [theatricalDone, setTheatricalDone] = useState(false);
   const [showReadyReveal, setShowReadyReveal] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(jobId);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const readyCalledRef = useRef(false);
+  const fallbackAttemptedRef = useRef(false);
+
+  /* ── Fallback: submit job if none provided ── */
+  useEffect(() => {
+    if (activeJobId || fallbackAttemptedRef.current || !submitFallback) return;
+    fallbackAttemptedRef.current = true;
+    submitFallback()
+      .then((newJobId) => setActiveJobId(newJobId))
+      .catch(() => setIsReady(true)); // If fallback fails, let user through anyway
+  }, [activeJobId, submitFallback]);
 
   /* ── Polling ── */
   useEffect(() => {
-    if (!jobId) {
-      // No job — treat as ready immediately
-      setIsReady(true);
+    if (!activeJobId) {
+      // No job yet — waiting for fallback or treating as ready
+      if (!submitFallback) setIsReady(true);
       return;
     }
 
     const poll = async () => {
       try {
-        const response = await pollJobStatus(jobId);
+        const response = await pollJobStatus(activeJobId!);
         if (response.status === 'complete' && response.result?.devotionalDay) {
           if (!readyCalledRef.current) {
             readyCalledRef.current = true;
@@ -356,7 +370,7 @@ export function DevotionalSegue({
         pollingRef.current = null;
       }
     };
-  }, [jobId, onDevotionalReady]);
+  }, [activeJobId, onDevotionalReady]);
 
   /* ── Theatrical completion ── */
   const handleTheatricalComplete = useCallback(() => {
