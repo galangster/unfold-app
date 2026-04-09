@@ -147,7 +147,7 @@ function PencilWriting({ accent }: { accent: string }) {
   const ICON_SIZE = 32;
   // Pencil tip offset: position so the tip leads the line
   const TIP_OFFSET_X = ICON_SIZE * 0.15;
-  const TIP_OFFSET_Y = ICON_SIZE - 4;
+  const TIP_OFFSET_Y = ICON_SIZE - 8;
 
   useEffect(() => {
     fadeIn.value = withTiming(1, { duration: 500 });
