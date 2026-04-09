@@ -70,7 +70,6 @@ import { FeatureSummaryCarousel } from '@/components/onboarding/FeatureSummaryCa
 import { DevotionalSegue } from '@/components/onboarding/DevotionalSegue';
 import { ReadDevotionalStep } from '@/components/onboarding/ReadDevotionalStep';
 import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
-import { ReviewPromptStep } from '@/components/onboarding/ReviewPromptStep';
 import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 
@@ -331,8 +330,6 @@ const ALL_STEPS = [
   { id: 'readDevotional', question: '', subtext: '', type: 'readDevotional' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // CELEBRATION: Emotional payoff after first devotional
   { id: 'celebration', question: '', subtext: '', type: 'celebration' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
-  // REVIEW PROMPT: Trigger native Apple review at peak emotion
-  { id: 'reviewPrompt', question: '', subtext: '', type: 'reviewPrompt' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMMITMENT 1: Self-identification question
   { id: 'commitment1', question: "How committed are you to making space for this?", subtext: '', type: 'commitment1' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // COMMITMENT 2: Personalized affirmation
@@ -341,7 +338,7 @@ const ALL_STEPS = [
   { id: 'threeStepPaywall', question: '', subtext: '', type: 'threeStepPaywall' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'reviewPrompt' | 'commitment1' | 'commitment2' | 'threeStepPaywall';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -882,7 +879,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and three-step paywall always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'reviewPrompt' || step.type === 'commitment1' || step.type === 'commitment2') {
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
       return true;
     }
 
@@ -2463,16 +2460,6 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Review prompt — native Apple review dialog
-    if (step.type === 'reviewPrompt') {
-      return (
-        <ReviewPromptStep
-          colors={colors}
-          onContinue={advanceToNextStep}
-        />
-      );
-    }
-
     // Commitment 1 — choose commitment level
     if (step.type === 'commitment1') {
       return (
@@ -2966,7 +2953,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'threeStepPaywall' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'reviewPrompt' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'threeStepPaywall' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2994,7 +2981,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'reviewPrompt' || step?.type === 'commitment1' || step?.type === 'commitment2' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'commitment1' || step?.type === 'commitment2' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
