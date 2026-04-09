@@ -552,16 +552,19 @@ export default function JournalHubScreen() {
     return currentDayData.reflectionQuestions;
   }, [currentDayData]);
 
+  // Use currentDayData.dayNumber (last completed day) NOT currentDevotional.currentDay
+  // (which is the NEXT day after advancement). Questions come from currentDayData,
+  // so answers must be looked up from the same day.
   const todayEntry = useMemo(() => {
-    if (!currentDevotional) return null;
+    if (!currentDevotional || !currentDayData) return null;
     return (
       journalEntries.find(
         (e) =>
           e.devotionalId === currentDevotional.id &&
-          e.dayNumber === currentDevotional.currentDay,
+          e.dayNumber === currentDayData.dayNumber,
       ) ?? null
     );
-  }, [currentDevotional, journalEntries]);
+  }, [currentDevotional, currentDayData, journalEntries]);
 
   // Count answered reflections — counts ALL non-empty question responses,
   // not just those matching the original reflectionQuestions strings

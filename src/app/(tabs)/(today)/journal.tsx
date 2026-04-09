@@ -201,6 +201,36 @@ export default function JournalScreen() {
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Resync local state when the store entry changes (MMKV hydration, sync pull)
+  // but only if no local edits are pending. This prevents the "disappear then reappear"
+  // issue where local state gets stale while the store has the correct data.
+  useEffect(() => {
+    if (!existingEntry || hasChanges || hasPendingSoapRef.current) return;
+    // Resync content if store has newer data
+    if (existingEntry.content && existingEntry.content !== content) {
+      setContent(existingEntry.content);
+    }
+    // Resync SOAP values
+    if (existingEntry.soapResponses) {
+      const storeVals = existingEntry.soapResponses;
+      const localVals = soapValuesRef.current;
+      const hasStoreDiff = (['scripture', 'observation', 'application', 'prayer'] as const).some(
+        (k) => (storeVals[k] ?? '') !== (localVals[k] ?? '')
+      );
+      if (hasStoreDiff) {
+        setSoapValues(storeVals);
+      }
+    }
+    // Resync deeper prompts
+    if (existingEntry.deeperQuestions?.length && !deeperPrompts.length) {
+      setDeeperPrompts(existingEntry.deeperQuestions);
+    }
+    // Resync saved entry ID ref
+    if (existingEntry.id && !savedEntryIdRef.current) {
+      savedEntryIdRef.current = existingEntry.id;
+    }
+  }, [existingEntry]);
+
   // Prayer state
   const [newPrayerText, setNewPrayerText] = useState('');
   const [showPrayerInput, setShowPrayerInput] = useState(false);
@@ -322,8 +352,18 @@ export default function JournalScreen() {
       // Flush any pending SOAP saves before unmount
       if (hasPendingSoapRef.current && soapSaveTimerRef.current) {
         clearTimeout(soapSaveTimerRef.current);
-        // Synchronously flush all SOAP fields
-        const entryId = savedEntryIdRef.current;
+        // Ensure an entry exists before flushing — if user typed SOAP for the
+        // first time and navigates away within the debounce window, the entry
+        // may not have been created yet.
+        let entryId = savedEntryIdRef.current;
+        if (!entryId) {
+          addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
+          const entry = getJournalEntry(devotionalId, dayNumber);
+          if (entry) {
+            entryId = entry.id;
+            savedEntryIdRef.current = entryId;
+          }
+        }
         if (entryId) {
           const vals = soapValuesRef.current;
           for (const key of ['scripture', 'observation', 'application', 'prayer'] as const) {
