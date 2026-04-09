@@ -45,7 +45,7 @@ export interface FeatureCard {
 
 export const FEATURE_PAGES: FeatureCard[] = [
   {
-    headline: 'Written for you',
+    headline: 'Made for no one else',
     body: 'Every word shaped by your story, your struggles, where you are right now. No one in the world will have the same experience as you.',
     animation: 'pencil',
   },
