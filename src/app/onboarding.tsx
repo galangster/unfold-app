@@ -308,7 +308,7 @@ const ALL_STEPS = [
   // VULNERABILITY VALIDATION: The exhale — acknowledge their courage before mirror-back
   { id: 'vulnerabilityValidation', question: '', subtext: '', type: 'vulnerabilityValidation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // MIRROR-BACK: Poetic reflection — like a book introduction
-  { id: 'mirrorBack', question: "Written for\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  { id: 'mirrorBack', question: "We heard\u00A0you.", subtext: '', type: 'mirrorBack' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FEATURE SUMMARY: How-it-works carousel with companion naming
   { id: 'featureSummary', question: '', subtext: '', type: 'featureSummary' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // FOUNDER NOTE: A personal letter from the founder
