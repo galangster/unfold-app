@@ -71,6 +71,7 @@ function formatResumeRelativeTime(iso?: string): string {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
   const { isLoading: authLoading } = useAuth();
   const user = useUnfoldStore((s) => s.user);
