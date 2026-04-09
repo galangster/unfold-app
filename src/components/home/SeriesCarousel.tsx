@@ -175,7 +175,7 @@ export function SeriesCarousel() {
       {/* Header row */}
       <View style={styles.headerRow}>
         <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>
-          YOUR STUDIES
+          YOUR DEVOTIONALS
         </Text>
 
         {showSeeAll && (

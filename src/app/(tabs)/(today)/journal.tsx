@@ -12,7 +12,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -143,6 +143,7 @@ function AnimatedPrayerCircle({ isAnswered, accentColor, hintColor }: {
 
 export default function JournalScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ devotionalId: string; dayNumber: string; focusQuestion?: string }>();
 
@@ -299,7 +300,10 @@ export default function JournalScreen() {
       dayNumber,
       devotionalTitle: currentDevotional?.title,
       dayTitle: currentDay?.title,
-      touchedAt: new Date().toISOString(),
+      // NOTE: Do NOT set touchedAt here. touchedAt is only used by reveal.tsx
+      // to trigger the auto-navigate effect in home index.tsx. Setting it here
+      // causes the home screen to auto-push to reading while the user is in
+      // the journal, stealing focus when the Journal tab closes.
     });
   }, [devotionalId, dayNumber, currentDevotional?.title, currentDay?.title, setResumeContext]);
 
@@ -409,6 +413,14 @@ export default function JournalScreen() {
     setHasChanges(true);
   };
 
+  const closeJournal = useCallback(() => {
+    if (pathname === '/(tabs)/(journal)/entry') {
+      router.replace('/(tabs)/(journal)');
+      return;
+    }
+    router.back();
+  }, [pathname, router]);
+
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (activeMode === 'freewrite') {
@@ -417,12 +429,12 @@ export default function JournalScreen() {
       flushSoapSaves();
     }
     AccessibilityInfo.announceForAccessibility('Journal entry saved');
-    router.back();
+    closeJournal();
   };
 
   const handleSkip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
+    closeJournal();
   };
 
   // Mode switching

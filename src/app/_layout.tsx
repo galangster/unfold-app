@@ -179,7 +179,7 @@ function RootLayoutNav() {
             animation: 'slide_from_bottom',
           }}
         />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none', contentStyle: { backgroundColor: 'transparent' } }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen
           name="share-card"
           options={{

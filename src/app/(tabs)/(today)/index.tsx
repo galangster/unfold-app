@@ -99,6 +99,10 @@ export default function HomeScreen() {
   // push to reading — avoids the home screen flash.
   useEffect(() => {
     if (!resumeContext?.touchedAt) return;
+    // Only auto-navigate for reading context (set by reveal.tsx).
+    // Journal context also sets resumeContext but should NOT trigger
+    // auto-navigate to reading — that steals focus from the journal.
+    if (resumeContext.route !== 'reading') return;
     const age = Date.now() - new Date(resumeContext.touchedAt).getTime();
     if (age < 3000) {
       // Fresh from reveal — auto-navigate and clear

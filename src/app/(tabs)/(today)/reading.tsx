@@ -686,7 +686,6 @@ export default function ReadingScreen() {
         dayNumber: journalDay,
         devotionalTitle: currentDevotional.title,
         dayTitle: journalDayData?.title ?? currentDayData?.title,
-        touchedAt: new Date().toISOString(),
       });
     }
 
@@ -1513,7 +1512,6 @@ export default function ReadingScreen() {
                       dayNumber: viewingDay,
                       devotionalTitle: currentDevotional.title,
                       dayTitle: currentDayData?.title,
-                      touchedAt: new Date().toISOString(),
                     });
                   }
                   router.push({

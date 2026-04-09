@@ -678,7 +678,7 @@ export default function JournalHubScreen() {
     });
   }, [journalEntries, searchQuery, devotionals]);
 
-  // ---- Series with journal entries (for YOUR STUDIES section) ----
+  // ---- Series with journal entries (for YOUR DEVOTIONALS section) ----
   const seriesWithEntries = useMemo(() => {
     // Group entries by devotionalId and compute stats
     const seriesMap = new Map<string, { devotional: typeof devotionals[0]; entryCount: number; latestEntry: string; scriptures: string[] }>();
@@ -731,10 +731,18 @@ export default function JournalHubScreen() {
 
   // ---- Handlers ----
   const handleWriteToday = useCallback(() => {
-    if (!currentDevotional) return;
+    if (!currentDevotional) {
+      console.log('[Journal] handleWriteToday: no currentDevotional, returning');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Navigate to the day being reflected on (last completed), not the next day
     const reflectionDay = currentDayData?.dayNumber ?? currentDevotional.currentDay;
+    console.log('[Journal] handleWriteToday → pushing /(tabs)/(journal)/entry', {
+      devotionalId: currentDevotional.id,
+      dayNumber: reflectionDay,
+      currentDevTitle: currentDevotional.title,
+    });
     router.push({
       pathname: '/(tabs)/(journal)/entry',
       params: {
@@ -1255,7 +1263,7 @@ export default function JournalHubScreen() {
                   </Animated.View>
                 )}
 
-              {/* YOUR STUDIES — grouped by series */}
+              {/* YOUR DEVOTIONALS — grouped by series */}
               {(seriesWithEntries.length > 0 || !currentDevotional) && (
                 <Animated.View
                   entering={FadeIn.duration(Duration.slow).delay(90)}
@@ -1263,7 +1271,7 @@ export default function JournalHubScreen() {
                 >
                   {seriesWithEntries.length > 0 ? (
                     <>
-                      {/* Header row: YOUR STUDIES + View All */}
+                      {/* Header row: YOUR DEVOTIONALS + View All */}
                       <View
                         style={{
                           flexDirection: 'row',
@@ -1280,7 +1288,7 @@ export default function JournalHubScreen() {
                             letterSpacing: 1,
                           }}
                         >
-                          YOUR STUDIES
+                          YOUR DEVOTIONALS
                         </Text>
                         <TouchableOpacity
                           activeOpacity={0.7}

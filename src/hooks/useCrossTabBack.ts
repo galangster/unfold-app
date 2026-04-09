@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect } from 'react';
+import { useCallback, useEffect, useLayoutEffect } from 'react';
 import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
@@ -9,8 +9,8 @@ import * as Haptics from 'expo-haptics';
  * pops within that tab's stack (revealing the wrong screen) instead of returning to the
  * source tab. The chevron back button handles this with `from === 'home'` param routing.
  *
- * Solution: When `from === 'home'`, disable the native swipe gesture so the user must
- * use the chevron (which correctly navigates back to the home tab).
+ * Solution: When `from === 'home'`, disable the native swipe gesture AND intercept
+ * the beforeRemove event to redirect back to the home tab.
  */
 export function useCrossTabBack() {
   const router = useRouter();
@@ -23,6 +23,20 @@ export function useCrossTabBack() {
       navigation.setOptions({ gestureEnabled: false });
     }
   }, [from, navigation]);
+
+  // Intercept any back navigation (swipe, hardware button, etc.) and redirect to home tab
+  useEffect(() => {
+    if (from !== 'home') return;
+
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      // Prevent the default back behavior
+      e.preventDefault();
+      // Navigate to the home tab instead
+      router.navigate('/(tabs)/(today)');
+    });
+
+    return unsubscribe;
+  }, [from, navigation, router]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

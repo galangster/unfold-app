@@ -13,7 +13,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
-import { CheckIcon, BookOpenIcon, StarIcon } from 'phosphor-react-native';
+import { CheckIcon, BookOpenIcon, StarIcon, PlayCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -48,7 +48,7 @@ interface ThreeStepPaywallProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_PAGES = 3;
 
-const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.7;
+const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.62;
 
 const REVIEWS = [
   {
@@ -72,6 +72,7 @@ const REVIEWS = [
 ] as const;
 
 const REVIEW_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
+const REVIEW_SNAP_INTERVAL = REVIEW_CARD_WIDTH + Spacing['2'];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,6 +80,7 @@ const REVIEW_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
 
 /** CTA label per screen index. */
 function ctaLabel(page: number): string {
+  if (page === 0) return 'Start Free Trial';
   if (page === 1) return 'Continue for FREE';
   return 'Try for $0.00';
 }
@@ -134,49 +136,67 @@ function ReviewDots({
 function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
   return (
     <View style={styles.screen1Root}>
-      {/* Headline -- near the top */}
-      <Text
-        style={[
-          styles.headline,
-          {
-            color: colors.text,
-            paddingHorizontal: Spacing['6'],
-            marginTop: Spacing['4'],
-          },
-        ]}
-      >
-        We want you to try Unfold for free.
-      </Text>
+      {/* Top section: headline */}
+      <View style={styles.screen1TopSection}>
+        <Text
+          style={[
+            styles.headline,
+            {
+              color: colors.text,
+              textAlign: 'center',
+            },
+          ]}
+        >
+          We want you to try{'\n'}Unfold for free.
+        </Text>
+      </View>
 
-      {/* Device bezel -- extends off the bottom of the screen */}
+      {/* Device bezel -- clips at the bottom edge of the viewport */}
       <View style={styles.screen1DeviceWrapper}>
         <View
           style={[
             styles.deviceBezel,
             {
               width: DEVICE_BEZEL_WIDTH,
-              borderColor: '#2A2A2A',
-              height: DEVICE_BEZEL_WIDTH / (9 / 19.5) + 100,
+              borderColor: 'rgba(255,255,255,0.1)',
             },
           ]}
         >
-          <View style={[styles.deviceInner, { aspectRatio: undefined, flex: 1 }]}>
-            <Text
-              style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: FontSize.sm,
-                color: colors.accent,
-              }}
-            >
-              Preview coming soon
-            </Text>
+          <View style={styles.deviceInner}>
+            {/* Play icon + subtle label — premium placeholder */}
+            <View style={styles.previewPlaceholder}>
+              <View
+                style={[
+                  styles.playIconRing,
+                  { borderColor: 'rgba(200,165,92,0.3)' },
+                ]}
+              >
+                <PlayCircleIcon
+                  size={40}
+                  color={colors.accent}
+                  weight="thin"
+                />
+              </View>
+              <Text
+                style={{
+                  fontFamily: FontFamily.ui,
+                  fontSize: FontSize.xs,
+                  color: colors.textSubtle,
+                  marginTop: Spacing['3'],
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Preview Coming Soon
+              </Text>
+            </View>
           </View>
         </View>
       </View>
 
-      {/* Gradient fade at the bottom -- feathers the bezel into black */}
+      {/* Gradient fade at the bottom -- feathers the bezel into bg */}
       <LinearGradient
-        colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.8)', 'rgba(10,10,10,1)']}
+        colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)', 'rgba(10,10,10,1)']}
         style={styles.screen1Gradient}
         pointerEvents="none"
       />
@@ -190,30 +210,60 @@ function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
 
 function ScreenTrialReminder({
   colors,
+  trialDays,
 }: {
   colors: ColorTheme;
+  trialDays: number;
 }) {
   return (
     <View style={styles.screen2Root}>
-      {/* Headline */}
-      <Text style={[styles.headline, { color: colors.text }]}>
-        We'll send you a reminder before your free trial ends
-      </Text>
+      {/* Vertically centered content group */}
+      <View style={styles.screen2Content}>
+        {/* Lottie bell -- above headline for visual anchor */}
+        <View style={styles.bellContainer}>
+          <LottieView
+            source={require('../../../assets/lottie/bell-notification.json')}
+            autoPlay
+            loop
+            style={styles.bellLottie}
+            colorFilters={[
+              { keypath: 'Pre-comp 1', color: colors.accent },
+              { keypath: 'Bell Frame', color: colors.accent },
+              { keypath: 'Bell Bottom', color: colors.accent },
+              { keypath: 'Mask', color: colors.accent },
+            ]}
+          />
+        </View>
 
-      {/* Lottie bell */}
-      <View style={styles.bellContainer}>
-        <LottieView
-          source={require('../../../assets/lottie/bell-notification.json')}
-          autoPlay
-          loop
-          style={styles.bellLottie}
-          colorFilters={[
-            { keypath: 'Pre-comp 1', color: colors.accent },
-            { keypath: 'Bell Frame', color: colors.accent },
-            { keypath: 'Bell Bottom', color: colors.accent },
-            { keypath: 'Mask', color: colors.accent },
+        {/* Headline */}
+        <Text
+          style={[
+            styles.headline,
+            {
+              color: colors.text,
+              textAlign: 'center',
+              marginTop: Spacing['6'],
+            },
           ]}
-        />
+        >
+          We'll remind you before{'\n'}your free trial ends
+        </Text>
+
+        {/* Supporting body text */}
+        <Text
+          style={{
+            fontFamily: FontFamily.body,
+            fontSize: FontSize.base,
+            lineHeight: 24,
+            color: colors.textMuted,
+            textAlign: 'center',
+            marginTop: Spacing['4'],
+            paddingHorizontal: Spacing['4'],
+          }}
+        >
+          You'll get a notification {trialDays === 7 ? '2 days' : '1 day'} before
+          your trial ends. No surprises, ever.
+        </Text>
       </View>
     </View>
   );
@@ -250,7 +300,7 @@ function ScreenPricing({
   const onReviewScroll = useCallback(
     (e: { nativeEvent: { contentOffset: { x: number } } }) => {
       const index = Math.round(
-        e.nativeEvent.contentOffset.x / REVIEW_CARD_WIDTH,
+        e.nativeEvent.contentOffset.x / REVIEW_SNAP_INTERVAL,
       );
       if (index >= 0 && index < REVIEWS.length) {
         setActiveReviewIndex(index);
@@ -263,9 +313,9 @@ function ScreenPricing({
     <View style={styles.screen3Root}>
       {/* Logo + headline */}
       <View style={styles.screen3Header}>
-        <BookOpenIcon size={32} color={colors.accent} weight="light" />
+        <BookOpenIcon size={28} color={colors.accent} weight="light" />
         <Text style={[styles.screen3Headline, { color: colors.text }]}>
-          Your personal Bible experience
+          Your personal Bible{'\n'}experience
         </Text>
 
         {/* Social proof line */}
@@ -273,7 +323,7 @@ function ScreenPricing({
           <Text
             style={{
               fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
+              fontSize: FontSize.xs,
               color: colors.textMuted,
             }}
           >
@@ -282,8 +332,8 @@ function ScreenPricing({
           <Text
             style={{
               fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
-              color: colors.textMuted,
+              fontSize: FontSize.xs,
+              color: colors.textSubtle,
               marginHorizontal: Spacing['1.5'],
             }}
           >
@@ -291,8 +341,8 @@ function ScreenPricing({
           </Text>
           <Text
             style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
+              fontFamily: FontFamily.uiMedium,
+              fontSize: FontSize.xs,
               color: colors.textMuted,
               marginRight: Spacing['1'],
             }}
@@ -303,19 +353,19 @@ function ScreenPricing({
         </View>
       </View>
 
-      {/* Horizontal review carousel */}
-      <View>
+      {/* Horizontal review carousel -- breaks out of parent padding */}
+      <View style={styles.reviewCarouselWrapper}>
         <FlatList
           ref={flatListRef}
           data={REVIEWS}
           horizontal
-          pagingEnabled
           showsHorizontalScrollIndicator={false}
-          snapToInterval={REVIEW_CARD_WIDTH}
+          snapToInterval={REVIEW_SNAP_INTERVAL}
           decelerationRate="fast"
           onMomentumScrollEnd={onReviewScroll}
           keyExtractor={(item) => item.name}
           contentContainerStyle={styles.reviewFlatListContent}
+          ItemSeparatorComponent={() => <View style={{ width: Spacing['2'] }} />}
           renderItem={({ item: review }) => (
             <View
               style={[
@@ -323,34 +373,41 @@ function ScreenPricing({
                 {
                   width: REVIEW_CARD_WIDTH,
                   backgroundColor: colors.inputBackground,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                 },
               ]}
             >
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: FontSize.sm,
-                  color: colors.text,
-                }}
-              >
-                {review.name}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: FontSize.xs,
-                  color: colors.textMuted,
-                  marginTop: Spacing['0.5'],
-                }}
-              >
-                {review.location}
-              </Text>
+              <View style={styles.reviewCardHeader}>
+                <View>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.uiSemiBold,
+                      fontSize: FontSize.sm,
+                      color: colors.text,
+                    }}
+                  >
+                    {review.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: FontSize.xs,
+                      color: colors.textSubtle,
+                      marginTop: 2,
+                    }}
+                  >
+                    {review.location}
+                  </Text>
+                </View>
+                <FiveStars color={colors.accent} />
+              </View>
               <Text
                 style={{
                   fontFamily: FontFamily.body,
                   fontSize: FontSize.sm,
                   color: colors.textMuted,
-                  marginTop: Spacing['2'],
+                  marginTop: Spacing['2.5'],
                   lineHeight: 20,
                 }}
               >
@@ -386,10 +443,10 @@ function ScreenPricing({
           <Text
             style={{
               fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
+              fontSize: 11,
+              color: colors.textSubtle,
               textTransform: 'uppercase',
-              letterSpacing: 1,
+              letterSpacing: 1.2,
             }}
           >
             Monthly
@@ -403,16 +460,32 @@ function ScreenPricing({
               marginTop: Spacing['1.5'],
             }}
           >
-            {monthlyPrice}/mo
+            {monthlyPrice}
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.sm,
+                color: colors.textMuted,
+              }}
+            >
+              /mo
+            </Text>
           </Text>
         </TouchableOpacity>
 
-        {/* Yearly — with SAVE badge on top border */}
+        {/* Yearly -- with SAVE badge on top border */}
         <View style={styles.yearlyCardWrapper}>
           {/* SAVE badge overlapping top border */}
           {savings > 0 && (
             <View style={[styles.saveBadge, { backgroundColor: colors.accent }]}>
-              <Text style={styles.saveBadgeText}>SAVE {savings}%</Text>
+              <Text
+                style={[
+                  styles.saveBadgeText,
+                  { color: colors.contrastText ?? '#FFFFFF' },
+                ]}
+              >
+                SAVE {savings}%
+              </Text>
             </View>
           )}
           <TouchableOpacity
@@ -431,10 +504,10 @@ function ScreenPricing({
             <Text
               style={{
                 fontFamily: FontFamily.uiMedium,
-                fontSize: FontSize.xs,
-                color: colors.textMuted,
+                fontSize: 11,
+                color: colors.textSubtle,
                 textTransform: 'uppercase',
-                letterSpacing: 1,
+                letterSpacing: 1.2,
               }}
             >
               Yearly
@@ -495,12 +568,12 @@ function BottomCTA({
         </Text>
       )}
 
-      {/* No payment due now */}
+      {/* No payment due now -- reassurance line */}
       <View style={styles.noPaymentRow}>
-        <CheckIcon size={16} color={colors.textMuted} weight="bold" />
+        <CheckIcon size={14} color={colors.accent} weight="bold" />
         <Text
           style={{
-            fontFamily: FontFamily.ui,
+            fontFamily: FontFamily.uiMedium,
             fontSize: FontSize.sm,
             color: colors.textMuted,
             marginLeft: Spacing['1.5'],
@@ -512,7 +585,7 @@ function BottomCTA({
 
       {/* Gold CTA button */}
       <TouchableOpacity
-        activeOpacity={0.7}
+        activeOpacity={0.8}
         onPress={onPress}
         disabled={isLoading}
       >
@@ -524,7 +597,7 @@ function BottomCTA({
           ) : (
             <Text
               style={{
-                fontFamily: FontFamily.uiMedium,
+                fontFamily: FontFamily.uiSemiBold,
                 fontSize: FontSize.base,
                 color: colors.background,
                 letterSpacing: 0.3,
@@ -536,15 +609,15 @@ function BottomCTA({
         </View>
       </TouchableOpacity>
 
-      {/* Renewal disclosure — must fit one line */}
+      {/* Renewal disclosure -- must fit one line */}
       <Text
         numberOfLines={1}
         style={{
           fontFamily: FontFamily.ui,
           fontSize: FontSize.xs,
-          color: colors.textMuted,
+          color: colors.textSubtle,
           textAlign: 'center',
-          marginTop: Spacing['2'],
+          marginTop: Spacing['2.5'],
         }}
       >
         {trialDays} days free, then {yearlyPrice}/yr. Cancel anytime.
@@ -648,26 +721,44 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Restore button — top-right on all screens */}
-      <TouchableOpacity
-        onPress={handleRestore}
-        hitSlop={12}
-        style={[styles.restoreButton, { top: insets.top + Spacing['2'] }]}
-        accessibilityRole="button"
-        accessibilityLabel="Restore purchases"
-      >
-        <Text
-          style={{
-            fontFamily: FontFamily.ui,
-            fontSize: FontSize.sm,
-            color: colors.textMuted,
-          }}
+      {/* Top bar: Skip (left) + Restore (right) */}
+      <View style={[styles.topBar, { paddingTop: insets.top + Spacing['2'] }]}>
+        <TouchableOpacity
+          onPress={onSkip}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Skip trial"
         >
-          Restore
-        </Text>
-      </TouchableOpacity>
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.sm,
+              color: colors.textSubtle,
+            }}
+          >
+            Skip
+          </Text>
+        </TouchableOpacity>
 
-      {/* Page content — starts immediately below the restore button */}
+        <TouchableOpacity
+          onPress={handleRestore}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Restore purchases"
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.sm,
+              color: colors.textSubtle,
+            }}
+          >
+            Restore
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Page content */}
       <View style={styles.flex1}>
         <Animated.View
           key={currentPage}
@@ -678,7 +769,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             <ScreenProductInAction colors={colors} />
           )}
           {currentPage === 1 && (
-            <ScreenTrialReminder colors={colors} />
+            <ScreenTrialReminder colors={colors} trialDays={trialDays} />
           )}
           {currentPage === 2 && (
             <ScreenPricing
@@ -727,128 +818,156 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Restore button (top-right)
-  restoreButton: {
-    position: 'absolute',
-    right: Spacing['5'],
+  // Top bar (Skip left, Restore right)
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing['5'],
+    paddingBottom: Spacing['2'],
     zIndex: 10,
   },
 
-  // Screen 1
+  // ------- Screen 1 -------
   screen1Root: {
     flex: 1,
     overflow: 'hidden',
   },
+  screen1TopSection: {
+    paddingHorizontal: Spacing['8'],
+    paddingTop: Spacing['6'],
+  },
   screen1DeviceWrapper: {
     flex: 1,
     alignItems: 'center',
-    marginTop: Spacing['5'],
+    justifyContent: 'flex-start',
+    paddingTop: Spacing['6'],
   },
   screen1Gradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: 240,
   },
 
-  // Screen 2
+  // ------- Screen 2 -------
   screen2Root: {
     flex: 1,
     paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['4'],
-    gap: Spacing['6'],
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  screen2Content: {
+    alignItems: 'center',
+    // Shift content up slightly from true center for optical balance
+    marginTop: -Spacing['10'],
   },
 
-  // Headlines
+  // ------- Shared Headlines -------
   headline: {
     fontFamily: FontFamily.display,
-    fontSize: 26,
-    lineHeight: Math.round(26 * 1.2),
+    fontSize: 28,
+    lineHeight: Math.round(28 * 1.25),
   },
 
-  // Device bezel (Screen 1)
+  // ------- Device bezel (Screen 1) -------
   deviceBezel: {
     alignSelf: 'center',
-    borderWidth: 2,
-    borderRadius: 40,
+    borderWidth: 1,
+    borderRadius: 36,
     overflow: 'hidden',
   },
   deviceInner: {
     width: '100%',
     aspectRatio: 9 / 19.5,
-    backgroundColor: '#111111',
+    backgroundColor: '#0F0F0F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playIconRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  // Bell (Screen 2)
+  // ------- Bell (Screen 2) -------
   bellContainer: {
     alignItems: 'center',
-    gap: Spacing['4'],
   },
   bellLottie: {
-    width: 120,
-    height: 120,
-  },
-  dayBadge: {
-    paddingHorizontal: Spacing['4'],
-    paddingVertical: Spacing['2'],
-    borderRadius: Radius.full,
-    borderWidth: 1,
+    width: 160,
+    height: 160,
   },
 
-  // Screen 3
+  // ------- Screen 3 -------
   screen3Root: {
     flex: 1,
     paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['2'],
-    gap: Spacing['4'],
+    paddingTop: Spacing['3'],
+    justifyContent: 'space-between',
   },
   screen3Header: {
     alignItems: 'center',
-    gap: Spacing['3'],
+    gap: Spacing['2'],
   },
   screen3Headline: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['2xl'],
-    lineHeight: Math.round(FontSize['2xl'] * 1.2),
+    lineHeight: Math.round(FontSize['2xl'] * 1.25),
     textAlign: 'center',
   },
   socialProofRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: Spacing['0.5'],
   },
   starsRow: {
     flexDirection: 'row',
     gap: 2,
   },
 
-  // Review carousel
+  // ------- Review carousel -------
+  reviewCarouselWrapper: {
+    // Break out of parent's paddingHorizontal so FlatList spans full width
+    marginHorizontal: -Spacing['6'],
+  },
   reviewFlatListContent: {
-    // No horizontal padding — cards are full width
+    paddingHorizontal: Spacing['6'],
   },
   reviewCard: {
     borderRadius: Radius.card,
     padding: Spacing['4'],
+  },
+  reviewCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   reviewDotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    marginTop: Spacing['3'],
+    marginTop: Spacing['2.5'],
   },
   reviewDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
   },
 
-  // Pricing
+  // ------- Pricing -------
   pricingRow: {
     flexDirection: 'row',
     gap: Spacing['3'],
+    marginBottom: Spacing['1'],
   },
   pricingCard: {
     flex: 1,
@@ -872,13 +991,13 @@ const styles = StyleSheet.create({
   saveBadgeText: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 10,
-    color: '#FFFFFF',
     letterSpacing: 0.5,
   },
 
-  // Bottom CTA
+  // ------- Bottom CTA -------
   bottomSection: {
     paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['2'],
   },
   ctaContainer: {
     gap: 0,
@@ -890,7 +1009,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   ctaButton: {
-    paddingVertical: Spacing['4'],
+    paddingVertical: Spacing['3.5'],
     borderRadius: Radius.md,
     alignItems: 'center',
     width: '100%',

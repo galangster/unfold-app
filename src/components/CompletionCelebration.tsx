@@ -249,7 +249,7 @@ export function CompletionCelebration({
   message,
   seriesReflectionSummary,
 }: CompletionCelebrationProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
 
   // Pick a random message on each render when visible
@@ -322,7 +322,7 @@ export function CompletionCelebration({
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
-    backgroundColor: colors.backgroundPure,
+    backgroundColor: colors.background,
   }));
 
   const titleStyle = useAnimatedStyle(() => ({
@@ -361,7 +361,7 @@ export function CompletionCelebration({
               delay={m.delay}
               drift={m.drift}
               accentColor={colors.accent}
-              textColor="rgba(255, 255, 255, 0.85)"
+              textColor={isDark ? colors.textMuted : colors.textSubtle}
               isAccent={m.isAccent}
             />
           ))}
@@ -381,7 +381,7 @@ export function CompletionCelebration({
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: type === 'series' ? 52 : 48,
-                  color: '#F5F0EB',
+                  color: colors.text,
                   textAlign: 'left',
                   lineHeight: type === 'series' ? 56 : 52,
                   letterSpacing: -1,
@@ -397,7 +397,7 @@ export function CompletionCelebration({
                 style={{
                   fontFamily: FontFamily.body,
                   fontSize: 17,
-                  color: 'rgba(245, 240, 235, 0.55)',
+                  color: colors.textMuted,
                   textAlign: 'left',
                   lineHeight: 26,
                 }}
@@ -414,7 +414,7 @@ export function CompletionCelebration({
                     fontFamily: FontFamily.bodyItalic,
                     fontSize: 14,
                     lineHeight: 20,
-                    color: 'rgba(245, 240, 235, 0.35)',
+                    color: colors.textSubtle,
                     textAlign: 'left',
                     paddingHorizontal: 8,
                   }}
@@ -440,7 +440,7 @@ export function CompletionCelebration({
               style={{
                 fontFamily: FontFamily.ui,
                 fontSize: 13,
-                color: 'rgba(245, 240, 235, 0.2)',
+                color: colors.textHint,
               }}
             >
               Tap anywhere to continue

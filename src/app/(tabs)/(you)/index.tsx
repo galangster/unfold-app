@@ -426,8 +426,8 @@ export default function YouScreen() {
   const menuItems: MenuItem[] = [
     {
       icon: BookOpenIcon,
-      label: 'My Studies',
-      subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'study' : 'studies'}`,
+      label: 'My Devotionals',
+      subtitle: `${devotionals.length} ${devotionals.length === 1 ? 'devotional' : 'devotionals'}`,
       route: '/(tabs)/(you)/past-devotionals',
     },
     {

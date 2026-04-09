@@ -71,7 +71,7 @@ function generateDaysData(streakCount: number): DayData[] {
 }
 
 export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   // Breathing pulse for active flame
   const flamePulse = useSharedValue(1);
@@ -140,14 +140,14 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
             styles.card,
             {
               backgroundColor: 'transparent',
-              borderColor: streakCount > 0 ? alpha(colors.accent, 0.08) : colors.border,
+              borderColor: colors.border,
               overflow: 'hidden',
             },
           ]}
         >
           <BlurView
-            intensity={40}
-            tint="dark"
+            intensity={isDark ? 40 : 30}
+            tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
           {/* Header row - Current Streak label on left, streak count on right */}

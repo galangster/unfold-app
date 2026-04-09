@@ -112,7 +112,7 @@ export function YourSeriesSection() {
         <View style={styles.headerLeft}>
           <BookOpenIcon size={14} color={colors.textMuted} weight="light" />
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
-            YOUR STUDIES
+            YOUR DEVOTIONALS
           </Text>
         </View>
 

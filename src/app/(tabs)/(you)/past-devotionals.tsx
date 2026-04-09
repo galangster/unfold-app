@@ -588,7 +588,7 @@ export default function PastDevotionalsScreen() {
 
   const handleDeleteDevotional = useCallback((devotional: Devotional) => {
     Alert.alert(
-      'Delete this study?',
+      'Delete this devotional?',
       'This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -640,7 +640,7 @@ export default function PastDevotionalsScreen() {
                 marginLeft: Spacing['2'],
               }}
             >
-              My Studies
+              My Devotionals
             </Text>
           </View>
 
@@ -667,10 +667,10 @@ export default function PastDevotionalsScreen() {
   }
 
   const emptyLabel = searchQuery.trim()
-    ? `No studies match "${searchQuery}"`
+    ? `No devotionals match "${searchQuery}"`
     : activeTab === 'completed'
-      ? 'No completed studies yet'
-      : 'No studies in progress';
+      ? 'No completed devotionals yet'
+      : 'No devotionals in progress';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -694,7 +694,7 @@ export default function PastDevotionalsScreen() {
               marginLeft: Spacing['2'],
             }}
           >
-            My Studies
+            My Devotionals
           </Text>
         </View>
 
@@ -724,7 +724,7 @@ export default function PastDevotionalsScreen() {
                 ref={searchInputRef}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search studies, days, scriptures..."
+                placeholder="Search devotionals, days, scriptures..."
                 placeholderTextColor={colors.textHint}
                 style={[
                   searchStyles.input,
