@@ -1317,10 +1317,9 @@ export default function JournalHubScreen() {
                           onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             router.push({
-                              pathname: '/(tabs)/(journal)/entry',
+                              pathname: '/(tabs)/(you)/series-detail',
                               params: {
-                                devotionalId: series.devotional.id,
-                                dayNumber: String(latestJournalDay),
+                                id: series.devotional.id,
                               },
                             });
                           }}
