@@ -26,7 +26,7 @@ function StatChar({ char, delay, fontSize, colors }: {
   const colorProgress = useSharedValue(0);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }));
+    opacity.value = withDelay(delay, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }));
     colorProgress.value = withDelay(delay + 50, withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) }));
     return () => {
       cancelAnimation(opacity);
@@ -64,7 +64,7 @@ function TypewriterNumber({ text, startDelay, fontSize, colors }: {
         <StatChar
           key={`${char}-${i}`}
           char={char}
-          delay={startDelay + i * 100}
+          delay={startDelay + i * 180}
           fontSize={fontSize}
           colors={colors}
         />
@@ -87,7 +87,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
     const timer2 = setTimeout(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       onReady?.();
-    }, 3800); // after 11% + description lands (extra 1s delay)
+    }, 4800); // after 11% + description lands (slower animations)
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
@@ -117,7 +117,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
           colors={colors}
         />
         <Animated.Text
-          entering={FadeIn.delay(700).duration(500)}
+          entering={FadeIn.delay(900).duration(800)}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 16,
@@ -140,12 +140,12 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
       }}>
         <TypewriterNumber
           text="11%"
-          startDelay={2600}
+          startDelay={3000}
           fontSize={72}
           colors={colors}
         />
         <Animated.Text
-          entering={FadeIn.delay(3200).duration(500)}
+          entering={FadeIn.delay(3600).duration(800)}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 16,
