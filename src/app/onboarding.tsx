@@ -593,8 +593,13 @@ export default function OnboardingScreen() {
       chaosSpeed.value = 1;
       chaosDrift.value = 0;
     } else if (currentStepId === 'shockStat') {
-      // Screen 9: keep particles frozen — pure problem, no hope yet
-      chaosSpeed.value = withTiming(0.02, { duration: 400, easing: Easing.out(Easing.cubic) });
+      // Shock stat: particles slow to near-still immediately, drift stops
+      chaosSpeed.value = withTiming(0.08, { duration: 800, easing: Easing.out(Easing.cubic) });
+      chaosDrift.value = withTiming(0, { duration: 800, easing: Easing.out(Easing.cubic) });
+      // When 11% reveals (~3000ms), freeze particles completely
+      setTimeout(() => {
+        chaosSpeed.value = withTiming(0.01, { duration: 1000, easing: Easing.out(Easing.cubic) });
+      }, 3000);
     } else if (currentStepId === 'growthGraph') {
       // Screen 10: hope arriving — particles begin slow warm drift upward
       setTimeout(() => {
