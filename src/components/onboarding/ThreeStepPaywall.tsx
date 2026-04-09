@@ -2,6 +2,7 @@ import { useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
@@ -20,7 +21,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
-import { CheckIcon, BookOpenIcon, StarIcon, PlayCircleIcon } from 'phosphor-react-native';
+import { CheckIcon, StarIcon, PlayCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -74,16 +75,18 @@ const REVIEWS = [
     name: 'Priya J.',
     location: 'Austin, TX',
     quote:
-      'This is the first quiet time app where I actually WANT to come back every day. The journal prompts are \u{1F525} and the companion is like having a study partner who gets it',
+      'This is the first quiet time app where I actually WANT to come back every day. The journal prompts are \u{1F525} and the companion actually asks good questions back',
   },
 ] as const;
 
+const PRICING_GAP = Spacing['3'];
+const PRICING_BOX_WIDTH = (SCREEN_WIDTH - Spacing['6'] * 2 - PRICING_GAP) / 2;
 const STACK_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
 const STACK_CARD_HEIGHT = 140;
 const STACK_OFFSET_Y = -8;
 const STACK_SCALE_STEP = 0.05;
 const SWIPE_THRESHOLD = -60;
-const CARD_SPRING = { damping: 20, stiffness: 200 };
+const CARD_SPRING = { damping: 28, stiffness: 200, mass: 1 };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -187,10 +190,10 @@ function StackCard({
     }
 
     if (relativePos === 2) {
-      // Third card
+      // Third card -- fully opaque, stacked behind
       return {
         zIndex: total - 2,
-        opacity: 0.7,
+        opacity: 1,
         transform: [
           { translateX: 0 },
           { translateY: STACK_OFFSET_Y * 2 },
@@ -266,7 +269,7 @@ function StackCard({
 function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60; // 15% of ~400px content area
-  const SPRING_CONFIG = { damping: 20, stiffness: 300 };
+  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
 
   const dragGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
@@ -373,56 +376,81 @@ function ScreenTrialReminder({
   colors: ColorTheme;
   trialDays: number;
 }) {
+  const dragY = useSharedValue(0);
+  const MAX_DRAG = 60;
+  const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
+
+  const dragGesture = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .failOffsetX([-24, 24])
+    .shouldCancelWhenOutside(false)
+    .onUpdate((e) => {
+      'worklet';
+      const raw = e.translationY * 0.4;
+      dragY.value = raw * (1 - Math.abs(raw) / (MAX_DRAG * 2));
+    })
+    .onFinalize(() => {
+      'worklet';
+      dragY.value = withSpring(0, SPRING_CONFIG);
+    });
+
+  const dragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
+
   return (
     <View style={styles.screen2Root}>
-      {/* Vertically centered content group */}
-      <View style={styles.screen2Content}>
-        {/* Lottie bell -- above headline for visual anchor */}
-        <View style={styles.bellContainer}>
-          <LottieView
-            source={require('../../../assets/lottie/bell-notification.json')}
-            autoPlay
-            loop
-            style={styles.bellLottie}
-            colorFilters={[
-              { keypath: 'Pre-comp 1', color: colors.accent },
-              { keypath: 'Bell Frame', color: colors.accent },
-              { keypath: 'Bell Bottom', color: colors.accent },
-              { keypath: 'Mask', color: colors.accent },
-            ]}
-          />
+      <GestureDetector gesture={dragGesture}>
+        <View style={styles.screen2DragArea} collapsable={false}>
+          <Animated.View style={[styles.screen2Content, dragStyle]}>
+            {/* Lottie bell -- above headline for visual anchor */}
+            <View style={styles.bellContainer}>
+              <LottieView
+                source={require('../../../assets/lottie/bell-notification.json')}
+                autoPlay
+                loop
+                style={styles.bellLottie}
+                colorFilters={[
+                  { keypath: 'Pre-comp 1', color: colors.accent },
+                  { keypath: 'Bell Frame', color: colors.accent },
+                  { keypath: 'Bell Bottom', color: colors.accent },
+                  { keypath: 'Mask', color: colors.accent },
+                ]}
+              />
+            </View>
+
+            {/* Headline */}
+            <Text
+              style={[
+                styles.headline,
+                {
+                  color: colors.text,
+                  textAlign: 'center',
+                  marginTop: Spacing['6'],
+                },
+              ]}
+            >
+              We'll remind you before{'\n'}your free trial ends
+            </Text>
+
+            {/* Supporting body text */}
+            <Text
+              style={{
+                fontFamily: FontFamily.body,
+                fontSize: FontSize.base,
+                lineHeight: 24,
+                color: colors.textMuted,
+                textAlign: 'center',
+                marginTop: Spacing['4'],
+                paddingHorizontal: Spacing['4'],
+              }}
+            >
+              You'll get a notification {trialDays === 7 ? '2 days' : '1 day'} before
+              your trial ends. No surprises, ever.
+            </Text>
+          </Animated.View>
         </View>
-
-        {/* Headline */}
-        <Text
-          style={[
-            styles.headline,
-            {
-              color: colors.text,
-              textAlign: 'center',
-              marginTop: Spacing['6'],
-            },
-          ]}
-        >
-          We'll remind you before{'\n'}your free trial ends
-        </Text>
-
-        {/* Supporting body text */}
-        <Text
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: FontSize.base,
-            lineHeight: 24,
-            color: colors.textMuted,
-            textAlign: 'center',
-            marginTop: Spacing['4'],
-            paddingHorizontal: Spacing['4'],
-          }}
-        >
-          You'll get a notification {trialDays === 7 ? '2 days' : '1 day'} before
-          your trial ends. No surprises, ever.
-        </Text>
-      </View>
+      </GestureDetector>
     </View>
   );
 }
@@ -450,7 +478,9 @@ function ScreenPricing({
 }) {
   const savings = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
   const yearlyMonthlyEquivalent =
-    monthlyRaw > 0 ? `$${(yearlyRaw / 12).toFixed(2)}/mo` : yearlyPrice;
+    monthlyRaw > 0
+      ? `$${(Math.floor((yearlyRaw / 12) * 100) / 100).toFixed(2)}/mo`
+      : yearlyPrice;
 
   // --- Stacked card carousel state ---
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
@@ -463,7 +493,6 @@ function ScreenPricing({
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-12, 12])
-    .failOffsetY([-20, 20])
     .onUpdate((e) => {
       'worklet';
       // Only allow left swipe (negative translationX)
@@ -499,43 +528,58 @@ function ScreenPricing({
     <View style={styles.screen3Root}>
       {/* Logo + headline */}
       <View style={styles.screen3Header}>
-        <BookOpenIcon size={28} color={colors.accent} weight="light" />
+        <Image
+          source={require('../../../assets/icon-paywall.png')}
+          style={{ width: 32, height: 32, tintColor: colors.accent, opacity: 0.9 }}
+          resizeMode="contain"
+        />
         <Text style={[styles.screen3Headline, { color: colors.text }]}>
-          Your personal Bible{'\n'}experience
+          Your personal Bible experience
         </Text>
 
-        {/* Social proof line */}
-        <View style={styles.socialProofRow}>
+        {/* Social proof -- stacked with laurel wreath */}
+        <View style={styles.socialProofStack}>
           <Text
             style={{
               fontFamily: FontFamily.ui,
               fontSize: FontSize.xs,
               color: colors.textMuted,
+              textAlign: 'center',
             }}
           >
             Trusted by thousands
           </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textSubtle,
-              marginHorizontal: Spacing['1.5'],
-            }}
-          >
-            {'\u00B7'}
-          </Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.uiMedium,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-              marginRight: Spacing['1'],
-            }}
-          >
-            4.8
-          </Text>
-          <FiveStars color={colors.accent} />
+          <View style={styles.laurelWrapper}>
+            {/* Left laurel arc */}
+            <View
+              style={[
+                styles.laurelBranch,
+                styles.laurelLeft,
+                { borderColor: colors.accent },
+              ]}
+            />
+            <View style={styles.ratingRow}>
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.sm,
+                  color: colors.text,
+                  marginRight: Spacing['1'],
+                }}
+              >
+                4.8
+              </Text>
+              <FiveStars color={colors.accent} />
+            </View>
+            {/* Right laurel arc */}
+            <View
+              style={[
+                styles.laurelBranch,
+                styles.laurelRight,
+                { borderColor: colors.accent },
+              ]}
+            />
+          </View>
         </View>
       </View>
 
@@ -568,7 +612,7 @@ function ScreenPricing({
         />
       </View>
 
-      {/* Pricing cards -- equal height via fixed padding */}
+      {/* Pricing cards -- explicit equal widths */}
       <View style={styles.pricingRow}>
         {/* Monthly */}
         <TouchableOpacity
@@ -577,6 +621,7 @@ function ScreenPricing({
           style={[
             styles.pricingCard,
             {
+              width: PRICING_BOX_WIDTH,
               backgroundColor: colors.inputBackground,
               borderColor:
                 selectedPlan === 'monthly' ? colors.accent : colors.border,
@@ -618,7 +663,7 @@ function ScreenPricing({
         </TouchableOpacity>
 
         {/* Yearly -- with SAVE badge on top border */}
-        <View style={styles.yearlyCardWrapper}>
+        <View style={[styles.yearlyCardWrapper, { width: PRICING_BOX_WIDTH }]}>
           {/* SAVE badge overlapping top border */}
           {savings > 0 && (
             <View style={[styles.saveBadge, { backgroundColor: colors.accent }]}>
@@ -682,8 +727,8 @@ function BottomCTA({
   colors,
   currentPage,
   trialDays,
-  yearlyPrice,
-  monthlyPrice,
+  yearlyRaw,
+  monthlyRaw,
   selectedPlan,
   isLoading,
   purchaseError,
@@ -692,8 +737,8 @@ function BottomCTA({
   colors: ColorTheme;
   currentPage: number;
   trialDays: number;
-  yearlyPrice: string;
-  monthlyPrice: string;
+  yearlyRaw: number;
+  monthlyRaw: number;
   selectedPlan: 'yearly' | 'monthly';
   isLoading: boolean;
   purchaseError: string | null;
@@ -701,8 +746,8 @@ function BottomCTA({
 }) {
   const disclosureText =
     selectedPlan === 'yearly'
-      ? `${trialDays} days free, then ${yearlyPrice}/yr. Cancel anytime.`
-      : `${trialDays} days free, then ${monthlyPrice}/mo. Cancel anytime.`;
+      ? `${trialDays} days free, then $${yearlyRaw.toFixed(2)}/yr. Cancel anytime.`
+      : `${trialDays} days free, then $${(monthlyRaw * 12).toFixed(2)}/yr. Cancel anytime.`;
 
   return (
     <View style={styles.ctaContainer}>
@@ -912,8 +957,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           colors={colors}
           currentPage={currentPage}
           trialDays={trialDays}
-          yearlyPrice={yearlyPrice}
-          monthlyPrice={monthlyPrice}
+          yearlyRaw={yearlyRaw}
+          monthlyRaw={monthlyRaw}
           selectedPlan={selectedPlan}
           isLoading={isLoading}
           purchaseError={purchaseError}
@@ -990,6 +1035,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  screen2DragArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 1,
+  },
   screen2Content: {
     alignItems: 'center',
     // Shift content up slightly from true center for optical balance
@@ -1052,14 +1103,39 @@ const styles = StyleSheet.create({
   },
   screen3Headline: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
-    lineHeight: Math.round(FontSize['2xl'] * 1.25),
+    fontSize: 22,
+    lineHeight: Math.round(22 * 1.25),
     textAlign: 'center',
   },
-  socialProofRow: {
+  socialProofStack: {
+    alignItems: 'center',
+    marginTop: Spacing['1'],
+    gap: Spacing['1.5'],
+  },
+  laurelWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: Spacing['0.5'],
+    gap: Spacing['2'],
+  },
+  laurelBranch: {
+    width: 18,
+    height: 28,
+    borderWidth: 1.5,
+    borderRadius: 12,
+  },
+  laurelLeft: {
+    borderRightWidth: 0,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  laurelRight: {
+    borderLeftWidth: 0,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   starsRow: {
     flexDirection: 'row',
@@ -1109,14 +1185,12 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
   },
   pricingCard: {
-    flex: 1,
     borderRadius: Radius.card,
     paddingHorizontal: Spacing['4'],
     paddingVertical: Spacing['4'],
     justifyContent: 'center',
   },
   yearlyCardWrapper: {
-    flex: 1,
     position: 'relative',
   },
   saveBadge: {
