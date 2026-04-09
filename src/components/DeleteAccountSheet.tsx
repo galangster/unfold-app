@@ -52,7 +52,7 @@ const DELETION_ITEMS = [
 // ---------------------------------------------------------------------------
 
 export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const bottomSheetRef = useRef<BottomSheet>(null);
   const reset = useUnfoldStore((s) => s.reset);
@@ -239,7 +239,7 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
                 onPress={handleProceedToConfirm}
                 style={styles.deleteButton}
               >
-                <Text style={styles.deleteButtonText}>
+                <Text style={[styles.deleteButtonText, { color: colors.error }]}>
                   Delete my account
                 </Text>
               </TouchableOpacity>
@@ -291,9 +291,9 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
               ]}
             >
               {isDeleting ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={isDark ? '#FFFFFF' : colors.backgroundPure} />
               ) : (
-                <Text style={styles.confirmDeleteButtonText}>
+                <Text style={[styles.confirmDeleteButtonText, { color: isDark ? '#FFFFFF' : colors.backgroundPure }]}>
                   Confirm deletion
                 </Text>
               )}
@@ -405,7 +405,6 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: 15,
-    color: '#E53935',
   },
   confirmInput: {
     fontFamily: FontFamily.ui,
@@ -426,7 +425,6 @@ const styles = StyleSheet.create({
   confirmDeleteButtonText: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.base,
-    color: '#FFFFFF',
   },
   backButton: {
     alignItems: 'center',

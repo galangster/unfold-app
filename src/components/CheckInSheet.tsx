@@ -281,7 +281,9 @@ function QuestionStep({
                 style={[
                   styles.chipText,
                   {
-                    color: isSelected ? '#FFFFFF' : colors.text,
+                    color: isSelected
+                      ? isDark ? '#FFFFFF' : colors.backgroundPure
+                      : colors.text,
                     fontFamily: isSelected
                       ? FontFamily.uiMedium
                       : FontFamily.ui,
@@ -339,7 +341,9 @@ function QuestionStep({
                 styles.submitTypedText,
                 {
                   color:
-                    typedAnswer.trim().length > 0 ? '#FFFFFF' : colors.textMuted,
+                    typedAnswer.trim().length > 0
+                      ? isDark ? '#FFFFFF' : colors.backgroundPure
+                      : colors.textMuted,
                   fontFamily: FontFamily.uiMedium,
                 },
               ]}
@@ -375,10 +379,12 @@ function NoteStep({
   onSubmit,
   onSkip,
   colors,
+  isDark,
 }: {
   onSubmit: (text: string) => void;
   onSkip: () => void;
   colors: ReturnType<typeof useTheme>['colors'];
+  isDark: boolean;
 }) {
   const [noteText, setNoteText] = useState('');
   const inputRef = useRef<TextInput>(null);
@@ -478,7 +484,9 @@ function NoteStep({
               styles.doneButtonText,
               {
                 color:
-                  noteText.trim().length > 0 ? '#FFFFFF' : colors.textMuted,
+                  noteText.trim().length > 0
+                    ? isDark ? '#FFFFFF' : colors.backgroundPure
+                    : colors.textMuted,
                 fontFamily: FontFamily.uiSemiBold,
               },
             ]}
@@ -763,6 +771,7 @@ export function CheckInSheet({
                       onSubmit={handleNoteSubmit}
                       onSkip={handleNoteSkip}
                       colors={colors}
+                      isDark={isDark}
                     />
                   )}
                 </>

@@ -39,6 +39,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { useTheme } from '@/lib/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DIAGONAL = Math.sqrt(SCREEN_WIDTH ** 2 + SCREEN_HEIGHT ** 2);
@@ -104,6 +105,7 @@ function Star({
   appearDelay,
   twinkleDuration,
   brightness,
+  color,
 }: {
   x: number;
   y: number;
@@ -111,6 +113,7 @@ function Star({
   appearDelay: number;
   twinkleDuration: number;
   brightness: number;
+  color: string;
 }) {
   const appear = useSharedValue(0);
   const twinkle = useSharedValue(brightness);
@@ -158,7 +161,7 @@ function Star({
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: '#F5F0EB',
+          backgroundColor: color,
         },
         style,
       ]}
@@ -167,7 +170,7 @@ function Star({
 }
 
 // ─── Expanding dark circle ───────────────────────────────────────────────────
-function DarkExpansion() {
+function DarkExpansion({ bgColor }: { bgColor: string }) {
   const scale = useSharedValue(0);
 
   useEffect(() => {
@@ -184,7 +187,7 @@ function DarkExpansion() {
     borderRadius: DIAGONAL / 2,
     left: SCREEN_WIDTH / 2 - DIAGONAL / 2,
     top: SCREEN_HEIGHT / 2 - DIAGONAL / 2,
-    backgroundColor: '#08080F',
+    backgroundColor: bgColor,
     transform: [{ scale: scale.value }],
   }));
 
@@ -204,6 +207,14 @@ export function EveningCelebration({
   message,
 }: EveningCelebrationProps) {
   const { reducedMotion } = useAccessibleAnimation();
+  const { colors, isDark } = useTheme();
+
+  // Theme-aware colors: preserve dark night-sky aesthetic in dark mode,
+  // use theme tokens in light mode
+  const overlayBg = isDark ? '#08080F' : colors.backgroundPure;
+  const starColor = isDark ? '#F5F0EB' : colors.textSubtle;
+  const messageColor = isDark ? 'rgba(245, 240, 235, 0.85)' : colors.text;
+  const hintColor = isDark ? 'rgba(245, 240, 235, 0.18)' : colors.textHint;
 
   const subtitle = useMemo(() => {
     if (message) return message;
@@ -297,9 +308,9 @@ export function EveningCelebration({
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
           {/* Expanding dark circle fills the screen */}
-          {!reducedMotion && <DarkExpansion />}
+          {!reducedMotion && <DarkExpansion bgColor={overlayBg} />}
           {reducedMotion && (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: '#08080F' }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: overlayBg }]} />
           )}
 
           {/* Twinkling stars */}
@@ -312,6 +323,7 @@ export function EveningCelebration({
               appearDelay={s.appearDelay}
               twinkleDuration={s.twinkleDuration}
               brightness={s.brightness}
+              color={starColor}
             />
           ))}
           {reducedMotion && stars.slice(0, 30).map((s) => (
@@ -324,7 +336,7 @@ export function EveningCelebration({
                 width: s.size,
                 height: s.size,
                 borderRadius: s.size / 2,
-                backgroundColor: '#F5F0EB',
+                backgroundColor: starColor,
                 opacity: s.brightness * 0.7,
               }}
             />
@@ -333,7 +345,7 @@ export function EveningCelebration({
           {/* Single message line — centered */}
           <View style={styles.textContainer}>
             <Animated.View style={textStyle}>
-              <Text style={styles.messageText}>
+              <Text style={[styles.messageText, { color: messageColor }]}>
                 {subtitle}
               </Text>
             </Animated.View>
@@ -341,7 +353,7 @@ export function EveningCelebration({
 
           {/* Dismiss hint */}
           <Animated.View style={[styles.hintContainer, hintStyle]}>
-            <Text style={styles.hintText}>
+            <Text style={[styles.hintText, { color: hintColor }]}>
               Tap anywhere to continue
             </Text>
           </Animated.View>
@@ -361,7 +373,6 @@ const styles = StyleSheet.create({
   messageText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize['2xl'],
-    color: 'rgba(245, 240, 235, 0.85)',
     textAlign: 'center',
     letterSpacing: -0.3,
   },
@@ -373,6 +384,5 @@ const styles = StyleSheet.create({
   hintText: {
     fontFamily: FontFamily.ui,
     fontSize: 13,
-    color: 'rgba(245, 240, 235, 0.18)',
   },
 });

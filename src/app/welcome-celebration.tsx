@@ -18,12 +18,12 @@ import { useUnfoldStore } from '@/lib/store';
 
 export default function WelcomeCelebrationScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
-  const darkBg = '#0A0A0A';
-  const darkCard = '#111214';
-  const darkBorder = '#24262B';
-  const darkText = '#F5F5F7';
-  const darkMuted = '#9DA3AE';
+  const { colors, isDark } = useTheme();
+  const bgColor = isDark ? '#0A0A0A' : colors.background;
+  const cardColor = isDark ? '#111214' : colors.backgroundElevated;
+  const borderColor = isDark ? '#24262B' : colors.border;
+  const textColor = isDark ? '#F5F5F7' : colors.text;
+  const mutedColor = isDark ? '#9DA3AE' : colors.textMuted;
   const user = useUnfoldStore((s) => s.user);
 
   const name = user?.name || 'Friend';
@@ -33,7 +33,7 @@ export default function WelcomeCelebrationScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: darkBg }}>
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
           <Animated.View entering={FadeIn.duration(600)} style={{ alignItems: 'center' }}>
@@ -53,7 +53,7 @@ export default function WelcomeCelebrationScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInUp.duration(500).delay(200)} style={{ alignItems: 'center' }}>
-            <Text style={{ fontFamily: FontFamily.display, fontSize: 32, color: darkText, marginBottom: Spacing['2'] }}>
+            <Text style={{ fontFamily: FontFamily.display, fontSize: 32, color: textColor, marginBottom: Spacing['2'] }}>
               Welcome, {name}
             </Text>
           </Animated.View>
@@ -63,11 +63,11 @@ export default function WelcomeCelebrationScreen() {
             style={{
               width: '100%',
               marginTop: 48,
-              backgroundColor: darkCard,
+              backgroundColor: cardColor,
               borderRadius: Radius.lg,
               padding: Spacing['6'],
               borderWidth: 1,
-              borderColor: darkBorder,
+              borderColor: borderColor,
             }}
           >
             <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: Spacing['4'] }}>
@@ -89,7 +89,7 @@ export default function WelcomeCelebrationScreen() {
                     marginRight: Spacing['3'],
                   }}
                 />
-                <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: darkText }}>
+                <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: textColor }}>
                   {text}
                 </Text>
               </View>
@@ -106,7 +106,7 @@ export default function WelcomeCelebrationScreen() {
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: '#FFFFFF' }}>
+                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 17, color: colors.contrastText ?? '#FFFFFF' }}>
                     Begin Your Journey
                   </Text>
                 </View>

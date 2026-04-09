@@ -80,7 +80,7 @@ export function DownloadBibleSheet({
             accessibilityLabel="Download Bible"
             accessibilityRole="button"
           >
-            <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium }]}>
+            <Text style={[styles.downloadButtonText, { fontFamily: FontFamily.uiMedium, color: isDark ? '#FFFFFF' : colors.backgroundPure }]}>
               Download
             </Text>
           </TouchableOpacity>
@@ -158,7 +158,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing['4'],
   },
   downloadButtonText: {
-    color: '#FFFFFF',
     fontSize: FontSize.base,
   },
 });

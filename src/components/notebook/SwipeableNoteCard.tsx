@@ -45,7 +45,7 @@ export function SwipeableNoteCard({
   onMove,
   onDelete,
 }: SwipeableNoteCardProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const translateX = useSharedValue(0);
   const contextX = useSharedValue(0);
 
@@ -123,8 +123,8 @@ export function SwipeableNoteCard({
             accessibilityRole="button"
             accessibilityLabel={`Share note ${note.title}`}
           >
-            <View style={[styles.actionCircle, { backgroundColor: '#3478F6' }]}>
-              <ArrowUpRightIcon size={17} color="#FFFFFF" weight="regular" />
+            <View style={[styles.actionCircle, { backgroundColor: colors.accent }]}>
+              <ArrowUpRightIcon size={17} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="regular" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.textSubtle }]}>Share</Text>
           </TouchableOpacity>
@@ -137,7 +137,7 @@ export function SwipeableNoteCard({
             accessibilityLabel={`Move note ${note.title} to folder`}
           >
             <View style={[styles.actionCircle, { backgroundColor: '#8B5CF6' }]}>
-              <FolderSimpleIcon size={17} color="#FFFFFF" weight="regular" />
+              <FolderSimpleIcon size={17} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="regular" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.textSubtle }]}>Move</Text>
           </TouchableOpacity>
@@ -150,7 +150,7 @@ export function SwipeableNoteCard({
             accessibilityLabel={`Delete note ${note.title}`}
           >
             <View style={[styles.actionCircle, { backgroundColor: colors.error }]}>
-              <TrashIcon size={17} color="#FFFFFF" weight="regular" />
+              <TrashIcon size={17} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="regular" />
             </View>
             <Text style={[styles.actionLabel, { color: colors.textSubtle }]}>Delete</Text>
           </TouchableOpacity>

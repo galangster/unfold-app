@@ -44,7 +44,7 @@ interface Props {
 }
 
 export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [text, setText] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -169,7 +169,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
                 justifyContent: 'center',
               }}
             >
-              <StopCircleIcon size={18} color="#FFFFFF" weight="fill" />
+              <StopCircleIcon size={18} color={isDark ? '#FFFFFF' : colors.backgroundPure} weight="fill" />
             </TouchableOpacity>
           ) : showMic ? (
             <TouchableOpacity
@@ -206,7 +206,7 @@ export function CompanionInput({ onSend, onStop, isStreaming }: Props) {
             >
               <ArrowUpIcon
                 size={18}
-                color="#FFFFFF"
+                color={isDark ? '#FFFFFF' : colors.backgroundPure}
                 weight="bold"
               />
             </TouchableOpacity>

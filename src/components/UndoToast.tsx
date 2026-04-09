@@ -22,7 +22,7 @@ export function UndoToast({
   onDismiss,
   duration = 3000,
 }: UndoToastProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
@@ -45,11 +45,21 @@ export function UndoToast({
     <Animated.View
       entering={SlideInDown.duration(Duration.slow)}
       exiting={SlideOutDown.duration(Duration.normal)}
-      style={styles.container}
+      style={[
+        styles.container,
+        {
+          backgroundColor: isDark
+            ? 'rgba(30, 30, 30, 0.95)'
+            : 'rgba(255, 255, 255, 0.97)',
+          borderWidth: isDark ? 0 : StyleSheet.hairlineWidth,
+          borderColor: isDark ? 'transparent' : colors.border,
+          shadowColor: '#000',
+        },
+      ]}
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
     >
-      <Text style={styles.message} numberOfLines={1}>
+      <Text style={[styles.message, { color: isDark ? '#FFFFFF' : colors.text }]} numberOfLines={1}>
         {message}
       </Text>
       <TouchableOpacity
@@ -71,14 +81,12 @@ const styles = StyleSheet.create({
     bottom: 100,
     left: 24,
     right: 24,
-    backgroundColor: 'rgba(30, 30, 30, 0.95)',
     borderRadius: Radius.card,
     paddingVertical: 14,
     paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -88,7 +96,6 @@ const styles = StyleSheet.create({
   message: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
-    color: '#FFFFFF',
     flex: 1,
     marginRight: Spacing['4'],
   },
