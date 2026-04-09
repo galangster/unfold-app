@@ -74,25 +74,27 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
     };
   });
 
-  // Dot position — travels along the curve with the clip reveal
+  // Dot position — travels along the cubic bezier curve with the clip reveal
+  // Control points match buildCurvePath exactly:
+  // P0=(0, h*0.92), P1=(w*0.35, h*0.85), P2=(w*0.5, h*0.4), P3=(w, h*0.08)
   const dotX = useDerivedValue(() => {
     const t = clipProgress.value;
-    // Approximate the cubic bezier x position
-    const startX = 0;
-    const endX = GRAPH_WIDTH;
-    return startX + t * (endX - startX);
+    const mt = 1 - t;
+    const p0 = 0;
+    const p1 = GRAPH_WIDTH * 0.35;
+    const p2 = GRAPH_WIDTH * 0.5;
+    const p3 = GRAPH_WIDTH;
+    return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
   });
 
   const dotY = useDerivedValue(() => {
     const t = clipProgress.value;
-    // Match the cubic bezier: M startX startY C cp1x cp1y, cp2x cp2y, endX endY
-    const startY = GRAPH_HEIGHT * 0.92;
-    const cp1y = GRAPH_HEIGHT * 0.85;
-    const cp2y = GRAPH_HEIGHT * 0.4;
-    const endY = GRAPH_HEIGHT * 0.08;
-    // Cubic bezier formula for y: (1-t)^3*p0 + 3(1-t)^2*t*p1 + 3(1-t)*t^2*p2 + t^3*p3
     const mt = 1 - t;
-    return mt * mt * mt * startY + 3 * mt * mt * t * cp1y + 3 * mt * t * t * cp2y + t * t * t * endY;
+    const p0 = GRAPH_HEIGHT * 0.92;
+    const p1 = GRAPH_HEIGHT * 0.85;
+    const p2 = GRAPH_HEIGHT * 0.4;
+    const p3 = GRAPH_HEIGHT * 0.08;
+    return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
   });
 
   // Pulsing glow for the dot (blink effect)
@@ -133,8 +135,9 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
       </Text>
 
       {/* Canvas */}
-      <View style={{ height: GRAPH_HEIGHT + 40, marginHorizontal: 16 }}>
-        <Canvas style={{ width: GRAPH_WIDTH, height: GRAPH_HEIGHT }}>
+      <View style={{ height: GRAPH_HEIGHT + 40, marginHorizontal: 4 }}>
+        <Canvas style={{ width: GRAPH_WIDTH + 24, height: GRAPH_HEIGHT + 24 }}>
+        <Group transform={[{ translateX: 12 }, { translateY: 12 }]}>
           {/* Gradient fill under curve (fades in after draw) */}
           {fillPath && (
             <Path path={fillPath} opacity={fillOpacity}>
@@ -163,6 +166,7 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
           <Circle cx={dotX} cy={dotY} r={5} color={ACCENT} opacity={dotPulse} />
           {/* Outer glow ring */}
           <Circle cx={dotX} cy={dotY} r={10} color={ACCENT} opacity={useDerivedValue(() => dotPulse.value * 0.25)} />
+        </Group>
         </Canvas>
 
         {/* X-axis labels */}
