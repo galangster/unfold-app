@@ -1065,10 +1065,9 @@ export default function OnboardingScreen() {
       }
     }
 
-    // Fire-and-forget: trigger onboarding devotional generation after spiritualSeeking
+    // Fire-and-forget: trigger onboarding devotional generation after aspiration
     // so content generates in the background while the user continues through buffer screens.
-    if (currentStepId === 'spiritualSeeking') {
-      const seekingValue = mergedCurrentAnswer || data.spiritualSeeking || '';
+    if (currentStepId === 'aspiration') {
       submitGenerationJob({
         jobType: 'onboarding',
         dayNumber: 1,
@@ -1078,7 +1077,7 @@ export default function OnboardingScreen() {
           situation: data.currentSituation || '',
           emotion: '',
           faith: '',
-          seeking: seekingValue,
+          seeking: data.aspiration || '',
           themeCategory: '',
           devotionalType: '',
           readingDuration: 5,
