@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useCrossTabBack } from '@/hooks/useCrossTabBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -97,6 +98,7 @@ export default function SeriesDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
 
@@ -161,17 +163,14 @@ export default function SeriesDetailScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.back();
-            }}
+            onPress={handleBack}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={styles.backButton}
           >
             <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Study Details
+            Devotional Details
           </Text>
         </View>
 

@@ -3,49 +3,50 @@ import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 /**
- * Handles back navigation for screens opened via cross-tab push (e.g. home → (you)/my-content).
- *
- * Problem: Expo Router push to another tab's stack means the native swipe-back gesture
- * pops within that tab's stack (revealing the wrong screen) instead of returning to the
- * source tab. The chevron back button handles this with `from === 'home'` param routing.
- *
- * Solution: When `from === 'home'`, disable the native swipe gesture AND intercept
- * the beforeRemove event to redirect back to the home tab.
+ * Handles back navigation for screens opened via cross-tab push.
+ * Maps `from` param to the correct tab route so back always returns
+ * to the source tab, not the (you) tab's index.
  */
+const FROM_TO_ROUTE: Record<string, string> = {
+  home: '/(tabs)/(today)',
+  journal: '/(tabs)/(journal)',
+};
+
 export function useCrossTabBack() {
   const router = useRouter();
   const navigation = useNavigation();
   const { from } = useLocalSearchParams<{ from?: string }>();
 
+  const isCrossTab = !!from && from in FROM_TO_ROUTE;
+  const returnRoute = from ? FROM_TO_ROUTE[from] : undefined;
+
   // Disable native swipe gesture for cross-tab navigations
   useLayoutEffect(() => {
-    if (from === 'home') {
+    if (isCrossTab) {
       navigation.setOptions({ gestureEnabled: false });
     }
-  }, [from, navigation]);
+  }, [isCrossTab, navigation]);
 
-  // Intercept any back navigation (swipe, hardware button, etc.) and redirect to home tab
+  // Intercept any back navigation and redirect to source tab
   useEffect(() => {
-    if (from !== 'home') return;
+    if (!isCrossTab || !returnRoute) return;
 
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      // Prevent the default back behavior
       e.preventDefault();
-      // Navigate to the home tab instead
-      router.navigate('/(tabs)/(today)');
+      router.navigate(returnRoute as any);
     });
 
     return unsubscribe;
-  }, [from, navigation, router]);
+  }, [isCrossTab, returnRoute, navigation, router]);
 
   const handleBack = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (from === 'home') {
-      router.navigate('/(tabs)/(today)');
+    if (isCrossTab && returnRoute) {
+      router.navigate(returnRoute as any);
     } else {
       router.back();
     }
-  }, [from, router]);
+  }, [isCrossTab, returnRoute, router]);
 
   return { handleBack, isFromHome: from === 'home' };
 }

@@ -1180,24 +1180,6 @@ export default function JournalHubScreen() {
                         </Text>
                       )}
 
-                      <View
-                        style={{
-                          height: 2,
-                          backgroundColor: colors.border,
-                          borderRadius: 1,
-                          marginTop: Spacing['4'],
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <View
-                          style={{
-                            height: 2,
-                            backgroundColor: colors.accent,
-                            borderRadius: 1,
-                            width: `${Math.min(Math.round((currentDevotional.currentDay / Math.max(currentDevotional.totalDays, currentDevotional.days.length, 1)) * 100), 100)}%`,
-                          }}
-                        />
-                      </View>
                     </View>
                   </TouchableOpacity>
                 </Animated.View>
@@ -1331,6 +1313,7 @@ export default function JournalHubScreen() {
                               pathname: '/(tabs)/(you)/series-detail',
                               params: {
                                 id: series.devotional.id,
+                                from: 'journal',
                               },
                             });
                           }}
