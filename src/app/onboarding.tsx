@@ -503,7 +503,7 @@ export default function OnboardingScreen() {
   const yearlyPackage = rcOfferings?.current?.availablePackages.find(
     (pkg) => pkg.identifier === '$rc_annual'
   );
-  const yearlyPrice = yearlyPackage?.product.priceString ?? '$49.99';
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '$59.99';
   const yearlyTrialDuration = (() => {
     const intro = yearlyPackage?.product.introPrice;
     if (!intro || intro.price !== 0) return '7-day';
@@ -2855,9 +2855,9 @@ export default function OnboardingScreen() {
       const monthlyPkg = rcOfferings?.current?.availablePackages.find(
         (pkg) => pkg.identifier === '$rc_monthly'
       );
-      const mPrice = monthlyPkg?.product.priceString ?? '$8.99';
-      const mRaw = monthlyPkg?.product.price ?? 8.99;
-      const yRaw = yearlyPackage?.product.price ?? 74.99;
+      const mPrice = monthlyPkg?.product.priceString ?? '$9.99';
+      const mRaw = monthlyPkg?.product.price ?? 9.99;
+      const yRaw = yearlyPackage?.product.price ?? 59.99;
       const tDays = (() => {
         const intro = yearlyPackage?.product.introPrice;
         if (!intro || intro.price !== 0) return 7;
@@ -2996,7 +2996,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'commitment1' || step?.type === 'commitment2' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'commitment1' || step?.type === 'commitment2' || step?.type === 'threeStepPaywall' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>

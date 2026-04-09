@@ -363,10 +363,10 @@ export default function PaywallScreen() {
   const isPurchasing = purchaseMutation.isPending || restoreMutation.isPending || isRetryingOfferings;
 
   // Pull real prices from RevenueCat packages, fall back to hardcoded defaults
-  const monthlyPrice = monthlyPackage?.product.priceString ?? '$8.99';
-  const yearlyPrice = yearlyPackage?.product.priceString ?? '$74.99';
-  const monthlyRaw = monthlyPackage?.product.price ?? 8.99;
-  const yearlyRaw = yearlyPackage?.product.price ?? 74.99;
+  const monthlyPrice = monthlyPackage?.product.priceString ?? '$9.99';
+  const yearlyPrice = yearlyPackage?.product.priceString ?? '$59.99';
+  const monthlyRaw = monthlyPackage?.product.price ?? 9.99;
+  const yearlyRaw = yearlyPackage?.product.price ?? 59.99;
   // Extract currency symbol from locale-aware priceString (e.g., "$" from "$49.99", "€" from "49,99 €")
   const currencySymbol = (yearlyPrice.replace(/[\d.,\s]/g, '').trim()) || '$';
   const perMonthFromYearly = `${currencySymbol}${(yearlyRaw / 12).toFixed(2)}`;

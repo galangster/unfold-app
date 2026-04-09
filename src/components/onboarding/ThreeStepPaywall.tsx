@@ -1,4 +1,4 @@
-import { useState, useCallback, memo, useRef } from 'react';
+import { useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,17 @@ import {
   StyleSheet,
   Dimensions,
   ActivityIndicator,
-  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
@@ -52,27 +59,31 @@ const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.62;
 
 const REVIEWS = [
   {
-    name: 'Sarah',
+    name: 'Sarah M.',
     location: 'Nashville, TN',
     quote:
-      "I've tried every devotional app. This one actually knows me. Day 3 hit different.",
+      'Ok so I downloaded this not expecting much but the day 3 devotional literally called out something I journaled about that morning?? I don\'t know how it does that',
   },
   {
     name: 'Marcus',
     location: 'Denver, CO',
     quote:
-      'The companion asked me a question that stopped me mid-scroll. Nobody does that.',
+      'My wife noticed I was calmer after a week. I just read for 5 min in the morning but it hits different when the words are actually about your life',
   },
   {
-    name: 'Priya',
+    name: 'Priya J.',
     location: 'Austin, TX',
     quote:
-      'I cried during my first devotional. It felt like someone actually listened.',
+      'Finally deleted 3 other Bible apps. This is the only one that doesn\'t feel like homework. The companion feature is so good it\'s almost unfair',
   },
 ] as const;
 
-const REVIEW_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
-const REVIEW_SNAP_INTERVAL = REVIEW_CARD_WIDTH + Spacing['2'];
+const STACK_CARD_WIDTH = SCREEN_WIDTH - Spacing['6'] * 2;
+const STACK_CARD_HEIGHT = 140;
+const STACK_OFFSET_Y = -8;
+const STACK_SCALE_STEP = 0.05;
+const SWIPE_THRESHOLD = -60;
+const CARD_SPRING = { damping: 20, stiffness: 200 };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,8 +111,8 @@ function FiveStars({ color }: { color: string }) {
   );
 }
 
-/** Small dot indicators for the review carousel. */
-function ReviewDots({
+/** Small dot indicators for the stacked card carousel. */
+function StackDots({
   current,
   total,
   accentColor,
@@ -113,12 +124,12 @@ function ReviewDots({
   borderColor: string;
 }) {
   return (
-    <View style={styles.reviewDotsRow}>
+    <View style={styles.stackDotsRow}>
       {Array.from({ length: total }).map((_, i) => (
         <View
           key={i}
           style={[
-            styles.reviewDot,
+            styles.stackDot,
             {
               backgroundColor: i === current ? accentColor : borderColor,
             },
@@ -129,72 +140,219 @@ function ReviewDots({
   );
 }
 
+/** Single animated card in the stack. */
+function StackCard({
+  review,
+  index,
+  activeIndex,
+  dismissX,
+  colors,
+  total,
+}: {
+  review: (typeof REVIEWS)[number];
+  index: number;
+  activeIndex: Animated.SharedValue<number>;
+  dismissX: Animated.SharedValue<number>;
+  colors: ColorTheme;
+  total: number;
+}) {
+  const animStyle = useAnimatedStyle(() => {
+    const active = activeIndex.value;
+    const relativePos = ((index - active) % total + total) % total;
+
+    if (relativePos === 0) {
+      // Front card -- follows swipe dismissal
+      return {
+        zIndex: total,
+        opacity: 1,
+        transform: [
+          { translateX: dismissX.value },
+          { translateY: 0 },
+          { scale: 1 },
+        ],
+      };
+    }
+
+    if (relativePos === 1) {
+      // Second card
+      return {
+        zIndex: total - 1,
+        opacity: 1,
+        transform: [
+          { translateX: 0 },
+          { translateY: STACK_OFFSET_Y },
+          { scale: 1 - STACK_SCALE_STEP },
+        ],
+      };
+    }
+
+    if (relativePos === 2) {
+      // Third card
+      return {
+        zIndex: total - 2,
+        opacity: 0.7,
+        transform: [
+          { translateX: 0 },
+          { translateY: STACK_OFFSET_Y * 2 },
+          { scale: 1 - STACK_SCALE_STEP * 2 },
+        ],
+      };
+    }
+
+    // Hidden
+    return {
+      zIndex: 0,
+      opacity: 0,
+      transform: [{ translateX: 0 }, { translateY: 0 }, { scale: 0.85 }],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.stackCard,
+        {
+          width: STACK_CARD_WIDTH,
+          backgroundColor: colors.inputBackground,
+          borderWidth: 1,
+          borderColor: colors.border,
+        },
+        animStyle,
+      ]}
+    >
+      <View style={styles.reviewCardHeader}>
+        <View>
+          <Text
+            style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: FontSize.sm,
+              color: colors.text,
+            }}
+          >
+            {review.name}
+          </Text>
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.xs,
+              color: colors.textSubtle,
+              marginTop: 2,
+            }}
+          >
+            {review.location}
+          </Text>
+        </View>
+        <FiveStars color={colors.accent} />
+      </View>
+      <Text
+        style={{
+          fontFamily: FontFamily.body,
+          fontSize: FontSize.sm,
+          color: colors.textMuted,
+          marginTop: Spacing['2.5'],
+          lineHeight: 20,
+        }}
+      >
+        &ldquo;{review.quote}&rdquo;
+      </Text>
+    </Animated.View>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Screen 1: Product in Action
 // ---------------------------------------------------------------------------
 
 function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
+  const dragY = useSharedValue(0);
+  const MAX_DRAG = 60; // 15% of ~400px content area
+  const SPRING_CONFIG = { damping: 20, stiffness: 300 };
+
+  const dragGesture = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .failOffsetX([-24, 24])
+    .shouldCancelWhenOutside(false)
+    .onUpdate((e) => {
+      'worklet';
+      const raw = e.translationY * 0.4;
+      dragY.value = raw * (1 - Math.abs(raw) / (MAX_DRAG * 2));
+    })
+    .onFinalize(() => {
+      'worklet';
+      dragY.value = withSpring(0, SPRING_CONFIG);
+    });
+
+  const dragStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
+
   return (
     <View style={styles.screen1Root}>
-      {/* Top section: headline */}
-      <View style={styles.screen1TopSection}>
-        <Text
-          style={[
-            styles.headline,
-            {
-              color: colors.text,
-              textAlign: 'center',
-            },
-          ]}
-        >
-          We want you to try{'\n'}Unfold for free.
-        </Text>
-      </View>
-
-      {/* Device bezel -- clips at the bottom edge of the viewport */}
-      <View style={styles.screen1DeviceWrapper}>
-        <View
-          style={[
-            styles.deviceBezel,
-            {
-              width: DEVICE_BEZEL_WIDTH,
-              borderColor: 'rgba(255,255,255,0.1)',
-            },
-          ]}
-        >
-          <View style={styles.deviceInner}>
-            {/* Play icon + subtle label — premium placeholder */}
-            <View style={styles.previewPlaceholder}>
-              <View
+      <GestureDetector gesture={dragGesture}>
+        <View style={styles.screen1DragArea} collapsable={false}>
+          <Animated.View style={[styles.screen1DraggableContent, dragStyle]}>
+            {/* Top section: headline */}
+            <View style={styles.screen1TopSection}>
+              <Text
                 style={[
-                  styles.playIconRing,
-                  { borderColor: 'rgba(200,165,92,0.3)' },
+                  styles.headline,
+                  {
+                    color: colors.text,
+                    textAlign: 'center',
+                  },
                 ]}
               >
-                <PlayCircleIcon
-                  size={40}
-                  color={colors.accent}
-                  weight="thin"
-                />
-              </View>
-              <Text
-                style={{
-                  fontFamily: FontFamily.ui,
-                  fontSize: FontSize.xs,
-                  color: colors.textSubtle,
-                  marginTop: Spacing['3'],
-                  letterSpacing: 1.5,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Preview Coming Soon
+                We want you to try{'\n'}Unfold for free.
               </Text>
             </View>
-          </View>
-        </View>
-      </View>
 
-      {/* Gradient fade at the bottom -- feathers the bezel into bg */}
+            {/* Device bezel -- clips at the bottom edge of the viewport */}
+            <View style={styles.screen1DeviceWrapper}>
+              <View
+                style={[
+                  styles.deviceBezel,
+                  {
+                    width: DEVICE_BEZEL_WIDTH,
+                    borderColor: 'rgba(255,255,255,0.1)',
+                  },
+                ]}
+              >
+                <View style={styles.deviceInner}>
+                  {/* Play icon + subtle label — premium placeholder */}
+                  <View style={styles.previewPlaceholder}>
+                    <View
+                      style={[
+                        styles.playIconRing,
+                        { borderColor: 'rgba(200,165,92,0.3)' },
+                      ]}
+                    >
+                      <PlayCircleIcon
+                        size={40}
+                        color={colors.accent}
+                        weight="thin"
+                      />
+                    </View>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.ui,
+                        fontSize: FontSize.xs,
+                        color: colors.textSubtle,
+                        marginTop: Spacing['3'],
+                        letterSpacing: 1.5,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Preview Coming Soon
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        </View>
+      </GestureDetector>
+
+      {/* Gradient fade at the bottom -- stays fixed, doesn't move with drag */}
       <LinearGradient
         colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)', 'rgba(10,10,10,1)']}
         style={styles.screen1Gradient}
@@ -290,24 +448,52 @@ function ScreenPricing({
   selectedPlan: 'yearly' | 'monthly';
   onSelectPlan: (plan: 'yearly' | 'monthly') => void;
 }) {
-  const savings = Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100);
+  const savings = monthlyRaw > 0 ? Math.round((1 - yearlyRaw / 12 / monthlyRaw) * 100) : 0;
   const yearlyMonthlyEquivalent =
     monthlyRaw > 0 ? `$${(yearlyRaw / 12).toFixed(2)}/mo` : yearlyPrice;
 
+  // --- Stacked card carousel state ---
   const [activeReviewIndex, setActiveReviewIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const activeIndex = useSharedValue(0);
+  const dismissX = useSharedValue(0);
 
-  const onReviewScroll = useCallback(
-    (e: { nativeEvent: { contentOffset: { x: number } } }) => {
-      const index = Math.round(
-        e.nativeEvent.contentOffset.x / REVIEW_SNAP_INTERVAL,
-      );
-      if (index >= 0 && index < REVIEWS.length) {
-        setActiveReviewIndex(index);
+  const advanceCard = useCallback(() => {
+    setActiveReviewIndex((prev) => (prev + 1) % REVIEWS.length);
+  }, []);
+
+  const swipeGesture = Gesture.Pan()
+    .activeOffsetX([-12, 12])
+    .failOffsetY([-20, 20])
+    .onUpdate((e) => {
+      'worklet';
+      // Only allow left swipe (negative translationX)
+      if (e.translationX < 0) {
+        dismissX.value = e.translationX;
       }
-    },
-    [],
-  );
+    })
+    .onEnd((e) => {
+      'worklet';
+      if (e.translationX < SWIPE_THRESHOLD) {
+        // Dismiss: animate card off screen, then advance
+        dismissX.value = withTiming(-SCREEN_WIDTH, { duration: 200 }, () => {
+          activeIndex.value = (activeIndex.value + 1) % REVIEWS.length;
+          dismissX.value = 0;
+          runOnJS(advanceCard)();
+        });
+      } else {
+        // Snap back
+        dismissX.value = withSpring(0, CARD_SPRING);
+      }
+    });
+
+  const handleCardTap = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    dismissX.value = withTiming(-SCREEN_WIDTH, { duration: 200 }, () => {
+      activeIndex.value = (activeIndex.value + 1) % REVIEWS.length;
+      dismissX.value = 0;
+      runOnJS(advanceCard)();
+    });
+  }, [activeIndex, dismissX, advanceCard]);
 
   return (
     <View style={styles.screen3Root}>
@@ -353,70 +539,28 @@ function ScreenPricing({
         </View>
       </View>
 
-      {/* Horizontal review carousel -- breaks out of parent padding */}
-      <View style={styles.reviewCarouselWrapper}>
-        <FlatList
-          ref={flatListRef}
-          data={REVIEWS}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={REVIEW_SNAP_INTERVAL}
-          decelerationRate="fast"
-          onMomentumScrollEnd={onReviewScroll}
-          keyExtractor={(item) => item.name}
-          contentContainerStyle={styles.reviewFlatListContent}
-          ItemSeparatorComponent={() => <View style={{ width: Spacing['2'] }} />}
-          renderItem={({ item: review }) => (
-            <View
-              style={[
-                styles.reviewCard,
-                {
-                  width: REVIEW_CARD_WIDTH,
-                  backgroundColor: colors.inputBackground,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.reviewCardHeader}>
-                <View>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.uiSemiBold,
-                      fontSize: FontSize.sm,
-                      color: colors.text,
-                    }}
-                  >
-                    {review.name}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: FontSize.xs,
-                      color: colors.textSubtle,
-                      marginTop: 2,
-                    }}
-                  >
-                    {review.location}
-                  </Text>
-                </View>
-                <FiveStars color={colors.accent} />
-              </View>
-              <Text
-                style={{
-                  fontFamily: FontFamily.body,
-                  fontSize: FontSize.sm,
-                  color: colors.textMuted,
-                  marginTop: Spacing['2.5'],
-                  lineHeight: 20,
-                }}
-              >
-                &ldquo;{review.quote}&rdquo;
-              </Text>
-            </View>
-          )}
-        />
-        <ReviewDots
+      {/* Stacked card carousel */}
+      <View style={styles.stackCarouselWrapper}>
+        <GestureDetector gesture={swipeGesture}>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={handleCardTap}
+            style={styles.stackContainer}
+          >
+            {REVIEWS.map((review, i) => (
+              <StackCard
+                key={review.name}
+                review={review}
+                index={i}
+                activeIndex={activeIndex}
+                dismissX={dismissX}
+                colors={colors}
+                total={REVIEWS.length}
+              />
+            ))}
+          </TouchableOpacity>
+        </GestureDetector>
+        <StackDots
           current={activeReviewIndex}
           total={REVIEWS.length}
           accentColor={colors.accent}
@@ -424,7 +568,7 @@ function ScreenPricing({
         />
       </View>
 
-      {/* Pricing cards */}
+      {/* Pricing cards -- equal height via fixed padding */}
       <View style={styles.pricingRow}>
         {/* Monthly */}
         <TouchableOpacity
@@ -539,6 +683,8 @@ function BottomCTA({
   currentPage,
   trialDays,
   yearlyPrice,
+  monthlyPrice,
+  selectedPlan,
   isLoading,
   purchaseError,
   onPress,
@@ -547,10 +693,17 @@ function BottomCTA({
   currentPage: number;
   trialDays: number;
   yearlyPrice: string;
+  monthlyPrice: string;
+  selectedPlan: 'yearly' | 'monthly';
   isLoading: boolean;
   purchaseError: string | null;
   onPress: () => void;
 }) {
+  const disclosureText =
+    selectedPlan === 'yearly'
+      ? `${trialDays} days free, then ${yearlyPrice}/yr. Cancel anytime.`
+      : `${trialDays} days free, then ${monthlyPrice}/mo. Cancel anytime.`;
+
   return (
     <View style={styles.ctaContainer}>
       {/* Error message */}
@@ -609,7 +762,7 @@ function BottomCTA({
         </View>
       </TouchableOpacity>
 
-      {/* Renewal disclosure -- must fit one line */}
+      {/* Renewal disclosure -- reflects selected plan */}
       <Text
         numberOfLines={1}
         style={{
@@ -620,7 +773,7 @@ function BottomCTA({
           marginTop: Spacing['2.5'],
         }}
       >
-        {trialDays} days free, then {yearlyPrice}/yr. Cancel anytime.
+        {disclosureText}
       </Text>
     </View>
   );
@@ -721,44 +874,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Top bar: Skip (left) + Restore (right) */}
-      <View style={[styles.topBar, { paddingTop: insets.top + Spacing['2'] }]}>
-        <TouchableOpacity
-          onPress={onSkip}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Skip trial"
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
-              color: colors.textSubtle,
-            }}
-          >
-            Skip
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={handleRestore}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Restore purchases"
-        >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
-              color: colors.textSubtle,
-            }}
-          >
-            Restore
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Page content */}
+      {/* Page content — fills space between onboarding header and bottom CTA */}
       <View style={styles.flex1}>
         <Animated.View
           key={currentPage}
@@ -785,7 +901,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         </Animated.View>
       </View>
 
-      {/* Bottom section: CTA (no dots) */}
+      {/* Bottom section: CTA + Restore */}
       <View
         style={[
           styles.bottomSection,
@@ -797,10 +913,29 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           currentPage={currentPage}
           trialDays={trialDays}
           yearlyPrice={yearlyPrice}
+          monthlyPrice={monthlyPrice}
+          selectedPlan={selectedPlan}
           isLoading={isLoading}
           purchaseError={purchaseError}
           onPress={handleCTAPress}
         />
+        <TouchableOpacity
+          onPress={handleRestore}
+          hitSlop={12}
+          style={{ alignSelf: 'center', marginTop: Spacing['2'] }}
+          accessibilityRole="button"
+          accessibilityLabel="Restore purchases"
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.xs,
+              color: colors.textHint,
+            }}
+          >
+            Restore purchases
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -818,29 +953,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Top bar (Skip left, Restore right)
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing['5'],
-    paddingBottom: Spacing['2'],
-    zIndex: 10,
-  },
-
   // ------- Screen 1 -------
   screen1Root: {
     flex: 1,
     overflow: 'hidden',
   },
+  screen1DragArea: {
+    flex: 1,
+    minHeight: 1,
+  },
+  screen1DraggableContent: {
+    flex: 1,
+  },
   screen1TopSection: {
     paddingHorizontal: Spacing['8'],
-    paddingTop: Spacing['6'],
+    paddingTop: Spacing['2'],
   },
   screen1DeviceWrapper: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingTop: Spacing['6'],
+    paddingTop: Spacing['4'],
   },
   screen1Gradient: {
     position: 'absolute',
@@ -933,15 +1066,20 @@ const styles = StyleSheet.create({
     gap: 2,
   },
 
-  // ------- Review carousel -------
-  reviewCarouselWrapper: {
-    // Break out of parent's paddingHorizontal so FlatList spans full width
-    marginHorizontal: -Spacing['6'],
+  // ------- Stacked card carousel -------
+  stackCarouselWrapper: {
+    alignItems: 'center',
   },
-  reviewFlatListContent: {
-    paddingHorizontal: Spacing['6'],
+  stackContainer: {
+    width: STACK_CARD_WIDTH,
+    height: STACK_CARD_HEIGHT,
+    position: 'relative',
   },
-  reviewCard: {
+  stackCard: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     borderRadius: Radius.card,
     padding: Spacing['4'],
   },
@@ -950,14 +1088,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  reviewDotsRow: {
+  stackDotsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
     marginTop: Spacing['2.5'],
   },
-  reviewDot: {
+  stackDot: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
@@ -968,12 +1106,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing['3'],
     marginBottom: Spacing['1'],
+    alignItems: 'stretch',
   },
   pricingCard: {
     flex: 1,
     borderRadius: Radius.card,
     paddingHorizontal: Spacing['4'],
-    paddingVertical: Spacing['3.5'],
+    paddingVertical: Spacing['4'],
+    justifyContent: 'center',
   },
   yearlyCardWrapper: {
     flex: 1,
