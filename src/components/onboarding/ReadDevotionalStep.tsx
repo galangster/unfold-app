@@ -1,97 +1,148 @@
 /**
- * ReadDevotionalStep — Placeholder for the in-onboarding reading experience.
+ * ReadDevotionalStep — Inline reading experience during onboarding.
  *
- * In the full Mau Baron framework, this screen shows the actual generated
- * devotional during onboarding. Currently, generation happens after onboarding
- * completes (on the /generating screen). This step acts as a bridge:
- * it completes onboarding and triggers generation, which then leads to the
- * reveal → reading flow.
- *
- * TODO: In the future, trigger generation during the segue step and show
- * the reading experience inline here without leaving onboarding.
+ * Shows the actual generated devotional content using DevotionalContent,
+ * with a fixed "Mark as complete" button at the bottom. On mount, creates
+ * the Devotional shell in the Zustand store so it persists after onboarding.
  */
 
-import { View, Text, TouchableOpacity } from 'react-native';
+import { useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { BookOpenIcon } from 'phosphor-react-native';
+import { DevotionalContent } from '@/components/reading/DevotionalContent';
+import { useUnfoldStore } from '@/lib/store';
 import type { ColorTheme } from '@/constants/colors';
+import type { Devotional } from '@/lib/store';
 
 interface Props {
+  devotionalDay: any | null;
+  devotionalId: string;
   colors: ColorTheme;
-  onContinue: () => void;
+  onComplete: () => void;
 }
 
-export function ReadDevotionalStep({ colors, onContinue }: Props) {
+export function ReadDevotionalStep({ devotionalDay, devotionalId, colors, onComplete }: Props) {
   const insets = useSafeAreaInsets();
+  const addDevotional = useUnfoldStore((s) => s.addDevotional);
+  const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
+
+  // On mount, add the devotional to the store if not already present
+  useEffect(() => {
+    if (!devotionalDay || !devotionalId) return;
+    addDevotional({
+      id: devotionalId,
+      title: 'Your First Devotional',
+      totalDays: 1,
+      currentDay: 1,
+      days: [{ ...devotionalDay, dayNumber: 1, isRead: false }],
+      createdAt: new Date().toISOString(),
+      generationMode: 'progressive',
+    } as Devotional);
+  }, [devotionalDay, devotionalId]);
+
+  const handleComplete = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    markDayAsRead(devotionalId, 1);
+    onComplete();
+  };
+
+  // Loading state while devotional is being generated
+  if (!devotionalDay) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+          Preparing your reading...
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
-      <View style={{ flex: 1 }} />
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <DevotionalContent
+          day={devotionalDay}
+          fontSize="medium"
+          devotionalId={devotionalId}
+        />
+      </ScrollView>
 
-      <View style={{ alignItems: 'center', gap: Spacing['5'] }}>
-        <Animated.View entering={FadeIn.duration(600).delay(200)}>
-          <BookOpenIcon size={48} color={colors.accent} weight="light" />
-        </Animated.View>
-
-        <Animated.Text
-          entering={FadeIn.duration(600).delay(400)}
-          style={{
-            fontFamily: FontFamily.display,
-            fontSize: 28,
-            color: colors.text,
-            textAlign: 'center',
-            lineHeight: 36,
-          }}
-        >
-          Your first devotional is ready.
-        </Animated.Text>
-
-        <Animated.Text
-          entering={FadeIn.duration(500).delay(800)}
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 16,
-            color: colors.textMuted,
-            textAlign: 'center',
-            lineHeight: 24,
-            paddingHorizontal: Spacing['4'],
-          }}
-        >
-          Written from your story, your struggles, and where you want to go. This is yours.
-        </Animated.Text>
+      {/* Fixed bottom button with gradient fade */}
+      <View
+        style={[
+          styles.bottomBar,
+          { paddingBottom: Math.max(insets.bottom, Spacing['4']) },
+        ]}
+        pointerEvents="box-none"
+      >
+        <LinearGradient
+          colors={['rgba(10,10,10,0)', 'rgba(10,10,10,0.85)', 'rgba(10,10,10,1)']}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={styles.buttonWrapper}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleComplete}
+            style={[styles.button, { backgroundColor: colors.accent }]}
+          >
+            <Text style={[styles.buttonText, { color: colors.background }]}>
+              I've finished reading
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      <View style={{ flex: 1 }} />
-
-      <Animated.View entering={FadeIn.duration(600).delay(1400)} style={{ paddingBottom: Math.max(insets.bottom, Spacing['4']) }}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onContinue();
-          }}
-          style={{
-            backgroundColor: colors.accent,
-            paddingVertical: Spacing['4'],
-            borderRadius: Radius.md,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.base,
-            color: colors.background,
-            letterSpacing: 0.3,
-          }}>
-            Begin reading
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing['4'],
+  },
+  loadingText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.base,
+    marginTop: Spacing['3'],
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 120,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: Spacing['6'],
+    paddingTop: Spacing['10'],
+  },
+  buttonWrapper: {
+    position: 'relative',
+  },
+  button: {
+    paddingVertical: Spacing['4'],
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.base,
+    letterSpacing: 0.3,
+  },
+});
