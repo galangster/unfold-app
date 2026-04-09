@@ -62,19 +62,19 @@ const REVIEWS = [
     name: 'Sarah M.',
     location: 'Nashville, TN',
     quote:
-      'Ok so I downloaded this not expecting much but the day 3 devotional literally called out something I journaled about that morning?? I don\'t know how it does that',
+      'I opened this on a random Tuesday morning and the devotional was EXACTLY what I needed to hear. Like eerily specific to what I was going through. Genuinely grateful for this app \u{1F64F}',
   },
   {
     name: 'Marcus',
     location: 'Denver, CO',
     quote:
-      'My wife noticed I was calmer after a week. I just read for 5 min in the morning but it hits different when the words are actually about your life',
+      'My wife asked what\'s been different with me lately. It\'s literally just 5 minutes in this app every morning lol. The writing feels like it was made for ME specifically',
   },
   {
     name: 'Priya J.',
     location: 'Austin, TX',
     quote:
-      'Finally deleted 3 other Bible apps. This is the only one that doesn\'t feel like homework. The companion feature is so good it\'s almost unfair',
+      'This is the first quiet time app where I actually WANT to come back every day. The journal prompts are \u{1F525} and the companion is like having a study partner who gets it',
   },
 ] as const;
 
