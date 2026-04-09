@@ -26,6 +26,7 @@ import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, C
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
