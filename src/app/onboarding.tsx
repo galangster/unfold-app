@@ -69,6 +69,9 @@ import { VulnerabilityValidation } from '@/components/onboarding/VulnerabilityVa
 import { FeatureSummaryCarousel } from '@/components/onboarding/FeatureSummaryCarousel';
 import { DevotionalSegue } from '@/components/onboarding/DevotionalSegue';
 import { ReadDevotionalStep } from '@/components/onboarding/ReadDevotionalStep';
+import { OnboardingCelebration } from '@/components/onboarding/OnboardingCelebration';
+import { ReviewPromptStep } from '@/components/onboarding/ReviewPromptStep';
+import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 
 
 // Slow-pulsing text — opacity breathes in and out gently
@@ -325,11 +328,19 @@ const ALL_STEPS = [
   { id: 'devotionalSegue', question: '', subtext: '', type: 'devotionalSegue' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // READ THE DEVOTIONAL: The actual first reading experience during onboarding
   { id: 'readDevotional', question: '', subtext: '', type: 'readDevotional' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // CELEBRATION: Emotional payoff after first devotional
+  { id: 'celebration', question: '', subtext: '', type: 'celebration' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // REVIEW PROMPT: Trigger native Apple review at peak emotion
+  { id: 'reviewPrompt', question: '', subtext: '', type: 'reviewPrompt' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // COMMITMENT 1: Self-identification question
+  { id: 'commitment1', question: "How committed are you to making space for this?", subtext: '', type: 'commitment1' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // COMMITMENT 2: Personalized affirmation
+  { id: 'commitment2', question: '', subtext: '', type: 'commitment2' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // PREMIUM SHOWCASE: Final premium pitch before generating — shown to ALL users
   { id: 'premiumShowcase', question: "Unlock the full\u00A0experience.", subtext: '', type: 'premiumShowcase' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'premiumShowcase';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'reviewPrompt' | 'commitment1' | 'commitment2' | 'premiumShowcase';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -653,6 +664,9 @@ export default function OnboardingScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const onboardingJobIdRef = useRef<string | null>(null);
   const onboardingDevotionalResultRef = useRef<any>(null);
+  const [commitmentLevel, setCommitmentLevel] = useState<string>('');
+  const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(null);
+  const [onboardingDevotionalId, setOnboardingDevotionalId] = useState<string>('');
   
   // Animated styles
   const inputAnimatedStyle = useAnimatedStyle(() => ({
@@ -867,7 +881,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and premium showcase always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation') {
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'premiumShowcase' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'reviewPrompt' || step.type === 'commitment1' || step.type === 'commitment2') {
       return true;
     }
 
@@ -2416,6 +2430,10 @@ export default function OnboardingScreen() {
           jobId={onboardingJobIdRef.current}
           onDevotionalReady={(result) => {
             onboardingDevotionalResultRef.current = result;
+            if (result?.devotionalDay) {
+              setOnboardingDevotionalDay(result.devotionalDay);
+              setOnboardingDevotionalId(result.devotionalId || `onboarding-${Date.now()}`);
+            }
           }}
           onContinue={advanceToNextStep}
         />
@@ -2426,7 +2444,57 @@ export default function OnboardingScreen() {
     if (step.type === 'readDevotional') {
       return (
         <ReadDevotionalStep
+          devotionalDay={onboardingDevotionalDay}
+          devotionalId={onboardingDevotionalId}
           colors={colors}
+          onComplete={advanceToNextStep}
+        />
+      );
+    }
+
+    // Celebration after first devotional
+    if (step.type === 'celebration') {
+      return (
+        <OnboardingCelebration
+          colors={colors}
+          onContinue={advanceToNextStep}
+        />
+      );
+    }
+
+    // Review prompt — native Apple review dialog
+    if (step.type === 'reviewPrompt') {
+      return (
+        <ReviewPromptStep
+          colors={colors}
+          onContinue={advanceToNextStep}
+        />
+      );
+    }
+
+    // Commitment 1 — choose commitment level
+    if (step.type === 'commitment1') {
+      return (
+        <CommitmentStep
+          step="choose"
+          colors={colors}
+          onSelect={(level) => {
+            setCommitmentLevel(level);
+            setTimeout(() => advanceToNextStep(), 300);
+          }}
+          onContinue={advanceToNextStep}
+        />
+      );
+    }
+
+    // Commitment 2 — personalized affirmation
+    if (step.type === 'commitment2') {
+      return (
+        <CommitmentStep
+          step="affirm"
+          commitmentLevel={commitmentLevel}
+          colors={colors}
+          onSelect={() => {}}
           onContinue={advanceToNextStep}
         />
       );
@@ -2985,7 +3053,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'premiumShowcase' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'reviewPrompt' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -3013,7 +3081,7 @@ export default function OnboardingScreen() {
 
           <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'reviewPrompt' || step?.type === 'commitment1' || step?.type === 'commitment2' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
