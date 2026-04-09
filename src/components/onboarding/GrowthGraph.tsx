@@ -8,12 +8,15 @@ import {
   vec,
   Group,
   Rect,
+  Circle,
 } from '@shopify/react-native-skia';
 import {
   useSharedValue,
   useDerivedValue,
   withTiming,
   withDelay,
+  withRepeat,
+  withSequence,
   Easing,
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
@@ -71,11 +74,44 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
     };
   });
 
+  // Dot position — travels along the curve with the clip reveal
+  const dotX = useDerivedValue(() => {
+    const t = clipProgress.value;
+    // Approximate the cubic bezier x position
+    const startX = 0;
+    const endX = GRAPH_WIDTH;
+    return startX + t * (endX - startX);
+  });
+
+  const dotY = useDerivedValue(() => {
+    const t = clipProgress.value;
+    // Match the cubic bezier: M startX startY C cp1x cp1y, cp2x cp2y, endX endY
+    const startY = GRAPH_HEIGHT * 0.92;
+    const cp1y = GRAPH_HEIGHT * 0.85;
+    const cp2y = GRAPH_HEIGHT * 0.4;
+    const endY = GRAPH_HEIGHT * 0.08;
+    // Cubic bezier formula for y: (1-t)^3*p0 + 3(1-t)^2*t*p1 + 3(1-t)*t^2*p2 + t^3*p3
+    const mt = 1 - t;
+    return mt * mt * mt * startY + 3 * mt * mt * t * cp1y + 3 * mt * t * t * cp2y + t * t * t * endY;
+  });
+
+  // Pulsing glow for the dot (blink effect)
+  const dotPulse = useSharedValue(0.6);
+
   useEffect(() => {
     // Line reveals over 6000ms — slow, deliberate, let it breathe
     clipProgress.value = withDelay(animationDelay, withTiming(1, { duration: 6000, easing: Easing.inOut(Easing.cubic) }));
     // Gradient fill fades in after line completes
     fillOpacity.value = withDelay(animationDelay + 6000, withTiming(0.15, { duration: 800 }));
+    // Dot pulse — blink continuously
+    dotPulse.value = withDelay(animationDelay, withRepeat(
+      withSequence(
+        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.4, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    ));
 
     const timer = setTimeout(() => onDrawComplete?.(), animationDelay + 6000);
     return () => clearTimeout(timer);
@@ -122,6 +158,11 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
               />
             </Group>
           )}
+
+          {/* Traveling dot — follows the leading edge of the curve reveal */}
+          <Circle cx={dotX} cy={dotY} r={5} color={ACCENT} opacity={dotPulse} />
+          {/* Outer glow ring */}
+          <Circle cx={dotX} cy={dotY} r={10} color={ACCENT} opacity={useDerivedValue(() => dotPulse.value * 0.25)} />
         </Canvas>
 
         {/* X-axis labels */}
