@@ -122,46 +122,53 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                     pageKey={currentPage}
                   />
 
-                  {/* Companion name input — only on companion card */}
+                  {/* Companion name input — staggered entrance top to bottom */}
                   {isCompanionPage && (
-                    <Animated.View entering={FadeIn.delay(400).duration(400)} style={{ marginTop: Spacing['4'] }}>
-                      <Text style={{
-                        fontFamily: FontFamily.uiMedium,
-                        fontSize: FontSize.xs,
-                        color: colors.textMuted,
-                        letterSpacing: 1.2,
-                        textTransform: 'uppercase',
-                        marginBottom: Spacing['2'],
-                      }}>
-                        Companion name
-                      </Text>
-                      <TextInput
-                        value={companionName}
-                        onChangeText={onCompanionNameChange}
-                        placeholder="e.g. Grace, Selah, Guide"
-                        placeholderTextColor={colors.textMuted}
+                    <View style={{ marginTop: Spacing['4'] }}>
+                      <Animated.View entering={FadeIn.delay(600).duration(400)}>
+                        <Text style={{
+                          fontFamily: FontFamily.uiMedium,
+                          fontSize: FontSize.xs,
+                          color: colors.textMuted,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                          marginBottom: Spacing['2'],
+                        }}>
+                          Companion name
+                        </Text>
+                      </Animated.View>
+                      <Animated.View entering={FadeIn.delay(750).duration(400)}>
+                        <TextInput
+                          value={companionName}
+                          onChangeText={onCompanionNameChange}
+                          placeholder="e.g. Grace, Selah, Guide"
+                          placeholderTextColor={colors.textMuted}
+                          style={{
+                            fontFamily: FontFamily.body,
+                            fontSize: FontSize.lg,
+                            color: colors.text,
+                            height: 54,
+                            paddingHorizontal: Spacing['5'],
+                            backgroundColor: colors.inputBackground,
+                            borderRadius: Radius.lg,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                          }}
+                          maxLength={30}
+                        />
+                      </Animated.View>
+                      <Animated.Text
+                        entering={FadeIn.delay(900).duration(400)}
                         style={{
-                          fontFamily: FontFamily.body,
-                          fontSize: FontSize.lg,
-                          color: colors.text,
-                          height: 54,
-                          paddingHorizontal: Spacing['5'],
-                          backgroundColor: colors.inputBackground,
-                          borderRadius: Radius.lg,
-                          borderWidth: 1,
-                          borderColor: colors.border,
+                          fontFamily: FontFamily.ui,
+                          fontSize: FontSize.xs,
+                          color: colors.textSubtle,
+                          marginTop: Spacing['2'],
                         }}
-                        maxLength={30}
-                      />
-                      <Text style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: FontSize.xs,
-                        color: colors.textSubtle,
-                        marginTop: Spacing['2'],
-                      }}>
+                      >
                         You can always change this later.
-                      </Text>
-                    </Animated.View>
+                      </Animated.Text>
+                    </View>
                   )}
                 </View>
               </View>
