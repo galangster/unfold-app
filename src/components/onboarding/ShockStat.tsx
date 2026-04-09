@@ -80,14 +80,14 @@ interface ShockStatProps {
 
 export function ShockStat({ colors, onReady }: ShockStatProps) {
   useEffect(() => {
-    // Haptic when 11% finishes revealing
+    // Haptic when stats land
     const timer1 = setTimeout(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }, 800); // after 93% lands
     const timer2 = setTimeout(() => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       onReady?.();
-    }, 2800); // after 11% + description lands
+    }, 3800); // after 11% + description lands (extra 1s delay)
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
@@ -95,14 +95,15 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
   }, []);
 
   // Sequence:
-  // t=0      93% typewriter starts (3 chars + % = ~400ms)
-  // t=600    "of Christians..." fades in
-  // t=1600   11% typewriter starts
-  // t=2200   "read the Bible daily." fades in
-  // t=2800   haptic + onReady
+  // t=0      Screen fades in (600ms)
+  // t=200    93% typewriter starts (3 chars + % = ~400ms)
+  // t=700    "of Christians..." fades in
+  // t=2600   11% typewriter starts (+1s extra pause after first stat)
+  // t=3200   "read the Bible daily." fades in
+  // t=3800   haptic + onReady
 
   return (
-    <View style={{ flex: 1 }}>
+    <Animated.View entering={FadeIn.duration(600)} style={{ flex: 1 }}>
       {/* 93% — top-left, desire */}
       <View style={{
         position: 'absolute',
@@ -130,7 +131,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
         </Animated.Text>
       </View>
 
-      {/* 11% — bottom-right, reality */}
+      {/* 11% — bottom-right, reality (extra 1s pause after first stat) */}
       <View style={{
         position: 'absolute',
         bottom: '25%',
@@ -139,12 +140,12 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
       }}>
         <TypewriterNumber
           text="11%"
-          startDelay={1600}
+          startDelay={2600}
           fontSize={72}
           colors={colors}
         />
         <Animated.Text
-          entering={FadeIn.delay(2200).duration(500)}
+          entering={FadeIn.delay(3200).duration(500)}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 16,
@@ -158,6 +159,6 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
           read the Bible daily.
         </Animated.Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
