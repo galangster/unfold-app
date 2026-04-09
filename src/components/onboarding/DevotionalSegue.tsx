@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  type SharedValue,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -10,130 +11,476 @@ import Animated, {
   withSequence,
   Easing,
   FadeIn,
+  FadeOut,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { pollJobStatus } from '@/lib/generation-api';
 import type { ColorTheme } from '@/constants/colors';
+
+/* ── Types ─────────────────────────────────────────────────────────── */
 
 interface Props {
   name: string;
   colors: ColorTheme;
+  jobId: string | null;
+  onDevotionalReady: (result: any) => void;
   onContinue: () => void;
 }
 
-export function DevotionalSegue({ name, colors, onContinue }: Props) {
-  const insets = useSafeAreaInsets();
+/* ── Constants ─────────────────────────────────────────────────────── */
 
-  // Pulsing glow behind the text
-  const glow = useSharedValue(0.3);
+const OPENING_LINE =
+  'While you were sharing your story, we were already writing something for you.';
+
+const STATUS_LINES = [
+  'Reading your story...',
+  'Choosing scripture for where you are...',
+  'Shaping the voice to match yours...',
+  'Weaving in what you\u2019re reaching for...',
+];
+
+/** Duration each status line is visible (ms). */
+const STATUS_HOLD_MS = 1500;
+/** Fade in/out duration for each status line (ms). */
+const STATUS_FADE_MS = 300;
+/** Total cycle per status line: fade-in + hold + fade-out */
+const STATUS_CYCLE_MS = STATUS_FADE_MS + STATUS_HOLD_MS + STATUS_FADE_MS;
+
+/** Delay before first status line appears (after typewriter). */
+const STATUS_START_DELAY_MS = 2800;
+
+/** Minimum theatrical duration before allowing the ready reveal. */
+const MIN_THEATRICAL_MS =
+  STATUS_START_DELAY_MS + STATUS_LINES.length * STATUS_CYCLE_MS;
+
+/** Duration of the typewriter effect (ms). */
+const TYPEWRITER_DURATION_MS = 2200;
+
+/** Orbital animation: number of dots. */
+const ORBIT_DOT_COUNT = 4;
+/** Orbital radius (px). */
+const ORBIT_RADIUS = 28;
+/** Dot size (px). */
+const DOT_SIZE = 5;
+/** Full orbital rotation period (ms). */
+const ORBIT_PERIOD_MS = 3000;
+
+const POLL_INTERVAL_MS = 3000;
+
+/* ── Orbital Dot ───────────────────────────────────────────────────── */
+
+function OrbitalDot({
+  index,
+  rotation,
+  accent,
+}: {
+  index: number;
+  rotation: SharedValue<number>;
+  accent: string;
+}) {
+  const baseAngle = (index / ORBIT_DOT_COUNT) * 2 * Math.PI;
+  // Stagger opacity so dots feel organic
+  const opacityBase = 0.5 + (index / ORBIT_DOT_COUNT) * 0.5;
+
+  const style = useAnimatedStyle(() => {
+    const angle = rotation.value + baseAngle;
+    const x = Math.cos(angle) * ORBIT_RADIUS;
+    const y = Math.sin(angle) * ORBIT_RADIUS;
+    return {
+      transform: [{ translateX: x }, { translateY: y }],
+      opacity: opacityBase,
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          width: DOT_SIZE,
+          height: DOT_SIZE,
+          borderRadius: DOT_SIZE / 2,
+          backgroundColor: accent,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+/* ── Orbital Loader ────────────────────────────────────────────────── */
+
+function OrbitalLoader({
+  accent,
+  isSettled,
+}: {
+  accent: string;
+  isSettled: boolean;
+}) {
+  const rotation = useSharedValue(0);
+
   useEffect(() => {
-    glow.value = withRepeat(
-      withSequence(
-        withTiming(0.6, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.3, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-      ),
+    if (isSettled) {
+      // Let current rotation finish gracefully, then stop
+      cancelAnimation(rotation);
+      return;
+    }
+    rotation.value = 0;
+    rotation.value = withRepeat(
+      withTiming(2 * Math.PI, {
+        duration: ORBIT_PERIOD_MS,
+        easing: Easing.linear,
+      }),
       -1,
       false,
     );
-  }, [glow]);
+    return () => cancelAnimation(rotation);
+  }, [isSettled, rotation]);
 
-  const glowStyle = useAnimatedStyle(() => ({
-    opacity: glow.value,
+  const containerOpacity = useSharedValue(1);
+  useEffect(() => {
+    if (isSettled) {
+      containerOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) });
+    }
+  }, [isSettled, containerOpacity]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    opacity: containerOpacity.value,
   }));
 
   return (
-    <View style={{ flex: 1, paddingHorizontal: Spacing['6'] }}>
-      {/* Ambient glow */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            top: '30%',
-            left: '10%',
-            right: '10%',
-            height: 200,
-            borderRadius: 100,
-            backgroundColor: colors.accent,
-          },
-          glowStyle,
-        ]}
-        pointerEvents="none"
-      />
+    <Animated.View
+      style={[
+        {
+          width: ORBIT_RADIUS * 2 + DOT_SIZE,
+          height: ORBIT_RADIUS * 2 + DOT_SIZE,
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'center',
+          marginBottom: Spacing['8'],
+        },
+        containerStyle,
+      ]}
+    >
+      {Array.from({ length: ORBIT_DOT_COUNT }).map((_, i) => (
+        <OrbitalDot key={i} index={i} rotation={rotation} accent={accent} />
+      ))}
+    </Animated.View>
+  );
+}
 
-      {/* Top spacer */}
-      <View style={{ flex: 1 }} />
+/* ── Typewriter Text ───────────────────────────────────────────────── */
 
-      {/* Content */}
-      <View>
+function TypewriterText({
+  text,
+  colors,
+  onComplete,
+}: {
+  text: string;
+  colors: ColorTheme;
+  onComplete?: () => void;
+}) {
+  const [visibleCount, setVisibleCount] = useState(0);
+  const chars = text.split('');
+  const intervalMs = TYPEWRITER_DURATION_MS / chars.length;
+
+  useEffect(() => {
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      setVisibleCount(i);
+      if (i >= chars.length) {
+        clearInterval(timer);
+        onComplete?.();
+      }
+    }, intervalMs);
+    return () => clearInterval(timer);
+    // Only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Text
+      style={{
+        fontFamily: FontFamily.display,
+        fontSize: FontSize.xl,
+        color: colors.text,
+        lineHeight: Math.round(FontSize.xl * 1.4),
+      }}
+    >
+      {chars.slice(0, visibleCount).join('')}
+      {visibleCount < chars.length && (
+        <Text style={{ opacity: 0 }}>
+          {chars.slice(visibleCount).join('')}
+        </Text>
+      )}
+    </Text>
+  );
+}
+
+/* ── Cycling Status Line ───────────────────────────────────────────── */
+
+function CyclingStatusLines({
+  colors,
+  startDelay,
+  onAllComplete,
+}: {
+  colors: ColorTheme;
+  startDelay: number;
+  onAllComplete: () => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(-1);
+  const [visible, setVisible] = useState(false);
+  const completedRef = useRef(false);
+
+  useEffect(() => {
+    // Delay before the first line appears
+    const initialTimer = setTimeout(() => {
+      setCurrentIndex(0);
+      setVisible(true);
+    }, startDelay);
+
+    return () => clearTimeout(initialTimer);
+  }, [startDelay]);
+
+  useEffect(() => {
+    if (currentIndex < 0) return;
+    if (currentIndex >= STATUS_LINES.length) {
+      if (!completedRef.current) {
+        completedRef.current = true;
+        onAllComplete();
+      }
+      return;
+    }
+
+    // Fade in is handled by Reanimated entering
+    // After hold period, fade out
+    const holdTimer = setTimeout(() => {
+      setVisible(false);
+    }, STATUS_FADE_MS + STATUS_HOLD_MS);
+
+    // After full cycle, advance
+    const advanceTimer = setTimeout(() => {
+      setCurrentIndex((prev) => prev + 1);
+      setVisible(true);
+    }, STATUS_CYCLE_MS);
+
+    return () => {
+      clearTimeout(holdTimer);
+      clearTimeout(advanceTimer);
+    };
+  }, [currentIndex, onAllComplete]);
+
+  if (currentIndex < 0 || currentIndex >= STATUS_LINES.length) {
+    return <View style={{ height: 24 }} />;
+  }
+
+  return (
+    <View style={{ height: 24, marginTop: Spacing['4'], justifyContent: 'center' }}>
+      {visible && (
         <Animated.Text
-          entering={FadeIn.duration(800).delay(200)}
-          style={{
-            fontFamily: FontFamily.display,
-            fontSize: 32,
-            color: colors.text,
-            lineHeight: 40,
-          }}
-        >
-          Something is being written for you right now.
-        </Animated.Text>
-
-        <Animated.Text
-          entering={FadeIn.duration(600).delay(1200)}
+          key={`status-${currentIndex}`}
+          entering={FadeIn.duration(STATUS_FADE_MS)}
+          exiting={FadeOut.duration(STATUS_FADE_MS)}
           style={{
             fontFamily: FontFamily.body,
-            fontSize: 16,
+            fontSize: 15,
             color: colors.textMuted,
-            lineHeight: 24,
-            marginTop: Spacing['5'],
+            lineHeight: 22,
           }}
         >
-          {name ? `${name}, your` : 'Your'} first devotional is being shaped by everything you just shared.
+          {STATUS_LINES[currentIndex]}
         </Animated.Text>
-
-        <Animated.Text
-          entering={FadeIn.duration(600).delay(2000)}
-          style={{
-            fontFamily: FontFamily.body,
-            fontSize: 16,
-            color: colors.textMuted,
-            lineHeight: 24,
-            marginTop: Spacing['1'],
-          }}
-        >
-          No one else will ever read what you{'\u2019'}re about to read.
-        </Animated.Text>
-      </View>
-
-      {/* Bottom spacer */}
-      <View style={{ flex: 1 }} />
-
-      {/* Continue button */}
-      <Animated.View entering={FadeIn.duration(600).delay(3000)} style={{ paddingBottom: Math.max(insets.bottom, Spacing['4']) }}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onContinue();
-          }}
-          style={{
-            backgroundColor: colors.accent,
-            paddingVertical: Spacing['4'],
-            borderRadius: Radius.md,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.base,
-            color: colors.background,
-            letterSpacing: 0.3,
-          }}>
-            Show me
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
+      )}
     </View>
   );
 }
+
+/* ── Main Component ────────────────────────────────────────────────── */
+
+export function DevotionalSegue({
+  name,
+  colors,
+  jobId,
+  onDevotionalReady,
+  onContinue,
+}: Props) {
+  const insets = useSafeAreaInsets();
+
+  /* ── State ── */
+  const [isReady, setIsReady] = useState(false);
+  const [theatricalDone, setTheatricalDone] = useState(false);
+  const [showReadyReveal, setShowReadyReveal] = useState(false);
+
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const readyCalledRef = useRef(false);
+
+  /* ── Polling ── */
+  useEffect(() => {
+    if (!jobId) {
+      // No job — treat as ready immediately
+      setIsReady(true);
+      return;
+    }
+
+    const poll = async () => {
+      try {
+        const response = await pollJobStatus(jobId);
+        if (response.status === 'complete' && response.result?.devotionalDay) {
+          if (!readyCalledRef.current) {
+            readyCalledRef.current = true;
+            onDevotionalReady(response.result);
+            setIsReady(true);
+          }
+          if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+        }
+      } catch {
+        // Silent — keep polling
+      }
+    };
+
+    // Poll immediately, then on interval
+    poll();
+    pollingRef.current = setInterval(poll, POLL_INTERVAL_MS);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [jobId, onDevotionalReady]);
+
+  /* ── Theatrical completion ── */
+  const handleTheatricalComplete = useCallback(() => {
+    setTheatricalDone(true);
+  }, []);
+
+  /* ── Show ready reveal when both conditions met ── */
+  useEffect(() => {
+    if (isReady && theatricalDone && !showReadyReveal) {
+      setShowReadyReveal(true);
+    }
+  }, [isReady, theatricalDone, showReadyReveal]);
+
+  /* ── Phase 1 opening line fade-out / Phase 2 fade-in ── */
+  const phase1Opacity = useSharedValue(1);
+  useEffect(() => {
+    if (showReadyReveal) {
+      phase1Opacity.value = withTiming(0, {
+        duration: 300,
+        easing: Easing.out(Easing.cubic),
+      });
+    }
+  }, [showReadyReveal, phase1Opacity]);
+
+  const phase1Style = useAnimatedStyle(() => ({
+    opacity: phase1Opacity.value,
+  }));
+
+  return (
+    <View style={[styles.container, { paddingHorizontal: Spacing['6'] }]}>
+      {/* Top spacer */}
+      <View style={styles.flex1} />
+
+      {/* Orbital animation */}
+      <OrbitalLoader accent={colors.accent} isSettled={showReadyReveal} />
+
+      {/* Phase 1: Theatrical reveal */}
+      {!showReadyReveal && (
+        <Animated.View style={phase1Style}>
+          <TypewriterText text={OPENING_LINE} colors={colors} />
+
+          <CyclingStatusLines
+            colors={colors}
+            startDelay={STATUS_START_DELAY_MS}
+            onAllComplete={handleTheatricalComplete}
+          />
+        </Animated.View>
+      )}
+
+      {/* Phase 2: Ready reveal */}
+      {showReadyReveal && (
+        <Animated.View entering={FadeIn.duration(300).delay(200)}>
+          <Text
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 28,
+              color: colors.text,
+              lineHeight: Math.round(28 * 1.3),
+            }}
+          >
+            Your first devotional is ready.
+          </Text>
+
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 15,
+              color: colors.textMuted,
+              lineHeight: 22,
+              marginTop: Spacing['4'],
+            }}
+          >
+            Written from everything you just shared. No one else will ever read
+            this.
+          </Text>
+        </Animated.View>
+      )}
+
+      {/* Bottom spacer */}
+      <View style={styles.flex1} />
+
+      {/* CTA Button — only in Phase 2 */}
+      {showReadyReveal && (
+        <Animated.View
+          entering={FadeIn.duration(300).delay(500)}
+          style={{ paddingBottom: Math.max(insets.bottom, Spacing['4']) }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              onContinue();
+            }}
+            style={{
+              backgroundColor: colors.accent,
+              paddingVertical: Spacing['4'],
+              borderRadius: Radius.md,
+              alignItems: 'center',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSize.base,
+                color: colors.background,
+                letterSpacing: 0.3,
+              }}
+            >
+              Open your devotional
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+/* ── Styles ─────────────────────────────────────────────────────────── */
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  flex1: {
+    flex: 1,
+  },
+});

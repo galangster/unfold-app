@@ -652,6 +652,7 @@ export default function OnboardingScreen() {
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const onboardingJobIdRef = useRef<string | null>(null);
+  const onboardingDevotionalResultRef = useRef<any>(null);
   
   // Animated styles
   const inputAnimatedStyle = useAnimatedStyle(() => ({
@@ -2412,6 +2413,10 @@ export default function OnboardingScreen() {
         <DevotionalSegue
           name={data.name}
           colors={colors}
+          jobId={onboardingJobIdRef.current}
+          onDevotionalReady={(result) => {
+            onboardingDevotionalResultRef.current = result;
+          }}
           onContinue={advanceToNextStep}
         />
       );
