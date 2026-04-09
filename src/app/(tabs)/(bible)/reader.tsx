@@ -84,13 +84,15 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_ACTIVATE_X = 20;
 // Fail the pan gesture promptly if vertical scroll starts — ScrollView wins
 const SWIPE_FAIL_Y = 15;
-// Commit threshold: ~25% of screen OR a strong flick
-const SWIPE_DISTANCE_THRESHOLD = SCREEN_WIDTH * 0.25;
+// Commit threshold: ~10% of screen OR a strong flick
+const SWIPE_DISTANCE_THRESHOLD = SCREEN_WIDTH * 0.10;
 const SWIPE_VELOCITY_THRESHOLD = 500;
+// Maximum visual drag distance — 15% of screen width
+const DRAG_MAX = SCREEN_WIDTH * 0.15;
 // Rubber-band divisor when there's no chapter to navigate to
 const EDGE_RESISTANCE = 3;
 // Drag distance at which edge arrow indicators are fully revealed
-const ARROW_REVEAL_DISTANCE = 60;
+const ARROW_REVEAL_DISTANCE = DRAG_MAX * 0.6;
 // Duration of the "slide off screen" exit after commit
 const NAV_EXIT_DURATION = 180;
 // Spring back when gesture ends without commit (critically damped, no bounce)
@@ -721,7 +723,12 @@ export default function BibleReaderScreen() {
         } else if (tx < 0 && !nextChapter) {
           tx = tx / EDGE_RESISTANCE;
         }
-        dragX.value = tx;
+        // Damped resistance: drag follows finger up to DRAG_MAX, then tapers off
+        // Formula: DRAG_MAX * tanh(tx / DRAG_MAX) — gives smooth asymptotic limit
+        const sign = tx >= 0 ? 1 : -1;
+        const abs = Math.abs(tx);
+        const damped = DRAG_MAX * (abs / (abs + DRAG_MAX));
+        dragX.value = sign * damped;
       })
       .onEnd((e) => {
         'worklet';
@@ -731,16 +738,16 @@ export default function BibleReaderScreen() {
         const goNext = !!nextChapter && (tx < -SWIPE_DISTANCE_THRESHOLD || vx < -SWIPE_VELOCITY_THRESHOLD);
 
         if (goPrev && tx > 0) {
-          // Slide current chapter off to the right, then navigate
+          // Quick settle to max drag distance, then navigate
           dragX.value = withTiming(
-            SCREEN_WIDTH,
+            DRAG_MAX,
             { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
             () => { runOnJS(navigateChapter)(-1); },
           );
         } else if (goNext && tx < 0) {
-          // Slide current chapter off to the left, then navigate
+          // Quick settle to max drag distance, then navigate
           dragX.value = withTiming(
-            -SCREEN_WIDTH,
+            -DRAG_MAX,
             { duration: NAV_EXIT_DURATION, easing: EASE_OUT_QUART },
             () => { runOnJS(navigateChapter)(1); },
           );
@@ -961,23 +968,13 @@ export default function BibleReaderScreen() {
         pointerEvents="none"
         style={[styles.edgeArrow, styles.edgeArrowLeft, leftArrowStyle]}
       >
-        <View style={[styles.edgeArrowPill, {
-          backgroundColor: isDark ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.82)',
-          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-        }]}>
-          <CaretLeftIcon size={18} color={colors.textMuted} weight="regular" />
-        </View>
+        <CaretLeftIcon size={20} color={colors.textMuted} weight="bold" />
       </Animated.View>
       <Animated.View
         pointerEvents="none"
         style={[styles.edgeArrow, styles.edgeArrowRight, rightArrowStyle]}
       >
-        <View style={[styles.edgeArrowPill, {
-          backgroundColor: isDark ? 'rgba(28,28,30,0.72)' : 'rgba(255,255,255,0.82)',
-          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-        }]}>
-          <CaretRightIcon size={18} color={colors.textMuted} weight="regular" />
-        </View>
+        <CaretRightIcon size={20} color={colors.textMuted} weight="bold" />
       </Animated.View>
 
       {/* ─── Context Bar — replaces bottom tab bar when verses selected ──── */}
