@@ -2678,6 +2678,37 @@ export default function SettingsScreen() {
                   Replay Onboarding (Dev)
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  // Find the current devotional's current day to test the reveal
+                  const store = useUnfoldStore.getState();
+                  const devId = store.currentDevotionalId;
+                  const dev = store.devotionals.find((d: any) => d.id === devId);
+                  if (dev) {
+                    router.push({
+                      pathname: '/reveal',
+                      params: {
+                        devotionalId: dev.id,
+                        dayNumber: String(dev.currentDay),
+                        seriesTitle: dev.title,
+                        dayTitle: dev.days?.find((d: any) => d.dayNumber === dev.currentDay)?.title ?? '',
+                      },
+                    });
+                  }
+                }}
+                style={{
+                  padding: Spacing['4'],
+                  borderRadius: Radius.md,
+                  backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                  alignItems: 'center',
+                  marginBottom: Spacing['4'],
+                }}
+              >
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                  Test Reveal Screen (Dev)
+                </Text>
+              </TouchableOpacity>
             </Animated.View>
           )}
 

@@ -138,6 +138,12 @@ export default function ReadingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string }>();
   const { colors, isDark } = useTheme();
+
+  // Clear reveal transition flag so home screen renders normally next time
+  useEffect(() => {
+    const { revealTransitioning, setRevealTransitioning } = useUIState.getState();
+    if (revealTransitioning) setRevealTransitioning(false);
+  }, []);
   const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);

@@ -938,12 +938,6 @@ Their journal entry:
                               style={jStyles.questionInputWrapper}
                             >
                               <View style={[jStyles.questionInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}>
-                                <Text
-                                  numberOfLines={2}
-                                  style={[jStyles.questionInputPromptHint, { color: colors.textMuted }]}
-                                >
-                                  {prompt}
-                                </Text>
                                 <TextInput
                                   ref={(ref) => {
                                     questionInputRefs.current.set(index, ref);

@@ -22,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { useUIState } from '@/lib/ui-state';
 import { alpha } from '@/components/ui';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
@@ -139,6 +140,9 @@ export default function RevealScreen() {
     if (devotionalId) {
       setCurrentDevotional(devotionalId);
     }
+    // Flag the transition so the home screen renders blank during the brief
+    // moment React Navigation renders the tab index before the reading screen.
+    useUIState.getState().setRevealTransitioning(true);
     // Navigate directly to reading — skips the home screen entirely
     router.replace({
       pathname: '/(tabs)/(today)/reading',
