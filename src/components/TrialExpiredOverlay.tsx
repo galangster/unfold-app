@@ -21,6 +21,8 @@ import {
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { EmberParticles } from '@/components/EmberParticles';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import {
@@ -196,12 +198,21 @@ export function TrialExpiredOverlay() {
         styles.root,
         {
           backgroundColor: colors.background,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
         },
       ]}
     >
-      <View style={styles.content}>
+      {/* Ambient ember particles — subtle background animation */}
+      <EmberParticles color={goldAccent} count={18} bidirectional />
+
+      {/* Gradient fade at bottom — warmth behind the CTA */}
+      <LinearGradient
+        colors={['transparent', `${goldAccent}15`, `${goldAccent}30`]}
+        style={styles.bottomGradient}
+        pointerEvents="none"
+      />
+
+      {/* Content block — left aligned, lifted toward center */}
+      <View style={[styles.content, { paddingTop: insets.top + Spacing['12'] }]}>
         {/* App icon */}
         <Image
           source={require('../../assets/icon-paywall.png')}
@@ -211,7 +222,7 @@ export function TrialExpiredOverlay() {
 
         {/* Headline */}
         <Text style={[styles.headline, { color: colors.text }]}>
-          {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
+          {firstName ? `Welcome back,\n${firstName}` : 'Welcome back'}
         </Text>
 
         {/* Body text */}
@@ -220,12 +231,9 @@ export function TrialExpiredOverlay() {
           {'\u2009\u2014\u2009'}your devotionals, journal entries, and highlights.
         </Text>
 
-        <Text style={[styles.body, { color: colors.textMuted, marginTop: Spacing['2'] }]}>
+        <Text style={[styles.body, { color: colors.textMuted, marginTop: Spacing['3'] }]}>
           Resubscribe to pick up right where you left off.
         </Text>
-
-        {/* Decorative divider */}
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
         {/* Value props */}
         <View style={styles.valueProps}>
@@ -266,8 +274,8 @@ export function TrialExpiredOverlay() {
         )}
       </View>
 
-      {/* Bottom CTA area */}
-      <View style={[styles.bottomArea, { paddingBottom: Math.max(insets.bottom, Spacing['6']) }]}>
+      {/* Bottom CTA area — lowered near tab bar */}
+      <View style={[styles.bottomArea, { paddingBottom: Spacing['4'] }]}>
         {/* Subscribe button */}
         <TouchableOpacity
           activeOpacity={0.8}
@@ -358,41 +366,42 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 80, // Leave space for tab bar
     zIndex: 50, // Below tab bar (which is at absolute bottom)
-    justifyContent: 'space-between',
+    overflow: 'hidden',
+  },
+  bottomGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 350,
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: Spacing['8'],
+    paddingHorizontal: Spacing['6'],
   },
   appIcon: {
-    width: 48,
-    height: 48,
-    marginBottom: Spacing['6'],
+    width: 40,
+    height: 40,
+    marginBottom: Spacing['5'],
   },
   headline: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['4xl'],
-    textAlign: 'center',
+    textAlign: 'left',
     letterSpacing: -0.5,
     marginBottom: Spacing['4'],
+    lineHeight: 40,
   },
   body: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.base,
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 24,
-    paddingHorizontal: Spacing['2'],
-  },
-  divider: {
-    width: 40,
-    height: StyleSheet.hairlineWidth,
-    marginVertical: Spacing['6'],
   },
   valueProps: {
-    alignSelf: 'center',
-    gap: Spacing['3'],
+    alignSelf: 'flex-start',
+    gap: Spacing['2.5'],
+    marginTop: Spacing['6'],
   },
   valuePropRow: {
     flexDirection: 'row',
@@ -412,13 +421,13 @@ const styles = StyleSheet.create({
   priceHint: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
-    textAlign: 'center',
-    marginTop: Spacing['4'],
+    textAlign: 'left',
+    marginTop: Spacing['5'],
   },
   errorText: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.sm,
-    textAlign: 'center',
+    textAlign: 'left',
     marginTop: Spacing['3'],
   },
   bottomArea: {
