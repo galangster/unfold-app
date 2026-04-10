@@ -294,7 +294,7 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
 }
 
 /** Names of tabs that remain free (no paywall overlay) */
-const FREE_TABS = new Set(['(bible)']);
+const FREE_TABS = new Set(['(bible)', '(you)']);
 
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
