@@ -198,7 +198,6 @@ function RootLayoutNav() {
         <Stack.Screen
           name="reveal"
           options={{
-            presentation: 'fullScreenModal',
             animation: 'fade',
             gestureEnabled: false,
           }}

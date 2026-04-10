@@ -300,7 +300,8 @@ export default function TabLayout() {
   const { colors, isDark } = useTheme();
 
   // Subscription gate state
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? true);
+  // DEBUG: Force premium true in dev to bypass churned-user overlay for testing. Revert before shipping.
+  const isPremium = __DEV__ ? true : useUnfoldStore((s) => s.user?.isPremium ?? true);
   const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
   const [activeTabName, setActiveTabName] = useState<string>('(today)');
 

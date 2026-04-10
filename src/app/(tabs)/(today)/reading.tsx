@@ -136,14 +136,26 @@ function ShimmerBar({ bg, width, delay }: { bg: string; width: DimensionValue; d
 }
 
 export default function ReadingScreen() {
+  console.log('[Reading] RENDER CALLED');
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string }>();
   const { colors, isDark } = useTheme();
 
-  // Clear reveal transition flag so home screen renders normally next time
+  // Clear reveal transition flag AFTER reading screen has painted to prevent
+  // home screen from flashing behind during the transition handoff.
   useEffect(() => {
+    console.log('[Reading] MOUNTED', { dayNumber: params.dayNumber });
     const { revealTransitioning, setRevealTransitioning } = useUIState.getState();
-    if (revealTransitioning) setRevealTransitioning(false);
+    console.log('[Reading] revealTransitioning was', revealTransitioning);
+    if (revealTransitioning) {
+      // Delay clearing the flag so the reading screen has time to fully render
+      // on top of the home screen before the blank-home fallback disappears.
+      const t = setTimeout(() => {
+        console.log('[Reading] clearing revealTransitioning flag (delayed)');
+        setRevealTransitioning(false);
+      }, 650);
+      return () => clearTimeout(t);
+    }
   }, []);
   const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
 
@@ -269,7 +281,9 @@ export default function ReadingScreen() {
   // Get highlights for current day
   const currentDayHighlights = useMemo(() => {
     if (!currentDevotionalId) return [];
-    return highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
+    const filtered = highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
+    console.log('[Highlight] currentDayHighlights recomputed', { totalInStore: highlights.length, filteredForThisDay: filtered.length, viewingDay });
+    return filtered;
   }, [highlights, currentDevotionalId, viewingDay]);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   // Only show retry banner if this specific series has ungenerated days
@@ -584,8 +598,19 @@ export default function ReadingScreen() {
   }, []);
 
   const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string; color?: string }) => {
-    if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
+    console.log('[Highlight] reading.handleQuoteSelected', {
+      text: quote.text?.substring(0, 40),
+      color: quote.color,
+      hasDevId: !!currentDevotionalId,
+      hasCurrentDev: !!currentDevotional,
+      hasCurrentDay: !!currentDayData,
+    });
+    if (!currentDevotionalId || !currentDevotional || !currentDayData) {
+      console.log('[Highlight] BAILING — missing required state');
+      return;
+    }
 
+    console.log('[Highlight] calling addHighlight', { viewingDay, color: quote.color });
     addHighlight({
       devotionalId: currentDevotionalId,
       devotionalTitle: currentDevotional.title,
@@ -596,6 +621,7 @@ export default function ReadingScreen() {
       color: (quote.color as import('@/lib/store').HighlightColor) || 'yellow',
       contextBefore: quote.context.substring(0, 100),
     });
+    console.log('[Highlight] addHighlight called — store should now have new highlight');
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, addHighlight]);
@@ -1011,7 +1037,14 @@ export default function ReadingScreen() {
   }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline]);
 
   // Early returns after all hooks
+  console.log('[Reading] early-return check', {
+    hasCurrentDevotional: !!currentDevotional,
+    currentDevotionalId,
+    hasCurrentDayData: !!currentDayData,
+    viewingDay,
+  });
   if (!currentDevotional) {
+    console.log('[Reading] RETURNING "No series found" — currentDevotional is null');
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>No series found</Text>
@@ -1020,6 +1053,7 @@ export default function ReadingScreen() {
   }
 
   if (!currentDayData) {
+    console.log('[Reading] RETURNING "Still being written" — currentDayData is null', { viewingDay, daysInSeries: currentDevotional.days.length });
     // Day hasn't been generated yet
     const daysReady = currentDevotional.days.length;
 

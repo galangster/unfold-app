@@ -18,7 +18,6 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { CaretUp } from 'phosphor-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -124,30 +123,58 @@ export default function RevealScreen() {
   // ─── Draggable curtain lift ────────────────────────────────────
   const translateY = useSharedValue(0);
   const hasNavigated = useRef(false);
+  const transitionResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Haptic flags — shared values for worklet access
   const didTickApproach = useSharedValue(0); // 0 = no, 1 = yes
   const didTickCommit = useSharedValue(0);
 
+  useEffect(() => {
+    return () => {
+      if (transitionResetTimerRef.current) {
+        clearTimeout(transitionResetTimerRef.current);
+      }
+    };
+  }, []);
+
   const navigateToReading = useCallback(() => {
-    if (hasNavigated.current) return;
+    console.log('[Reveal] navigateToReading START', { devotionalId, dayNumber, hasNavigated: hasNavigated.current });
+    if (hasNavigated.current) {
+      console.log('[Reveal] already navigated, bailing');
+      return;
+    }
     hasNavigated.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     // Mark this day as revealed — teaser card won't show again
     if (devotionalId && dayNumber) {
+      console.log('[Reveal] markDayAsRevealed', { devotionalId, dayNumber });
       markDayAsRevealed(devotionalId, Number(dayNumber));
     }
     if (devotionalId) {
+      console.log('[Reveal] setCurrentDevotional', devotionalId);
       setCurrentDevotional(devotionalId);
     }
     // Flag the transition so the home screen renders blank during the brief
     // moment React Navigation renders the tab index before the reading screen.
+    console.log('[Reveal] setRevealTransitioning(true)');
     useUIState.getState().setRevealTransitioning(true);
-    // Navigate directly to reading — skips the home screen entirely
-    router.replace({
+    // Safety valve: if the transition is interrupted before Reading mounts,
+    // don't leave Home permanently blank.
+    transitionResetTimerRef.current = setTimeout(() => {
+      const { revealTransitioning, setRevealTransitioning } = useUIState.getState();
+      if (revealTransitioning) {
+        console.log('[Reveal] fallback clear revealTransitioning after interrupted navigation');
+        setRevealTransitioning(false);
+      }
+    }, 2000);
+    // Use a single POP_TO action so native stack dismissal and nested route
+    // activation happen atomically under Expo Router / React Navigation.
+    console.log('[Reveal] dismissTo → /(tabs)/(today)/reading', { dayNumber: String(dayNumber ?? '1') });
+    router.dismissTo({
       pathname: '/(tabs)/(today)/reading',
       params: { dayNumber: String(dayNumber ?? '1') },
     });
+    console.log('[Reveal] navigateToReading DONE');
   }, [devotionalId, dayNumber, router, markDayAsRevealed, setCurrentDevotional]);
 
   const fireApproachHaptic = useCallback(() => {
@@ -201,30 +228,9 @@ export default function RevealScreen() {
     transform: [{ translateY: translateY.value }],
   }));
 
-  // ─── Shimmer sweep across title after scatter completes ────────
-  const shimmerSweepOpacity = useSharedValue(0);
-  const shimmerSweepX = useSharedValue(-SCREEN_WIDTH);
-
   const onScatterComplete = useCallback(() => {
     onTitleComplete();
-
-    if (reducedMotion) return;
-
-    // Fire shimmer sweep across the title area
-    shimmerSweepOpacity.value = withSequence(
-      withTiming(1, { duration: 100 }),
-      withDelay(700, withTiming(0, { duration: 300 })),
-    );
-    shimmerSweepX.value = withTiming(SCREEN_WIDTH, {
-      duration: 800,
-      easing: Easing.inOut(Easing.ease),
-    });
-  }, [onTitleComplete, reducedMotion]);
-
-  const shimmerSweepStyle = useAnimatedStyle(() => ({
-    opacity: shimmerSweepOpacity.value,
-    transform: [{ translateX: shimmerSweepX.value }],
-  }));
+  }, [onTitleComplete]);
 
   // ─── Render ────────────────────────────────────────────────────
 
@@ -273,22 +279,6 @@ export default function RevealScreen() {
               onComplete={onScatterComplete}
             />
 
-            {/* Shimmer sweep overlay — passes once after scatter */}
-            <Animated.View
-              style={[styles.shimmerSweep, shimmerSweepStyle]}
-              pointerEvents="none"
-            >
-              <LinearGradient
-                colors={[
-                  'transparent',
-                  alpha(colors.accent, 0.15),
-                  'transparent',
-                ]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ flex: 1, borderRadius: 30 }}
-              />
-            </Animated.View>
           </View>
 
           {/* Day counter */}
@@ -351,13 +341,6 @@ const styles = StyleSheet.create({
   titleContainer: {
     marginBottom: 16,
     overflow: 'hidden',
-  },
-  shimmerSweep: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    width: 60,
   },
   dayCounter: {
     fontFamily: FontFamily.ui,

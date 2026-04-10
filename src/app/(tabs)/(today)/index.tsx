@@ -660,6 +660,7 @@ export default function HomeScreen() {
   // the home screen from flashing. The reading screen clears this flag on mount.
   const revealTransitioning = useUIState((s) => s.revealTransitioning);
   if (revealTransitioning) {
+    console.log('[HomeScreen] rendering BLANK due to revealTransitioning=true');
     return <View style={{ flex: 1, backgroundColor: '#0A0A0A' }} />;
   }
 
@@ -793,10 +794,26 @@ export default function HomeScreen() {
           {/* Zone 7: Bento Grid */}
           <BentoGrid />
 
-          {/* DEBUG: Preview reveal screen with current devotional (dev only) */}
-          {__DEV__ && currentDevotional && currentDayData && (
+          {/* DEBUG: Preview reveal screen (dev only, works without active devotional) */}
+          {__DEV__ && (
             <TouchableOpacity
-              onPress={handleReveal}
+              onPress={() => {
+                // Use real devotional if available, otherwise fake params
+                if (currentDevotional && currentDayData) {
+                  handleReveal();
+                } else {
+                  router.push({
+                    pathname: '/reveal',
+                    params: {
+                      devotionalId: 'debug',
+                      dayNumber: '1',
+                      seriesTitle: 'Preview Series',
+                      dayTitle: 'When the Map Dissolves',
+                      totalDays: '7',
+                    },
+                  });
+                }
+              }}
               style={{
                 alignSelf: 'center',
                 marginTop: Spacing['4'],

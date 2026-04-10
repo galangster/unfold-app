@@ -1108,16 +1108,17 @@ export const useUnfoldStore = create<UnfoldState>()(
       },
 
       // Highlight actions
-      addHighlight: (highlight) =>
+      addHighlight: (highlight) => {
+        console.log('[Highlight] store.addHighlight', { text: highlight.highlightedText?.substring(0, 40), color: highlight.color, dayNumber: highlight.dayNumber, devId: highlight.devotionalId });
         set((state) => {
           const now = new Date().toISOString();
+          const newHighlight = { ...highlight, id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, createdAt: now, updatedAt: now };
+          console.log('[Highlight] store — new highlights count:', state.highlights.length + 1);
           return {
-            highlights: [
-              { ...highlight, id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, createdAt: now, updatedAt: now },
-              ...state.highlights,
-            ],
+            highlights: [newHighlight, ...state.highlights],
           };
-        }),
+        });
+      },
 
       removeHighlight: (id) =>
         set((state) => ({
