@@ -11,7 +11,6 @@ export default function YouLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ animation: 'fade' }} />
-      <Stack.Screen name="settings" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="streak-settings" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="past-devotionals" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
       <Stack.Screen name="saved-passages" options={{ animation: 'ios_from_right', gestureEnabled: true }} />
