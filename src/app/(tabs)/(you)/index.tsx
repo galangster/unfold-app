@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Alert, Linking, Platform, ActivityIndicator, TextInput } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -147,6 +147,18 @@ export default function YouScreen() {
   const { colors, isDark } = useTheme();
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  // Name edit state — tapping the name on the profile swaps it for a
+  // TextInput. Commit on blur or submit. Cancels back to the previous
+  // value if the user clears the field entirely.
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const commitNameEdit = useCallback(() => {
+    const trimmed = nameDraft.trim();
+    if (trimmed.length > 0 && trimmed !== user?.name) {
+      updateUser({ name: trimmed });
+    }
+    setIsEditingName(false);
+  }, [nameDraft, user?.name, updateUser]);
   const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
   const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
   const setDebugForceTrialExpired = useUIState((s) => s.setDebugForceTrialExpired);
@@ -479,17 +491,57 @@ export default function YouScreen() {
             }}
           >
             <ProfileAvatar size={80} editable />
-            <Text
-              style={{
-                fontFamily: FontFamily.display,
-                fontSize: 28,
-                color: colors.text,
-                letterSpacing: -0.5,
-                marginTop: 14,
-              }}
-            >
-              {user?.name ?? 'You'}
-            </Text>
+            {isEditingName ? (
+              <TextInput
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                onBlur={commitNameEdit}
+                onSubmitEditing={commitNameEdit}
+                autoFocus
+                selectTextOnFocus
+                maxLength={40}
+                returnKeyType="done"
+                placeholder="Your name"
+                placeholderTextColor={colors.textHint}
+                style={{
+                  fontFamily: FontFamily.display,
+                  fontSize: 28,
+                  color: colors.text,
+                  letterSpacing: -0.5,
+                  marginTop: 14,
+                  textAlign: 'center',
+                  minWidth: 120,
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.accent,
+                }}
+              />
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  setNameDraft(user?.name ?? '');
+                  setIsEditingName(true);
+                  Haptics.selectionAsync();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit your name"
+                accessibilityHint="Tap to change your display name"
+              >
+                <Text
+                  style={{
+                    fontFamily: FontFamily.display,
+                    fontSize: 28,
+                    color: colors.text,
+                    letterSpacing: -0.5,
+                    marginTop: 14,
+                  }}
+                >
+                  {user?.name ?? 'Add your name'}
+                </Text>
+              </TouchableOpacity>
+            )}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['3'], marginTop: Spacing['2'] }}>
               <StreakDisplay compact hideDayLabel />
               {isPremium && (
