@@ -24,7 +24,7 @@ import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { CaretLeftIcon, SunIcon, MoonIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, SunIcon, MoonIcon, WarningCircleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
 import { FontFamily } from '@/constants/fonts';
@@ -36,7 +36,6 @@ import { useUnfoldStore, type Note, type ThemeMode } from '@/lib/store';
 import { EveningCelebration } from '@/components/EveningCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
 import { UndoToast } from '@/components/UndoToast';
-import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
 import { CompanionInput } from '@/components/companion/CompanionInput';
 import { SwipeableNoteCard } from '@/components/notebook/SwipeableNoteCard';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
@@ -131,7 +130,6 @@ export default function DebugLightModeScreen() {
   const [showEvening, setShowEvening] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showUndoToast, setShowUndoToast] = useState(false);
-  const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const [showDownloadSheet, setShowDownloadSheet] = useState(false);
 
   const toggleTheme = () => {
@@ -298,25 +296,127 @@ export default function DebugLightModeScreen() {
           </TouchableOpacity>
         </Section>
 
-        {/* 5. DeleteAccountSheet */}
+        {/* 5. DeleteAccountSheet — inline preview of the sheet content.
+            The real sheet uses @gorhom/bottom-sheet which has stacking
+            quirks inside this debug screen, so we clone its step-1 layout
+            for color verification. Logic/buttons are no-ops. */}
         <Section
           title="5. Delete Account Sheet"
-          subtitle="Bottom sheet. Don't actually confirm — just look at it."
+          subtitle="Inline preview — colors only, no real deletion."
         >
-          <TouchableOpacity
-            onPress={() => setShowDeleteSheet(true)}
-            style={{ padding: Spacing['4'], alignItems: 'center' }}
-          >
+          <View style={{ padding: Spacing['5'], paddingTop: Spacing['4'] }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: Spacing['3'] }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: colors.error,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <WarningCircleIcon size={28} color="#FFFFFF" weight="regular" />
+              </View>
+            </View>
+
             <Text
               style={{
-                fontFamily: FontFamily.uiMedium,
-                fontSize: 14,
-                color: colors.accent,
+                fontFamily: FontFamily.display,
+                fontSize: 22,
+                textAlign: 'center',
+                color: colors.text,
+                marginBottom: Spacing['2'],
               }}
             >
-              Open DeleteAccountSheet
+              Delete your account?
             </Text>
-          </TouchableOpacity>
+
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 14,
+                textAlign: 'center',
+                color: colors.textMuted,
+                marginBottom: Spacing['3'],
+              }}
+            >
+              This will permanently delete:
+            </Text>
+
+            <View style={{ gap: Spacing['2'], marginBottom: Spacing['3'] }}>
+              {[
+                'Your devotional series and reading progress',
+                'Your journal entries and reflections',
+                'Your streak history and achievements',
+                'Your Bible highlights and reading history',
+              ].map((item) => (
+                <View key={item} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: Spacing['2'] }}>
+                  <View
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 2.5,
+                      backgroundColor: colors.error,
+                      marginTop: 7,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: FontFamily.ui,
+                      fontSize: 14,
+                      color: colors.textMuted,
+                      flex: 1,
+                    }}
+                  >
+                    {item}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 12,
+                textAlign: 'center',
+                color: colors.textSubtle,
+                marginBottom: Spacing['4'],
+              }}
+            >
+              This action cannot be undone.
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: Spacing['3'] }}>
+              <View
+                style={{
+                  flex: 1,
+                  paddingVertical: Spacing['3'],
+                  borderRadius: Radius.md,
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.text }}>
+                  Cancel
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  paddingVertical: Spacing['3'],
+                  borderRadius: Radius.md,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.error }}>
+                  Delete my account
+                </Text>
+              </View>
+            </View>
+          </View>
         </Section>
 
         {/* 6. CompanionInput — inline */}
@@ -404,12 +504,6 @@ export default function DebugLightModeScreen() {
         }}
         onDismiss={() => setShowUndoToast(false)}
         duration={999999}
-      />
-
-      {/* 5. DeleteAccountSheet */}
-      <DeleteAccountSheet
-        visible={showDeleteSheet}
-        onClose={() => setShowDeleteSheet(false)}
       />
 
       {/* 8. DownloadBibleSheet */}

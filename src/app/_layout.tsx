@@ -213,8 +213,7 @@ function RootLayoutNav() {
         <Stack.Screen
           name="debug-light-mode"
           options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
+            animation: 'slide_from_right',
             gestureEnabled: true,
           }}
         />
