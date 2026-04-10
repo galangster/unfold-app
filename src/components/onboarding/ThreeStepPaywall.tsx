@@ -29,6 +29,7 @@ import { Duration } from '@/constants/animations';
 import { purchasePackage, restorePurchases } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
+import LaurelWreath from '../../../assets/images/laurel-wreath.svg';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -544,34 +545,38 @@ function ScreenPricing({
           Your personal Bible experience
         </Text>
 
-        {/* Social proof -- stacked with laurel wreath border */}
-        <View style={[styles.laurelContainer, { borderColor: colors.accent }]}>
-          {/* Left laurel leaf */}
-          <Text style={{ position: 'absolute', left: 6, fontSize: 28, opacity: 0.7 }}>{'\u{1F33F}'}</Text>
-          {/* Right laurel leaf (mirrored) */}
-          <Text style={{ position: 'absolute', right: 6, fontSize: 28, opacity: 0.7, transform: [{ scaleX: -1 }] }}>{'\u{1F33F}'}</Text>
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textMuted,
-              textAlign: 'center',
-            }}
-          >
-            Trusted by thousands
-          </Text>
-          <View style={styles.ratingRow}>
+        {/* Social proof -- stacked inside real SVG laurel wreath */}
+        <View style={styles.laurelContainer}>
+          <LaurelWreath
+            width={180}
+            height={90}
+            color={colors.accent}
+            style={styles.laurelImage}
+          />
+          <View style={styles.laurelContent}>
             <Text
               style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.sm,
-                color: colors.text,
-                marginRight: Spacing['1'],
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textMuted,
+                textAlign: 'center',
               }}
             >
-              4.8
+              Trusted by thousands
             </Text>
-            <FiveStars color={colors.accent} />
+            <View style={styles.ratingRow}>
+              <Text
+                style={{
+                  fontFamily: FontFamily.uiSemiBold,
+                  fontSize: FontSize.sm,
+                  color: colors.text,
+                  marginRight: Spacing['1'],
+                }}
+              >
+                4.8
+              </Text>
+              <FiveStars color={colors.accent} />
+            </View>
           </View>
         </View>
       </View>
@@ -1105,11 +1110,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
     marginTop: Spacing['2'],
-    paddingHorizontal: Spacing['10'],
-    paddingVertical: Spacing['2.5'],
-    borderWidth: 1,
-    borderRadius: Radius.full,
-    gap: Spacing['1'],
+    width: 180,
+    height: 90,
+  },
+  laurelImage: {
+    position: 'absolute',
+    opacity: 0.5,
+  },
+  laurelContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing['0.5'],
   },
   ratingRow: {
     flexDirection: 'row',
