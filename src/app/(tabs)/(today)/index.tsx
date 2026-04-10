@@ -793,6 +793,26 @@ export default function HomeScreen() {
           {/* Zone 7: Bento Grid */}
           <BentoGrid />
 
+          {/* DEBUG: Preview reveal screen with current devotional (dev only) */}
+          {__DEV__ && currentDevotional && currentDayData && (
+            <TouchableOpacity
+              onPress={handleReveal}
+              style={{
+                alignSelf: 'center',
+                marginTop: Spacing['4'],
+                paddingHorizontal: Spacing['4'],
+                paddingVertical: Spacing['2'],
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.ui, fontSize: 11, color: colors.textSubtle }}>
+                DEBUG: Preview reveal
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Premium Nudge Card — contextual, inline upsell */}
           {premiumNudge && (
             <View style={styles.premiumNudgeWrapper}>
