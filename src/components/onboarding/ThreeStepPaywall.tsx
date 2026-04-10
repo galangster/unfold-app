@@ -2,7 +2,7 @@ import { useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
-  Image,
+  Image as RNImage,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
@@ -535,7 +535,7 @@ function ScreenPricing({
     <View style={styles.screen3Root}>
       {/* Logo + headline */}
       <View style={styles.screen3Header}>
-        <Image
+        <RNImage
           source={require('../../../assets/icon-paywall.png')}
           style={{ width: 32, height: 32, tintColor: colors.accent, opacity: 0.9 }}
           resizeMode="contain"
@@ -544,8 +544,12 @@ function ScreenPricing({
           Your personal Bible experience
         </Text>
 
-        {/* Social proof -- stacked with laurel wreath */}
-        <View style={styles.socialProofStack}>
+        {/* Social proof -- stacked with laurel wreath border */}
+        <View style={[styles.laurelContainer, { borderColor: colors.accent }]}>
+          {/* Left laurel leaf */}
+          <Text style={{ position: 'absolute', left: 6, fontSize: 28, opacity: 0.7 }}>{'\u{1F33F}'}</Text>
+          {/* Right laurel leaf (mirrored) */}
+          <Text style={{ position: 'absolute', right: 6, fontSize: 28, opacity: 0.7, transform: [{ scaleX: -1 }] }}>{'\u{1F33F}'}</Text>
           <Text
             style={{
               fontFamily: FontFamily.ui,
@@ -556,36 +560,18 @@ function ScreenPricing({
           >
             Trusted by thousands
           </Text>
-          <View style={styles.laurelWrapper}>
-            {/* Left laurel arc */}
-            <View
-              style={[
-                styles.laurelBranch,
-                styles.laurelLeft,
-                { borderColor: colors.accent },
-              ]}
-            />
-            <View style={styles.ratingRow}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: FontSize.sm,
-                  color: colors.text,
-                  marginRight: Spacing['1'],
-                }}
-              >
-                4.8
-              </Text>
-              <FiveStars color={colors.accent} />
-            </View>
-            {/* Right laurel arc */}
-            <View
-              style={[
-                styles.laurelBranch,
-                styles.laurelRight,
-                { borderColor: colors.accent },
-              ]}
-            />
+          <View style={styles.ratingRow}>
+            <Text
+              style={{
+                fontFamily: FontFamily.uiSemiBold,
+                fontSize: FontSize.sm,
+                color: colors.text,
+                marginRight: Spacing['1'],
+              }}
+            >
+              4.8
+            </Text>
+            <FiveStars color={colors.accent} />
           </View>
         </View>
       </View>
@@ -1114,31 +1100,16 @@ const styles = StyleSheet.create({
     lineHeight: Math.round(22 * 1.25),
     textAlign: 'center',
   },
-  socialProofStack: {
+  laurelContainer: {
     alignItems: 'center',
-    marginTop: Spacing['1'],
-    gap: Spacing['1.5'],
-  },
-  laurelWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-  },
-  laurelBranch: {
-    width: 18,
-    height: 28,
-    borderWidth: 1.5,
-    borderRadius: 12,
-  },
-  laurelLeft: {
-    borderRightWidth: 0,
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  laurelRight: {
-    borderLeftWidth: 0,
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginTop: Spacing['2'],
+    paddingHorizontal: Spacing['10'],
+    paddingVertical: Spacing['2.5'],
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    gap: Spacing['1'],
   },
   ratingRow: {
     flexDirection: 'row',
