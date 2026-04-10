@@ -17,6 +17,7 @@ import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
+import { RippleLoader } from '@/components/RippleLoader';
 import { useUIState } from '@/lib/ui-state';
 import { StreakCelebration } from '@/components/StreakCelebration';
 import { CheckInSheet } from '@/components/CheckInSheet';
@@ -86,6 +87,7 @@ export default function HomeScreen() {
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
+  const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
   const archiveCurrentDevotional = useUnfoldStore((s) => s.archiveCurrentDevotional);
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
@@ -656,12 +658,23 @@ export default function HomeScreen() {
     ctaText: getCtaText(),
   });
 
-  // During reveal → reading transition, render a blank dark screen to prevent
-  // the home screen from flashing. The reading screen clears this flag on mount.
+  // During reveal → reading transition, render a centered ripple loader to
+  // smooth over the brief gap while the reading screen mounts and paints.
+  // The reading screen clears this flag ~650ms after mount.
   const revealTransitioning = useUIState((s) => s.revealTransitioning);
   if (revealTransitioning) {
-    console.log('[HomeScreen] rendering BLANK due to revealTransitioning=true');
-    return <View style={{ flex: 1, backgroundColor: '#0A0A0A' }} />;
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#0A0A0A',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <RippleLoader size={140} color={colors.accent} />
+      </View>
+    );
   }
 
   return (
@@ -872,8 +885,12 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* First-time onboarding tooltips — shown once, persisted in store */}
+      {/* First-time onboarding tooltips — shown once, persisted in store.
+          Keyed by hasSeenHomeTooltips so the debug "Replay Home Tooltips"
+          button (which flips the flag back to false) forces a full remount
+          and clean re-measurement of the target rects. */}
       <HomeOnboardingTooltips
+        key={String(hasSeenHomeTooltips)}
         readingRef={readingRef}
         streakRef={streakRef}
       />
