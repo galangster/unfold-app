@@ -335,7 +335,7 @@ export function RichMessageText({ text, onVersePress }: Props) {
 
         if (block.type === 'header') {
           return (
-            <View key={i} style={{ marginTop: i > 0 ? Spacing['5'] : 0, marginBottom: Spacing['1'] }}>
+            <View key={i} style={{ marginTop: i > 0 ? Spacing['5'] : 0, marginBottom: Spacing['2'] }}>
               <Text style={{
                 fontFamily: FontFamily.bodyBold ?? FontFamily.uiSemiBold,
                 fontSize: FontSize.base,

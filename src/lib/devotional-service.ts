@@ -42,6 +42,8 @@ import {
 import { PERSONA_FULL } from '../constants/persona';
 import { buildVoiceAdaptationDirective } from '../constants/voice-adaptation';
 import { fetchStoriesForGeneration, formatStoriesForPrompt } from './story-service';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+import { DYNAMIC_EXAMPLE_KEY } from '@/lib/generation-api';
 
 // Re-export for use in components
 export { DEVOTIONAL_PERSONAS, DevotionalPersona };
@@ -1175,7 +1177,31 @@ async function generateBatch(
       )
     : '';
   const rhetoricalQuestions = retryLevel <= 1 ? RHETORICAL_QUESTION_DIRECTIVE : '';
-  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + rhetoricalQuestions + convictionDirective + parableGuardrails + dialogueGuardrails + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION;
+
+  // Read cached dynamic prompt example (if any) for self-improving generation quality
+  let dynamicExampleDirective = '';
+  if (retryLevel === 0) {
+    try {
+      const cached = mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY);
+      if (cached) {
+        const example: { rule: string; badText: string; goodText: string } = JSON.parse(cached);
+        if (example.rule && example.badText && example.goodText) {
+          dynamicExampleDirective = `
+
+ACTIVE QUALITY EXAMPLE (from recent validation):
+Rule: ${example.rule}
+BAD: "${example.badText}"
+GOOD: "${example.goodText}"
+Avoid the bad pattern. Follow the good pattern.`;
+          logger.log(`[Devotional] Batch: injecting dynamic example for rule "${example.rule}"`);
+        }
+      }
+    } catch {
+      // Silent -- dynamic example is best-effort enrichment
+    }
+  }
+
+  const systemPrompt = baseSystemPrompt + PETER_ENNS_ADDITION + craftFoundation + antiSlop + rhetoricalQuestions + convictionDirective + parableGuardrails + dialogueGuardrails + patternBreaks + voiceOverlay + voiceAdaptation + STICKY_SENTENCE_INSTRUCTION + dynamicExampleDirective;
   // V2: Include per-day variety schedule (with craft directives + story system) in the user prompt
   const varietySchedule = retryLevel === 0
     ? buildVarietySchedule(startDay, endDay, context.devotionalLength, persona.primary, persona.secondary, persona.templateSeed, context.readingDuration, context.writingStyle?.faithBackground)
