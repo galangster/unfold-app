@@ -300,8 +300,12 @@ export default function TabLayout() {
   const { colors, isDark } = useTheme();
 
   // Subscription gate state
-  // DEBUG: Force premium true in dev to bypass churned-user overlay for testing. Revert before shipping.
-  const isPremium = __DEV__ ? true : useUnfoldStore((s) => s.user?.isPremium ?? true);
+  // DEV bypass: force premium in dev so the overlay doesn't block routine
+  // development. Toggleable via the Dev Tools "Simulate Trial Expired" button
+  // which sets debugForceTrialExpired=true to preview the churned-user UX.
+  const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? true);
+  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
+  const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
   const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
   const [activeTabName, setActiveTabName] = useState<string>('(today)');
 

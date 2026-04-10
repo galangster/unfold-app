@@ -210,6 +210,14 @@ function RootLayoutNav() {
             contentStyle: { backgroundColor: '#0a0a0a' },
           }}
         />
+        <Stack.Screen
+          name="debug-light-mode"
+          options={{
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+            gestureEnabled: true,
+          }}
+        />
         </Stack>
         <AudioPlayerOverlay />
       </View>

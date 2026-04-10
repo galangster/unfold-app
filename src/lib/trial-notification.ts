@@ -218,6 +218,59 @@ export async function scheduleTrialEndingNotification(
 }
 
 /**
+ * DEBUG-ONLY: schedule the real trial-ending notification to fire in a few
+ * seconds so we can preview it without waiting for an actual trial to expire.
+ * Uses a distinct identifier so it doesn't clobber any real schedule.
+ *
+ * Returns the identifier if scheduled, or `null` if unsupported / no permission.
+ */
+export async function debugFireTrialEndingNotification(
+  delaySeconds = 5,
+): Promise<string | null> {
+  if (isUnsupportedPlatform()) {
+    logger.log(`${LOG_PREFIX} Debug fire skipped: unsupported platform`);
+    return null;
+  }
+
+  const hasPermission = await hasNotificationPermission();
+  if (!hasPermission) {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        logger.log(`${LOG_PREFIX} Debug fire skipped: permission denied`);
+        return null;
+      }
+    } catch (error) {
+      logger.log(`${LOG_PREFIX} Debug fire permission request failed:`, error);
+      return null;
+    }
+  }
+
+  try {
+    const identifier = await Notifications.scheduleNotificationAsync({
+      identifier: `${TRIAL_NOTIFICATION_ID}-debug`,
+      content: {
+        title: 'Your Unfold trial ends in 2 days',
+        body: "Your devotionals, journal, and everything you've built is waiting. Don't lose your progress.",
+        sound: true,
+        data: { type: 'trial-ending', debug: true },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, delaySeconds),
+      },
+    });
+    logger.log(
+      `${LOG_PREFIX} Debug notification scheduled to fire in ${delaySeconds}s`,
+    );
+    return identifier;
+  } catch (error) {
+    logger.error(`${LOG_PREFIX} Debug fire failed:`, error);
+    return null;
+  }
+}
+
+/**
  * Re-sync the trial-ending notification with the latest RevenueCat state.
  *
  * Call this on app launch, after a successful purchase, and after a

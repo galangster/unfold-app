@@ -50,6 +50,8 @@ import {
   ReadingFontId,
 } from '@/lib/store';
 import { logger } from '@/lib/logger';
+import { debugFireTrialEndingNotification } from '@/lib/trial-notification';
+import { useUIState } from '@/lib/ui-state';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
@@ -145,6 +147,9 @@ export default function YouScreen() {
   const { colors, isDark } = useTheme();
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
+  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
+  const setDebugForceTrialExpired = useUIState((s) => s.setDebugForceTrialExpired);
   const reset = useUnfoldStore((s) => s.reset);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
@@ -1960,6 +1965,191 @@ export default function YouScreen() {
                 </View>
               </TouchableOpacity>
             </View>
+
+            {/* --- Dev Tools --- Always rendered (not __DEV__ gated) so they
+                are available in dev AND TestFlight builds. Each button is
+                labeled "(Dev)". Remove this block or gate behind a feature
+                flag before public App Store release. */}
+            <SectionHeader label="Dev Tools" />
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => router.push('/onboarding')}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Replay Onboarding (Dev)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                const store = useUnfoldStore.getState();
+                const devId = store.currentDevotionalId;
+                const dev = store.devotionals.find((d: any) => d.id === devId);
+                if (dev) {
+                  router.push({
+                    pathname: '/reveal',
+                    params: {
+                      devotionalId: dev.id,
+                      dayNumber: String(dev.currentDay),
+                      seriesTitle: dev.title,
+                      dayTitle: dev.days?.find((d: any) => d.dayNumber === dev.currentDay)?.title ?? '',
+                    },
+                  });
+                }
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Test Reveal Screen (Dev)
+              </Text>
+            </TouchableOpacity>
+
+            {/* Toggle light ↔ dark mode for testing the theme-aware fixes. */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                const current = useUnfoldStore.getState().user?.themeMode ?? 'dark';
+                const next: ThemeMode = current === 'light' ? 'dark' : 'light';
+                updateUser({ themeMode: next });
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Toggle Light/Dark Mode (Dev) — currently {user?.themeMode ?? 'dark'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Opens a single-screen gallery showing all 8 components that
+                received light-mode fixes (from commit 27d6775). Pair with the
+                theme toggle above (or the one inside the gallery screen) to
+                flip the theme and verify each component adapts correctly. */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                router.push('/debug-light-mode');
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Light Mode Component Gallery (Dev)
+              </Text>
+            </TouchableOpacity>
+
+            {/* Replay the home-screen first-run tooltips. We navigate to the
+                Today tab FIRST, then flip the persisted flag after the tab
+                settles. Flipping before navigation causes the tooltips to
+                try measuring while the Today tab's elements aren't yet in
+                the window, which returns zero rects and silently fails.
+                Combined with the key={hasSeenHomeTooltips} on
+                <HomeOnboardingTooltips />, the flag-flip forces a clean
+                remount + re-measure once the tab is already visible. */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/(tabs)/(today)');
+                setTimeout(() => {
+                  setHasSeenHomeTooltips(false);
+                }, 600);
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Replay Home Tooltips (Dev)
+              </Text>
+            </TouchableOpacity>
+
+            {/* Simulate a churned user by forcing the TrialExpiredOverlay
+                to show regardless of real subscription state. Toggles the
+                debugForceTrialExpired flag in ui-state (not persisted, so
+                a full app restart clears it). Free tabs (Bible, You) stay
+                accessible; Today/Companion/Journal show the blocking overlay. */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                setDebugForceTrialExpired(!debugForceTrialExpired);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                {debugForceTrialExpired ? '✓ Trial Expired Overlay ON — tap to clear' : 'Simulate Trial Expired Overlay (Dev)'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Fire the real trial-ending notification content in 5s so we
+                can see what it looks like without waiting for an actual
+                trial to expire. Uses a distinct identifier so it does not
+                clobber any real schedule. */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={async () => {
+                const id = await debugFireTrialEndingNotification(5);
+                Haptics.notificationAsync(
+                  id
+                    ? Haptics.NotificationFeedbackType.Success
+                    : Haptics.NotificationFeedbackType.Warning,
+                );
+                Alert.alert(
+                  id ? 'Scheduled' : 'Could not schedule',
+                  id
+                    ? 'Trial-ending notification will fire in 5 seconds. Background the app to see it.'
+                    : 'Notification permission may not be granted. Check system settings.',
+                );
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['6'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Test Trial-Ending Notification (Dev)
+              </Text>
+            </TouchableOpacity>
 
             {/* --- Data / Danger zone --- */}
             <SectionHeader label="Data" />
