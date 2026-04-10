@@ -2858,7 +2858,6 @@ export default function OnboardingScreen() {
       const mPrice = monthlyPkg?.product.priceString ?? '$9.99';
       const mRaw = monthlyPkg?.product.price ?? 9.99;
       const yRaw = yearlyPackage?.product.price ?? 59.99;
-      console.log('[Paywall] RC prices:', { mRaw, yRaw, mPrice, yearlyPrice: yearlyPackage?.product.priceString });
       const tDays = (() => {
         const intro = yearlyPackage?.product.introPrice;
         if (!intro || intro.price !== 0) return 7;

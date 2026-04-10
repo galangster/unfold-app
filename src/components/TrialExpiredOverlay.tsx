@@ -352,8 +352,12 @@ function ValuePropRow({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 100,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 80, // Leave space for tab bar
+    zIndex: 50, // Below tab bar (which is at absolute bottom)
     justifyContent: 'space-between',
   },
   content: {
