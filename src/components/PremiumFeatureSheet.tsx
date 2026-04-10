@@ -57,9 +57,9 @@ interface FeatureConfig {
 
 const FEATURES: Record<string, FeatureConfig> = {
   voice: {
-    icon: SpeakerHighIcon,
-    headline: 'Listen your way',
-    description: 'Choose from 3 unique voices to narrate your devotional. Find the one that speaks to you.',
+    icon: CrownIcon,
+    headline: 'Unlock the full experience',
+    description: 'Get unlimited devotionals, custom themes, and more.',
     cta: 'Try free for 7 days',
   },
   series: {
@@ -99,9 +99,9 @@ const FEATURES: Record<string, FeatureConfig> = {
     cta: 'Try free for 7 days',
   },
   audio: {
-    icon: SpeakerHighIcon,
-    headline: 'Listen along',
-    description: 'AI narration brings your devotional to life. Read or listen — your choice.',
+    icon: CrownIcon,
+    headline: 'Unlock the full experience',
+    description: 'Get unlimited devotionals, custom themes, and more.',
     cta: 'Try free for 7 days',
   },
   translation: {
@@ -137,7 +137,7 @@ const FEATURES: Record<string, FeatureConfig> = {
   general: {
     icon: CrownIcon,
     headline: 'Unlock the full experience',
-    description: 'Get unlimited devotionals, AI narration, custom themes, and more.',
+    description: 'Get unlimited devotionals, custom themes, and more.',
     cta: 'Try free for 7 days',
   },
 };
