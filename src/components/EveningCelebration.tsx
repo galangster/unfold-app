@@ -39,7 +39,6 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { useTheme } from '@/lib/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DIAGONAL = Math.sqrt(SCREEN_WIDTH ** 2 + SCREEN_HEIGHT ** 2);
@@ -207,14 +206,15 @@ export function EveningCelebration({
   message,
 }: EveningCelebrationProps) {
   const { reducedMotion } = useAccessibleAnimation();
-  const { colors, isDark } = useTheme();
 
-  // Theme-aware colors: preserve dark night-sky aesthetic in dark mode,
-  // use theme tokens in light mode
-  const overlayBg = isDark ? '#08080F' : colors.backgroundPure;
-  const starColor = isDark ? '#F5F0EB' : colors.textSubtle;
-  const messageColor = isDark ? 'rgba(245, 240, 235, 0.85)' : colors.text;
-  const hintColor = isDark ? 'rgba(245, 240, 235, 0.18)' : colors.textHint;
+  // Evening celebration is ALWAYS rendered with the dark night-sky aesthetic
+  // regardless of the user's theme preference. A white "evening" screen with
+  // grey stars looked wrong — night is night. These values are hardcoded so
+  // the celebration stays thematically consistent for light-mode users too.
+  const overlayBg = '#08080F';
+  const starColor = '#F5F0EB';
+  const messageColor = 'rgba(245, 240, 235, 0.85)';
+  const hintColor = 'rgba(245, 240, 235, 0.18)';
 
   const subtitle = useMemo(() => {
     if (message) return message;

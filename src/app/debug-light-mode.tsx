@@ -124,13 +124,15 @@ export default function DebugLightModeScreen() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
   // Each sheet/toast/overlay has its own visibility toggle so previews
-  // don't fight each other for the screen. They all default to `true` so
-  // the full gallery renders on first entry.
-  const [showEvening, setShowEvening] = useState(true);
+  // don't fight each other for the screen. They all default to `false` —
+  // only the inline components (CompanionInput, SwipeableNoteCard) render
+  // unconditionally. Tap a section's button to open its overlay when
+  // you want to inspect it.
+  const [showEvening, setShowEvening] = useState(false);
   const [showCheckIn, setShowCheckIn] = useState(false);
-  const [showUndoToast, setShowUndoToast] = useState(true);
+  const [showUndoToast, setShowUndoToast] = useState(false);
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
-  const [showDownloadSheet, setShowDownloadSheet] = useState(true);
+  const [showDownloadSheet, setShowDownloadSheet] = useState(false);
 
   const toggleTheme = () => {
     const next: ThemeMode = themeMode === 'light' ? 'dark' : 'light';
