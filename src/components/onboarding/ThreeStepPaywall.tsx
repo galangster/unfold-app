@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, useEffect, memo } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,20 @@ import {
   StyleSheet,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withRepeat,
   withTiming,
   runOnJS,
+  Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -30,7 +35,6 @@ import { purchasePackage, restorePurchases } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
-import LaurelWreath from '../../../assets/images/laurel-wreath.svg';
 import { EmberParticles } from '@/components/EmberParticles';
 
 // ---------------------------------------------------------------------------
@@ -536,54 +540,46 @@ function ScreenPricing({
 
   return (
     <View style={styles.screen3Root}>
-      {/* Logo + headline */}
+      {/* Logo + headline. Using expo-image (not RN Image) so the bundled
+          PNG paints synchronously with its tint applied — native Image
+          has a brief async tint processing step on iOS that made the
+          logo fade in noticeably later than the headline text. */}
       <View style={styles.screen3Header}>
-        <RNImage
+        <ExpoImage
           source={require('../../../assets/icon-paywall.png')}
-          style={{ width: 32, height: 32, tintColor: colors.accent, opacity: 0.9 }}
-          resizeMode="contain"
+          style={{ width: 32, height: 32, opacity: 0.9 }}
+          contentFit="contain"
+          tintColor={colors.accent}
+          cachePolicy="memory-disk"
         />
         <Text style={[styles.screen3Headline, { color: colors.text }]}>
-          Your personal Bible experience
+          The most personal{'\n'}Bible experience{'\n'}in the world
         </Text>
 
-        {/* Social proof -- stacked inside real SVG laurel wreath. The
-            wreath SVG uses preserveAspectRatio="none" so we can freely
-            resize — made wider (260) so the leaf opening clears the text
-            and shorter (72) so the wreath reads as low and wide rather
-            than tall and cartoonish. */}
-        <View style={styles.laurelContainer}>
-          <LaurelWreath
-            width={260}
-            height={72}
-            color={colors.accent}
-            style={styles.laurelImage}
-          />
-          <View style={styles.laurelContent}>
-            <Text
-              style={{
-                fontFamily: FontFamily.ui,
-                fontSize: FontSize.xs,
-                color: colors.textMuted,
-                textAlign: 'center',
-              }}
-            >
-              Trusted by thousands
-            </Text>
-            <View style={styles.ratingRow}>
-              <Text
-                style={{
-                  fontFamily: FontFamily.uiSemiBold,
-                  fontSize: FontSize.sm,
-                  color: colors.text,
-                  marginRight: Spacing['1'],
-                }}
-              >
-                4.8
-              </Text>
-              <FiveStars color={colors.accent} />
-            </View>
-          </View>
+        {/* Social proof — simple row, no wreath. Sits close to the
+            testimonial cards below so it reads as a trust badge for them. */}
+        <View style={styles.socialProofRow}>
+          <Text
+            style={{
+              fontFamily: FontFamily.ui,
+              fontSize: FontSize.xs,
+              color: colors.textMuted,
+              marginRight: Spacing['2'],
+            }}
+          >
+            Trusted by thousands
+          </Text>
+          <Text
+            style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: FontSize.sm,
+              color: colors.text,
+              marginRight: Spacing['1'],
+            }}
+          >
+            4.8
+          </Text>
+          <FiveStars color={colors.accent} />
         </View>
       </View>
 
@@ -727,6 +723,82 @@ function ScreenPricing({
 // Shared Bottom CTA Section
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Glowing gold CTA button
+// ---------------------------------------------------------------------------
+// Mirrors the gold button treatment used on the home devotional card —
+// bright accent fill, native iOS shadow in the accent color, and a looping
+// pulsed inner-glow overlay so the button feels alive rather than static.
+// Applied globally via BottomCTA so all three paywall screens get the same
+// glow without per-screen duplication.
+
+function GlowingCTA({
+  label,
+  colors,
+  onPress,
+  isLoading,
+}: {
+  label: string;
+  colors: ColorTheme;
+  onPress: () => void;
+  isLoading: boolean;
+}) {
+  // Seamless breathing halo — uses a linear phase counter (0 → 1 → 0 → 1...)
+  // mapped through a sine wave so the shadowOpacity rises and falls
+  // continuously with no visible "pause" at the extremes. ping-pong via
+  // withRepeat(...true) + easing curves can feel jittery because each
+  // iteration re-interpolates from a fixed keyframe; a sin wave gives a
+  // true continuous oscillation.
+  const phase = useSharedValue(0);
+
+  useEffect(() => {
+    phase.value = withRepeat(
+      withTiming(1, { duration: 3600, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    return () => cancelAnimation(phase);
+  }, [phase]);
+
+  const shadowStyle = useAnimatedStyle(() => {
+    // sin wave: phase 0 → sin(-π/2) = -1 → 0; phase 0.5 → sin(π/2) = 1;
+    // phase 1 → sin(3π/2) = -1 → 0. Normalised to 0..1 range.
+    'worklet';
+    const sine = (Math.sin(phase.value * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+    return {
+      shadowOpacity: 0.55 + sine * 0.45,
+    };
+  });
+
+  return (
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress} disabled={isLoading}>
+      <Animated.View
+        style={[
+          styles.ctaButton,
+          styles.ctaShadow,
+          { backgroundColor: colors.accent, shadowColor: colors.accent },
+          shadowStyle,
+        ]}
+      >
+        {isLoading ? (
+          <ActivityIndicator color={colors.background} size="small" />
+        ) : (
+          <Text
+            style={{
+              fontFamily: FontFamily.uiSemiBold,
+              fontSize: FontSize.base,
+              color: colors.background,
+              letterSpacing: 0.3,
+            }}
+          >
+            {label}
+          </Text>
+        )}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
 function BottomCTA({
   colors,
   currentPage,
@@ -785,31 +857,14 @@ function BottomCTA({
         </Text>
       </View>
 
-      {/* Gold CTA button */}
-      <TouchableOpacity
-        activeOpacity={0.8}
+      {/* Gold CTA button — pulsing glow + bright accent fill, mirrors the
+          gold button treatment on the home devotional card. */}
+      <GlowingCTA
+        label={ctaLabel(currentPage)}
+        colors={colors}
         onPress={onPress}
-        disabled={isLoading}
-      >
-        <View
-          style={[styles.ctaButton, { backgroundColor: colors.accent }]}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={colors.background} size="small" />
-          ) : (
-            <Text
-              style={{
-                fontFamily: FontFamily.uiSemiBold,
-                fontSize: FontSize.base,
-                color: colors.background,
-                letterSpacing: 0.3,
-              }}
-            >
-              {ctaLabel(currentPage)}
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
+        isLoading={isLoading}
+      />
 
       {/* Renewal disclosure -- reflects selected plan */}
       <Text
@@ -925,15 +980,10 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Persistent ambient background — stays mounted across all three
-          screens so the embers + gradient flow continuously as the user
-          taps Continue, rather than restarting per screen. */}
+      {/* Persistent ember particles — stay mounted across all three
+          screens so the embers flow continuously as the user taps
+          Continue rather than restarting per screen. */}
       <EmberParticles color={colors.accent} count={18} bidirectional />
-      <LinearGradient
-        colors={['transparent', `${colors.accent}12`, `${colors.accent}24`]}
-        style={styles.ambientGradient}
-        pointerEvents="none"
-      />
 
       {/* Page content — fills space between onboarding header and bottom CTA */}
       <View style={styles.flex1}>
@@ -1012,15 +1062,6 @@ const styles = StyleSheet.create({
   },
   flex1: {
     flex: 1,
-  },
-  // Persistent ambient gradient — sits behind all three paywall screens,
-  // anchored to the bottom so warmth accumulates near the CTA.
-  ambientGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 380,
   },
 
   // ------- Screen 1 -------
@@ -1128,26 +1169,19 @@ const styles = StyleSheet.create({
   },
   screen3Headline: {
     fontFamily: FontFamily.display,
-    fontSize: 22,
-    lineHeight: Math.round(22 * 1.25),
+    fontSize: 36,
+    lineHeight: Math.round(36 * 1.1),
     textAlign: 'center',
-  },
-  laurelContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
     marginTop: Spacing['2'],
-    width: 260,
-    height: 72,
   },
-  laurelImage: {
-    position: 'absolute',
-    opacity: 0.5,
-  },
-  laurelContent: {
+  // Social proof row — sits just above the testimonial card carousel
+  // so the "Trusted by thousands · 4.8 ★★★★★" line reads as a trust
+  // badge directly attached to the reviews below.
+  socialProofRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing['0.5'],
+    marginTop: Spacing['4'],
   },
   ratingRow: {
     flexDirection: 'row',
@@ -1242,6 +1276,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['3.5'],
     borderRadius: Radius.md,
     alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
+  },
+  // iOS native shadow produces a true GPU-blurred colored halo that
+  // actually feathers at the edges. Combined with the sin-wave animated
+  // shadowOpacity in GlowingCTA, this creates a breathing aura. 34px
+  // radius = tight glow hugging the button edges (down from 42, ~20%
+  // reduction). Android falls back to elevation which won't produce a
+  // visible colored glow (system uses a generic shadow color).
+  ctaShadow: {
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 34,
+    // shadowOpacity is animated by GlowingCTA — this is the max/fallback.
+    shadowOpacity: Platform.OS === 'ios' ? 1 : 0,
+    elevation: 18,
   },
 });
