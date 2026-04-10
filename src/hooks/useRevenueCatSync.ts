@@ -13,6 +13,7 @@ import Purchases from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnfoldStore } from '@/lib/store';
 import { isRevenueCatEnabled, getOfferings } from '@/lib/revenuecatClient';
+import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
 
 export function useRevenueCatSync() {
@@ -31,6 +32,9 @@ export function useRevenueCatSync() {
       .then((customerInfo) => {
         const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
         updateUser({ isPremium: hasSubscription });
+        // Re-validate the trial-ending local notification against the latest
+        // customer info. Fire-and-forget — failures are logged internally.
+        void syncTrialEndingNotification();
       })
       .catch(() => {
         // Silently fail — stale store value is acceptable as a fallback
@@ -59,6 +63,9 @@ export function useRevenueCatSync() {
     const unsubscribe = Purchases.addCustomerInfoUpdateListener((customerInfo) => {
       const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
       updateUser({ isPremium: hasSubscription });
+      // Re-sync the trial-ending notification whenever entitlements change
+      // (purchase, restore, lapse). Fire-and-forget.
+      void syncTrialEndingNotification();
     });
 
     // Cleanup listener on unmount

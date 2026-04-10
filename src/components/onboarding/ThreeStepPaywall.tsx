@@ -27,6 +27,7 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { purchasePackage, restorePurchases } from '@/lib/revenuecatClient';
+import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
 import LaurelWreath from '../../../assets/images/laurel-wreath.svg';
@@ -870,6 +871,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     setIsLoading(false);
     if (result.ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await syncTrialEndingNotification();
       onPurchaseSuccess();
     } else {
       if (result.reason !== 'user_cancelled') {
@@ -889,6 +891,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       );
       if (isPremium) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await syncTrialEndingNotification();
         onPurchaseSuccess();
       } else {
         setPurchaseError('No previous purchases found.');

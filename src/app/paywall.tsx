@@ -14,6 +14,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
+import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
@@ -219,6 +220,8 @@ export default function PaywallScreen() {
           updateUser({ isPremium: subscriptionResult.data });
         }
 
+        await syncTrialEndingNotification();
+
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
         if (isEarlyOnboarding) {
@@ -258,6 +261,8 @@ export default function PaywallScreen() {
         if (subscriptionResult.ok) {
           updateUser({ isPremium: subscriptionResult.data });
         }
+
+        await syncTrialEndingNotification();
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
