@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
@@ -16,6 +16,8 @@ import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
+import { useUnfoldStore } from '@/lib/store';
+import { TrialExpiredOverlay } from '@/components/TrialExpiredOverlay';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -74,7 +76,7 @@ function AnimatedTabIcon({
 }
 
 /** Fully custom tab bar with frosted glass, animated indicators, and premium feel */
-function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
+function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarProps & { onTabChange?: (name: string) => void }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
@@ -83,6 +85,14 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   // Audio player auto-collapse: sheet → pill on tab switch
   const playerTier = useAudioPlayerState((s) => s.playerTier);
   const setPlayerTier = useAudioPlayerState((s) => s.setTier);
+
+  // Report active tab to parent for paywall gating
+  useEffect(() => {
+    const activeRoute = state.routes[state.index];
+    if (activeRoute && onTabChange) {
+      onTabChange(activeRoute.name);
+    }
+  }, [state.index, state.routes, onTabChange]);
 
   // Slide channel (scroll-based) and instant channel (verse selection)
   const translateY = useSharedValue(0);
@@ -283,48 +293,66 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   );
 }
 
+/** Names of tabs that remain free (no paywall overlay) */
+const FREE_TABS = new Set(['(bible)']);
+
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
 
+  // Subscription gate state
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? true);
+  const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
+  const [activeTabName, setActiveTabName] = useState<string>('(today)');
+
+  const shouldShowPaywall =
+    !isPremium && hasCompletedOnboarding && !FREE_TABS.has(activeTabName);
+
   return (
-    <Tabs
-      tabBar={(props: any) => <CustomTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: colors.background },
-      }}
-    >
-      <Tabs.Screen
-        name="(today)"
-        options={{
-          title: 'Today',
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={(props: any) => (
+          <CustomTabBar {...props} onTabChange={setActiveTabName} />
+        )}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: colors.background },
         }}
-      />
-      <Tabs.Screen
-        name="(bible)"
-        options={{
-          title: 'Bible',
-        }}
-      />
-      <Tabs.Screen
-        name="(ask)"
-        options={{
-          title: 'Companion',
-        }}
-      />
-      <Tabs.Screen
-        name="(journal)"
-        options={{
-          title: 'Journal',
-        }}
-      />
-      <Tabs.Screen
-        name="(you)"
-        options={{
-          title: 'You',
-          href: null,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="(today)"
+          options={{
+            title: 'Today',
+          }}
+        />
+        <Tabs.Screen
+          name="(bible)"
+          options={{
+            title: 'Bible',
+          }}
+        />
+        <Tabs.Screen
+          name="(ask)"
+          options={{
+            title: 'Companion',
+          }}
+        />
+        <Tabs.Screen
+          name="(journal)"
+          options={{
+            title: 'Journal',
+          }}
+        />
+        <Tabs.Screen
+          name="(you)"
+          options={{
+            title: 'You',
+            href: null,
+          }}
+        />
+      </Tabs>
+
+      {/* Full-screen paywall overlay for expired subscriptions */}
+      {shouldShowPaywall && <TrialExpiredOverlay />}
+    </View>
   );
 }
