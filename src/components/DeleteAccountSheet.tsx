@@ -189,10 +189,11 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
       <View style={styles.content}>
         {step === 1 ? (
           <Animated.View entering={FadeIn.duration(Duration.slow)}>
-            {/* Warning icon */}
+            {/* Warning icon — solid red background with white glyph so the
+                icon stays visible against the circle regardless of theme. */}
             <View style={styles.iconRow}>
-              <View style={[styles.iconContainer, { backgroundColor: `${colors.error}14` }]}>
-                <WarningCircleIcon size={28} color={colors.error} weight="light" />
+              <View style={[styles.iconContainer, { backgroundColor: colors.error }]}>
+                <WarningCircleIcon size={28} color="#FFFFFF" weight="regular" />
               </View>
             </View>
 
