@@ -113,9 +113,13 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
       width: auto;
       max-width: 100vw;
       overflow-x: hidden;
-      overflow-wrap: anywhere;
+      /* CRITICAL: use ONLY overflow-wrap:break-word for breaking long
+         unbreakable tokens (URLs, long words). DO NOT use
+         word-break:break-all — that breaks between any two characters,
+         splitting normal words mid-letter at line ends (e.g. "one" →
+         "on" + "e", "mistake" → "mistak" + "e"). */
+      overflow-wrap: break-word;
       word-wrap: break-word;
-      word-break: break-all;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
       min-height: 100%;
@@ -125,9 +129,8 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
     }
     .ProseMirror {
       overflow-anchor: none;
-      overflow-wrap: anywhere;
+      overflow-wrap: break-word;
       word-wrap: break-word;
-      word-break: break-all;
       max-width: 100%;
       overflow-x: hidden;
     }

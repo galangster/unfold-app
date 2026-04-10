@@ -564,9 +564,13 @@ function buildEditorCSS(colors: any): string {
       width: auto;
       max-width: 100vw;
       overflow-x: hidden;
+      /* CRITICAL: use only overflow-wrap:break-word for wrapping long
+         unbreakable tokens (URLs, long words). DO NOT use
+         word-break:break-word — it's a non-standard value that current
+         iOS WebKit interprets as break-all, which breaks NORMAL words
+         mid-letter at line ends (e.g. "one" → "on" + "e"). */
       overflow-wrap: break-word;
       word-wrap: break-word;
-      word-break: break-word;
       caret-color: ${colors.accent};
       -webkit-text-size-adjust: none;
       min-height: 100%;
@@ -577,7 +581,6 @@ function buildEditorCSS(colors: any): string {
       overflow-anchor: none;
       overflow-wrap: break-word;
       word-wrap: break-word;
-      word-break: break-word;
       max-width: 100%;
     }
     .tiptap { scroll-padding-bottom: 60vh; }
