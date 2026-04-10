@@ -31,6 +31,7 @@ import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
 import LaurelWreath from '../../../assets/images/laurel-wreath.svg';
+import { EmberParticles } from '@/components/EmberParticles';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -546,11 +547,15 @@ function ScreenPricing({
           Your personal Bible experience
         </Text>
 
-        {/* Social proof -- stacked inside real SVG laurel wreath */}
+        {/* Social proof -- stacked inside real SVG laurel wreath. The
+            wreath SVG uses preserveAspectRatio="none" so we can freely
+            resize — made wider (260) so the leaf opening clears the text
+            and shorter (72) so the wreath reads as low and wide rather
+            than tall and cartoonish. */}
         <View style={styles.laurelContainer}>
           <LaurelWreath
-            width={180}
-            height={90}
+            width={260}
+            height={72}
             color={colors.accent}
             style={styles.laurelImage}
           />
@@ -920,6 +925,16 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* Persistent ambient background — stays mounted across all three
+          screens so the embers + gradient flow continuously as the user
+          taps Continue, rather than restarting per screen. */}
+      <EmberParticles color={colors.accent} count={18} bidirectional />
+      <LinearGradient
+        colors={['transparent', `${colors.accent}12`, `${colors.accent}24`]}
+        style={styles.ambientGradient}
+        pointerEvents="none"
+      />
+
       {/* Page content — fills space between onboarding header and bottom CTA */}
       <View style={styles.flex1}>
         <Animated.View
@@ -997,6 +1012,15 @@ const styles = StyleSheet.create({
   },
   flex1: {
     flex: 1,
+  },
+  // Persistent ambient gradient — sits behind all three paywall screens,
+  // anchored to the bottom so warmth accumulates near the CTA.
+  ambientGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 380,
   },
 
   // ------- Screen 1 -------
@@ -1113,8 +1137,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
     marginTop: Spacing['2'],
-    width: 180,
-    height: 90,
+    width: 260,
+    height: 72,
   },
   laurelImage: {
     position: 'absolute',
