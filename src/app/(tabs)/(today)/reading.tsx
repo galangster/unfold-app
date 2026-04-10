@@ -281,9 +281,7 @@ export default function ReadingScreen() {
   // Get highlights for current day
   const currentDayHighlights = useMemo(() => {
     if (!currentDevotionalId) return [];
-    const filtered = highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
-    console.log('[Highlight] currentDayHighlights recomputed', { totalInStore: highlights.length, filteredForThisDay: filtered.length, viewingDay });
-    return filtered;
+    return highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
   }, [highlights, currentDevotionalId, viewingDay]);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   // Only show retry banner if this specific series has ungenerated days
@@ -598,19 +596,8 @@ export default function ReadingScreen() {
   }, []);
 
   const handleQuoteSelected = useCallback((quote: { text: string; context: string; serializedRange?: string; color?: string }) => {
-    console.log('[Highlight] reading.handleQuoteSelected', {
-      text: quote.text?.substring(0, 40),
-      color: quote.color,
-      hasDevId: !!currentDevotionalId,
-      hasCurrentDev: !!currentDevotional,
-      hasCurrentDay: !!currentDayData,
-    });
-    if (!currentDevotionalId || !currentDevotional || !currentDayData) {
-      console.log('[Highlight] BAILING — missing required state');
-      return;
-    }
+    if (!currentDevotionalId || !currentDevotional || !currentDayData) return;
 
-    console.log('[Highlight] calling addHighlight', { viewingDay, color: quote.color });
     addHighlight({
       devotionalId: currentDevotionalId,
       devotionalTitle: currentDevotional.title,
@@ -621,25 +608,39 @@ export default function ReadingScreen() {
       color: (quote.color as import('@/lib/store').HighlightColor) || 'yellow',
       contextBefore: quote.context.substring(0, 100),
     });
-    console.log('[Highlight] addHighlight called — store should now have new highlight');
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [currentDevotionalId, currentDevotional, viewingDay, currentDayData, addHighlight]);
 
-  const handleHighlightRemoved = useCallback((event: { text: string; color: string; context: string }) => {
+  const handleHighlightRemoved = useCallback((event: { text: string; color: string; context: string; serializedRange?: string }) => {
     if (!currentDevotionalId) return;
-    // Match by devotional + day + text + color. Context is a tiebreaker when the
-    // same phrase is highlighted twice in different paragraphs (rare but possible).
-    const match = currentDayHighlights.find(
-      (h) =>
-        h.highlightedText === event.text &&
-        h.color === event.color &&
-        (h.contextBefore ? event.context.includes(h.contextBefore.slice(0, 30)) : true),
-    ) ?? currentDayHighlights.find(
-      (h) => h.highlightedText === event.text && h.color === event.color,
-    );
-    if (match) {
-      removeHighlight(match.id);
+
+    // Extract position key "start-end-className" from a rangy serialized range.
+    // Format: "start$end$id$className$containerElementId". Ignoring the id
+    // field makes matching robust across sessions.
+    const posKey = (serialized?: string): string | null => {
+      if (!serialized) return null;
+      const parts = serialized.split('$');
+      if (parts.length < 4) return null;
+      return `${parts[0]}-${parts[1]}-${parts[3]}`;
+    };
+
+    const eventPosKey = posKey(event.serializedRange);
+
+    // Remove ALL entries that match this position. There may be duplicates
+    // in the store from earlier sessions where deserialize was broken and the
+    // user re-created the same highlight multiple times. One tap should
+    // clean them all up, otherwise a "removed" highlight comes back on reload.
+    const matches = currentDayHighlights.filter((h) => {
+      if (event.serializedRange && h.serializedRange === event.serializedRange) return true;
+      if (eventPosKey && posKey(h.serializedRange) === eventPosKey) return true;
+      // Legacy text+color match for highlights missing serializedRange
+      if (!h.serializedRange && h.highlightedText === event.text && h.color === event.color) return true;
+      return false;
+    });
+
+    if (matches.length > 0) {
+      matches.forEach((m) => removeHighlight(m.id));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [currentDevotionalId, currentDayHighlights, removeHighlight]);
