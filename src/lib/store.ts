@@ -1109,11 +1109,32 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       // Highlight actions
       addHighlight: (highlight) => {
-        console.log('[Highlight] store.addHighlight', { text: highlight.highlightedText?.substring(0, 40), color: highlight.color, dayNumber: highlight.dayNumber, devId: highlight.devotionalId });
         set((state) => {
+          // Dedupe: if a highlight with the same devotional+day+serializedRange
+          // (or legacy text+color on the same day) already exists, don't add
+          // a duplicate. Prevents store bloat when the user re-highlights the
+          // same text or when a sync retry replays a creation event.
+          const posKey = (serialized?: string): string | null => {
+            if (!serialized) return null;
+            const parts = serialized.split('$');
+            if (parts.length < 4) return null;
+            return `${parts[0]}-${parts[1]}-${parts[3]}`;
+          };
+          const newPosKey = posKey(highlight.serializedRange);
+          const existing = state.highlights.find((h) => {
+            if (h.devotionalId !== highlight.devotionalId) return false;
+            if (h.dayNumber !== highlight.dayNumber) return false;
+            if (highlight.serializedRange && h.serializedRange === highlight.serializedRange) return true;
+            if (newPosKey && posKey(h.serializedRange) === newPosKey) return true;
+            if (!highlight.serializedRange && h.highlightedText === highlight.highlightedText && h.color === highlight.color) return true;
+            return false;
+          });
+          if (existing) {
+            // Already have this exact highlight — no-op
+            return state;
+          }
           const now = new Date().toISOString();
           const newHighlight = { ...highlight, id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, createdAt: now, updatedAt: now };
-          console.log('[Highlight] store — new highlights count:', state.highlights.length + 1);
           return {
             highlights: [newHighlight, ...state.highlights],
           };
@@ -2281,6 +2302,46 @@ export const useUnfoldStore = create<UnfoldState>()(
             // Reset session-scoped state on app launch (not persisted across sessions)
             state.nudgeShownThisSession = false;
             state.streakJustReset = false;
+
+            // One-time cleanup: remove duplicate highlights introduced by an
+            // earlier bug where deserialize was broken and users re-created
+            // the same highlight multiple times. Dedupe by
+            // devotional+day+position (start-end-className), keeping the
+            // earliest entry.
+            if (Array.isArray(state.highlights) && state.highlights.length > 0) {
+              const posKey = (serialized?: string): string | null => {
+                if (!serialized) return null;
+                const parts = serialized.split('$');
+                if (parts.length < 4) return null;
+                return `${parts[0]}-${parts[1]}-${parts[3]}`;
+              };
+              const seen = new Set<string>();
+              const deduped: typeof state.highlights = [];
+              // Iterate oldest-first so the earliest created entry wins
+              const sortedOldestFirst = [...state.highlights].sort((a, b) => {
+                const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return at - bt;
+              });
+              for (const h of sortedOldestFirst) {
+                const pk = posKey(h.serializedRange);
+                const key = pk
+                  ? `${h.devotionalId}|${h.dayNumber}|${pk}`
+                  : `${h.devotionalId}|${h.dayNumber}|${h.highlightedText}|${h.color}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                deduped.push(h);
+              }
+              if (deduped.length !== state.highlights.length) {
+                logger.log(`[store] Deduped highlights: ${state.highlights.length} → ${deduped.length}`);
+                // Restore original (newest-first) order after dedupe
+                state.highlights = deduped.sort((a, b) => {
+                  const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                  const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                  return bt - at;
+                });
+              }
+            }
           }
         };
       },
