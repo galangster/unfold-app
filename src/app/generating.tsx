@@ -41,6 +41,57 @@ const INFLIGHT_KEY = 'inflight-generation-job';
 // Maximum time to poll before giving up (10 minutes)
 const MAX_POLL_DURATION_MS = 10 * 60 * 1000;
 
+// Inflight job payload shape. `ownerAuthUserId` binds the persisted job
+// to the account that submitted it so user B can't inherit user A's
+// generation on a shared device. `null` represents an anonymous-device
+// owner (no Clerk sign-in). On read, we compare against the current
+// store's authUserId and treat any mismatch as non-resumable + clear
+// the key.
+type InflightPayload = {
+  jobId: string;
+  devotionalId?: string;
+  submittedAt: number;
+  ownerAuthUserId: string | null;
+};
+
+function readInflightForOwner(currentOwner: string | null): InflightPayload | null {
+  const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<InflightPayload>;
+    if (typeof parsed.jobId !== 'string' || typeof parsed.submittedAt !== 'number') {
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      return null;
+    }
+    // Reject legacy payloads without owner metadata outright: we can't
+    // prove ownership, so treat them as non-resumable. Same goes for any
+    // mismatch against the current store user.
+    const persistedOwner = parsed.ownerAuthUserId === undefined ? undefined : parsed.ownerAuthUserId;
+    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
+      logger.warn('[generating] Inflight job owner mismatch — discarding', {
+        persistedOwner: persistedOwner ?? null,
+        currentOwner,
+      });
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      return null;
+    }
+    return {
+      jobId: parsed.jobId,
+      devotionalId: parsed.devotionalId,
+      submittedAt: parsed.submittedAt,
+      ownerAuthUserId: persistedOwner,
+    };
+  } catch {
+    mmkvStorage.removeItem(INFLIGHT_KEY);
+    return null;
+  }
+}
+
+function writeInflight(payload: Omit<InflightPayload, 'ownerAuthUserId'>, ownerAuthUserId: string | null): void {
+  const full: InflightPayload = { ...payload, ownerAuthUserId };
+  mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify(full));
+}
+
 // Sample devotional content shown as a preview while generating
 const SAMPLE_PREVIEW = {
   themeTitle: 'Learning to Trust Again',
@@ -575,24 +626,23 @@ export default function GeneratingScreen() {
     if (shouldAbortForEntitlement) return;
     jobSubmittedRef.current = true;
 
-    // Check MMKV for an inflight job from a previous session (app-kill recovery)
-    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-    if (raw) {
-      try {
-        const inflight = JSON.parse(raw) as { jobId: string; devotionalId?: string; submittedAt: number };
-        // Only resume if not expired (15 min)
-        if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-          logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
-          setPendingJobId(inflight.jobId);
-          pollStartTime.current = inflight.submittedAt;
-          startPolling(inflight.jobId);
-          return;
-        }
-        // Expired — clear and submit fresh
-        mmkvStorage.removeItem(INFLIGHT_KEY);
-      } catch {
-        mmkvStorage.removeItem(INFLIGHT_KEY);
+    // Check MMKV for an inflight job from a previous session (app-kill
+    // recovery). readInflightForOwner clears the key if the persisted
+    // job belongs to a different account, so we never resume someone
+    // else's generation on a shared device.
+    const currentOwner = user.authUserId ?? null;
+    const inflight = readInflightForOwner(currentOwner);
+    if (inflight) {
+      // Only resume if not expired (15 min)
+      if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
+        logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+        setPendingJobId(inflight.jobId);
+        pollStartTime.current = inflight.submittedAt;
+        startPolling(inflight.jobId);
+        return;
       }
+      // Expired — clear and submit fresh
+      mmkvStorage.removeItem(INFLIGHT_KEY);
     }
 
     const submitJob = async () => {
@@ -637,12 +687,13 @@ export default function GeneratingScreen() {
         setIsReconnecting(false);
         updateGenerationSessionProgress({ title: 'Generating...' });
 
-        // Persist inflight job to MMKV for app-kill recovery
-        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
-          jobId,
-          devotionalId,
-          submittedAt: Date.now(),
-        }));
+        // Persist inflight job to MMKV for app-kill recovery, bound to
+        // the current account so a different user on the same device
+        // can't inherit it.
+        writeInflight(
+          { jobId, devotionalId, submittedAt: Date.now() },
+          user.authUserId ?? null,
+        );
 
         // Reset poll start time and start polling
         pollStartTime.current = Date.now();
@@ -734,11 +785,11 @@ export default function GeneratingScreen() {
         }
         logger.log('[generating] Job retried:', jobId);
         setPendingJobId(jobId);
-        // Update MMKV with new jobId
-        mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
-          jobId,
-          submittedAt: Date.now(),
-        }));
+        // Update MMKV with new jobId, preserving owner binding
+        writeInflight(
+          { jobId, submittedAt: Date.now() },
+          user?.authUserId ?? null,
+        );
         startPolling(jobId);
       } else {
         // No job ID -- resubmit from scratch
@@ -783,12 +834,11 @@ export default function GeneratingScreen() {
           }
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);
-          // Persist inflight job to MMKV
-          mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
-            jobId,
-            devotionalId,
-            submittedAt: Date.now(),
-          }));
+          // Persist inflight job to MMKV with owner binding
+          writeInflight(
+            { jobId, devotionalId, submittedAt: Date.now() },
+            user.authUserId ?? null,
+          );
           startPolling(jobId);
         }
       }

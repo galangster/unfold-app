@@ -216,10 +216,13 @@ export default function WelcomeScreenWrapper() {
   // a degraded-dependency trap — if Clerk startup stalls (offline cold
   // start, SDK outage, bad init) the user is stranded on a blank screen
   // forever. Grant a 3s grace period; if Clerk hasn't loaded by then,
-  // fall through. With `isLoaded === false` Clerk's types guarantee
-  // `isSignedIn === false`, so `hasStaleAuthState` below evaluates true
-  // and we render WelcomeScreen with the stale-auth CTA — the safe
-  // degraded path, not a lockout.
+  // fall through and trust the persisted state. If Clerk *eventually*
+  // resolves to a revoked session, useAuth() reconciles and clears the
+  // store — which reroutes via the normal signed-out path. What we must
+  // NOT do is treat "Clerk still loading" as "Clerk said signed-out":
+  // `isSignedIn` defaults to false while unresolved, so reading stale-
+  // auth off it during the fallback would reclassify legitimate
+  // onboarded users as stale and push them through /onboarding again.
   const [clerkWaitExpired, setClerkWaitExpired] = useState(false);
   useEffect(() => {
     if (!needsClerkConfirmation || isClerkLoaded) return;
@@ -233,11 +236,13 @@ export default function WelcomeScreenWrapper() {
     return <View style={{ flex: 1, backgroundColor: BG }} />;
   }
 
-  // Stale-auth guard: persisted profile claims a Clerk identity but
-  // Clerk itself says nobody is signed in → session was revoked or
-  // expired. Force the welcome screen so they can re-authenticate
-  // instead of routing them into the signed-in app on cached state.
-  const hasStaleAuthState = needsClerkConfirmation && !isSignedIn;
+  // Stale-auth guard: only assert this once Clerk has ACTUALLY loaded
+  // and reported no session. `isClerkLoaded === false` is ambiguous
+  // (could be truly revoked or just slow), so we never flag stale-auth
+  // during the unresolved fallback — that would be a destructive false
+  // positive on the degraded-dependency path. useAuth() will handle
+  // real revocation whenever Clerk finishes loading.
+  const hasStaleAuthState = needsClerkConfirmation && isClerkLoaded && !isSignedIn;
 
   if (hasCompletedOnboarding && !signedOut && !hasStaleAuthState) {
     return <Redirect href="/(tabs)/(today)" />;

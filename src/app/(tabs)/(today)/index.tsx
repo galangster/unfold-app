@@ -72,16 +72,32 @@ function formatResumeRelativeTime(iso?: string): string {
 
 /**
  * Synchronously read the inflight generation job from MMKV on mount.
- * Returns true if there's a non-expired inflight job that the user should
- * be redirected to /generating for. Cleans up expired entries as a side
- * effect. Called from the wrapper below at render time so the Redirect
- * fires before the heavy HomeScreen component ever mounts.
+ * Returns true if there's a non-expired inflight job OWNED BY the
+ * current account that we should be redirected to /generating for.
+ * Cleans up expired or cross-owner entries as a side effect.
+ *
+ * Owner binding: the inflight payload carries `ownerAuthUserId` set at
+ * write time in generating.tsx. On a shared device or a non-clean
+ * account switch, user B can land on the home screen with user A's key
+ * still in MMKV. Without this check we would redirect B into /generating
+ * and let them inherit A's job result — a tenant-isolation failure.
+ * Reject on mismatch and clear the key. Legacy payloads (pre-owner)
+ * have no proof of ownership and are treated the same as a mismatch.
  */
-function hasInflightGenerationJob(): boolean {
+function hasInflightGenerationJobFor(currentOwner: string | null): boolean {
   const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
   if (!raw) return false;
   try {
-    const inflight = JSON.parse(raw) as { jobId: string; submittedAt: number };
+    const inflight = JSON.parse(raw) as {
+      jobId: string;
+      submittedAt: number;
+      ownerAuthUserId?: string | null;
+    };
+    const persistedOwner = inflight.ownerAuthUserId === undefined ? undefined : inflight.ownerAuthUserId;
+    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      return false;
+    }
     if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
       return true;
     }
@@ -118,9 +134,19 @@ export default function HomeScreenWrapper() {
   const hasHydrated = useHasHydrated();
   const hasUser = useUnfoldStore((s) => s.user != null);
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
-  // Read MMKV exactly once per mount. useState initializer runs synchronously
-  // during the first render and the result is frozen for this instance.
-  const [shouldResumeInflight] = useState(hasInflightGenerationJob);
+
+  // Read MMKV exactly once — but only AFTER hydration, so the owner
+  // binding check compares against the real authUserId rather than the
+  // pre-hydration placeholder. A useState initializer would run on the
+  // first pre-hydration render and freeze the wrong value. A ref
+  // assignment during the first hydrated render is effect-free and
+  // survives subsequent re-renders.
+  const inflightRef = useRef<boolean | null>(null);
+  if (hasHydrated && inflightRef.current === null) {
+    const currentOwner = useUnfoldStore.getState().user?.authUserId ?? null;
+    inflightRef.current = hasInflightGenerationJobFor(currentOwner);
+  }
+  const shouldResumeInflight = inflightRef.current === true;
 
   if (!hasHydrated) {
     return null;
