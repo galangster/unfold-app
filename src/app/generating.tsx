@@ -156,6 +156,13 @@ export default function GeneratingScreen() {
   const pollingRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jobSubmittedRef = useRef(false);
+  // Session-level abort fence. Flipped by the entitlement watchdog when
+  // the user loses premium mid-flight. Every awaited continuation in the
+  // submit/poll/retry paths checks this after the await resolves and
+  // no-ops if true — otherwise in-flight network promises can still write
+  // a devotional into the store or persist a new inflight MMKV job after
+  // the user has already lost premium.
+  const abortedRef = useRef(false);
 
   // Track when polling started for max-duration timeout
   const pollStartTime = useRef(Date.now());
@@ -189,6 +196,7 @@ export default function GeneratingScreen() {
     if (!shouldAbortForEntitlement) return;
 
     logger.warn('[generating] Entitlement lost mid-generation; aborting flow');
+    abortedRef.current = true;
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -401,6 +409,13 @@ export default function GeneratingScreen() {
     arc?: import('@/lib/store').SeriesArc;
     devotionalId?: string;
   }) => {
+    // Post-abort fence: if entitlement was lost mid-flight and this
+    // completion is a late-arriving continuation from an awaited network
+    // call, drop it on the floor. No store writes, no MMKV persistence.
+    if (abortedRef.current) {
+      logger.warn('[generating] Discarding completion — session aborted');
+      return;
+    }
     const devotionalId = result.devotionalId ?? `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const seriesTitle = result.seriesTitle ?? 'Your Devotional';
     const totalDays = result.totalDays ?? devotionalLength;
@@ -494,6 +509,15 @@ export default function GeneratingScreen() {
       try {
         const status = await pollJobStatus(jobId);
 
+        // Post-await abort fence. If entitlement was lost while this
+        // request was in-flight, drop the response and do not schedule
+        // more work. handleGenerationComplete has its own fence as a
+        // second line of defense.
+        if (abortedRef.current) {
+          pollingRef.current = false;
+          return;
+        }
+
         if (status.status === 'complete' && status.result) {
           pollingRef.current = false;
           handleGenerationComplete(status.result);
@@ -522,6 +546,13 @@ export default function GeneratingScreen() {
         // Still pending or processing -- poll again
         pollTimerRef.current = setTimeout(poll, POLL_INTERVAL_MS);
       } catch (err) {
+        // Post-await abort fence on the error path too — don't schedule
+        // another poll if the user lost entitlement while this request
+        // was in-flight.
+        if (abortedRef.current) {
+          pollingRef.current = false;
+          return;
+        }
         // Network error during polling -- keep trying a few times
         const errorMsg = err instanceof Error ? err.message : String(err);
         logger.warn('[generating] Poll error (will retry):', errorMsg);
@@ -592,6 +623,14 @@ export default function GeneratingScreen() {
             writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
           },
         });
+
+        // Post-await abort fence. If entitlement was lost between submit
+        // and resolution, don't persist MMKV or start polling — the
+        // watchdog already redirected us out.
+        if (abortedRef.current) {
+          logger.warn('[generating] Discarding submit result — session aborted');
+          return;
+        }
 
         logger.log('[generating] Job submitted:', jobId);
         setPendingJobId(jobId);
@@ -687,6 +726,12 @@ export default function GeneratingScreen() {
       if (pendingJobId) {
         // Retry existing job on the server
         const { jobId } = await retryJob(pendingJobId);
+        // Post-await abort fence — don't restart polling if entitlement
+        // was lost while the retry was in flight.
+        if (abortedRef.current) {
+          logger.warn('[generating] Discarding retry result — session aborted');
+          return;
+        }
         logger.log('[generating] Job retried:', jobId);
         setPendingJobId(jobId);
         // Update MMKV with new jobId
@@ -730,6 +775,12 @@ export default function GeneratingScreen() {
             },
           });
 
+          // Post-await abort fence — don't persist MMKV or start polling
+          // if entitlement was lost while the resubmit was in flight.
+          if (abortedRef.current) {
+            logger.warn('[generating] Discarding resubmit result — session aborted');
+            return;
+          }
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);
           // Persist inflight job to MMKV

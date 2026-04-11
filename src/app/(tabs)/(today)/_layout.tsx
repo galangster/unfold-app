@@ -1,10 +1,17 @@
 import { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { useTheme } from '@/lib/theme';
 import { TrialExpiredOverlay } from '@/components/TrialExpiredOverlay';
+
+// Routes in this stack that are presented natively (iOS modal / formSheet)
+// and therefore render ABOVE the React tree where the sibling overlay lives.
+// When entitlement is lost we must dismiss these specifically — pushed
+// in-stack routes (reading, journal, highlights, etc.) stay mounted so
+// drafts and in-progress state are preserved behind the overlay.
+const NATIVE_PRESENTED_ROUTES = new Set(['wallpaper', 'day-menu']);
 
 export default function TodayLayout() {
   // Wait for persisted state before deciding anything. Zustand's MMKV
@@ -15,6 +22,7 @@ export default function TodayLayout() {
   const hasHydrated = useHasHydrated();
   const { colors } = useTheme();
   const router = useRouter();
+  const segments = useSegments();
 
   const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? false);
   const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
@@ -25,17 +33,22 @@ export default function TodayLayout() {
   // Native-presented routes in this stack (wallpaper = modal, day-menu =
   // formSheet) sit outside the sibling overlay's React tree, so a runtime
   // premium flip while one of them is open would leave the sheet interactive
-  // on top of a pointerEvents-none'd stack. Tear those presentations down
-  // the instant the overlay should show.
+  // on top of a pointerEvents-none'd stack. Targeted dismissal only:
+  // we check the current top segment and pop it if and only if it's one of
+  // the native-presented routes. Pushed in-stack routes (reading, journal,
+  // highlights, etc.) are left mounted so their component state (drafts,
+  // editor buffers) survives the premium flip under the overlay.
+  const topSegment = segments[segments.length - 1];
+  const topIsNativePresented = typeof topSegment === 'string' && NATIVE_PRESENTED_ROUTES.has(topSegment);
   useEffect(() => {
-    if (shouldShowOverlay) {
-      try {
-        router.dismissAll();
-      } catch {
-        // dismissAll throws if there's nothing to dismiss — safe to ignore.
-      }
+    if (!shouldShowOverlay || !topIsNativePresented) return;
+    try {
+      if (router.canGoBack()) router.back();
+    } catch {
+      // back() can throw mid-transition; safe to ignore — the overlay
+      // is already covering the underlying React tree.
     }
-  }, [shouldShowOverlay, router]);
+  }, [shouldShowOverlay, topIsNativePresented, router]);
 
   if (!hasHydrated) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
