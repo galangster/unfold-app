@@ -145,6 +145,28 @@ export function getDeviceId(): string {
 }
 
 /**
+ * Rotate the device ID to a fresh UUID. Used by destructive teardown
+ * paths (reset-all-data, delete-account).
+ *
+ * Why this matters: anonymous backend traffic is keyed by the
+ * `X-Device-ID` header resolved from `getDeviceId()`. Without rotation,
+ * a user who hits "Reset all data" or "Delete account" would come back
+ * up with the *same* anonymous identity on the backend — meaning any
+ * server-linked data associated with that device ID (devotionals,
+ * progress, analytics, etc.) would still be reachable. That's a real
+ * data-deletion gap for a UI that promises "delete everything."
+ *
+ * Returns the new device ID so the caller can log the transition for
+ * debug purposes.
+ */
+export function rotateDeviceId(): string {
+  const fresh = uuidv4();
+  mmkv.set(DEVICE_ID_KEY, fresh);
+  logger.log('[MMKV] Rotated device ID (destructive teardown):', fresh);
+  return fresh;
+}
+
+/**
  * Zustand-compatible storage adapter using MMKV.
  */
 export const mmkvStorage: StateStorage = {

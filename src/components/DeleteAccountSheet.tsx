@@ -138,6 +138,7 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
       performSignOutTeardown({
         clerkSignOut: signOut,
         source: 'settings-delete-account',
+        destructive: true,
       });
 
       logger.log('[DeleteAccount] Account deletion complete');

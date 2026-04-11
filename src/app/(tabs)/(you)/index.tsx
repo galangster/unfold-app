@@ -337,6 +337,7 @@ export default function YouScreen() {
                       performSignOutTeardown({
                         clerkSignOut: signOut,
                         source: 'settings-reset-data',
+                        destructive: true,
                       });
                       router.dismissAll();
                       setTimeout(() => router.replace('/'), 50);

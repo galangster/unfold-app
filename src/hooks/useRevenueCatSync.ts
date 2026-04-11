@@ -158,6 +158,26 @@ export function useRevenueCatSync() {
     let bootstrapped = false;
     // Track the currently-attached listener so cleanup can remove it.
     let listener: CustomerInfoUpdateListener | undefined;
+    // Generation token for stale-callback rejection. Every time we
+    // attach a new listener we store a fresh object here and close
+    // over it in the listener body; if the live token has changed
+    // (because invalidation fired, or because we re-attached) when a
+    // queued CustomerInfo callback eventually runs, the listener
+    // discards the callback instead of writing its entitlement into
+    // the store.
+    //
+    // Why this exists: React Native's CustomerInfoUpdateListener
+    // queues callbacks across the native bridge. When sign-out fires
+    // and we call removeCustomerInfoUpdateListener(), any callback
+    // already in flight on the bridge still runs — the removal only
+    // prevents *future* callbacks from being dispatched, not ones
+    // that were already handed off. Without a stale-generation
+    // guard, that late callback unconditionally writes
+    // `updateUser({ isPremium: hasSubscription })` with the previous
+    // user's entitlement, defeating the fail-closed invariant and
+    // leaking premium back into the cleared/anonymous session on
+    // shared devices.
+    let activeListenerToken: object | null = null;
     // Prevents overlapping attempts: if a backoff tick or AppState
     // 'active' event fires while a prior attempt is still in flight,
     // skip instead of racing a second Purchases.logOut() or
@@ -399,7 +419,31 @@ export function useRevenueCatSync() {
         // active subscriber after a renewal. Writing here keeps
         // the cache as fresh as the most recent authoritative
         // update RC pushed to us.
+        // Bind the listener's identity to a fresh generation token.
+        // If this token is replaced (new attach) or nulled
+        // (invalidation) before a queued callback fires, the
+        // callback drops its writes instead of leaking the previous
+        // user's entitlement.
+        const myToken: object = {};
+        activeListenerToken = myToken;
         const fn: CustomerInfoUpdateListener = (customerInfo) => {
+          // Stale-callback guard. If we've been invalidated or a
+          // fresh listener has replaced us, this callback is from a
+          // prior generation — drop it entirely rather than racing a
+          // store write.
+          if (cancelled) return;
+          if (activeListenerToken !== myToken) {
+            logger.warn('[RevenueCat] Dropping stale CustomerInfo callback (listener generation expired)');
+            return;
+          }
+          // Belt-and-suspenders: if rc-logout-pending got set after
+          // this listener attached but before the invalidation event
+          // bus caught up, refuse to write. The next bootstrap will
+          // honor the pending flag and re-run from clean state.
+          if (mmkvStorage.getItem(RC_LOGOUT_PENDING_KEY)) {
+            logger.warn('[RevenueCat] Dropping CustomerInfo callback: rc-logout-pending is set');
+            return;
+          }
           const entitlement = customerInfo.entitlements.active?.['Unfold Premium'];
           const hasSubscription = Boolean(entitlement);
           updateUser({ isPremium: hasSubscription });
@@ -453,6 +497,16 @@ export function useRevenueCatSync() {
     // it can prove a clean logOut.
     const unsubInvalidate = onRevenueCatSessionInvalidated(() => {
       if (cancelled) return;
+      // Null the active token BEFORE removing the native listener.
+      // The token check inside the listener runs synchronously on
+      // every callback, so any callback that's already mid-bridge
+      // hand-off when this runs will see a null activeListenerToken
+      // and drop its write. If we only called
+      // removeCustomerInfoUpdateListener() without nulling first,
+      // a queued callback could still slip through the window
+      // between the removal request and the native side actually
+      // tearing down the subscription.
+      activeListenerToken = null;
       if (listener) {
         try {
           Purchases.removeCustomerInfoUpdateListener(listener);
@@ -493,6 +547,11 @@ export function useRevenueCatSync() {
 
     return () => {
       cancelled = true;
+      // Null the token first so any in-flight callback from the
+      // native side drops its write before it can race the effect
+      // re-mount (e.g. Fast Refresh in dev, or RootLayout remounts
+      // during a navigation shift).
+      activeListenerToken = null;
       unsubInvalidate();
       appStateSub.remove();
       if (retryTimer) {

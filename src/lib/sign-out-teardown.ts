@@ -52,12 +52,15 @@
 import * as Sentry from '@sentry/react-native';
 import { useUnfoldStore } from '@/lib/store';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
-import { mmkvStorage } from '@/lib/mmkv-storage';
+import { mmkvStorage, rotateDeviceId } from '@/lib/mmkv-storage';
 import { Analytics } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
 import { isRevenueCatEnabled, logoutUser as rcLogoutUser } from '@/lib/revenuecatClient';
 import { invalidateRevenueCatSession } from '@/lib/revenuecat-session';
 import { clearInflight } from '@/lib/inflight-job';
+import { cancelTrialEndingNotification } from '@/lib/trial-notification';
+import { clearBridgeCache } from '@/lib/bridge-service';
+import { clearExamenCache } from '@/lib/examen-service';
 
 const FORCED_SIGNED_OUT_KEY = 'forced-signed-out-clerk-id';
 const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
@@ -99,6 +102,31 @@ export type SignOutTeardownOptions = {
     | 'settings-sign-out'
     | 'settings-reset-data'
     | 'settings-delete-account';
+
+  /**
+   * Escalates this teardown from "ordinary sign-out" to "this user
+   * is leaving the device entirely and every byte they put on it
+   * should be unreachable." Triggered by Reset-All-Data and
+   * Delete-Account — paths whose UI promises full data removal.
+   *
+   * A destructive teardown additionally:
+   *   - Rotates the anonymous device ID, so the backend no longer
+   *     links future anonymous traffic to the prior user's data
+   *     (anonymous requests are keyed by `X-Device-ID`).
+   *   - Clears the bridge and examen caches (they hold personalized
+   *     generated text — leaving them on disk after a delete is
+   *     real PII residue on shared devices).
+   *   - Wipes the trial-notification MMKV mirror alongside the
+   *     notification itself.
+   *
+   * An ordinary sign-out does NOT do these things: a transient
+   * sign-out should not wipe the device identity or force a fresh
+   * server-side account link, and keeping the generated content
+   * caches around means a sign-back-in to the same account sees
+   * its own content instantly. Only the explicit delete/reset UIs
+   * should set this flag.
+   */
+  destructive?: boolean;
 };
 
 /**
@@ -190,9 +218,9 @@ export function performRevenueCatTeardown(source: RevenueCatTeardownSource): voi
  * this returns.
  */
 export function performSignOutTeardown(options: SignOutTeardownOptions): void {
-  const { clerkSignOut, source } = options;
+  const { clerkSignOut, source, destructive = false } = options;
 
-  logger.log('[sign-out-teardown] Running teardown', { source });
+  logger.log('[sign-out-teardown] Running teardown', { source, destructive });
 
   // 1. Capture authUserId BEFORE reset() so we can persist the
   //    forced-signed-out guard. useAuth will honor this on any
@@ -220,7 +248,21 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
       });
   }
 
-  // 4. Clear local state. Order matters only in that inflight-job
+  // 4. Cancel the trial-ending local notification and clear its
+  //    MMKV mirror. This notification is scheduled with a stable
+  //    identifier specifically so it survives app restarts — which
+  //    means without this step, a signed-out or deleted account
+  //    can still receive the previous user's "your trial ends in
+  //    2 days" push. User-visible privacy leakage on shared
+  //    devices, especially confusing if the new user never
+  //    started a trial. Fire-and-forget: cancelTrialEndingNotification
+  //    is async and we don't want to block navigation on the OS
+  //    notification-center round-trip.
+  void cancelTrialEndingNotification().catch((err) => {
+    logger.warn('[sign-out-teardown] cancelTrialEndingNotification failed', { source, err });
+  });
+
+  // 5. Clear local state. Order matters only in that inflight-job
   //    and companion conversations come after reset() so their
   //    own in-memory caches don't race a fresh Zustand identity.
   useUnfoldStore.getState().reset();
@@ -228,4 +270,41 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
   clearInflight();
   Analytics.setUserId(null);
   Sentry.setUser(null);
+
+  // 6. Destructive escalation. Paths whose UI explicitly promises
+  //    full data removal (Reset-All-Data, Delete-Account) must go
+  //    beyond "sign out + keep personal content caches" because
+  //    leaving those caches behind would be a real data-residue
+  //    bug on shared devices:
+  //      - Bridge/examen caches hold personalized generated text
+  //        keyed by devotional/day/date. Not tenant-isolated by
+  //        user id. Must be wiped.
+  //      - The anonymous device id keys backend traffic via
+  //        `X-Device-ID`. Without rotation, a fresh anonymous
+  //        session on the same device reuses the prior user's
+  //        server-linked data. Rotate it so the new anonymous
+  //        session starts from zero.
+  //
+  //    Ordinary sign-out skips this block: a transient sign-out
+  //    should not force the next sign-in to rebuild every cache
+  //    from scratch or look like a brand-new device to the
+  //    backend.
+  if (destructive) {
+    try {
+      clearBridgeCache();
+    } catch (err) {
+      logger.warn('[sign-out-teardown] clearBridgeCache failed', { source, err });
+    }
+    try {
+      clearExamenCache();
+    } catch (err) {
+      logger.warn('[sign-out-teardown] clearExamenCache failed', { source, err });
+    }
+    try {
+      const freshId = rotateDeviceId();
+      logger.log('[sign-out-teardown] device id rotated', { source, freshId });
+    } catch (err) {
+      logger.warn('[sign-out-teardown] rotateDeviceId failed', { source, err });
+    }
+  }
 }
