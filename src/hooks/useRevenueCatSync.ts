@@ -161,16 +161,29 @@ export function useRevenueCatSync() {
 
         if (cancelled) return;
         if (!fetched) {
-          // Fail closed. Without an authoritative bootstrap we cannot
-          // trust the persisted `isPremium` value — a user who was
-          // premium on their last launch but is offline today would
-          // otherwise keep gated access forever on a stale store
-          // write. Force to non-premium and let the backoff retry
-          // restore the real value when connectivity returns. The
-          // tradeoff (legitimate premium users briefly see the
-          // paywall on offline launch) is explicit: fail-closed is
-          // the whole point of the RC sync contract.
-          updateUser({ isPremium: false });
+          // Transient fetch failure path. We intentionally do NOT
+          // downgrade `isPremium` here. Previously this path forced
+          // isPremium=false on every bootstrap fetch failure, which
+          // solved the "churned user retains premium on offline
+          // launch" edge case at the cost of a much larger regression:
+          // any legitimate premium user launching offline or during a
+          // RevenueCat backend blip would be hit with the paywall
+          // despite a valid subscription. That's a user-visible
+          // entitlement revocation caused by transient dependency
+          // failure, not by any actual subscription change.
+          //
+          // Fail-closed is only appropriate when identity is
+          // uncertain — the rc-logout-pending branch above already
+          // handles that case authoritatively. When we know the
+          // current SDK identity is correct (no pending logout) and
+          // the only failure is the fetch itself, the last
+          // authoritative entitlement value persisted to the store
+          // is the best available answer. The backoff retry will
+          // correct a stale premium=true when the network recovers,
+          // and CustomerInfo listener (attached on first success)
+          // will pick up any subsequent server-side entitlement
+          // change in real time.
+          logger.warn('[RevenueCat] Fetch failed without pending logout — preserving persisted entitlement until retry succeeds');
           scheduleRetry();
           return;
         }

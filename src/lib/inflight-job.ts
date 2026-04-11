@@ -85,7 +85,27 @@ export function readInflightForOwner(currentOwner: string | null): InflightPaylo
       return null;
     }
 
-    // Explicit owner present — enforce strict match.
+    // Anonymous sessions cannot be distinguished from each other on a
+    // shared device: every signed-out user shows up as
+    // `authUserId === null`. If the persisted payload was written
+    // anonymously (`persistedOwner === null`), matching it against
+    // the current anonymous owner (`currentOwner === null`) is a
+    // trivial `null === null` pass that collapses all anonymous
+    // users into one bucket. On a shared device, user B can resume
+    // user A's anonymous generation. Refuse anonymous resume
+    // entirely: the UX cost is that anonymous users who get their
+    // app killed mid-generation have to re-submit, which is a
+    // one-time minor inconvenience bounded by the 10-minute poll
+    // window. The server still has the job and will complete it;
+    // we just don't tie the local poll state to an unprovable
+    // session identity.
+    if (persistedOwner === null) {
+      logger.warn('[inflight-job] Anonymous-owner payload — refusing resume (shared-device tenant risk)');
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      return null;
+    }
+
+    // Explicit (non-null) owner present — enforce strict match.
     if (persistedOwner !== currentOwner) {
       logger.warn('[inflight-job] Owner mismatch — discarding', {
         persistedOwner,
