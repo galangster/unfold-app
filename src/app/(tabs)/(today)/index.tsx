@@ -29,7 +29,6 @@ import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { useAuth } from '@/hooks/useAuth';
 import { submitGenerationJob, findCompletedJob, fetchJobResult, ApiError } from '@/lib/generation-api';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
@@ -74,7 +73,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
-  const { isLoading: authLoading } = useAuth();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -357,7 +355,7 @@ export default function HomeScreen() {
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
     queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber],
     queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
-    enabled: isPremium && !!bridgeInput && !authLoading,
+    enabled: isPremium && !!bridgeInput,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
     retry: 1,
   });
