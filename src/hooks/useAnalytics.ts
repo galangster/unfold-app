@@ -19,7 +19,6 @@ const getScreenName = (pathname: string, segments: string[]): string => {
     'onboarding': 'Onboarding_AboutYou',
     'style-onboarding': 'Onboarding_Style',
     'generating': 'Devotional_Generating',
-    '(onboarding)/sign-in': 'SignIn',
     '(tabs)/(today)': 'Home',
     '(tabs)/(today)/reading': 'Reading',
     '(tabs)/(today)/journal': 'Journal',
