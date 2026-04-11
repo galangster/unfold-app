@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
+import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -175,22 +176,44 @@ const RevealWord = React.memo(({
  * This is the navigation-in-render pattern — no useEffect + router.replace.
  * See ~/vault/standards/navigation-in-render-not-effects.md
  *
- * Waits for Zustand hydration before deciding. Without the gate, a cold
- * launch would read `user === undefined` on the first frame and briefly
- * mount the welcome animation even for onboarded users.
+ * Waits for BOTH Zustand hydration AND Clerk auth resolution before
+ * deciding:
+ *  - Without hydration, a cold launch would read `user === undefined` on
+ *    the first frame and briefly mount the welcome animation even for
+ *    onboarded users.
+ *  - Without Clerk `isLoaded`, a revoked or expired session combined
+ *    with a stale persisted `hasCompletedOnboarding: true` would be
+ *    redirected into the tabs before useAuth()'s sign-out effect cleared
+ *    the store — routing an unauthenticated user into the signed-in app
+ *    on cached state alone.
+ *
+ * Anonymous-onboarded users (no Clerk sign-in, `authUserId == null`)
+ * are still allowed through: anonymous device data is a first-class
+ * flow and later migrated by useAuth() on sign-in. Only users whose
+ * persisted profile claims a Clerk identity (`authUserId != null`) are
+ * held on the welcome screen when Clerk says nobody is signed in —
+ * that's the stale-auth case.
  */
 export default function WelcomeScreenWrapper() {
   const { signedOut } = useLocalSearchParams<{ signedOut?: string }>();
   const hasHydrated = useHasHydrated();
+  const { isLoaded: isClerkLoaded, isSignedIn } = useClerkAuth();
   const hasCompletedOnboarding = useUnfoldStore(
     (s) => s.user?.hasCompletedOnboarding ?? false,
   );
+  const authUserId = useUnfoldStore((s) => s.user?.authUserId ?? null);
 
-  if (!hasHydrated) {
+  if (!hasHydrated || !isClerkLoaded) {
     return <View style={{ flex: 1, backgroundColor: BG }} />;
   }
 
-  if (hasCompletedOnboarding && !signedOut) {
+  // Stale-auth guard: persisted profile claims a Clerk identity but
+  // Clerk itself says nobody is signed in → session was revoked or
+  // expired. Force the welcome screen so they can re-authenticate
+  // instead of routing them into the signed-in app on cached state.
+  const hasStaleAuthState = authUserId != null && !isSignedIn;
+
+  if (hasCompletedOnboarding && !signedOut && !hasStaleAuthState) {
     return <Redirect href="/(tabs)/(today)" />;
   }
 

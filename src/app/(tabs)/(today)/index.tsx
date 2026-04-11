@@ -106,10 +106,18 @@ function hasInflightGenerationJob(): boolean {
  * stray key combined with a signed-out (or pre-onboarding) user would land
  * them on /generating — which immediately bails out when user is null,
  * stranding them in an empty screen.
+ *
+ * Premium gate: /generating lives at the app root, outside (today)/_layout,
+ * so redirecting there pulls the user out from under TrialExpiredOverlay.
+ * A churned user whose inflight-generation-job key survived a subscription
+ * expiry would otherwise get an unpaywalled generation screen. Require
+ * `user.isPremium` before resuming — the paywall takes priority over a
+ * stale job, which will be reaped on next destructive reset / sign-out.
  */
 export default function HomeScreenWrapper() {
   const hasHydrated = useHasHydrated();
   const hasUser = useUnfoldStore((s) => s.user != null);
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
   // Read MMKV exactly once per mount. useState initializer runs synchronously
   // during the first render and the result is frozen for this instance.
   const [shouldResumeInflight] = useState(hasInflightGenerationJob);
@@ -118,7 +126,7 @@ export default function HomeScreenWrapper() {
     return null;
   }
 
-  if (shouldResumeInflight && hasUser) {
+  if (shouldResumeInflight && hasUser && isPremium) {
     return <Redirect href="/generating" />;
   }
 
