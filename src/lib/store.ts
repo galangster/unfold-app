@@ -1755,7 +1755,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 35, // v35: Add hasEverCreatedDevotional flag for returning user detection
+      version: 36, // v36: Strip legacy absolute path from profilePicture (store filename only)
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2252,6 +2252,27 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v34→35: Added hasEverCreatedDevotional flag');
           } catch (err) {
             console.error('[store] Migration v34→35 failed:', err);
+          }
+        }
+
+        // Migration from version 35 to 36: Strip legacy absolute path from
+        // profilePicture. Old versions stored `${documentDirectory}${fileName}`,
+        // which embeds the iOS Simulator container UUID and goes stale on every
+        // dev-client rebuild. We now store only the filename and reconstruct
+        // the path at render time. See ProfileAvatar.tsx.
+        if (version < 36) {
+          try {
+            const pic = state.user?.profilePicture;
+            if (pic && typeof pic === 'string' && (pic.startsWith('file://') || pic.startsWith('/'))) {
+              const slash = pic.lastIndexOf('/');
+              const fileName = slash >= 0 ? pic.slice(slash + 1) : pic;
+              if (state.user) {
+                state.user.profilePicture = fileName;
+              }
+              logger.log('[store] Migration v35→36: Stripped absolute path from profilePicture');
+            }
+          } catch (err) {
+            console.error('[store] Migration v35→36 failed:', err);
           }
         }
 

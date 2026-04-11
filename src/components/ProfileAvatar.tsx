@@ -23,11 +23,34 @@ interface ProfileAvatarProps {
  * Profile avatar component — shows user photo or initial letter fallback.
  * When `editable`, tapping shows an action sheet to pick a photo.
  */
+/**
+ * Resolve a stored `profilePicture` value (filename only) to a usable URI.
+ *
+ * Historical note: earlier versions stored the absolute `${documentDirectory}${fileName}`
+ * path. On iOS Simulator every dev-client rebuild reinstalls the app with a
+ * fresh sandbox container UUID, so any absolute path persisted in MMKV goes
+ * stale on the next launch and the <Image> silently fails. We now store the
+ * filename only and reconstruct the absolute path at render time so the
+ * reference survives container UUID changes. The v35→v36 migration in
+ * store.ts strips any legacy absolute prefix from existing persisted values.
+ */
+function resolveProfilePictureUri(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.startsWith('file://') || value.startsWith('/')) {
+    const slash = value.lastIndexOf('/');
+    const fileName = slash >= 0 ? value.slice(slash + 1) : value;
+    return documentDirectory ? `${documentDirectory}${fileName}` : null;
+  }
+  return documentDirectory ? `${documentDirectory}${value}` : null;
+}
+
 export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileAvatarProps) {
   const { colors } = useTheme();
   const userName = useUnfoldStore((s) => s.user?.name);
   const profilePicture = useUnfoldStore((s) => s.user?.profilePicture);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+
+  const profilePictureUri = resolveProfilePictureUri(profilePicture);
 
   const initial = (userName ?? '?')[0].toUpperCase();
   const fontSize = size * 0.42;
@@ -36,28 +59,26 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
 
   const savePhoto = useCallback(async (uri: string) => {
     try {
-      // Resize to 300x300 for efficient storage
       const result = await manipulateAsync(
         uri,
         [{ resize: { width: 300, height: 300 } }],
         { compress: 0.85, format: SaveFormat.JPEG },
       );
 
-      // Copy to persistent documentDirectory
       const fileName = `profile-avatar-${Date.now()}.jpg`;
       const destPath = `${documentDirectory}${fileName}`;
       await copyAsync({ from: result.uri, to: destPath });
 
-      // Delete old photo if exists
-      if (profilePicture) {
+      const previousUri = resolveProfilePictureUri(profilePicture);
+      if (previousUri) {
         try {
-          await deleteAsync(profilePicture, { idempotent: true });
+          await deleteAsync(previousUri, { idempotent: true });
         } catch {
           // ignore cleanup failures
         }
       }
 
-      updateUser({ profilePicture: destPath });
+      updateUser({ profilePicture: fileName });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Error', 'Could not save photo. Please try again.');
@@ -81,9 +102,10 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
   }, [savePhoto]);
 
   const removePhoto = useCallback(async () => {
-    if (profilePicture) {
+    const previousUri = resolveProfilePictureUri(profilePicture);
+    if (previousUri) {
       try {
-        await deleteAsync(profilePicture, { idempotent: true });
+        await deleteAsync(previousUri, { idempotent: true });
       } catch {
         // ignore
       }
@@ -124,15 +146,15 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: profilePicture ? 'transparent' : alpha(colors.accent, 0.13),
+          backgroundColor: profilePictureUri ? 'transparent' : alpha(colors.accent, 0.13),
           justifyContent: 'center',
           alignItems: 'center',
           overflow: 'hidden',
         }}
       >
-        {profilePicture ? (
+        {profilePictureUri ? (
           <Image
-            source={{ uri: profilePicture }}
+            source={{ uri: profilePictureUri }}
             style={{ width: size, height: size, borderRadius: size / 2 }}
             resizeMode="cover"
           />
