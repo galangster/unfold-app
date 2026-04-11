@@ -217,6 +217,13 @@ function RootLayoutNav() {
             gestureEnabled: true,
           }}
         />
+        <Stack.Screen
+          name="streak-settings"
+          options={{
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+          }}
+        />
         </Stack>
         <AudioPlayerOverlay />
       </View>

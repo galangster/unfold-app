@@ -138,7 +138,7 @@ function ShimmerBar({ bg, width, delay }: { bg: string; width: DimensionValue; d
 export default function ReadingScreen() {
   console.log('[Reading] RENDER CALLED');
   const router = useRouter();
-  const params = useLocalSearchParams<{ dayNumber?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string }>();
   const { colors, isDark } = useTheme();
 
   // Clear reveal transition flag AFTER reading screen has painted to prevent
@@ -160,6 +160,7 @@ export default function ReadingScreen() {
   const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
@@ -188,24 +189,38 @@ export default function ReadingScreen() {
   const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
 
   const devotionals = useUnfoldStore((s) => s.devotionals);
+
+  // Honor ?devotionalId=… so deep links (e.g., from the library) open the
+  // correct devotional instead of whatever happens to be current in the store.
+  // We resolve the effective devotional locally from the param *immediately*
+  // so first-render state (viewingDay) picks the right days, and we also
+  // mirror it to the store in the same render so downstream consumers
+  // (audio player, highlights filters) see the right id next tick.
+  const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
+  if (params.devotionalId && params.devotionalId !== currentDevotionalId) {
+    setCurrentDevotional(params.devotionalId);
+  }
+
   // Derive via useMemo instead of inline .find() in a Zustand selector.
   // .find() inside a selector returns a new reference on every store update,
   // which causes infinite re-renders when used as a useEffect dependency.
   const currentDevotional = useMemo(
-    () => devotionals.find((d) => d.id === currentDevotionalId),
-    [devotionals, currentDevotionalId],
+    () => devotionals.find((d) => d.id === effectiveDevotionalId),
+    [devotionals, effectiveDevotionalId],
   );
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
 
   const [viewingDay, setViewingDay] = useState(() => {
     if (requestedDayNumber) return requestedDayNumber;
-    if (!currentDevotional) return 1;
-    const target = currentDevotional.currentDay;
-    // If the target day has content, use it
-    if (currentDevotional.days.some((d) => d.dayNumber === target)) return target;
-    // Otherwise fall back to the last available day (so users can re-read, not hit a dead-end)
-    return currentDevotional.days.length > 0 ? currentDevotional.days.length : 1;
+    // Read fresh state from the store to ensure the param devotional is used
+    // even before the render-phase sync has flushed.
+    const devs = useUnfoldStore.getState().devotionals;
+    const d = devs.find((x) => x.id === effectiveDevotionalId);
+    if (!d) return 1;
+    const target = d.currentDay;
+    if (d.days.some((day) => day.dayNumber === target)) return target;
+    return d.days.length > 0 ? d.days.length : 1;
   });
   // shareModalOpen removed — share now navigates to /share-card route
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
@@ -1976,7 +1991,10 @@ export default function ReadingScreen() {
           <TouchableOpacity
             onPress={() => {
               setBookmarkToast(false);
-              router.push('/(tabs)/(you)/saved');
+              router.push({
+                pathname: '/(tabs)/(you)/my-content',
+                params: { tab: 'bookmarks', from: 'home' },
+              });
             }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -14,14 +14,17 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon, MagnifyingGlassIcon, XIcon } from 'phosphor-react-native';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
+import { useSavedHighlights, SavedItem, SavedItemSource } from '@/hooks/useSavedHighlights';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, Highlight, HighlightColor } from '@/lib/store';
+import { useUnfoldStore, BibleHighlight, Highlight, HighlightColor, BibleHighlightColor } from '@/lib/store';
 
-const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; dark: string }> = {
+type HighlightKey = HighlightColor | BibleHighlightColor;
+
+const HIGHLIGHT_COLORS: Record<HighlightKey, { label: string; light: string; dark: string }> = {
   yellow: { label: 'General', light: '#FFDC64', dark: '#C8A55C' },
   green: { label: 'Growth', light: '#64C864', dark: '#6DAF7B' },
   blue: { label: 'Prayer', light: '#6496FF', dark: '#5B9BD5' },
@@ -30,18 +33,40 @@ const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; d
 };
 
 type Tab = 'journal' | 'highlights' | 'bookmarks';
+type HighlightFilter = 'all' | SavedItemSource;
+
+const VALID_TABS: Tab[] = ['journal', 'highlights', 'bookmarks'];
+const VALID_SOURCES: HighlightFilter[] = ['all', 'devotional', 'bible'];
 
 export default function MyContentScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { handleBack } = useCrossTabBack();
-  const [activeTab, setActiveTab] = useState<Tab>('journal');
+  const params = useLocalSearchParams<{ tab?: string; source?: string; from?: string }>();
 
-  const highlights = useUnfoldStore((s) => s.highlights);
+  const [activeTab, setActiveTab] = useState<Tab>('journal');
+  const [highlightFilter, setHighlightFilter] = useState<HighlightFilter>('all');
+
+  // Re-sync param-driven state on every focus so repeat pushes with different
+  // ?tab=… or ?source=… values actually take effect (useState initializer
+  // only fires once).
+  useFocusEffect(
+    useCallback(() => {
+      if (params.tab && (VALID_TABS as string[]).includes(params.tab)) {
+        setActiveTab(params.tab as Tab);
+      }
+      if (params.source && (VALID_SOURCES as string[]).includes(params.source)) {
+        setHighlightFilter(params.source as HighlightFilter);
+      }
+    }, [params.tab, params.source]),
+  );
+
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+
+  const saved = useSavedHighlights();
 
   // Search
   const [showSearch, setShowSearch] = useState(false);
@@ -55,13 +80,23 @@ export default function MyContentScreen() {
     );
   }, [journalEntries, searchQuery]);
 
+  const highlightsForFilter = useMemo(() => {
+    switch (highlightFilter) {
+      case 'devotional': return saved.devotional;
+      case 'bible': return saved.bible;
+      case 'all':
+      default: return saved.all;
+    }
+  }, [highlightFilter, saved.all, saved.devotional, saved.bible]);
+
   const filteredHighlights = useMemo(() => {
-    if (!searchQuery.trim()) return highlights;
+    if (!searchQuery.trim()) return highlightsForFilter;
     const q = searchQuery.toLowerCase();
-    return highlights.filter(h =>
-      h.highlightedText?.toLowerCase().includes(q) || h.dayTitle?.toLowerCase().includes(q)
+    return highlightsForFilter.filter(item =>
+      item.text.toLowerCase().includes(q) ||
+      item.contextLabel.toLowerCase().includes(q),
     );
-  }, [highlights, searchQuery]);
+  }, [highlightsForFilter, searchQuery]);
 
   const filteredBookmarks = useMemo(() => {
     if (!searchQuery.trim()) return bookmarks;
@@ -76,10 +111,45 @@ export default function MyContentScreen() {
     setActiveTab(tab);
   };
 
+  const handleFilterPress = (filter: HighlightFilter) => {
+    Haptics.selectionAsync();
+    setHighlightFilter(filter);
+  };
+
+  const handleHighlightPress = (item: SavedItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (item.source === 'devotional') {
+      const h = item.raw as Highlight;
+      router.push({
+        pathname: '/(tabs)/(today)/reading',
+        params: {
+          devotionalId: h.devotionalId,
+          dayNumber: h.dayNumber.toString(),
+        },
+      });
+      return;
+    }
+    const b = item.raw as BibleHighlight;
+    router.push({
+      pathname: '/(tabs)/(bible)/reader',
+      params: {
+        bookId: b.bookId.toString(),
+        chapter: b.chapter.toString(),
+        verse: b.verseStart.toString(),
+      },
+    });
+  };
+
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: 'journal', label: 'Journal', count: journalEntries.length },
-    { id: 'highlights', label: 'Highlights', count: highlights.length },
+    { id: 'highlights', label: 'Highlights', count: saved.count.all },
     { id: 'bookmarks', label: 'Bookmarks', count: bookmarks.length },
+  ];
+
+  const highlightFilters: { id: HighlightFilter; label: string; count: number }[] = [
+    { id: 'all', label: 'All', count: saved.count.all },
+    { id: 'devotional', label: 'Devotional', count: saved.count.devotional },
+    { id: 'bible', label: 'Bible', count: saved.count.bible },
   ];
 
   return (
@@ -360,25 +430,80 @@ export default function MyContentScreen() {
 
         {activeTab === 'highlights' && (
           <Animated.View entering={FadeInRight.duration(Duration.slow)}>
+            {/* Source filter chips */}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: Spacing['2'],
+                marginBottom: Spacing['4'],
+              }}
+            >
+              {highlightFilters.map((f) => {
+                const isActive = highlightFilter === f.id;
+                return (
+                  <TouchableOpacity
+                    key={f.id}
+                    activeOpacity={0.7}
+                    onPress={() => handleFilterPress(f.id)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      paddingHorizontal: Spacing['3'],
+                      paddingVertical: Spacing['2'],
+                      borderRadius: Radius.xl,
+                      borderWidth: 1,
+                      borderColor: isActive ? colors.accent : colors.border,
+                      backgroundColor: isActive ? colors.accent : 'transparent',
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter highlights: ${f.label}`}
+                    accessibilityState={{ selected: isActive }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: isActive ? FontFamily.uiSemiBold : FontFamily.ui,
+                        fontSize: 12,
+                        color: isActive ? colors.background : colors.textMuted,
+                      }}
+                    >
+                      {f.label}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: 11,
+                        color: isActive ? colors.background : colors.textSubtle,
+                      }}
+                    >
+                      {f.count}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             {filteredHighlights.length === 0 ? (
               <EmptyState
                 icon={HighlighterIcon}
                 title="No highlights yet"
-                subtitle="Select text while reading to save your favorite quotes."
+                subtitle={
+                  highlightFilter === 'bible'
+                    ? 'Tap a verse in the Bible reader to save it here.'
+                    : highlightFilter === 'devotional'
+                      ? 'Select text while reading a devotional to save it here.'
+                      : 'Select text in a devotional or Bible verse to save it here.'
+                }
               />
             ) : (
-              filteredHighlights.map((highlight) => {
-                const devotional = devotionals.find(d => d.id === highlight.devotionalId);
+              filteredHighlights.map((item) => {
+                const colorKey: HighlightKey = item.color ?? 'yellow';
+                const accent = HIGHLIGHT_COLORS[colorKey][isDark ? 'dark' : 'light'];
                 return (
-                  <TouchableOpacity activeOpacity={0.7}
-                    key={highlight.id}
-                    onPress={() => router.push({
-                      pathname: '/(tabs)/(today)/reading',
-                      params: { 
-                        devotionalId: highlight.devotionalId,
-                        dayNumber: highlight.dayNumber.toString(),
-                      },
-                    })}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    key={`${item.source}:${item.id}`}
+                    onPress={() => handleHighlightPress(item)}
                     style={{
                       backgroundColor: colors.inputBackground,
                       borderRadius: Radius.lg,
@@ -386,8 +511,10 @@ export default function MyContentScreen() {
                       marginBottom: 12,
                       opacity: 1,
                       borderLeftWidth: 4,
-                      borderLeftColor: HIGHLIGHT_COLORS[highlight.color || 'yellow'][isDark ? 'dark' : 'light'],
+                      borderLeftColor: accent,
                     }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} highlight: ${item.text}`}
                   >
                     <Text
                       style={{
@@ -398,7 +525,7 @@ export default function MyContentScreen() {
                         marginBottom: Spacing['3'],
                       }}
                     >
-                      "{highlight.highlightedText}"
+                      "{item.text}"
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
                       <View
@@ -406,11 +533,11 @@ export default function MyContentScreen() {
                           width: 8,
                           height: 8,
                           borderRadius: 4,
-                          backgroundColor: HIGHLIGHT_COLORS[highlight.color || 'yellow'][isDark ? 'dark' : 'light'],
+                          backgroundColor: accent,
                         }}
                       />
                       <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
-                        {devotional?.title} · Day {highlight.dayNumber}
+                        {item.contextLabel}
                       </Text>
                     </View>
                   </TouchableOpacity>

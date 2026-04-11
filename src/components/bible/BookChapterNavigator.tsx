@@ -627,7 +627,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: FontFamily.ui,
     fontSize: 15,
-    padding: 0,
+    lineHeight: 20,
+    paddingVertical: 4,
+    paddingHorizontal: 0,
   },
 
   // Suggestions

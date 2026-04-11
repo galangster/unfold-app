@@ -23,6 +23,7 @@ import type { BibleTranslation } from '@/lib/bible-db';
 import { ReadingSettingsSheet } from '@/components/bible/ReadingSettingsSheet';
 import { BookChapterNavigator } from '@/components/bible/BookChapterNavigator';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
+import { BibleNoteSheet } from '@/components/bible/BibleNoteSheet';
 import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
@@ -116,6 +117,7 @@ const VerseItem = React.memo(({
   fontFamily,
   isSelected,
   highlightColor,
+  hasNote,
   isFlashing,
   isRedLetter,
   isDark,
@@ -128,6 +130,7 @@ const VerseItem = React.memo(({
   fontFamily: string;
   isSelected: boolean;
   highlightColor?: BibleHighlightColor;
+  hasNote: boolean;
   isFlashing: boolean;
   isRedLetter: boolean;
   isDark: boolean;
@@ -264,6 +267,18 @@ const VerseItem = React.memo(({
           }}>
             {verse.verse}{' '}
           </Text>
+          {hasNote && (
+            <Text
+              style={{
+                fontSize: Math.max(8, Math.round(fontSize * 0.5)),
+                lineHeight,
+                fontFamily: FontFamily.uiMedium,
+                color: isDark ? '#F5B041' : '#C87F0A',
+              }}
+            >
+              {'● '}
+            </Text>
+          )}
           {verse.text}
         </Text>
       </Animated.View>
@@ -308,6 +323,8 @@ export default function BibleReaderScreen() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState('');
   const noteInputRef = useRef<TextInput>(null);
+  // Note viewer sheet — opened when tapping an inline note marker
+  const [noteSheetHighlight, setNoteSheetHighlight] = useState<import('@/lib/store').BibleHighlight | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // Premium gating for highlight colors
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
@@ -388,8 +405,28 @@ export default function BibleReaderScreen() {
   const highlightMap = useMemo(() => {
     const map: Record<number, BibleHighlightColor> = {};
     for (const h of highlights) {
+      if (h.color === null) continue; // note-only entries — no visual highlight
       for (let v = h.verseStart; v <= h.verseEnd; v++) {
         map[v] = h.color;
+      }
+    }
+    return map;
+  }, [highlights]);
+
+  // Map of verse → highlight with a non-empty note. Used to render the inline
+  // note marker next to the verse number. If a verse has multiple overlapping
+  // notes, the most recently updated one wins.
+  const noteMap = useMemo(() => {
+    const map: Record<number, import('@/lib/store').BibleHighlight> = {};
+    const sorted = [...highlights].sort((a, b) => {
+      const aTime = new Date(a.updatedAt ?? a.createdAt).getTime();
+      const bTime = new Date(b.updatedAt ?? b.createdAt).getTime();
+      return aTime - bTime; // oldest first so newer overwrites
+    });
+    for (const h of sorted) {
+      if (!h.note || !h.note.trim()) continue;
+      for (let v = h.verseStart; v <= h.verseEnd; v++) {
+        map[v] = h;
       }
     }
     return map;
@@ -541,12 +578,19 @@ export default function BibleReaderScreen() {
   const handleNote = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Check if there's an existing highlight with a note for these verses
+    // If the selection overlaps a highlight that already has a non-empty note,
+    // open the read-first bottom sheet. Otherwise open the inline composer.
     const sorted = Array.from(selectedVerses).sort((a, b) => a - b);
     const existingHL = highlights.find((h) =>
       sorted.some((v) => v >= h.verseStart && v <= h.verseEnd)
     );
-    setNoteText(existingHL?.note ?? '');
+    if (existingHL && existingHL.note && existingHL.note.trim()) {
+      setSelectedVerses(new Set());
+      setShowActions(false);
+      setNoteSheetHighlight(existingHL);
+      return;
+    }
+    setNoteText('');
     setShowNoteInput(true);
     setShowColorPicker(false);
     setTimeout(() => noteInputRef.current?.focus(), 100);
@@ -566,7 +610,8 @@ export default function BibleReaderScreen() {
     if (existingHL) {
       updateBibleHighlightNote(existingHL.id, noteText.trim());
     } else {
-      // Create a highlight with the note (default yellow)
+      // Note-only entry: no visual highlight, just a marker next to verse number.
+      // color=null distinguishes "note" from "highlight" in the same data model.
       const selectedTexts = sorted.map((v) => verses.find((vr) => vr.verse === v)?.text ?? '').join(' ');
       addBibleHighlight({
         bookId,
@@ -575,7 +620,7 @@ export default function BibleReaderScreen() {
         verseStart,
         verseEnd,
         text: selectedTexts,
-        color: 'yellow',
+        color: null,
         note: noteText.trim(),
         translation: bibleReaderSettings.translation,
       });
@@ -914,6 +959,7 @@ export default function BibleReaderScreen() {
                   fontFamily={readingFont.body}
                   isSelected={selectedVerses.has(v.verse)}
                   highlightColor={highlightMap[v.verse]}
+                  hasNote={!!noteMap[v.verse]}
                   isFlashing={flashVerse === v.verse}
                   isRedLetter={isRedLetterVerse(bookId, chapter, v.verse)}
                   isDark={isDark}
@@ -1097,6 +1143,14 @@ export default function BibleReaderScreen() {
         visible={showSettings}
         onClose={() => setShowSettings(false)}
         tabBarHeight={tabBarHeight}
+        savedVersesCount={bibleHighlights.length}
+        onOpenSavedVerses={() => {
+          setShowSettings(false);
+          router.push({
+            pathname: '/(tabs)/(you)/my-content',
+            params: { tab: 'highlights', source: 'bible', from: 'bible' },
+          });
+        }}
       />
 
       {/* Book & Chapter Navigator */}
@@ -1128,6 +1182,24 @@ export default function BibleReaderScreen() {
         visible={showHighlightPremiumSheet}
         onClose={() => setShowHighlightPremiumSheet(false)}
         feature="highlight"
+      />
+      {/* Scripture note viewer — opened by tapping the inline note marker */}
+      <BibleNoteSheet
+        highlight={noteSheetHighlight}
+        onClose={() => setNoteSheetHighlight(null)}
+        onSave={(id, note) => {
+          updateBibleHighlightNote(id, note);
+          setNoteSheetHighlight((prev) => (prev ? { ...prev, note } : prev));
+        }}
+        onDelete={(id) => {
+          const target = bibleHighlights.find((h) => h.id === id);
+          if (target && target.color !== null) {
+            // Keep the highlight, just strip the note.
+            updateBibleHighlightNote(id, '');
+          } else {
+            removeBibleHighlight(id);
+          }
+        }}
       />
     </View>
   );

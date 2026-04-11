@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { MagnifyingGlassIcon, BookmarkSimpleIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
+import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
@@ -62,10 +62,6 @@ export default function BibleHomeScreen() {
 
   const handleSearchPress = useCallback(() => {
     router.push('/(tabs)/(bible)/search');
-  }, [router]);
-
-  const handleSavedPress = useCallback(() => {
-    router.push('/(tabs)/(bible)/saved');
   }, [router]);
 
   /** Group books by literary category and render with sub-labels */
@@ -147,15 +143,6 @@ export default function BibleHomeScreen() {
         <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.display }]}>
           Bible
         </Text>
-        <TouchableOpacity
-          onPress={handleSavedPress}
-          style={styles.headerButton}
-          accessibilityLabel="Saved verses"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <BookmarkSimpleIcon size={22} color={colors.textSubtle} weight="light" />
-        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -300,12 +287,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: FontSize['3xl'],
     letterSpacing: -0.5,
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   searchBar: {
     flexDirection: 'row',

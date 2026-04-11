@@ -201,6 +201,7 @@ export default function NoteDetailScreen() {
     verseEnd?: string;
     verseText?: string;
     reference?: string;
+    folderId?: string;
   }>();
 
   const { colors, isDark } = useTheme();
@@ -228,6 +229,14 @@ export default function NoteDetailScreen() {
   // Track the live note ID (may be set after first auto-save for new notes)
   const [noteId, setNoteId] = useState<string | undefined>(params.noteId);
   const category: NoteCategory = existingNote?.category ?? 'general';
+
+  // Initial folder pre-assignment for NEW notes — inherited from the
+  // Journal Notebook's currently-selected folder filter. Captured once at
+  // mount via ref so later in-editor folder moves (moveNoteToFolder) aren't
+  // clobbered by this initial value on subsequent addNote fallbacks.
+  const initialFolderIdRef = useRef<string | undefined>(
+    typeof params.folderId === 'string' && params.folderId.length > 0 ? params.folderId : undefined,
+  );
 
   // Editing state — new notes start in edit mode, existing in read mode
   const isNewNote = !params.noteId;
@@ -480,6 +489,7 @@ export default function NoteDetailScreen() {
           dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
           bibleBookId: params.bookId ? Number(params.bookId) : undefined,
           bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+          folderId: initialFolderIdRef.current,
         });
         setNoteId(id);
         logger.log('[NoteDetail] Auto-saved new note:', id);
@@ -545,6 +555,7 @@ export default function NoteDetailScreen() {
           dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
           bibleBookId: params.bookId ? Number(params.bookId) : undefined,
           bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+          folderId: initialFolderIdRef.current,
         });
         setNoteId(id);
         logger.log('[NoteDetail] Created new note on Done:', id);
@@ -595,6 +606,7 @@ export default function NoteDetailScreen() {
             dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
             bibleBookId: params.bookId ? Number(params.bookId) : undefined,
             bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+            folderId: initialFolderIdRef.current,
           });
           setNoteId(id);
           logger.log('[NoteDetail] Saved new note on back:', id);
@@ -627,6 +639,7 @@ export default function NoteDetailScreen() {
       dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
       bibleBookId: params.bookId ? Number(params.bookId) : undefined,
       bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+      folderId: initialFolderIdRef.current,
     });
     setNoteId(id);
     logger.log('[NoteDetail] Saved note via menu action:', id);

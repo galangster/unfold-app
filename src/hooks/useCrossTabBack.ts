@@ -10,6 +10,7 @@ import * as Haptics from 'expo-haptics';
 const FROM_TO_ROUTE: Record<string, string> = {
   home: '/(tabs)/(today)',
   journal: '/(tabs)/(journal)',
+  bible: '/(tabs)/(bible)',
 };
 
 export function useCrossTabBack() {

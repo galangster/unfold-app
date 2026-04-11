@@ -99,7 +99,8 @@ export interface BibleHighlight {
   verseStart: number;
   verseEnd: number;
   text: string;
-  color: BibleHighlightColor;
+  // null = note-only entry (no visual highlight, just a marker)
+  color: BibleHighlightColor | null;
   note?: string;
   translation: string;
   createdAt: string;
