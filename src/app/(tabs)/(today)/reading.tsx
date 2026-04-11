@@ -569,6 +569,20 @@ export default function ReadingScreen() {
       const fullText = buildTtsText(currentDayData);
       const result = await streamDevotionalAudio(fullText, voiceId);
 
+      // Post-await entitlement re-check. The (today) stack is now kept
+      // mounted under TrialExpiredOverlay when premium flips false, so a
+      // TTS promise that was started while premium can resolve after
+      // churn. Reading live store state (not the closed-over `isPremium`
+      // prop) catches the flip — if it happened, abort playback and
+      // dismiss the player sheet instead of starting paid audio behind
+      // the paywall.
+      const currentPremium =
+        useUnfoldStore.getState().user?.isPremium ?? false;
+      if (!currentPremium) {
+        useAudioPlayerState.getState().stopAudio();
+        return;
+      }
+
       // Start Live Activity only after audio is ready
       startReadingSession({
         devotionalTitle: currentDevotional?.title ?? 'Unfold',

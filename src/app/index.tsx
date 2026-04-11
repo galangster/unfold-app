@@ -203,7 +203,15 @@ export default function WelcomeScreenWrapper() {
   );
   const authUserId = useUnfoldStore((s) => s.user?.authUserId ?? null);
 
-  if (!hasHydrated || !isClerkLoaded) {
+  // Anonymous-onboarded users (`authUserId == null`) do not depend on
+  // Clerk at all — they have local devotional content and never
+  // completed a Clerk sign-in. Waiting on Clerk for those users would
+  // strand them on a blank screen whenever Clerk startup is slow or
+  // fails (offline, outage, SDK error). Only block on Clerk when the
+  // persisted profile actually claims a Clerk identity.
+  const needsClerkConfirmation = authUserId != null;
+
+  if (!hasHydrated || (needsClerkConfirmation && !isClerkLoaded)) {
     return <View style={{ flex: 1, backgroundColor: BG }} />;
   }
 
@@ -211,16 +219,16 @@ export default function WelcomeScreenWrapper() {
   // Clerk itself says nobody is signed in → session was revoked or
   // expired. Force the welcome screen so they can re-authenticate
   // instead of routing them into the signed-in app on cached state.
-  const hasStaleAuthState = authUserId != null && !isSignedIn;
+  const hasStaleAuthState = needsClerkConfirmation && !isSignedIn;
 
   if (hasCompletedOnboarding && !signedOut && !hasStaleAuthState) {
     return <Redirect href="/(tabs)/(today)" />;
   }
 
-  return <WelcomeScreen signedOut={!!signedOut} />;
+  return <WelcomeScreen signedOut={!!signedOut} staleAuth={hasStaleAuthState} />;
 }
 
-function WelcomeScreen({ signedOut = false }: { signedOut?: boolean }) {
+function WelcomeScreen({ signedOut = false, staleAuth = false }: { signedOut?: boolean; staleAuth?: boolean }) {
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
@@ -266,10 +274,11 @@ function WelcomeScreen({ signedOut = false }: { signedOut?: boolean }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // `signedOut` suppresses the onboarded shortcut so a just-signed-out user
     // with stale store/auth state can't bounce straight back into the tabs.
-    // WelcomeScreenWrapper already blocks the same path at its entry — this is
-    // defense in depth in case any downstream code re-populates the store
-    // before navigation lands here.
-    if (!signedOut && user?.hasCompletedOnboarding) {
+    // `staleAuth` handles the same concern on cold start: the wrapper blocked
+    // the render-time redirect because Clerk says no session, but the user
+    // could still tap Continue. Both flags must bypass the shortcut and route
+    // through /onboarding, which re-runs auth.
+    if (!signedOut && !staleAuth && user?.hasCompletedOnboarding) {
       router.replace('/(tabs)/(today)');
       return;
     }
@@ -277,7 +286,7 @@ function WelcomeScreen({ signedOut = false }: { signedOut?: boolean }) {
     // Go directly to onboarding — cutscene and features carousel are now
     // embedded within the onboarding flow (featureSummary step after mirror-back)
     router.replace('/onboarding');
-  }, [user, router, phase, isLastFeaturePage, signedOut]);
+  }, [user, router, phase, isLastFeaturePage, signedOut, staleAuth]);
 
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

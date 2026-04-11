@@ -21,7 +21,14 @@ export function useAuth() {
   // Zustand store — authUserId and authProvider live inside UserProfile
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
-  const prevUserIdRef = useRef<string | null>(null);
+  // Sentinel `undefined` = "no reconciliation yet". On initial boot we
+  // MUST run the sync path once even when Clerk says signed-out, so a
+  // persisted `authUserId` from a revoked or expired session is cleared
+  // from the store. Without this, a stale signed-out boot leaves the
+  // store claiming a Clerk identity that Clerk itself no longer recognizes
+  // — which is exactly the stale-auth state WelcomeScreenWrapper now
+  // guards against. Clearing here is the root-cause fix.
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
   // Derive auth provider from Clerk external accounts
   const authProvider = (() => {
@@ -49,8 +56,10 @@ export function useAuth() {
 
     const newUserId = clerkUserId ?? null;
 
-    // Skip if no change
-    if (newUserId === prevUserIdRef.current) return;
+    // Skip if no change — but the very first reconciliation always runs
+    // (prevUserIdRef starts as `undefined`) so an initial signed-out boot
+    // can clear stale persisted authUserId.
+    if (prevUserIdRef.current !== undefined && newUserId === prevUserIdRef.current) return;
     prevUserIdRef.current = newUserId;
 
     if (newUserId) {
