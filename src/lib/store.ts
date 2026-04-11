@@ -146,13 +146,6 @@ export interface UserProfile {
   accentTheme: AccentThemeId;
   readingFont: ReadingFontId;
   preferredVoice: string;
-  // Auth-related fields (synced from Clerk)
-  authUserId?: string | null;
-  authProvider?: 'apple' | 'google' | 'facebook' | null;
-  authEmail?: string | null;
-  authDisplayName?: string | null;
-  signInPromptCount?: number;
-  hasSeenSignInPrompt?: boolean;
   // New: Theme and type preferences for next devotional
   selectedTheme?: ThemeCategory;
   selectedType?: DevotionalType;

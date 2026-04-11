@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -171,7 +171,6 @@ const RevealWord = React.memo(({
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { signedOut } = useLocalSearchParams<{ signedOut?: string }>();
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
 
@@ -258,7 +257,7 @@ export default function WelcomeScreen() {
 
   // ─── Initial mount animations ───────────────────────────────────
   useEffect(() => {
-    if (user?.hasCompletedOnboarding && !signedOut) {
+    if (user?.hasCompletedOnboarding) {
       router.replace('/(tabs)/(today)');
       return;
     }

@@ -25,7 +25,6 @@ import {
   PaletteIcon,
   TextAaIcon,
   HourglassIcon,
-  SignOutIcon,
   UserCircleIcon,
   LockIcon,
   CreditCardIcon,
@@ -56,7 +55,6 @@ import { StreakDisplay } from '@/components/StreakDisplay';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { DeleteAccountSheet } from '@/components/DeleteAccountSheet';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
@@ -72,8 +70,6 @@ import {
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
-import { useAuth } from '@/hooks/useAuth';
-import { useClerk } from '@clerk/clerk-expo';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
@@ -175,9 +171,6 @@ export default function YouScreen() {
   const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
   const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
 
-  const { isAuthenticated, email, authProvider } = useAuth();
-  const { signOut } = useClerk();
-
   const { data: premiumResult } = useQuery({
     queryKey: ['revenuecat', 'premium'],
     queryFn: () => hasEntitlement('Unfold Premium'),
@@ -194,10 +187,8 @@ export default function YouScreen() {
   const [premiumFeature, setPremiumFeature] = useState<'voice' | 'theme' | 'font' | 'general' | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
   const [isExportingData, setIsExportingData] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
 
   // Check notification status on mount
   useEffect(() => {
@@ -255,36 +246,6 @@ export default function YouScreen() {
       await scheduleDailyReminder(time);
     }
   };
-
-  const handleSignOut = useCallback(async () => {
-    Alert.alert(
-      'Sign out?',
-      'This will clear all your data on this device and return you to the start.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsSigningOut(true);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              await signOut();
-              reset();
-              useCompanionChatStore.getState().clearAllConversations();
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              router.replace({ pathname: '/', params: { signedOut: '1' } });
-            } catch (err) {
-              logger.error('[YouScreen] Sign out error:', err);
-              Alert.alert('Error', 'Could not sign out. Please try again.');
-            } finally {
-              setIsSigningOut(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [signOut, reset, router]);
 
   const handleResetData = async () => {
     if (isDeletingAccount) return;
@@ -1942,82 +1903,6 @@ export default function YouScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* --- Account --- */}
-            <SectionHeader label="Account" />
-
-            <View
-              style={{
-                backgroundColor: colors.inputBackground,
-                borderRadius: Radius.lg,
-                borderWidth: 1,
-                borderColor: colors.border,
-                marginBottom: Spacing['6'],
-              }}
-            >
-              {/* Signed-in user info */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: Spacing['4'],
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: alpha(colors.accent, 0.12),
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <UserCircleIcon size={20} color={colors.accent} weight="light" />
-                </View>
-                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-                    {email ?? 'Signed in'}
-                  </Text>
-                  <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, marginTop: Spacing['0.5'] }}>
-                    {authProvider === 'apple' ? 'Apple' : authProvider === 'google' ? 'Google' : authProvider === 'facebook' ? 'Facebook' : 'Signed in'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Sign out */}
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={handleSignOut}
-                disabled={isSigningOut}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: Spacing['4'],
-                }}
-              >
-                <View
-                  style={{
-                    width: 36, height: 36, borderRadius: 10,
-                    backgroundColor: colors.buttonBackground,
-                    justifyContent: 'center', alignItems: 'center',
-                  }}
-                >
-                  {isSigningOut ? (
-                    <ActivityIndicator size="small" color={colors.textMuted} />
-                  ) : (
-                    <SignOutIcon size={18} color={colors.textMuted} weight="light" />
-                  )}
-                </View>
-                <View style={{ marginLeft: Spacing['3.5'], flex: 1 }}>
-                  <Text style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.text }}>
-                    {isSigningOut ? 'Signing out...' : 'Sign out'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
             {/* --- Dev Tools --- Always rendered (not __DEV__ gated) so they
                 are available in dev AND TestFlight builds. Each button is
                 labeled "(Dev)". Remove this block or gate behind a feature
@@ -2235,39 +2120,6 @@ export default function YouScreen() {
               </View>
             </TouchableOpacity>
 
-            {isAuthenticated && (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  setShowDeleteAccount(true);
-                }}
-                accessibilityLabel="Delete account"
-              >
-                <View
-                  style={{
-                    borderRadius: Radius.md,
-                    paddingVertical: Spacing['3.5'],
-                    paddingHorizontal: Spacing['4'],
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                  }}
-                >
-                  <TrashIcon size={20} color={colors.error} weight="light" />
-                  <Text
-                    style={{
-                      fontFamily: FontFamily.ui,
-                      fontSize: 15,
-                      color: colors.error,
-                      marginLeft: Spacing['3'],
-                    }}
-                  >
-                    Delete account
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
-
             {/* App info */}
             <View style={{ marginTop: Spacing['12'], alignItems: 'center', marginBottom: Spacing['6'] }}>
               <Text
@@ -2301,11 +2153,6 @@ export default function YouScreen() {
           setShowPremiumSheet(false);
         }}
         feature={premiumFeature ?? 'general'}
-      />
-
-      <DeleteAccountSheet
-        visible={showDeleteAccount}
-        onClose={() => setShowDeleteAccount(false)}
       />
     </View>
   );

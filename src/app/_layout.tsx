@@ -11,24 +11,18 @@ import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useFonts } from 'expo-font';
 
-import { ClerkProvider, ClerkLoaded, useAuth as useClerkAuth } from '@clerk/clerk-expo';
-import { tokenCache, setTokenGetter } from '@/lib/clerk';
 import { Colors } from '@/constants/colors';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
-import { useAuth } from '@/hooks/useAuth';
 import { useUnfoldStore } from '@/lib/store';
 import { registerPushToken, setupNotificationListeners } from '@/lib/push-notifications';
-import { syncService } from '@/lib/sync-service';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 // GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
 // blocking touch events and causing audio playback freezes. See GlowBackground.tsx for details.
 // import { GlowBackground } from '@/components/GlowBackground';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
-
-const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 const navigationIntegration = Sentry.reactNavigationIntegration({
   enableTimeToInitialDisplay: true,
@@ -96,35 +90,16 @@ function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
   const ref = useNavigationContainerRef();
 
-  // Sync Clerk token getter to module-level ref for non-React service files
-  const { getToken } = useClerkAuth();
-  useEffect(() => {
-    setTokenGetter(getToken);
-  }, [getToken]);
-
-  // Auth state — syncs Clerk to Zustand, RevenueCat, Sentry
-  const { userId, email, authProvider } = useAuth();
-
-  // Start/stop cloud sync service based on auth state
-  useEffect(() => {
-    if (userId) {
-      syncService.start();
-      return () => syncService.stop();
-    }
-  }, [userId]);
-
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
 
   // Schedule/cancel midday check-in and evening wind-down notifications
   useCheckInNotifications();
 
-  // Register push token with backend and listen for notification taps
+  // Register push token with backend (anonymous, keyed by X-Device-ID)
   useEffect(() => {
-    if (userId) {
-      registerPushToken();
-    }
-  }, [userId]);
+    registerPushToken();
+  }, []);
 
   useEffect(() => {
     const cleanup = setupNotificationListeners();
@@ -145,16 +120,10 @@ function RootLayoutNav() {
     }
   }, [ref]);
 
-  // Set Sentry user context when auth state changes
+  // Track premium state in Sentry tags
   useEffect(() => {
-    if (userId) {
-      Sentry.setUser({ id: userId });
-      Sentry.setTag('auth_provider', authProvider ?? 'none');
-      Sentry.setTag('is_premium', String(isPremium));
-    } else {
-      Sentry.setUser(null);
-    }
-  }, [userId, email, authProvider, isPremium]);
+    Sentry.setTag('is_premium', String(isPremium));
+  }, [isPremium]);
 
 
   return (
@@ -172,13 +141,6 @@ function RootLayoutNav() {
         <Stack.Screen name="how-it-works" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="onboarding" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
         <Stack.Screen name="generating" options={{ animation: 'fade_from_bottom', gestureEnabled: false }} />
-        <Stack.Screen
-          name="(onboarding)/sign-in"
-          options={{
-            presentation: 'fullScreenModal',
-            animation: 'slide_from_bottom',
-          }}
-        />
         <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'none', gestureEnabled: false, contentStyle: { backgroundColor: 'transparent' } }} />
         <Stack.Screen
           name="share-card"
@@ -283,21 +245,17 @@ function RootLayout() {
   }
 
   return (
-    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY!} tokenCache={tokenCache}>
-      <ClerkLoaded>
-        <ErrorBoundary>
-          <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
-              <KeyboardProvider>
-                <ThemeProvider>
-                  <RootLayoutNav />
-                </ThemeProvider>
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </QueryClientProvider>
-        </ErrorBoundary>
-      </ClerkLoaded>
-    </ClerkProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
+          <KeyboardProvider>
+            <ThemeProvider>
+              <RootLayoutNav />
+            </ThemeProvider>
+          </KeyboardProvider>
+        </GestureHandlerRootView>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

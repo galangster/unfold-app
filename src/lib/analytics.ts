@@ -18,13 +18,7 @@ export const AnalyticsEvents = {
   DEVOTIONAL_GENERATION_STARTED: 'devotional_generation_started',
   DEVOTIONAL_GENERATION_COMPLETED: 'devotional_generation_completed',
   DEVOTIONAL_GENERATION_ERROR: 'devotional_generation_error',
-  
-  // Sign In
-  SIGN_IN_PROMPT_SHOWN: 'sign_in_prompt_shown',
-  SIGN_IN_APPLE_TAPPED: 'sign_in_apple_tapped',
-  SIGN_IN_SUCCESS: 'sign_in_success',
-  SIGN_IN_ERROR: 'sign_in_error',
-  
+
   // Devotional Reading
   DEVOTIONAL_OPENED: 'devotional_opened',
   DEVOTIONAL_COMPLETED: 'devotional_completed',
@@ -73,7 +67,6 @@ export const AnalyticsEvents = {
 
 // User properties for segmentation
 export const UserProperties = {
-  AUTH_PROVIDER: 'auth_provider', // 'apple', 'google', 'facebook'
   IS_PREMIUM: 'is_premium', // 'true', 'false'
   READING_DURATION: 'reading_duration', // '5', '15', '30'
   DEVOTIONAL_LENGTH: 'devotional_length', // '3', '7', '14', '30'

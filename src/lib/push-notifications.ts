@@ -77,13 +77,7 @@ export async function registerPushToken(): Promise<void> {
     const token = tokenData.data;
     logger.log(`[push] Push token obtained: ${token.slice(0, 30)}...`);
 
-    // Send token to backend — requires authenticated user
     const headers = await getAuthHeaders();
-    if (!headers['Authorization']) {
-      logger.log('[push] Skipping registration — not authenticated');
-      return;
-    }
-
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const response = await fetch(

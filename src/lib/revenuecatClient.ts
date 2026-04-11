@@ -219,24 +219,6 @@ export const restorePurchases = (): Promise<
 };
 
 /**
- * Set user ID for RevenueCat (useful for cross-platform user tracking)
- *
- * @param userId - The user ID to set
- * @returns RevenueCatResult<void> describing success/failure
- *
- * @example
- * const result = await setUserId(user.id);
- * if (!result.ok) {
- *   // Handle failure case
- * }
- */
-export const setUserId = (userId: string): Promise<RevenueCatResult<void>> => {
-  return guardRevenueCatUsage("setUserId", async () => {
-    await Purchases.logIn(userId);
-  });
-};
-
-/**
  * Log out the current user
  *
  * @returns RevenueCatResult<void> describing success/failure
