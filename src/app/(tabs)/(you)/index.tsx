@@ -316,6 +316,10 @@ export default function YouScreen() {
                     try {
                       reset();
                       useCompanionChatStore.getState().clearAllConversations();
+                      // Mirror sign-out: clear the inflight-generation-job
+                      // MMKV key so HomeScreenWrapper can't resurrect a stale
+                      // job after a destructive local reset.
+                      mmkvStorage.removeItem('inflight-generation-job');
                       router.dismissAll();
                       setTimeout(() => router.replace('/'), 50);
                     } finally {

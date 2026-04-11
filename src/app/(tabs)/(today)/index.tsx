@@ -9,7 +9,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, type MoodLevel } from '@/lib/store';
+import { useUnfoldStore, useHasHydrated, type MoodLevel } from '@/lib/store';
 import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
@@ -99,13 +99,26 @@ function hasInflightGenerationJob(): boolean {
  *
  * The reveal → reading handoff is NOT handled here: reveal.tsx calls
  * router.dismissTo('/(tabs)/(today)/reading') directly, skipping home entirely.
+ *
+ * Defense in depth: the inflight-generation-job MMKV key is cleared on
+ * sign-out and on destructive local reset, but the wrapper also refuses to
+ * redirect unless there's a hydrated user in the store. Without this gate, a
+ * stray key combined with a signed-out (or pre-onboarding) user would land
+ * them on /generating — which immediately bails out when user is null,
+ * stranding them in an empty screen.
  */
 export default function HomeScreenWrapper() {
+  const hasHydrated = useHasHydrated();
+  const hasUser = useUnfoldStore((s) => s.user != null);
   // Read MMKV exactly once per mount. useState initializer runs synchronously
   // during the first render and the result is frozen for this instance.
   const [shouldResumeInflight] = useState(hasInflightGenerationJob);
 
-  if (shouldResumeInflight) {
+  if (!hasHydrated) {
+    return null;
+  }
+
+  if (shouldResumeInflight && hasUser) {
     return <Redirect href="/generating" />;
   }
 

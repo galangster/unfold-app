@@ -3,7 +3,7 @@
  * Pi-style single continuous conversation.
  * Phase 2: rich text with verse pills, blockquotes, scripture tap sheet.
  */
-import React, { useCallback, useRef, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -148,6 +148,18 @@ export default function CompanionScreen() {
     stopGeneration,
     startNewConversation,
   } = useCompanionChat();
+
+  // Runtime premium loss: the sibling-overlay pattern in (ask)/_layout.tsx keeps
+  // this stack mounted to preserve drafts across a churn event, but that also
+  // preserves any in-flight companion stream. When premium flips false
+  // mid-stream we abort immediately so we don't keep delivering paid AI
+  // responses under the overlay. Mirrors the audio teardown in
+  // evening-wind-down.tsx for the same reason.
+  useEffect(() => {
+    if (!isPremium && isStreaming) {
+      stopGeneration();
+    }
+  }, [isPremium, isStreaming, stopGeneration]);
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
