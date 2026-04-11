@@ -63,21 +63,19 @@ function readInflightForOwner(currentOwner: string | null): InflightPayload | nu
       mmkvStorage.removeItem(INFLIGHT_KEY);
       return null;
     }
-    // Legacy migration: pre-owner payloads (no `ownerAuthUserId` key)
-    // predate this version's tenant-isolation contract. Deleting them
-    // on upgrade would strand any in-flight job created by the prior
-    // build, orphaning server results from local state. Allow legacy
-    // payloads to resume under the current account and backfill the
-    // owner binding on next write. The shared-device risk is bounded
-    // by sign-out / destructive reset already clearing the key, so a
-    // persisted legacy payload is always attributable to "whoever
-    // currently has the local profile hydrated" — the same user who
-    // submitted it, unless they explicitly switched accounts (which
-    // goes through the sign-out path that clears MMKV anyway).
+    // Legacy payloads (no `ownerAuthUserId` key) carry no proof of
+    // ownership and we cannot safely adopt them: a non-clean account
+    // switch on a shared device would let user B inherit user A's
+    // job result. Reject outright. The cost is that in-flight jobs
+    // created by a build predating this contract become non-
+    // resumable on upgrade — tenant isolation outweighs recovery of
+    // an already-orphaned local pointer (the server result still
+    // lives under the original user and can be re-fetched through
+    // the normal devotional list path once the job finishes).
     const persistedOwner = parsed.ownerAuthUserId === undefined ? undefined : parsed.ownerAuthUserId;
-    if (persistedOwner !== undefined && persistedOwner !== currentOwner) {
-      logger.warn('[generating] Inflight job owner mismatch — discarding', {
-        persistedOwner,
+    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
+      logger.warn('[generating] Inflight job owner unprovable — discarding', {
+        persistedOwner: persistedOwner === undefined ? 'legacy' : persistedOwner,
         currentOwner,
       });
       mmkvStorage.removeItem(INFLIGHT_KEY);
@@ -87,10 +85,7 @@ function readInflightForOwner(currentOwner: string | null): InflightPayload | nu
       jobId: parsed.jobId,
       devotionalId: parsed.devotionalId,
       submittedAt: parsed.submittedAt,
-      // Adopt current owner (either the persisted match or the backfill
-      // for a legacy payload). Subsequent writes via writeInflight will
-      // stamp this explicitly.
-      ownerAuthUserId: currentOwner,
+      ownerAuthUserId: persistedOwner,
     };
   } catch {
     mmkvStorage.removeItem(INFLIGHT_KEY);

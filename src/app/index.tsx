@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
-import { useAuth as useClerkAuth } from '@clerk/clerk-expo';
+import { useAuth as useClerkAuth, useClerk } from '@clerk/clerk-expo';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -175,12 +176,46 @@ const RevealWord = React.memo(({
  * auth-bound profile and the initial grace period has expired. We keep
  * waiting for Clerk — we do NOT fall through to the tabs, because
  * granting access on unproven auth would leak the previous user's
- * local data on a revoked-session cold start. This screen just tells
- * the user what's happening so they aren't staring at an infinite
- * blank view.
+ * local data on a revoked-session cold start.
+ *
+ * Escape hatch: after a longer delay we expose a sign-out action so
+ * users aren't permanently stranded if Clerk startup is truly stuck
+ * (SDK outage, bad init, hard offline). Signing out clears the stored
+ * profile, drops them to the welcome screen, and lets them re-auth
+ * once they're back online.
  */
+const CLERK_ESCAPE_HATCH_DELAY_MS = 10_000;
+
 function ClerkHoldingScreen() {
   const { colors } = useTheme();
+  const router = useRouter();
+  const { signOut } = useClerk();
+  const reset = useUnfoldStore((s) => s.reset);
+  const [showEscape, setShowEscape] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setShowEscape(true), CLERK_ESCAPE_HATCH_DELAY_MS);
+    return () => clearTimeout(id);
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      // Best-effort Clerk sign-out. If Clerk is actually dead this
+      // throws, but we still want to clear local auth state and fall
+      // through to the welcome screen — the whole point of this
+      // button is to recover from a dead Clerk SDK.
+      await signOut().catch(() => {});
+      reset();
+      mmkvStorage.removeItem('inflight-generation-job');
+      router.replace({ pathname: '/', params: { signedOut: '1' } });
+    } finally {
+      setSigningOut(false);
+    }
+  }, [signingOut, signOut, reset, router]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing['8'] }}>
       <Text
@@ -205,6 +240,31 @@ function ClerkHoldingScreen() {
       >
         This is taking a moment. Check your connection — we'll bring you in as soon as we can reach your account.
       </Text>
+      {showEscape && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleSignOut}
+          disabled={signingOut}
+          style={{
+            marginTop: Spacing['8'],
+            paddingVertical: Spacing['3'],
+            paddingHorizontal: Spacing['6'],
+            borderRadius: Radius.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: FontFamily.uiMedium,
+              fontSize: FontSize.sm,
+              color: colors.textMuted,
+            }}
+          >
+            {signingOut ? 'Signing out…' : 'Still stuck? Sign out'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
