@@ -25,6 +25,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
+import { useUIState } from '@/lib/ui-state';
 import { submitGenerationJob, pollJobStatus, retryJob } from '@/lib/generation-api';
 
 import {
@@ -117,6 +118,18 @@ export default function GeneratingScreen() {
 
   const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
   const user = useUnfoldStore((s) => s.user);
+
+  // Live entitlement gate. If a churned user is already on /generating when
+  // RevenueCat flips false — or the debug-force toggle trips — we must not
+  // let a new paid devotional land. `shouldAbortForEntitlement` mirrors the
+  // sibling-overlay predicate used by (today)/_layout so behavior lines up:
+  // abort only when the user already completed onboarding. Mid-onboarding
+  // users haven't reached the paywall yet and shouldn't be kicked here.
+  const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
+  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
+  const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
+  const shouldAbortForEntitlement = !isPremium && hasCompletedOnboarding;
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
@@ -165,6 +178,33 @@ export default function GeneratingScreen() {
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: !!error });
   }, [navigation, error]);
+
+  // Entitlement watchdog. If the user's premium flips false mid-generation
+  // (RC sync, trial expiry, debug toggle), we must tear the flow down: stop
+  // polling, clear the MMKV inflight key, fail the session, and route them
+  // out before a paid devotional can land. Without this they'd continue to
+  // poll, `handleGenerationComplete` would write a new devotional, and
+  // `handleBeginReading` would redirect them into gated content.
+  useEffect(() => {
+    if (!shouldAbortForEntitlement) return;
+
+    logger.warn('[generating] Entitlement lost mid-generation; aborting flow');
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    pollingRef.current = false;
+    jobSubmittedRef.current = true; // prevent the submit effect from kicking off after abort
+    mmkvStorage.removeItem(INFLIGHT_KEY);
+    failGenerationSession('Subscription required');
+    setIsGenerating(false);
+    setIsReconnecting(false);
+
+    // Drop the user back at the welcome/paywall surface. `/` resolves via
+    // WelcomeScreenWrapper which re-reads hydrated state and routes them to
+    // the correct destination (paywall, onboarding, or tabs).
+    router.replace('/');
+  }, [shouldAbortForEntitlement, router, failGenerationSession]);
 
   // Block deep-link / external navigation while generation is in progress.
   useEffect(() => {
@@ -498,6 +538,10 @@ export default function GeneratingScreen() {
 
   useEffect(() => {
     if (!user || jobSubmittedRef.current) return;
+    // Don't start a new job (or resume) if entitlement is already gone —
+    // the watchdog effect will redirect shortly, but belt-and-suspenders
+    // prevents a narrow race where this effect runs before the watchdog.
+    if (shouldAbortForEntitlement) return;
     jobSubmittedRef.current = true;
 
     // Check MMKV for an inflight job from a previous session (app-kill recovery)
@@ -600,6 +644,22 @@ export default function GeneratingScreen() {
 
   const handleBeginReading = () => {
     if (isNavigating) return;
+    // Re-check entitlement at the moment of navigation. Between the server
+    // job completing and the user tapping Begin Reading, RevenueCat may have
+    // flipped false — the watchdog effect above covers most cases but the
+    // live check closes the narrow race where the flip lands after render
+    // but before dispatch.
+    const liveUser = useUnfoldStore.getState().user;
+    const livePremium = __DEV__
+      ? !useUIState.getState().debugForceTrialExpired
+      : liveUser?.isPremium ?? false;
+    const liveCompletedOnboarding = liveUser?.hasCompletedOnboarding ?? false;
+    if (!livePremium && liveCompletedOnboarding) {
+      logger.warn('[generating] Begin reading blocked — entitlement lost');
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      router.replace('/');
+      return;
+    }
     setIsNavigating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.replace('/(tabs)/(today)/reading');

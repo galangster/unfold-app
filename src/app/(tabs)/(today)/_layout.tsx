@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { useTheme } from '@/lib/theme';
@@ -13,12 +14,28 @@ export default function TodayLayout() {
   // ~/vault/standards/navigation-in-render-not-effects.md
   const hasHydrated = useHasHydrated();
   const { colors } = useTheme();
+  const router = useRouter();
 
   const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? false);
   const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
   const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
   const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
   const shouldShowOverlay = !isPremium && hasCompletedOnboarding;
+
+  // Native-presented routes in this stack (wallpaper = modal, day-menu =
+  // formSheet) sit outside the sibling overlay's React tree, so a runtime
+  // premium flip while one of them is open would leave the sheet interactive
+  // on top of a pointerEvents-none'd stack. Tear those presentations down
+  // the instant the overlay should show.
+  useEffect(() => {
+    if (shouldShowOverlay) {
+      try {
+        router.dismissAll();
+      } catch {
+        // dismissAll throws if there's nothing to dismiss — safe to ignore.
+      }
+    }
+  }, [shouldShowOverlay, router]);
 
   if (!hasHydrated) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
