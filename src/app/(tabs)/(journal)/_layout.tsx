@@ -1,5 +1,5 @@
 import { View, StyleSheet, Modal } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { useTheme } from '@/lib/theme';
@@ -12,6 +12,7 @@ export default function JournalLayout() {
   // flip.
   const hasHydrated = useHasHydrated();
   const { colors } = useTheme();
+  const router = useRouter();
 
   const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? false);
   const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
@@ -53,7 +54,8 @@ export default function JournalLayout() {
         animationType="fade"
         statusBarTranslucent
         presentationStyle="overFullScreen"
-        onRequestClose={() => {}}
+        // See (today)/_layout.tsx for rationale — escape hatch for Android back.
+        onRequestClose={() => router.replace('/(tabs)/(bible)')}
       >
         <View
           style={StyleSheet.absoluteFill}

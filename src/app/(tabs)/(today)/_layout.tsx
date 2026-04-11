@@ -182,7 +182,11 @@ export default function TodayLayout() {
         animationType="fade"
         statusBarTranslucent
         presentationStyle="overFullScreen"
-        onRequestClose={() => {}}
+        // Android hardware back: route to the free Bible tab instead of
+        // no-op'ing. A no-op back button on a full-screen paywall is a
+        // trap — the overlay covers the tab bar, so the user has no
+        // other way out without subscribing.
+        onRequestClose={() => router.replace('/(tabs)/(bible)')}
       >
         <View
           style={StyleSheet.absoluteFill}

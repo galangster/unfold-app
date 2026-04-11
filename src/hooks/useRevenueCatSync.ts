@@ -350,11 +350,25 @@ export function useRevenueCatSync() {
             logger.warn('[RevenueCat] Fetch failed; cached entitlement is non-premium — preserving fail-closed state');
             updateUser({ isPremium: false });
           } else if (cached.expirationDateMillis === null) {
-            logger.warn('[RevenueCat] Fetch failed; cached entitlement is lifetime — preserving premium');
+            // Lifetime grant. Actively write `isPremium: true` — do
+            // NOT rely on the store already holding it. On a cold
+            // launch, Zustand hydration may have restored
+            // `isPremium=false` (e.g. fresh install after reinstall,
+            // or a prior session that fail-closed before this one).
+            // "Preserving premium" without a write is only
+            // "preserving non-premium" in those cases, which
+            // falsely locks out a legitimate lifetime subscriber.
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement is lifetime — restoring premium from cache');
+            updateUser({ isPremium: true });
           } else if (cached.expirationDateMillis > Date.now()) {
-            logger.warn('[RevenueCat] Fetch failed; cached entitlement still within paid window — preserving premium', {
+            // Paid window still valid. Same rationale as the lifetime
+            // branch: the store's starting state cannot be trusted
+            // to already reflect the paid entitlement, so we must
+            // actively write it.
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement still within paid window — restoring premium from cache', {
               msRemaining: cached.expirationDateMillis - Date.now(),
             });
+            updateUser({ isPremium: true });
           } else {
             logger.warn('[RevenueCat] Fetch failed; cached entitlement expired — failing closed to non-premium', {
               msPastExpiration: Date.now() - cached.expirationDateMillis,

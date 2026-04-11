@@ -21,6 +21,7 @@ import {
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { EmberParticles } from '@/components/EmberParticles';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
@@ -75,6 +76,7 @@ export function TrialExpiredOverlay() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const userName = useUnfoldStore((s) => s.user?.name);
 
@@ -177,6 +179,15 @@ export function TrialExpiredOverlay() {
     setErrorMessage(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     restoreMutation.mutate();
+  };
+
+  // Escape hatch to the free Bible tab. The paywall is hosted inside a
+  // <Modal presentationStyle="overFullScreen"> for z-order correctness,
+  // which covers the tab bar — without this, a churned user landing on
+  // Today/Ask/Journal has no way to reach the still-free Bible tab.
+  const handleGoToBible = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.replace('/(tabs)/(bible)');
   };
 
   // Build CTA label
@@ -295,19 +306,33 @@ export function TrialExpiredOverlay() {
           )}
         </TouchableOpacity>
 
-        {/* Restore purchases */}
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleRestore}
-          disabled={isPurchasing}
-          accessibilityRole="button"
-          accessibilityLabel="Restore purchases"
-          style={styles.restoreButton}
-        >
-          <Text style={[styles.restoreText, { color: colors.textSubtle }]}>
-            Restore purchases
-          </Text>
-        </TouchableOpacity>
+        {/* Secondary actions row — restore and free-tab escape */}
+        <View style={styles.secondaryRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleRestore}
+            disabled={isPurchasing}
+            accessibilityRole="button"
+            accessibilityLabel="Restore purchases"
+            style={styles.secondaryButton}
+          >
+            <Text style={[styles.restoreText, { color: colors.textSubtle }]}>
+              Restore purchases
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.legalSeparator, { color: colors.textHint }]}>{'\u00B7'}</Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleGoToBible}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to Bible"
+            style={styles.secondaryButton}
+          >
+            <Text style={[styles.restoreText, { color: colors.textSubtle }]}>
+              Continue to Bible
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Legal links */}
         <View style={styles.legalRow}>
@@ -446,10 +471,17 @@ const styles = StyleSheet.create({
     fontSize: FontSize.base,
     letterSpacing: 0.2,
   },
-  restoreButton: {
+  secondaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing['2'],
+    marginTop: Spacing['2'],
+  },
+  secondaryButton: {
     alignItems: 'center',
     paddingVertical: Spacing['3'],
-    marginTop: Spacing['2'],
+    paddingHorizontal: Spacing['2'],
   },
   restoreText: {
     fontFamily: FontFamily.ui,
