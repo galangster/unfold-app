@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, StyleSheet, Modal } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
@@ -39,18 +39,26 @@ export default function TodayLayout() {
   // highlights, etc.) are left mounted so their component state (drafts,
   // editor buffers) survives the premium flip under the overlay.
   //
-  // Dismissal must not silently fail. `router.back()` can throw mid-
-  // transition, and a single best-effort attempt lets the native sheet
-  // stay interactive above the paywall overlay — a direct gating bypass.
-  // We retry with exponential backoff and, if the top segment still
-  // hasn't left the native-presented set after N attempts, fall back to
-  // `router.dismissAll()` to nuke the whole stack back to `index`. That
-  // trades losing in-stack drafts (reading buffer, etc.) for the harder
-  // guarantee that no gated native sheet remains interactive above the
-  // overlay. The trade is the right one: a churn event is rare, but if
-  // it happens we MUST cover the surface.
+  // Dismissal must not silently fail. `router.back()` can throw or no-op
+  // mid-transition, and a single best-effort attempt would let the native
+  // sheet stay interactive above the paywall overlay — a direct gating
+  // bypass. But retries also must NOT fire blindly: a second back() while
+  // the first is still animating will pop the screen BENEATH the native
+  // sheet, destroying reading/journal draft state beneath. So every
+  // retry tick must re-read navigation state before acting: we keep a
+  // `segmentsRef` updated on every render (fresh closure-free read),
+  // and the retry closure checks it before each `router.back()` call.
+  // If the top segment has already left `NATIVE_PRESENTED_ROUTES`, we
+  // bail out — the native sheet is gone, reading/journal is intact, no
+  // more pops needed. Only if the top segment is still a gated native
+  // presentation after the attempt cap do we escalate to `dismissAll()`,
+  // and only after re-verifying it's STILL a gated native presentation
+  // at escalation time.
   const topSegment = segments[segments.length - 1];
   const topIsNativePresented = typeof topSegment === 'string' && NATIVE_PRESENTED_ROUTES.has(topSegment);
+  const segmentsRef = useRef(segments);
+  segmentsRef.current = segments;
+
   useEffect(() => {
     if (!shouldShowOverlay || !topIsNativePresented) return;
 
@@ -59,55 +67,55 @@ export default function TodayLayout() {
     const MAX_BACK_ATTEMPTS = 3;
     const BACK_RETRY_DELAY_MS = 80;
 
+    const currentTopIsNative = (): boolean => {
+      const segs = segmentsRef.current;
+      const top = segs[segs.length - 1];
+      return typeof top === 'string' && NATIVE_PRESENTED_ROUTES.has(top);
+    };
+
+    const escalate = () => {
+      // Only nuke the stack if we're STILL on a gated native
+      // presentation. If segments already moved away while we were
+      // waiting, the transition resolved on its own and we must not
+      // over-pop into non-gated screens below.
+      if (!currentTopIsNative()) return;
+      try {
+        router.dismissAll();
+      } catch {
+        router.replace('/(tabs)/(today)');
+      }
+    };
+
     const tryDismiss = () => {
       if (cancelled) return;
+
+      // Fresh navigation-state read. If the native sheet is already
+      // gone, bail — no further pops. This is the guard that prevents
+      // over-popping a successful first back() into the reading/journal
+      // screen beneath.
+      if (!currentTopIsNative()) return;
+
       attempts += 1;
+      if (attempts > MAX_BACK_ATTEMPTS) {
+        escalate();
+        return;
+      }
+
       try {
         if (router.canGoBack()) {
           router.back();
-          // Schedule a verification pass; if we're still on a native-
-          // presented segment after this tick, back() no-op'd and we
-          // need to retry or escalate.
-          setTimeout(() => {
-            if (cancelled) return;
-            // Re-read segments via the route object indirectly — we
-            // schedule another attempt and let the effect's next run
-            // decide whether we're still stuck. Since segments is a
-            // captured closure here, we just retry unconditionally up
-            // to the attempt cap.
-            if (attempts < MAX_BACK_ATTEMPTS) {
-              tryDismiss();
-            } else {
-              try {
-                router.dismissAll();
-              } catch {
-                router.replace('/(tabs)/(today)');
-              }
-            }
-          }, BACK_RETRY_DELAY_MS);
+        } else {
+          // canGoBack said false but we're still on a native sheet —
+          // weird stack state; nuke to tab root.
+          escalate();
           return;
         }
-        // canGoBack said false — the stack has nothing to pop, which
-        // shouldn't happen when a native sheet is on top, but if it
-        // does, nuke to the tab root.
-        try {
-          router.dismissAll();
-        } catch {
-          router.replace('/(tabs)/(today)');
-        }
       } catch {
-        // back() threw mid-transition. Retry up to the cap, then
-        // escalate to dismissAll + hard replace.
-        if (attempts < MAX_BACK_ATTEMPTS) {
-          setTimeout(tryDismiss, BACK_RETRY_DELAY_MS);
-        } else {
-          try {
-            router.dismissAll();
-          } catch {
-            router.replace('/(tabs)/(today)');
-          }
-        }
+        // back() threw mid-transition. Fall through to the scheduled
+        // retry.
       }
+
+      setTimeout(tryDismiss, BACK_RETRY_DELAY_MS);
     };
 
     tryDismiss();

@@ -223,19 +223,43 @@ function ClerkHoldingScreen() {
       // recovers. So we run the same teardown inline: Clerk, local
       // store, companion conversations, inflight MMKV, RevenueCat,
       // Analytics, and Sentry.
+      //
+      // Local-first ordering: wipe Zustand BEFORE awaiting any network
+      // call. Every premium-sensitive surface reads isPremium from
+      // Zustand (see (today)/_layout.tsx, TrialExpiredOverlay, etc.),
+      // so by the time routing lands on the welcome screen, there's
+      // no locally-observable stale entitlement to leak, regardless
+      // of whether the RC logout network call has resolved yet.
       await signOut().catch(() => {});
       reset();
       useCompanionChatStore.getState().clearAllConversations();
       mmkvStorage.removeItem('inflight-generation-job');
-      if (isRevenueCatEnabled()) {
-        rcLogoutUser().then((result) => {
-          if (!result.ok) {
-            logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
-          }
-        });
-      }
       Analytics.setUserId(null);
       Sentry.setUser(null);
+
+      // RevenueCat logout — await with timeout. We can't leave it
+      // fire-and-forget (the next mount could racily observe stale
+      // CustomerInfo if anything reads directly off Purchases), but
+      // we also can't block indefinitely because Clerk being stuck
+      // often means the device is hard-offline and Purchases.logOut()
+      // would hang forever on the network call. 1.5s cap, then proceed.
+      if (isRevenueCatEnabled()) {
+        const RC_LOGOUT_TIMEOUT_MS = 1500;
+        try {
+          await Promise.race([
+            rcLogoutUser().then((result) => {
+              if (!result.ok) {
+                logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
+              }
+            }),
+            new Promise<void>((resolve) => setTimeout(resolve, RC_LOGOUT_TIMEOUT_MS)),
+          ]);
+        } catch {
+          // rcLogoutUser is already guarded and returns {ok,reason};
+          // any thrown error here is defensive.
+        }
+      }
+
       router.replace({ pathname: '/', params: { signedOut: '1' } });
     } finally {
       setSigningOut(false);
@@ -379,7 +403,18 @@ export default function WelcomeScreenWrapper() {
     return () => clearTimeout(id);
   }, [needsClerkConfirmation, isClerkLoaded]);
 
-  const waitingOnClerk = needsClerkConfirmation && !isClerkLoaded;
+  // Escape-hatch override. `authUserIdSnapshotRef` is intentionally
+  // frozen to survive useAuth() mutations, but that also means a user
+  // who taps 'Still stuck? Sign out' in ClerkHoldingScreen would be
+  // bounced right back to the holding screen on the next render
+  // (same frozen snapshot → still auth-bound → still waiting on a
+  // Clerk that's still stuck). The `signedOut=1` param is our signal
+  // from handleSignOut that local state has been wiped and the user
+  // has explicitly opted out of waiting — short-circuit the Clerk
+  // wait so they reach the welcome flow even if Clerk never recovers.
+  // Local auth teardown already ran (reset + RC logout + Analytics +
+  // Sentry), so we're safe to treat this session as anonymous here.
+  const waitingOnClerk = needsClerkConfirmation && !isClerkLoaded && !signedOut;
 
   if (!hasHydrated || (waitingOnClerk && !showClerkHolding)) {
     return <View style={{ flex: 1, backgroundColor: BG }} />;
