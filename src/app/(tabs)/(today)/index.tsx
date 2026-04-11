@@ -106,21 +106,33 @@ export default function HomeScreenWrapper() {
   const hasHydrated = useHasHydrated();
   const hasUser = useUnfoldStore((s) => s.user != null);
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  // Clerk-authoritative identity. We use Clerk's userId (not the
+  // store's authUserId) as the inflight owner because of a cold-start
+  // race:
+  //
+  //   1. Cold launch. Zustand persist hydrates and the store's
+  //      authUserId is whatever was last written — which may legitimately
+  //      be null if the user signed out last session and then re-signed-in
+  //      on a run the store never got to persist.
+  //   2. useAuth's effect hasn't yet fired to write the live Clerk id
+  //      into the store (effects run after render).
+  //   3. HomeScreenWrapper renders during that gap and would read
+  //      `authUserId=null` as "anonymous owner" → hasInflightJobForOwner
+  //      discards the (owned) persisted job permanently.
+  //
+  // By gating on `!authLoading` AND using `clerkUserId` directly, we
+  // delay the one-shot MMKV read until Clerk has authoritatively
+  // decided, and the owner we compare against is never a pre-effect
+  // stale null from the store.
+  const { isLoading: authLoading, userId: clerkUserId } = useAuth();
 
-  // Read MMKV exactly once — but only AFTER hydration, so the owner
-  // binding check compares against the real authUserId rather than the
-  // pre-hydration placeholder. A useState initializer would run on the
-  // first pre-hydration render and freeze the wrong value. A ref
-  // assignment during the first hydrated render is effect-free and
-  // survives subsequent re-renders.
   const inflightRef = useRef<boolean | null>(null);
-  if (hasHydrated && inflightRef.current === null) {
-    const currentOwner = useUnfoldStore.getState().user?.authUserId ?? null;
-    inflightRef.current = hasInflightGenerationJobFor(currentOwner);
+  if (hasHydrated && !authLoading && inflightRef.current === null) {
+    inflightRef.current = hasInflightGenerationJobFor(clerkUserId);
   }
   const shouldResumeInflight = inflightRef.current === true;
 
-  if (!hasHydrated) {
+  if (!hasHydrated || authLoading) {
     return null;
   }
 

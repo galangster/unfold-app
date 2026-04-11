@@ -42,8 +42,22 @@ const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
 // used to decide whether it is safe to preserve `isPremium=true` when
 // a later bootstrap fetch fails.
 //
-// Schema:
+// Schema (v2):
 //   {
+//     // RevenueCat appUserID (from Purchases.getAppUserID()) at the
+//     // time of the write. Used to refuse cross-identity cache
+//     // inheritance: on an RC outage at cold launch the fallback
+//     // branch compares this to the *current* appUserID and rejects
+//     // the cache on mismatch. Without this binding, the cache is
+//     // global MMKV state and a scenario where a previous user's
+//     // snapshot survives sign-out (e.g. sign-out path crashed after
+//     // the cache write but before the clear, or two installs sharing
+//     // the same device shared a cache key) would let an offline
+//     // cold-launch of a *different* identity inherit the prior user's
+//     // `isPremium=true`. appUserID includes the anonymous-id prefix
+//     // for signed-out sessions, so anonymous-to-anonymous transitions
+//     // also get fresh identities and do not share cache.
+//     appUserId: string,
 //     isPremium: boolean,
 //     // expirationDateMillis at time of last successful sync. null
 //     // means lifetime access (no expiration). Used to bound the
@@ -71,6 +85,7 @@ const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
 const RC_CACHED_ENTITLEMENT_KEY = 'rc-cached-entitlement-v1';
 
 type CachedEntitlement = {
+  appUserId: string;
   isPremium: boolean;
   expirationDateMillis: number | null;
   syncedAtMillis: number;
@@ -81,10 +96,14 @@ function readCachedEntitlement(): CachedEntitlement | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<CachedEntitlement>;
+    // v2 requires appUserId. v1 entries lack it — fail-closed reject
+    // on migration so no identity is silently inherited.
+    if (typeof parsed.appUserId !== 'string' || parsed.appUserId.length === 0) return null;
     if (typeof parsed.isPremium !== 'boolean') return null;
     if (parsed.expirationDateMillis !== null && typeof parsed.expirationDateMillis !== 'number') return null;
     if (typeof parsed.syncedAtMillis !== 'number') return null;
     return {
+      appUserId: parsed.appUserId,
       isPremium: parsed.isPremium,
       expirationDateMillis: parsed.expirationDateMillis ?? null,
       syncedAtMillis: parsed.syncedAtMillis,
@@ -96,6 +115,23 @@ function readCachedEntitlement(): CachedEntitlement | null {
 
 function writeCachedEntitlement(snapshot: CachedEntitlement): void {
   mmkvStorage.setItem(RC_CACHED_ENTITLEMENT_KEY, JSON.stringify(snapshot));
+}
+
+/**
+ * Resolve the RC appUserID for a cache read/write. This is a local
+ * SDK call — it does not hit the network, so it succeeds even in the
+ * fail-closed fallback branch where getCustomerInfo() just failed.
+ * Returns null if the SDK throws (extremely unlikely but we treat
+ * "cannot prove identity" as a cache-reject signal).
+ */
+async function resolveAppUserId(): Promise<string | null> {
+  try {
+    const id = await Purchases.getAppUserID();
+    return typeof id === 'string' && id.length > 0 ? id : null;
+  } catch (err) {
+    logger.warn('[RevenueCat] getAppUserID threw — treating as no identity', { err });
+    return null;
+  }
 }
 
 export function useRevenueCatSync() {
@@ -214,11 +250,23 @@ export function useRevenueCatSync() {
           // valid until" cutoff. For non-premium users we still write
           // the snapshot (with isPremium=false) so the cache reflects
           // the latest known state rather than a stale premium=true.
-          writeCachedEntitlement({
-            isPremium: hasSubscription,
-            expirationDateMillis: entitlement?.expirationDateMillis ?? null,
-            syncedAtMillis: Date.now(),
-          });
+          // Bind to the current RC appUserID so the cache can't be
+          // inherited across identities on a future launch.
+          const appUserId = await resolveAppUserId();
+          if (cancelled) return;
+          if (appUserId !== null) {
+            writeCachedEntitlement({
+              appUserId,
+              isPremium: hasSubscription,
+              expirationDateMillis: entitlement?.expirationDateMillis ?? null,
+              syncedAtMillis: Date.now(),
+            });
+          } else {
+            // No identity to bind — drop any stale cache rather than
+            // persisting an unidentifiable snapshot.
+            logger.warn('[RevenueCat] Cannot resolve appUserID on success — clearing cache');
+            mmkvStorage.removeItem(RC_CACHED_ENTITLEMENT_KEY);
+          }
           // Re-validate the trial-ending local notification against the
           // latest customer info. Fire-and-forget.
           void syncTrialEndingNotification();
@@ -275,9 +323,28 @@ export function useRevenueCatSync() {
           // pending branch above regardless of cache state, because
           // that path is about *identity* uncertainty, not
           // *entitlement* staleness.
+          //
+          // Identity binding: before trusting the cache, compare the
+          // cached appUserId to the *current* RC appUserID. If they
+          // don't match, the cache belongs to a different identity
+          // (different Clerk user, different anonymous session, or
+          // a v1 cache entry with no identity at all — readCachedEntitlement
+          // rejects those shape-wise). Refuse the cache and fail
+          // closed. This closes the defense-in-depth hole where a
+          // sign-out path that crashed after the cache write (or any
+          // edge case where the cache survives an identity change)
+          // could otherwise leak premium across users.
           const cached = readCachedEntitlement();
+          const currentAppUserId = await resolveAppUserId();
+          if (cancelled) return;
           if (!cached) {
             logger.warn('[RevenueCat] Fetch failed with no cached entitlement — failing closed to non-premium');
+            updateUser({ isPremium: false });
+          } else if (currentAppUserId === null || cached.appUserId !== currentAppUserId) {
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement belongs to a different RC identity — rejecting cache and failing closed', {
+              cachedAppUserId: cached.appUserId,
+              currentAppUserId,
+            });
             updateUser({ isPremium: false });
           } else if (!cached.isPremium) {
             logger.warn('[RevenueCat] Fetch failed; cached entitlement is non-premium — preserving fail-closed state');
@@ -322,11 +389,25 @@ export function useRevenueCatSync() {
           const entitlement = customerInfo.entitlements.active?.['Unfold Premium'];
           const hasSubscription = Boolean(entitlement);
           updateUser({ isPremium: hasSubscription });
-          writeCachedEntitlement({
-            isPremium: hasSubscription,
-            expirationDateMillis: entitlement?.expirationDateMillis ?? null,
-            syncedAtMillis: Date.now(),
-          });
+          // Fire-and-forget: resolveAppUserId is async, and the
+          // listener signature is sync. The store update above
+          // already reflects the new entitlement immediately; the
+          // persisted cache refresh runs in the background and
+          // catches up. We intentionally do NOT await it — listener
+          // callbacks must stay non-blocking, and a resolve-identity
+          // failure here should not block the store write from
+          // propagating to UI.
+          void (async () => {
+            if (cancelled) return;
+            const appUserId = await resolveAppUserId();
+            if (cancelled || appUserId === null) return;
+            writeCachedEntitlement({
+              appUserId,
+              isPremium: hasSubscription,
+              expirationDateMillis: entitlement?.expirationDateMillis ?? null,
+              syncedAtMillis: Date.now(),
+            });
+          })();
           void syncTrialEndingNotification();
         };
         Purchases.addCustomerInfoUpdateListener(fn);
