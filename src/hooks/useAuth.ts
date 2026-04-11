@@ -10,10 +10,11 @@ import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-expo';
 import * as Sentry from '@sentry/react-native';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
-import { setUserId as rcSetUserId, logoutUser as rcLogoutUser, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import { setUserId as rcSetUserId, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { Analytics } from '@/lib/analytics';
 import { migrateAnonymousData } from '@/lib/api-config';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { performRevenueCatTeardown } from '@/lib/sign-out-teardown';
 
 // Persistent guard set by the welcome-screen escape hatch
 // (src/app/index.tsx handleSignOut) when the user force-signs-out while
@@ -188,9 +189,30 @@ export function useAuth() {
 
       logger.log('[useAuth] Clerk user synced:', newUserId);
     } else if (!isSignedIn) {
-      // Signed out — authoritative confirmation from Clerk. See the
-      // "Clerk confirmed signed-out" block above the skip-if-no-
-      // change gate for the full guard-clear rationale.
+      // Signed out — authoritative confirmation from Clerk. This is
+      // the catch-all branch for every Clerk-driven signed-out
+      // transition that did NOT route through the settings UI /
+      // escape hatch: session expiry, token revocation, externally-
+      // signalled sign-out, Clerk dashboard force-signout, etc.
+      //
+      // We must run the same fail-closed RevenueCat teardown as
+      // performSignOutTeardown — set rc-logout-pending, clear the
+      // persisted entitlement snapshot, invalidate the live RC
+      // session, fire-and-forget the RC logout — otherwise the
+      // offline-cache fallback in useRevenueCatSync can rehydrate
+      // the previous user's isPremium=true into the now-signed-out
+      // session on the next cold launch with a degraded RC. That's
+      // a real cross-session entitlement leak on shared devices.
+      //
+      // We do NOT wipe local content (devotionals, journal,
+      // companion) here: Clerk sign-outs can be transient (token
+      // refresh races, backend dashboard hiccups), and the RC
+      // teardown by itself is enough to keep entitlement state
+      // tenant-safe. The settings-UI path remains responsible for
+      // the full store wipe.
+      //
+      // See the "Clerk confirmed signed-out" block above the skip-
+      // if-no-change gate for the full guard-clear rationale.
       updateUser({
         authUserId: null,
         authProvider: null,
@@ -198,14 +220,7 @@ export function useAuth() {
         authDisplayName: null,
       });
 
-      // Clear RevenueCat (wrapper returns { ok, reason }, never rejects)
-      if (isRevenueCatEnabled()) {
-        rcLogoutUser().then((result) => {
-          if (!result.ok) {
-            logger.warn('[useAuth] RevenueCat logoutUser failed:', result.reason);
-          }
-        });
-      }
+      performRevenueCatTeardown('useauth-clerk-signed-out');
 
       // Clear analytics & Sentry
       Analytics.setUserId(null);

@@ -98,6 +98,85 @@ export type SignOutTeardownOptions = {
 };
 
 /**
+ * Source tag for the standalone RC-teardown helper below. Every
+ * string here names a code path where we need the fail-closed
+ * RevenueCat teardown without doing a full local-state wipe.
+ */
+export type RevenueCatTeardownSource =
+  | 'welcome-escape-hatch'
+  | 'settings-sign-out'
+  | 'settings-reset-data'
+  | 'useauth-clerk-signed-out';
+
+/**
+ * Shared RevenueCat teardown for every sign-out path — both the full
+ * `performSignOutTeardown` (which ALSO wipes local state) and the
+ * passive Clerk-confirmed signed-out branch in `useAuth` (which must
+ * NOT wipe local devotionals/journal/etc because Clerk sign-outs can
+ * be transient and the user's own content is tenant-safe as long as
+ * the RC entitlement state can't leak).
+ *
+ * Why this exists: before extraction, `useAuth`'s authoritative
+ * signed-out branch only fire-and-forgot `rcLogoutUser()`. With the
+ * offline-cache fallback added to `useRevenueCatSync`, any
+ * Clerk-driven sign-out that didn't go through the settings UI
+ * (session expiry, token revocation, external sign-out) left:
+ *   - `rc-cached-entitlement-v1` live in MMKV
+ *   - `rc-logout-pending` unset
+ *   - The in-process RC listener still attached
+ * and the next cold launch with a degraded/offline RC would
+ * rehydrate the previous user's `isPremium=true` into the now-
+ * signed-out session. Real cross-session entitlement leak on
+ * shared devices.
+ *
+ * This helper enforces the same fail-closed sequence every path
+ * needs:
+ *   1. Set `rc-logout-pending` BEFORE invalidating the session so
+ *      the re-bootstrap refuses premium writes.
+ *   2. Clear the persisted entitlement snapshot so offline cold-
+ *      launch cannot restore premium.
+ *   3. Invalidate the in-process RC session so any late
+ *      CustomerInfo listener callback is torn down.
+ *   4. Fire-and-forget `rcLogoutUser()`; clear the pending flag on
+ *      success, leave it set on failure so the next bootstrap
+ *      retries.
+ *
+ * Does NOT touch Zustand, companion store, inflight job, Analytics,
+ * or Sentry — those are the caller's responsibility (and differ
+ * between the full teardown and the useAuth branch).
+ */
+export function performRevenueCatTeardown(source: RevenueCatTeardownSource): void {
+  if (!isRevenueCatEnabled()) return;
+
+  // Steps 1-3 are synchronous and must land BEFORE any further
+  // re-render so that a concurrent `useRevenueCatSync` re-bootstrap
+  // sees the guard + cleared cache on its first read.
+  mmkvStorage.setItem(RC_LOGOUT_PENDING_KEY, '1');
+  mmkvStorage.removeItem(RC_CACHED_ENTITLEMENT_KEY);
+  invalidateRevenueCatSession();
+
+  // Step 4: background RC logout. Fire-and-forget — if RC is stuck
+  // we must not block the caller. On success we clear the pending
+  // flag; on failure we leave it set so the next bootstrap retries.
+  void (async () => {
+    try {
+      const result = await rcLogoutUser();
+      if (result.ok) {
+        mmkvStorage.removeItem(RC_LOGOUT_PENDING_KEY);
+        logger.log('[sign-out-teardown] RC logout succeeded, cleared pending flag', { source });
+      } else {
+        logger.warn('[sign-out-teardown] RC logout failed, leaving pending flag set', {
+          source,
+          reason: result.reason,
+        });
+      }
+    } catch (err) {
+      logger.warn('[sign-out-teardown] RC logout threw, leaving pending flag set', { source, err });
+    }
+  })();
+}
+
+/**
  * Run the fail-closed teardown sequence shared by every sign-out or
  * destructive-reset path. Synchronous from the caller's perspective:
  * returns after local state is cleared; RC/Clerk network calls
@@ -119,23 +198,11 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
     mmkvStorage.setItem(FORCED_SIGNED_OUT_KEY, preSignOutAuthUserId);
   }
 
-  // 2. Persist the RC logout-pending guard BEFORE invalidating the
-  //    session, so the re-bootstrap triggered by the invalidation
-  //    sees the flag and refuses premium writes until it can prove
-  //    a clean logOut. Also wipe the persisted entitlement cache:
-  //    that cache is a global MMKV key keyed on nothing, so if we
-  //    leave it in place a subsequent offline cold-launch in a new
-  //    or anonymous session would read the previous user's
-  //    `isPremium=true` snapshot and restore it. Clearing it here
-  //    is safe because any still-valid premium session will
-  //    repopulate the cache on its next successful
-  //    `getCustomerInfo()` — and any session that never reaches
-  //    that success will have stayed fail-closed regardless.
-  if (isRevenueCatEnabled()) {
-    mmkvStorage.setItem(RC_LOGOUT_PENDING_KEY, '1');
-    mmkvStorage.removeItem(RC_CACHED_ENTITLEMENT_KEY);
-    invalidateRevenueCatSession();
-  }
+  // 2. Fail-closed RevenueCat teardown — guards + cache clear +
+  //    session invalidate, plus fire-and-forget logout. Delegated
+  //    to performRevenueCatTeardown so this sequence stays in lock-
+  //    step with useAuth's Clerk-signed-out branch.
+  performRevenueCatTeardown(source);
 
   // 3. Fire Clerk signOut in the background. Do not await — if
   //    Clerk is stuck (the exact scenario the escape hatch handles)
@@ -156,27 +223,4 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
   clearInflight();
   Analytics.setUserId(null);
   Sentry.setUser(null);
-
-  // 5. Background RC logout. Same fire-and-forget pattern as the
-  //    escape hatch — on success we clear the pending flag, on
-  //    failure we leave it set so the next useRevenueCatSync bootstrap
-  //    (this session via the re-bootstrap, or next launch) retries.
-  if (isRevenueCatEnabled()) {
-    void (async () => {
-      try {
-        const result = await rcLogoutUser();
-        if (result.ok) {
-          mmkvStorage.removeItem(RC_LOGOUT_PENDING_KEY);
-          logger.log('[sign-out-teardown] RC logout succeeded, cleared pending flag', { source });
-        } else {
-          logger.warn('[sign-out-teardown] RC logout failed, leaving pending flag set', {
-            source,
-            reason: result.reason,
-          });
-        }
-      } catch (err) {
-        logger.warn('[sign-out-teardown] RC logout threw, leaving pending flag set', { source, err });
-      }
-    })();
-  }
 }
