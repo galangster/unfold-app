@@ -799,7 +799,7 @@ export default function HomeScreen() {
             >
               <StreakBox
                 streakCount={streakCurrent}
-                onPress={() => router.push('/(tabs)/(you)/streak-settings')}
+                onPress={() => router.push('/streak-settings')}
               />
             </Animated.View>
           </View>

@@ -26,7 +26,7 @@ const getScreenName = (pathname: string, segments: string[]): string => {
     '(tabs)/(journal)': 'Journal_Hub',
     '(tabs)/(you)/settings': 'Settings',
     '(tabs)/(you)/stats': 'Stats',
-    '(tabs)/(you)/streak-settings': 'StreakSettings',
+    'streak-settings': 'StreakSettings',
     'paywall': 'Paywall',
   };
 
