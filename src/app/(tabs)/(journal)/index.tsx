@@ -771,9 +771,12 @@ export default function JournalHubScreen() {
   const handleCreateNote = useCallback(() => {
     router.push({
       pathname: '/(tabs)/(journal)/note-detail',
-      params: { startEditing: 'true' },
+      params: {
+        startEditing: 'true',
+        ...(activeFolderId ? { folderId: activeFolderId } : {}),
+      },
     });
-  }, [router]);
+  }, [router, activeFolderId]);
 
   const handleNotePress = useCallback(
     (note: Note) => {
