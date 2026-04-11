@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon, MagnifyingGlassIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -892,15 +892,31 @@ export default function BibleReaderScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setShowSettings(true)}
-          style={styles.headerButton}
-          accessibilityLabel="Reading settings"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <TextAaIcon size={20} color={colors.text} weight="light" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {/* Bible search — the only explicit path to /(tabs)/(bible)/search
+              now that (bible)/index.tsx is a render-phase redirect into
+              the reader. The book/chapter title also opens
+              BookChapterNavigator which has FTS5 search, but a dedicated
+              magnifying-glass icon is the discoverable entry point. */}
+          <TouchableOpacity
+            onPress={() => router.push('/(tabs)/(bible)/search')}
+            style={styles.headerButton}
+            accessibilityLabel="Search the Bible"
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <MagnifyingGlassIcon size={20} color={colors.text} weight="light" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowSettings(true)}
+            style={styles.headerButton}
+            accessibilityLabel="Reading settings"
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <TextAaIcon size={20} color={colors.text} weight="light" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Scroll content — wrapped in gesture detector for swipe chapter navigation */}
@@ -1219,6 +1235,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 6 },
   headerBook: { fontSize: 17 },
   headerChapter: { fontFamily: FontFamily.ui, fontSize: 15 },

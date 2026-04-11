@@ -16,6 +16,14 @@ import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
  * The redirect runs during render, not in a useEffect, so there's no
  * one-frame flash of any intermediate UI on cold start. See
  * ~/vault/standards/navigation-in-render-not-effects.md
+ *
+ * Navigation/search affordances live in reader.tsx's header (not here):
+ *  - MagnifyingGlass icon → /(tabs)/(bible)/search (FTS5)
+ *  - Book/chapter tap → BookChapterNavigator (book picker + FTS5)
+ *  - TextAa icon → ReadingSettingsSheet
+ * Previously this index rendered a book grid with a search button; that
+ * surface is now folded into the reader header so tab reselect still
+ * opens the reader while search/nav stay one tap away.
  */
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
