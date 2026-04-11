@@ -18,14 +18,13 @@ import { Duration } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { WarningCircleIcon, TrashIcon } from 'phosphor-react-native';
-import { MMKV } from 'react-native-mmkv';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore } from '@/lib/store';
 import { useUser, useClerk } from '@clerk/clerk-expo';
 import { logger } from '@/lib/logger';
+import { performSignOutTeardown } from '@/lib/sign-out-teardown';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,7 +54,6 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
   const { colors, isDark } = useTheme();
   const router = useRouter();
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const reset = useUnfoldStore((s) => s.reset);
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
 
@@ -107,7 +105,11 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
     try {
-      // Delete Clerk account if user is signed in
+      // Delete Clerk account if user is signed in. Only after the
+      // remote delete succeeds do we hand local cleanup off to the
+      // shared teardown — that way a failed remote delete leaves the
+      // device in its pre-delete state instead of an orphaned
+      // "locally wiped, still subscribed" limbo.
       if (clerkUser) {
         try {
           await clerkUser.delete();
@@ -120,24 +122,26 @@ export function DeleteAccountSheet({ visible, onClose }: DeleteAccountSheetProps
           setIsDeleting(false);
           return;
         }
-        await signOut();
       }
 
-      // Clear Zustand store
-      reset();
-
-      // Clear MMKV storage
-      try {
-        const mmkv = new MMKV({ id: 'unfold-store' });
-        mmkv.clearAll();
-        logger.log('[DeleteAccount] MMKV storage cleared');
-      } catch (mmkvError) {
-        logger.error('[DeleteAccount] Failed to clear MMKV', mmkvError);
-      }
+      // Delegate to the shared fail-closed teardown. This is the
+      // only place account deletion should open-code local cleanup —
+      // the teardown enforces the RevenueCat guard + cache-clear +
+      // session-invalidate sequence and the forced-signed-out guard
+      // that useAuth relies on to refuse a late Clerk positive-sync
+      // for the now-deleted user. Previously DeleteAccountSheet
+      // called reset() + mmkv.clearAll() on the deprecated
+      // unfold-store (v1) MMKV instance directly, which left the
+      // current v2 store and every new RC guard key untouched —
+      // real cross-session entitlement leak on shared devices if
+      // the next launch hit a degraded RC.
+      performSignOutTeardown({
+        clerkSignOut: signOut,
+        source: 'settings-delete-account',
+      });
 
       logger.log('[DeleteAccount] Account deletion complete');
 
-      // Close sheet and navigate to root
       onClose();
       router.replace('/');
     } catch (error) {

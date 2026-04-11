@@ -94,7 +94,11 @@ export type SignOutTeardownOptions = {
    * escape hatch from the settings flows when debugging. Not shown
    * to the user.
    */
-  source: 'welcome-escape-hatch' | 'settings-sign-out' | 'settings-reset-data';
+  source:
+    | 'welcome-escape-hatch'
+    | 'settings-sign-out'
+    | 'settings-reset-data'
+    | 'settings-delete-account';
 };
 
 /**
@@ -106,6 +110,7 @@ export type RevenueCatTeardownSource =
   | 'welcome-escape-hatch'
   | 'settings-sign-out'
   | 'settings-reset-data'
+  | 'settings-delete-account'
   | 'useauth-clerk-signed-out';
 
 /**
