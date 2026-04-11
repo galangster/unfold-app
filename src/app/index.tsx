@@ -22,7 +22,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
-import { useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
 import {
@@ -174,12 +174,21 @@ const RevealWord = React.memo(({
  * during render, before WelcomeScreen's heavy animation tree ever mounts.
  * This is the navigation-in-render pattern — no useEffect + router.replace.
  * See ~/vault/standards/navigation-in-render-not-effects.md
+ *
+ * Waits for Zustand hydration before deciding. Without the gate, a cold
+ * launch would read `user === undefined` on the first frame and briefly
+ * mount the welcome animation even for onboarded users.
  */
 export default function WelcomeScreenWrapper() {
   const { signedOut } = useLocalSearchParams<{ signedOut?: string }>();
+  const hasHydrated = useHasHydrated();
   const hasCompletedOnboarding = useUnfoldStore(
     (s) => s.user?.hasCompletedOnboarding ?? false,
   );
+
+  if (!hasHydrated) {
+    return <View style={{ flex: 1, backgroundColor: BG }} />;
+  }
 
   if (hasCompletedOnboarding && !signedOut) {
     return <Redirect href="/(tabs)/(today)" />;

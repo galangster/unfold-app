@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore } from '@/lib/store';
+import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 
@@ -19,10 +19,20 @@ import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
  */
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
+  const hasHydrated = useHasHydrated();
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
   const getLastBiblePosition = useUnfoldStore((s) => s.getLastBiblePosition);
 
-  const lastPosition = useMemo(() => getLastBiblePosition(), [getLastBiblePosition]);
+  // Wait for persisted state before computing lastPosition — otherwise
+  // cold-start users land on Genesis 1 regardless of where they left off.
+  const lastPosition = useMemo(
+    () => (hasHydrated ? getLastBiblePosition() : null),
+    [hasHydrated, getLastBiblePosition],
+  );
+
+  if (!hasHydrated) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
 
   if (isReady) {
     const target = lastPosition

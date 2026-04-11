@@ -105,19 +105,22 @@ export default function HomeScreenWrapper() {
 
   // Fresh resume context from reveal screen — render-phase check.
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
-  const isFreshRevealHandoff =
+  const freshRevealDayNumber =
     resumeContext?.route === 'reading' &&
+    typeof resumeContext.dayNumber === 'number' &&
     resumeContext.touchedAt &&
-    Date.now() - new Date(resumeContext.touchedAt).getTime() < 3000;
+    Date.now() - new Date(resumeContext.touchedAt).getTime() < 3000
+      ? resumeContext.dayNumber
+      : null;
 
   if (shouldResumeInflight) {
     return <Redirect href="/generating" />;
   }
 
-  if (isFreshRevealHandoff) {
+  if (freshRevealDayNumber !== null) {
     return (
       <Redirect
-        href={`/(tabs)/(today)/reading?dayNumber=${resumeContext!.dayNumber}` as any}
+        href={`/(tabs)/(today)/reading?dayNumber=${freshRevealDayNumber}` as any}
       />
     );
   }
