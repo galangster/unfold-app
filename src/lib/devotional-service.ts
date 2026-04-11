@@ -80,30 +80,12 @@ export async function postJsonWithBackendFallback(
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      let response = await fetch(`${backendUrl}${path}`, {
+      const response = await fetch(`${backendUrl}${path}`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
-
-      // If 401, the Firebase token may be stale — force refresh and retry once
-      if (response.status === 401) {
-        logger.warn(`[Devotional] 401 from ${backendUrl}; refreshing token and retrying`);
-        clearTimeout(timeoutId); // Clear the old timeout
-        const retryController = new AbortController();
-        const retryTimeoutId = setTimeout(() => retryController.abort(), timeoutMs);
-        try {
-          response = await fetch(`${backendUrl}${path}`, {
-            method: 'POST',
-            headers: await getAuthHeaders(true),
-            body: JSON.stringify(payload),
-            signal: retryController.signal,
-          });
-        } finally {
-          clearTimeout(retryTimeoutId);
-        }
-      }
 
       // If this backend fails and we have a fallback endpoint, try it.
       // This specifically guards against stale/misconfigured deployments returning

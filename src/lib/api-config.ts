@@ -26,9 +26,7 @@ export function getBackendCandidates(): string[] {
 // Request headers — anonymous, keyed by X-Device-ID
 // ---------------------------------------------------------------------------
 
-export async function getAuthHeaders(
-  _forceRefresh = false,
-): Promise<Record<string, string>> {
+export async function getAuthHeaders(): Promise<Record<string, string>> {
   return {
     'Content-Type': 'application/json',
     'User-Agent': APP_USER_AGENT,

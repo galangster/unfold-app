@@ -5,7 +5,7 @@ global.fetch = mockFetch as any;
 // Mock auth headers
 jest.mock('@/lib/api-config', () => ({
   PRIMARY_BACKEND_URL: 'http://test',
-  getAuthHeaders: jest.fn().mockResolvedValue({ Authorization: 'Bearer test' }),
+  getAuthHeaders: jest.fn().mockResolvedValue({ 'X-Device-ID': 'test-device' }),
 }));
 
 jest.mock('@/lib/logger', () => ({

@@ -92,3 +92,5 @@ AUDIO_PLUGIN_NEEDED.md
 unfold-bible-v1.db
 .superpowers/
 .flowdeck/
+.pr-body.md
+.backend-cleanup-issue.md

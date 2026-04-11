@@ -17,12 +17,6 @@ export async function migrateGenerationDataToServer(): Promise<void> {
   const store = useUnfoldStore.getState();
   const headers = await getAuthHeaders();
 
-  // Only migrate if user is authenticated
-  if (!headers["Authorization"]) {
-    logger.log("[gen-migration] Skipping — no auth token");
-    return;
-  }
-
   try {
     // Gather progressive devotionals to migrate
     const devotionals = store.devotionals.filter(

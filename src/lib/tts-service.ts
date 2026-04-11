@@ -138,12 +138,6 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
 
   try {
     const headers = await getAuthHeaders();
-
-    // Fail fast if not authenticated — backend will 401 anyway
-    if (!headers['Authorization']) {
-      throw new Error('TTS_AUTH_REQUIRED');
-    }
-
     const fetchStart = Date.now();
 
     // Step 1: POST to generate audio — returns { downloadId }
@@ -289,14 +283,6 @@ export async function prefetchDevotionalAudio(
   // Skip if cached or already downloading
   if (isCached(key)) return;
   if (inFlightRequests.has(key)) return;
-
-  // Skip prefetch if not authenticated — avoid a wasted 401
-  try {
-    const headers = await getAuthHeaders();
-    if (!headers['Authorization']) return;
-  } catch {
-    return;
-  }
 
   const promise = downloadAudio(text, resolvedVoice, key);
   inFlightRequests.set(key, promise);
