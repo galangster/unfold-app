@@ -31,12 +31,9 @@ import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/c
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { useAuth } from '@/hooks/useAuth';
 import { submitGenerationJob, findCompletedJob, fetchJobResult, ApiError } from '@/lib/generation-api';
-import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
-
-// Must match the key used in generating.tsx
-const INFLIGHT_KEY = 'inflight-generation-job';
+import { hasInflightJobForOwner } from '@/lib/inflight-job';
 
 // Zone components
 import { getContextSlotType } from '@/lib/context-slot-priority';
@@ -71,45 +68,16 @@ function formatResumeRelativeTime(iso?: string): string {
 }
 
 /**
- * Synchronously read the inflight generation job from MMKV on mount.
- * Returns true if there's a non-expired inflight job OWNED BY the
- * current account that we should be redirected to /generating for.
- * Cleans up expired or cross-owner entries as a side effect.
- *
- * Owner binding: the inflight payload carries `ownerAuthUserId` set at
- * write time in generating.tsx. On a shared device or a non-clean
- * account switch, user B can land on the home screen with user A's key
- * still in MMKV. Without this check we would redirect B into /generating
- * and let them inherit A's job result — a tenant-isolation failure.
- * Reject on mismatch and clear the key. Legacy payloads (pre-owner)
- * have no proof of ownership and are treated the same as a mismatch.
+ * Whether there is a resumable inflight generation job for the current
+ * owner. Delegates to the canonical helper in `@/lib/inflight-job`, which
+ * handles expiry, cross-owner rejection, and the legacy-payload migration
+ * decision in ONE place. Previously home had a divergent copy that
+ * eagerly deleted legacy payloads, clobbering the adoption path used by
+ * /generating on upgrade recovery. Unifying here prevents the two
+ * screens from racing on cleanup.
  */
 function hasInflightGenerationJobFor(currentOwner: string | null): boolean {
-  const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-  if (!raw) return false;
-  try {
-    const inflight = JSON.parse(raw) as {
-      jobId: string;
-      submittedAt: number;
-      ownerAuthUserId?: string | null;
-    };
-    // Legacy payloads (no `ownerAuthUserId` key) carry no proof of
-    // ownership and cannot be safely adopted — a non-clean account
-    // switch would let the wrong user resume. Reject outright. See
-    // matching note in generating.tsx readInflightForOwner.
-    const persistedOwner = inflight.ownerAuthUserId === undefined ? undefined : inflight.ownerAuthUserId;
-    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-      return false;
-    }
-    if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-      return true;
-    }
-    mmkvStorage.removeItem(INFLIGHT_KEY);
-  } catch {
-    mmkvStorage.removeItem(INFLIGHT_KEY);
-  }
-  return false;
+  return hasInflightJobForOwner(currentOwner);
 }
 
 /**

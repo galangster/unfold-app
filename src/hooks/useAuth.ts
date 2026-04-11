@@ -13,6 +13,29 @@ import { logger } from '@/lib/logger';
 import { setUserId as rcSetUserId, logoutUser as rcLogoutUser, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { Analytics } from '@/lib/analytics';
 import { migrateAnonymousData } from '@/lib/api-config';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+
+// Persistent guard set by the welcome-screen escape hatch
+// (src/app/index.tsx handleSignOut) when the user force-signs-out while
+// Clerk is stuck. Stores the Clerk user id that was just signed out so
+// that if Clerk eventually recovers and reports the SAME id as
+// authenticated, we know that sync is stale (the user explicitly asked
+// to be signed out) and must be ignored. A different id means a genuine
+// new sign-in to a different account and clears the guard.
+//
+// Why persistent: without this, the sequence is:
+//   1. User hits escape hatch; handleSignOut clears store + fires
+//      signOut() fire-and-forget
+//   2. router.replace('/') lands on welcome
+//   3. Clerk's signOut() finally resolves (or never does) — either way,
+//      on Clerk's next sync `clerkUserId` can still flip back to the
+//      previous value, at which point useAuth's effect writes the
+//      previous authUserId back into the store, undoing the sign-out
+//   4. User is "silently signed back in" despite having asked to leave
+//
+// The guard breaks this by making the sign-in write conditional: if
+// the incoming id matches the guarded id, treat as signed-out.
+const FORCED_SIGNED_OUT_KEY = 'forced-signed-out-clerk-id';
 
 export function useAuth() {
   const { isSignedIn, isLoaded, userId: clerkUserId } = useClerkAuth();
@@ -54,6 +77,28 @@ export function useAuth() {
     prevUserIdRef.current = newUserId;
 
     if (newUserId) {
+      // Forced-sign-out guard. If the escape hatch in
+      // src/app/index.tsx just force-signed-out this exact Clerk user,
+      // ignore any late positive sync for that same id — it's a Clerk
+      // recovery, not a fresh sign-in, and applying it would re-write
+      // the authUserId into the store after we already cleared it.
+      //
+      // A DIFFERENT incoming id is a genuine new sign-in (e.g., user
+      // re-signs-in with a different account, or to the same account
+      // fresh from the welcome screen) — clear the guard and proceed.
+      // We intentionally clear for same-id re-sign-in too, but that
+      // requires the user to pass through the welcome sign-in flow,
+      // which is the explicit intent signal we need.
+      const guardedId = mmkvStorage.getItem(FORCED_SIGNED_OUT_KEY) as string | null;
+      if (guardedId !== null && guardedId === newUserId) {
+        logger.warn('[useAuth] Ignoring late Clerk sync for forced-signed-out user', { guardedId });
+        return;
+      }
+      if (guardedId !== null && guardedId !== newUserId) {
+        logger.log('[useAuth] Fresh sign-in to different account — clearing forced-signed-out guard');
+        mmkvStorage.removeItem(FORCED_SIGNED_OUT_KEY);
+      }
+
       // User signed in via Clerk
       const state = useUnfoldStore.getState();
       const hasExistingContent = (state.devotionals?.length ?? 0) > 0;

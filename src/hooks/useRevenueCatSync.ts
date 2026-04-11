@@ -161,6 +161,16 @@ export function useRevenueCatSync() {
 
         if (cancelled) return;
         if (!fetched) {
+          // Fail closed. Without an authoritative bootstrap we cannot
+          // trust the persisted `isPremium` value — a user who was
+          // premium on their last launch but is offline today would
+          // otherwise keep gated access forever on a stale store
+          // write. Force to non-premium and let the backoff retry
+          // restore the real value when connectivity returns. The
+          // tradeoff (legitimate premium users briefly see the
+          // paywall on offline launch) is explicit: fail-closed is
+          // the whole point of the RC sync contract.
+          updateUser({ isPremium: false });
           scheduleRetry();
           return;
         }

@@ -238,6 +238,21 @@ function ClerkHoldingScreen() {
       // background rcLogoutUser call happens to succeed in this
       // session, it clears the flag so the next launch skips the
       // retry.
+      // Capture the Clerk user id BEFORE local reset so we can set the
+      // persistent forced-signed-out guard for useAuth. This guard
+      // prevents a late positive Clerk sync from silently re-writing
+      // the just-cleared authUserId back into the store if Clerk
+      // happens to recover after the escape hatch fires. See
+      // FORCED_SIGNED_OUT_KEY in src/hooks/useAuth.ts for the full
+      // rationale. We use the zustand store's authUserId snapshot
+      // because useClerkAuth().userId may be null while Clerk is
+      // stuck — the whole reason the escape hatch exists.
+      const preSignOutAuthUserId =
+        useUnfoldStore.getState().user?.authUserId ?? null;
+      if (preSignOutAuthUserId !== null) {
+        mmkvStorage.setItem('forced-signed-out-clerk-id', preSignOutAuthUserId);
+      }
+
       if (isRevenueCatEnabled()) {
         mmkvStorage.setItem('rc-logout-pending', '1');
         // Tear down the in-process RevenueCat session synchronously.
