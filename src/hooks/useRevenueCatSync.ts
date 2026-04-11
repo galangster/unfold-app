@@ -304,9 +304,29 @@ export function useRevenueCatSync() {
         // itself as the handle, so we track the function reference
         // and hand it back to removeCustomerInfoUpdateListener in
         // the cleanup path.
+        //
+        // The listener also refreshes the persisted entitlement
+        // cache. Without this mirror, the cache could go stale
+        // mid-session: e.g. a user's subscription renews (new
+        // expirationDateMillis), or lapses/is refunded, and the
+        // listener updates in-memory isPremium but the persisted
+        // snapshot still reflects the stale bootstrap value. On
+        // the next cold-launch with a transient RC failure, the
+        // fallback branch would then make its preserve/fail-
+        // closed decision from outdated expiration data — leaking
+        // premium past a revoke, or incorrectly locking out an
+        // active subscriber after a renewal. Writing here keeps
+        // the cache as fresh as the most recent authoritative
+        // update RC pushed to us.
         const fn: CustomerInfoUpdateListener = (customerInfo) => {
-          const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
+          const entitlement = customerInfo.entitlements.active?.['Unfold Premium'];
+          const hasSubscription = Boolean(entitlement);
           updateUser({ isPremium: hasSubscription });
+          writeCachedEntitlement({
+            isPremium: hasSubscription,
+            expirationDateMillis: entitlement?.expirationDateMillis ?? null,
+            syncedAtMillis: Date.now(),
+          });
           void syncTrialEndingNotification();
         };
         Purchases.addCustomerInfoUpdateListener(fn);

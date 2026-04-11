@@ -61,6 +61,17 @@ import { clearInflight } from '@/lib/inflight-job';
 
 const FORCED_SIGNED_OUT_KEY = 'forced-signed-out-clerk-id';
 const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
+// Kept in sync with src/hooks/useRevenueCatSync.ts — the persisted
+// entitlement snapshot used as the offline-bootstrap fallback. Must
+// be cleared on every sign-out path, otherwise a successful logout
+// followed by an offline cold-launch in a new/anonymous session
+// would still read the previous user's cached premium snapshot and
+// restore isPremium=true into the new session. Defined here as a
+// plain string rather than imported from the hook file to avoid a
+// cycle (the hook imports nothing from this module, but importing
+// a constant across react/non-react modules for a magic string is
+// an unnecessary coupling).
+const RC_CACHED_ENTITLEMENT_KEY = 'rc-cached-entitlement-v1';
 
 export type SignOutTeardownOptions = {
   /**
@@ -111,9 +122,18 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
   // 2. Persist the RC logout-pending guard BEFORE invalidating the
   //    session, so the re-bootstrap triggered by the invalidation
   //    sees the flag and refuses premium writes until it can prove
-  //    a clean logOut.
+  //    a clean logOut. Also wipe the persisted entitlement cache:
+  //    that cache is a global MMKV key keyed on nothing, so if we
+  //    leave it in place a subsequent offline cold-launch in a new
+  //    or anonymous session would read the previous user's
+  //    `isPremium=true` snapshot and restore it. Clearing it here
+  //    is safe because any still-valid premium session will
+  //    repopulate the cache on its next successful
+  //    `getCustomerInfo()` — and any session that never reaches
+  //    that success will have stayed fail-closed regardless.
   if (isRevenueCatEnabled()) {
     mmkvStorage.setItem(RC_LOGOUT_PENDING_KEY, '1');
+    mmkvStorage.removeItem(RC_CACHED_ENTITLEMENT_KEY);
     invalidateRevenueCatSession();
   }
 
