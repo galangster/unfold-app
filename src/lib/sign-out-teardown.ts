@@ -61,9 +61,14 @@ import { clearInflight } from '@/lib/inflight-job';
 import { cancelTrialEndingNotification } from '@/lib/trial-notification';
 import { clearBridgeCache } from '@/lib/bridge-service';
 import { clearExamenCache } from '@/lib/examen-service';
+import { syncService } from '@/lib/sync-service';
 
 const FORCED_SIGNED_OUT_KEY = 'forced-signed-out-clerk-id';
 const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
+// Keep in sync with hooks/useAuth.ts `AUTH_REQUIRED_KEY`. Defined as
+// a local string rather than imported to avoid this non-React module
+// pulling the React/Clerk hook module into its import graph.
+const AUTH_REQUIRED_KEY = 'auth-required-until-resignin';
 // Kept in sync with src/hooks/useRevenueCatSync.ts — the persisted
 // entitlement snapshot used as the offline-bootstrap fallback. Must
 // be cleared on every sign-out path, otherwise a successful logout
@@ -262,7 +267,43 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
     logger.warn('[sign-out-teardown] cancelTrialEndingNotification failed', { source, err });
   });
 
-  // 5. Clear local state. Order matters only in that inflight-job
+  // 5. Tear down the cloud-sync engine BEFORE resetting the Zustand
+  //    store, and purge its persisted dirty queue + last-pulled
+  //    watermark. Order is critical here:
+  //
+  //    (a) `syncService.stop()` unsubscribes the store-change
+  //        listener. If we skipped this and called reset() first,
+  //        the reset would fire a giant prev→curr diff into the
+  //        listener — every cleared record would be flagged as a
+  //        "changed" row and marked dirty. That would either
+  //        re-populate the queue we're about to purge (if purge
+  //        ran first) or leave the queue populated with clear-
+  //        out records under the OUTGOING account's id (if purge
+  //        ran last). Both corrupt cross-tenant state.
+  //
+  //    (b) `syncService.resetPersisted()` clears the in-memory Map
+  //        AND the `unfold-sync-dirty` + `unfold-sync-last-pulled`
+  //        MMKV keys. Without this, the next sign-in calls
+  //        `syncService.start()` → `loadDirtySet()` → replays the
+  //        departing account's queued records under the new
+  //        account's Clerk token. Especially dangerous for the
+  //        `users` row, where the dirty record id is the OLD
+  //        authUserId and the push payload is the NEW profile —
+  //        the server writes account B's profile against account
+  //        A's id. Real cross-tenant write.
+  //
+  //    Both calls are synchronous and cheap. No network I/O, no
+  //    async — we can block on them without risking the same
+  //    "wait forever on a stuck backend" failure mode the rest of
+  //    this teardown is designed around.
+  try {
+    syncService.stop();
+    syncService.resetPersisted();
+  } catch (err) {
+    logger.warn('[sign-out-teardown] syncService teardown failed', { source, err });
+  }
+
+  // 6. Clear local state. Order matters only in that inflight-job
   //    and companion conversations come after reset() so their
   //    own in-memory caches don't race a fresh Zustand identity.
   useUnfoldStore.getState().reset();
@@ -271,7 +312,18 @@ export function performSignOutTeardown(options: SignOutTeardownOptions): void {
   Analytics.setUserId(null);
   Sentry.setUser(null);
 
-  // 6. Destructive escalation. Paths whose UI explicitly promises
+  // Clear the auth-required-until-resignin guard. This teardown
+  // has wiped all local content and the device is now a clean
+  // anonymous session — there is nothing auth-bound left to leak,
+  // so holding the user on the welcome screen would only block
+  // legitimate anonymous onboarding. This covers the edge case
+  // where useAuth's signed-out branch previously set the flag
+  // (during a transient sign-out) and the user has now escalated
+  // to Reset-All-Data / Delete-Account without an intervening
+  // sign-in to clear it.
+  mmkvStorage.removeItem(AUTH_REQUIRED_KEY);
+
+  // 7. Destructive escalation. Paths whose UI explicitly promises
   //    full data removal (Reset-All-Data, Delete-Account) must go
   //    beyond "sign out + keep personal content caches" because
   //    leaving those caches behind would be a real data-residue

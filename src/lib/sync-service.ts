@@ -78,6 +78,32 @@ class SyncService {
     logger.log('[sync] SyncService stopped');
   }
 
+  /**
+   * Purge the persisted sync queue and the last-pulled watermark.
+   * Called from sign-out / reset / delete-account teardown paths so a
+   * stale dirty record keyed by the departing account's record id
+   * cannot be replayed under the next account's Clerk token — that
+   * would be a real cross-tenant write (especially dangerous for the
+   * `users` table, which is keyed by `authUserId || 'self'`).
+   *
+   * Also clears `unfold-sync-last-pulled` so the next account starts
+   * with a clean pull watermark instead of inheriting the previous
+   * account's "I've already seen changes up to X" marker — otherwise
+   * the new session's first pull silently skips any server writes
+   * that pre-date X.
+   *
+   * Safe to call while stopped: the in-memory Map is independently
+   * cleared and the MMKV writes are no-ops if the keys are already
+   * missing. Safe to call while running: subsequent push() calls
+   * will see an empty dirty set and return early.
+   */
+  resetPersisted() {
+    this.dirtySet.clear();
+    mmkvStorage.removeItem(SYNC_DIRTY_KEY);
+    mmkvStorage.removeItem(SYNC_LAST_PULLED_KEY);
+    logger.log('[sync] SyncService persisted state cleared');
+  }
+
   private onAppStateChange = (state: AppStateStatus) => {
     if (state === 'active') this.pull();
     if (state === 'background') this.push();

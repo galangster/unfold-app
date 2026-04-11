@@ -15,6 +15,7 @@ import { Analytics } from '@/lib/analytics';
 import { migrateAnonymousData } from '@/lib/api-config';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { performRevenueCatTeardown } from '@/lib/sign-out-teardown';
+import { syncService } from '@/lib/sync-service';
 
 // Persistent guard set by the welcome-screen escape hatch
 // (src/app/index.tsx handleSignOut) when the user force-signs-out while
@@ -37,6 +38,19 @@ import { performRevenueCatTeardown } from '@/lib/sign-out-teardown';
 // The guard breaks this by making the sign-in write conditional: if
 // the incoming id matches the guarded id, treat as signed-out.
 const FORCED_SIGNED_OUT_KEY = 'forced-signed-out-clerk-id';
+
+// Persistent cross-launch guard set whenever useAuth observes an
+// authoritative Clerk signed-out transition. Read at hydration time by
+// WelcomeScreenWrapper to force a Clerk re-auth before the device is
+// allowed back into the signed-in tabs — closing the shared-device
+// hole where a nulled `authUserId` made the snapshot ref classify the
+// device as anonymous-onboarded on the next cold launch, handing the
+// previous user's local content to whoever picked up the phone.
+// Cleared on every successful new sign-in (below), and on every
+// destructive teardown via performSignOutTeardown (it clears local
+// content wholesale, which is the stronger guarantee). Exported so
+// WelcomeScreenWrapper can reference the same constant.
+export const AUTH_REQUIRED_KEY = 'auth-required-until-resignin';
 
 export function useAuth() {
   const { isSignedIn, isLoaded, userId: clerkUserId } = useClerkAuth();
@@ -168,6 +182,16 @@ export function useAuth() {
         ...(hasExistingContent ? { hasCompletedOnboarding: true } : {}),
       });
 
+      // Clear the auth-required guard. A successful Clerk sign-in is
+      // the only signal that can safely release the device back into
+      // the signed-in tabs after a prior Clerk-confirmed sign-out —
+      // whether the user signed back in to the same account or a
+      // different one, the new session is authoritative.
+      if (mmkvStorage.getItem(AUTH_REQUIRED_KEY) !== null) {
+        mmkvStorage.removeItem(AUTH_REQUIRED_KEY);
+        logger.log('[useAuth] Cleared auth-required guard on successful sign-in');
+      }
+
       // Sync RevenueCat (wrapper returns { ok, reason }, never rejects)
       if (isRevenueCatEnabled()) {
         rcSetUserId(newUserId).then((result) => {
@@ -219,6 +243,48 @@ export function useAuth() {
         authEmail: null,
         authDisplayName: null,
       });
+
+      // Stop and purge the cloud-sync engine. Local content stays
+      // (see the block comment below on why), but the dirty queue
+      // absolutely cannot survive: any record in `unfold-sync-dirty`
+      // that was enqueued under the now-signed-out account is
+      // keyed by that account's record ids, and on the next sign-in
+      // the queue will be replayed against the new account's Clerk
+      // token. Especially dangerous for the `users` row (see
+      // sign-out-teardown step 5). Synchronous, no network — safe
+      // to call even on transient sign-outs because the sync
+      // engine will simply restart clean when the user signs back
+      // in.
+      try {
+        syncService.stop();
+        syncService.resetPersisted();
+      } catch (err) {
+        logger.warn('[useAuth] syncService teardown failed', err);
+      }
+
+      // Persist the auth-required-until-resignin guard. The
+      // `authUserId: null` we just wrote will cause
+      // `WelcomeScreenWrapper` to classify this device as anonymous-
+      // onboarded on the NEXT cold launch — its snapshot ref reads
+      // the already-nulled field and decides `needsClerkConfirmation
+      // = false`, routes straight into the tabs, and the previous
+      // user's local devotionals/journal/notes become accessible to
+      // whoever picks up the device. This flag closes that hole:
+      // once set, WelcomeScreenWrapper treats the profile as
+      // auth-bound regardless of the nulled snapshot and holds the
+      // user on the welcome/stale-auth screen until Clerk either
+      // resolves signed-in (and the flag is cleared in the
+      // sign-in branch above) or the user explicitly re-authenticates.
+      //
+      // Why not also wipe local content here? Clerk sign-outs can
+      // be transient (token refresh races, session expiry that
+      // recovers on the next request, dashboard-driven force sign-
+      // outs that the user resolves by signing back in to the same
+      // account). Wiping content on every transient signal would
+      // destroy the user's journal on their own device. The flag
+      // is the minimal intervention that closes the shared-device
+      // hole without the content-loss tradeoff.
+      mmkvStorage.setItem(AUTH_REQUIRED_KEY, '1');
 
       performRevenueCatTeardown('useauth-clerk-signed-out');
 

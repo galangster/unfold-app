@@ -25,6 +25,8 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
+import { mmkvStorage } from '@/lib/mmkv-storage';
+import { AUTH_REQUIRED_KEY } from '@/hooks/useAuth';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
 import {
@@ -338,11 +340,33 @@ export default function WelcomeScreenWrapper() {
   // Clerk sign-in. Waiting on Clerk for those users would strand them
   // on a blank screen whenever Clerk startup is slow or fails.
   const authUserIdSnapshotRef = useRef<string | null | undefined>(undefined);
+  const authRequiredSnapshotRef = useRef<boolean | undefined>(undefined);
   if (hasHydrated && authUserIdSnapshotRef.current === undefined) {
     authUserIdSnapshotRef.current =
       useUnfoldStore.getState().user?.authUserId ?? null;
+    // Cold-launch shared-device guard. If a PRIOR session hit useAuth's
+    // Clerk-confirmed signed-out branch, it nulled `authUserId` in the
+    // Zustand profile and persisted an `auth-required-until-resignin`
+    // MMKV flag. Without this snapshot the current cold launch would
+    // read `authUserId === null`, classify the device as anonymous-
+    // onboarded, and redirect straight into the tabs with the prior
+    // user's local devotionals/journal/notes accessible. That's a real
+    // cross-session data exposure on shared devices.
+    //
+    // Reading the flag into a ref (rather than a live selector) mirrors
+    // the `authUserId` snapshot: useAuth's sign-in branch clears the
+    // flag synchronously on a successful Clerk resolve, and we want
+    // the FIRST-render decision to stick until the user either
+    // completes Clerk or explicitly escape-hatches — exactly like the
+    // authUserId snapshot. A live read would flip mid-render as soon
+    // as a successful sign-in cleared the MMKV key, but at that point
+    // `isSignedIn` is already true and the tabs redirect is safe.
+    authRequiredSnapshotRef.current =
+      mmkvStorage.getItem(AUTH_REQUIRED_KEY) !== null;
   }
-  const needsClerkConfirmation = authUserIdSnapshotRef.current != null;
+  const needsClerkConfirmation =
+    authUserIdSnapshotRef.current != null ||
+    authRequiredSnapshotRef.current === true;
 
   // Clerk-wait is UNBOUNDED for auth-bound profiles — we cannot grant
   // access to the signed-in tabs until Clerk has conclusively resolved
