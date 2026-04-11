@@ -17,7 +17,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -25,6 +25,7 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
+import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
 import {
@@ -207,8 +208,13 @@ function ClerkHoldingScreen() {
       // throws, but we still want to clear local auth state and fall
       // through to the welcome screen — the whole point of this
       // button is to recover from a dead Clerk SDK.
+      // Mirror the (you) screen sign-out flow exactly — clearing local
+      // Zustand is not enough, because separately-persisted user-scoped
+      // stores (companion conversations) would otherwise leak to the
+      // next device user who signs in.
       await signOut().catch(() => {});
       reset();
+      useCompanionChatStore.getState().clearAllConversations();
       mmkvStorage.removeItem('inflight-generation-job');
       router.replace({ pathname: '/', params: { signedOut: '1' } });
     } finally {
@@ -300,15 +306,36 @@ export default function WelcomeScreenWrapper() {
   const hasCompletedOnboarding = useUnfoldStore(
     (s) => s.user?.hasCompletedOnboarding ?? false,
   );
-  const authUserId = useUnfoldStore((s) => s.user?.authUserId ?? null);
 
-  // Anonymous-onboarded users (`authUserId == null`) do not depend on
-  // Clerk at all — they have local devotional content and never
-  // completed a Clerk sign-in. Waiting on Clerk for those users would
-  // strand them on a blank screen whenever Clerk startup is slow or
-  // fails (offline, outage, SDK error). Only block on Clerk when the
-  // persisted profile actually claims a Clerk identity.
-  const needsClerkConfirmation = authUserId != null;
+  // CRITICAL: Capture whether the persisted profile is auth-bound at the
+  // FIRST post-hydration render, BEFORE useAuth()'s effect can mutate
+  // the store. useAuth() clears `authUserId` when Clerk resolves
+  // signed-out, so a live selector on `authUserId` would flip to null
+  // moments later and reclassify a formerly auth-bound user as
+  // anonymous-onboarded — bypassing the stale-auth guard and routing
+  // them straight into the signed-in tabs on cached data.
+  //
+  // A ref captured once from `getState()` is immune to that mutation:
+  // the snapshot is taken on the first render where `hasHydrated`
+  // becomes true (which runs before useAuth's effect commits), so even
+  // after useAuth nulls the store field, `needsClerkConfirmation`
+  // remains true and the stale-auth branch correctly fires.
+  //
+  // On explicit escape-hatch sign-out, `router.replace` re-renders this
+  // component with a fresh `signedOut=1` param that bypasses the
+  // onboarded shortcut regardless of the ref, so the frozen snapshot
+  // doesn't trap a user who deliberately signed out.
+  //
+  // Anonymous-onboarded users (`authUserId == null` at hydration) do
+  // NOT wait on Clerk — they have local content and never completed a
+  // Clerk sign-in. Waiting on Clerk for those users would strand them
+  // on a blank screen whenever Clerk startup is slow or fails.
+  const authUserIdSnapshotRef = useRef<string | null | undefined>(undefined);
+  if (hasHydrated && authUserIdSnapshotRef.current === undefined) {
+    authUserIdSnapshotRef.current =
+      useUnfoldStore.getState().user?.authUserId ?? null;
+  }
+  const needsClerkConfirmation = authUserIdSnapshotRef.current != null;
 
   // Clerk-wait is UNBOUNDED for auth-bound profiles — we cannot grant
   // access to the signed-in tabs until Clerk has conclusively resolved
