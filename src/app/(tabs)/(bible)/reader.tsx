@@ -1143,6 +1143,14 @@ export default function BibleReaderScreen() {
         visible={showSettings}
         onClose={() => setShowSettings(false)}
         tabBarHeight={tabBarHeight}
+        savedVersesCount={bibleHighlights.length}
+        onOpenSavedVerses={() => {
+          setShowSettings(false);
+          router.push({
+            pathname: '/(tabs)/(you)/my-content',
+            params: { tab: 'highlights', source: 'bible', from: 'bible' },
+          });
+        }}
       />
 
       {/* Book & Chapter Navigator */}

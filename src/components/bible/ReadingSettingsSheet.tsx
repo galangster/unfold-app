@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, CaretRightIcon, MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
@@ -14,6 +14,8 @@ interface ReadingSettingsSheetProps {
   visible: boolean;
   onClose: () => void;
   tabBarHeight: number;
+  onOpenSavedVerses?: () => void;
+  savedVersesCount?: number;
 }
 
 const LINE_HEIGHT_OPTIONS: Array<{ label: string; value: number }> = [
@@ -48,7 +50,7 @@ const ANIM = {
   overlayExit:  150,   // backdrop fade out
 };
 
-export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: ReadingSettingsSheetProps) {
+export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSavedVerses, savedVersesCount }: ReadingSettingsSheetProps) {
   const { colors, isDark } = useTheme();
   const settings = useUnfoldStore((s) => s.bibleReaderSettings);
   const updateSettings = useUnfoldStore((s) => s.updateBibleReaderSettings);
@@ -223,7 +225,7 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
         </View>
 
         {/* Translation */}
-        <View style={styles.sectionLast}>
+        <View style={[onOpenSavedVerses ? styles.section : styles.sectionLast, onOpenSavedVerses && { borderBottomColor: sectionBorder }]}>
           <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Translation</Text>
           <View style={styles.segmentedRow}>
             {TRANSLATION_OPTIONS.map((t) => {
@@ -256,6 +258,29 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight }: Reading
             })}
           </View>
         </View>
+
+        {/* Library */}
+        {onOpenSavedVerses && (
+          <View style={styles.sectionLast}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onOpenSavedVerses();
+              }}
+              style={[styles.libraryRow, { backgroundColor: controlBg }]}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Saved verses${savedVersesCount != null ? `, ${savedVersesCount} items` : ''}`}
+            >
+              <BookmarkSimpleIcon size={18} color={colors.text} weight="regular" />
+              <Text style={[styles.libraryLabel, { color: colors.text }]}>Saved verses</Text>
+              {savedVersesCount != null && savedVersesCount > 0 && (
+                <Text style={[styles.libraryCount, { color: colors.textSubtle }]}>{savedVersesCount}</Text>
+              )}
+              <CaretRightIcon size={14} color={colors.textSubtle} weight="regular" />
+            </TouchableOpacity>
+          </View>
+        )}
       </Animated.View>
     </>
   );
@@ -380,4 +405,22 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
+  // Library row
+  libraryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  libraryLabel: {
+    flex: 1,
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  libraryCount: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
 });
