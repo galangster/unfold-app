@@ -300,10 +300,6 @@ export default function JournalScreen() {
       dayNumber,
       devotionalTitle: currentDevotional?.title,
       dayTitle: currentDay?.title,
-      // NOTE: Do NOT set touchedAt here. touchedAt is only used by reveal.tsx
-      // to trigger the auto-navigate effect in home index.tsx. Setting it here
-      // causes the home screen to auto-push to reading while the user is in
-      // the journal, stealing focus when the Journal tab closes.
     });
   }, [devotionalId, dayNumber, currentDevotional?.title, currentDay?.title, setResumeContext]);
 

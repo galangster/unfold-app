@@ -93,45 +93,20 @@ function hasInflightGenerationJob(): boolean {
 }
 
 /**
- * Thin wrapper that handles render-phase redirects (inflight generation
- * resume, fresh-from-reveal auto-nav) before mounting the heavy HomeScreen.
- * This is the navigation-in-render pattern — no useEffect + router.replace.
- * See ~/vault/standards/navigation-in-render-not-effects.md
+ * Thin wrapper that handles the inflight-generation-resume redirect before
+ * mounting the heavy HomeScreen. Navigation-in-render pattern — no useEffect
+ * + router.replace. See ~/vault/standards/navigation-in-render-not-effects.md
+ *
+ * The reveal → reading handoff is NOT handled here: reveal.tsx calls
+ * router.dismissTo('/(tabs)/(today)/reading') directly, skipping home entirely.
  */
 export default function HomeScreenWrapper() {
   // Read MMKV exactly once per mount. useState initializer runs synchronously
   // during the first render and the result is frozen for this instance.
   const [shouldResumeInflight] = useState(hasInflightGenerationJob);
 
-  // Consume the fresh-reveal handoff atomically on mount. We read once, then
-  // clear `resumeContext` from the store so a back-nav + remount inside the
-  // 3-second window can't re-satisfy the condition and trap the user in a
-  // redirect loop. useState initializers run synchronously, exactly once per
-  // mount, so the captured value is stable for this instance.
-  const [freshRevealDayNumber] = useState<number | null>(() => {
-    const rc = useUnfoldStore.getState().resumeContext;
-    if (
-      rc?.route === 'reading' &&
-      typeof rc.dayNumber === 'number' &&
-      rc.touchedAt &&
-      Date.now() - new Date(rc.touchedAt).getTime() < 3000
-    ) {
-      useUnfoldStore.getState().clearResumeContext();
-      return rc.dayNumber;
-    }
-    return null;
-  });
-
   if (shouldResumeInflight) {
     return <Redirect href="/generating" />;
-  }
-
-  if (freshRevealDayNumber !== null) {
-    return (
-      <Redirect
-        href={`/(tabs)/(today)/reading?dayNumber=${freshRevealDayNumber}` as any}
-      />
-    );
   }
 
   return <HomeScreen />;
