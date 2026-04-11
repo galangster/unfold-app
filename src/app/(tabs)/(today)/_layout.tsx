@@ -1,6 +1,22 @@
 import { Stack } from 'expo-router';
+import { useUnfoldStore } from '@/lib/store';
+import { useUIState } from '@/lib/ui-state';
+import { TrialExpiredOverlay } from '@/components/TrialExpiredOverlay';
 
 export default function TodayLayout() {
+  // Render-phase paywall gate. Zustand reads are synchronous via
+  // useSyncExternalStore, so the first render already sees truth —
+  // no one-frame flash of gated content. See
+  // ~/vault/standards/navigation-in-render-not-effects.md
+  const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? true);
+  const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
+  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
+  const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
+
+  if (!isPremium && hasCompletedOnboarding) {
+    return <TrialExpiredOverlay />;
+  }
+
   return (
     <Stack
       screenOptions={{

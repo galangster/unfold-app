@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
@@ -16,8 +16,6 @@ import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
-import { useUnfoldStore } from '@/lib/store';
-import { TrialExpiredOverlay } from '@/components/TrialExpiredOverlay';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -76,7 +74,7 @@ function AnimatedTabIcon({
 }
 
 /** Fully custom tab bar with frosted glass, animated indicators, and premium feel */
-function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarProps & { onTabChange?: (name: string) => void }) {
+function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
@@ -85,14 +83,6 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
   // Audio player auto-collapse: sheet → pill on tab switch
   const playerTier = useAudioPlayerState((s) => s.playerTier);
   const setPlayerTier = useAudioPlayerState((s) => s.setTier);
-
-  // Report active tab to parent for paywall gating
-  useEffect(() => {
-    const activeRoute = state.routes[state.index];
-    if (activeRoute && onTabChange) {
-      onTabChange(activeRoute.name);
-    }
-  }, [state.index, state.routes, onTabChange]);
 
   // Slide channel (scroll-based) and instant channel (verse selection)
   const translateY = useSharedValue(0);
@@ -293,71 +283,28 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
   );
 }
 
-/** Names of tabs that remain free (no paywall overlay) */
-const FREE_TABS = new Set(['(bible)', '(you)']);
-
 export default function TabLayout() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
-  // Subscription gate state
-  // DEV bypass: force premium in dev so the overlay doesn't block routine
-  // development. Toggleable via the Dev Tools "Simulate Trial Expired" button
-  // which sets debugForceTrialExpired=true to preview the churned-user UX.
-  const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? true);
-  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
-  const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
-  const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
-  const [activeTabName, setActiveTabName] = useState<string>('(today)');
-
-  const shouldShowPaywall =
-    !isPremium && hasCompletedOnboarding && !FREE_TABS.has(activeTabName);
+  // Paywall gating is enforced per-gated-tab in each child _layout.tsx
+  // ((today), (ask), (journal)) as a render-phase conditional. This avoids
+  // the one-frame flash that happens when the gate is tracked via useState +
+  // useEffect at the parent level. See
+  // ~/vault/standards/navigation-in-render-not-effects.md
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-        tabBar={(props: any) => (
-          <CustomTabBar {...props} onTabChange={setActiveTabName} />
-        )}
-        screenOptions={{
-          headerShown: false,
-          sceneStyle: { backgroundColor: colors.background },
-        }}
-      >
-        <Tabs.Screen
-          name="(today)"
-          options={{
-            title: 'Today',
-          }}
-        />
-        <Tabs.Screen
-          name="(bible)"
-          options={{
-            title: 'Bible',
-          }}
-        />
-        <Tabs.Screen
-          name="(ask)"
-          options={{
-            title: 'Companion',
-          }}
-        />
-        <Tabs.Screen
-          name="(journal)"
-          options={{
-            title: 'Journal',
-          }}
-        />
-        <Tabs.Screen
-          name="(you)"
-          options={{
-            title: 'You',
-            href: null,
-          }}
-        />
-      </Tabs>
-
-      {/* Full-screen paywall overlay for expired subscriptions */}
-      {shouldShowPaywall && <TrialExpiredOverlay />}
-    </View>
+    <Tabs
+      tabBar={(props: any) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Tabs.Screen name="(today)" options={{ title: 'Today' }} />
+      <Tabs.Screen name="(bible)" options={{ title: 'Bible' }} />
+      <Tabs.Screen name="(ask)" options={{ title: 'Companion' }} />
+      <Tabs.Screen name="(journal)" options={{ title: 'Journal' }} />
+      <Tabs.Screen name="(you)" options={{ title: 'You', href: null }} />
+    </Tabs>
   );
 }

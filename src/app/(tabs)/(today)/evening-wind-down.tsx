@@ -146,11 +146,12 @@ export default function EveningWindDownScreen() {
   });
   const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
 
-  useEffect(() => {
-    if (!isPremium) {
-      router.back();
-    }
-  }, [isPremium, router]);
+  // No in-screen gate: the parent (today)/_layout.tsx already blocks churned
+  // users with the TrialExpiredOverlay at the layout level. When RC state
+  // changes mid-session, useRevenueCatSync in the root layout updates
+  // user.isPremium, the parent layout re-renders, and the whole stack
+  // unmounts — including this screen. See
+  // ~/vault/standards/navigation-in-render-not-effects.md
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Redirect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -70,7 +70,62 @@ function formatResumeRelativeTime(iso?: string): string {
   return `Saved ${days}d ago`;
 }
 
-export default function HomeScreen() {
+/**
+ * Synchronously read the inflight generation job from MMKV on mount.
+ * Returns true if there's a non-expired inflight job that the user should
+ * be redirected to /generating for. Cleans up expired entries as a side
+ * effect. Called from the wrapper below at render time so the Redirect
+ * fires before the heavy HomeScreen component ever mounts.
+ */
+function hasInflightGenerationJob(): boolean {
+  const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
+  if (!raw) return false;
+  try {
+    const inflight = JSON.parse(raw) as { jobId: string; submittedAt: number };
+    if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
+      return true;
+    }
+    mmkvStorage.removeItem(INFLIGHT_KEY);
+  } catch {
+    mmkvStorage.removeItem(INFLIGHT_KEY);
+  }
+  return false;
+}
+
+/**
+ * Thin wrapper that handles render-phase redirects (inflight generation
+ * resume, fresh-from-reveal auto-nav) before mounting the heavy HomeScreen.
+ * This is the navigation-in-render pattern — no useEffect + router.replace.
+ * See ~/vault/standards/navigation-in-render-not-effects.md
+ */
+export default function HomeScreenWrapper() {
+  // Read MMKV exactly once per mount. useState initializer runs synchronously
+  // during the first render and the result is frozen for this instance.
+  const [shouldResumeInflight] = useState(hasInflightGenerationJob);
+
+  // Fresh resume context from reveal screen — render-phase check.
+  const resumeContext = useUnfoldStore((s) => s.resumeContext);
+  const isFreshRevealHandoff =
+    resumeContext?.route === 'reading' &&
+    resumeContext.touchedAt &&
+    Date.now() - new Date(resumeContext.touchedAt).getTime() < 3000;
+
+  if (shouldResumeInflight) {
+    return <Redirect href="/generating" />;
+  }
+
+  if (isFreshRevealHandoff) {
+    return (
+      <Redirect
+        href={`/(tabs)/(today)/reading?dayNumber=${resumeContext!.dayNumber}` as any}
+      />
+    );
+  }
+
+  return <HomeScreen />;
+}
+
+function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
@@ -80,7 +135,6 @@ export default function HomeScreen() {
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
-  const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
@@ -95,26 +149,9 @@ export default function HomeScreen() {
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
-  // Auto-navigate to reading when coming from the reveal screen.
-  // The reveal sets resumeContext with a fresh touchedAt timestamp,
-  // then navigates here. We detect the fresh context and immediately
-  // push to reading — avoids the home screen flash.
-  useEffect(() => {
-    if (!resumeContext?.touchedAt) return;
-    // Only auto-navigate for reading context (set by reveal.tsx).
-    // Journal context also sets resumeContext but should NOT trigger
-    // auto-navigate to reading — that steals focus from the journal.
-    if (resumeContext.route !== 'reading') return;
-    const age = Date.now() - new Date(resumeContext.touchedAt).getTime();
-    if (age < 3000) {
-      // Fresh from reveal — auto-navigate and clear
-      clearResumeContext();
-      router.push({
-        pathname: '/(tabs)/(today)/reading',
-        params: { dayNumber: String(resumeContext.dayNumber) },
-      });
-    }
-  }, [resumeContext?.touchedAt]);
+  // Render-phase redirects (inflight resume, fresh-from-reveal handoff)
+  // are handled by HomeScreenWrapper above. If we got here, HomeScreen is
+  // the real destination — no more auto-navigation gymnastics.
 
   // Safe area insets for tooltip y-offset calculation
   const insets = useSafeAreaInsets();
@@ -155,34 +192,9 @@ export default function HomeScreen() {
     downloadBibleDb().catch(() => {});
   }, []);
 
-  // Resume inflight generation job from a previous app session (app-kill recovery)
-  const inflightResumeAttempted = useRef(false);
-  useEffect(() => {
-    if (inflightResumeAttempted.current) return;
-    inflightResumeAttempted.current = true;
-
-    const raw = mmkvStorage.getItem(INFLIGHT_KEY) as string | null;
-    if (!raw) return;
-
-    try {
-      const inflight = JSON.parse(raw) as {
-        jobId: string;
-        devotionalId?: string;
-        submittedAt: number;
-      };
-      // Only resume if not expired (15 min)
-      if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
-        console.log('[home] Resuming inflight generation job from MMKV:', inflight.jobId);
-        // Navigate to generating screen — it will pick up the inflight job from MMKV
-        router.replace('/generating');
-        return;
-      }
-      // Expired — clean up
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    } catch {
-      mmkvStorage.removeItem(INFLIGHT_KEY);
-    }
-  }, [router]);
+  // Inflight-job resume (app-kill recovery) is handled by HomeScreenWrapper
+  // above via a synchronous MMKV read + <Redirect />. If we're here, there's
+  // no inflight job to resume.
 
   // Check premium status from RevenueCat
   const { data: premiumResult } = useQuery({

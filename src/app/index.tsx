@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -169,9 +169,27 @@ const RevealWord = React.memo(({
   );
 });
 
-export default function WelcomeScreen() {
-  const router = useRouter();
+/**
+ * Thin wrapper that redirects onboarded users straight to the Today tab
+ * during render, before WelcomeScreen's heavy animation tree ever mounts.
+ * This is the navigation-in-render pattern — no useEffect + router.replace.
+ * See ~/vault/standards/navigation-in-render-not-effects.md
+ */
+export default function WelcomeScreenWrapper() {
   const { signedOut } = useLocalSearchParams<{ signedOut?: string }>();
+  const hasCompletedOnboarding = useUnfoldStore(
+    (s) => s.user?.hasCompletedOnboarding ?? false,
+  );
+
+  if (hasCompletedOnboarding && !signedOut) {
+    return <Redirect href="/(tabs)/(today)" />;
+  }
+
+  return <WelcomeScreen />;
+}
+
+function WelcomeScreen() {
+  const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
 
@@ -257,16 +275,15 @@ export default function WelcomeScreen() {
     });
 
   // ─── Initial mount animations ───────────────────────────────────
+  // The onboarded-user redirect lives in WelcomeScreenWrapper above. If
+  // we're here, the user is not onboarded (or has explicitly signed out)
+  // and should see the welcome animation.
   useEffect(() => {
-    if (user?.hasCompletedOnboarding && !signedOut) {
-      router.replace('/(tabs)/(today)');
-      return;
-    }
     iconOpacity.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
     iconScale.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
     buttonOpacity.value = withDelay(subtitleEndTime + 300, withTiming(1, { duration: 600, easing: EASE }));
     buttonTranslateY.value = withDelay(subtitleEndTime + 300, withTiming(0, { duration: 600, easing: EASE }));
-  }, [user, titleEndTime, subtitleEndTime]);
+  }, [subtitleEndTime]);
 
   // ─── Animated styles ────────────────────────────────────────────
   const iconStyle = useAnimatedStyle(() => ({

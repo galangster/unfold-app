@@ -19,7 +19,6 @@ import {
   Linking,
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { EmberParticles } from '@/components/EmberParticles';
@@ -38,7 +37,6 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -192,8 +190,7 @@ export function TrialExpiredOverlay() {
   const goldAccent = colors.accent;
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(Duration.normal)}
+    <View
       style={[
         styles.root,
         {
@@ -329,7 +326,7 @@ export function TrialExpiredOverlay() {
           </TouchableOpacity>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
