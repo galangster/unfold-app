@@ -165,7 +165,7 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
             exiting={SlideOutDown.duration(250)}
             style={[
               styles.sheet,
-              { backgroundColor: colors.inputBackground },
+              { backgroundColor: colors.backgroundElevated },
               sheetAnimatedStyle,
             ]}
           >
