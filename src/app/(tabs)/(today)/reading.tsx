@@ -138,7 +138,7 @@ function ShimmerBar({ bg, width, delay }: { bg: string; width: DimensionValue; d
 export default function ReadingScreen() {
   console.log('[Reading] RENDER CALLED');
   const router = useRouter();
-  const params = useLocalSearchParams<{ dayNumber?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string }>();
   const { colors, isDark } = useTheme();
 
   // Clear reveal transition flag AFTER reading screen has painted to prevent
@@ -160,6 +160,7 @@ export default function ReadingScreen() {
   const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
@@ -188,6 +189,15 @@ export default function ReadingScreen() {
   const { nudge: premiumNudge, onAction: nudgeAction, onDismiss: nudgeDismiss } = usePremiumNudge({ screen: 'reading' });
 
   const devotionals = useUnfoldStore((s) => s.devotionals);
+
+  // Honor ?devotionalId=… so deep links (e.g., from the library) open the
+  // correct devotional instead of whatever happens to be current in the store.
+  // Render-phase sync is safe here because the condition is guarded, so it
+  // bails out after at most one re-render.
+  if (params.devotionalId && params.devotionalId !== currentDevotionalId) {
+    setCurrentDevotional(params.devotionalId);
+  }
+
   // Derive via useMemo instead of inline .find() in a Zustand selector.
   // .find() inside a selector returns a new reference on every store update,
   // which causes infinite re-renders when used as a useEffect dependency.
