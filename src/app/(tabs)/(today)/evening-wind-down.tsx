@@ -146,12 +146,14 @@ export default function EveningWindDownScreen() {
   });
   const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
 
-  // No in-screen gate: the parent (today)/_layout.tsx already blocks churned
-  // users with the TrialExpiredOverlay at the layout level. When RC state
-  // changes mid-session, useRevenueCatSync in the root layout updates
-  // user.isPremium, the parent layout re-renders, and the whole stack
-  // unmounts — including this screen. See
-  // ~/vault/standards/navigation-in-render-not-effects.md
+  // In-screen entitlement guard. The parent (today)/_layout.tsx layers a
+  // TrialExpiredOverlay on top of this stack for churned users but no longer
+  // unmounts it — in-progress screens keep their state across a runtime
+  // premium flip. That state-preserving behavior is load-bearing for journal
+  // drafts etc., but it means premium-only backend work here has to be gated
+  // per-query, not left to layout-level unmounting. generateExamen and the
+  // evening scripture fetch are both gated on `isPremium` below; audio is
+  // torn down when premium flips false.
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -208,7 +210,7 @@ export default function EveningWindDownScreen() {
       if (!result) throw new Error('Failed to generate examen');
       return result;
     },
-    enabled: !!currentDay && !!user && !!currentDevotional,
+    enabled: isPremium && !!currentDay && !!user && !!currentDevotional,
     staleTime: Infinity,
     retry: 1,
   });
@@ -223,7 +225,7 @@ export default function EveningWindDownScreen() {
       if (!result) throw new Error('Failed to fetch verse');
       return result;
     },
-    enabled: !!currentDay?.eveningScriptureRef,
+    enabled: isPremium && !!currentDay?.eveningScriptureRef,
     staleTime: Infinity,
     retry: 1,
   });
@@ -231,7 +233,7 @@ export default function EveningWindDownScreen() {
   const scriptureText = scriptureResult?.text ?? null;
 
   const handlePlayScripture = useCallback(async () => {
-    if (!scriptureText) return;
+    if (!scriptureText || !isPremium) return;
 
     if (audioUri && player) {
       if (isPlaying) {
@@ -254,16 +256,30 @@ export default function EveningWindDownScreen() {
     } finally {
       setAudioLoading(false);
     }
-  }, [scriptureText, audioUri, player, isPlaying]);
+  }, [scriptureText, audioUri, player, isPlaying, isPremium]);
 
   // Auto-play when player initializes after audioUri is set
   // useAudioPlayer creates the player on re-render — this bridges the async gap
   useEffect(() => {
-    if (audioUri && player) {
+    if (audioUri && player && isPremium) {
       player.play();
       setIsPlaying(true);
     }
-  }, [audioUri, player]);
+  }, [audioUri, player, isPremium]);
+
+  // Tear down audio immediately if premium flips false (runtime churn via
+  // RevenueCat sync). The parent overlay blocks interaction, but without this
+  // gate the audio would keep streaming underneath it.
+  useEffect(() => {
+    if (!isPremium && player && isPlaying) {
+      try {
+        player.pause();
+      } catch {
+        // player may already be disposed — ignore
+      }
+      setIsPlaying(false);
+    }
+  }, [isPremium, player, isPlaying]);
 
   const handleShowCelebration = useCallback(() => {
     // Record evening check-in so the home card knows it's done

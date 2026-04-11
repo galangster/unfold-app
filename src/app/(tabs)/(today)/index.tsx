@@ -103,15 +103,24 @@ export default function HomeScreenWrapper() {
   // during the first render and the result is frozen for this instance.
   const [shouldResumeInflight] = useState(hasInflightGenerationJob);
 
-  // Fresh resume context from reveal screen — render-phase check.
-  const resumeContext = useUnfoldStore((s) => s.resumeContext);
-  const freshRevealDayNumber =
-    resumeContext?.route === 'reading' &&
-    typeof resumeContext.dayNumber === 'number' &&
-    resumeContext.touchedAt &&
-    Date.now() - new Date(resumeContext.touchedAt).getTime() < 3000
-      ? resumeContext.dayNumber
-      : null;
+  // Consume the fresh-reveal handoff atomically on mount. We read once, then
+  // clear `resumeContext` from the store so a back-nav + remount inside the
+  // 3-second window can't re-satisfy the condition and trap the user in a
+  // redirect loop. useState initializers run synchronously, exactly once per
+  // mount, so the captured value is stable for this instance.
+  const [freshRevealDayNumber] = useState<number | null>(() => {
+    const rc = useUnfoldStore.getState().resumeContext;
+    if (
+      rc?.route === 'reading' &&
+      typeof rc.dayNumber === 'number' &&
+      rc.touchedAt &&
+      Date.now() - new Date(rc.touchedAt).getTime() < 3000
+    ) {
+      useUnfoldStore.getState().clearResumeContext();
+      return rc.dayNumber;
+    }
+    return null;
+  });
 
   if (shouldResumeInflight) {
     return <Redirect href="/generating" />;
@@ -271,9 +280,13 @@ function HomeScreen() {
   // 2. If found, apply it directly — no generation needed
   // 3. If not, submit a new generation job as a client-side fallback
   // 4. If 409 (already generated), recover by fetching the existing job result
+  //
+  // Gated on `isPremium` — the parent layout overlays a paywall but keeps this
+  // screen mounted so in-progress state survives a churn event. That means
+  // premium-only backend work has to be gated here, not by unmounting.
   const autoGenAttemptedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isPreparingCurrentDay || !currentDevotional) return;
+    if (!isPreparingCurrentDay || !currentDevotional || !isPremium) return;
 
     const devId = currentDevotional.id;
     const dayNum = currentDevotional.currentDay;
@@ -332,7 +345,7 @@ function HomeScreen() {
     })();
 
     return () => { cancelled = true; };
-  }, [isPreparingCurrentDay, currentDevotional]);
+  }, [isPreparingCurrentDay, currentDevotional, isPremium]);
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
