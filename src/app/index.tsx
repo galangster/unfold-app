@@ -529,6 +529,17 @@ function WelcomeScreen({ signedOut = false, staleAuth = false }: { signedOut?: b
       return;
     }
 
+    // User is explicitly starting a fresh auth flow from the welcome
+    // screen. If the escape hatch previously set the forced-signed-out
+    // guard (keyed on the Clerk id they signed out from), clear it now
+    // — the user's deliberate "continue to sign-in" tap is the intent
+    // signal that any subsequent Clerk userId (even the same one they
+    // signed out of) should be treated as a fresh sign-in and applied
+    // to the store. Without this clear, a user who used the escape
+    // hatch can never re-authenticate to the same account because
+    // useAuth would keep ignoring Clerk's positive sync.
+    mmkvStorage.removeItem('forced-signed-out-clerk-id');
+
     // Go directly to onboarding — cutscene and features carousel are now
     // embedded within the onboarding flow (featureSummary step after mirror-back)
     router.replace('/onboarding');
@@ -536,6 +547,10 @@ function WelcomeScreen({ signedOut = false, staleAuth = false }: { signedOut?: b
 
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Same intent-clear as handleContinue: user is explicitly entering
+    // onboarding, so any prior forced-signed-out guard should no longer
+    // suppress Clerk syncs.
+    mmkvStorage.removeItem('forced-signed-out-clerk-id');
     router.replace('/onboarding');
   }, [router]);
 
