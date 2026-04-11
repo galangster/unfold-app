@@ -208,10 +208,6 @@ function ClerkHoldingScreen() {
     if (signingOut) return;
     setSigningOut(true);
     try {
-      // Best-effort Clerk sign-out. If Clerk is actually dead this
-      // throws, but we still want to clear local auth state and fall
-      // through to the welcome screen — the whole point of this
-      // button is to recover from a dead Clerk SDK.
       // Full service teardown inline. The (you) screen sign-out flow
       // relies on useAuth()'s effect to clear RevenueCat + Analytics +
       // Sentry when Clerk resolves signed-out, but useAuth's effect is
@@ -224,49 +220,56 @@ function ClerkHoldingScreen() {
       // store, companion conversations, inflight MMKV, RevenueCat,
       // Analytics, and Sentry.
       //
-      // Fail-closed RevenueCat teardown. We MUST guarantee that the
-      // next session can't observe stale CustomerInfo from the
-      // previous user. `Promise.race()` with a timeout doesn't work
-      // on its own — it wouldn't cancel the underlying
-      // Purchases.logOut(), and the RC customer-info listener or a
-      // fresh getCustomerInfo call could racily set isPremium back
-      // to true before the logout completes.
+      // CRITICAL: this handler MUST NOT block on network I/O. The
+      // whole point of the escape hatch is to recover when something
+      // in the auth/subscriptions stack is stuck or offline — if we
+      // await rcLogoutUser() and RevenueCat happens to be the stalled
+      // dependency, the user is trapped on the holding screen with a
+      // disabled button. So we:
+      //   1. Set the persisted `rc-logout-pending` guard FIRST.
+      //   2. Fire Clerk signOut + RC logoutUser in the background.
+      //   3. Clear local state and navigate IMMEDIATELY.
       //
-      // Solution: set a PERSISTED `rc-logout-pending` flag BEFORE
-      // starting the logout. The useRevenueCatSync hook checks this
-      // flag on mount and refuses to sync premium state until the
-      // logout has definitively completed (retrying itself if this
-      // session's logout failed or was killed mid-flight). This
-      // closes the leak even if the app is force-quit between the
-      // flag being set and Purchases.logOut() resolving.
-      //
-      // Local-first ordering: wipe Zustand BEFORE the RC call, so
-      // every premium-sensitive surface reads a clean anonymous
-      // state from the moment the router navigates.
-      await signOut().catch(() => {});
+      // The persisted guard is what makes fail-closed work: even if
+      // neither background call completes before force-quit, the next
+      // launch's useRevenueCatSync sees the flag and refuses to sync
+      // premium state until it can prove a clean logOut. If the
+      // background rcLogoutUser call happens to succeed in this
+      // session, it clears the flag so the next launch skips the
+      // retry.
+      if (isRevenueCatEnabled()) {
+        mmkvStorage.setItem('rc-logout-pending', '1');
+      }
+
+      // Fire Clerk signOut in the background. If Clerk is stuck this
+      // promise may never resolve — we don't await it.
+      void signOut().catch(() => {});
+
+      // Local teardown — synchronous, never blocks.
       reset();
       useCompanionChatStore.getState().clearAllConversations();
       mmkvStorage.removeItem('inflight-generation-job');
       Analytics.setUserId(null);
       Sentry.setUser(null);
 
+      // Background RC logout. Fire-and-forget — if it completes, clear
+      // the pending flag; if it hangs or errors, leave the flag set
+      // for the next mount of useRevenueCatSync (or the next launch)
+      // to retry.
       if (isRevenueCatEnabled()) {
-        // Persist the pending guard BEFORE initiating logout, so a
-        // force-quit between here and logout completion still gets
-        // retried on next launch by useRevenueCatSync.
-        mmkvStorage.setItem('rc-logout-pending', '1');
-        try {
-          const result = await rcLogoutUser();
-          if (result.ok) {
-            mmkvStorage.removeItem('rc-logout-pending');
-          } else {
-            logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
-            // Leave the flag set — useRevenueCatSync retries on next mount.
+        void (async () => {
+          try {
+            const result = await rcLogoutUser();
+            if (result.ok) {
+              mmkvStorage.removeItem('rc-logout-pending');
+            } else {
+              logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
+            }
+          } catch {
+            // Defensive: rcLogoutUser is guarded and shouldn't throw,
+            // but if it does, leave the flag set for retry.
           }
-        } catch {
-          // Defensive: rcLogoutUser is guarded and shouldn't throw,
-          // but if it does, leave the flag set for retry.
-        }
+        })();
       }
 
       router.replace({ pathname: '/', params: { signedOut: '1' } });

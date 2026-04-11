@@ -9,6 +9,7 @@
  */
 
 import { useEffect } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import Purchases, { type CustomerInfoUpdateListener } from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnfoldStore } from '@/lib/store';
@@ -29,9 +30,10 @@ import { logger } from '@/lib/logger';
 // Fail-closed behavior: do NOT call getCustomerInfo, do NOT attach the
 // update listener, and do NOT write isPremium until logOut() has definitively
 // succeeded in THIS session. If the retry fails, leave the flag set and bail
-// out entirely — the user stays non-premium until the next launch tries
-// again. Offerings prefetch is still safe (no identity involved) and runs
-// independently.
+// out of THIS attempt — but schedule another attempt on the next AppState
+// 'active' transition so a transient network/SDK failure doesn't strand the
+// user as non-premium for the entire app session. Offerings prefetch is
+// still safe (no identity involved) and runs independently.
 const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
 
 export function useRevenueCatSync() {
@@ -45,7 +47,16 @@ export function useRevenueCatSync() {
     }
 
     let cancelled = false;
+    // Track the currently-attached listener (if any). Once we've
+    // successfully cleared any pending logout and attached the
+    // CustomerInfo listener, `listener` is non-null and further
+    // retry attempts become no-ops — we only need to run the
+    // pending-logout resolve path once per session.
     let listener: CustomerInfoUpdateListener | undefined;
+    // Prevents overlapping attempts: if an AppState 'active' event
+    // fires while a prior attempt is still in flight, skip instead of
+    // racing a second Purchases.logOut() against the first.
+    let attemptInFlight = false;
 
     // Prefetch offerings unconditionally — offerings are identity-agnostic
     // and safe to prime even while logout is pending.
@@ -63,65 +74,94 @@ export function useRevenueCatSync() {
       }
     });
 
-    const runSync = async () => {
-      // Honor the escape-hatch logout guard. If a previous session
-      // started an RC logout and we can't prove it completed, retry the
-      // logout here BEFORE touching CustomerInfo. See the comment on
-      // RC_LOGOUT_PENDING_KEY above for the full rationale.
-      const pending = mmkvStorage.getItem(RC_LOGOUT_PENDING_KEY);
-      if (pending) {
-        logger.warn('[RevenueCat] rc-logout-pending flag set — retrying logOut before syncing');
-        const result = await rcLogoutUser();
-        if (cancelled) return;
-        if (!result.ok) {
-          // Retry failed. Leave the flag set, force the store to the
-          // non-premium state (defense against any earlier in-memory
-          // leak), and bail out. Do not attach the listener — we don't
-          // want a late CustomerInfo callback restoring the previous
-          // user's entitlement. Next launch will retry.
-          logger.warn('[RevenueCat] Logout retry failed, bailing out of sync:', result.reason);
-          updateUser({ isPremium: false });
-          return;
-        }
-        mmkvStorage.removeItem(RC_LOGOUT_PENDING_KEY);
-      }
+    const attemptSync = async () => {
+      // Already attached — nothing to do. Steady-state after a
+      // successful initial sync.
+      if (listener) return;
+      if (attemptInFlight) return;
+      attemptInFlight = true;
 
-      // Fetch current subscription status on launch.
-      // This catches lapses that occurred between app sessions.
       try {
-        const customerInfo = await Purchases.getCustomerInfo();
-        if (cancelled) return;
-        const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
-        updateUser({ isPremium: hasSubscription });
-        // Re-validate the trial-ending local notification against the latest
-        // customer info. Fire-and-forget — failures are logged internally.
-        void syncTrialEndingNotification();
-      } catch {
-        // Silently fail — stale store value is acceptable as a fallback.
-        // The listener below will correct it when connectivity returns.
+        // Honor the escape-hatch logout guard. If a previous session
+        // (or an earlier attempt this session) started an RC logout
+        // and we can't prove it completed, retry the logout here
+        // BEFORE touching CustomerInfo.
+        const pending = mmkvStorage.getItem(RC_LOGOUT_PENDING_KEY);
+        if (pending) {
+          logger.warn('[RevenueCat] rc-logout-pending flag set — retrying logOut before syncing');
+          const result = await rcLogoutUser();
+          if (cancelled) return;
+          if (!result.ok) {
+            // Retry failed. Leave the flag set, force the store to
+            // the non-premium state (defense against any earlier
+            // in-memory leak), and bail out of THIS attempt. Do not
+            // attach the listener — we don't want a late
+            // CustomerInfo callback restoring the previous user's
+            // entitlement. The AppState 'active' subscription below
+            // will schedule another attempt when the app next
+            // foregrounds, so a transient failure recovers without
+            // needing a full app restart.
+            logger.warn('[RevenueCat] Logout retry failed, will retry on foreground:', result.reason);
+            updateUser({ isPremium: false });
+            return;
+          }
+          mmkvStorage.removeItem(RC_LOGOUT_PENDING_KEY);
+        }
+
+        // Fetch current subscription status.
+        try {
+          const customerInfo = await Purchases.getCustomerInfo();
+          if (cancelled) return;
+          const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
+          updateUser({ isPremium: hasSubscription });
+          // Re-validate the trial-ending local notification against the
+          // latest customer info. Fire-and-forget.
+          void syncTrialEndingNotification();
+        } catch {
+          // Silently fail — stale store value is acceptable as a
+          // fallback. The listener below will correct it when
+          // connectivity returns, and foreground events will retry
+          // the whole flow.
+        }
+
+        if (cancelled || listener) return;
+
+        // Attach real-time listener. Once attached, subsequent calls
+        // to attemptSync() are no-ops (see early return at top).
+        // RevenueCat's add/remove API uses the listener identity
+        // itself as the handle, so we track the function reference
+        // and hand it back to removeCustomerInfoUpdateListener in
+        // the cleanup path.
+        const fn: CustomerInfoUpdateListener = (customerInfo) => {
+          const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
+          updateUser({ isPremium: hasSubscription });
+          void syncTrialEndingNotification();
+        };
+        Purchases.addCustomerInfoUpdateListener(fn);
+        listener = fn;
+      } finally {
+        attemptInFlight = false;
       }
-
-      if (cancelled) return;
-
-      // Set up real-time listener for subscription changes.
-      // This is triggered on purchases, restores, and when entitlements change.
-      // RevenueCat's add/remove API uses the listener identity itself as
-      // the handle, so we track the function reference and hand it back
-      // to removeCustomerInfoUpdateListener in the cleanup path.
-      listener = (customerInfo) => {
-        const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
-        updateUser({ isPremium: hasSubscription });
-        // Re-sync the trial-ending notification whenever entitlements change
-        // (purchase, restore, lapse). Fire-and-forget.
-        void syncTrialEndingNotification();
-      };
-      Purchases.addCustomerInfoUpdateListener(listener);
     };
 
-    void runSync();
+    // Initial attempt on mount.
+    void attemptSync();
+
+    // Foreground retry: if a prior attempt bailed out (pending-logout
+    // retry failed, getCustomerInfo errored and we never attached),
+    // re-run when the app next becomes active. Connectivity has often
+    // recovered by then. Once the listener is attached, attemptSync
+    // short-circuits so this is a no-op at steady state.
+    const onAppStateChange = (state: AppStateStatus) => {
+      if (state === 'active') {
+        void attemptSync();
+      }
+    };
+    const appStateSub = AppState.addEventListener('change', onAppStateChange);
 
     return () => {
       cancelled = true;
+      appStateSub.remove();
       if (listener) {
         Purchases.removeCustomerInfoUpdateListener(listener);
       }
