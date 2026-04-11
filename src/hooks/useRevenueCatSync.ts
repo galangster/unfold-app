@@ -47,16 +47,46 @@ export function useRevenueCatSync() {
     }
 
     let cancelled = false;
-    // Track the currently-attached listener (if any). Once we've
-    // successfully cleared any pending logout and attached the
-    // CustomerInfo listener, `listener` is non-null and further
-    // retry attempts become no-ops — we only need to run the
-    // pending-logout resolve path once per session.
+    // Bootstrapped = we have completed the full happy path this
+    // session: (a) any pending logout has been cleared, (b)
+    // getCustomerInfo() has returned an authoritative result and we've
+    // written isPremium from it, and (c) the CustomerInfo listener is
+    // attached. Only when all three are true do we consider sync
+    // "done" and stop retrying. Attaching the listener alone is NOT
+    // enough — a listener without a successful bootstrap means the
+    // store holds stale/fail-closed state until an entitlement-
+    // changing event happens to fire the callback, which for an
+    // offline-at-launch user is essentially never.
+    let bootstrapped = false;
+    // Track the currently-attached listener so cleanup can remove it.
     let listener: CustomerInfoUpdateListener | undefined;
-    // Prevents overlapping attempts: if an AppState 'active' event
-    // fires while a prior attempt is still in flight, skip instead of
-    // racing a second Purchases.logOut() against the first.
+    // Prevents overlapping attempts: if a backoff tick or AppState
+    // 'active' event fires while a prior attempt is still in flight,
+    // skip instead of racing a second Purchases.logOut() or
+    // getCustomerInfo() against the first.
     let attemptInFlight = false;
+    // Bounded backoff schedule for in-session retries while not yet
+    // bootstrapped. After the initial attempt on mount, failures
+    // queue the next tick from this schedule (2s → 5s → 15s → 60s,
+    // then 60s indefinitely). This recovers users whose first
+    // attempt failed while they stay in the foreground (connectivity
+    // recovery, RC backend blip, etc.) without requiring them to
+    // background the app. Bounded to avoid hammering a down backend
+    // or a permanently offline device.
+    const RETRY_SCHEDULE_MS: readonly number[] = [2000, 5000, 15000, 60000];
+    let retryIndex = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleRetry = () => {
+      if (cancelled || bootstrapped) return;
+      if (retryTimer) return; // already queued
+      const delay = RETRY_SCHEDULE_MS[Math.min(retryIndex, RETRY_SCHEDULE_MS.length - 1)];
+      retryIndex += 1;
+      retryTimer = setTimeout(() => {
+        retryTimer = undefined;
+        void attemptSync();
+      }, delay);
+    };
 
     // Prefetch offerings unconditionally — offerings are identity-agnostic
     // and safe to prime even while logout is pending.
@@ -74,10 +104,10 @@ export function useRevenueCatSync() {
       }
     });
 
-    const attemptSync = async () => {
-      // Already attached — nothing to do. Steady-state after a
-      // successful initial sync.
-      if (listener) return;
+    async function attemptSync(): Promise<void> {
+      // Already done — nothing to do. Steady-state after a successful
+      // bootstrap.
+      if (bootstrapped) return;
       if (attemptInFlight) return;
       attemptInFlight = true;
 
@@ -94,21 +124,22 @@ export function useRevenueCatSync() {
           if (!result.ok) {
             // Retry failed. Leave the flag set, force the store to
             // the non-premium state (defense against any earlier
-            // in-memory leak), and bail out of THIS attempt. Do not
-            // attach the listener — we don't want a late
-            // CustomerInfo callback restoring the previous user's
-            // entitlement. The AppState 'active' subscription below
-            // will schedule another attempt when the app next
-            // foregrounds, so a transient failure recovers without
-            // needing a full app restart.
-            logger.warn('[RevenueCat] Logout retry failed, will retry on foreground:', result.reason);
+            // in-memory leak), and queue another retry on the
+            // backoff schedule. Do NOT attach the listener — a late
+            // CustomerInfo callback on a still-authenticated SDK
+            // could restore the previous user's entitlement.
+            logger.warn('[RevenueCat] Logout retry failed, scheduling backoff retry:', result.reason);
             updateUser({ isPremium: false });
+            scheduleRetry();
             return;
           }
           mmkvStorage.removeItem(RC_LOGOUT_PENDING_KEY);
         }
 
-        // Fetch current subscription status.
+        // Fetch authoritative customer info. This is the gate to
+        // "bootstrapped" — we will NOT mark the sync as done or
+        // attach the listener until this succeeds at least once.
+        let fetched = false;
         try {
           const customerInfo = await Purchases.getCustomerInfo();
           if (cancelled) return;
@@ -117,17 +148,24 @@ export function useRevenueCatSync() {
           // Re-validate the trial-ending local notification against the
           // latest customer info. Fire-and-forget.
           void syncTrialEndingNotification();
-        } catch {
-          // Silently fail — stale store value is acceptable as a
-          // fallback. The listener below will correct it when
-          // connectivity returns, and foreground events will retry
-          // the whole flow.
+          fetched = true;
+        } catch (error) {
+          // Transient fetch failure — could be offline launch, RC
+          // backend blip, network mid-switch. Do not attach the
+          // listener: if we did, this attempt would short-circuit all
+          // future retries even though we never got an authoritative
+          // result. Queue a backoff retry instead.
+          logger.warn('[RevenueCat] getCustomerInfo failed, scheduling backoff retry:', error);
         }
 
-        if (cancelled || listener) return;
+        if (cancelled) return;
+        if (!fetched) {
+          scheduleRetry();
+          return;
+        }
 
-        // Attach real-time listener. Once attached, subsequent calls
-        // to attemptSync() are no-ops (see early return at top).
+        // Success path. Attach the real-time listener, mark as
+        // bootstrapped, and cancel any queued backoff.
         // RevenueCat's add/remove API uses the listener identity
         // itself as the handle, so we track the function reference
         // and hand it back to removeCustomerInfoUpdateListener in
@@ -139,29 +177,42 @@ export function useRevenueCatSync() {
         };
         Purchases.addCustomerInfoUpdateListener(fn);
         listener = fn;
+        bootstrapped = true;
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = undefined;
+        }
       } finally {
         attemptInFlight = false;
       }
-    };
+    }
 
     // Initial attempt on mount.
     void attemptSync();
 
-    // Foreground retry: if a prior attempt bailed out (pending-logout
-    // retry failed, getCustomerInfo errored and we never attached),
-    // re-run when the app next becomes active. Connectivity has often
-    // recovered by then. Once the listener is attached, attemptSync
-    // short-circuits so this is a no-op at steady state.
+    // Foreground retry: when the app returns to active, reset the
+    // backoff index (user re-engagement is a strong signal to try
+    // fresh) and kick off an immediate attempt. Once bootstrapped,
+    // attemptSync short-circuits and this becomes a no-op.
     const onAppStateChange = (state: AppStateStatus) => {
-      if (state === 'active') {
-        void attemptSync();
+      if (state !== 'active') return;
+      if (bootstrapped) return;
+      retryIndex = 0;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
       }
+      void attemptSync();
     };
     const appStateSub = AppState.addEventListener('change', onAppStateChange);
 
     return () => {
       cancelled = true;
       appStateSub.remove();
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
       if (listener) {
         Purchases.removeCustomerInfoUpdateListener(listener);
       }
