@@ -187,6 +187,25 @@ export default function GeneratingScreen() {
   const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
   const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
   const shouldAbortForEntitlement = !isPremium && hasCompletedOnboarding;
+
+  // Auth-owner binding for this generation session. Captured on first
+  // mount from the live user and then frozen — matches the inflight
+  // MMKV payload's ownerAuthUserId contract (see readInflightForOwner
+  // in this file), so app-kill recovery paths and fresh-submit paths
+  // are bound the same way. The auth watchdog below uses this to abort
+  // the flow if the live authUserId drifts off the captured owner
+  // mid-generation (sign-out, account swap). Without this fence,
+  // polling keeps running and handleGenerationComplete could persist
+  // a finished devotional under the now-signed-out or different-user
+  // profile — a stale-auth/cross-account leak path.
+  const liveAuthUserId = useUnfoldStore((s) => s.user?.authUserId ?? null);
+  const sessionOwnerRef = useRef<string | null | undefined>(undefined);
+  if (user && sessionOwnerRef.current === undefined) {
+    sessionOwnerRef.current = user.authUserId ?? null;
+  }
+  const shouldAbortForAuth =
+    sessionOwnerRef.current !== undefined &&
+    sessionOwnerRef.current !== liveAuthUserId;
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
   const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
@@ -243,16 +262,30 @@ export default function GeneratingScreen() {
     navigation.setOptions({ gestureEnabled: !!error });
   }, [navigation, error]);
 
-  // Entitlement watchdog. If the user's premium flips false mid-generation
-  // (RC sync, trial expiry, debug toggle), we must tear the flow down: stop
-  // polling, clear the MMKV inflight key, fail the session, and route them
-  // out before a paid devotional can land. Without this they'd continue to
-  // poll, `handleGenerationComplete` would write a new devotional, and
-  // `handleBeginReading` would redirect them into gated content.
-  useEffect(() => {
-    if (!shouldAbortForEntitlement) return;
+  // Combined abort condition. Entitlement loss OR auth-owner drift both
+  // need the exact same teardown — stop polling, clear MMKV, fail the
+  // session, redirect out before any late completion can land.
+  const shouldAbort = shouldAbortForEntitlement || shouldAbortForAuth;
 
-    logger.warn('[generating] Entitlement lost mid-generation; aborting flow');
+  // Session watchdog. Two independent trigger conditions:
+  //  1. Entitlement flip (RC sync, trial expiry, debug toggle) — user
+  //     lost premium mid-generation, must not let a paid devotional land.
+  //  2. Auth-owner drift (sign-out or account swap) — the live user is
+  //     no longer who started this generation, must not persist the
+  //     finished devotional under the wrong profile.
+  //
+  // Without this combined fence, polling continues across sign-out,
+  // handleGenerationComplete writes to the now-signed-out or different
+  // user's local store, and handleBeginReading redirects into gated or
+  // wrong-account content.
+  useEffect(() => {
+    if (!shouldAbort) return;
+
+    logger.warn(
+      shouldAbortForAuth
+        ? '[generating] Auth owner changed mid-generation; aborting flow'
+        : '[generating] Entitlement lost mid-generation; aborting flow',
+    );
     abortedRef.current = true;
     if (pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
@@ -261,7 +294,7 @@ export default function GeneratingScreen() {
     pollingRef.current = false;
     jobSubmittedRef.current = true; // prevent the submit effect from kicking off after abort
     mmkvStorage.removeItem(INFLIGHT_KEY);
-    failGenerationSession('Subscription required');
+    failGenerationSession(shouldAbortForAuth ? 'Sign-in required' : 'Subscription required');
     setIsGenerating(false);
     setIsReconnecting(false);
 
@@ -269,7 +302,7 @@ export default function GeneratingScreen() {
     // WelcomeScreenWrapper which re-reads hydrated state and routes them to
     // the correct destination (paywall, onboarding, or tabs).
     router.replace('/');
-  }, [shouldAbortForEntitlement, router, failGenerationSession]);
+  }, [shouldAbort, shouldAbortForAuth, router, failGenerationSession]);
 
   // Block deep-link / external navigation while generation is in progress.
   useEffect(() => {
@@ -626,10 +659,11 @@ export default function GeneratingScreen() {
 
   useEffect(() => {
     if (!user || jobSubmittedRef.current) return;
-    // Don't start a new job (or resume) if entitlement is already gone —
-    // the watchdog effect will redirect shortly, but belt-and-suspenders
+    // Don't start a new job (or resume) if entitlement is already gone
+    // OR if the session owner no longer matches the live user. The
+    // watchdog effect will redirect shortly, but belt-and-suspenders
     // prevents a narrow race where this effect runs before the watchdog.
-    if (shouldAbortForEntitlement) return;
+    if (shouldAbort) return;
     jobSubmittedRef.current = true;
 
     // Check MMKV for an inflight job from a previous session (app-kill

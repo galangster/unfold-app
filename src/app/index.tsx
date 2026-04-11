@@ -1,7 +1,11 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
 import { useAuth as useClerkAuth, useClerk } from '@clerk/clerk-expo';
+import * as Sentry from '@sentry/react-native';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { logoutUser as rcLogoutUser, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import { Analytics } from '@/lib/analytics';
+import { logger } from '@/lib/logger';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -208,14 +212,30 @@ function ClerkHoldingScreen() {
       // throws, but we still want to clear local auth state and fall
       // through to the welcome screen — the whole point of this
       // button is to recover from a dead Clerk SDK.
-      // Mirror the (you) screen sign-out flow exactly — clearing local
-      // Zustand is not enough, because separately-persisted user-scoped
-      // stores (companion conversations) would otherwise leak to the
-      // next device user who signs in.
+      // Full service teardown inline. The (you) screen sign-out flow
+      // relies on useAuth()'s effect to clear RevenueCat + Analytics +
+      // Sentry when Clerk resolves signed-out, but useAuth's effect is
+      // gated on `isLoaded === true` — which is exactly the condition
+      // this escape hatch exists to recover from. If we only cleared
+      // local Zustand/MMKV, RevenueCat would stay authenticated as the
+      // previous user and the next anonymous/local session would
+      // inherit their premium entitlement until Clerk eventually
+      // recovers. So we run the same teardown inline: Clerk, local
+      // store, companion conversations, inflight MMKV, RevenueCat,
+      // Analytics, and Sentry.
       await signOut().catch(() => {});
       reset();
       useCompanionChatStore.getState().clearAllConversations();
       mmkvStorage.removeItem('inflight-generation-job');
+      if (isRevenueCatEnabled()) {
+        rcLogoutUser().then((result) => {
+          if (!result.ok) {
+            logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
+          }
+        });
+      }
+      Analytics.setUserId(null);
+      Sentry.setUser(null);
       router.replace({ pathname: '/', params: { signedOut: '1' } });
     } finally {
       setSigningOut(false);
