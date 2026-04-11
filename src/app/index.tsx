@@ -224,12 +224,25 @@ function ClerkHoldingScreen() {
       // store, companion conversations, inflight MMKV, RevenueCat,
       // Analytics, and Sentry.
       //
-      // Local-first ordering: wipe Zustand BEFORE awaiting any network
-      // call. Every premium-sensitive surface reads isPremium from
-      // Zustand (see (today)/_layout.tsx, TrialExpiredOverlay, etc.),
-      // so by the time routing lands on the welcome screen, there's
-      // no locally-observable stale entitlement to leak, regardless
-      // of whether the RC logout network call has resolved yet.
+      // Fail-closed RevenueCat teardown. We MUST guarantee that the
+      // next session can't observe stale CustomerInfo from the
+      // previous user. `Promise.race()` with a timeout doesn't work
+      // on its own — it wouldn't cancel the underlying
+      // Purchases.logOut(), and the RC customer-info listener or a
+      // fresh getCustomerInfo call could racily set isPremium back
+      // to true before the logout completes.
+      //
+      // Solution: set a PERSISTED `rc-logout-pending` flag BEFORE
+      // starting the logout. The useRevenueCatSync hook checks this
+      // flag on mount and refuses to sync premium state until the
+      // logout has definitively completed (retrying itself if this
+      // session's logout failed or was killed mid-flight). This
+      // closes the leak even if the app is force-quit between the
+      // flag being set and Purchases.logOut() resolving.
+      //
+      // Local-first ordering: wipe Zustand BEFORE the RC call, so
+      // every premium-sensitive surface reads a clean anonymous
+      // state from the moment the router navigates.
       await signOut().catch(() => {});
       reset();
       useCompanionChatStore.getState().clearAllConversations();
@@ -237,26 +250,22 @@ function ClerkHoldingScreen() {
       Analytics.setUserId(null);
       Sentry.setUser(null);
 
-      // RevenueCat logout — await with timeout. We can't leave it
-      // fire-and-forget (the next mount could racily observe stale
-      // CustomerInfo if anything reads directly off Purchases), but
-      // we also can't block indefinitely because Clerk being stuck
-      // often means the device is hard-offline and Purchases.logOut()
-      // would hang forever on the network call. 1.5s cap, then proceed.
       if (isRevenueCatEnabled()) {
-        const RC_LOGOUT_TIMEOUT_MS = 1500;
+        // Persist the pending guard BEFORE initiating logout, so a
+        // force-quit between here and logout completion still gets
+        // retried on next launch by useRevenueCatSync.
+        mmkvStorage.setItem('rc-logout-pending', '1');
         try {
-          await Promise.race([
-            rcLogoutUser().then((result) => {
-              if (!result.ok) {
-                logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
-              }
-            }),
-            new Promise<void>((resolve) => setTimeout(resolve, RC_LOGOUT_TIMEOUT_MS)),
-          ]);
+          const result = await rcLogoutUser();
+          if (result.ok) {
+            mmkvStorage.removeItem('rc-logout-pending');
+          } else {
+            logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
+            // Leave the flag set — useRevenueCatSync retries on next mount.
+          }
         } catch {
-          // rcLogoutUser is already guarded and returns {ok,reason};
-          // any thrown error here is defensive.
+          // Defensive: rcLogoutUser is guarded and shouldn't throw,
+          // but if it does, leave the flag set for retry.
         }
       }
 

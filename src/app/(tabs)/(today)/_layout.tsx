@@ -39,21 +39,29 @@ export default function TodayLayout() {
   // highlights, etc.) are left mounted so their component state (drafts,
   // editor buffers) survives the premium flip under the overlay.
   //
-  // Dismissal must not silently fail. `router.back()` can throw or no-op
-  // mid-transition, and a single best-effort attempt would let the native
-  // sheet stay interactive above the paywall overlay — a direct gating
-  // bypass. But retries also must NOT fire blindly: a second back() while
-  // the first is still animating will pop the screen BENEATH the native
-  // sheet, destroying reading/journal draft state beneath. So every
-  // retry tick must re-read navigation state before acting: we keep a
-  // `segmentsRef` updated on every render (fresh closure-free read),
-  // and the retry closure checks it before each `router.back()` call.
-  // If the top segment has already left `NATIVE_PRESENTED_ROUTES`, we
-  // bail out — the native sheet is gone, reading/journal is intact, no
-  // more pops needed. Only if the top segment is still a gated native
-  // presentation after the attempt cap do we escalate to `dismissAll()`,
-  // and only after re-verifying it's STILL a gated native presentation
-  // at escalation time.
+  // Dismissal is a TWO-STAGE observer, not a retry loop:
+  //
+  //   Stage 1: Fire a single `router.back()` and let iOS run its modal
+  //            dismissal animation (formSheet ~300ms, modal ~400ms).
+  //   Stage 2: After a wait long enough to cover the slowest native
+  //            animation, do a SINGLE fresh navigation-state read. If
+  //            the top segment is no longer a gated native route, we
+  //            succeeded — done. Only if it's STILL on a gated native
+  //            route do we escalate to `dismissAll()`.
+  //
+  // Why not a retry loop with short ticks? Each retry tick that fires
+  // while the first dismissal is still animating risks popping the
+  // screen BENEATH the sheet (draft state loss) OR prematurely
+  // escalating into `dismissAll()` (nukes the entire tab stack). iOS
+  // native dismiss animations commonly outlive a 240ms window, so
+  // short-tick loops are structurally unsafe. A single long wait that
+  // exceeds the animation ceiling gives the targeted back() time to
+  // resolve on its own; if after that wait we're still on the sheet,
+  // something is actually wrong and a full stack reset is warranted.
+  //
+  // `segmentsRef` gives us a closure-free read of current segments so
+  // the stage-2 timer sees the latest navigation state even though the
+  // effect was scheduled on an earlier render.
   const topSegment = segments[segments.length - 1];
   const topIsNativePresented = typeof topSegment === 'string' && NATIVE_PRESENTED_ROUTES.has(topSegment);
   const segmentsRef = useRef(segments);
@@ -63,9 +71,14 @@ export default function TodayLayout() {
     if (!shouldShowOverlay || !topIsNativePresented) return;
 
     let cancelled = false;
-    let attempts = 0;
-    const MAX_BACK_ATTEMPTS = 3;
-    const BACK_RETRY_DELAY_MS = 80;
+    // Must exceed the slowest native dismissal. iOS formSheet is
+    // ~300ms, full-screen modal is ~400ms. 700ms gives comfortable
+    // headroom without being so long the overlay feels interactive
+    // in the gap (the stack is already pointerEvents-none'd via
+    // `shouldShowOverlay`, so the only thing still live is the native
+    // sheet itself, which the user cannot usefully interact with
+    // because it's gating a non-premium experience).
+    const STAGE_2_DELAY_MS = 700;
 
     const currentTopIsNative = (): boolean => {
       const segs = segmentsRef.current;
@@ -73,55 +86,33 @@ export default function TodayLayout() {
       return typeof top === 'string' && NATIVE_PRESENTED_ROUTES.has(top);
     };
 
-    const escalate = () => {
-      // Only nuke the stack if we're STILL on a gated native
-      // presentation. If segments already moved away while we were
-      // waiting, the transition resolved on its own and we must not
-      // over-pop into non-gated screens below.
+    // Stage 1: fire one targeted back(). Swallow throws — if back()
+    // throws mid-transition, stage 2 will catch the leftover state.
+    try {
+      if (router.canGoBack()) {
+        router.back();
+      }
+    } catch {
+      // fall through to stage 2
+    }
+
+    // Stage 2: single fresh verification after the animation window.
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      // Success path: segments have moved off the gated native route —
+      // targeted dismissal worked, leave the rest of the stack alone.
       if (!currentTopIsNative()) return;
+      // Still on the sheet after the full animation window. Escalate.
       try {
         router.dismissAll();
       } catch {
         router.replace('/(tabs)/(today)');
       }
-    };
-
-    const tryDismiss = () => {
-      if (cancelled) return;
-
-      // Fresh navigation-state read. If the native sheet is already
-      // gone, bail — no further pops. This is the guard that prevents
-      // over-popping a successful first back() into the reading/journal
-      // screen beneath.
-      if (!currentTopIsNative()) return;
-
-      attempts += 1;
-      if (attempts > MAX_BACK_ATTEMPTS) {
-        escalate();
-        return;
-      }
-
-      try {
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          // canGoBack said false but we're still on a native sheet —
-          // weird stack state; nuke to tab root.
-          escalate();
-          return;
-        }
-      } catch {
-        // back() threw mid-transition. Fall through to the scheduled
-        // retry.
-      }
-
-      setTimeout(tryDismiss, BACK_RETRY_DELAY_MS);
-    };
-
-    tryDismiss();
+    }, STAGE_2_DELAY_MS);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [shouldShowOverlay, topIsNativePresented, router]);
 
