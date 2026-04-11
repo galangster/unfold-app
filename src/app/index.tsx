@@ -211,7 +211,25 @@ export default function WelcomeScreenWrapper() {
   // persisted profile actually claims a Clerk identity.
   const needsClerkConfirmation = authUserId != null;
 
-  if (!hasHydrated || (needsClerkConfirmation && !isClerkLoaded)) {
+  // Bounded Clerk-wait: we block on `isClerkLoaded` so a revoked session
+  // can't route a persisted user into the tabs, but an unbounded wait is
+  // a degraded-dependency trap — if Clerk startup stalls (offline cold
+  // start, SDK outage, bad init) the user is stranded on a blank screen
+  // forever. Grant a 3s grace period; if Clerk hasn't loaded by then,
+  // fall through. With `isLoaded === false` Clerk's types guarantee
+  // `isSignedIn === false`, so `hasStaleAuthState` below evaluates true
+  // and we render WelcomeScreen with the stale-auth CTA — the safe
+  // degraded path, not a lockout.
+  const [clerkWaitExpired, setClerkWaitExpired] = useState(false);
+  useEffect(() => {
+    if (!needsClerkConfirmation || isClerkLoaded) return;
+    const id = setTimeout(() => setClerkWaitExpired(true), 3000);
+    return () => clearTimeout(id);
+  }, [needsClerkConfirmation, isClerkLoaded]);
+
+  const waitingOnClerk = needsClerkConfirmation && !isClerkLoaded && !clerkWaitExpired;
+
+  if (!hasHydrated || waitingOnClerk) {
     return <View style={{ flex: 1, backgroundColor: BG }} />;
   }
 
