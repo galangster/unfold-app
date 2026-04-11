@@ -194,10 +194,10 @@ export default function WelcomeScreenWrapper() {
     return <Redirect href="/(tabs)/(today)" />;
   }
 
-  return <WelcomeScreen />;
+  return <WelcomeScreen signedOut={!!signedOut} />;
 }
 
-function WelcomeScreen() {
+function WelcomeScreen({ signedOut = false }: { signedOut?: boolean }) {
   const router = useRouter();
   const user = useUnfoldStore((s) => s.user);
   const { colors } = useTheme();
@@ -241,7 +241,12 @@ function WelcomeScreen() {
   // ─── Phase handlers ─────────────────────────────────────────────
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (user?.hasCompletedOnboarding) {
+    // `signedOut` suppresses the onboarded shortcut so a just-signed-out user
+    // with stale store/auth state can't bounce straight back into the tabs.
+    // WelcomeScreenWrapper already blocks the same path at its entry — this is
+    // defense in depth in case any downstream code re-populates the store
+    // before navigation lands here.
+    if (!signedOut && user?.hasCompletedOnboarding) {
       router.replace('/(tabs)/(today)');
       return;
     }
@@ -249,7 +254,7 @@ function WelcomeScreen() {
     // Go directly to onboarding — cutscene and features carousel are now
     // embedded within the onboarding flow (featureSummary step after mirror-back)
     router.replace('/onboarding');
-  }, [user, router, phase, isLastFeaturePage]);
+  }, [user, router, phase, isLastFeaturePage, signedOut]);
 
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

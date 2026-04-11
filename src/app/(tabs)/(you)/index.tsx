@@ -72,6 +72,7 @@ import {
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useAuth } from '@/hooks/useAuth';
 import { useClerk } from '@clerk/clerk-expo';
 import * as Sharing from 'expo-sharing';
@@ -272,6 +273,10 @@ export default function YouScreen() {
               await signOut();
               reset();
               useCompanionChatStore.getState().clearAllConversations();
+              // Clear the inflight-generation-job MMKV key so a stale job from
+              // the previous session cannot trigger HomeScreenWrapper's
+              // render-phase redirect to /generating on the next launch.
+              mmkvStorage.removeItem('inflight-generation-job');
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               router.replace({ pathname: '/', params: { signedOut: '1' } });
             } catch (err) {
