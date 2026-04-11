@@ -63,13 +63,21 @@ function readInflightForOwner(currentOwner: string | null): InflightPayload | nu
       mmkvStorage.removeItem(INFLIGHT_KEY);
       return null;
     }
-    // Reject legacy payloads without owner metadata outright: we can't
-    // prove ownership, so treat them as non-resumable. Same goes for any
-    // mismatch against the current store user.
+    // Legacy migration: pre-owner payloads (no `ownerAuthUserId` key)
+    // predate this version's tenant-isolation contract. Deleting them
+    // on upgrade would strand any in-flight job created by the prior
+    // build, orphaning server results from local state. Allow legacy
+    // payloads to resume under the current account and backfill the
+    // owner binding on next write. The shared-device risk is bounded
+    // by sign-out / destructive reset already clearing the key, so a
+    // persisted legacy payload is always attributable to "whoever
+    // currently has the local profile hydrated" — the same user who
+    // submitted it, unless they explicitly switched accounts (which
+    // goes through the sign-out path that clears MMKV anyway).
     const persistedOwner = parsed.ownerAuthUserId === undefined ? undefined : parsed.ownerAuthUserId;
-    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
+    if (persistedOwner !== undefined && persistedOwner !== currentOwner) {
       logger.warn('[generating] Inflight job owner mismatch — discarding', {
-        persistedOwner: persistedOwner ?? null,
+        persistedOwner,
         currentOwner,
       });
       mmkvStorage.removeItem(INFLIGHT_KEY);
@@ -79,7 +87,10 @@ function readInflightForOwner(currentOwner: string | null): InflightPayload | nu
       jobId: parsed.jobId,
       devotionalId: parsed.devotionalId,
       submittedAt: parsed.submittedAt,
-      ownerAuthUserId: persistedOwner,
+      // Adopt current owner (either the persisted match or the backfill
+      // for a legacy payload). Subsequent writes via writeInflight will
+      // stamp this explicitly.
+      ownerAuthUserId: currentOwner,
     };
   } catch {
     mmkvStorage.removeItem(INFLIGHT_KEY);

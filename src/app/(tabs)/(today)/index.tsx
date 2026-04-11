@@ -93,8 +93,12 @@ function hasInflightGenerationJobFor(currentOwner: string | null): boolean {
       submittedAt: number;
       ownerAuthUserId?: string | null;
     };
+    // Legacy migration: payloads from builds predating this contract
+    // have no `ownerAuthUserId`. Deleting them on upgrade would strand
+    // in-flight jobs, so allow them to resume under the current user.
+    // See matching note in generating.tsx readInflightForOwner.
     const persistedOwner = inflight.ownerAuthUserId === undefined ? undefined : inflight.ownerAuthUserId;
-    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
+    if (persistedOwner !== undefined && persistedOwner !== currentOwner) {
       mmkvStorage.removeItem(INFLIGHT_KEY);
       return false;
     }

@@ -171,6 +171,45 @@ const RevealWord = React.memo(({
 });
 
 /**
+ * Neutral holding surface rendered while Clerk is still loading for an
+ * auth-bound profile and the initial grace period has expired. We keep
+ * waiting for Clerk — we do NOT fall through to the tabs, because
+ * granting access on unproven auth would leak the previous user's
+ * local data on a revoked-session cold start. This screen just tells
+ * the user what's happening so they aren't staring at an infinite
+ * blank view.
+ */
+function ClerkHoldingScreen() {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing['8'] }}>
+      <Text
+        style={{
+          fontFamily: FontFamily.display,
+          fontSize: FontSize.xl,
+          color: colors.text,
+          textAlign: 'center',
+          marginBottom: Spacing['3'],
+        }}
+      >
+        Connecting to your account
+      </Text>
+      <Text
+        style={{
+          fontFamily: FontFamily.body,
+          fontSize: FontSize.base,
+          color: colors.textMuted,
+          textAlign: 'center',
+          lineHeight: 22,
+        }}
+      >
+        This is taking a moment. Check your connection — we'll bring you in as soon as we can reach your account.
+      </Text>
+    </View>
+  );
+}
+
+/**
  * Thin wrapper that redirects onboarded users straight to the Today tab
  * during render, before WelcomeScreen's heavy animation tree ever mounts.
  * This is the navigation-in-render pattern — no useEffect + router.replace.
@@ -211,38 +250,43 @@ export default function WelcomeScreenWrapper() {
   // persisted profile actually claims a Clerk identity.
   const needsClerkConfirmation = authUserId != null;
 
-  // Bounded Clerk-wait: we block on `isClerkLoaded` so a revoked session
-  // can't route a persisted user into the tabs, but an unbounded wait is
-  // a degraded-dependency trap — if Clerk startup stalls (offline cold
-  // start, SDK outage, bad init) the user is stranded on a blank screen
-  // forever. Grant a 3s grace period; if Clerk hasn't loaded by then,
-  // fall through and trust the persisted state. If Clerk *eventually*
-  // resolves to a revoked session, useAuth() reconciles and clears the
-  // store — which reroutes via the normal signed-out path. What we must
-  // NOT do is treat "Clerk still loading" as "Clerk said signed-out":
-  // `isSignedIn` defaults to false while unresolved, so reading stale-
-  // auth off it during the fallback would reclassify legitimate
-  // onboarded users as stale and push them through /onboarding again.
-  const [clerkWaitExpired, setClerkWaitExpired] = useState(false);
+  // Clerk-wait is UNBOUNDED for auth-bound profiles — we cannot grant
+  // access to the signed-in tabs until Clerk has conclusively resolved
+  // the session. useAuth() only clears the store once `isLoaded`
+  // becomes true, so an unresolved Clerk + cached `hasCompletedOnboarding`
+  // is not a safe redirect target: on a revoked session cold start the
+  // previous user's local devotionals/journal would be accessible
+  // during the degraded path (tenant-isolation regression).
+  //
+  // The "infinite blank screen" degraded-dependency concern is real,
+  // but the fix is UI, not routing — after a short grace period we
+  // swap the blank View for a visible holding surface (spinner +
+  // explanatory copy) so the user knows what's happening. When Clerk
+  // eventually resolves (either signed-in → redirect, or signed-out →
+  // stale-auth welcome CTA) we unblock. Until then we stay on a
+  // neutral surface; we never render the tabs with unproven auth.
+  const [showClerkHolding, setShowClerkHolding] = useState(false);
   useEffect(() => {
     if (!needsClerkConfirmation || isClerkLoaded) return;
-    const id = setTimeout(() => setClerkWaitExpired(true), 3000);
+    const id = setTimeout(() => setShowClerkHolding(true), 3000);
     return () => clearTimeout(id);
   }, [needsClerkConfirmation, isClerkLoaded]);
 
-  const waitingOnClerk = needsClerkConfirmation && !isClerkLoaded && !clerkWaitExpired;
+  const waitingOnClerk = needsClerkConfirmation && !isClerkLoaded;
 
-  if (!hasHydrated || waitingOnClerk) {
+  if (!hasHydrated || (waitingOnClerk && !showClerkHolding)) {
     return <View style={{ flex: 1, backgroundColor: BG }} />;
   }
 
+  if (waitingOnClerk && showClerkHolding) {
+    return <ClerkHoldingScreen />;
+  }
+
   // Stale-auth guard: only assert this once Clerk has ACTUALLY loaded
-  // and reported no session. `isClerkLoaded === false` is ambiguous
-  // (could be truly revoked or just slow), so we never flag stale-auth
-  // during the unresolved fallback — that would be a destructive false
-  // positive on the degraded-dependency path. useAuth() will handle
-  // real revocation whenever Clerk finishes loading.
-  const hasStaleAuthState = needsClerkConfirmation && isClerkLoaded && !isSignedIn;
+  // and reported no session. By this point `waitingOnClerk === false`,
+  // so either Clerk resolved or the profile is anonymous — either way
+  // `isSignedIn` is authoritative.
+  const hasStaleAuthState = needsClerkConfirmation && !isSignedIn;
 
   if (hasCompletedOnboarding && !signedOut && !hasStaleAuthState) {
     return <Redirect href="/(tabs)/(today)" />;
