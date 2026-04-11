@@ -46,8 +46,10 @@ export function useAuth() {
 
   const prevUserIdRef = useRef<string | null>(null);
 
-  // Derive auth provider from Clerk external accounts
-  const authProvider = (() => {
+  // Derive auth provider from Clerk external accounts. Computed
+  // unconditionally so the effect can pass it into the store sync on
+  // first observation — the gated PUBLIC value is computed below.
+  const rawAuthProvider = (() => {
     if (!clerkUser) return null;
     const primary = clerkUser.externalAccounts?.[0];
     if (!primary) return 'apple'; // fallback
@@ -58,10 +60,27 @@ export function useAuth() {
     return 'apple';
   })();
 
-  // Resolve userId from Clerk
-  const userId = clerkUserId ?? null;
-  const email = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
-  const displayName = clerkUser?.firstName ?? null;
+  // Effective auth state. The forced-sign-out guard must suppress the
+  // hook's public output — not just the sync effect — because callers
+  // like _layout.tsx start syncService and register push tokens off
+  // `userId`. If we only gated the effect, a stale Clerk recovery
+  // would still read as "signed in" to the rest of the app and
+  // re-engage authenticated background behavior under the old
+  // identity. Gate everything on the guard.
+  //
+  // Read on every render: the guard is set/cleared synchronously
+  // right before router.replace() calls that re-render this hook, so
+  // each render sees the authoritative current value without needing
+  // a separate subscribe mechanism.
+  const rawClerkUserId = clerkUserId ?? null;
+  const guardedId = mmkvStorage.getItem(FORCED_SIGNED_OUT_KEY) as string | null;
+  const isGuardedStaleRecovery =
+    rawClerkUserId !== null && guardedId !== null && guardedId === rawClerkUserId;
+
+  const userId = isGuardedStaleRecovery ? null : rawClerkUserId;
+  const email = isGuardedStaleRecovery ? null : clerkUser?.primaryEmailAddress?.emailAddress ?? null;
+  const displayName = isGuardedStaleRecovery ? null : clerkUser?.firstName ?? null;
+  const authProvider = isGuardedStaleRecovery ? null : rawAuthProvider;
 
   const isAuthenticated = !!userId;
   const isLoading = !isLoaded;
@@ -72,33 +91,42 @@ export function useAuth() {
 
     const newUserId = clerkUserId ?? null;
 
-    // Skip if no change
+    // Forced-sign-out guard check runs BEFORE prevUserIdRef is
+    // advanced, AND resets prevUserIdRef to null on a guarded
+    // return. This matters for "same account re-auth after escape
+    // hatch":
+    //
+    //   - Initial mount (signed in as X): prevRef=null → advances to
+    //     X, sync runs.
+    //   - Escape hatch fires: guard set to X. Next effect run sees
+    //     newUserId=X, guard matches → we reset prevRef=null and
+    //     return. Without the reset, prevRef would stay at X.
+    //   - User clears guard from welcome and re-signs-in to X:
+    //     newUserId=X, guard=null, prevRef=null → proceeds with
+    //     sign-in sync. If we had left prevRef=X, the "skip if no
+    //     change" check would short-circuit the sync and the store
+    //     would stay empty until restart.
+    if (newUserId) {
+      const currentGuardedId = mmkvStorage.getItem(FORCED_SIGNED_OUT_KEY) as string | null;
+      if (currentGuardedId !== null && currentGuardedId === newUserId) {
+        logger.warn('[useAuth] Ignoring late Clerk sync for forced-signed-out user', {
+          guardedId: currentGuardedId,
+        });
+        prevUserIdRef.current = null;
+        return;
+      }
+      if (currentGuardedId !== null && currentGuardedId !== newUserId) {
+        logger.log('[useAuth] Fresh sign-in to different account — clearing forced-signed-out guard');
+        mmkvStorage.removeItem(FORCED_SIGNED_OUT_KEY);
+      }
+    }
+
+    // Skip if no change. Runs AFTER the guard so a guarded return
+    // does not poison prevRef.
     if (newUserId === prevUserIdRef.current) return;
     prevUserIdRef.current = newUserId;
 
     if (newUserId) {
-      // Forced-sign-out guard. If the escape hatch in
-      // src/app/index.tsx just force-signed-out this exact Clerk user,
-      // ignore any late positive sync for that same id — it's a Clerk
-      // recovery, not a fresh sign-in, and applying it would re-write
-      // the authUserId into the store after we already cleared it.
-      //
-      // A DIFFERENT incoming id is a genuine new sign-in (e.g., user
-      // re-signs-in with a different account, or to the same account
-      // fresh from the welcome screen) — clear the guard and proceed.
-      // We intentionally clear for same-id re-sign-in too, but that
-      // requires the user to pass through the welcome sign-in flow,
-      // which is the explicit intent signal we need.
-      const guardedId = mmkvStorage.getItem(FORCED_SIGNED_OUT_KEY) as string | null;
-      if (guardedId !== null && guardedId === newUserId) {
-        logger.warn('[useAuth] Ignoring late Clerk sync for forced-signed-out user', { guardedId });
-        return;
-      }
-      if (guardedId !== null && guardedId !== newUserId) {
-        logger.log('[useAuth] Fresh sign-in to different account — clearing forced-signed-out guard');
-        mmkvStorage.removeItem(FORCED_SIGNED_OUT_KEY);
-      }
-
       // User signed in via Clerk
       const state = useUnfoldStore.getState();
       const hasExistingContent = (state.devotionals?.length ?? 0) > 0;
