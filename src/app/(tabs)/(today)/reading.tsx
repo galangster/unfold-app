@@ -883,6 +883,20 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
+    // Live entitlement fence — same pattern as generating.tsx. The parent
+    // layout now keeps this screen mounted across a premium flip so the
+    // reading draft survives, which means a churn mid-`continueGeneratingDays`
+    // can still try to write paid days into the store after entitlement is
+    // gone. Re-check live store state inside the incremental callback and
+    // after the await resolves.
+    const isStillEntitled = () => {
+      if (__DEV__) return true;
+      const liveUser = useUnfoldStore.getState().user;
+      const livePremium = liveUser?.isPremium ?? false;
+      const liveCompletedOnboarding = liveUser?.hasCompletedOnboarding ?? false;
+      return livePremium || !liveCompletedOnboarding;
+    };
+
     try {
       const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength);
       const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
@@ -894,6 +908,9 @@ export default function ReadingScreen() {
           bibleTranslation: user.bibleTranslation ?? 'BSB',
         },
         (day) => {
+          // Per-day fence: if entitlement flipped during streaming, drop
+          // subsequent days on the floor instead of writing them to store.
+          if (!isStillEntitled()) return;
           const current = useUnfoldStore.getState().devotionals.find((d) => d.id === currentDevotional.id);
           if (current) {
             const updated = [...current.days];
@@ -904,6 +921,14 @@ export default function ReadingScreen() {
           }
         }
       );
+
+      // Post-await fence. Don't finalize the store write or navigate forward
+      // if entitlement is gone — the overlay will show momentarily and the
+      // user should not receive newly-minted paid days.
+      if (!isStillEntitled()) {
+        logger.warn('[Reading] Entitlement lost mid-generation; discarding result');
+        return { ok: false, retriable: false };
+      }
 
       updateDevotionalDays(currentDevotional.id, allDays, currentDevotional.title);
 

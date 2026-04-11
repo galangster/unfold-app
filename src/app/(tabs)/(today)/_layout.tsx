@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Modal } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -103,7 +103,21 @@ export default function TodayLayout() {
           />
         </Stack>
       </View>
-      {shouldShowOverlay && (
+      {/*
+        Paywall presented via RN Modal so it renders in the top-level modal
+        layer. Without this, in-stack RN <Modal> sheets (CheckInSheet, the
+        folder sheets, etc.) render ABOVE a sibling-View overlay regardless
+        of pointerEvents, and a churn event while one is open leaves the
+        sheet interactive on top of the paywall.
+      */}
+      <Modal
+        visible={shouldShowOverlay}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {}}
+      >
         <View
           style={StyleSheet.absoluteFill}
           accessibilityViewIsModal
@@ -111,7 +125,7 @@ export default function TodayLayout() {
         >
           <TrialExpiredOverlay />
         </View>
-      )}
+      </Modal>
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -39,7 +39,15 @@ export default function AskLayout() {
           <Stack.Screen name="index" />
         </Stack>
       </View>
-      {shouldShowOverlay && (
+      {/* See (today)/_layout.tsx for Modal-layer rationale. */}
+      <Modal
+        visible={shouldShowOverlay}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {}}
+      >
         <View
           style={StyleSheet.absoluteFill}
           accessibilityViewIsModal
@@ -47,7 +55,7 @@ export default function AskLayout() {
         >
           <TrialExpiredOverlay />
         </View>
-      )}
+      </Modal>
     </View>
   );
 }

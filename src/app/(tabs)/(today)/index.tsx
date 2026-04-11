@@ -300,11 +300,25 @@ function HomeScreen() {
       dayNumber: day.dayNumber ?? dayNum,
     });
 
+    // Live entitlement re-check. Between a pre-await `isPremium` gate and
+    // the continuation landing, RevenueCat can flip false. Without this
+    // check, a churned user still receives paid content written to store
+    // under the paywall overlay. Mirrors the abort fence pattern used in
+    // src/app/generating.tsx.
+    const isStillEntitled = () => {
+      const liveUser = useUnfoldStore.getState().user;
+      const liveCompletedOnboarding = liveUser?.hasCompletedOnboarding ?? false;
+      const livePremium = liveUser?.isPremium ?? false;
+      // __DEV__ short-circuits to true everywhere else; mirror that here.
+      if (__DEV__) return true;
+      return livePremium || !liveCompletedOnboarding;
+    };
+
     (async () => {
       try {
         // Step 1: Check if content already exists on server
         const existing = await findCompletedJob(devId, dayNum);
-        if (cancelled) return;
+        if (cancelled || !isStillEntitled()) return;
 
         if (existing?.result?.devotionalDay) {
           addGeneratedDay(devId, normalizeDayForSync(existing.result.devotionalDay));
@@ -319,16 +333,16 @@ function HomeScreen() {
           dayNumber: dayNum,
           jobType: 'day',
         });
-        if (cancelled) return;
+        if (cancelled || !isStillEntitled()) return;
         autoGenAttemptedRef.current = key;
         console.log('[home] Submitted generation job:', resp.jobId);
       } catch (err) {
-        if (cancelled) return;
+        if (cancelled || !isStillEntitled()) return;
 
         // Handle 409 with structured error — server already has this day's content
         if (err instanceof ApiError && err.status === 409 && err.existingJobId) {
           const jobResult = await fetchJobResult(err.existingJobId).catch(() => null);
-          if (cancelled) return;
+          if (cancelled || !isStillEntitled()) return;
           if (jobResult?.result?.devotionalDay) {
             addGeneratedDay(devId, normalizeDayForSync(jobResult.result.devotionalDay));
             autoGenAttemptedRef.current = key;

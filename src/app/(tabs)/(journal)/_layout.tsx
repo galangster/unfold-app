@@ -1,4 +1,4 @@
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Modal } from 'react-native';
 import { Stack } from 'expo-router';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -46,7 +46,15 @@ export default function JournalLayout() {
           <Stack.Screen name="my-responses" options={{ animation: 'ios_from_right', gestureEnabled: true, fullScreenGestureEnabled: true }} />
         </Stack>
       </View>
-      {shouldShowOverlay && (
+      {/* See (today)/_layout.tsx for Modal-layer rationale. */}
+      <Modal
+        visible={shouldShowOverlay}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {}}
+      >
         <View
           style={StyleSheet.absoluteFill}
           accessibilityViewIsModal
@@ -54,7 +62,7 @@ export default function JournalLayout() {
         >
           <TrialExpiredOverlay />
         </View>
-      )}
+      </Modal>
     </View>
   );
 }
