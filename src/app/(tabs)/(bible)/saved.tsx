@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon, NotePencilIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -13,8 +13,11 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import type { BibleHighlight, BibleHighlightColor } from '@/lib/store';
 
-const COLOR_FILTERS: Array<{ key: BibleHighlightColor | 'all'; label: string; color: string }> = [
+type FilterKey = BibleHighlightColor | 'all' | 'notes';
+
+const COLOR_FILTERS: Array<{ key: FilterKey; label: string; color: string }> = [
   { key: 'all', label: 'All', color: 'transparent' },
+  { key: 'notes', label: 'Notes', color: '#C87F0A' },
   { key: 'yellow', label: 'Yellow', color: '#FFD700' },
   { key: 'green', label: 'Green', color: '#4CAF50' },
   { key: 'blue', label: 'Blue', color: '#5B9BD5' },
@@ -27,13 +30,16 @@ export default function SavedVersesScreen() {
   const router = useRouter();
   const bibleHighlights = useUnfoldStore((s) => s.bibleHighlights);
   const removeBibleHighlight = useUnfoldStore((s) => s.removeBibleHighlight);
-  const [activeFilter, setActiveFilter] = useState<BibleHighlightColor | 'all'>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
   const filteredHighlights = useMemo(() => {
     const sorted = [...bibleHighlights].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
     if (activeFilter === 'all') return sorted;
+    if (activeFilter === 'notes') {
+      return sorted.filter((h) => !!(h.note && h.note.trim()));
+    }
     return sorted.filter((h) => h.color === activeFilter);
   }, [bibleHighlights, activeFilter]);
 
@@ -52,7 +58,12 @@ export default function SavedVersesScreen() {
       ? `${item.bookName} ${item.chapter}:${item.verseStart}`
       : `${item.bookName} ${item.chapter}:${item.verseStart}-${item.verseEnd}`;
 
-    const colorDot = COLOR_FILTERS.find((c) => c.key === item.color)?.color ?? '#FFD700';
+    // Note-only entries (color === null) render a subdued marker bar instead
+    // of a highlight color to visually distinguish them in the list.
+    const isNoteOnly = item.color === null;
+    const colorDot = isNoteOnly
+      ? (isDark ? '#6B5A3A' : '#C87F0A')
+      : (COLOR_FILTERS.find((c) => c.key === item.color)?.color ?? '#FFD700');
 
     return (
       <TouchableOpacity
@@ -112,9 +123,11 @@ export default function SavedVersesScreen() {
               { backgroundColor: activeFilter === f.key ? colors.accent : colors.inputBackground },
             ]}
           >
-            {f.key !== 'all' && (
+            {f.key === 'notes' ? (
+              <NotePencilIcon size={12} color={activeFilter === f.key ? '#FFFFFF' : f.color} weight="regular" />
+            ) : f.key !== 'all' ? (
               <View style={[styles.filterDot, { backgroundColor: f.color }]} />
-            )}
+            ) : null}
             <Text style={[
               styles.filterLabel,
               { color: activeFilter === f.key ? '#FFFFFF' : colors.textSubtle },
@@ -132,6 +145,8 @@ export default function SavedVersesScreen() {
           <Text style={[styles.emptyText, { color: colors.textSubtle }]}>
             {activeFilter === 'all'
               ? 'Highlight verses while reading to save them here'
+              : activeFilter === 'notes'
+              ? 'No notes yet — tap a verse while reading and add one'
               : `No ${activeFilter} highlights yet`}
           </Text>
         </View>
