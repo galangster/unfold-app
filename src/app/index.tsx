@@ -529,16 +529,23 @@ function WelcomeScreen({ signedOut = false, staleAuth = false }: { signedOut?: b
       return;
     }
 
-    // User is explicitly starting a fresh auth flow from the welcome
-    // screen. If the escape hatch previously set the forced-signed-out
-    // guard (keyed on the Clerk id they signed out from), clear it now
-    // — the user's deliberate "continue to sign-in" tap is the intent
-    // signal that any subsequent Clerk userId (even the same one they
-    // signed out of) should be treated as a fresh sign-in and applied
-    // to the store. Without this clear, a user who used the escape
-    // hatch can never re-authenticate to the same account because
-    // useAuth would keep ignoring Clerk's positive sync.
-    mmkvStorage.removeItem('forced-signed-out-clerk-id');
+    // NOTE: we used to clear the forced-signed-out guard here on
+    // the theory that the user's deliberate "Continue to sign-in"
+    // tap was an intent signal to trust any subsequent Clerk sync.
+    // That's wrong: tapping Continue does not prove Clerk has
+    // actually signed anyone out. If Clerk is wedged and still
+    // reports the same userId as authenticated, clearing the guard
+    // before Clerk confirms the signed-out state silently re-adopts
+    // the very session the escape hatch was meant to kill.
+    //
+    // The guard is now cleared authoritatively inside useAuth only
+    // when (a) Clerk observably transitions to isSignedIn=false
+    // (genuine signed-out confirmation) or (b) Clerk reports a
+    // clerkUserId different from the guarded id (fresh sign-in to
+    // a new account). Both signals come from Clerk itself, not from
+    // a UI tap. The welcome screen does not need to mutate the
+    // guard at all — the user re-signing-in under the same id will
+    // naturally produce Clerk state that clears it.
 
     // Go directly to onboarding — cutscene and features carousel are now
     // embedded within the onboarding flow (featureSummary step after mirror-back)
@@ -547,10 +554,9 @@ function WelcomeScreen({ signedOut = false, staleAuth = false }: { signedOut?: b
 
   const handleSkip = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Same intent-clear as handleContinue: user is explicitly entering
-    // onboarding, so any prior forced-signed-out guard should no longer
-    // suppress Clerk syncs.
-    mmkvStorage.removeItem('forced-signed-out-clerk-id');
+    // Do NOT clear the forced-signed-out guard here — see the long
+    // comment in handleContinue for why. Clerk itself is the only
+    // authoritative source for guard-clear events.
     router.replace('/onboarding');
   }, [router]);
 

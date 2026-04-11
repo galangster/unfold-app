@@ -91,21 +91,25 @@ export function useAuth() {
 
     const newUserId = clerkUserId ?? null;
 
-    // Forced-sign-out guard check runs BEFORE prevUserIdRef is
-    // advanced, AND resets prevUserIdRef to null on a guarded
-    // return. This matters for "same account re-auth after escape
-    // hatch":
+    // Forced-sign-out guard check runs BEFORE the skip-if-no-change
+    // gate, AND resets prevUserIdRef to null on a guarded return.
+    // This matters for the "same account re-auth after escape
+    // hatch" flow:
     //
-    //   - Initial mount (signed in as X): prevRef=null → advances to
-    //     X, sync runs.
-    //   - Escape hatch fires: guard set to X. Next effect run sees
-    //     newUserId=X, guard matches → we reset prevRef=null and
-    //     return. Without the reset, prevRef would stay at X.
-    //   - User clears guard from welcome and re-signs-in to X:
-    //     newUserId=X, guard=null, prevRef=null → proceeds with
-    //     sign-in sync. If we had left prevRef=X, the "skip if no
-    //     change" check would short-circuit the sync and the store
-    //     would stay empty until restart.
+    //   1. Initial mount (signed in as X): prevRef=null → advances
+    //      to X, sign-in sync runs.
+    //   2. Escape hatch fires: guard set to X. Clerk may be wedged
+    //      and keep reporting X. Next effect run sees newUserId=X,
+    //      guard matches → we reset prevRef=null and return.
+    //   3. Clerk eventually unwedges and reports signed-out
+    //      (newUserId=null). The "Clerk confirmed signed-out"
+    //      block below clears the guard (outside the gate, so
+    //      prevRef=null doesn't poison the clear).
+    //   4. User re-signs in to the same X. Clerk reports X,
+    //      guard is now null, prevRef is still null → advances
+    //      to X, sign-in sync runs. If we had left prevRef=X in
+    //      step 2, step 4's skip-if-no-change gate would short-
+    //      circuit and the store would stay empty until restart.
     if (newUserId) {
       const currentGuardedId = mmkvStorage.getItem(FORCED_SIGNED_OUT_KEY) as string | null;
       if (currentGuardedId !== null && currentGuardedId === newUserId) {
@@ -117,6 +121,30 @@ export function useAuth() {
       }
       if (currentGuardedId !== null && currentGuardedId !== newUserId) {
         logger.log('[useAuth] Fresh sign-in to different account — clearing forced-signed-out guard');
+        mmkvStorage.removeItem(FORCED_SIGNED_OUT_KEY);
+      }
+    }
+
+    // Authoritative signed-out confirmation from Clerk — clear the
+    // forced-signed-out guard BEFORE the skip-if-no-change gate.
+    //
+    // Why before the gate: the guarded-return path above resets
+    // prevRef to null whenever a guarded userId matches. If the next
+    // effect run arrives with newUserId=null (Clerk finally
+    // transitioned to signed-out), the skip-if-no-change check
+    // would see null===null and short-circuit before the signed-out
+    // branch could run — leaving the guard set forever. Clearing
+    // here, outside the gate, makes the signed-out signal land
+    // regardless of the prevRef state the guarded return poisoned.
+    //
+    // This is the "same account" clear path: user escape-hatch'd
+    // from X, Clerk eventually confirms signed-out, guard cleared,
+    // a subsequent re-sign-in to X will now be accepted. The other
+    // clear path is "different userId fresh sign-in," handled in
+    // the newUserId guard block above.
+    if (!isSignedIn && newUserId === null) {
+      if (mmkvStorage.getItem(FORCED_SIGNED_OUT_KEY) !== null) {
+        logger.log('[useAuth] Clerk confirmed signed-out — clearing forced-signed-out guard');
         mmkvStorage.removeItem(FORCED_SIGNED_OUT_KEY);
       }
     }
@@ -160,7 +188,9 @@ export function useAuth() {
 
       logger.log('[useAuth] Clerk user synced:', newUserId);
     } else if (!isSignedIn) {
-      // Signed out
+      // Signed out — authoritative confirmation from Clerk. See the
+      // "Clerk confirmed signed-out" block above the skip-if-no-
+      // change gate for the full guard-clear rationale.
       updateUser({
         authUserId: null,
         authProvider: null,
