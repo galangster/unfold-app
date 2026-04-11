@@ -31,7 +31,12 @@ export default function TodayLayout() {
   // overlay is visible to prevent interaction with hidden screens.
   return (
     <View style={{ flex: 1 }}>
-      <View style={{ flex: 1 }} pointerEvents={shouldShowOverlay ? 'none' : 'auto'}>
+      <View
+        style={{ flex: 1 }}
+        pointerEvents={shouldShowOverlay ? 'none' : 'auto'}
+        importantForAccessibility={shouldShowOverlay ? 'no-hide-descendants' : 'auto'}
+        aria-hidden={shouldShowOverlay}
+      >
         <Stack
           screenOptions={{
             headerShown: false,
@@ -69,7 +74,11 @@ export default function TodayLayout() {
         </Stack>
       </View>
       {shouldShowOverlay && (
-        <View style={StyleSheet.absoluteFill}>
+        <View
+          style={StyleSheet.absoluteFill}
+          accessibilityViewIsModal
+          importantForAccessibility="yes"
+        >
           <TrialExpiredOverlay />
         </View>
       )}
