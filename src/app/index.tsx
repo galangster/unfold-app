@@ -4,6 +4,7 @@ import { useAuth as useClerkAuth, useClerk } from '@clerk/clerk-expo';
 import * as Sentry from '@sentry/react-native';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { logoutUser as rcLogoutUser, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import { invalidateRevenueCatSession } from '@/lib/revenuecat-session';
 import { Analytics } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
 import Animated, {
@@ -239,6 +240,15 @@ function ClerkHoldingScreen() {
       // retry.
       if (isRevenueCatEnabled()) {
         mmkvStorage.setItem('rc-logout-pending', '1');
+        // Tear down the in-process RevenueCat session synchronously.
+        // useRevenueCatSync runs once at root layout mount and flips
+        // a bootstrapped flag on success, after which it ignores the
+        // MMKV flag entirely. Without this imperative invalidation,
+        // the still-attached CustomerInfo listener could restore
+        // isPremium=true from a late RevenueCat callback after the
+        // user is anonymous. See src/lib/revenuecat-session.ts for
+        // the full rationale.
+        invalidateRevenueCatSession();
       }
 
       // Fire Clerk signOut in the background. If Clerk is stuck this

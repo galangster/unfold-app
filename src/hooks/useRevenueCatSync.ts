@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUnfoldStore } from '@/lib/store';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { isRevenueCatEnabled, getOfferings, logoutUser as rcLogoutUser } from '@/lib/revenuecatClient';
+import { onRevenueCatSessionInvalidated } from '@/lib/revenuecat-session';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
 
@@ -190,6 +191,42 @@ export function useRevenueCatSync() {
     // Initial attempt on mount.
     void attemptSync();
 
+    // Mid-session invalidation. The welcome-screen escape hatch
+    // (src/app/index.tsx handleSignOut) sets the `rc-logout-pending`
+    // MMKV flag when Clerk is stuck and the user hits the recovery
+    // button. Without this subscription, the already-bootstrapped
+    // sync would never re-read the flag, its listener would stay
+    // attached, and any late CustomerInfo callback from RevenueCat
+    // could restore the previous user's isPremium=true on the now-
+    // anonymous session. Reset synchronously: remove the listener,
+    // force isPremium=false, flip bootstrapped back to false, cancel
+    // any queued backoff, then kick off a fresh attemptSync() which
+    // will now see the pending flag and block premium writes until
+    // it can prove a clean logOut.
+    const unsubInvalidate = onRevenueCatSessionInvalidated(() => {
+      if (cancelled) return;
+      if (listener) {
+        try {
+          Purchases.removeCustomerInfoUpdateListener(listener);
+        } catch {
+          // Defensive: if removal throws we still want to continue
+          // the reset so the fail-closed flow takes over.
+        }
+        listener = undefined;
+      }
+      bootstrapped = false;
+      retryIndex = 0;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
+      // Force fail-closed state before the retry runs so no UI
+      // surface reads stale isPremium=true between the invalidation
+      // fire and the async attemptSync() write.
+      updateUser({ isPremium: false });
+      void attemptSync();
+    });
+
     // Foreground retry: when the app returns to active, reset the
     // backoff index (user re-engagement is a strong signal to try
     // fresh) and kick off an immediate attempt. Once bootstrapped,
@@ -208,6 +245,7 @@ export function useRevenueCatSync() {
 
     return () => {
       cancelled = true;
+      unsubInvalidate();
       appStateSub.remove();
       if (retryTimer) {
         clearTimeout(retryTimer);

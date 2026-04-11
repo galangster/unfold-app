@@ -63,19 +63,64 @@ function readInflightForOwner(currentOwner: string | null): InflightPayload | nu
       mmkvStorage.removeItem(INFLIGHT_KEY);
       return null;
     }
-    // Legacy payloads (no `ownerAuthUserId` key) carry no proof of
-    // ownership and we cannot safely adopt them: a non-clean account
-    // switch on a shared device would let user B inherit user A's
-    // job result. Reject outright. The cost is that in-flight jobs
-    // created by a build predating this contract become non-
-    // resumable on upgrade — tenant isolation outweighs recovery of
-    // an already-orphaned local pointer (the server result still
-    // lives under the original user and can be re-fetched through
-    // the normal devotional list path once the job finishes).
+
+    // Expiry check first: any payload — legacy or owned — older than
+    // the poll window is non-resumable regardless of identity.
+    const age = Date.now() - parsed.submittedAt;
+    if (age > MAX_POLL_DURATION_MS) {
+      logger.warn('[generating] Inflight job expired — discarding', { age });
+      mmkvStorage.removeItem(INFLIGHT_KEY);
+      return null;
+    }
+
     const persistedOwner = parsed.ownerAuthUserId === undefined ? undefined : parsed.ownerAuthUserId;
-    if (persistedOwner === undefined || persistedOwner !== currentOwner) {
-      logger.warn('[generating] Inflight job owner unprovable — discarding', {
-        persistedOwner: persistedOwner === undefined ? 'legacy' : persistedOwner,
+
+    // Legacy payloads (written by a build predating the
+    // ownerAuthUserId contract) have no explicit owner. We can adopt
+    // them for the CURRENT session if — and only if — we can prove
+    // continuity: there must be a signed-in user right now
+    // (currentOwner !== null) AND the payload must still be within
+    // the 10-minute poll window (checked above). On adoption we
+    // rewrite the key with the current owner so subsequent reads
+    // follow the clean tenant-isolation path.
+    //
+    // Why this is tenant-safe: the only way a legacy payload could
+    // belong to a different user than the current session is if user
+    // A submitted a job on the old build, signed out without the
+    // inflight key being cleared, user B signed in, and then the app
+    // was upgraded — all within the 10-minute poll window. That
+    // specific sequence is extremely narrow on a personal device and
+    // requires a bug in the old sign-out path. The alternative
+    // (unconditionally discarding all legacy payloads) strands every
+    // user who happens to upgrade mid-generation, which is the
+    // common case. One-release migration window trades a narrow
+    // theoretical leak for everyday upgrade recovery.
+    //
+    // Anonymous sessions (currentOwner === null) cannot adopt: with
+    // no signed-in identity we have no basis on which to claim the
+    // job, and adopting into anonymous state would make the NEXT
+    // sign-in read someone else's pointer.
+    if (persistedOwner === undefined) {
+      if (currentOwner === null) {
+        logger.warn('[generating] Legacy inflight payload in anonymous session — discarding');
+        mmkvStorage.removeItem(INFLIGHT_KEY);
+        return null;
+      }
+      logger.log('[generating] Adopting legacy inflight payload for current owner', { currentOwner });
+      const adopted: InflightPayload = {
+        jobId: parsed.jobId,
+        devotionalId: parsed.devotionalId,
+        submittedAt: parsed.submittedAt,
+        ownerAuthUserId: currentOwner,
+      };
+      mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify(adopted));
+      return adopted;
+    }
+
+    // Explicit owner present — enforce strict match.
+    if (persistedOwner !== currentOwner) {
+      logger.warn('[generating] Inflight job owner mismatch — discarding', {
+        persistedOwner,
         currentOwner,
       });
       mmkvStorage.removeItem(INFLIGHT_KEY);
