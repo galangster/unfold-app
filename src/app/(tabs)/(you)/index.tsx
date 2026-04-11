@@ -74,6 +74,7 @@ import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useAuth } from '@/hooks/useAuth';
+import { performSignOutTeardown } from '@/lib/sign-out-teardown';
 import { useClerk } from '@clerk/clerk-expo';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -266,17 +267,24 @@ export default function YouScreen() {
         {
           text: 'Sign out',
           style: 'destructive',
-          onPress: async () => {
+          onPress: () => {
+            // Delegate to the shared teardown helper so this flow
+            // gets the same fail-closed RevenueCat guards as the
+            // welcome-screen escape hatch. Previously this path
+            // open-coded reset() + signOut() without setting the
+            // rc-logout-pending flag or invalidating the in-process
+            // RC session, so a backgrounded or force-quit app
+            // during the async rcLogoutUser() call could leak the
+            // previous user's entitlement into the next session on
+            // a shared device. See src/lib/sign-out-teardown.ts for
+            // the full contract.
+            setIsSigningOut(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             try {
-              setIsSigningOut(true);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              await signOut();
-              reset();
-              useCompanionChatStore.getState().clearAllConversations();
-              // Clear the inflight-generation-job MMKV key so a stale job from
-              // the previous session cannot trigger HomeScreenWrapper's
-              // render-phase redirect to /generating on the next launch.
-              mmkvStorage.removeItem('inflight-generation-job');
+              performSignOutTeardown({
+                clerkSignOut: signOut,
+                source: 'settings-sign-out',
+              });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               router.replace({ pathname: '/', params: { signedOut: '1' } });
             } catch (err) {
@@ -289,7 +297,7 @@ export default function YouScreen() {
         },
       ]
     );
-  }, [signOut, reset, router]);
+  }, [signOut, router]);
 
   const handleResetData = async () => {
     if (isDeletingAccount) return;
@@ -314,12 +322,22 @@ export default function YouScreen() {
                     setIsDeletingAccount(true);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     try {
-                      reset();
-                      useCompanionChatStore.getState().clearAllConversations();
-                      // Mirror sign-out: clear the inflight-generation-job
-                      // MMKV key so HomeScreenWrapper can't resurrect a stale
-                      // job after a destructive local reset.
-                      mmkvStorage.removeItem('inflight-generation-job');
+                      // Reset-all-data is functionally a sign-out for
+                      // our threat model: it clears local state and
+                      // drops the user back at welcome. If we didn't
+                      // also tear down Clerk + RevenueCat here, the
+                      // next launch would boot with the old Clerk
+                      // session still alive, useAuth would re-write
+                      // authUserId back into the cleared store, and
+                      // the still-authenticated RevenueCat SDK would
+                      // restore isPremium from its cached CustomerInfo.
+                      // Route through the shared teardown so this
+                      // flow gets the same guards as the escape hatch
+                      // and settings sign-out.
+                      performSignOutTeardown({
+                        clerkSignOut: signOut,
+                        source: 'settings-reset-data',
+                      });
                       router.dismissAll();
                       setTimeout(() => router.replace('/'), 50);
                     } finally {

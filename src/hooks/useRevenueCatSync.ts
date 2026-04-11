@@ -37,20 +37,66 @@ import { logger } from '@/lib/logger';
 // still safe (no identity involved) and runs independently.
 const RC_LOGOUT_PENDING_KEY = 'rc-logout-pending';
 
-// Timestamp of the most recent authoritative getCustomerInfo() success.
-// Written every time the SDK returns a CustomerInfo we wrote through to
-// the store. Used as the freshness oracle on cold-start fetch failure:
-// preserving a stale `isPremium=true` across a transient RC outage is
-// safe for a short window (legitimate offline launch, RC backend blip),
-// but becomes a silent entitlement leak for churned users if preserved
-// indefinitely. The TTL below is the bound: within the window we
-// preserve the persisted value; past it we force-close to non-premium
-// so a user whose subscription lapsed can't coast forever on the last
-// cached `isPremium=true`. A long-lived backend outage plus a churned
-// user is the exact scenario fail-open breaks, and the TTL contains it
-// without hitting legitimate users on a short blip.
-const RC_LAST_AUTHORITATIVE_SYNC_KEY = 'rc-last-authoritative-sync-at';
-const RC_FRESHNESS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Persisted snapshot of the Unfold Premium entitlement from the most
+// recent authoritative getCustomerInfo() success. This is the oracle
+// used to decide whether it is safe to preserve `isPremium=true` when
+// a later bootstrap fetch fails.
+//
+// Schema:
+//   {
+//     isPremium: boolean,
+//     // expirationDateMillis at time of last successful sync. null
+//     // means lifetime access (no expiration). Used to bound the
+//     // offline-preserve window: we will only trust the cached
+//     // `isPremium=true` as long as that expiration is still in the
+//     // future. A churned/refunded/lapsed user will have an
+//     // expiration in the past (or will flip to isPremium=false on
+//     // the next successful fetch), so we cannot preserve stale
+//     // entitlement beyond what RevenueCat already told us was the
+//     // paid window.
+//     expirationDateMillis: number | null,
+//     // Wall-clock time of the write. Debug/diagnostic only — the
+//     // entitlement-validity decision is made against
+//     // expirationDateMillis, not against this timestamp.
+//     syncedAtMillis: number,
+//   }
+//
+// Previous iterations of this code used a 24-hour fixed TTL on the
+// sync timestamp. That was rejected because it granted a full day of
+// premium access after churn/refund even though RC itself would have
+// told us the entitlement was gone if we could have reached it. The
+// cached expirationDateMillis is the correct bound: it's the exact
+// wall-clock moment RevenueCat last told us the entitlement stopped
+// being valid.
+const RC_CACHED_ENTITLEMENT_KEY = 'rc-cached-entitlement-v1';
+
+type CachedEntitlement = {
+  isPremium: boolean;
+  expirationDateMillis: number | null;
+  syncedAtMillis: number;
+};
+
+function readCachedEntitlement(): CachedEntitlement | null {
+  const raw = mmkvStorage.getItem(RC_CACHED_ENTITLEMENT_KEY) as string | null;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<CachedEntitlement>;
+    if (typeof parsed.isPremium !== 'boolean') return null;
+    if (parsed.expirationDateMillis !== null && typeof parsed.expirationDateMillis !== 'number') return null;
+    if (typeof parsed.syncedAtMillis !== 'number') return null;
+    return {
+      isPremium: parsed.isPremium,
+      expirationDateMillis: parsed.expirationDateMillis ?? null,
+      syncedAtMillis: parsed.syncedAtMillis,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedEntitlement(snapshot: CachedEntitlement): void {
+  mmkvStorage.setItem(RC_CACHED_ENTITLEMENT_KEY, JSON.stringify(snapshot));
+}
 
 export function useRevenueCatSync() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
@@ -159,14 +205,20 @@ export function useRevenueCatSync() {
         try {
           const customerInfo = await Purchases.getCustomerInfo();
           if (cancelled) return;
-          const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
+          const entitlement = customerInfo.entitlements.active?.['Unfold Premium'];
+          const hasSubscription = Boolean(entitlement);
           updateUser({ isPremium: hasSubscription });
-          // Stamp the authoritative-sync timestamp. This is the freshness
-          // oracle read on the failure path below — without writing it on
-          // every success, the TTL check would never advance past its
-          // initial value and the fail-closed branch would eventually
-          // kick in for legitimately-active premium users.
-          mmkvStorage.setItem(RC_LAST_AUTHORITATIVE_SYNC_KEY, String(Date.now()));
+          // Persist the entitlement snapshot for fail-closed bootstrapping
+          // on future launches. Store the expirationDateMillis verbatim
+          // from RevenueCat — it's the authoritative "entitlement is
+          // valid until" cutoff. For non-premium users we still write
+          // the snapshot (with isPremium=false) so the cache reflects
+          // the latest known state rather than a stale premium=true.
+          writeCachedEntitlement({
+            isPremium: hasSubscription,
+            expirationDateMillis: entitlement?.expirationDateMillis ?? null,
+            syncedAtMillis: Date.now(),
+          });
           // Re-validate the trial-ending local notification against the
           // latest customer info. Fire-and-forget.
           void syncTrialEndingNotification();
@@ -182,46 +234,64 @@ export function useRevenueCatSync() {
 
         if (cancelled) return;
         if (!fetched) {
-          // Transient fetch failure path. The previous two iterations
-          // of this branch flip-flopped between two broken extremes:
+          // Transient fetch failure path. Prior iterations of this
+          // branch flip-flopped between fail-open-always (leaked
+          // premium indefinitely to churned users) and fail-closed-
+          // always (revoked entitlement from legitimate premium
+          // users on any transient blip). A 24h fixed TTL was then
+          // introduced but rejected because it still granted a full
+          // day of premium access after churn/refund, even though
+          // RC itself would have reported the entitlement as gone
+          // if we could have reached it.
           //
-          //   (a) Fail-closed always — force isPremium=false on every
-          //       bootstrap fetch failure. This solves the churned-
-          //       user-offline leak but hits every legitimate premium
-          //       user with the paywall on any offline launch or RC
-          //       backend blip. User-visible entitlement revocation
-          //       from transient dependency failure is unacceptable.
+          // The correct bound is not a clock-based TTL — it's the
+          // entitlement's own expirationDateMillis, which is the
+          // exact wall-clock cutoff RevenueCat gave us at the last
+          // successful sync. That's the furthest point in the
+          // future we can honestly claim the user paid through.
           //
-          //   (b) Fail-open always — preserve persisted isPremium
-          //       indefinitely until the next successful fetch. This
-          //       solves the transient-failure regression but re-
-          //       introduces the churned-user leak: a subscriber who
-          //       cancelled last month and stays offline (or whose RC
-          //       is permanently down) keeps premium forever.
-          //
-          // The principled middle path is a freshness TTL. Read the
-          // timestamp of the last authoritative getCustomerInfo()
-          // success. If it's within the TTL (24h), the last value is
-          // recent enough to trust — preserve persisted isPremium and
-          // schedule a retry. If the TTL has lapsed (or the stamp was
-          // never written because this install has never successfully
-          // synced), the cached value is too stale to rely on as an
-          // entitlement guarantee — fail closed and force isPremium=
-          // false. Backoff retries still run, so the moment the SDK
-          // recovers the listener and fetch will correct either
-          // direction.
+          // Policy:
+          //   - No cached snapshot → fail closed. This install has
+          //     never had an authoritative read, so we have no
+          //     proof of entitlement at all.
+          //   - Cached isPremium=false → leave the store alone
+          //     (it's already the fail-closed value; any earlier
+          //     write has the same effect). Schedule a retry.
+          //   - Cached isPremium=true, expirationDateMillis === null
+          //     → lifetime access. Preserve. A lifetime grant has
+          //     no bound; revoking it on offline launch would be
+          //     wrong every time.
+          //   - Cached isPremium=true, expirationDateMillis > now
+          //     → paid window still valid. Preserve. The user paid
+          //     for this window; a transient RC failure should not
+          //     revoke access they already purchased.
+          //   - Cached isPremium=true, expirationDateMillis <= now
+          //     → the paid window has closed since the last sync.
+          //     Fail closed. If RC is reachable the retry will
+          //     confirm; if it's not, we correctly refuse to grant
+          //     premium on an expired entitlement.
           //
           // Fail-closed remains the right call for the rc-logout-
-          // pending branch above regardless of freshness, because
+          // pending branch above regardless of cache state, because
           // that path is about *identity* uncertainty, not
           // *entitlement* staleness.
-          const rawStamp = mmkvStorage.getItem(RC_LAST_AUTHORITATIVE_SYNC_KEY) as string | null;
-          const stamp = rawStamp != null ? Number(rawStamp) : NaN;
-          const age = Number.isFinite(stamp) ? Date.now() - stamp : Number.POSITIVE_INFINITY;
-          if (age <= RC_FRESHNESS_TTL_MS) {
-            logger.warn('[RevenueCat] Fetch failed but last authoritative sync is fresh — preserving persisted entitlement', { ageMs: age });
+          const cached = readCachedEntitlement();
+          if (!cached) {
+            logger.warn('[RevenueCat] Fetch failed with no cached entitlement — failing closed to non-premium');
+            updateUser({ isPremium: false });
+          } else if (!cached.isPremium) {
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement is non-premium — preserving fail-closed state');
+            updateUser({ isPremium: false });
+          } else if (cached.expirationDateMillis === null) {
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement is lifetime — preserving premium');
+          } else if (cached.expirationDateMillis > Date.now()) {
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement still within paid window — preserving premium', {
+              msRemaining: cached.expirationDateMillis - Date.now(),
+            });
           } else {
-            logger.warn('[RevenueCat] Fetch failed and last authoritative sync is stale or missing — failing closed to non-premium', { ageMs: Number.isFinite(age) ? age : null });
+            logger.warn('[RevenueCat] Fetch failed; cached entitlement expired — failing closed to non-premium', {
+              msPastExpiration: Date.now() - cached.expirationDateMillis,
+            });
             updateUser({ isPremium: false });
           }
           scheduleRetry();

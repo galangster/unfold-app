@@ -1,12 +1,7 @@
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { useRouter, useLocalSearchParams, Redirect } from 'expo-router';
 import { useAuth as useClerkAuth, useClerk } from '@clerk/clerk-expo';
-import * as Sentry from '@sentry/react-native';
-import { mmkvStorage } from '@/lib/mmkv-storage';
-import { logoutUser as rcLogoutUser, isRevenueCatEnabled } from '@/lib/revenuecatClient';
-import { invalidateRevenueCatSession } from '@/lib/revenuecat-session';
-import { Analytics } from '@/lib/analytics';
-import { logger } from '@/lib/logger';
+import { performSignOutTeardown } from '@/lib/sign-out-teardown';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,7 +25,6 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
-import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
 import {
@@ -196,7 +190,6 @@ function ClerkHoldingScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const { signOut } = useClerk();
-  const reset = useUnfoldStore((s) => s.reset);
   const [showEscape, setShowEscape] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -209,99 +202,32 @@ function ClerkHoldingScreen() {
     if (signingOut) return;
     setSigningOut(true);
     try {
-      // Full service teardown inline. The (you) screen sign-out flow
-      // relies on useAuth()'s effect to clear RevenueCat + Analytics +
-      // Sentry when Clerk resolves signed-out, but useAuth's effect is
-      // gated on `isLoaded === true` — which is exactly the condition
-      // this escape hatch exists to recover from. If we only cleared
-      // local Zustand/MMKV, RevenueCat would stay authenticated as the
-      // previous user and the next anonymous/local session would
-      // inherit their premium entitlement until Clerk eventually
-      // recovers. So we run the same teardown inline: Clerk, local
-      // store, companion conversations, inflight MMKV, RevenueCat,
-      // Analytics, and Sentry.
+      // Delegate to the shared sign-out teardown helper. This is the
+      // same helper every other sign-out/reset path uses (see
+      // src/lib/sign-out-teardown.ts) so the escape hatch cannot
+      // drift from the settings flows. The helper handles:
+      //   - Persisting forced-signed-out-clerk-id so useAuth
+      //     refuses late positive Clerk syncs for the same user
+      //   - Setting rc-logout-pending + invalidating the in-process
+      //     RevenueCat session (critical because
+      //     useRevenueCatSync's bootstrap is one-shot)
+      //   - Fire-and-forget Clerk signOut + RC logoutUser (never
+      //     blocks; that's the whole point of the escape hatch)
+      //   - Clearing local store, companion chat, inflight job,
+      //     analytics, and sentry synchronously
       //
-      // CRITICAL: this handler MUST NOT block on network I/O. The
-      // whole point of the escape hatch is to recover when something
-      // in the auth/subscriptions stack is stuck or offline — if we
-      // await rcLogoutUser() and RevenueCat happens to be the stalled
-      // dependency, the user is trapped on the holding screen with a
-      // disabled button. So we:
-      //   1. Set the persisted `rc-logout-pending` guard FIRST.
-      //   2. Fire Clerk signOut + RC logoutUser in the background.
-      //   3. Clear local state and navigate IMMEDIATELY.
-      //
-      // The persisted guard is what makes fail-closed work: even if
-      // neither background call completes before force-quit, the next
-      // launch's useRevenueCatSync sees the flag and refuses to sync
-      // premium state until it can prove a clean logOut. If the
-      // background rcLogoutUser call happens to succeed in this
-      // session, it clears the flag so the next launch skips the
-      // retry.
-      // Capture the Clerk user id BEFORE local reset so we can set the
-      // persistent forced-signed-out guard for useAuth. This guard
-      // prevents a late positive Clerk sync from silently re-writing
-      // the just-cleared authUserId back into the store if Clerk
-      // happens to recover after the escape hatch fires. See
-      // FORCED_SIGNED_OUT_KEY in src/hooks/useAuth.ts for the full
-      // rationale. We use the zustand store's authUserId snapshot
-      // because useClerkAuth().userId may be null while Clerk is
-      // stuck — the whole reason the escape hatch exists.
-      const preSignOutAuthUserId =
-        useUnfoldStore.getState().user?.authUserId ?? null;
-      if (preSignOutAuthUserId !== null) {
-        mmkvStorage.setItem('forced-signed-out-clerk-id', preSignOutAuthUserId);
-      }
-
-      if (isRevenueCatEnabled()) {
-        mmkvStorage.setItem('rc-logout-pending', '1');
-        // Tear down the in-process RevenueCat session synchronously.
-        // useRevenueCatSync runs once at root layout mount and flips
-        // a bootstrapped flag on success, after which it ignores the
-        // MMKV flag entirely. Without this imperative invalidation,
-        // the still-attached CustomerInfo listener could restore
-        // isPremium=true from a late RevenueCat callback after the
-        // user is anonymous. See src/lib/revenuecat-session.ts for
-        // the full rationale.
-        invalidateRevenueCatSession();
-      }
-
-      // Fire Clerk signOut in the background. If Clerk is stuck this
-      // promise may never resolve — we don't await it.
-      void signOut().catch(() => {});
-
-      // Local teardown — synchronous, never blocks.
-      reset();
-      useCompanionChatStore.getState().clearAllConversations();
-      mmkvStorage.removeItem('inflight-generation-job');
-      Analytics.setUserId(null);
-      Sentry.setUser(null);
-
-      // Background RC logout. Fire-and-forget — if it completes, clear
-      // the pending flag; if it hangs or errors, leave the flag set
-      // for the next mount of useRevenueCatSync (or the next launch)
-      // to retry.
-      if (isRevenueCatEnabled()) {
-        void (async () => {
-          try {
-            const result = await rcLogoutUser();
-            if (result.ok) {
-              mmkvStorage.removeItem('rc-logout-pending');
-            } else {
-              logger.warn('[welcome] RevenueCat logoutUser failed:', result.reason);
-            }
-          } catch {
-            // Defensive: rcLogoutUser is guarded and shouldn't throw,
-            // but if it does, leave the flag set for retry.
-          }
-        })();
-      }
+      // The caller only owns navigation, which is why router.replace
+      // still lives here.
+      performSignOutTeardown({
+        clerkSignOut: signOut,
+        source: 'welcome-escape-hatch',
+      });
 
       router.replace({ pathname: '/', params: { signedOut: '1' } });
     } finally {
       setSigningOut(false);
     }
-  }, [signingOut, signOut, reset, router]);
+  }, [signingOut, signOut, router]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing['8'] }}>
