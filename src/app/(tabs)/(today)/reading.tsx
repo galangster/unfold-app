@@ -192,8 +192,11 @@ export default function ReadingScreen() {
 
   // Honor ?devotionalId=… so deep links (e.g., from the library) open the
   // correct devotional instead of whatever happens to be current in the store.
-  // Render-phase sync is safe here because the condition is guarded, so it
-  // bails out after at most one re-render.
+  // We resolve the effective devotional locally from the param *immediately*
+  // so first-render state (viewingDay) picks the right days, and we also
+  // mirror it to the store in the same render so downstream consumers
+  // (audio player, highlights filters) see the right id next tick.
+  const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
   if (params.devotionalId && params.devotionalId !== currentDevotionalId) {
     setCurrentDevotional(params.devotionalId);
   }
@@ -202,20 +205,22 @@ export default function ReadingScreen() {
   // .find() inside a selector returns a new reference on every store update,
   // which causes infinite re-renders when used as a useEffect dependency.
   const currentDevotional = useMemo(
-    () => devotionals.find((d) => d.id === currentDevotionalId),
-    [devotionals, currentDevotionalId],
+    () => devotionals.find((d) => d.id === effectiveDevotionalId),
+    [devotionals, effectiveDevotionalId],
   );
 
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
 
   const [viewingDay, setViewingDay] = useState(() => {
     if (requestedDayNumber) return requestedDayNumber;
-    if (!currentDevotional) return 1;
-    const target = currentDevotional.currentDay;
-    // If the target day has content, use it
-    if (currentDevotional.days.some((d) => d.dayNumber === target)) return target;
-    // Otherwise fall back to the last available day (so users can re-read, not hit a dead-end)
-    return currentDevotional.days.length > 0 ? currentDevotional.days.length : 1;
+    // Read fresh state from the store to ensure the param devotional is used
+    // even before the render-phase sync has flushed.
+    const devs = useUnfoldStore.getState().devotionals;
+    const d = devs.find((x) => x.id === effectiveDevotionalId);
+    if (!d) return 1;
+    const target = d.currentDay;
+    if (d.days.some((day) => day.dayNumber === target)) return target;
+    return d.days.length > 0 ? d.days.length : 1;
   });
   // shareModalOpen removed — share now navigates to /share-card route
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
@@ -1986,7 +1991,10 @@ export default function ReadingScreen() {
           <TouchableOpacity
             onPress={() => {
               setBookmarkToast(false);
-              router.push('/(tabs)/(you)/saved');
+              router.push({
+                pathname: '/(tabs)/(you)/my-content',
+                params: { tab: 'bookmarks', from: 'home' },
+              });
             }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
