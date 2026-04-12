@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
 import { Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import { useAutoHide } from '@/hooks/useAutoHide';
+import Animated, { SlideInDown, SlideOutDown, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
@@ -23,28 +23,16 @@ export function UndoToast({
   duration = 3000,
 }: UndoToastProps) {
   const { colors, isDark } = useTheme();
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const reducedMotion = useReducedMotion();
 
-  useEffect(() => {
-    if (visible) {
-      timerRef.current = setTimeout(() => {
-        onDismiss();
-      }, duration);
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, [visible, duration, onDismiss]);
+  useAutoHide(visible, duration, onDismiss);
 
   if (!visible) return null;
 
   return (
     <Animated.View
-      entering={SlideInDown.duration(Duration.slow)}
-      exiting={SlideOutDown.duration(Duration.normal)}
+      entering={reducedMotion ? undefined : SlideInDown.duration(Duration.slow).easing(Ease.out)}
+      exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
       style={[
         styles.container,
         {

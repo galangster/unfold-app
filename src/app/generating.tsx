@@ -115,7 +115,6 @@ export default function GeneratingScreen() {
     buttonBackgroundPressed: themeColors.accent,
   };
 
-  const hasConsentedToAI = useUnfoldStore((s) => s.hasConsentedToAI);
   const user = useUnfoldStore((s) => s.user);
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const addUsedScriptures = useUnfoldStore((s) => s.addUsedScriptures);
@@ -127,11 +126,12 @@ export default function GeneratingScreen() {
   const clearGenerationSession = useUnfoldStore((s) => s.clearGenerationSession);
   // AI consent is implied by using the app — consent screen removed from onboarding.
   // Auto-set the flag on first generation so persisted state stays consistent.
+  // Reads directly from store (no selector subscription) since this is a one-time fire-and-forget.
   useEffect(() => {
-    if (!hasConsentedToAI) {
+    if (!useUnfoldStore.getState().hasConsentedToAI) {
       useUnfoldStore.getState().setHasConsentedToAI(true);
     }
-  }, [hasConsentedToAI]);
+  }, []);
 
   const [isComplete, setIsComplete] = useState(false);
   const [devotionalTitle, setDevotionalTitle] = useState('');

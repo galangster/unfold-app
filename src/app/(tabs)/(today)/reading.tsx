@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import Animated, {
   FadeOut,
   SlideInDown,
   SlideOutDown,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -30,7 +32,7 @@ import { useUIState } from '@/lib/ui-state';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
 import type { FontSize as FontSizePreference } from '@/lib/store';
@@ -140,6 +142,7 @@ export default function ReadingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string }>();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   // Clear reveal transition flag AFTER reading screen has painted to prevent
   // home screen from flashing behind during the transition handoff.
@@ -248,7 +251,6 @@ export default function ReadingScreen() {
   const [bookmarkToast, setBookmarkToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const mountedRef = useRef(true);
-  const bookmarkToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
@@ -262,18 +264,7 @@ export default function ReadingScreen() {
   const scrollProgress = useSharedValue(0);
 
   // Bookmark toast auto-dismiss after 2.5s
-  useEffect(() => {
-    if (bookmarkToast) {
-      bookmarkToastTimerRef.current = setTimeout(() => {
-        setBookmarkToast(false);
-      }, 2500);
-    }
-    return () => {
-      if (bookmarkToastTimerRef.current) {
-        clearTimeout(bookmarkToastTimerRef.current);
-      }
-    };
-  }, [bookmarkToast]);
+  useAutoHide(bookmarkToast, 2500, useCallback(() => setBookmarkToast(false), []));
 
   // Button press micro-interaction — spring scale for Complete Day button
   const completeButtonScale = useSharedValue(1);
@@ -337,7 +328,6 @@ export default function ReadingScreen() {
     return () => {
       mountedRef.current = false;
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
-      if (bookmarkToastTimerRef.current) clearTimeout(bookmarkToastTimerRef.current);
     };
   }, []);
 
@@ -1466,7 +1456,7 @@ export default function ReadingScreen() {
               {/* Bridge text — personalized transition for Day 2+ */}
               {viewingDay >= 2 && isBridgeLoading && (
                 <Animated.View
-                  entering={FadeIn.duration(Duration.normal)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                   style={{
                     marginBottom: Spacing['6'],
                     padding: Spacing['4'],
@@ -1578,8 +1568,8 @@ export default function ReadingScreen() {
               {/* Chevron at top of content area - invites scroll */}
               {showScrollHint && (
                 <Animated.View
-                  entering={FadeIn.duration(Duration.slow)}
-                  exiting={FadeOut.duration(Duration.slow)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
+                  exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
                   style={{
                     alignItems: 'center',
                     marginTop: 20,
@@ -1612,7 +1602,7 @@ export default function ReadingScreen() {
 
               {/* Complete button + Share button row */}
               <Animated.View
-                entering={FadeIn.delay(200).duration(400)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}
                 style={[{ marginTop: Spacing['8'], paddingHorizontal: Spacing['6'] }, completeButtonAnimStyle]}
               >
                 <View
@@ -1818,7 +1808,7 @@ export default function ReadingScreen() {
                   {/* Tomorrow Preview — shown after completing today's reading */}
                   {isCompleted && !showCelebration && tomorrowDayData && tomorrowTeaser && (
                     <Animated.View
-                      entering={FadeIn.delay(300).duration(400)}
+                      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
                       style={{
                         marginTop: Spacing['8'],
                         paddingVertical: 18,
@@ -1872,7 +1862,7 @@ export default function ReadingScreen() {
                   {/* Preparing Tomorrow — progressive mode, next day being generated */}
                   {isCompleted && !showCelebration && !tomorrowDayData && isPreparingNextDay && (
                     <Animated.View
-                      entering={FadeIn.delay(300).duration(400)}
+                      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
                       style={{
                         marginTop: Spacing['8'],
                         paddingVertical: 18,
@@ -1940,8 +1930,8 @@ export default function ReadingScreen() {
       {/* Premium Toast Notification */}
       {audioToast?.visible && (
         <Animated.View
-          entering={FadeIn.duration(Duration.normal)}
-          exiting={FadeOut.duration(Duration.normal)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={[
             styles.toastContainer,
             { backgroundColor: isDark ? 'rgba(40, 40, 40, 0.95)' : 'rgba(60, 60, 60, 0.95)' }
@@ -1977,8 +1967,8 @@ export default function ReadingScreen() {
       {/* Bookmark saved toast */}
       {bookmarkToast && (
         <Animated.View
-          entering={SlideInDown.duration(Duration.slow)}
-          exiting={SlideOutDown.duration(Duration.normal)}
+          entering={reducedMotion ? undefined : SlideInDown.duration(Duration.slow).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
           style={[
             styles.bookmarkToastContainer,
             { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(40, 40, 40, 0.95)' },
@@ -2026,6 +2016,7 @@ const FONT_SIZE_OPTIONS: Array<{ label: string; value: FontSizePreference }> = [
 
 function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const currentFontSize = useUnfoldStore((s) => s.user?.fontSize ?? 'medium');
   const currentReadingFont = useUnfoldStore((s) => s.user?.readingFont ?? 'source-serif');
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
@@ -2038,8 +2029,8 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
     <>
       {/* Overlay */}
       <Animated.View
-        entering={FadeIn.duration(Duration.normal)}
-        exiting={FadeOut.duration(Duration.fast)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+        exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
         style={{
           ...StyleSheet.absoluteFillObject,
           backgroundColor: 'rgba(0,0,0,0.35)',
@@ -2057,8 +2048,8 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
 
       {/* Settings card */}
       <Animated.View
-        entering={FadeIn.duration(Duration.normal)}
-        exiting={FadeOut.duration(180)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+        exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
         style={{
           position: 'absolute',
           left: 12,

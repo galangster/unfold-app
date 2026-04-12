@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { usePrevious } from '@/hooks/usePrevious';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -31,6 +32,7 @@ import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { Duration, Ease } from '@/constants/animations';
 import { submitGenerationJob, findCompletedJob, fetchJobResult, ApiError } from '@/lib/generation-api';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
@@ -240,13 +242,12 @@ export default function HomeScreen() {
 
   // Streak celebration: show once when hasReadToday flips from false->true
   const [showCelebration, setShowCelebration] = useState(false);
-  const prevHasReadToday = React.useRef(hasReadToday);
+  const prevHasReadToday = usePrevious(hasReadToday);
   useEffect(() => {
-    if (hasReadToday && !prevHasReadToday.current) {
+    if (hasReadToday && prevHasReadToday === false) {
       setShowCelebration(true);
     }
-    prevHasReadToday.current = hasReadToday;
-  }, [hasReadToday]);
+  }, [hasReadToday, prevHasReadToday]);
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
 
@@ -720,7 +721,7 @@ export default function HomeScreen() {
           />
 
           {/* Zone 2: Context Slot */}
-          <Animated.View entering={entering(FadeIn.duration(280).delay(80))}>
+          <Animated.View entering={entering(FadeIn.duration(280).delay(80).easing(Ease.out))}>
             <ContextSlot
               slotType={slotType}
               colors={colors}
@@ -738,7 +739,7 @@ export default function HomeScreen() {
 
           {/* Zone 3: Hero Devotional — single card */}
           <View collapsable={false} onLayout={handleReadingLayout}>
-            <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
+            <Animated.View entering={entering(FadeIn.duration(280).delay(160).easing(Ease.out))}>
               <DevotionalCard
                 state={devotionalState}
                 scrollY={scrollY}
@@ -752,7 +753,7 @@ export default function HomeScreen() {
           {/* Day 1 Review Prompt */}
           {showDay1Review && (
             <Animated.View
-              entering={entering(FadeIn.duration(400).delay(200))}
+              entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
               style={styles.day1ReviewWrapper}
             >
               <View
@@ -814,7 +815,7 @@ export default function HomeScreen() {
           {/* Zone 6: Streak */}
           <View collapsable={false} onLayout={handleStreakLayout}>
             <Animated.View
-              entering={entering(FadeIn.delay(200).duration(400))}
+              entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
               style={styles.streakWrapper}
             >
               <StreakBox

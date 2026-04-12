@@ -111,8 +111,6 @@ function RootLayoutNav() {
     migrateGenerationDataToServer().catch(() => {});
   }, []);
 
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
-
   // Register navigation container with Sentry for screen tracking
   useEffect(() => {
     if (ref) {
@@ -120,10 +118,21 @@ function RootLayoutNav() {
     }
   }, [ref]);
 
-  // Track premium state in Sentry tags
+  // Track premium state in Sentry tags — subscribes directly to the store
+  // so tag updates bypass the component render cycle entirely
   useEffect(() => {
-    Sentry.setTag('is_premium', String(isPremium));
-  }, [isPremium]);
+    let prev = useUnfoldStore.getState().user?.isPremium ?? false;
+    Sentry.setTag('is_premium', String(prev));
+
+    const unsubscribe = useUnfoldStore.subscribe((state) => {
+      const current = state.user?.isPremium ?? false;
+      if (current !== prev) {
+        prev = current;
+        Sentry.setTag('is_premium', String(current));
+      }
+    });
+    return unsubscribe;
+  }, []);
 
 
   return (

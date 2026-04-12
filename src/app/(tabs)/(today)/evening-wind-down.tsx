@@ -12,11 +12,13 @@ import Animated, {
   withDelay,
   interpolate,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { CaretLeftIcon, BookOpenIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
+import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -92,9 +94,10 @@ function MovementCard({
   textColor: string;
   mutedColor: string;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <Animated.View
-      entering={FadeInDown.duration(600).delay(200 + index * 150)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(200 + index * 150).easing(Ease.out)}
       style={{
         marginBottom: Spacing['8'],
         paddingLeft: Spacing['5'],
@@ -133,6 +136,7 @@ function MovementCard({
 export default function EveningWindDownScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const user = useUnfoldStore((s) => s.user);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
@@ -318,7 +322,7 @@ export default function EveningWindDownScreen() {
         >
           {/* Hero — Moon + title */}
           <Animated.View
-            entering={FadeIn.duration(1000)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={{
               alignItems: 'center',
               paddingTop: Spacing['6'],
@@ -358,7 +362,7 @@ export default function EveningWindDownScreen() {
             {/* === EVENING PRAYER SECTION === */}
             {loading ? (
               <Animated.View
-                entering={FadeIn.duration(400)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={{ alignItems: 'center', paddingTop: 40 }}
               >
                 <ActivityIndicator size="small" color={colors.accent} />
@@ -376,7 +380,7 @@ export default function EveningWindDownScreen() {
               </Animated.View>
             ) : error ? (
               <Animated.View
-                entering={FadeIn.duration(400)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={{ alignItems: 'center', paddingTop: 40 }}
               >
                 <Text
@@ -426,7 +430,7 @@ export default function EveningWindDownScreen() {
               <>
                 {/* Thin divider */}
                 <Animated.View
-                  entering={FadeIn.duration(600).delay(100)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(100).easing(Ease.out)}
                   style={{
                     width: 24,
                     height: 1,
@@ -448,7 +452,7 @@ export default function EveningWindDownScreen() {
                 ))}
                 {/* Closing ornament */}
                 <Animated.View
-                  entering={FadeIn.duration(600).delay(1000)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(1000).easing(Ease.out)}
                   style={{
                     alignItems: 'center',
                     paddingTop: Spacing['2'],
@@ -485,7 +489,7 @@ export default function EveningWindDownScreen() {
 
             {/* === EVENING SCRIPTURE SECTION === */}
             {currentDay?.eveningScriptureRef && (
-              <Animated.View entering={FadeInDown.duration(600).delay(examen ? 800 : 200)}>
+              <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(examen ? 800 : 200).easing(Ease.out)}>
                 {/* Section divider */}
                 <View
                   style={{
@@ -544,7 +548,7 @@ export default function EveningWindDownScreen() {
 
             {/* === DONE BUTTON === */}
             {(examen || scriptureText) && (
-              <Animated.View entering={FadeIn.duration(400).delay(1200)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
+              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(1200).easing(Ease.out)} style={{ marginTop: Spacing['4'], marginBottom: Spacing['2'] }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={handleShowCelebration}
                 >
