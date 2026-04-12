@@ -638,9 +638,9 @@ export default function PaywallScreen() {
               paddingVertical: 14,
               paddingHorizontal: 18,
               borderRadius: Radius.md,
-              backgroundColor: selectedPlan === 'yearly' ? `${colors.accent}18` : 'rgba(255,255,255,0.04)',
+              backgroundColor: selectedPlan === 'yearly' ? `${colors.accent}18` : 'transparent',
               borderWidth: 1.5,
-              borderColor: selectedPlan === 'yearly' ? colors.accent : 'rgba(255,255,255,0.15)',
+              borderColor: selectedPlan === 'yearly' ? colors.accent : colors.border,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -688,9 +688,9 @@ export default function PaywallScreen() {
               paddingVertical: 14,
               paddingHorizontal: 18,
               borderRadius: Radius.md,
-              backgroundColor: selectedPlan === 'monthly' ? `${colors.accent}18` : 'rgba(255,255,255,0.04)',
+              backgroundColor: selectedPlan === 'monthly' ? `${colors.accent}18` : 'transparent',
               borderWidth: 1.5,
-              borderColor: selectedPlan === 'monthly' ? colors.accent : 'rgba(255,255,255,0.15)',
+              borderColor: selectedPlan === 'monthly' ? colors.accent : colors.border,
             }}
           >
             <Text
