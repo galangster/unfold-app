@@ -30,6 +30,8 @@ import { streamDevotionalAudio } from '@/lib/tts-service';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { cancelAndRescheduleEveningForTomorrow } from '@/lib/notifications';
 import { EveningCelebration } from '@/components/EveningCelebration';
+import { useCreationGate } from '@/hooks/useCreationGate';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
 
@@ -146,11 +148,7 @@ export default function EveningWindDownScreen() {
   });
   const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
 
-  useEffect(() => {
-    if (!isPremium) {
-      router.back();
-    }
-  }, [isPremium, router]);
+  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
   const [audioUri, setAudioUri] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
@@ -265,7 +263,7 @@ export default function EveningWindDownScreen() {
   }, [audioUri, player]);
 
   const handleShowCelebration = useCallback(() => {
-    // Record evening check-in so the home card knows it's done
+    if (!gate()) return;
     if (currentDevotional && currentDay) {
       addCheckIn({
         devotionalId: currentDevotional.id,
@@ -280,7 +278,7 @@ export default function EveningWindDownScreen() {
     const msg = EVENING_CELEBRATION_MESSAGES[Math.floor(Math.random() * EVENING_CELEBRATION_MESSAGES.length)];
     setCelebrationMessage(msg);
     setShowCelebration(true);
-  }, [currentDevotional, currentDay, addCheckIn]);
+  }, [currentDevotional, currentDay, addCheckIn, gate]);
 
   const handleDismissCelebration = useCallback(() => {
     setShowCelebration(false);
@@ -579,6 +577,7 @@ export default function EveningWindDownScreen() {
         onDismiss={handleDismissCelebration}
         message={celebrationMessage}
       />
+      <ExclusiveOfferSheet visible={showExclusiveOffer} onDismiss={dismissOffer} context="churned" />
     </View>
   );
 }
