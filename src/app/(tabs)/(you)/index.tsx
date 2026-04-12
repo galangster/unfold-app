@@ -2032,11 +2032,6 @@ export default function YouScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Simulate a churned user by forcing the TrialExpiredOverlay
-                to show regardless of real subscription state. Toggles the
-                debugForceTrialExpired flag in ui-state (not persisted, so
-                a full app restart clears it). Free tabs (Bible, You) stay
-                accessible; Today/Companion/Journal show the blocking overlay. */}
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => {
