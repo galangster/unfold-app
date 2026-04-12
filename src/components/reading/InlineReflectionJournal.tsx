@@ -204,7 +204,7 @@ export function InlineReflectionJournal({
           marginBottom: Spacing['7'],
         }}
       >
-        <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.4 }} />
+        <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.5 }} />
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
@@ -214,12 +214,11 @@ export function InlineReflectionJournal({
             textTransform: 'uppercase',
             textAlign: 'center',
             marginHorizontal: 14,
-            opacity: 0.75,
           }}
         >
           For Reflection
         </Text>
-        <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.4 }} />
+        <View style={{ width: 32, height: 0.5, backgroundColor: colors.accent, opacity: 0.5 }} />
       </View>
 
       {/* Progress indicator */}
@@ -378,7 +377,6 @@ function ReflectionQuestionCard({
               fontSize: Math.round(fontSizes.body * 1.1),
               color: colors.text,
               lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,
-              opacity: 0.9,
             }}
           >
             {preventOrphan(question)}

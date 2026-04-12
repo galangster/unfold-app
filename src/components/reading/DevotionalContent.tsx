@@ -343,7 +343,6 @@ export function DevotionalContent({
                         color: colors.text,
                         lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,
                         flex: 1,
-                        opacity: 0.9,
                       }}
                     >
                       {preventOrphan(question)}
@@ -369,7 +368,6 @@ export function DevotionalContent({
               lineHeight: fontSizes.body * 1.8,
               textAlign: 'left',
               paddingHorizontal: 16,
-              opacity: 0.9,
             }}
           >
             {preventOrphan(day.closingPrayer)}
@@ -408,7 +406,7 @@ const dcStyles = StyleSheet.create({
   ornamentalLine: {
     width: 32,
     height: 0.5,
-    opacity: 0.4,
+    opacity: 0.5,
   },
   ornamentalLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -417,7 +415,6 @@ const dcStyles = StyleSheet.create({
     textTransform: 'uppercase',
     textAlign: 'center',
     marginHorizontal: 14,
-    opacity: 0.75,
   },
   dayTitle: {
     fontFamily: FontFamily.display,
@@ -493,7 +490,6 @@ const dcStyles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1.2,
     marginBottom: 8,
-    opacity: 0.7,
   },
   reflectionItem: {
     marginBottom: Spacing['6'],
@@ -506,7 +502,6 @@ const dcStyles = StyleSheet.create({
   },
   reflectionNumber: {
     fontFamily: FontFamily.display,
-    opacity: 0.5,
     marginRight: Spacing['3'],
     marginTop: 1,
     minWidth: 16,

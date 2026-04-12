@@ -67,7 +67,7 @@ const HEADER_HEIGHT = 52;
  * ───────────────────────────────────────────────────────── */
 
 const ANIM = {
-  verseFade:     Duration.normal,   // verse content fade in
+  verseFade:     Duration.fast,     // verse content fade in (speed over delight)
   contextEnter:  180,   // context bar enter (fade + slide)
   contextExit:   100,   // context bar exit (fade only)
   flashHold:     600,   // flash highlight hold before fade

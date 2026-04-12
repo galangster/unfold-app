@@ -87,10 +87,11 @@ export const LightColors: ColorTheme = {
   backgroundElevated: '#FFFFFF',
 
   // Text hierarchy - warm dark tones
+  // Contrast ratios on #FAF7F2: text 16.7:1, muted 5.9:1, subtle 3.9:1, hint 2.5:1
   text: '#1C1710',
   textMuted: 'rgba(28, 23, 16, 0.68)',
-  textSubtle: 'rgba(28, 23, 16, 0.42)',
-  textHint: 'rgba(28, 23, 16, 0.3)',
+  textSubtle: 'rgba(28, 23, 16, 0.55)',
+  textHint: 'rgba(28, 23, 16, 0.40)',
 
   // Interactive elements
   inputBackground: 'rgba(28, 23, 16, 0.06)',
@@ -107,8 +108,8 @@ export const LightColors: ColorTheme = {
   glassBackground: 'rgba(255, 255, 255, 0.9)',
   glassBorder: 'rgba(28, 23, 16, 0.08)',
 
-  // Accent - deeper warm gold for light mode
-  accent: '#9A7B3C',
+  // Accent - deep warm gold for light mode (4.73:1 on cream — WCAG AA)
+  accent: '#866B2F',
   contrastText: '#FFFFFF',
 
   // Status

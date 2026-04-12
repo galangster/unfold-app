@@ -727,9 +727,9 @@ export function DevotionalWebView({
 
     const webFont = getWebFontName(readingFont.body);
     const bodyColor = isDark ? '#E8E4DC' : '#1A1A1A';
-    const mutedColor = isDark ? '#9A958D' : '#6B6560';
+    const mutedColor = isDark ? '#9A958D' : '#5A534E';  // 6.83:1 on card bg — AAA
     const accentColor = colors.accent;
-    const inputBg = isDark ? '#1F1F1F' : '#F5F5F3';
+    const inputBg = isDark ? '#1F1F1F' : '#EDE8E0';     // warmer, visible surface separation
 
     const bodyText = day.bodyText || '';
 
@@ -964,7 +964,6 @@ export function DevotionalWebView({
       letter-spacing: 1.2px;
       text-transform: uppercase;
       color: ${accentColor};
-      opacity: 0.85;
       margin-top: ${lineHeight * 1.2}px;
       margin-bottom: ${lineHeight * 0.4}px;
     }
@@ -1042,7 +1041,6 @@ export function DevotionalWebView({
       letter-spacing: 1.2px;
       text-transform: uppercase;
       margin-bottom: 14px;
-      opacity: 0.8;
       font-weight: 500;
     }
     
@@ -1069,7 +1067,6 @@ export function DevotionalWebView({
       font-size: ${bodyFontSize - 2}px;
       color: ${accentColor};
       margin-left: 12px;
-      opacity: 0.7;
     }
 
     /* Bookmark button on quotes, context, and word study boxes */
