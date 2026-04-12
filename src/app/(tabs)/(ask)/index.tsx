@@ -51,9 +51,11 @@ import { SuggestionChips } from '@/components/companion/SuggestionChips';
 import { TypingIndicator } from '@/components/companion/TypingIndicator';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
+import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   canSendCompanionMessage,
   incrementCompanionDailyCount,
@@ -139,6 +141,8 @@ export default function CompanionScreen() {
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [dailyRemaining, setDailyRemaining] = useState(() => getCompanionDailyUsage().remaining);
 
+  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+
   const {
     messages,
     isStreaming,
@@ -207,7 +211,8 @@ export default function CompanionScreen() {
 
   const handleSend = useCallback(
     (text: string) => {
-      // Free user daily limit check
+      if (!gate()) return;
+
       if (!isPremium && !canSendCompanionMessage()) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         setShowPremiumSheet(true);
@@ -226,7 +231,7 @@ export default function CompanionScreen() {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 100);
     },
-    [sendMessage, isPremium]
+    [sendMessage, isPremium, gate]
   );
 
   const handleChipSelect = useCallback(
@@ -332,6 +337,7 @@ export default function CompanionScreen() {
         {/* Right: new chat — fixed width to balance center */}
         <TouchableOpacity
           onPress={() => {
+            if (!gate()) return;
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             startNewConversation();
           }}
@@ -508,6 +514,8 @@ export default function CompanionScreen() {
         onClose={() => setShowPremiumSheet(false)}
         feature="companion"
       />
+
+      <ExclusiveOfferSheet visible={showExclusiveOffer} onDismiss={dismissOffer} context="churned" />
       {/* Removed: floating FAB approach failed due to FlatList gesture conflicts */}
     </KeyboardAvoidingView>
   );
