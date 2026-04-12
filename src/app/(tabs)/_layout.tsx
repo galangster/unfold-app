@@ -17,7 +17,6 @@ import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { useUnfoldStore } from '@/lib/store';
-import { TrialExpiredOverlay } from '@/components/TrialExpiredOverlay';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -293,9 +292,6 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
   );
 }
 
-/** Names of tabs that remain free (no paywall overlay) */
-const FREE_TABS = new Set(['(bible)', '(you)']);
-
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
 
@@ -306,11 +302,7 @@ export default function TabLayout() {
   const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? true);
   const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
   const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
-  const hasCompletedOnboarding = useUnfoldStore((s) => s.user?.hasCompletedOnboarding ?? false);
   const [activeTabName, setActiveTabName] = useState<string>('(today)');
-
-  const shouldShowPaywall =
-    !isPremium && hasCompletedOnboarding && !FREE_TABS.has(activeTabName);
 
   return (
     <View style={{ flex: 1 }}>
@@ -355,9 +347,6 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-
-      {/* Full-screen paywall overlay for expired subscriptions */}
-      {shouldShowPaywall && <TrialExpiredOverlay />}
     </View>
   );
 }
