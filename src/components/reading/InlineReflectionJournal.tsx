@@ -17,6 +17,7 @@ import { Duration } from '@/constants/animations';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
+import { useUIState } from '@/lib/ui-state';
 
 interface InlineReflectionJournalProps {
   questions: string[];
@@ -43,6 +44,9 @@ export function InlineReflectionJournal({
   const { colors } = useTheme();
   const readingFont = useReadingFont();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
+  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
+  const effectivePremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremium;
 
   // Store actions
   const getJournalEntry = useUnfoldStore((s) => s.getJournalEntry);
@@ -259,6 +263,7 @@ export function InlineReflectionJournal({
             readingFont={readingFont}
             fontSizes={fontSizes}
             scrollViewRef={scrollViewRef}
+            editable={effectivePremium}
           />
         );
       })}
@@ -319,6 +324,7 @@ function ReflectionQuestionCard({
   readingFont,
   fontSizes,
   scrollViewRef,
+  editable = true,
 }: {
   index: number;
   question: string;
@@ -332,6 +338,7 @@ function ReflectionQuestionCard({
   readingFont: any;
   fontSizes: { body: number; scripture: number; title: number };
   scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
+  editable?: boolean;
 }) {
   return (
     <Animated.View
@@ -395,12 +402,13 @@ function ReflectionQuestionCard({
             <TextInput
               ref={(ref) => { inputRefs.current.set(index, ref); }}
               value={response}
+              editable={editable}
               onChangeText={(text) => onResponseChange(index, question, text)}
               onContentSizeChange={() => {
                 // Re-scroll to keep cursor visible as multiline text grows
                 scrollViewRef?.current?.assureFocusedInputVisible();
               }}
-              placeholder="Write your thoughts..."
+              placeholder={editable ? 'Write your thoughts...' : 'Subscribe to journal your reflections'}
               placeholderTextColor={colors.textHint}
               multiline
               textAlignVertical="top"
