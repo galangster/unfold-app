@@ -2015,7 +2015,7 @@ export default function YouScreen() {
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 setHasSeenHomeTooltips(true);
-                router.back();
+                router.replace('/(tabs)/(today)');
                 setTimeout(() => {
                   setHasSeenHomeTooltips(false);
                 }, 600);

@@ -1,9 +1,9 @@
 import { useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
-import Svg, { Path } from 'react-native-svg';
+import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
+import Svg, { Defs, Rect, Mask } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -75,47 +75,19 @@ const TOOLTIP_STEPS: TooltipStep[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// SVG spotlight mask — full screen dark + rounded-rect hole
+// SVG spotlight mask — full screen dark + feathered rounded-rect hole
 // ---------------------------------------------------------------------------
 
 const SPOTLIGHT_PADDING = 10;
-const SPOTLIGHT_RADIUS = 22;
-const BACKDROP_OPACITY = 0.55;
-
-function buildMaskPath(
-  screenW: number,
-  screenH: number,
-  rect: TargetRect,
-): string {
-  const outer = `M0,0 H${screenW} V${screenH} H0 Z`;
-
-  const x = rect.x - SPOTLIGHT_PADDING;
-  const y = rect.y - SPOTLIGHT_PADDING;
-  const w = rect.width + SPOTLIGHT_PADDING * 2;
-  const h = rect.height + SPOTLIGHT_PADDING * 2;
-  const r = SPOTLIGHT_RADIUS;
-
-  const inner = [
-    `M${x + r},${y}`,
-    `H${x + w - r}`,
-    `A${r},${r} 0 0 1 ${x + w},${y + r}`,
-    `V${y + h - r}`,
-    `A${r},${r} 0 0 1 ${x + w - r},${y + h}`,
-    `H${x + r}`,
-    `A${r},${r} 0 0 1 ${x},${y + h - r}`,
-    `V${y + r}`,
-    `A${r},${r} 0 0 1 ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
-  return `${outer} ${inner}`;
-}
+const BACKDROP_OPACITY = 0.65;
+const FEATHER_SIZE = 14;
+const SPOT_CORNER_RADIUS = 14;
 
 // ---------------------------------------------------------------------------
 // Arrow triangle component
 // ---------------------------------------------------------------------------
 
-const ARROW_SIZE = 8;
+const ARROW_SIZE = 10;
 
 function Arrow({ direction, color }: { direction: 'up' | 'down'; color: string }) {
   if (direction === 'down') {
@@ -155,18 +127,21 @@ function Arrow({ direction, color }: { direction: 'up' | 'down'; color: string }
 // ---------------------------------------------------------------------------
 
 const TAB_BAR_HEIGHT = 49;
-const TOOLTIP_ESTIMATED_HEIGHT = 110;
+const TAB_BAR_PADDING_H = Spacing['6']; // matches _layout.tsx paddingHorizontal
+const TOOLTIP_ESTIMATED_HEIGHT = 130;
 
 /** Compute tab bar item rects from screen dimensions — tabs are fixed at bottom */
 function computeTabRects(screenW: number, screenH: number, bottomInset: number): Record<string, TargetRect> {
   // 4 visible tabs: Today(0), Bible(1), Companion(2), Journal(3)
+  // Tab bar has paddingHorizontal: Spacing['6'] = 24
   const tabCount = 4;
-  const tabWidth = screenW / tabCount;
+  const usableWidth = screenW - TAB_BAR_PADDING_H * 2;
+  const tabWidth = usableWidth / tabCount;
   const tabBarTop = screenH - TAB_BAR_HEIGHT - bottomInset;
   const iconSize = 28;
 
   const makeTabRect = (index: number): TargetRect => ({
-    x: tabWidth * index + (tabWidth - iconSize) / 2,
+    x: TAB_BAR_PADDING_H + tabWidth * index + (tabWidth - iconSize) / 2,
     y: tabBarTop + 6,
     width: iconSize,
     height: iconSize,
@@ -190,8 +165,10 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const hasSeenHomeTooltips = useUnfoldStore((s) => s.hasSeenHomeTooltips);
   const setHasSeenHomeTooltips = useUnfoldStore((s) => s.setHasSeenHomeTooltips);
 
+  const reducedMotion = useReducedMotion();
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const [tooltipHeight, setTooltipHeight] = useState(TOOLTIP_ESTIMATED_HEIGHT);
 
   const measuredRects = useMemo<Record<string, TargetRect>>(() => {
     if (hasSeenHomeTooltips) return {};
@@ -213,16 +190,12 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const handleNext = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (currentStep < TOOLTIP_STEPS.length - 1) {
+      setTooltipHeight(TOOLTIP_ESTIMATED_HEIGHT);
       setCurrentStep((prev) => prev + 1);
     } else {
       dismiss();
     }
   }, [currentStep, dismiss]);
-
-  const handleOverlayPress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    dismiss();
-  }, [dismiss]);
 
   // Don't render if already seen or dismissed
   if (hasSeenHomeTooltips || !isVisible || !step) return null;
@@ -232,81 +205,109 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   if (!targetRect) return null;
 
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
-  const tooltipBg = isDark ? colors.inputBackground : colors.background;
-  const tooltipBorder = colors.border;
+  const tooltipBg = colors.backgroundElevated;
+  const tooltipBorder = isDark ? 'rgba(245, 240, 235, 0.12)' : 'rgba(28, 23, 16, 0.08)';
 
   // Calculate tooltip position
-  const GAP = 12;
+  const GAP = 14;
   const TOOLTIP_MARGIN_H = 24;
-  const spotlightBottom = targetRect.y + targetRect.height + SPOTLIGHT_PADDING;
-  const spotlightTop = targetRect.y - SPOTLIGHT_PADDING;
-
-  const maxTooltipTop = screenH - TAB_BAR_HEIGHT - insets.bottom - TOOLTIP_ESTIMATED_HEIGHT;
 
   let tooltipTop: number;
   let arrowDirection: 'up' | 'down';
+  const activeHeight = tooltipHeight > 0 ? tooltipHeight : TOOLTIP_ESTIMATED_HEIGHT;
 
   if (step.placement === 'below') {
-    const candidateTop = spotlightBottom + GAP;
-    if (candidateTop > maxTooltipTop) {
-      tooltipTop = spotlightTop - GAP - TOOLTIP_ESTIMATED_HEIGHT;
-      arrowDirection = 'down';
-    } else {
-      tooltipTop = candidateTop;
-      arrowDirection = 'up';
-    }
+    // For "below" placement (reading card), position below the spotlight
+    const spotlightBottom = targetRect.y + targetRect.height + SPOTLIGHT_PADDING;
+    tooltipTop = spotlightBottom + GAP;
+    arrowDirection = 'up';
   } else {
-    tooltipTop = spotlightTop - GAP - TOOLTIP_ESTIMATED_HEIGHT;
+    // For "above" placement (tab items, streak), position above the target
+    tooltipTop = targetRect.y - SPOTLIGHT_PADDING - GAP - activeHeight;
     arrowDirection = 'down';
   }
 
   const arrowLeft = targetRect.x + targetRect.width / 2 - ARROW_SIZE;
-  const maskPath = buildMaskPath(screenW, screenH, targetRect);
+
+  // Build rectangular spotlight
+  const spotX = targetRect.x - SPOTLIGHT_PADDING;
+  const spotY = targetRect.y - SPOTLIGHT_PADDING;
+  const spotW = targetRect.width + SPOTLIGHT_PADDING * 2;
+  const spotH = targetRect.height + SPOTLIGHT_PADDING * 2;
 
   return (
     <Animated.View
-      entering={FadeIn.duration(Duration.slow)}
-      exiting={FadeOut.duration(Duration.normal)}
+      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+      exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
       style={styles.overlay}
       pointerEvents="box-none"
     >
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={handleOverlayPress}
-        style={StyleSheet.absoluteFill}
-        accessibilityRole="button"
-        accessibilityLabel="Skip onboarding"
-      >
+      {/* Backdrop — blocks interaction but no onPress (user must use Next/Skip) */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="auto">
         <Svg width={screenW} height={screenH} style={StyleSheet.absoluteFill}>
-          <Path
-            d={maskPath}
+          <Defs>
+            <Mask id="spotlightMask">
+              {/* White = backdrop visible (dimmed) */}
+              <Rect x="0" y="0" width={screenW} height={screenH} fill="white" />
+              {/* Feathered rectangular hole — concentric rects */}
+              <Rect
+                x={spotX - FEATHER_SIZE}
+                y={spotY - FEATHER_SIZE}
+                width={spotW + FEATHER_SIZE * 2}
+                height={spotH + FEATHER_SIZE * 2}
+                rx={SPOT_CORNER_RADIUS + FEATHER_SIZE * 0.6}
+                fill="black"
+                opacity="0.2"
+              />
+              <Rect
+                x={spotX - FEATHER_SIZE * 0.6}
+                y={spotY - FEATHER_SIZE * 0.6}
+                width={spotW + FEATHER_SIZE * 1.2}
+                height={spotH + FEATHER_SIZE * 1.2}
+                rx={SPOT_CORNER_RADIUS + FEATHER_SIZE * 0.3}
+                fill="black"
+                opacity="0.3"
+              />
+              <Rect
+                x={spotX - FEATHER_SIZE * 0.3}
+                y={spotY - FEATHER_SIZE * 0.3}
+                width={spotW + FEATHER_SIZE * 0.6}
+                height={spotH + FEATHER_SIZE * 0.6}
+                rx={SPOT_CORNER_RADIUS + FEATHER_SIZE * 0.15}
+                fill="black"
+                opacity="0.4"
+              />
+              {/* Solid hole matching target bounds */}
+              <Rect
+                x={spotX}
+                y={spotY}
+                width={spotW}
+                height={spotH}
+                rx={SPOT_CORNER_RADIUS}
+                fill="black"
+              />
+            </Mask>
+          </Defs>
+          <Rect
+            x="0"
+            y="0"
+            width={screenW}
+            height={screenH}
             fill={`rgba(0, 0, 0, ${BACKDROP_OPACITY})`}
-            fillRule="evenodd"
+            mask="url(#spotlightMask)"
           />
         </Svg>
-      </TouchableOpacity>
-
-      {/* Arrow */}
-      <Animated.View
-        key={`arrow-${currentStep}`}
-        entering={FadeIn.duration(Duration.slow).delay(150)}
-        exiting={FadeOut.duration(Duration.fast)}
-        style={{
-          position: 'absolute',
-          top: arrowDirection === 'up' ? tooltipTop - ARROW_SIZE : undefined,
-          bottom: arrowDirection === 'down' ? screenH - tooltipTop - TOOLTIP_ESTIMATED_HEIGHT - ARROW_SIZE : undefined,
-          left: arrowLeft,
-        }}
-        pointerEvents="none"
-      >
-        <Arrow direction={arrowDirection} color={tooltipBg} />
-      </Animated.View>
+      </View>
 
       {/* Tooltip card */}
       <Animated.View
         key={`tooltip-${currentStep}`}
-        entering={FadeIn.duration(Duration.slow).delay(100)}
-        exiting={FadeOut.duration(Duration.normal)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out).delay(currentStep === 0 ? 100 : 0)}
+        exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0 && Math.abs(h - tooltipHeight) > 2) setTooltipHeight(h);
+        }}
         style={[
           styles.tooltipCard,
           {
@@ -319,6 +320,19 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
         ]}
         pointerEvents="box-none"
       >
+        {/* Arrow — inside card so it renders above the SVG backdrop */}
+        <View
+          style={{
+            position: 'absolute',
+            ...(arrowDirection === 'up'
+              ? { top: -(ARROW_SIZE - 1) }
+              : { bottom: -(ARROW_SIZE - 1) }),
+            left: arrowLeft - TOOLTIP_MARGIN_H,
+          }}
+          pointerEvents="none"
+        >
+          <Arrow direction={arrowDirection} color={tooltipBg} />
+        </View>
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
@@ -418,6 +432,7 @@ const styles = StyleSheet.create({
   },
   tooltipCard: {
     position: 'absolute',
+    overflow: 'visible',
     borderRadius: Radius.card,
     borderWidth: 1,
     paddingHorizontal: 18,

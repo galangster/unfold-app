@@ -29,7 +29,7 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
   const profilePicture = useUnfoldStore((s) => s.user?.profilePicture);
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
-  const initial = (userName ?? '?')[0].toUpperCase();
+  const initial = (userName || '?')[0].toUpperCase();
   const fontSize = size * 0.42;
   const badgeSize = size * 0.32;
   const badgeIconSize = badgeSize * 0.55;
