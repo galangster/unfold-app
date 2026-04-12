@@ -36,6 +36,8 @@ import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
 import { EmberParticles } from '@/components/EmberParticles';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -940,6 +942,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [showExclusiveOffer, setShowExclusiveOffer] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly'>(
     'yearly',
   );
@@ -988,7 +991,13 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       await syncTrialEndingNotification();
       onPurchaseSuccess();
     } else {
-      if (result.reason !== 'user_cancelled') {
+      if (result.reason === 'user_cancelled') {
+        const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
+        if (!hasSeenOnboardingOffer) {
+          mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
+          setShowExclusiveOffer(true);
+        }
+      } else {
         setPurchaseError('Something went wrong. Please try again.');
       }
     }
@@ -1107,6 +1116,11 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           </Text>
         </TouchableOpacity>
       </View>
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={() => setShowExclusiveOffer(false)}
+        context="onboarding"
+      />
     </View>
   );
 });

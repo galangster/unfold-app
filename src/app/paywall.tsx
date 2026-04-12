@@ -20,6 +20,8 @@ import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { getThemeById } from '@/constants/devotional-types';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import type { ThemeCategory } from '@/constants/devotional-types';
 
 type PlanChoice = 'yearly' | 'monthly';
@@ -113,6 +115,7 @@ export default function PaywallScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [selectedPlan, setSelectedPlan] = useState<PlanChoice>('yearly');
+  const [showExclusiveOffer, setShowExclusiveOffer] = useState(false);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
 
@@ -238,7 +241,11 @@ export default function PaywallScreen() {
           router.back();
         }
       } else if (result.reason === 'user_cancelled') {
-        // User tapped Cancel on the Apple payment sheet — do nothing
+        const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
+        if (!hasSeenOnboardingOffer) {
+          mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
+          setShowExclusiveOffer(true);
+        }
         return;
       } else {
         // Actual SDK error
@@ -916,6 +923,11 @@ export default function PaywallScreen() {
           </View>
         </View>
       )}
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={() => setShowExclusiveOffer(false)}
+        context="onboarding"
+      />
     </View>
   );
 }
