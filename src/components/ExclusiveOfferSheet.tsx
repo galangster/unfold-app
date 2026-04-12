@@ -90,7 +90,17 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
     onSuccess: async (result) => {
       if (result.ok) {
         const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
-        updateUser({ isPremium: hasPremium });
+        logger.log(
+          '[ExclusiveOfferSheet] Purchase succeeded. Active entitlements:',
+          JSON.stringify(Object.keys(result.data.entitlements.active ?? {})),
+          'hasPremium:', hasPremium,
+        );
+        if (!hasPremium) {
+          setErrorMessage('Purchase completed but premium was not activated. Please tap Restore.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+        updateUser({ isPremium: true });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
         setErrorMessage(null);

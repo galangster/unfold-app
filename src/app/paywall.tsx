@@ -208,8 +208,25 @@ export default function PaywallScreen() {
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
     onSuccess: async (result) => {
       if (result.ok) {
-        const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
-        updateUser({ isPremium: hasPremium });
+        const activeEntitlements = result.data.entitlements.active;
+        const hasPremium = Boolean(activeEntitlements?.['Unfold Premium']);
+        logger.log(
+          '[Paywall] Purchase succeeded. Active entitlements:',
+          JSON.stringify(Object.keys(activeEntitlements ?? {})),
+          'hasPremium:', hasPremium,
+          'allEntitlements:', JSON.stringify(Object.keys(result.data.entitlements.all ?? {})),
+        );
+
+        if (!hasPremium) {
+          // Purchase went through StoreKit but entitlement not granted — likely
+          // a RevenueCat dashboard config issue (product not linked to entitlement)
+          logger.log('[Paywall] WARNING: Purchase ok but no Unfold Premium entitlement. Check RevenueCat dashboard.');
+          setSubscribeError('Purchase completed but premium was not activated. Please tap Restore below.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+
+        updateUser({ isPremium: true });
 
         await syncTrialEndingNotification();
 
@@ -349,6 +366,7 @@ export default function PaywallScreen() {
       return;
     }
 
+    logger.log('[Paywall] Initiating purchase:', pkg.identifier, pkg.product.identifier, pkg.product.priceString);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     purchaseMutation.mutate(pkg);
   };
