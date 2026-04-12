@@ -15,6 +15,7 @@ import { Colors } from '@/constants/colors';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
+import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
 import { useUnfoldStore } from '@/lib/store';
 import { registerPushToken, setupNotificationListeners } from '@/lib/push-notifications';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
@@ -95,6 +96,10 @@ function RootLayoutNav() {
 
   // Schedule/cancel midday check-in and evening wind-down notifications
   useCheckInNotifications();
+
+  // Keep the 8am daily reminder payload fresh as devotional state changes.
+  // Without this, the iOS/Android recurring trigger fires stale copy forever.
+  useDailyReminderSync();
 
   // Register push token with backend (anonymous, keyed by X-Device-ID)
   useEffect(() => {

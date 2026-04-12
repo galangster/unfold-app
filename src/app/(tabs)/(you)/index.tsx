@@ -242,11 +242,11 @@ export default function YouScreen() {
 
   const handleSelectTime = async (time: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // useDailyReminderSync picks this up via the fingerprint and reschedules.
+    // Do not call scheduleDailyReminder here — that created a dual scheduling
+    // authority that raced with the centralized sync hook.
     updateUser({ reminderTime: time });
     setShowTimeSelector(false);
-    if (notificationsEnabled) {
-      await scheduleDailyReminder(time);
-    }
   };
 
   const handleResetData = async () => {
@@ -272,6 +272,10 @@ export default function YouScreen() {
                     setIsDeletingAccount(true);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     try {
+                      // Cancel every scheduled OS notification BEFORE wiping
+                      // store state — otherwise the frozen payloads keep
+                      // firing against content that no longer exists.
+                      await cancelAllReminders();
                       reset();
                       useCompanionChatStore.getState().clearAllConversations();
                       router.dismissAll();
