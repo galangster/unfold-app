@@ -511,24 +511,31 @@ export default function MyContentScreen() {
                       borderRadius: Radius.lg,
                       padding: 20,
                       marginBottom: 12,
-                      opacity: 1,
-                      borderLeftWidth: 4,
-                      borderLeftColor: accent,
                     }}
                     accessibilityRole="button"
                     accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} highlight: ${item.text}`}
                   >
-                    <Text
+                    {/* Quoted text with inline highlight tint */}
+                    <View
                       style={{
-                        fontFamily: FontFamily.bodyItalic,
-                        fontSize: FontSize.base,
-                        color: colors.text,
-                        lineHeight: 24,
+                        backgroundColor: `${accent}14`,
+                        borderRadius: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
                         marginBottom: Spacing['3'],
                       }}
                     >
-                      "{item.text}"
-                    </Text>
+                      <Text
+                        style={{
+                          fontFamily: FontFamily.bodyItalic,
+                          fontSize: FontSize.base,
+                          color: colors.text,
+                          lineHeight: 24,
+                        }}
+                      >
+                        "{item.text}"
+                      </Text>
+                    </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
                       <View
                         style={{

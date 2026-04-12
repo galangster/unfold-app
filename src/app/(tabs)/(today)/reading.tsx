@@ -24,7 +24,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import NetInfo from '@react-native-community/netinfo';
 import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, ListBulletsIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
+import { BookmarkSimpleIcon, ArrowsClockwiseIcon, CaretDownIcon, BookOpenIcon, CaretLeftIcon, PlayIcon, CheckIcon, UploadSimpleIcon, SunHorizonIcon, TextAaIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -1329,8 +1329,23 @@ export default function ReadingScreen() {
                   paddingVertical: 10,
                 }}
               >
-              {/* Left: Table of contents icon */}
+              {/* Left: Back button */}
               <TouchableOpacity activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.back();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                style={{ padding: Spacing['2'] }}
+              >
+                <CaretLeftIcon size={22} color={colors.text} weight="light" />
+              </TouchableOpacity>
+
+              {/* Center: Day indicator — tappable, opens day-menu sheet */}
+              <TouchableOpacity
+                activeOpacity={0.7}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
@@ -1341,17 +1356,12 @@ export default function ReadingScreen() {
                     },
                   });
                 }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Day ${viewingDay} of ${currentDevotional.totalDays}`}
                 accessibilityHint="Opens day selector menu"
-                style={{ padding: Spacing['2'] }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
-                <ListBulletsIcon size={22} color={colors.text} weight="light" />
-              </TouchableOpacity>
-
-              {/* Center: Day indicator */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text
                   style={{
                     fontFamily: FontFamily.uiMedium,
@@ -1382,7 +1392,8 @@ export default function ReadingScreen() {
                     </Text>
                   </View>
                 )}
-              </View>
+                <CaretDownIcon size={14} color={colors.textMuted} weight="bold" />
+              </TouchableOpacity>
 
               {/* Right: Journal + Reading Settings */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -1964,36 +1975,33 @@ export default function ReadingScreen() {
         />
       )}
 
-      {/* Bookmark saved toast */}
+      {/* Bookmark saved toast — entire toast is tappable */}
       {bookmarkToast && (
-        <Animated.View
-          entering={reducedMotion ? undefined : SlideInDown.duration(Duration.slow).easing(Ease.out)}
-          exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
-          style={[
-            styles.bookmarkToastContainer,
-            { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(40, 40, 40, 0.95)' },
-          ]}
-          accessibilityRole="alert"
-          accessibilityLiveRegion="polite"
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            setBookmarkToast(false);
+            router.push({
+              pathname: '/(tabs)/(you)/my-content',
+              params: { tab: 'bookmarks', from: 'home' },
+            });
+          }}
+          accessibilityRole="link"
+          accessibilityLabel="Bookmark saved. Tap to view in your library."
         >
-          <BookmarkSimpleIcon size={16} color={colors.accent} weight="fill" />
-          <Text style={styles.bookmarkToastText}>Saved to your library</Text>
-          <TouchableOpacity
-            onPress={() => {
-              setBookmarkToast(false);
-              router.push({
-                pathname: '/(tabs)/(you)/my-content',
-                params: { tab: 'bookmarks', from: 'home' },
-              });
-            }}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="link"
-            accessibilityLabel="View saved bookmarks"
+          <Animated.View
+            entering={reducedMotion ? undefined : SlideInDown.duration(Duration.slow).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
+            style={[
+              styles.bookmarkToastContainer,
+              { backgroundColor: isDark ? 'rgba(30, 30, 30, 0.95)' : 'rgba(40, 40, 40, 0.95)' },
+            ]}
           >
+            <BookmarkSimpleIcon size={16} color={colors.accent} weight="fill" />
+            <Text style={styles.bookmarkToastText}>Saved to your library</Text>
             <Text style={[styles.bookmarkToastLink, { color: colors.accent }]}>View</Text>
-          </TouchableOpacity>
-        </Animated.View>
+          </Animated.View>
+        </TouchableOpacity>
       )}
 
       {/* Study Method Info Sheet */}

@@ -111,7 +111,12 @@ export function PremiumNudgeCard({
         accessibilityRole="alert"
         accessibilityLabel={`Premium feature suggestion: ${message}`}
       >
-        <View
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={handleAction}
+          accessibilityRole="button"
+          accessibilityLabel={`${message}. ${cta}`}
+          accessibilityHint="Opens premium feature details"
           style={[
             styles.container,
             {
@@ -155,30 +160,20 @@ export function PremiumNudgeCard({
                 {message}
               </Text>
 
-              {/* CTA link */}
-              <TouchableOpacity activeOpacity={0.7}
-                onPress={handleAction}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={cta}
-                accessibilityHint="Opens premium feature details"
-                style={styles.ctaPressable}
+              <Text
+                style={[
+                  styles.ctaText,
+                  {
+                    color: colors.accent,
+                    fontFamily: FontFamily.uiSemiBold,
+                  },
+                ]}
               >
-                  <Text
-                    style={[
-                      styles.ctaText,
-                      {
-                        color: colors.accent,
-                        fontFamily: FontFamily.uiSemiBold,
-                      },
-                    ]}
-                  >
-                    {cta}
-                  </Text>
-              </TouchableOpacity>
+                {cta}
+              </Text>
             </View>
 
-            {/* Dismiss button */}
+            {/* Dismiss button — stops propagation so card tap doesn't fire */}
             <TouchableOpacity activeOpacity={0.7}
               onPress={handleDismiss}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
@@ -193,7 +188,7 @@ export function PremiumNudgeCard({
                 />
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Premium Feature Sheet — opens on CTA tap */}
@@ -235,10 +230,6 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 13,
     lineHeight: 19,
-  },
-  ctaPressable: {
-    alignSelf: 'flex-start',
-    paddingVertical: 2,
   },
   ctaText: {
     fontSize: 13,
