@@ -55,6 +55,8 @@ import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/ap
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
+import { useCreationGate } from '@/hooks/useCreationGate';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
   {
@@ -163,6 +165,7 @@ export default function JournalScreen() {
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
   // Subscribe to journalEntries for reactive updates (prayer toggles, etc.)
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
@@ -409,6 +412,7 @@ export default function JournalScreen() {
   }, [content, hasChanges, isSaving, saveEntry]);
 
   const handleTextChange = (text: string) => {
+    if (!gate()) return;
     setContent(text);
     setHasChanges(true);
   };
@@ -422,6 +426,7 @@ export default function JournalScreen() {
   }, [pathname, router]);
 
   const handleDone = () => {
+    if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (activeMode === 'freewrite') {
       saveEntry(content);
@@ -440,6 +445,7 @@ export default function JournalScreen() {
   // Mode switching
   const handleModeSwitch = useCallback((mode: JournalMode) => {
     if (mode === activeMode) return;
+    if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveMode(mode);
     Keyboard.dismiss();
@@ -458,10 +464,11 @@ export default function JournalScreen() {
         if (isMountedRef.current) inputRef.current?.focus();
       }, 300);
     }
-  }, [activeMode, ensureEntry, updateJournalMode, expandedSoapSection]);
+  }, [activeMode, ensureEntry, updateJournalMode, expandedSoapSection, gate]);
 
   // SOAP handlers
   const handleSoapChange = useCallback((field: keyof SoapResponses, text: string) => {
+    if (!gate()) return;
     setSoapValues((prev) => ({ ...prev, [field]: text }));
     hasPendingSoapRef.current = true;
 
@@ -473,7 +480,7 @@ export default function JournalScreen() {
       }
       hasPendingSoapRef.current = false;
     }, 800);
-  }, [ensureEntry, updateSoapResponse]);
+  }, [ensureEntry, updateSoapResponse, gate]);
 
   // Flush all pending SOAP values to the store immediately
   const flushSoapSaves = useCallback(() => {
@@ -508,6 +515,7 @@ export default function JournalScreen() {
   // Prayer handlers
   const handleAddPrayer = useCallback(() => {
     if (!newPrayerText.trim()) return;
+    if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const entryId = ensureEntry();
@@ -516,9 +524,10 @@ export default function JournalScreen() {
     }
     setNewPrayerText('');
     setShowPrayerInput(false);
-  }, [newPrayerText, ensureEntry, addPrayerRequest]);
+  }, [newPrayerText, ensureEntry, addPrayerRequest, gate]);
 
   const handleTogglePrayer = useCallback((prayerId: string) => {
+    if (!gate()) return;
     const entryId = savedEntryIdRef.current ?? ensureEntry();
     if (!entryId) return;
     // Find current prayer state to determine direction
@@ -530,7 +539,7 @@ export default function JournalScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     togglePrayerAnswered(entryId, prayerId);
-  }, [togglePrayerAnswered, ensureEntry, existingEntry]);
+  }, [togglePrayerAnswered, ensureEntry, existingEntry, gate]);
 
   // SOAP completion count
   const soapCompletedCount = useMemo(() => {
@@ -540,6 +549,7 @@ export default function JournalScreen() {
   // Save a question response to the store
   const handleQuestionResponseChange = useCallback(
     (index: number, question: string, response: string) => {
+      if (!gate()) return;
       setQuestionResponses((prev) => {
         const next = new Map(prev);
         next.set(index, response);
@@ -562,7 +572,7 @@ export default function JournalScreen() {
         updateQuestionResponse(savedEntryIdRef.current, question, response);
       }
     },
-    [content, devotionalId, dayNumber, addJournalEntry, getJournalEntry, saveEntry, updateQuestionResponse, activeMode]
+    [content, devotionalId, dayNumber, addJournalEntry, getJournalEntry, saveEntry, updateQuestionResponse, activeMode, gate]
   );
 
   const handleToggleQuestion = useCallback(
@@ -622,6 +632,7 @@ export default function JournalScreen() {
 
   const handleGoDeeper = async () => {
     if (loadingDeeper) return;
+    if (!gate()) return;
 
     if (!isPremium) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -1273,6 +1284,7 @@ Their journal entry:
               ) : (
                 <TouchableOpacity
                   onPress={() => {
+                    if (!gate()) return;
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowPrayerInput(true);
                   }}
@@ -1309,6 +1321,7 @@ Their journal entry:
         onClose={() => setShowPremiumSheet(false)}
         feature="journal"
       />
+      <ExclusiveOfferSheet visible={showExclusiveOffer} onDismiss={dismissOffer} context="churned" />
     </TouchableOpacity>
   );
 }
