@@ -13,7 +13,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled, hasActiveSubscription } from '@/lib/revenuecatClient';
+import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
@@ -218,10 +218,8 @@ export default function PaywallScreen() {
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
     onSuccess: async (result) => {
       if (result.ok) {
-        const subscriptionResult = await hasActiveSubscription();
-        if (subscriptionResult.ok) {
-          updateUser({ isPremium: subscriptionResult.data });
-        }
+        const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
+        updateUser({ isPremium: hasPremium });
 
         await syncTrialEndingNotification();
 
@@ -263,10 +261,8 @@ export default function PaywallScreen() {
     mutationFn: restorePurchases,
     onSuccess: async (result) => {
       if (result.ok) {
-        const subscriptionResult = await hasActiveSubscription();
-        if (subscriptionResult.ok) {
-          updateUser({ isPremium: subscriptionResult.data });
-        }
+        const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
+        updateUser({ isPremium: hasPremium });
 
         await syncTrialEndingNotification();
 
