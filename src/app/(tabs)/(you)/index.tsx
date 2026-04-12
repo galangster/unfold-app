@@ -50,6 +50,7 @@ import {
 } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { debugFireTrialEndingNotification } from '@/lib/trial-notification';
+import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUIState } from '@/lib/ui-state';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { useQuery } from '@tanstack/react-query';
@@ -2051,7 +2052,28 @@ export default function YouScreen() {
               }}
             >
               <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
-                {debugForceTrialExpired ? '✓ Trial Expired Overlay ON — tap to clear' : 'Simulate Trial Expired Overlay (Dev)'}
+                {debugForceTrialExpired ? '✓ Churned User ON — tap to clear' : 'Simulate Churned User (Dev)'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                mmkvStorage.removeItem('@unfold_exclusive_offer_seen');
+                mmkvStorage.removeItem('@unfold_onboarding_offer_seen');
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert('Reset', 'Both exclusive offers reset. Enable "Simulate Churned User" then tap any creation action to see the win-back offer, or cancel Apple Pay on the paywall for the onboarding offer.');
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Reset Exclusive Offers (Dev)
               </Text>
             </TouchableOpacity>
 
