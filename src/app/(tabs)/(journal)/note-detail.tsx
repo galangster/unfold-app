@@ -54,6 +54,8 @@ import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { isHtmlContent } from '@/components/notebook/NoteEditor';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
+import { useCreationGate } from '@/hooks/useCreationGate';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -205,6 +207,8 @@ export default function NoteDetailScreen() {
   }>();
 
   const { colors, isDark } = useTheme();
+
+  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
   // Store selectors
   const notes = useUnfoldStore((s) => s.notes);
@@ -457,6 +461,7 @@ export default function NoteDetailScreen() {
   /* ───── Debounced auto-save ───── */
 
   const scheduleAutoSave = useCallback(() => {
+    if (!gate()) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
 
@@ -501,7 +506,7 @@ export default function NoteDetailScreen() {
         savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
       }, 150);
     }, 800);
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote]);
+  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, gate]);
 
   const handleTitleChange = useCallback(
     (text: string) => {
@@ -1301,6 +1306,12 @@ export default function NoteDetailScreen() {
         currentFolderId={liveNote?.folderId ?? existingNote?.folderId}
         onSelect={handleMoveFolderSelect}
         onCreateFolder={handleCreateFolderFromSheet}
+      />
+
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={dismissOffer}
+        context="churned"
       />
     </View>
   );

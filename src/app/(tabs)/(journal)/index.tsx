@@ -53,6 +53,8 @@ import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
 import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
 import { alpha } from '@/components/ui';
+import { useCreationGate } from '@/hooks/useCreationGate';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 type Segment = 'reflections' | 'notebook';
 
@@ -470,6 +472,8 @@ export default function JournalHubScreen() {
   const notes = useUnfoldStore((s) => s.notes);
   const deleteNote = useUnfoldStore((s) => s.deleteNote);
 
+  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+
   const folders = useUnfoldStore((s) => s.folders);
   const addFolder = useUnfoldStore((s) => s.addFolder);
   const updateFolder = useUnfoldStore((s) => s.updateFolder);
@@ -821,10 +825,11 @@ export default function JournalHubScreen() {
 
   const handleCreateFolderSubmit = useCallback(
     (name: string, color?: string, parentId?: string) => {
+      if (!gate()) return;
       addFolder(name, color, parentId);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [addFolder],
+    [addFolder, gate],
   );
 
   // Track which parent folder we're creating a subfolder inside
@@ -836,6 +841,7 @@ export default function JournalHubScreen() {
         {
           text: 'Rename',
           onPress: () => {
+            if (!gate()) return;
             Alert.prompt(
               'Rename Folder',
               undefined,
@@ -853,6 +859,7 @@ export default function JournalHubScreen() {
         {
           text: 'Add Subfolder',
           onPress: () => {
+            if (!gate()) return;
             setCreateFolderParent({ id: folder.id, name: folder.name });
             setShowCreateFolderSheet(true);
           },
@@ -897,7 +904,7 @@ export default function JournalHubScreen() {
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [updateFolder, storeDeleteFolder, activeFolderId, notes],
+    [updateFolder, storeDeleteFolder, activeFolderId, notes, gate],
   );
 
   const handleNoteDelete = useCallback(
@@ -1578,6 +1585,12 @@ export default function JournalHubScreen() {
               setUndoAction(null);
             }, 4000);
           }}
+        />
+
+        <ExclusiveOfferSheet
+          visible={showExclusiveOffer}
+          onDismiss={dismissOffer}
+          context="churned"
         />
 
       </SafeAreaView>
