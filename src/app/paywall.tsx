@@ -175,39 +175,28 @@ export default function PaywallScreen() {
     enabled: isRevenueCatEnabled() && !!(monthlyPackage || yearlyPackage),
   });
 
-  // Determine trial eligibility
+  // Determine trial eligibility — default false until RevenueCat confirms.
+  // Never fall back to SKU config (packageHasFreeTrial) because that doesn't
+  // know whether THIS user already used their trial (churned users, etc.).
   const isTrialEligible = useMemo(() => {
     const selectedPkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
-    if (!selectedPkg) return false;
+    if (!selectedPkg || !trialEligibility) return false;
 
-    if (trialEligibility) {
-      const eligibility = trialEligibility[selectedPkg.product.identifier];
-      if (eligibility) {
-        if (eligibility.status === 2) return true;
-        if (eligibility.status === 1) return false;
-      }
-    }
-
-    return packageHasFreeTrial(selectedPkg);
+    const eligibility = trialEligibility[selectedPkg.product.identifier];
+    return eligibility?.status === 2;
   }, [selectedPlan, yearlyPackage, monthlyPackage, trialEligibility]);
 
   // Check if either plan has a trial (for badge on plan cards)
   const yearlyHasTrial = useMemo(() => {
-    if (trialEligibility && yearlyPackage) {
-      const e = trialEligibility[yearlyPackage.product.identifier];
-      if (e && e.status === 1) return false;
-      if (e && e.status === 2) return true;
-    }
-    return packageHasFreeTrial(yearlyPackage);
+    if (!trialEligibility || !yearlyPackage) return false;
+    const e = trialEligibility[yearlyPackage.product.identifier];
+    return e?.status === 2;
   }, [yearlyPackage, trialEligibility]);
 
   const monthlyHasTrial = useMemo(() => {
-    if (trialEligibility && monthlyPackage) {
-      const e = trialEligibility[monthlyPackage.product.identifier];
-      if (e && e.status === 1) return false;
-      if (e && e.status === 2) return true;
-    }
-    return packageHasFreeTrial(monthlyPackage);
+    if (!trialEligibility || !monthlyPackage) return false;
+    const e = trialEligibility[monthlyPackage.product.identifier];
+    return e?.status === 2;
   }, [monthlyPackage, trialEligibility]);
 
   // Trial duration strings
@@ -248,6 +237,7 @@ export default function PaywallScreen() {
       } else {
         // Actual SDK error
         logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
+        setSubscribeError('Something went wrong. Please try again.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     },
@@ -530,10 +520,10 @@ export default function PaywallScreen() {
             <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
               <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
               </Text>
-              <Text style={{ width: 70, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center', letterSpacing: 0.5 }}>
+              <Text style={{ width: 60, fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, textAlign: 'center', letterSpacing: 0.5 }}>
                 FREE
               </Text>
-              <Text style={{ width: 80, fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.accent, textAlign: 'center', letterSpacing: 0.5 }}>
+              <Text style={{ width: 100, fontFamily: FontFamily.uiSemiBold, fontSize: 11, color: colors.accent, textAlign: 'center', letterSpacing: 0.5 }}>
                 PREMIUM
               </Text>
             </View>
@@ -555,22 +545,22 @@ export default function PaywallScreen() {
                 <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: 13, color: colors.text }}>
                   {row.label}
                 </Text>
-                <View style={{ width: 70, alignItems: 'center' }}>
+                <View style={{ width: 60, alignItems: 'center' }}>
                   {typeof row.free === 'boolean' ? (
                     row.free
                       ? <CheckIcon size={15} color={colors.textMuted} weight="bold" />
                       : <XCircleIcon size={15} color={colors.textSubtle} weight="light" />
                   ) : (
-                    <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
+                    <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted, textAlign: 'center' }}>
                       {row.free}
                     </Text>
                   )}
                 </View>
-                <View style={{ width: 80, alignItems: 'center' }}>
+                <View style={{ width: 100, alignItems: 'center' }}>
                   {typeof row.premium === 'boolean' ? (
                     <CheckIcon size={15} color={colors.accent} weight="bold" />
                   ) : (
-                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent }}>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent, textAlign: 'center' }}>
                       {row.premium}
                     </Text>
                   )}

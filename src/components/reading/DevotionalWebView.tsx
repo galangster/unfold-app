@@ -990,7 +990,7 @@ export function DevotionalWebView({
       padding: 24px 22px 20px;
       border-left: 2px solid ${accentColor};
       position: relative;
-      background: ${isDark ? `${accentColor}06` : `${accentColor}05`};
+      background: ${isDark ? `${accentColor}08` : `${accentColor}0F`};
       border-radius: 0 8px 8px 0;
     }
 
