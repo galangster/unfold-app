@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -180,14 +180,10 @@ function computeTabRects(screenW: number, screenH: number, bottomInset: number):
 }
 
 interface HomeOnboardingTooltipsProps {
-  /** Pre-measured layout rects from ref.measureInWindow */
   layoutRects?: OnboardingLayoutRects;
-  /** Refs to measure after delay — used instead of onLayout for Fabric compatibility */
-  readingRef?: React.RefObject<View | null>;
-  streakRef?: React.RefObject<View | null>;
 }
 
-export function HomeOnboardingTooltips({ layoutRects, readingRef, streakRef }: HomeOnboardingTooltipsProps) {
+export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsProps) {
   const { colors, isDark } = useTheme();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -196,44 +192,16 @@ export function HomeOnboardingTooltips({ layoutRects, readingRef, streakRef }: H
 
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
-  const [measuredRects, setMeasuredRects] = useState<Record<string, TargetRect>>({});
-  const hasMeasured = useRef(false);
 
-  // Measure targets after a delay so entering animations have settled
-  useEffect(() => {
-    if (hasSeenHomeTooltips || hasMeasured.current) return;
-
-    const timer = setTimeout(() => {
-      const rects: Record<string, TargetRect> = {};
-
-      // Compute tab bar positions (fixed, no measurement needed)
-      const tabRects = computeTabRects(screenW, screenH, insets.bottom);
-      Object.assign(rects, tabRects);
-
-      // Measure scroll content elements via ref.measureInWindow
-      const measureRef = (ref: React.RefObject<View | null> | undefined, key: string) => {
-        if (ref?.current) {
-          (ref.current as any).measureInWindow((x: number, y: number, w: number, h: number) => {
-            if (w > 0 && h > 0) {
-              setMeasuredRects((prev) => ({ ...prev, [key]: { x, y, width: w, height: h } }));
-            }
-          });
-        }
-      };
-
-      measureRef(readingRef, 'reading');
-      measureRef(streakRef, 'streak');
-
-      // Also accept pre-computed layout rects as fallback
-      if (layoutRects?.reading) rects.reading = layoutRects.reading;
-      if (layoutRects?.streak) rects.streak = layoutRects.streak;
-
-      setMeasuredRects((prev) => ({ ...prev, ...rects }));
-      hasMeasured.current = true;
-    }, 800); // Wait for entering animations to complete
-
-    return () => clearTimeout(timer);
-  }, [hasSeenHomeTooltips, readingRef, streakRef, layoutRects, screenW, screenH, insets.bottom]);
+  const measuredRects = useMemo<Record<string, TargetRect>>(() => {
+    if (hasSeenHomeTooltips) return {};
+    const rects: Record<string, TargetRect> = {};
+    const tabRects = computeTabRects(screenW, screenH, insets.bottom);
+    Object.assign(rects, tabRects);
+    if (layoutRects?.reading) rects.reading = layoutRects.reading;
+    if (layoutRects?.streak) rects.streak = layoutRects.streak;
+    return rects;
+  }, [hasSeenHomeTooltips, layoutRects, screenW, screenH, insets.bottom]);
 
   const step = TOOLTIP_STEPS[currentStep];
 
@@ -261,7 +229,7 @@ export function HomeOnboardingTooltips({ layoutRects, readingRef, streakRef }: H
 
   // Don't render until we have the current step's target measured
   const targetRect = measuredRects[step.targetKey] ?? null;
-  if (!targetRect) return null; // No dim-only fallback — wait for measurement
+  if (!targetRect) return null;
 
   const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
   const tooltipBg = isDark ? colors.inputBackground : colors.background;

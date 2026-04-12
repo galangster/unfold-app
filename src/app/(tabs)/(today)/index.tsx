@@ -119,10 +119,30 @@ export default function HomeScreen() {
   // Safe area insets for tooltip y-offset calculation
   const insets = useSafeAreaInsets();
 
-  // Tooltip target refs — measured via measureInWindow after a delay
-  // so entering animations have settled (onLayout fires too early on Fabric).
-  const readingRef = useRef<View>(null);
-  const streakRef = useRef<View>(null);
+  const [tooltipLayoutRects, setTooltipLayoutRects] = useState<{
+    reading: { x: number; y: number; width: number; height: number } | null;
+    streak: { x: number; y: number; width: number; height: number } | null;
+  }>({ reading: null, streak: null });
+
+  const handleReadingLayout = useCallback((event: any) => {
+    const { x, y, width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setTooltipLayoutRects((prev) => ({
+        ...prev,
+        reading: { x, y: y + insets.top, width, height },
+      }));
+    }
+  }, [insets.top]);
+
+  const handleStreakLayout = useCallback((event: any) => {
+    const { x, y, width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setTooltipLayoutRects((prev) => ({
+        ...prev,
+        streak: { x, y: y + insets.top, width, height },
+      }));
+    }
+  }, [insets.top]);
 
   // Scroll tracking for AmbientArtCanvas fade
   const scrollY = useSharedValue(0);
@@ -717,7 +737,7 @@ export default function HomeScreen() {
           <RememberThisCard />
 
           {/* Zone 3: Hero Devotional — single card */}
-          <View ref={readingRef} collapsable={false}>
+          <View collapsable={false} onLayout={handleReadingLayout}>
             <Animated.View entering={entering(FadeIn.duration(280).delay(160))}>
               <DevotionalCard
                 state={devotionalState}
@@ -792,7 +812,7 @@ export default function HomeScreen() {
           )}
 
           {/* Zone 6: Streak */}
-          <View ref={streakRef} collapsable={false}>
+          <View collapsable={false} onLayout={handleStreakLayout}>
             <Animated.View
               entering={entering(FadeIn.delay(200).duration(400))}
               style={styles.streakWrapper}
@@ -897,8 +917,7 @@ export default function HomeScreen() {
           and clean re-measurement of the target rects. */}
       <HomeOnboardingTooltips
         key={String(hasSeenHomeTooltips)}
-        readingRef={readingRef}
-        streakRef={streakRef}
+        layoutRects={tooltipLayoutRects}
       />
     </View>
   );
