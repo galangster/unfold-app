@@ -25,6 +25,8 @@ import { AmbientArtCanvas } from '@/components/home/AmbientArtCanvas';
 import { syncWidgets } from '@/lib/widget-bridge';
 import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { useCreationGate } from '@/hooks/useCreationGate';
+import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
@@ -133,6 +135,7 @@ export default function HomeScreen() {
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
   // Update time of day every minute
   useEffect(() => {
@@ -441,10 +444,7 @@ export default function HomeScreen() {
 
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!isPremium && devotionals.length >= 1) {
-      setShowPremiumSheet(true);
-      return;
-    }
+    if (!gate()) return;
     if (currentDevotionalId) {
       Alert.alert(
         'Start a new series?',
@@ -466,6 +466,7 @@ export default function HomeScreen() {
   };
 
   const handleCheckIn = () => {
+    if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowCheckInSheet(true);
   };
@@ -873,6 +874,12 @@ export default function HomeScreen() {
         visible={showPremiumSheet}
         onClose={() => setShowPremiumSheet(false)}
         feature="series"
+      />
+
+      <ExclusiveOfferSheet
+        visible={showExclusiveOffer}
+        onDismiss={dismissOffer}
+        context="churned"
       />
 
       {/* Streak celebration — fires once when today's reading is completed */}
