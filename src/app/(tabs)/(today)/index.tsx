@@ -493,6 +493,7 @@ export default function HomeScreen() {
   };
 
   const handleEveningWindDown = () => {
+    if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/(today)/evening-wind-down');
   };

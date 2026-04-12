@@ -413,7 +413,7 @@ function ReflectionQuestionCard({
               multiline
               textAlignVertical="top"
               accessibilityLabel={`Your response to: ${question}`}
-              accessibilityHint="Write your reflection. Auto-saved."
+              accessibilityHint={editable ? 'Write your reflection. Auto-saved.' : 'Subscribe to write reflections.'}
               style={{
                 minHeight: 80,
                 fontFamily: FontFamily.body,
@@ -425,18 +425,20 @@ function ReflectionQuestionCard({
             />
           </View>
 
-          {/* Auto-save hint */}
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: 11,
-              color: colors.textHint,
-              marginTop: Spacing['2'],
-              textAlign: 'right',
-            }}
-          >
-            Auto-saved
-          </Text>
+          {/* Auto-save hint — only show for premium users */}
+          {editable && (
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: 11,
+                color: colors.textHint,
+                marginTop: Spacing['2'],
+                textAlign: 'right',
+              }}
+            >
+              Auto-saved
+            </Text>
+          )}
         </Animated.View>
       )}
 

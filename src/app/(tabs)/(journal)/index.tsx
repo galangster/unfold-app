@@ -773,6 +773,7 @@ export default function JournalHubScreen() {
   );
 
   const handleCreateNote = useCallback(() => {
+    if (!gate()) return;
     router.push({
       pathname: '/(tabs)/(journal)/note-detail',
       params: {
@@ -780,7 +781,7 @@ export default function JournalHubScreen() {
         ...(activeFolderId ? { folderId: activeFolderId } : {}),
       },
     });
-  }, [router, activeFolderId]);
+  }, [router, activeFolderId, gate]);
 
   const handleNotePress = useCallback(
     (note: Note) => {

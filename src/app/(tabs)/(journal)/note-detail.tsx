@@ -208,7 +208,7 @@ export default function NoteDetailScreen() {
 
   const { colors, isDark } = useTheme();
 
-  const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
+  const { isPremium, gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
   // Store selectors
   const notes = useUnfoldStore((s) => s.notes);
@@ -243,8 +243,9 @@ export default function NoteDetailScreen() {
   );
 
   // Editing state — new notes start in edit mode, existing in read mode
+  // Non-premium users cannot create or edit notes (defense-in-depth behind navigation gate)
   const isNewNote = !params.noteId;
-  const shouldStartEditing = isNewNote || params.startEditing === 'true';
+  const shouldStartEditing = isPremium && (isNewNote || params.startEditing === 'true');
   const [isEditing, setIsEditing] = useState(shouldStartEditing);
 
   // Title state
@@ -521,15 +522,15 @@ export default function NoteDetailScreen() {
   /* ───── Mode switching ───── */
 
   const handleEdit = useCallback(() => {
+    if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsEditing(true);
     editor.setEditable(true);
-    // Re-inject CSS for editing mode (e.g., cursor pointer on checkboxes)
     editor.injectCSS(buildEditorCSS(colors, true));
     setTimeout(() => {
       editor.focus('end');
     }, 100);
-  }, [editor, colors]);
+  }, [editor, colors, gate]);
 
 
   const handleDone = useCallback(async () => {
@@ -703,6 +704,7 @@ export default function NoteDetailScreen() {
   );
 
   const handleCreateFolderFromSheet = useCallback(() => {
+    if (!gate()) return;
     Alert.prompt(
       'New Folder',
       'Enter a name for the new folder.',
@@ -714,7 +716,6 @@ export default function NoteDetailScreen() {
             const trimmed = name?.trim();
             if (!trimmed) return;
             const folderId = addFolder(trimmed);
-            // Move the note into the newly created folder
             const id = await ensureNoteSaved();
             moveNoteToFolder(id, folderId);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -725,7 +726,7 @@ export default function NoteDetailScreen() {
       '',
       'default',
     );
-  }, [addFolder, ensureNoteSaved, moveNoteToFolder]);
+  }, [addFolder, ensureNoteSaved, moveNoteToFolder, gate]);
 
 
   /* ───── Scripture actions ───── */

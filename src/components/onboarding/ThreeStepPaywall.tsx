@@ -994,7 +994,6 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       if (result.reason === 'user_cancelled') {
         const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
         if (!hasSeenOnboardingOffer) {
-          mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
           setShowExclusiveOffer(true);
         }
       } else {
@@ -1118,7 +1117,10 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       </View>
       <ExclusiveOfferSheet
         visible={showExclusiveOffer}
-        onDismiss={() => setShowExclusiveOffer(false)}
+        onDismiss={() => {
+          mmkvStorage.setItem('@unfold_onboarding_offer_seen', 'true');
+          setShowExclusiveOffer(false);
+        }}
         context="onboarding"
       />
     </View>

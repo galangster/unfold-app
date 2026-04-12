@@ -13,6 +13,7 @@ import { View, Text, StyleSheet, ActivityIndicator, Modal, Linking } from 'react
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import {
@@ -20,7 +21,6 @@ import {
   purchasePackage,
   restorePurchases,
   isRevenueCatEnabled,
-  hasActiveSubscription,
 } from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
@@ -49,6 +49,7 @@ interface ExclusiveOfferSheetProps {
 export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOfferSheetProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
@@ -79,15 +80,16 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
     ? `${targetPackage.product.priceString}/year`
     : null;
 
+  // Detect offering failure — loaded but target package missing
+  const offeringFailed = !isLoadingOfferings && offeringsResult && !targetPackage;
+
   // Purchase mutation
   const purchaseMutation = useMutation({
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
     onSuccess: async (result) => {
       if (result.ok) {
-        const subscriptionResult = await hasActiveSubscription();
-        if (subscriptionResult.ok) {
-          updateUser({ isPremium: subscriptionResult.data });
-        }
+        const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
+        updateUser({ isPremium: hasPremium });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
         setErrorMessage(null);
@@ -112,14 +114,17 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
     mutationFn: restorePurchases,
     onSuccess: async (result) => {
       if (result.ok) {
-        const subscriptionResult = await hasActiveSubscription();
-        if (subscriptionResult.ok) {
-          updateUser({ isPremium: subscriptionResult.data });
+        const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
+        if (hasPremium) {
+          updateUser({ isPremium: true });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
+          setErrorMessage(null);
+          onDismiss();
+        } else {
+          setErrorMessage('No active subscription found.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         }
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        setErrorMessage(null);
-        onDismiss();
       } else {
         setErrorMessage('No active subscription found.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -139,6 +144,11 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
     setErrorMessage(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     purchaseMutation.mutate(targetPackage);
+  };
+
+  const handleFallbackPaywall = () => {
+    onDismiss();
+    router.push('/paywall');
   };
 
   const handleRestore = () => {
@@ -190,41 +200,52 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
             You will not see this offer again.
           </Text>
 
-          {/* Plan pill */}
-          <View
-            style={[
-              styles.planPill,
-              {
-                borderColor: colors.accent,
-                backgroundColor: colors.accent + '08',
-              },
-            ]}
-          >
-            {/* Discount badge */}
-            <View style={[styles.discountBadge, { backgroundColor: colors.accent }]}>
-              <Text style={[styles.discountBadgeText, { color: isDark ? '#0A0A0A' : '#FFFFFF' }]}>
-                {discountLabel}
-              </Text>
-            </View>
-
-            <View style={styles.planPillContent}>
-              <Text style={[styles.planLabel, { color: colors.text }]}>Yearly</Text>
-              {priceString ? (
-                <Text style={[styles.planPrice, { color: colors.text }]}>
-                  {priceString}
+          {/* Plan pill — hidden when offering failed */}
+          {!offeringFailed && (
+            <View
+              style={[
+                styles.planPill,
+                {
+                  borderColor: colors.accent,
+                  backgroundColor: colors.accent + '08',
+                },
+              ]}
+            >
+              {/* Discount badge */}
+              <View style={[styles.discountBadge, { backgroundColor: colors.accent }]}>
+                <Text style={[styles.discountBadgeText, { color: isDark ? '#0A0A0A' : '#FFFFFF' }]}>
+                  {discountLabel}
                 </Text>
-              ) : (
-                <ActivityIndicator size="small" color={colors.textSubtle} />
-              )}
+              </View>
+
+              <View style={styles.planPillContent}>
+                <Text style={[styles.planLabel, { color: colors.text }]}>Yearly</Text>
+                {priceString ? (
+                  <Text style={[styles.planPrice, { color: colors.text }]}>
+                    {priceString}
+                  </Text>
+                ) : (
+                  <ActivityIndicator size="small" color={colors.textSubtle} />
+                )}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Cancel anytime reassurance */}
-          <View style={styles.reassuranceRow}>
-            <Text style={[styles.reassuranceText, { color: colors.textMuted }]}>
-              {'\u2713'} Cancel anytime
+          {!offeringFailed && (
+            <View style={styles.reassuranceRow}>
+              <Text style={[styles.reassuranceText, { color: colors.textMuted }]}>
+                {'\u2713'} Cancel anytime
+              </Text>
+            </View>
+          )}
+
+          {/* Offering failed fallback */}
+          {offeringFailed && (
+            <Text style={[styles.body, { color: colors.textMuted, marginTop: Spacing['4'] }]}>
+              This offer isn't available right now. You can still view our plans.
             </Text>
-          </View>
+          )}
 
           {/* Error message */}
           {errorMessage && (
@@ -236,13 +257,13 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
 
         {/* Bottom CTA area — pinned to bottom */}
         <View style={[styles.bottomArea, { paddingBottom: insets.bottom + Spacing['4'] }]}>
-          {/* Accept Offer button */}
+          {/* Accept Offer / Fallback CTA */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={handleAcceptOffer}
-            disabled={isPurchasing || isLoadingOfferings || !targetPackage}
+            onPress={offeringFailed ? handleFallbackPaywall : handleAcceptOffer}
+            disabled={!offeringFailed && (isPurchasing || isLoadingOfferings || !targetPackage)}
             accessibilityRole="button"
-            accessibilityLabel="Accept Offer"
+            accessibilityLabel={offeringFailed ? 'View Plans' : 'Accept Offer'}
             style={[
               styles.acceptButton,
               { backgroundColor: colors.accent },
@@ -253,7 +274,7 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
               <ActivityIndicator color={isDark ? '#0A0A0A' : '#FFFFFF'} size="small" />
             ) : (
               <Text style={[styles.acceptButtonText, { color: isDark ? '#0A0A0A' : '#FFFFFF' }]}>
-                {isLoadingOfferings ? 'Loading...' : 'Accept Offer'}
+                {offeringFailed ? 'View Plans' : isLoadingOfferings ? 'Loading...' : 'Accept Offer'}
               </Text>
             )}
           </TouchableOpacity>
