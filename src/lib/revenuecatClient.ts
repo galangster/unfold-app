@@ -328,3 +328,31 @@ export const getPackage = async (
 
   return { ok: true, data: pkg };
 };
+
+/**
+ * Check whether this user is eligible for the intro/trial offer on a given
+ * product. Returns `true` ONLY when RevenueCat definitively says the user is
+ * eligible. Every other status — ineligible, unknown, no-offer-exists — returns
+ * `false`, which is the safe default per RevenueCat's own guidance: when in
+ * doubt, show non-trial pricing so we never promise a trial the user won't
+ * actually get (Apple Guideline 3.1.2).
+ *
+ * iOS-only surface. Android always returns UNKNOWN per SDK, so this helper
+ * returns `false` on Android too.
+ */
+export const isTrialEligibleForProduct = async (
+  productIdentifier: string,
+): Promise<boolean> => {
+  if (!isEnabled || Platform.OS !== "ios") return false;
+  try {
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility([
+      productIdentifier,
+    ]);
+    const entry = result[productIdentifier];
+    // INTRO_ELIGIBILITY_STATUS_ELIGIBLE = 2 (see @revenuecat/purchases-typescript-internal/offerings.d.ts)
+    return entry?.status === 2;
+  } catch (error) {
+    logger.warn(`${LOG_PREFIX} trial eligibility check failed`, error);
+    return false;
+  }
+};

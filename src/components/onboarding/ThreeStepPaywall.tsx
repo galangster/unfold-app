@@ -52,6 +52,10 @@ interface ThreeStepPaywallProps {
   monthlyRaw: number;
   trialDuration: string;
   trialDays: number;
+  // When false, the yearly package has no intro/free-trial offer configured in
+  // App Store Connect. We must not promise a trial anywhere in the UI — skip
+  // the trial-reminder screen and drop trial copy from CTAs + disclosures.
+  hasFreeTrial: boolean;
   onPurchaseSuccess: () => void;
   onSkip: () => void;
 }
@@ -61,7 +65,8 @@ interface ThreeStepPaywallProps {
 // ---------------------------------------------------------------------------
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TOTAL_PAGES = 3;
+const TOTAL_PAGES_WITH_TRIAL = 3;
+const TOTAL_PAGES_NO_TRIAL = 2;
 
 const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.62;
 
@@ -99,8 +104,12 @@ const CARD_SPRING = { damping: 28, stiffness: 200, mass: 1 };
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** CTA label per screen index. */
-function ctaLabel(page: number): string {
+/** CTA label per screen index. Depends on whether a free trial is offered. */
+function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): string {
+  const isFinal = page === totalPages - 1;
+  if (!hasFreeTrial) {
+    return isFinal ? 'Subscribe' : 'Continue';
+  }
   if (page === 0) return 'Start Free Trial';
   if (page === 1) return 'Continue for FREE';
   return 'Try for $0.00';
@@ -282,7 +291,13 @@ function StackCard({
 // Screen 1: Product in Action
 // ---------------------------------------------------------------------------
 
-function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
+function ScreenProductInAction({
+  colors,
+  hasFreeTrial,
+}: {
+  colors: ColorTheme;
+  hasFreeTrial: boolean;
+}) {
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60; // 15% of ~400px content area
   const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
@@ -321,7 +336,9 @@ function ScreenProductInAction({ colors }: { colors: ColorTheme }) {
                   },
                 ]}
               >
-                We want you to try{'\n'}Unfold for free.
+                {hasFreeTrial
+                  ? `We want you to try\nUnfold for free.`
+                  : `Unlock everything\nUnfold can do.`}
               </Text>
             </View>
 
@@ -802,6 +819,8 @@ function GlowingCTA({
 function BottomCTA({
   colors,
   currentPage,
+  totalPages,
+  hasFreeTrial,
   trialDays,
   yearlyRaw,
   monthlyRaw,
@@ -812,6 +831,8 @@ function BottomCTA({
 }: {
   colors: ColorTheme;
   currentPage: number;
+  totalPages: number;
+  hasFreeTrial: boolean;
   trialDays: number;
   yearlyRaw: number;
   monthlyRaw: number;
@@ -820,10 +841,19 @@ function BottomCTA({
   purchaseError: string | null;
   onPress: () => void;
 }) {
+  // `hasFreeTrial` reflects yearly-plan eligibility only. Monthly has its own
+  // cadence and its own (unverified) intro-offer state, so the moment the user
+  // selects monthly on the pricing screen we must stop promising a trial —
+  // CTA copy, reassurance row, and disclosure all need to reflect that.
+  // Guideline 3.1.2 misrepresentation risk otherwise.
+  const effectiveHasTrial = hasFreeTrial && selectedPlan === 'yearly';
+
   const disclosureText =
     selectedPlan === 'yearly'
-      ? `${trialDays} days free, then $${yearlyRaw.toFixed(2)}/yr. Cancel anytime.`
-      : `${trialDays} days free, then $${(monthlyRaw * 12).toFixed(2)}/yr. Cancel anytime.`;
+      ? effectiveHasTrial
+        ? `${trialDays} days free, then $${yearlyRaw.toFixed(2)}/yr. Cancel anytime.`
+        : `$${yearlyRaw.toFixed(2)}/yr. Cancel anytime.`
+      : `$${monthlyRaw.toFixed(2)}/mo. Cancel anytime.`;
 
   return (
     <View style={styles.ctaContainer}>
@@ -842,25 +872,29 @@ function BottomCTA({
         </Text>
       )}
 
-      {/* No payment due now -- reassurance line */}
-      <View style={styles.noPaymentRow}>
-        <CheckIcon size={14} color={colors.accent} weight="bold" />
-        <Text
-          style={{
-            fontFamily: FontFamily.uiMedium,
-            fontSize: FontSize.sm,
-            color: colors.textMuted,
-            marginLeft: Spacing['1.5'],
-          }}
-        >
-          No Payment Due Now
-        </Text>
-      </View>
+      {/* No payment due now — reassurance only valid when there IS a trial.
+          If there's no trial, the user IS paying now, so hiding this row
+          (and dropping "free" from the CTA/disclosure) keeps us honest. */}
+      {effectiveHasTrial && (
+        <View style={styles.noPaymentRow}>
+          <CheckIcon size={14} color={colors.accent} weight="bold" />
+          <Text
+            style={{
+              fontFamily: FontFamily.uiMedium,
+              fontSize: FontSize.sm,
+              color: colors.textMuted,
+              marginLeft: Spacing['1.5'],
+            }}
+          >
+            No Payment Due Now
+          </Text>
+        </View>
+      )}
 
       {/* Gold CTA button — pulsing glow + bright accent fill, mirrors the
           gold button treatment on the home devotional card. */}
       <GlowingCTA
-        label={ctaLabel(currentPage)}
+        label={ctaLabel(currentPage, totalPages, effectiveHasTrial)}
         colors={colors}
         onPress={onPress}
         isLoading={isLoading}
@@ -898,6 +932,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   monthlyRaw,
   trialDuration,
   trialDays,
+  hasFreeTrial,
   onPurchaseSuccess,
   onSkip,
 }: ThreeStepPaywallProps) {
@@ -909,14 +944,33 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     'yearly',
   );
 
+  // Latch the initial hasFreeTrial value for the component's lifetime.
+  // Offerings + trial eligibility resolve async, so the prop can flip from
+  // false -> true after mount. Without latching, totalPages would jump
+  // 2 -> 3 while the user is mid-flow, remapping pages and rewriting CTA
+  // copy in place. Snapshot once on mount; honor any later updates only if
+  // the user is still on the first screen (safe to extend the flow).
+  const [stableHasFreeTrial, setStableHasFreeTrial] = useState<boolean>(
+    () => hasFreeTrial,
+  );
+  useEffect(() => {
+    if (hasFreeTrial !== stableHasFreeTrial && currentPage === 0) {
+      setStableHasFreeTrial(hasFreeTrial);
+    }
+  }, [hasFreeTrial, stableHasFreeTrial, currentPage]);
+
+  const totalPages = stableHasFreeTrial
+    ? TOTAL_PAGES_WITH_TRIAL
+    : TOTAL_PAGES_NO_TRIAL;
+
   // -----------------------------------------------------------------------
   // Navigation — CTA buttons only, no swipe
   // -----------------------------------------------------------------------
 
   const nextPage = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentPage((p) => Math.min(p + 1, TOTAL_PAGES - 1));
-  }, []);
+    setCurrentPage((p) => Math.min(p + 1, totalPages - 1));
+  }, [totalPages]);
 
   // -----------------------------------------------------------------------
   // Purchase / Restore
@@ -967,12 +1021,12 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // -----------------------------------------------------------------------
 
   const handleCTAPress = useCallback(() => {
-    if (currentPage < TOTAL_PAGES - 1) {
+    if (currentPage < totalPages - 1) {
       nextPage();
     } else {
       handlePurchase();
     }
-  }, [currentPage, nextPage, handlePurchase]);
+  }, [currentPage, totalPages, nextPage, handlePurchase]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -993,12 +1047,15 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           style={styles.flex1}
         >
           {currentPage === 0 && (
-            <ScreenProductInAction colors={colors} />
+            <ScreenProductInAction
+              colors={colors}
+              hasFreeTrial={stableHasFreeTrial}
+            />
           )}
-          {currentPage === 1 && (
+          {stableHasFreeTrial && currentPage === 1 && (
             <ScreenTrialReminder colors={colors} trialDays={trialDays} />
           )}
-          {currentPage === 2 && (
+          {currentPage === totalPages - 1 && (
             <ScreenPricing
               colors={colors}
               yearlyPrice={yearlyPrice}
@@ -1022,6 +1079,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         <BottomCTA
           colors={colors}
           currentPage={currentPage}
+          totalPages={totalPages}
+          hasFreeTrial={stableHasFreeTrial}
           trialDays={trialDays}
           yearlyRaw={yearlyRaw}
           monthlyRaw={monthlyRaw}

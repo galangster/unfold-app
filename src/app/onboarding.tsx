@@ -52,7 +52,12 @@ import {
   getRandomDurationSubtext,
   getRandomReadingSubtext,
 } from '@/constants/onboarding-questions';
-import { getOfferings, purchasePackage, isRevenueCatEnabled } from '@/lib/revenuecatClient';
+import {
+  getOfferings,
+  purchasePackage,
+  isRevenueCatEnabled,
+  isTrialEligibleForProduct,
+} from '@/lib/revenuecatClient';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
@@ -504,6 +509,26 @@ export default function OnboardingScreen() {
     (pkg) => pkg.identifier === '$rc_annual'
   );
   const yearlyPrice = yearlyPackage?.product.priceString ?? '$59.99';
+  // Honest source of truth: only true when (a) App Store Connect advertises
+  // a zero-price intro offer on the yearly SKU AND (b) RevenueCat confirms
+  // *this user* is eligible to receive it. Everywhere in the paywall UI reads
+  // from this flag so we never promise a trial the user won't actually get
+  // (Apple Guideline 3.1.2). Defaults to `false` while either query resolves
+  // or on any error — showing non-trial pricing to a trial-eligible user is
+  // merely a missed upsell; showing trial copy to an ineligible user is a lie.
+  const yearlyProductId = yearlyPackage?.product.identifier;
+  const { data: yearlyEligible } = useQuery({
+    queryKey: ['revenuecat', 'trial-eligibility', yearlyProductId],
+    queryFn: () =>
+      yearlyProductId ? isTrialEligibleForProduct(yearlyProductId) : false,
+    enabled: isRevenueCatEnabled() && !!yearlyProductId,
+    staleTime: Infinity,
+  });
+  const yearlyHasZeroIntro = (() => {
+    const intro = yearlyPackage?.product.introPrice;
+    return !!intro && intro.price === 0;
+  })();
+  const yearlyHasFreeTrial = yearlyHasZeroIntro && yearlyEligible === true;
   const yearlyTrialDuration = (() => {
     const intro = yearlyPackage?.product.introPrice;
     if (!intro || intro.price !== 0) return '7-day';
@@ -2879,6 +2904,7 @@ export default function OnboardingScreen() {
           monthlyRaw={mRaw}
           trialDuration={yearlyTrialDuration}
           trialDays={tDays}
+          hasFreeTrial={yearlyHasFreeTrial}
           onPurchaseSuccess={() => {
             setPurchasedDuringOnboarding(true);
             updateUser({ isPremium: true });
