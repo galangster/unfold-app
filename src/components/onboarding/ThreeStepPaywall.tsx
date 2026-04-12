@@ -27,7 +27,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
-import { CheckIcon, StarIcon, PlayCircleIcon } from 'phosphor-react-native';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { CheckIcon, StarIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -301,6 +302,18 @@ function ScreenProductInAction({
   colors: ColorTheme;
   hasFreeTrial: boolean;
 }) {
+  // Walkthrough video bundled at 1206x2622 (matches the 9:19.5 device bezel
+  // aspect ratio exactly — no letterbox, no crop). Hook is scoped to this
+  // component so the player tears down when the user advances to Screen 2.
+  const player = useVideoPlayer(
+    require('../../../assets/video/paywall-walkthrough.mp4'),
+    (p) => {
+      p.loop = true;
+      p.muted = true;
+      p.play();
+    },
+  );
+
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60; // 15% of ~400px content area
   const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
@@ -357,33 +370,16 @@ function ScreenProductInAction({
                 ]}
               >
                 <View style={styles.deviceInner}>
-                  {/* Play icon + subtle label — premium placeholder */}
-                  <View style={styles.previewPlaceholder}>
-                    <View
-                      style={[
-                        styles.playIconRing,
-                        { borderColor: 'rgba(200,165,92,0.3)' },
-                      ]}
-                    >
-                      <PlayCircleIcon
-                        size={40}
-                        color={colors.accent}
-                        weight="thin"
-                      />
-                    </View>
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.ui,
-                        fontSize: FontSize.xs,
-                        color: colors.textSubtle,
-                        marginTop: Spacing['3'],
-                        letterSpacing: 1.5,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      Preview Coming Soon
-                    </Text>
-                  </View>
+                  <VideoView
+                    player={player}
+                    style={styles.deviceVideo}
+                    contentFit="cover"
+                    nativeControls={false}
+                    // Content is a silent app walkthrough — no audio to route
+                    // and no PiP expected from a paywall background element.
+                    allowsPictureInPicture={false}
+                    fullscreenOptions={{ enable: false }}
+                  />
                 </View>
               </View>
             </View>
@@ -1208,20 +1204,14 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 9 / 19.5,
     backgroundColor: '#0F0F0F',
-    justifyContent: 'center',
-    alignItems: 'center',
+    // overflow:hidden on the parent deviceBezel already clips to the 36px
+    // radius, but Android can leak native video surfaces past rounded
+    // borders — give the inner its own matching clip as defense in depth.
+    overflow: 'hidden',
   },
-  previewPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playIconRing: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  deviceVideo: {
+    width: '100%',
+    height: '100%',
   },
 
   // ------- Bell (Screen 2) -------
