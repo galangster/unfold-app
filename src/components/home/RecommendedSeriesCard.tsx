@@ -17,6 +17,7 @@ import { AccentGlow } from '@/components/AccentGlow';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 
@@ -92,7 +93,7 @@ export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }
   // Loading state — subtle shimmer
   if (loading) {
     return (
-      <Animated.View entering={entering(FadeIn.duration(200))}>
+      <Animated.View entering={entering(FadeIn.duration(200).easing(Ease.out))}>
         <View style={[styles.card, {
           backgroundColor: Platform.OS === 'ios'
             ? alpha(colors.backgroundElevated, 0.6)
@@ -113,7 +114,7 @@ export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }
   }
 
   return (
-    <Animated.View entering={entering(FadeIn.duration(300))}>
+    <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
       <View style={[styles.card, {
         backgroundColor: Platform.OS === 'ios'
           ? alpha(colors.backgroundElevated, 0.6)

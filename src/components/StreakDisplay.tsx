@@ -11,10 +11,12 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
+import { Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { Radius } from '@/constants/radius';
 
@@ -29,6 +31,7 @@ interface StreakDisplayProps {
 export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hideDayLabel, onPress }: StreakDisplayProps) {
   const { colors, isDark } = useTheme();
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
 
@@ -71,7 +74,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
     return (
       <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
         <Animated.View
-          entering={FadeIn}
+          entering={reducedMotion ? undefined : FadeIn.easing(Ease.out)}
           style={{
             flexDirection: 'row',
             alignItems: 'center',
@@ -100,7 +103,7 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
   return (
     <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
       <Animated.View
-        entering={FadeInUp}
+        entering={reducedMotion ? undefined : FadeInUp.easing(Ease.out)}
         style={{
           flexDirection: 'row',
           alignItems: 'center',

@@ -10,12 +10,14 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 
 /** Returns motivational micro-copy based on streak length */
 function getStreakMotivation(streak: number): string {
@@ -72,6 +74,7 @@ function generateDaysData(streakCount: number): DayData[] {
 
 export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   // Breathing pulse for active flame
   const flamePulse = useSharedValue(1);
@@ -133,7 +136,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
   });
 
   return (
-    <Animated.View entering={FadeInDown.duration(600).delay(400)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(400).easing(Ease.out)}>
       <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
         <View
           style={[
@@ -188,7 +191,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
 
           {/* Motivational micro-copy */}
           <Animated.Text
-            entering={FadeIn.delay(600).duration(400)}
+            entering={reducedMotion ? undefined : FadeIn.delay(600).duration(Duration.normal).easing(Ease.out)}
             style={[styles.motivationText, { color: colors.textMuted }]}
           >
             {motivation}
@@ -197,7 +200,7 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
           {/* Freeze progress dots */}
           {streakCount > 0 && (
             <Animated.View
-              entering={FadeIn.delay(700).duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.delay(700).duration(Duration.normal).easing(Ease.out)}
               style={styles.freezeRow}
             >
               <SnowflakeIcon size={12} color={colors.textSubtle} weight="light" />

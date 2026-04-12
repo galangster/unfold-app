@@ -8,8 +8,8 @@
  */
 import { useMemo } from 'react';
 import { View, Text } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
@@ -47,7 +47,7 @@ interface Props {
  *         streaming cursor starts immediately if streaming
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeIn.duration(Duration.normal);
+const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
 
 /** Memoized streaming text that strips markdown on the fly */
 function StreamingText({ content, color }: { content: string; color: string }) {
@@ -68,6 +68,7 @@ function StreamingText({ content, color }: { content: string; color: string }) {
 
 export function CompanionMessageContent({ message, showIcon, isStreaming, isSearching, onVersePress }: Props) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   const isComplete = message.status === 'complete';
 
@@ -78,7 +79,7 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
   }, [message.deepLinks]);
 
   return (
-    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
+    <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: Spacing['4'] }}>
       {/* Icon column — 28px wide + 12px gap = 40px indent */}
       <View style={{ width: 28, marginRight: Spacing['3'] }}>
         {showIcon && (

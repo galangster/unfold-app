@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as StoreReview from 'expo-store-review';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import type { ColorTheme } from '@/constants/colors';
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 
 export function ReviewPromptStep({ colors, onContinue }: Props) {
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     async function requestReview() {
@@ -70,7 +72,7 @@ export function ReviewPromptStep({ colors, onContinue }: Props) {
 
       {/* Continue button — fades in after 2 seconds */}
       <Animated.View
-        entering={FadeIn.duration(400).delay(2000)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(2000).easing(Ease.out)}
         style={{ paddingTop: Spacing['6'], paddingBottom: Math.max(insets.bottom, Spacing['4']) }}
       >
         <TouchableOpacity

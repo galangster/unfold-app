@@ -1,13 +1,13 @@
 import { useState, useCallback, memo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, runOnJS } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import {
   FEATURE_PAGES,
@@ -53,6 +53,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   onComplete,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const [currentPage, setCurrentPage] = useState(0);
 
   const page = ALL_PAGES[currentPage];
@@ -95,8 +96,8 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
         <View style={{ flex: 1 }}>
           <Animated.View
             key={currentPage}
-            entering={FadeIn.duration(Duration.normal)}
-            exiting={FadeOut.duration(Duration.fast)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={StyleSheet.absoluteFill}
           >
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
@@ -125,7 +126,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                   {/* Companion name input — staggered entrance top to bottom */}
                   {isCompanionPage && (
                     <View style={{ marginTop: Spacing['4'] }}>
-                      <Animated.View entering={FadeIn.delay(600).duration(400)}>
+                      <Animated.View entering={reducedMotion ? undefined : FadeIn.delay(600).duration(Duration.slow).easing(Ease.out)}>
                         <Text style={{
                           fontFamily: FontFamily.uiMedium,
                           fontSize: FontSize.xs,
@@ -137,7 +138,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                           Companion name
                         </Text>
                       </Animated.View>
-                      <Animated.View entering={FadeIn.delay(750).duration(400)}>
+                      <Animated.View entering={reducedMotion ? undefined : FadeIn.delay(750).duration(Duration.slow).easing(Ease.out)}>
                         <TextInput
                           value={companionName}
                           onChangeText={onCompanionNameChange}
@@ -158,7 +159,7 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                         />
                       </Animated.View>
                       <Animated.Text
-                        entering={FadeIn.delay(900).duration(400)}
+                        entering={reducedMotion ? undefined : FadeIn.delay(900).duration(Duration.slow).easing(Ease.out)}
                         style={{
                           fontFamily: FontFamily.ui,
                           fontSize: FontSize.xs,

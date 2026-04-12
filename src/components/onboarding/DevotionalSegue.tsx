@@ -13,11 +13,13 @@ import Animated, {
   FadeIn,
   FadeOut,
   cancelAnimation,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { pollJobStatus } from '@/lib/generation-api';
 import type { ColorTheme } from '@/constants/colors';
 
@@ -235,6 +237,7 @@ function CyclingStatusLines({
   startDelay: number;
   onAllComplete: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [visible, setVisible] = useState(false);
   const completedRef = useRef(false);
@@ -286,8 +289,8 @@ function CyclingStatusLines({
       {visible && (
         <Animated.Text
           key={`status-${currentIndex}`}
-          entering={FadeIn.duration(STATUS_FADE_MS)}
-          exiting={FadeOut.duration(STATUS_FADE_MS)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 15,
@@ -313,6 +316,7 @@ export function DevotionalSegue({
   onContinue,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   /* ── State ── */
   const [isReady, setIsReady] = useState(false);
@@ -423,7 +427,7 @@ export function DevotionalSegue({
 
       {/* Phase 2: Ready reveal — larger heading, upper-middle */}
       {showReadyReveal && (
-        <Animated.View entering={FadeIn.duration(300).delay(200)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}>
           <Text
             style={{
               fontFamily: FontFamily.display,
@@ -456,7 +460,7 @@ export function DevotionalSegue({
       {/* CTA Button — only in Phase 2 */}
       {showReadyReveal && (
         <Animated.View
-          entering={FadeIn.duration(300).delay(500)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(500).easing(Ease.out)}
           style={{ paddingBottom: Math.max(insets.bottom, Spacing['4']) }}
         >
           <TouchableOpacity

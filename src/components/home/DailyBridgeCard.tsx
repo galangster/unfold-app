@@ -4,6 +4,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -19,7 +20,7 @@ export function DailyBridgeCard({ text, colors }: Props) {
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(600))}
+      entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}
       style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>

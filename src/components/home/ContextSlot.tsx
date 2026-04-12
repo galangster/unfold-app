@@ -9,7 +9,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { NotificationCard } from '@/components/home/NotificationCard';
 import { BridgeShimmer } from '@/components/home/BridgeShimmer';
@@ -48,7 +48,7 @@ interface Props {
 
 /** @deprecated — collapse animation removed, content auto-sizes now */
 const ENTER_DURATION = Duration.normal;
-const EXIT_DURATION = 180;
+const EXIT_DURATION = Duration.fast;
 
 // ---------------------------------------------------------------------------
 // Resume Card (inline, not via NotificationCard)
@@ -187,8 +187,8 @@ export function ContextSlot({
   return (
     <Animated.View
       key={slotType}
-      entering={entering(FadeIn.duration(ENTER_DURATION))}
-      exiting={exiting(FadeOut.duration(EXIT_DURATION))}
+      entering={entering(FadeIn.duration(ENTER_DURATION).easing(Ease.out))}
+      exiting={exiting(FadeOut.duration(EXIT_DURATION).easing(Ease.out))}
     >
       {renderCard()}
     </Animated.View>

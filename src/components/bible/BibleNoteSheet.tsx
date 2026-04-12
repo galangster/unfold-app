@@ -30,6 +30,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   runOnJS,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -37,6 +38,7 @@ import { TrashIcon, PencilSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import type { BibleHighlight } from '@/lib/store';
 
@@ -52,6 +54,7 @@ const RUBBER_BAND_FACTOR = 0.3;
 
 export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNoteSheetProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
   // Keep last non-null highlight so the slide-out animation still has content.
@@ -152,8 +155,8 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
     >
       <GestureHandlerRootView style={styles.gestureRoot}>
         <Animated.View
-          entering={FadeIn.duration(250)}
-          exiting={FadeOut.duration(200)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={styles.backdrop}
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -161,8 +164,8 @@ export function BibleNoteSheet({ highlight, onClose, onSave, onDelete }: BibleNo
 
         <GestureDetector gesture={panGesture}>
           <Animated.View
-            entering={SlideInDown.duration(350).damping(20).stiffness(200)}
-            exiting={SlideOutDown.duration(250)}
+            entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
             style={[
               styles.sheet,
               { backgroundColor: colors.backgroundElevated },

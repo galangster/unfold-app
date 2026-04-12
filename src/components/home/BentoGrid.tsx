@@ -8,6 +8,7 @@ import { BookOpenIcon, BookmarksSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -32,7 +33,7 @@ export function BentoGrid() {
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(400).delay(150))}
+      entering={entering(FadeIn.duration(Duration.normal).delay(150).easing(Ease.out))}
       style={styles.container}
     >
       <View style={styles.row}>

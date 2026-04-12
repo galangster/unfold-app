@@ -6,7 +6,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -26,8 +26,8 @@ export function NotificationCard({ colors, onPress, message, icon, accentColor, 
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(400).delay(delay))}
-      exiting={exiting(FadeOut.duration(Duration.slow))}
+      entering={entering(FadeIn.duration(Duration.normal).delay(delay).easing(Ease.out))}
+      exiting={exiting(FadeOut.duration(Duration.fast).easing(Ease.out))}
       style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['3'] }}
     >
       <TouchableOpacity activeOpacity={0.7} onPress={onPress}>

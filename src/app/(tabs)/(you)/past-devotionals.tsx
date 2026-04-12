@@ -13,6 +13,7 @@ import Animated, {
   interpolate,
   clamp,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 // Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
 import { FlashList } from '@shopify/flash-list';
@@ -21,7 +22,7 @@ import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, M
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, Devotional } from '@/lib/store';
 import { format } from 'date-fns';
@@ -463,6 +464,7 @@ export default function PastDevotionalsScreen() {
   const router = useRouter();
   const { handleBack } = useCrossTabBack();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
@@ -645,7 +647,7 @@ export default function PastDevotionalsScreen() {
           </View>
 
           <Animated.View
-            entering={FadeIn.duration(400)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={{ alignItems: 'center', paddingTop: 60 }}
           >
             <BookOpenIcon size={48} color={colors.textHint} weight="light" />
@@ -706,8 +708,8 @@ export default function PastDevotionalsScreen() {
         {/* Pull-down search bar */}
         {searchVisible && (
           <Animated.View
-            entering={FadeIn.duration(Duration.fast)}
-            exiting={FadeOut.duration(Duration.fast)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={searchStyles.container}
           >
             <View
@@ -750,7 +752,7 @@ export default function PastDevotionalsScreen() {
 
         {filteredDevotionals.length === 0 ? (
           <Animated.View
-            entering={FadeIn.duration(Duration.slow)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
             style={{ alignItems: 'center', paddingTop: 48 }}
           >
             <BookOpenIcon size={36} color={colors.textHint} weight="light" />

@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { MagnifyingGlassIcon, ClockIcon, CaretRightIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -13,10 +13,11 @@ import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 
 export default function BibleHomeScreen() {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const { isReady, isDownloading, progress, download, error } = useBibleDb();
   const getLastBiblePosition = useUnfoldStore((s) => s.getLastBiblePosition);
@@ -165,7 +166,7 @@ export default function BibleHomeScreen() {
       >
         {/* Continue Reading */}
         {lastPosition && (
-          <Animated.View entering={FadeInDown.duration(400)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}>
             <TouchableOpacity
               onPress={handleContinueReading}
               style={[styles.continueCard, {
@@ -218,7 +219,7 @@ export default function BibleHomeScreen() {
           onPress={() => setSelectedBook(null)}
         >
           <Animated.View
-            entering={FadeIn.duration(Duration.normal)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={[styles.chapterModal, {
               backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
             }]}

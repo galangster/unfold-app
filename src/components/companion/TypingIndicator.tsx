@@ -15,8 +15,9 @@ import Animated, {
   withSequence,
   withTiming,
   withDelay,
+  useReducedMotion,
 } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -66,17 +67,18 @@ function Dot({ delay, color }: { delay: number; color: string }) {
  *         dots begin pulsing immediately on mount
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeIn.duration(Duration.normal);
+const ENTERING = FadeIn.duration(Duration.normal).easing(Ease.out);
 
 export function TypingIndicator() {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     Haptics.selectionAsync();
   }, []);
 
   return (
-    <Animated.View entering={ENTERING} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}>
+    <Animated.View entering={reducedMotion ? undefined : ENTERING} style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: Spacing['4'] }}>
       {/* Companion orb — same size as in CompanionMessageContent */}
       <CompanionOrb accentColor={colors.accent} size={28} />
       <View style={{ width: Spacing['3'] }} />

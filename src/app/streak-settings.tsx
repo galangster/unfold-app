@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -126,6 +126,7 @@ type StatTooltipId = 'best' | 'freezes' | 'toFreeze';
 export default function StreakSettingsScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [activeTooltip, setActiveTooltip] = useState<StatTooltipId | null>(null);
 
   const streak = useUnfoldStore((s) => s.streakCurrent);
@@ -177,7 +178,7 @@ export default function StreakSettingsScreen() {
       <ScrollView style={ssStyles.flex1} contentContainerStyle={ssStyles.scrollContent}>
         {/* Streak Society Tier Card */}
         <Animated.View
-          entering={FadeInDown.duration(500)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
           style={[ssStyles.tierCard, { backgroundColor: colors.inputBackground, borderColor: isDark ? `${colors.accent}30` : `${colors.accent}20` }]}
         >
           {/* Top section: tier icon + name + streak count */}
@@ -246,7 +247,7 @@ export default function StreakSettingsScreen() {
         </Animated.View>
 
         {/* Tier roadmap - all 4 tiers shown as a row */}
-        <Animated.View entering={FadeInDown.duration(500).delay(100)} style={ssStyles.tierRoadmapRow}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(100).easing(Ease.out)} style={ssStyles.tierRoadmapRow}>
           {STREAK_TIERS.map((tier) => {
             const isActive = tier.id === currentTier.id;
             const isPast = tier.minDays < currentTier.minDays;
@@ -318,8 +319,8 @@ export default function StreakSettingsScreen() {
             </TouchableOpacity>
             {activeTooltip === 'best' && (
               <Animated.View
-                entering={FadeIn.duration(Duration.normal)}
-                exiting={FadeOut.duration(Duration.fast)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
@@ -352,8 +353,8 @@ export default function StreakSettingsScreen() {
             </TouchableOpacity>
             {activeTooltip === 'freezes' && (
               <Animated.View
-                entering={FadeIn.duration(Duration.normal)}
-                exiting={FadeOut.duration(Duration.fast)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>
@@ -386,8 +387,8 @@ export default function StreakSettingsScreen() {
             </TouchableOpacity>
             {activeTooltip === 'toFreeze' && (
               <Animated.View
-                entering={FadeIn.duration(Duration.normal)}
-                exiting={FadeOut.duration(Duration.fast)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
                 style={[ssStyles.tooltipBubble, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
               >
                 <Text style={[ssStyles.tooltipText, { color: colors.textMuted }]}>

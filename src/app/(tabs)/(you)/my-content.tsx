@@ -10,6 +10,7 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookOpenIcon, HighlighterIcon, BookmarkSimpleIcon, PencilLineIcon, LockIcon, MagnifyingGlassIcon, XIcon } from 'phosphor-react-native';
@@ -18,7 +19,7 @@ import { useSavedHighlights, SavedItem, SavedItemSource } from '@/hooks/useSaved
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, BibleHighlight, Highlight, HighlightColor, BibleHighlightColor } from '@/lib/store';
 
@@ -41,6 +42,7 @@ const VALID_SOURCES: HighlightFilter[] = ['all', 'devotional', 'bible'];
 export default function MyContentScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
   const params = useLocalSearchParams<{ tab?: string; source?: string; from?: string }>();
 
@@ -198,7 +200,7 @@ export default function MyContentScreen() {
 
       {/* Search Bar */}
       {showSearch && (
-        <Animated.View entering={FadeIn.duration(200)} style={{ paddingHorizontal: Spacing['5'], paddingBottom: Spacing['3'] }}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)} style={{ paddingHorizontal: Spacing['5'], paddingBottom: Spacing['3'] }}>
           <View
             style={{
               flexDirection: 'row',
@@ -303,7 +305,7 @@ export default function MyContentScreen() {
       {/* Tab Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['5'] }}>
         {activeTab === 'journal' && (
-          <Animated.View entering={FadeInRight.duration(Duration.slow)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(Duration.slow).easing(Ease.out)}>
             {filteredJournal.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}>
                 <View
@@ -429,7 +431,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'highlights' && (
-          <Animated.View entering={FadeInRight.duration(Duration.slow)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(Duration.slow).easing(Ease.out)}>
             {/* Source filter chips */}
             <View
               style={{
@@ -548,7 +550,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'bookmarks' && (
-          <Animated.View entering={FadeInRight.duration(Duration.slow)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(Duration.slow).easing(Ease.out)}>
             {filteredBookmarks.length === 0 ? (
               <EmptyState
                 icon={BookmarkSimpleIcon}
@@ -631,6 +633,7 @@ export default function MyContentScreen() {
 
 function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIcon; title: string; subtitle: string }) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   // Gentle breathing pulse on the icon
   const iconPulse = useSharedValue(1);
@@ -648,7 +651,7 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
 
   return (
     <Animated.View
-      entering={FadeIn.duration(600)}
+      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
       style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}
     >
       <Animated.View

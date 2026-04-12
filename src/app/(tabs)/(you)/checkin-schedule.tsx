@@ -2,13 +2,14 @@ import { useState, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import {
@@ -46,6 +47,7 @@ export default function CheckInScheduleScreen() {
 
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
+  const reducedMotion = useReducedMotion();
   const checkInType: CheckInType = type === 'evening' ? 'evening' : 'midday';
   const isMidday = checkInType === 'midday';
 
@@ -222,7 +224,7 @@ export default function CheckInScheduleScreen() {
         contentContainerStyle={{ padding: Spacing['5'] }}
       >
         {/* Default time */}
-        <Animated.View entering={FadeIn.duration(300)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
           <Text
             style={{
               fontFamily: FontFamily.ui,
@@ -273,7 +275,7 @@ export default function CheckInScheduleScreen() {
           </TouchableOpacity>
 
           {activePicker === 'default' && (
-            <Animated.View entering={FadeIn.duration(200)}>
+            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}>
               <DateTimePicker
                 value={timeStringToDate(localDefaultTime)}
                 mode="time"
@@ -311,7 +313,7 @@ export default function CheckInScheduleScreen() {
         />
 
         {/* Customize by day toggle */}
-        <Animated.View entering={FadeInDown.duration(300).delay(100)}>
+        <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(100).easing(Ease.out)}>
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={handleToggleCustomize}
@@ -363,7 +365,7 @@ export default function CheckInScheduleScreen() {
         {/* Per-day schedule */}
         {customizeByDay && (
           <Animated.View
-            entering={FadeInDown.duration(300)}
+            entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
             style={{ marginTop: Spacing['5'] }}
           >
             {DAYS.map((day, i) => {
@@ -373,7 +375,7 @@ export default function CheckInScheduleScreen() {
               return (
                 <Animated.View
                   key={day}
-                  entering={FadeInDown.duration(250).delay(i * 40)}
+                  entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(i * 40).easing(Ease.out)}
                 >
                   <View
                     style={{
@@ -459,7 +461,7 @@ export default function CheckInScheduleScreen() {
                   </View>
 
                   {activePicker === day && !isSkipped && (
-                    <Animated.View entering={FadeIn.duration(200)}>
+                    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.fast).easing(Ease.out)}>
                       <DateTimePicker
                         value={timeStringToDate(dayTime)}
                         mode="time"
@@ -478,7 +480,7 @@ export default function CheckInScheduleScreen() {
         )}
 
         {/* Explanation text */}
-        <Animated.View entering={FadeIn.duration(300).delay(200)} style={{ marginTop: Spacing['6'] }}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)} style={{ marginTop: Spacing['6'] }}>
           <Text
             style={{
               fontFamily: FontFamily.ui,

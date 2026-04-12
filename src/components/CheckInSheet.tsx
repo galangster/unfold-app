@@ -20,6 +20,7 @@ import Animated, {
   SlideOutDown,
   Easing,
   interpolate,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -38,7 +39,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { CHECKIN_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 
@@ -121,9 +122,10 @@ function MoodStep({
   isDark: boolean;
 }) {
   const [hoveredMood, setHoveredMood] = useState<MoodValue | null>(null);
+  const reducedMotion = useReducedMotion();
 
   return (
-    <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.stepContent}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
       <Text
         style={[
           styles.stepTitle,
@@ -209,6 +211,7 @@ function QuestionStep({
   const inputRef = useRef<TextInput>(null);
   const chipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     return () => {
@@ -243,7 +246,7 @@ function QuestionStep({
   }, [typedAnswer, onSelectChip]);
 
   return (
-    <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.stepContent}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
       <Text
         style={[
           styles.stepTitle,
@@ -298,7 +301,7 @@ function QuestionStep({
       </View>
 
       {isTyping ? (
-        <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.typeOwnContainer}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.typeOwnContainer}>
           <TextInput
             ref={inputRef}
             value={typedAnswer}
@@ -388,6 +391,7 @@ function NoteStep({
 }) {
   const [noteText, setNoteText] = useState('');
   const inputRef = useRef<TextInput>(null);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 200);
@@ -405,7 +409,7 @@ function NoteStep({
   }, [onSkip]);
 
   return (
-    <Animated.View entering={FadeIn.duration(Duration.normal)} style={styles.stepContent}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={styles.stepContent}>
       <Text
         style={[
           styles.stepTitle,
@@ -589,6 +593,7 @@ export function CheckInSheet({
   dayNumber: _dayNumber,
 }: CheckInSheetProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedMood, setSelectedMood] = useState<MoodValue | null>(null);
   const [chipAnswer, setChipAnswer] = useState<string | undefined>(undefined);
@@ -701,8 +706,8 @@ export function CheckInSheet({
         {/* Sheet */}
         {visible && (
           <Animated.View
-            entering={SlideInDown.duration(400).easing(Easing.out(Easing.cubic))}
-            exiting={SlideOutDown.duration(Duration.normal)}
+            entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
             style={[
               styles.sheet,
               {

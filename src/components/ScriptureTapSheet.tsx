@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
@@ -52,6 +52,7 @@ export function ScriptureTapSheet({
   devotionalTitle,
 }: ScriptureTapSheetProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
   const isBookmarked = useUnfoldStore((s) => s.isBookmarked);
@@ -154,8 +155,8 @@ export function ScriptureTapSheet({
 
         {/* Sheet */}
         <Animated.View
-          entering={FadeInDown.duration(Duration.normal)}
-          exiting={FadeOut.duration(Duration.fast)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={[s.sheet, { backgroundColor: colors.background }]}
         >
           {/* Drag indicator */}
@@ -248,7 +249,7 @@ export function ScriptureTapSheet({
                 {/* AI Commentary */}
                 {commentaryLoading && (
                   <Animated.View
-                    entering={FadeIn.duration(Duration.normal)}
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                     style={[s.commentaryLoading, { backgroundColor: colors.inputBackground }]}
                   >
                     <ActivityIndicator size={12} color={colors.accent} />
@@ -259,7 +260,7 @@ export function ScriptureTapSheet({
                 )}
                 {commentary && !commentaryLoading && (
                   <Animated.View
-                    entering={FadeIn.duration(400)}
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                     style={[s.commentaryCard, { backgroundColor: colors.inputBackground }]}
                   >
                     <View style={s.commentaryHeaderRow}>

@@ -17,7 +17,7 @@
 
 import { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   XIcon,
@@ -28,7 +28,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -76,6 +76,7 @@ export function PremiumNudgeCard({
   variant = 'card',
 }: PremiumNudgeCardProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [dismissed, setDismissed] = useState(false);
   const [showSheet, setShowSheet] = useState(false);
 
@@ -105,8 +106,8 @@ export function PremiumNudgeCard({
   return (
     <>
       <Animated.View
-        entering={FadeInDown.duration(500).delay(300)}
-        exiting={FadeOut.duration(Duration.slow)}
+        entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(300).easing(Ease.out)}
+        exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
         accessibilityRole="alert"
         accessibilityLabel={`Premium feature suggestion: ${message}`}
       >

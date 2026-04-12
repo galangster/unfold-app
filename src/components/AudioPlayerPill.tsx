@@ -25,6 +25,7 @@ import Animated, {
   withTiming,
   withSequence,
   runOnJS,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { PlayIcon, PauseIcon } from 'phosphor-react-native';
@@ -38,7 +39,7 @@ import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Shadow } from '@/constants/shadows';
 import { alpha } from '@/components/ui';
 
@@ -59,6 +60,7 @@ const MAX_TITLE_WIDTH = 160;
 
 export function AudioPlayerPill() {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const { togglePlayPause, stopAudio } = useGlobalAudioPlayer();
 
@@ -171,8 +173,8 @@ export function AudioPlayerPill() {
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(Duration.normal)}
-      exiting={FadeOutDown.duration(Duration.normal)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
+      exiting={reducedMotion ? undefined : FadeOutDown.duration(Duration.fast).easing(Ease.out)}
       style={[styles.wrapper, bottomStyle]}
     >
       <GestureDetector gesture={panGesture}>

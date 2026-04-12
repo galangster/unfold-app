@@ -1,10 +1,11 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import type { ColorTheme } from '@/constants/colors';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ function getAffirmation(commitmentLevel?: string): string {
 
 export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, colors }: Props) {
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
 
   if (step === 'choose') {
     return (
@@ -113,7 +115,7 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
 
       {/* Affirmation */}
       <Animated.Text
-        entering={FadeIn.duration(600).delay(200)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(200).easing(Ease.out)}
         style={{
           fontFamily: FontFamily.display,
           fontSize: 24,
@@ -130,7 +132,7 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
 
       {/* Continue button */}
       <Animated.View
-        entering={FadeIn.duration(400).delay(800)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(800).easing(Ease.out)}
         style={{ paddingTop: Spacing['6'], paddingBottom: Math.max(insets.bottom, Spacing['4']) }}
       >
         <TouchableOpacity

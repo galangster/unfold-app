@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { Duration, Stagger } from '@/constants/animations';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease, Stagger } from '@/constants/animations';
 import { CheckIcon, LockSimpleIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -15,6 +15,7 @@ import { useUnfoldStore } from '@/lib/store';
 export default function DayMenuScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{
     devotionalId: string;
     currentDay: string;
@@ -50,7 +51,7 @@ export default function DayMenuScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       {/* Header */}
-      <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: Spacing['8'], paddingTop: Spacing['5'], paddingBottom: Spacing['5'] }}>
+      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ paddingHorizontal: Spacing['8'], paddingTop: Spacing['5'], paddingBottom: Spacing['5'] }}>
         <Text
           style={{
             fontFamily: FontFamily.uiMedium,
@@ -96,7 +97,7 @@ export default function DayMenuScreen() {
           return (
             <Animated.View
               key={dayNumber}
-              entering={FadeInDown.duration(Duration.slow).delay(Math.min(i * Stagger.fast, 400))}
+              entering={reducedMotion ? undefined : FadeInDown.duration(Duration.slow).delay(Math.min(i * Stagger.fast, 400)).easing(Ease.out)}
             >
             <TouchableOpacity activeOpacity={isLocked ? 1 : 0.7}
               onPress={() => handleSelectDay(dayNumber)}

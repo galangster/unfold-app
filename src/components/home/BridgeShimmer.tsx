@@ -12,7 +12,7 @@ import Animated, {
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import type { ColorTheme } from '@/constants/colors';
 
@@ -39,7 +39,7 @@ export function BridgeShimmer({ colors }: Props) {
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(Duration.slow))}
+      entering={entering(FadeIn.duration(Duration.slow).easing(Ease.out))}
       style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
     >
       <View

@@ -10,7 +10,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -19,7 +19,7 @@ import { XIcon, LockIcon, CrownIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -126,6 +126,7 @@ function getWallpaperStyles(isDark: boolean): WallpaperStyle[] {
 export default function WallpaperScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ quote: string; dayNumber: string; dayTitle: string }>();
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
@@ -262,7 +263,7 @@ export default function WallpaperScreen() {
 
         {/* Preview */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing['8'] }}>
-          <Animated.View entering={FadeIn.duration(400)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
             <View
               style={{
                 width: actualPreviewWidth,
@@ -330,7 +331,7 @@ export default function WallpaperScreen() {
 
         {/* Style Carousel */}
         <View style={{ paddingBottom: isPremium ? 100 : 140 }}>
-          <Animated.View entering={FadeIn.duration(400).delay(100)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(100).easing(Ease.out)}>
             <FlatList
               data={wallpaperStyles}
               horizontal
@@ -425,7 +426,7 @@ export default function WallpaperScreen() {
         {/* Upgrade CTA for Free Users */}
         {!isPremium && (
           <Animated.View
-            entering={FadeInUp.duration(Duration.slow).delay(200)}
+            entering={reducedMotion ? undefined : FadeInUp.duration(Duration.slow).delay(200).easing(Ease.out)}
             style={{
               position: 'absolute',
               bottom: 90 + tabBarHeight,
@@ -480,7 +481,7 @@ export default function WallpaperScreen() {
 
         {/* Actions */}
         <Animated.View
-          entering={FadeIn.duration(400).delay(200)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}
           style={{
             flexDirection: 'row',
             justifyContent: 'center',

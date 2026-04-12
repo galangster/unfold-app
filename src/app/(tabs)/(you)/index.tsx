@@ -3,9 +3,9 @@ import { View, Text, ScrollView, Alert, Linking, Platform, ActivityIndicator, Te
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   BookOpenIcon,
@@ -142,6 +142,7 @@ interface MenuItem {
 export default function YouScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   // Name edit state — tapping the name on the profile swaps it for a
@@ -444,7 +445,7 @@ export default function YouScreen() {
         >
           {/* Header — avatar + name */}
           <Animated.View
-            entering={FadeIn.duration(700)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={{
               paddingHorizontal: Spacing['6'],
               paddingTop: Spacing['4'],
@@ -884,7 +885,7 @@ export default function YouScreen() {
                 </TouchableOpacity>
 
                 {expandedPremium === 'colors' && (
-                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ paddingHorizontal: Spacing['4'], paddingBottom: Spacing['4'] }}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ paddingHorizontal: Spacing['4'], paddingBottom: Spacing['4'] }}>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing['3'] }}>
                       {ACCENT_THEMES.map((theme) => {
                         const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
@@ -991,7 +992,7 @@ export default function YouScreen() {
                 </TouchableOpacity>
 
                 {expandedPremium === 'fonts' && (
-                  <Animated.View entering={FadeIn.duration(Duration.normal)}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
                     {READING_FONTS.map((font, index) => {
                       const isSelected = (user?.readingFont ?? 'source-serif') === font.id;
                       return (
@@ -1306,7 +1307,7 @@ export default function YouScreen() {
 
             {/* Time options (outside the card for cleaner expand) */}
             {showTimeSelector && (
-              <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
+              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ marginTop: -Spacing['4'], marginBottom: Spacing['6'] }}>
                 {REMINDER_TIMES.map((time) => (
                   <TouchableOpacity activeOpacity={0.7}
                     key={time.value}
@@ -1405,7 +1406,7 @@ export default function YouScreen() {
               </TouchableOpacity>
 
               {expandedPreference === 'tone' && (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ padding: Spacing['2'] }}>
                   {TONE_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.tone === option.value;
                     return (
@@ -1499,7 +1500,7 @@ export default function YouScreen() {
               </TouchableOpacity>
 
               {expandedPreference === 'depth' && (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ padding: Spacing['2'] }}>
                   {DEPTH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.depth === option.value;
                     return (
@@ -1593,7 +1594,7 @@ export default function YouScreen() {
               </TouchableOpacity>
 
               {expandedPreference === 'faith' && (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ padding: Spacing['2'] }}>
                   {FAITH_OPTIONS.map((option) => {
                     const isSelected = user?.writingStyle?.faithBackground === option.value;
                     return (
@@ -1685,7 +1686,7 @@ export default function YouScreen() {
               </TouchableOpacity>
 
               {expandedPreference === 'lifeStage' && (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={{ padding: Spacing['2'] }}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ padding: Spacing['2'] }}>
                   {LIFE_STAGE_OPTIONS.map((option) => {
                     const isSelected = (user?.writingStyle?.lifeStage ?? 'building') === option.value;
                     return (

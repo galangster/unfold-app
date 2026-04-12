@@ -6,6 +6,7 @@ import { PenIcon, ChatCircleDotsIcon, BookOpenIcon, HighlighterIcon } from 'phos
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -41,7 +42,7 @@ function ActionPill({ icon, label, onPress, index, entering, accessibilityHint }
   return (
     <Animated.View
       entering={entering(
-        FadeIn.duration(400).delay(BASE_DELAY + index * STAGGER_DELAY)
+        FadeIn.duration(Duration.normal).delay(BASE_DELAY + index * STAGGER_DELAY).easing(Ease.out)
       )}
     >
       <TouchableOpacity

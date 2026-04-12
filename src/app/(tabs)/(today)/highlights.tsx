@@ -9,9 +9,11 @@ import Animated, {
   withRepeat,
   withTiming,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, HighlighterIcon, BookOpenIcon, QuotesIcon } from 'phosphor-react-native';
+import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -29,6 +31,7 @@ const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; light: string; d
 export default function HighlightsScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const highlights = useUnfoldStore((s) => s.highlights);
   const devotionals = useUnfoldStore((s) => s.devotionals);
 
@@ -98,7 +101,7 @@ export default function HighlightsScreen() {
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['6'] }}>
           {/* Stats */}
-          <Animated.View entering={FadeIn} style={{ marginBottom: Spacing['6'] }}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ marginBottom: Spacing['6'] }}>
             <Text
               style={{
                 fontFamily: FontFamily.ui,
@@ -117,7 +120,7 @@ export default function HighlightsScreen() {
           {Object.entries(highlightsByDevotional).map(([devotionalId, { devotional, highlights: devHighlights }], index) => (
             <Animated.View
               key={devotionalId}
-              entering={FadeIn.delay(index * 100)}
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(index * 100).easing(Ease.out)}
               style={{
                 marginBottom: Spacing['6'],
               }}
@@ -205,6 +208,7 @@ export default function HighlightsScreen() {
 }
 
 function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }) {
+  const reducedMotion = useReducedMotion();
   const iconPulse = useSharedValue(1);
   useEffect(() => {
     iconPulse.value = withRepeat(
@@ -220,7 +224,7 @@ function HighlightsEmptyState({ colors }: { colors: ReturnType<typeof useTheme>[
 
   return (
     <Animated.View
-      entering={FadeIn.duration(600)}
+      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
       style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing['10'] }}
     >
       <Animated.View style={[{ marginBottom: Spacing['4'] }, iconPulseStyle]}>

@@ -8,8 +8,8 @@ import {
   HandsPrayingIcon,
   NoteIcon,
 } from 'phosphor-react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -47,6 +47,7 @@ interface NoteCardProps {
  */
 export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const categoryConfig = CATEGORY_CONFIG[note.category];
   const CategoryIcon = categoryConfig.Icon;
 
@@ -83,7 +84,7 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const extraTagCount = note.tags.length - visibleTags.length;
 
   return (
-    <Animated.View entering={FadeIn.duration(Duration.normal).delay(30 * index)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(30 * index).easing(Ease.out)}>
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={handleLongPress}

@@ -7,17 +7,18 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { ThemeProvider, useTheme } from '../lib/theme';
 import { StreakDisplay } from '../components/StreakDisplay';
 import { AudioWaveform } from '../components/AudioWaveform';
 import { SparkleBurst } from '../components/SparkleBurst';
 import { FontFamily } from '../constants/fonts';
 import { Spacing } from '../constants/spacing';
-import { Duration } from '../constants/animations';
+import { Duration, Ease } from '../constants/animations';
 
 function ShowcaseContent() {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [sparkleTrigger, setSparkleTrigger] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeWord, setActiveWord] = useState(0);
@@ -32,8 +33,8 @@ function ShowcaseContent() {
   }, [isPlaying]);
 
   const renderSection = (title: string, children: React.ReactNode, delay = 0) => (
-    <Animated.View 
-      entering={FadeInDown.duration(400).delay(delay)}
+    <Animated.View
+      entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(delay).easing(Ease.out)}
       style={styles.section}
     >
       <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
@@ -47,14 +48,14 @@ function ShowcaseContent() {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Animated.Text 
-          entering={FadeIn.duration(600)}
+        <Animated.Text
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
           style={[styles.header, { color: colors.text, fontFamily: FontFamily.display }]}
         >
           ✦ Unfold
         </Animated.Text>
-        <Animated.Text 
-          entering={FadeIn.duration(600).delay(100)}
+        <Animated.Text
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(100).easing(Ease.out)}
           style={[styles.subheader, { color: colors.textMuted }]}
         >
           Component Showcase
@@ -129,7 +130,7 @@ function ShowcaseContent() {
             ].map(([name, color], index) => (
               <Animated.View 
                 key={name} 
-                entering={FadeIn.duration(Duration.slow).delay(index * 50)}
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(index * 50).easing(Ease.out)}
                 style={styles.colorItem}
               >
                 <View style={[styles.colorSwatch, { backgroundColor: color }]} />

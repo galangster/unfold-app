@@ -25,6 +25,7 @@ import Animated, {
   withSequence,
   withDelay,
   interpolateColor,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -45,7 +46,7 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, JournalMode, SoapResponses } from '@/lib/store';
 import { isOnline } from '@/lib/network-error-handler';
@@ -147,6 +148,7 @@ export default function JournalScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ devotionalId: string; dayNumber: string; focusQuestion?: string }>();
 
   const devotionalId = params.devotionalId ?? '';
@@ -850,7 +852,7 @@ Their journal entry:
           >
             {/* Scripture anchor — tappable link back to today's reading */}
             {currentDay && (
-              <Animated.View entering={FadeIn.duration(400)}>
+              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
                 <TouchableOpacity
                   activeOpacity={0.6}
                   onPress={() => {
@@ -876,7 +878,7 @@ Their journal entry:
             {/* ===== FREE WRITE MODE ===== */}
             {activeMode === 'freewrite' && (
               <>
-                <Animated.View entering={FadeIn.duration(400)}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
                   <Text style={[jStyles.freewriteTitle, { color: colors.text }]}>
                     What's stirring?
                   </Text>
@@ -885,7 +887,7 @@ Their journal entry:
                   </Text>
                 </Animated.View>
 
-                <Animated.View entering={FadeIn.duration(400).delay(200)}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}>
                   <TextInput
                     ref={inputRef}
                     value={content}
@@ -902,7 +904,7 @@ Their journal entry:
 
                 {/* Go Deeper button */}
                 {showDeeperButton && (
-                  <Animated.View entering={FadeIn.duration(Duration.slow)} style={jStyles.deeperButtonWrapper}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={jStyles.deeperButtonWrapper}>
                     <TouchableOpacity
                       onPress={handleGoDeeper}
                       disabled={loadingDeeper}
@@ -938,7 +940,7 @@ Their journal entry:
 
                 {/* Error state */}
                 {deeperError && (
-                  <Animated.View entering={FadeIn.duration(Duration.slow)} style={jStyles.errorWrapper}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={jStyles.errorWrapper}>
                     <TouchableOpacity onPress={handleGoDeeper} activeOpacity={0.6}>
                       <Text style={[jStyles.errorText, { color: colors.textMuted }]}>
                         Couldn't generate prompts. Tap to try again.
@@ -949,7 +951,7 @@ Their journal entry:
 
                 {/* Deeper prompts */}
                 {allQuestions.length > 0 && (
-                  <Animated.View entering={FadeInDown.duration(500)} style={jStyles.deeperPromptsSection}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)} style={jStyles.deeperPromptsSection}>
                     <View style={[jStyles.deeperAccentLine, { backgroundColor: colors.accent }]} />
                     <View style={jStyles.deeperHeaderRow}>
                       <Text style={[jStyles.deeperLabel, { color: colors.accent }]}>
@@ -970,7 +972,7 @@ Their journal entry:
                       return (
                         <Animated.View
                           key={`q-${index}`}
-                          entering={FadeInDown.duration(400).delay(index * 100)}
+                          entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(index * 100).easing(Ease.out)}
                           style={jStyles.questionItem}
                         >
                           <TouchableOpacity
@@ -997,7 +999,7 @@ Their journal entry:
 
                           {isExpanded && (
                             <Animated.View
-                              entering={FadeInDown.duration(Duration.normal)}
+                              entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
                               style={jStyles.questionInputWrapper}
                             >
                               <View style={[jStyles.questionInputCard, { backgroundColor: colors.inputBackground, borderColor: colors.borderFocused }]}>
@@ -1031,7 +1033,7 @@ Their journal entry:
                               accessibilityHint="Tap to edit your response"
                             >
                               <Animated.View
-                                entering={FadeIn.duration(Duration.normal)}
+                                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                                 style={jStyles.questionPreview}
                               >
                                 <Text style={[jStyles.questionPreviewText, { color: colors.textMuted }]} numberOfLines={2}>
@@ -1050,7 +1052,7 @@ Their journal entry:
 
             {/* ===== SOAP MODE ===== */}
             {activeMode === 'soap' && (
-              <Animated.View entering={FadeIn.duration(400)}>
+              <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
                 <Text style={[jStyles.soapTitle, { color: colors.text }]}>
                   SOAP Journal
                 </Text>
@@ -1076,7 +1078,7 @@ Their journal entry:
                   return (
                     <Animated.View
                       key={section.key}
-                      entering={FadeInDown.duration(400).delay(idx * 80)}
+                      entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(idx * 80).easing(Ease.out)}
                       style={{ marginBottom: isExpanded ? 20 : 12 }}
                     >
                       <TouchableOpacity
@@ -1122,7 +1124,7 @@ Their journal entry:
                       {/* Expanded input */}
                       {isExpanded && (
                         <Animated.View
-                          entering={FadeInDown.duration(Duration.normal)}
+                          entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
                           style={jStyles.soapExpandedWrapper}
                         >
                           <View style={[jStyles.soapInputCard, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.19) }]}>
@@ -1161,7 +1163,7 @@ Their journal entry:
 
                 {/* SOAP completion message */}
                 {soapCompletedCount === 4 && (
-                  <Animated.View entering={FadeIn.duration(400)} style={jStyles.soapCompleteWrapper}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={jStyles.soapCompleteWrapper}>
                     <Text style={[jStyles.soapCompleteText, { color: colors.accent }]}>
                       Beautiful reflection. All sections complete.
                     </Text>
@@ -1172,7 +1174,7 @@ Their journal entry:
 
             {/* ===== PRAYER REQUESTS SECTION ===== */}
             <Animated.View
-              entering={FadeIn.duration(400).delay(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(400).easing(Ease.out)}
               style={{ marginTop: activeMode === 'soap' ? 32 : allQuestions.length > 0 ? 0 : 40 }}
             >
               {/* Divider */}
@@ -1189,7 +1191,7 @@ Their journal entry:
               {prayerRequests.map((prayer) => (
                 <Animated.View
                   key={prayer.id}
-                  entering={FadeIn.duration(Duration.slow)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
                   style={jStyles.prayerItemWrapper}
                 >
                   <TouchableOpacity
@@ -1231,7 +1233,7 @@ Their journal entry:
 
               {/* Add prayer input */}
               {showPrayerInput ? (
-                <Animated.View entering={FadeIn.duration(Duration.normal)} style={jStyles.prayerInputMargin}>
+                <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={jStyles.prayerInputMargin}>
                   <View style={[jStyles.prayerInputCard, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.19) }]}>
                     <TextInput
                       ref={prayerInputRef}
@@ -1302,13 +1304,13 @@ Their journal entry:
 
           {/* Bottom hint — crossfade between states */}
           <Animated.View
-            entering={FadeIn.duration(400).delay(400)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(400).easing(Ease.out)}
             style={jStyles.bottomHint}
           >
             <Animated.Text
               key={hasChanges ? 'saving' : justSaved ? 'saved' : 'idle'}
-              entering={FadeIn.duration(Duration.slow)}
-              exiting={FadeOut.duration(Duration.normal)}
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
+              exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
               style={[jStyles.bottomHintText, { color: justSaved ? colors.accent : colors.textHint }]}
             >
               {hasChanges ? 'Saving...' : justSaved ? 'Saved' : 'Your response is saved automatically'}

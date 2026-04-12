@@ -1,13 +1,14 @@
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, CaretRightIcon, PencilLineIcon } from 'phosphor-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { format } from 'date-fns';
@@ -17,6 +18,7 @@ const MAX_CONTENT_HEIGHT = 100; // Max height for content preview
 export default function MyResponsesScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
 
@@ -74,7 +76,7 @@ export default function MyResponsesScreen() {
         >
           {journalEntries.length === 0 ? (
             <Animated.View
-              entering={FadeIn.duration(400)}
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
               style={{ alignItems: 'center', paddingTop: 60 }}
             >
               <PencilLineIcon size={48} color={colors.textHint} weight="light" />
@@ -113,7 +115,7 @@ export default function MyResponsesScreen() {
                 return (
                   <Animated.View
                     key={entry.id}
-                    entering={FadeInDown.duration(400).delay(index * 100)}
+                    entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(index * 100).easing(Ease.out)}
                   >
                     <TouchableOpacity activeOpacity={0.7}
                       onPress={() => handleEntryPress(entry.id)}

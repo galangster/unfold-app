@@ -5,6 +5,7 @@ import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controlle
 import Animated, {
   FadeIn,
   FadeInDown,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ArrowRightIcon, NotePencilIcon } from 'phosphor-react-native';
@@ -13,7 +14,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
@@ -42,6 +43,7 @@ export function InlineReflectionJournal({
   scrollViewRef,
 }: InlineReflectionJournalProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const readingFont = useReadingFont();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
@@ -223,7 +225,7 @@ export function InlineReflectionJournal({
       {/* Progress indicator */}
       {answeredCount > 0 && (
         <Animated.View
-          entering={FadeIn.duration(Duration.slow)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
           style={{
             alignItems: 'center',
             marginBottom: Spacing['5'],
@@ -264,13 +266,14 @@ export function InlineReflectionJournal({
             fontSizes={fontSizes}
             scrollViewRef={scrollViewRef}
             editable={effectivePremium}
+            reducedMotion={reducedMotion ?? false}
           />
         );
       })}
 
       {/* Continue in Journal CTA */}
       <Animated.View
-        entering={FadeIn.duration(400).delay(questions.length * 100 + 200)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out).delay(questions.length * 100 + 200)}
         style={{ marginTop: Spacing['5'], alignItems: 'center' }}
       >
         <TouchableOpacity
@@ -325,6 +328,7 @@ function ReflectionQuestionCard({
   fontSizes,
   scrollViewRef,
   editable = true,
+  reducedMotion = false,
 }: {
   index: number;
   question: string;
@@ -339,10 +343,11 @@ function ReflectionQuestionCard({
   fontSizes: { body: number; scripture: number; title: number };
   scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
   editable?: boolean;
+  reducedMotion?: boolean;
 }) {
   return (
     <Animated.View
-      entering={FadeInDown.duration(400).delay(index * 120)}
+      entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out).delay(index * 120)}
       style={{ marginBottom: isExpanded ? Spacing['6'] : Spacing['4'] }}
     >
       {/* Question — tappable */}
@@ -384,7 +389,7 @@ function ReflectionQuestionCard({
       {/* Expanded: TextInput area */}
       {isExpanded && (
         <Animated.View
-          entering={FadeInDown.duration(Duration.normal)}
+          entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
           style={{
             marginTop: Spacing['3'],
             paddingHorizontal: 18,
@@ -452,7 +457,7 @@ function ReflectionQuestionCard({
           accessibilityHint="Tap to edit your response"
         >
           <Animated.View
-            entering={FadeIn.duration(Duration.normal)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={{
               marginLeft: 50,
               marginTop: 6,

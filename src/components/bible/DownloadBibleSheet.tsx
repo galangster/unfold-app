@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import type { ColorTheme } from '@/constants/colors';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 
 interface DownloadBibleSheetProps {
   visible: boolean;
@@ -27,11 +28,13 @@ export function DownloadBibleSheet({
   error,
   onDownload,
 }: DownloadBibleSheetProps) {
+  const reducedMotion = useReducedMotion();
+
   if (!visible) return null;
 
   return (
     <View style={styles.container}>
-      <Animated.View entering={FadeInDown.duration(500)} style={styles.content}>
+      <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)} style={styles.content}>
         <BookBookmarkIcon size={56} color={colors.accent} weight="light" />
 
         <Text style={[styles.title, { color: colors.text, fontFamily: FontFamily.uiSemiBold }]}>

@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet }
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { XIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BookmarkSimpleIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
@@ -11,7 +11,7 @@ import { GoldEmberField } from '@/components/home/GoldEmberField';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
@@ -107,6 +107,7 @@ function getTrialDuration(pkg: PurchasesPackage | undefined | null): string | nu
 }
 
 export default function PaywallScreen() {
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const { source } = useLocalSearchParams<{ source?: string }>();
   const isFromOnboarding = source === 'onboarding' || source === 'onboarding_early';
@@ -436,7 +437,7 @@ export default function PaywallScreen() {
       >
         <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
           {/* Unfold icon + close button row */}
-          <Animated.View entering={FadeIn.duration(400)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
             <Image
               source={require('@/app/icon-paywall-light.png')}
               style={{ width: 28, height: 28, tintColor: colors.accent, opacity: 0.8 }}
@@ -445,7 +446,7 @@ export default function PaywallScreen() {
           </Animated.View>
 
           {/* Hero — title + subtitle */}
-          <Animated.View entering={FadeIn.duration(600)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
             <Text
               style={{
                 fontFamily: FontFamily.display,
@@ -477,7 +478,7 @@ export default function PaywallScreen() {
               return (
                 <Animated.View
                   key={benefit.title}
-                  entering={FadeInDown.duration(Duration.slow).delay(150 + index * 70)}
+                  entering={reducedMotion ? undefined : FadeInDown.duration(Duration.slow).delay(150 + index * 70).easing(Ease.out)}
                   style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}
                 >
                   <View
@@ -524,7 +525,7 @@ export default function PaywallScreen() {
           </View>
 
           {/* ─── Free vs Premium comparison ─── */}
-          <Animated.View entering={FadeInDown.duration(400).delay(600)} style={{ marginTop: Spacing['7'] }}>
+          <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(600).easing(Ease.out)} style={{ marginTop: Spacing['7'] }}>
             {/* Column headers */}
             <View style={{ flexDirection: 'row', marginBottom: 10, paddingLeft: 4 }}>
               <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
@@ -580,7 +581,7 @@ export default function PaywallScreen() {
 
           {/* ─── Trial timeline (when eligible) ─── */}
           {isTrialEligible && (
-            <Animated.View entering={FadeInDown.duration(400).delay(700)} style={{ marginTop: Spacing['7'] }}>
+            <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(700).easing(Ease.out)} style={{ marginTop: Spacing['7'] }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 8 }}>
                 {/* Today */}
                 <View style={{ alignItems: 'center', flex: 1 }}>

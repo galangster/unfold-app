@@ -3,6 +3,7 @@ import { View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { StreakDisplay } from '@/components/StreakDisplay';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
@@ -38,7 +39,7 @@ export function GreetingRow({ userName, onAvatarPress }: Props) {
       }}
     >
       {/* Greeting text — stagger 0ms */}
-      <Animated.View entering={entering(FadeIn.duration(400))} style={{ flex: 1 }}>
+      <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))} style={{ flex: 1 }}>
         <Text
           style={{
             fontFamily: FontFamily.bodyItalic,
@@ -66,7 +67,7 @@ export function GreetingRow({ userName, onAvatarPress }: Props) {
 
       {/* Avatar — stagger 80ms per spec Zone 1 */}
       <Animated.View
-        entering={entering(FadeIn.duration(400).delay(80))}
+        entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
         style={{ marginTop: Spacing['1'] }}
       >
         <ProfileAvatar size={38} onPress={onAvatarPress} />

@@ -16,7 +16,7 @@ import { SunIcon, SparkleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { AccentGlow } from './AccentGlow';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -247,7 +247,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
             </View>
             <AccentGlow color={colors.accent} intensity="strong" active={isMilestone}>
               <Animated.Text
-                entering={entering(FadeIn.delay(200))}
+                entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out).delay(200))}
                 style={{
                   fontFamily: FontFamily.display,
                   fontSize: 32 + (milestoneScale - 1) * 20,
@@ -260,7 +260,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
               </Animated.Text>
             </AccentGlow>
             <Animated.Text
-              entering={entering(FadeIn.delay(400))}
+              entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out).delay(400))}
               style={{
                 fontFamily: FontFamily.uiMedium,
                 fontSize: FontSize.sm,
@@ -275,7 +275,7 @@ export function StreakCelebration({ streak, onComplete }: StreakCelebrationProps
           <View style={{ alignItems: 'center' }}>
             <SunIcon size={50} color={colors.accent} weight="fill" />
             <Animated.Text
-              entering={entering(FadeIn.delay(200))}
+              entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out).delay(200))}
               style={{
                 fontFamily: FontFamily.display,
                 fontSize: 28,

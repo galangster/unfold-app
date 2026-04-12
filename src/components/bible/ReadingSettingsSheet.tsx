@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, Easing, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BookmarkSimpleIcon, CaretRightIcon, MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import type { BibleReaderSettings } from '@/lib/store';
 
@@ -52,6 +53,7 @@ const ANIM = {
 
 export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSavedVerses, savedVersesCount }: ReadingSettingsSheetProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const settings = useUnfoldStore((s) => s.bibleReaderSettings);
   const updateSettings = useUnfoldStore((s) => s.updateBibleReaderSettings);
   const [minusPressed, setMinusPressed] = useState(false);
@@ -80,8 +82,8 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSav
     <>
       {/* Dark overlay */}
       <Animated.View
-        entering={FadeIn.duration(ANIM.overlayEnter)}
-        exiting={FadeOut.duration(ANIM.overlayExit)}
+        entering={reducedMotion ? undefined : FadeIn.duration(ANIM.overlayEnter).easing(Ease.out)}
+        exiting={reducedMotion ? undefined : FadeOut.duration(ANIM.overlayExit).easing(Ease.out)}
         style={styles.overlay}
       >
         <TouchableOpacity
@@ -95,8 +97,8 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSav
 
       {/* Settings card */}
       <Animated.View
-        entering={FadeIn.duration(ANIM.sheetEnter)}
-        exiting={FadeOut.duration(ANIM.sheetExit)}
+        entering={reducedMotion ? undefined : FadeIn.duration(ANIM.sheetEnter).easing(Ease.out)}
+        exiting={reducedMotion ? undefined : FadeOut.duration(ANIM.sheetExit).easing(Ease.out)}
         style={[
           styles.container,
           {

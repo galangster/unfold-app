@@ -21,6 +21,7 @@ import Animated, {
   runOnJS,
   Easing,
   cancelAnimation,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -30,7 +31,7 @@ import { CheckIcon, StarIcon, PlayCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { purchasePackage, restorePurchases } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -939,6 +940,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   onSkip,
 }: ThreeStepPaywallProps) {
   const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -1051,7 +1053,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       <View style={styles.flex1}>
         <Animated.View
           key={currentPage}
-          entering={FadeIn.duration(Duration.normal)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
           style={styles.flex1}
         >
           {currentPage === 0 && (

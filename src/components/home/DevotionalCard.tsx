@@ -29,7 +29,7 @@ import { PlusIcon, CheckIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { useTheme } from '@/lib/theme';
 import { AccentGlow } from '@/components/AccentGlow';
@@ -174,13 +174,13 @@ function FirstTimeEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
       </View>
 
       <Animated.Text
-        entering={entering(FadeIn.duration(800).delay(titleEndTime))}
+        entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime).easing(Ease.out))}
         style={[styles.emptySubtitle, { color: 'rgba(200, 165, 92, 0.7)' }]}
       >
         The world's most personal{'\n'}Bible studies.
       </Animated.Text>
 
-      <Animated.View entering={entering(FadeIn.duration(600).delay(titleEndTime + 400))}>
+      <Animated.View entering={entering(FadeIn.duration(Duration.normal).delay(titleEndTime + 400).easing(Ease.out))}>
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={onCreateNew}
@@ -279,7 +279,7 @@ function ReturningEmptyStateFallback({ onCreateNew }: { onCreateNew: () => void 
 
       {/* Content */}
       <Animated.View
-        entering={entering(FadeIn.duration(500).delay(80))}
+        entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
         style={styles.returningContent}
       >
         <Text style={[styles.returningTitle, { color: colors.text }]}>
@@ -327,7 +327,7 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
   const isYesterday = state.dayLabel === 'Yesterday';
 
   return (
-    <Animated.View entering={entering(FadeIn.duration(300))}>
+    <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
       <View style={[styles.revealCard, {
         backgroundColor: Platform.OS === 'ios'
           ? alpha(colors.backgroundElevated, 0.6)
@@ -791,7 +791,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
 
   return (
     <Animated.View
-      entering={entering(FadeIn.delay(100).duration(400))}
+      entering={entering(FadeIn.delay(100).duration(Duration.normal).easing(Ease.out))}
       style={[inStack ? styles.rootInStack : styles.root, parallaxStyle]}
     >
       {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} isReturningUser={isReturningUser} />}

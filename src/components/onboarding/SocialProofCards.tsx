@@ -1,9 +1,9 @@
 import { View, Text } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Stagger } from '@/constants/animations';
+import { Duration, Ease, Stagger } from '@/constants/animations';
 import type { ColorTheme } from '@/constants/colors';
 
 /**
@@ -39,12 +39,14 @@ interface SocialProofCardsProps {
 }
 
 export function SocialProofCards({ colors }: SocialProofCardsProps) {
+  const reducedMotion = useReducedMotion();
+
   return (
     <View style={{ gap: Spacing['3'], marginTop: Spacing['2'] }}>
       {REVIEWS.map((review, index) => (
         <Animated.View
           key={review.author}
-          entering={FadeIn.delay(index * Stagger.slow).duration(600)}
+          entering={reducedMotion ? undefined : FadeIn.delay(index * Stagger.slow).duration(Duration.slow).easing(Ease.out)}
         >
           <View
             style={{

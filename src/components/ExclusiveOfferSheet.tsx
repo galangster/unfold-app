@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Modal, Linking } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -28,7 +28,7 @@ import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Gift } from 'phosphor-react-native';
 import { logger } from '@/lib/logger';
 
@@ -48,6 +48,7 @@ interface ExclusiveOfferSheetProps {
 
 export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOfferSheetProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -170,7 +171,7 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
       onRequestClose={onDismiss}
     >
       <Animated.View
-        entering={FadeIn.duration(Duration.normal)}
+        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
         style={[styles.root, { backgroundColor: colors.background }]}
       >
         {/* Scrollable content area */}

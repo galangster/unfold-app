@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { BookOpenIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 
 function SeriesCard({
@@ -71,6 +72,7 @@ function SeriesCard({
 export function YourSeriesSection() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
 
@@ -104,7 +106,7 @@ export function YourSeriesSection() {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(400).delay(300)}
+      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
       style={styles.wrapper}
     >
       {/* Section header */}

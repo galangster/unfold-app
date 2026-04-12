@@ -23,6 +23,7 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -40,7 +41,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteFolder } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
@@ -239,10 +240,11 @@ interface NotebookEmptyStateProps {
 
 function NotebookEmptyState({ onCreateNote }: NotebookEmptyStateProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   return (
     <Animated.View
-      entering={FadeIn.duration(Duration.slow).delay(60)}
+      entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(60).easing(Ease.out)}
       style={emptyStyles.container}
     >
       <NotepadIcon
@@ -379,6 +381,7 @@ interface FABProps {
 
 function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const translateY = useSharedValue(visible ? 0 : 200);
 
@@ -408,7 +411,7 @@ function FloatingActionButton({ onPress, visible, tabBarHeight }: FABProps) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(Duration.normal).delay(300)}
+      entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(300).easing(Ease.out)}
       style={[
         fabStyles.container,
         {
@@ -465,6 +468,7 @@ const fabStyles = StyleSheet.create({
 export default function JournalHubScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -982,7 +986,7 @@ export default function JournalHubScreen() {
         >
           {/* Header with search toggle */}
           <Animated.View
-            entering={FadeIn.duration(700)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             style={mainStyles.headerRow}
           >
             <Text
@@ -1020,7 +1024,7 @@ export default function JournalHubScreen() {
           {/* Search Bar */}
           {showSearch && (
             <Animated.View
-              entering={FadeIn.duration(Duration.normal)}
+              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
               style={mainStyles.searchContainer}
             >
               <View
@@ -1062,11 +1066,11 @@ export default function JournalHubScreen() {
           {/* REFLECTIONS TAB (existing content — unchanged) */}
           {/* ================================================================ */}
           {activeSegment === 'reflections' && (
-            <Animated.View entering={FadeIn.duration(Duration.normal)}>
+            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
               {/* Today's Reflection Card */}
               {currentDevotional && (
                 <Animated.View
-                  entering={FadeIn.duration(Duration.slow).delay(30)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(30).easing(Ease.out)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['5'] }}
                 >
                   <TouchableOpacity
@@ -1201,7 +1205,7 @@ export default function JournalHubScreen() {
                 firstUnansweredQuestion &&
                 reflectionQuestions.length > 1 && (
                   <Animated.View
-                    entering={FadeIn.duration(Duration.slow).delay(60)}
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(60).easing(Ease.out)}
                     style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['4'] }}
                   >
                     <TouchableOpacity
@@ -1259,7 +1263,7 @@ export default function JournalHubScreen() {
               {/* YOUR DEVOTIONALS — grouped by series */}
               {(seriesWithEntries.length > 0 || !currentDevotional) && (
                 <Animated.View
-                  entering={FadeIn.duration(Duration.slow).delay(90)}
+                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(90).easing(Ease.out)}
                   style={{ paddingHorizontal: Spacing['6'], marginTop: Spacing['7'] }}
                 >
                   {seriesWithEntries.length > 0 ? (
@@ -1445,7 +1449,7 @@ export default function JournalHubScreen() {
           {/* NOTEBOOK TAB (new content) */}
           {/* ================================================================ */}
           {activeSegment === 'notebook' && (
-            <Animated.View entering={FadeIn.duration(Duration.normal)}>
+            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
               {/* Folder filter chips */}
               <View style={mainStyles.filterRow}>
                 <FolderChips

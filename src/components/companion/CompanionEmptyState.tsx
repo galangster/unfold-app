@@ -11,6 +11,7 @@ import Animated, {
   withDelay,
   Easing,
   FadeOut,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import {
   ChatCircleDotsIcon,
@@ -27,7 +28,7 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore } from '@/lib/store';
 
@@ -128,6 +129,7 @@ function FadeSlideIn({
 
 export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const userName = useUnfoldStore((s) => s.user?.name ?? null);
 
   const greeting = useMemo(() => {
@@ -170,7 +172,7 @@ export function CompanionEmptyState({ onSelectStarter, todayTheme }: Props) {
 
   return (
     <Animated.View
-      exiting={FadeOut.duration(Duration.fast)}
+      exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
       style={{ flex: 1, justifyContent: 'center', paddingHorizontal: Spacing['6'] }}
     >
       {/* Companion icon */}

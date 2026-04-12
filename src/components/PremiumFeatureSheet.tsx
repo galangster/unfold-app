@@ -19,6 +19,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   runOnJS,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -41,6 +42,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 
 // ---------------------------------------------------------------------------
 // Feature definitions — each gate point maps to contextual copy + icon
@@ -160,6 +162,7 @@ const RUBBER_BAND_FACTOR = 0.3;
 export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatureSheetProps) {
   const { colors } = useTheme();
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
 
   const config = FEATURES[feature] ?? FEATURES.general;
   const IconComponent = config.icon as React.ComponentType<{ size: number; color: string; weight: IconWeight }>;
@@ -243,8 +246,8 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
       <GestureHandlerRootView style={pfStyles.gestureRoot}>
         {/* Backdrop — tap to dismiss */}
         <Animated.View
-          entering={FadeIn.duration(250)}
-          exiting={FadeOut.duration(200)}
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+          exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
           style={pfStyles.backdrop}
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -253,8 +256,8 @@ export function PremiumFeatureSheet({ visible, onClose, feature }: PremiumFeatur
         {/* Sheet content — draggable */}
         <GestureDetector gesture={panGesture}>
           <Animated.View
-            entering={SlideInDown.duration(350).damping(20).stiffness(200)}
-            exiting={SlideOutDown.duration(250)}
+            entering={reducedMotion ? undefined : SlideInDown.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : SlideOutDown.duration(Duration.fast).easing(Ease.out)}
             style={[
               pfStyles.sheet,
               { backgroundColor: colors.backgroundElevated },

@@ -9,10 +9,12 @@ import Animated, {
   Easing,
   interpolateColor,
   cancelAnimation,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import type { ColorTheme } from '@/constants/colors';
 
 // Single character that animates in with gold → text color fade
@@ -79,6 +81,8 @@ interface ShockStatProps {
 }
 
 export function ShockStat({ colors, onReady }: ShockStatProps) {
+  const reducedMotion = useReducedMotion();
+
   useEffect(() => {
     // Haptic when stats land
     const timer1 = setTimeout(() => {
@@ -103,7 +107,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
   // t=3800   haptic + onReady
 
   return (
-    <Animated.View entering={FadeIn.duration(600)} style={{ flex: 1 }}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={{ flex: 1 }}>
       {/* 93% — top-left, desire */}
       <View style={{
         position: 'absolute',
@@ -117,7 +121,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
           colors={colors}
         />
         <Animated.Text
-          entering={FadeIn.delay(900).duration(800)}
+          entering={reducedMotion ? undefined : FadeIn.delay(900).duration(Duration.slow).easing(Ease.out)}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 16,
@@ -145,7 +149,7 @@ export function ShockStat({ colors, onReady }: ShockStatProps) {
           colors={colors}
         />
         <Animated.Text
-          entering={FadeIn.delay(3600).duration(800)}
+          entering={reducedMotion ? undefined : FadeIn.delay(3600).duration(Duration.slow).easing(Ease.out)}
           style={{
             fontFamily: FontFamily.body,
             fontSize: 16,

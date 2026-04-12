@@ -23,8 +23,9 @@ import {
 import Animated, {
   FadeIn,
   FadeOut,
+  useReducedMotion,
 } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import {
   useEditorBridge,
@@ -104,6 +105,7 @@ export function NoteEditor({
   onScriptureInserted,
 }: NoteEditorProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   const [title, setTitle] = useState(initialNote?.title ?? '');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -350,8 +352,8 @@ export function NoteEditor({
       <View style={styles.saveIndicatorContainer}>
         {saveState === 'saved' && (
           <Animated.View
-            entering={FadeIn.duration(Duration.normal)}
-            exiting={FadeOut.duration(Duration.slow)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={styles.saveIndicator}
           >
             <CheckIcon size={14} color={colors.textSubtle} weight="bold" />
@@ -386,7 +388,7 @@ export function NoteEditor({
             Uses pointerEvents='none' so taps pass through while the overlay fades. */}
         {!editorReady && (
           <Animated.View
-            exiting={FadeOut.duration(Duration.normal)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             pointerEvents="none"
             style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
           />

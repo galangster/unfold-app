@@ -1,18 +1,20 @@
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CaretLeftIcon, BookmarkSimpleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 
 export default function SavedPassagesScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const removeBookmark = useUnfoldStore((s) => s.removeBookmark);
 
@@ -67,7 +69,7 @@ export default function SavedPassagesScreen() {
             {bookmarks.map((bookmark, index) => (
               <Animated.View
                 key={bookmark.id}
-                entering={FadeInDown.duration(400).delay(index * 60)}
+                entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(index * 60).easing(Ease.out)}
               >
                 <View
                   style={{

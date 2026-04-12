@@ -38,6 +38,7 @@ import Animated, {
   withTiming,
   runOnJS,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 
 // Animation config
@@ -55,7 +56,7 @@ import {
   WarningCircleIcon,
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
@@ -95,6 +96,7 @@ export function ScriptureSearchSheet({
   existingRefs = [],
 }: ScriptureSearchSheetProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -372,7 +374,7 @@ export function ScriptureSearchSheet({
 
                 {/* Search state feedback */}
                 {searchState === 'searching' && (
-                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={sheetStyles.stateContainer}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={sheetStyles.stateContainer}>
                     <ActivityIndicator size="small" color={colors.accent} />
                     <Text style={[sheetStyles.stateText, { color: colors.textMuted }]}>
                       Searching...
@@ -381,7 +383,7 @@ export function ScriptureSearchSheet({
                 )}
 
                 {searchState === 'not-found' && (
-                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={sheetStyles.stateContainer}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={sheetStyles.stateContainer}>
                     <WarningCircleIcon size={16} color={colors.textHint} weight="light" />
                     <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
                       Verse not found. Try a reference like "John 3:16"
@@ -390,7 +392,7 @@ export function ScriptureSearchSheet({
                 )}
 
                 {searchState === 'error' && (
-                  <Animated.View entering={FadeIn.duration(Duration.normal)} style={sheetStyles.stateContainer}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={sheetStyles.stateContainer}>
                     <WarningCircleIcon size={16} color={colors.textHint} weight="light" />
                     <Text style={[sheetStyles.stateText, { color: colors.textHint }]}>
                       Something went wrong. Please try again.
@@ -401,8 +403,8 @@ export function ScriptureSearchSheet({
                 {/* Verse preview card */}
                 {searchState === 'found' && verseResult && (
                   <Animated.View
-                    entering={FadeIn.duration(Duration.slow)}
-                    exiting={FadeOut.duration(Duration.fast)}
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
+                    exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
                     style={[
                       sheetStyles.previewCard,
                       {
@@ -423,7 +425,7 @@ export function ScriptureSearchSheet({
 
                 {/* Insert button */}
                 {searchState === 'found' && verseResult && parsedRef && (
-                  <Animated.View entering={FadeIn.duration(Duration.normal).delay(100)}>
+                  <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(100).easing(Ease.out)}>
                     <TouchableOpacity
                       onPress={handleInsert}
                       activeOpacity={0.7}

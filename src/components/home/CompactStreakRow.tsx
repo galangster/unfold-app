@@ -6,6 +6,7 @@ import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -27,7 +28,7 @@ export function CompactStreakRow({ streakCount, onPress }: Props) {
   const freezeDots = streakCount > 0 && freezeProgress === 0 ? 7 : freezeProgress;
 
   return (
-    <Animated.View entering={entering(FadeIn.duration(400).delay(400))}>
+    <Animated.View entering={entering(FadeIn.duration(Duration.normal).delay(400).easing(Ease.out))}>
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={onPress}

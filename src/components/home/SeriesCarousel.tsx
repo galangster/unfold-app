@@ -16,7 +16,7 @@ import { CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Stagger } from '@/constants/animations';
+import { Duration, Ease, Stagger } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional } from '@/lib/store';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -60,7 +60,7 @@ function SeriesCardInner({
   return (
     <Animated.View
       entering={entering(
-        FadeInRight.duration(300).delay(Stagger.normal * index),
+        FadeInRight.duration(Duration.normal).delay(Stagger.normal * index).easing(Ease.out),
       )}
       style={[{ width: CARD_WIDTH, marginRight: CARD_GAP }, animatedStyle]}
     >
@@ -169,7 +169,7 @@ export function SeriesCarousel() {
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(400).delay(320))}
+      entering={entering(FadeIn.duration(Duration.normal).delay(320).easing(Ease.out))}
       style={styles.wrapper}
     >
       {/* Header row */}

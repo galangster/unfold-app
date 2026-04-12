@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, Keyboard, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -11,7 +11,7 @@ import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, CopyIcon, Highlighter
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -67,7 +67,7 @@ const HEADER_HEIGHT = 52;
  * ───────────────────────────────────────────────────────── */
 
 const ANIM = {
-  verseFade:     400,   // verse content fade in
+  verseFade:     Duration.normal,   // verse content fade in
   contextEnter:  180,   // context bar enter (fade + slide)
   contextExit:   100,   // context bar exit (fade only)
   flashHold:     600,   // flash highlight hold before fade
@@ -290,6 +290,7 @@ const VerseItem = React.memo(({
 
 export default function BibleReaderScreen() {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const params = useLocalSearchParams<{ bookId: string; chapter: string; verse?: string }>();
   const bookId = parseInt(params.bookId ?? '1', 10) || 1;
@@ -932,7 +933,7 @@ export default function BibleReaderScreen() {
             <ActivityIndicator color={colors.textSubtle} size="small" />
           </View>
         ) : (
-          <Animated.View entering={FadeIn.duration(ANIM.verseFade)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(ANIM.verseFade).easing(Ease.out)}>
             {verses?.map((v) => (
               <View
                 key={v.verse}
@@ -1027,7 +1028,7 @@ export default function BibleReaderScreen() {
       {/* No exiting animation — tab bar snaps on top instantly, so exit plays behind it invisibly */}
       {showActions && (
         <Animated.View
-          entering={FadeIn.duration(ANIM.contextEnter)}
+          entering={reducedMotion ? undefined : FadeIn.duration(ANIM.contextEnter).easing(Ease.out)}
           style={[
             styles.contextBarFull,
             {
@@ -1169,8 +1170,8 @@ export default function BibleReaderScreen() {
       {toast !== null && (
         <View style={styles.toast} pointerEvents="none">
           <Animated.View
-            entering={FadeIn.duration(ANIM.toastEnter)}
-            exiting={FadeOut.duration(ANIM.toastExit)}
+            entering={reducedMotion ? undefined : FadeIn.duration(ANIM.toastEnter).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(ANIM.toastExit).easing(Ease.out)}
             style={[styles.toastPill, { backgroundColor: isDark ? '#3A3A3C' : 'rgba(30, 30, 30, 0.92)' }]}
           >
             <Text style={styles.toastText}>{toast}</Text>

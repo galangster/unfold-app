@@ -5,8 +5,8 @@
  * ANIMATION: Fade + slide up on entrance (200ms, ease-out).
  */
 import { View, Text } from 'react-native';
-import Animated, { FadeInDown, Easing } from 'react-native-reanimated';
-import { Duration } from '@/constants/animations';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
@@ -20,7 +20,7 @@ import type { CompanionMessage } from '@/lib/companion-chat-store';
  *         duration 200ms, ease-out cubic
  * ───────────────────────────────────────────────────────── */
 
-const ENTERING = FadeInDown.duration(Duration.normal).easing(Easing.out(Easing.cubic));
+const ENTERING = FadeInDown.duration(Duration.normal).easing(Ease.out);
 
 interface Props {
   message: CompanionMessage;
@@ -28,10 +28,11 @@ interface Props {
 
 export function UserMessageBubble({ message }: Props) {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
 
   return (
     <Animated.View
-      entering={ENTERING}
+      entering={reducedMotion ? undefined : ENTERING}
       style={{ alignItems: 'flex-end', paddingRight: Spacing['4'], paddingLeft: 60 }}
     >
       <View

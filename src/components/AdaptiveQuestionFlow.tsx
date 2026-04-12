@@ -9,9 +9,10 @@ import {
   LayoutAnimation,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
+import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
@@ -27,6 +28,7 @@ interface AdaptiveQuestionFlowProps {
 
 export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: AdaptiveQuestionFlowProps) {
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [answer, setAnswer] = useState('');
   const [showInput, setShowInput] = useState(false);
 
@@ -91,11 +93,11 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
         </View>
         
         {progressMessage && (
-          <Animated.Text 
-            entering={FadeIn}
-            style={{ 
-              fontFamily: FontFamily.body, 
-              fontSize: 13, 
+          <Animated.Text
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 13,
               color: colors.textMuted,
               marginTop: Spacing['2'],
               fontStyle: 'italic',
@@ -117,7 +119,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
 
       {/* Subtext */}
       {showInput && (
-        <Animated.View entering={FadeIn} style={{ marginBottom: Spacing['8'] }}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ marginBottom: Spacing['8'] }}>
           <Text style={{
             fontFamily: FontFamily.body,
             fontSize: FontSize.base,
@@ -131,7 +133,7 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
 
       {/* Input */}
       {showInput && !shouldGenerateNow && (
-        <Animated.View entering={FadeIn} style={{ flex: 1 }}>
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flex: 1 }}>
           <TextInput
             style={{
               fontFamily: FontFamily.body,
@@ -190,8 +192,8 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
 
       {/* Generating state */}
       {shouldGenerateNow && (
-        <Animated.View 
-          entering={FadeIn}
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
           style={{
             flex: 1,
             justifyContent: 'center',

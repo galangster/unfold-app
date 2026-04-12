@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { CaretLeftIcon, ArrowRightIcon } from 'phosphor-react-native';
 
@@ -53,6 +54,7 @@ function generateSampleDevotional(name: string, aboutMe: string): DevotionalCont
 export default function SampleDevotionalScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const user = useUnfoldStore((s) => s.user);
   const [showContent, setShowContent] = useState(false);
 
@@ -85,7 +87,7 @@ export default function SampleDevotionalScreen() {
 
         {showContent && (
           <>
-            <Animated.View entering={FadeIn.duration(400)} style={{ paddingHorizontal: Spacing['8'], marginBottom: Spacing['4'] }}>
+            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ paddingHorizontal: Spacing['8'], marginBottom: Spacing['4'] }}>
               <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 13, color: colors.accent, marginBottom: Spacing['2'] }}>
                 YOUR FIRST DEVOTIONAL
               </Text>
@@ -95,7 +97,7 @@ export default function SampleDevotionalScreen() {
             </Animated.View>
 
             <Animated.View
-              entering={FadeInUp.duration(500).delay(200)}
+              entering={reducedMotion ? undefined : FadeInUp.duration(Duration.normal).delay(200).easing(Ease.out)}
               style={{
                 flex: 1,
                 marginHorizontal: Spacing['6'],
@@ -155,7 +157,7 @@ export default function SampleDevotionalScreen() {
               </ScrollView>
             </Animated.View>
 
-            <Animated.View entering={FadeIn.duration(400).delay(400)} style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'], paddingTop: Spacing['4'] }}>
+            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(400).easing(Ease.out)} style={{ paddingHorizontal: Spacing['6'], paddingBottom: Spacing['6'], paddingTop: Spacing['4'] }}>
               <Text
                 style={{
                   fontFamily: FontFamily.body,

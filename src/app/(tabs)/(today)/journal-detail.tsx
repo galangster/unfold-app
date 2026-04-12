@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
   CaretLeftIcon,
@@ -14,6 +14,7 @@ import {
 } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
+import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, SoapResponses } from '@/lib/store';
@@ -95,6 +96,7 @@ function SoapSectionDisplay({
 export default function JournalDetailScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ entryId: string }>();
 
   const entryId = params.entryId ?? '';
@@ -179,7 +181,7 @@ export default function JournalDetailScreen() {
           contentContainerStyle={{ paddingHorizontal: Spacing['6'], paddingTop: Spacing['6'], paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
-          <Animated.View entering={FadeIn.duration(400)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
             {/* Meta info */}
             <View style={{ marginBottom: Spacing['6'] }}>
               <Text

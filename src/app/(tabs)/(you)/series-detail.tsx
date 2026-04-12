@@ -12,6 +12,7 @@ import Animated, {
   withDelay,
   interpolate,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -25,6 +26,7 @@ import { format } from 'date-fns';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { alpha } from '@/components/ui';
@@ -98,6 +100,7 @@ export default function SeriesDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
@@ -179,7 +182,7 @@ export default function SeriesDetailScreen() {
           contentContainerStyle={styles.scrollContent}
         >
           {/* Series info */}
-          <Animated.View entering={FadeIn.duration(300)}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
             <Text style={[styles.dateLabel, { color: colors.textHint }]}>
               {createdDate}
             </Text>
@@ -222,7 +225,7 @@ export default function SeriesDetailScreen() {
                 return (
                   <Animated.View
                     key={day.dayNumber}
-                    entering={FadeIn.duration(250).delay(day.dayNumber * 40)}
+                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(day.dayNumber * 40).easing(Ease.out)}
                   >
                     <TouchableOpacity
                       activeOpacity={isLocked ? 1 : 0.7}

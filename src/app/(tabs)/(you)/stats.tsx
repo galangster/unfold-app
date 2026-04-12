@@ -2,13 +2,14 @@ import { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { CaretLeftIcon, SunIcon, BookOpenIcon, CalendarIcon, CrosshairIcon, TrophyIcon, SparkleIcon, CompassIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
+import { Duration, Ease } from '@/constants/animations';
 import { BIBLE_STUDY_METHODS } from '@/constants/bible-study-methods';
 import { THEME_CATEGORIES, type ThemeCategory } from '@/constants/devotional-types';
 import { useTheme } from '@/lib/theme';
@@ -247,7 +248,7 @@ export default function StatsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {selectedThemeName && (
-            <Animated.View entering={entering(FadeInDown.duration(420))}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).easing(Ease.out))}>
               <View style={[statStyles.focusedBanner, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                 <Text style={[statStyles.focusedBannerText, { color: colors.textSubtle }]}>
                   Focused view · {selectedThemeName}
@@ -257,7 +258,7 @@ export default function StatsScreen() {
           )}
 
           {/* Streak Hero */}
-          <Animated.View entering={entering(FadeInDown.duration(500))}>
+          <Animated.View entering={entering(FadeInDown.duration(Duration.normal).easing(Ease.out))}>
             <View style={[statStyles.streakHero, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
               <SunIcon size={32} color={colors.accent} weight="light" />
               <Text style={[statStyles.streakNumber, { color: colors.text }]}>
@@ -276,7 +277,7 @@ export default function StatsScreen() {
 
           {/* Stats Grid */}
           <View style={statStyles.gridRow}>
-            <Animated.View entering={entering(FadeInDown.duration(500).delay(100))} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(100).easing(Ease.out))} style={statStyles.flex1}>
               <StatCard
                 icon={<CalendarIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalDaysCompleted}
@@ -284,7 +285,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={entering(FadeInDown.duration(500).delay(150))} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(150).easing(Ease.out))} style={statStyles.flex1}>
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.uniqueScriptures}
@@ -295,7 +296,7 @@ export default function StatsScreen() {
           </View>
 
           <View style={statStyles.gridRow}>
-            <Animated.View entering={entering(FadeInDown.duration(500).delay(200))} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(200).easing(Ease.out))} style={statStyles.flex1}>
               <StatCard
                 icon={<CrosshairIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.completedJourneys}
@@ -303,7 +304,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={entering(FadeInDown.duration(500).delay(250))} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(250).easing(Ease.out))} style={statStyles.flex1}>
               <StatCard
                 icon={<SparkleIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.themesExplored}
@@ -314,7 +315,7 @@ export default function StatsScreen() {
           </View>
 
           <View style={statStyles.gridRow}>
-            <Animated.View entering={entering(FadeInDown.duration(500).delay(300))} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(300).easing(Ease.out))} style={statStyles.flex1}>
               <StatCard
                 icon={<TrophyIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJournalEntries}
@@ -322,7 +323,7 @@ export default function StatsScreen() {
                 colors={colors}
               />
             </Animated.View>
-            <Animated.View entering={entering(FadeInDown.duration(500).delay(350))} style={statStyles.flex1}>
+            <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(350).easing(Ease.out))} style={statStyles.flex1}>
               <StatCard
                 icon={<BookOpenIcon size={18} color={colors.accent} weight="light" />}
                 value={stats.totalJourneys}
@@ -335,7 +336,7 @@ export default function StatsScreen() {
           {/* Method variety row */}
           {stats.uniqueMethodsUsed > 0 && (
             <View style={statStyles.gridRow}>
-              <Animated.View entering={entering(FadeInDown.duration(500).delay(400))} style={statStyles.flex1}>
+              <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(400).easing(Ease.out))} style={statStyles.flex1}>
                 <StatCard
                   icon={<CompassIcon size={18} color={colors.accent} weight="light" />}
                   value={stats.uniqueMethodsUsed}
@@ -343,7 +344,7 @@ export default function StatsScreen() {
                   colors={colors}
                 />
               </Animated.View>
-              <Animated.View entering={entering(FadeInDown.duration(500).delay(450))} style={statStyles.flex1}>
+              <Animated.View entering={entering(FadeInDown.duration(Duration.normal).delay(450).easing(Ease.out))} style={statStyles.flex1}>
                 {stats.favoriteMethodName ? (
                   <View style={[statStyles.favoriteMethodCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                     <CompassIcon size={18} color={colors.accent} weight="light" />
@@ -364,7 +365,7 @@ export default function StatsScreen() {
           <View style={statStyles.spacer} />
 
           {/* Encouraging message */}
-          <Animated.View entering={entering(FadeIn.duration(600).delay(500))}>
+          <Animated.View entering={entering(FadeIn.duration(Duration.normal).delay(500).easing(Ease.out))}>
             <View style={[statStyles.quoteBlock, { borderLeftColor: colors.accent }]}>
               <Text style={[statStyles.quoteText, { color: colors.textMuted }]}>
                 {stats.totalDaysCompleted === 0

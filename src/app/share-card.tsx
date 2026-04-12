@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
@@ -32,7 +32,7 @@ import {
 import { XIcon, UploadSimpleIcon, DownloadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { Duration } from '@/constants/animations';
+import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
@@ -118,6 +118,7 @@ export default function ShareCardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark } = useTheme();
+  const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{
     text: string;
     reference: string;
@@ -370,7 +371,7 @@ export default function ShareCardScreen() {
       </View>
 
       {/* Card Preview (RN views — just for display, NOT captured) */}
-      <Animated.View entering={FadeIn.duration(Duration.slow)} style={s.cardWrapper}>
+      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)} style={s.cardWrapper}>
         <View style={[s.card, { backgroundColor: activeTheme.bg }]}>
           {/* Verse / quote text */}
           <View style={s.textContainer}>
@@ -434,7 +435,7 @@ export default function ShareCardScreen() {
       </Animated.View>
 
       {/* Theme carousel */}
-      <Animated.View entering={FadeIn.duration(Duration.slow).delay(100)} style={s.carouselWrapper}>
+      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).delay(100).easing(Ease.out)} style={s.carouselWrapper}>
         <FlatList
           data={CARD_THEMES}
           horizontal
@@ -491,7 +492,7 @@ export default function ShareCardScreen() {
 
       {/* Action buttons */}
       <Animated.View
-        entering={FadeInUp.duration(Duration.slow).delay(200)}
+        entering={reducedMotion ? undefined : FadeInUp.duration(Duration.slow).delay(200).easing(Ease.out)}
         style={[s.actionsWrapper, { paddingBottom: insets.bottom + 16 }]}
       >
         <View style={s.actionsRow}>
