@@ -755,6 +755,52 @@ export default function NoteDetailScreen() {
   }, [pendingScriptureInsert, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
+  /* ───── Save command ─────
+   * Unified entry point for persisting the editor state. Returns null when
+   * the editor is empty and the caller did not opt in to allowEmpty.
+   * Callers own the surrounding UX (indicator, navigation, mode switch).
+   */
+  const saveNote = useCallback(
+    async (opts?: { allowEmpty?: boolean }): Promise<string | null> => {
+      const html = await editor.getHTML();
+      const titleVal = latestTitleRef.current;
+
+      const isEmpty = !titleVal.trim() && (!html || html === '<p></p>');
+      if (isEmpty && !opts?.allowEmpty) return null;
+
+      const contentHtml = html || '<p></p>';
+      latestContentRef.current = { title: titleVal, content: contentHtml };
+
+      if (noteId) {
+        updateNote(noteId, {
+          title: titleVal,
+          content: contentHtml,
+          category,
+          scriptureRefs,
+        });
+        return noteId;
+      }
+
+      const id = addNote({
+        title: titleVal,
+        content: contentHtml,
+        category,
+        tags: [],
+        isFavorite: false,
+        scriptureRefs,
+        devotionalId: params.devotionalId,
+        dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
+        bibleBookId: params.bookId ? Number(params.bookId) : undefined,
+        bibleChapter: params.chapter ? Number(params.chapter) : undefined,
+        folderId: initialFolderIdRef.current,
+      });
+      setNoteId(id);
+      logger.log('[NoteDetail] Created new note:', id);
+      return id;
+    },
+    [editor, noteId, category, scriptureRefs, params, addNote, updateNote],
+  );
+
   /* ───── Debounced auto-save ───── */
 
   const scheduleAutoSave = useCallback(() => {
@@ -763,47 +809,17 @@ export default function NoteDetailScreen() {
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
 
     saveTimeoutRef.current = setTimeout(async () => {
-      const html = await editor.getHTML();
-      const titleVal = latestTitleRef.current;
-
-      if (!titleVal.trim() && (!html || html === '<p></p>')) return;
-
-      // Update the content ref
-      latestContentRef.current = { title: titleVal, content: html };
+      const id = await saveNote();
+      if (id === null) return;
 
       setSaveState('saving');
-
-      if (noteId) {
-        updateNote(noteId, {
-          title: titleVal,
-          content: html,
-          category,
-        });
-      } else {
-        const id = addNote({
-          title: titleVal,
-          content: html,
-          category,
-          tags: [],
-          isFavorite: false,
-          scriptureRefs,
-          devotionalId: params.devotionalId,
-          dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-          bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-          bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-          folderId: initialFolderIdRef.current,
-        });
-        setNoteId(id);
-        logger.log('[NoteDetail] Auto-saved new note:', id);
-      }
-
       setTimeout(() => {
         setSaveState('saved');
         AccessibilityInfo.announceForAccessibility('Note saved');
         savedResetRef.current = setTimeout(() => setSaveState('idle'), 2000);
       }, 150);
     }, 800);
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, gate]);
+  }, [saveNote, gate]);
 
   // Mirror scheduleAutoSave into a ref so the ack handler effect (which is
   // registered once on mount with empty deps) can always reach the latest
@@ -839,38 +855,10 @@ export default function NoteDetailScreen() {
   const handleDone = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Get the final content from the editor
-    const html = await editor.getHTML();
-    const titleVal = latestTitleRef.current;
+    const savedId = await saveNote();
 
-    // Persist
-    if (titleVal.trim() || (html && html !== '<p></p>')) {
-      if (noteId) {
-        updateNote(noteId, {
-          title: titleVal,
-          content: html,
-          category,
-          scriptureRefs,
-        });
-      } else {
-        const id = addNote({
-          title: titleVal,
-          content: html,
-          category,
-          tags: [],
-          isFavorite: false,
-          scriptureRefs,
-          devotionalId: params.devotionalId,
-          dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-          bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-          bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-          folderId: initialFolderIdRef.current,
-        });
-        setNoteId(id);
-        logger.log('[NoteDetail] Created new note on Done:', id);
-      }
-    } else if (!noteId) {
-      // Empty new note — just go back
+    // Empty new note — just go back without entering read mode
+    if (savedId === null && !noteId) {
       router.back();
       return;
     }
@@ -884,47 +872,20 @@ export default function NoteDetailScreen() {
     // Clear any pending save timers
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setSaveState('idle');
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, router, colors]);
+  }, [editor, noteId, colors, router, saveNote]);
 
 
   /* ───── Navigation ───── */
 
   const handleBack = useCallback(async () => {
-    // If editing, save before going back
+    // If editing, save before going back. saveNote is a no-op on empty,
+    // which is fine — we're navigating away either way.
     if (isEditingRef.current) {
-      const html = await editor.getHTML();
-      const titleVal = latestTitleRef.current;
-
-      if (titleVal.trim() || (html && html !== '<p></p>')) {
-        if (noteId) {
-          updateNote(noteId, {
-            title: titleVal,
-            content: html,
-            category,
-            scriptureRefs,
-          });
-        } else {
-          const id = addNote({
-            title: titleVal,
-            content: html,
-            category,
-            tags: [],
-            isFavorite: false,
-            scriptureRefs,
-            devotionalId: params.devotionalId,
-            dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-            bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-            bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-            folderId: initialFolderIdRef.current,
-          });
-          setNoteId(id);
-          logger.log('[NoteDetail] Saved new note on back:', id);
-        }
-      }
+      await saveNote();
     }
 
     router.back();
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, router]);
+  }, [router, saveNote]);
 
 
   /* ───── Menu actions ───── */
@@ -935,25 +896,14 @@ export default function NoteDetailScreen() {
    */
   const ensureNoteSaved = useCallback(async (): Promise<string> => {
     if (noteId) return noteId;
-    const html = await editor.getHTML();
-    const titleVal = latestTitleRef.current;
-    const id = addNote({
-      title: titleVal,
-      content: html || '<p></p>',
-      category,
-      tags: [],
-      isFavorite: false,
-      scriptureRefs,
-      devotionalId: params.devotionalId,
-      dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-      bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-      bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-      folderId: initialFolderIdRef.current,
-    });
-    setNoteId(id);
-    logger.log('[NoteDetail] Saved note via menu action:', id);
+    const id = await saveNote({ allowEmpty: true });
+    if (!id) {
+      throw new Error(
+        'ensureNoteSaved: saveNote returned null despite allowEmpty',
+      );
+    }
     return id;
-  }, [noteId, editor, category, scriptureRefs, params, addNote]);
+  }, [noteId, saveNote]);
 
   const handleToggleFavorite = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
