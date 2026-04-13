@@ -51,7 +51,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
-import { isHtmlContent } from '@/components/notebook/NoteEditor';
+import { isHtmlContent } from '@/components/notebook/html-utils';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';

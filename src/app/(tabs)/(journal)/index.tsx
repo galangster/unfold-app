@@ -52,7 +52,7 @@ import { FolderChips } from '@/components/notebook/FolderChips';
 import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { UndoToast } from '@/components/UndoToast';
-import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
+import { stripHtml, isHtmlContent } from '@/components/notebook/html-utils';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';

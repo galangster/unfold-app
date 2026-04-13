@@ -17,7 +17,7 @@ import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { ScriptureRefPill } from './ScriptureRefPill';
-import { stripHtml, isHtmlContent } from './NoteEditor';
+import { stripHtml, isHtmlContent } from './html-utils';
 
 import { Note, NoteCategory } from '@/lib/store';
 
