@@ -48,7 +48,6 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
-import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { isHtmlContent } from '@/components/notebook/NoteEditor';
@@ -161,12 +160,43 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
     ul[data-type="taskList"] .is-empty::before {
       display: none !important;
     }
+    /* Blockquote — also serves as the scripture callout when populated by
+       the scripture insertion flow. Two paragraphs (verse + reference) get
+       the callout treatment; single-paragraph user blockquotes stay simple
+       italic quotes via the :last-child:not(:first-child) guard.
+
+       Design constraint: NO transparency. All surface and text colors are
+       solid hex values from the design system. The lifted feel comes from
+       backgroundElevated (a real second surface), not an alpha overlay. */
     blockquote {
       border-left: 3px solid ${colors.accent};
-      padding-left: 14px;
-      margin: 8px 0 8px 0;
-      color: ${colors.textMuted};
+      padding: 14px 18px;
+      margin: 16px 0;
+      background-color: ${colors.backgroundElevated};
+      border-radius: 0 10px 10px 0;
+      color: ${colors.text};
+    }
+    blockquote p {
+      margin: 0;
       font-style: italic;
+      line-height: 1.55;
+      color: ${colors.text};
+    }
+    blockquote p + p {
+      margin-top: 10px;
+    }
+    /* Scripture reference: the second paragraph in a multi-paragraph
+       blockquote. Upright, smaller, slightly tracked — the typical
+       "— Reference" cap on a callout. Differentiated from the verse
+       text by size, weight, and style (NOT by opacity), so the design
+       contains no transparent values. Single-paragraph blockquotes
+       (where p is both first and last) are not affected. */
+    blockquote p:last-child:not(:first-child) {
+      font-style: normal;
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.2px;
+      color: ${colors.text};
     }
     strong { font-weight: 700; }
     em { font-style: italic; }
@@ -404,54 +434,89 @@ export default function NoteDetailScreen() {
   }, []);
 
 
-  /* ───── Scripture insertion via pending prop ───── */
+  /* ───── Scripture insertion via pending prop ─────
+   *
+   * Inserts a scripture as a blockquote callout at the user's cursor
+   * position. The blockquote contains TWO paragraphs:
+   *   1. The verse text (rendered italic via CSS)
+   *   2. The reference, prefixed with an em-dash (rendered upright/muted
+   *      via `blockquote p:last-child:not(:first-child)` in buildEditorCSS)
+   *
+   * After the blockquote we insert an EMPTY trailing paragraph so the
+   * cursor has a clean landing pad outside the callout — without it,
+   * the cursor stays trapped at the end of the reference paragraph and
+   * the user's next keystroke extends the reference instead of starting
+   * a new line of body text.
+   *
+   * We use JSON.stringify on the entire content array to escape every
+   * special character (quotes, backslashes, unicode) in one step, rather
+   * than maintaining a hand-rolled escape function that would silently
+   * break on the first verse containing an embedded apostrophe or smart
+   * quote we forgot about.
+   *
+   * Display behavior is intentionally split from data persistence:
+   *   - The blockquote is the IN-CONTEXT visual (editable, in the body,
+   *     where the user typed it).
+   *   - `scriptureRefs[]` (set in handleScriptureInsert) is the SEMANTIC
+   *     metadata — used by getNotesForScripture() cross-linking, NoteCard
+   *     pill rendering, and the journal search filter. We never delete
+   *     that metadata; only the chip strip above the title was removed.
+   *     See ~/vault/standards/grep-read-path-when-touching-ui.md
+   */
 
   useEffect(() => {
     if (!pendingScriptureInsert || !editorState.isReady) return;
     const { reference, text } = pendingScriptureInsert;
 
-    const escapedRef = reference.replace(/'/g, "\\'");
-    const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
+    // Normalize whitespace in the verse text — TipTap paragraphs render as
+    // a single line, so collapse any embedded newlines from the API to spaces.
+    const verseText = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+    const referenceLine = `\u2014 ${reference}`;
+
+    // Use JSON.stringify on the full content array to safely escape every
+    // special character. JSON output is a strict subset of JS literal
+    // syntax, so it embeds cleanly inside the WebView script template.
+    const contentJson = JSON.stringify([
+      {
+        type: 'blockquote',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: verseText }],
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: referenceLine }],
+          },
+        ],
+      },
+      // Trailing empty paragraph — the cursor lands here after insertion,
+      // outside the blockquote, so the user can keep typing without their
+      // next keystroke being captured by the reference paragraph.
+      { type: 'paragraph' },
+    ]);
 
     // Restore the saved cursor position before inserting so the blockquote
     // lands where the user's cursor was, not at the top of the document.
     // Falls back to the end of the document if no position was saved.
     editor.injectJS(`
       (function() {
-        var pos = typeof window.__savedSelection === 'number'
-          ? window.__savedSelection
-          : window.editor.state.doc.content.size - 1;
-        // Clamp to valid range
-        var maxPos = window.editor.state.doc.content.size - 1;
-        if (pos > maxPos) pos = maxPos;
-        if (pos < 0) pos = 0;
-        window.editor
-          .chain()
-          .focus()
-          .setTextSelection(pos)
-          .insertContent({
-            type: 'blockquote',
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  { type: 'text', text: '${escapedText}' },
-                ],
-              },
-              {
-                type: 'paragraph',
-                content: [
-                  {
-                    type: 'text',
-                    marks: [{ type: 'italic' }],
-                    text: '\\u2014 ${escapedRef}',
-                  },
-                ],
-              },
-            ],
-          })
-          .run();
-        delete window.__savedSelection;
+        try {
+          var pos = typeof window.__savedSelection === 'number'
+            ? window.__savedSelection
+            : window.editor.state.doc.content.size - 1;
+          var maxPos = window.editor.state.doc.content.size - 1;
+          if (pos > maxPos) pos = maxPos;
+          if (pos < 0) pos = 0;
+          window.editor
+            .chain()
+            .focus()
+            .setTextSelection(pos)
+            .insertContent(${contentJson})
+            .run();
+        } finally {
+          delete window.__savedSelection;
+        }
       })();
     `);
 
@@ -837,9 +902,6 @@ export default function NoteDetailScreen() {
   );
   const isFavorite = liveNote?.isFavorite ?? existingNote?.isFavorite ?? false;
 
-  // Get live scripture refs from the store
-  const liveScriptureRefs = liveNote?.scriptureRefs ?? existingNote?.scriptureRefs ?? [];
-
 
   /* ───── Render: Note not found ───── */
 
@@ -1052,30 +1114,22 @@ export default function NoteDetailScreen() {
           )}
         </View>
 
-        {/* ── Scripture references (read mode only) ── */}
-        {!isEditing && liveScriptureRefs.length > 0 && (
-          <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
-            style={styles.scriptureSection}
-          >
-            {liveScriptureRefs.map((ref, idx) => (
-              <View
-                key={`${ref.reference}-${idx}`}
-                style={[
-                  styles.scriptureCard,
-                  {
-                    backgroundColor: alpha(colors.accent, 0.03),
-                    borderLeftColor: colors.accent,
-                  },
-                ]}
-              >
-                <ScriptureRefPill reference={ref} size="regular" />
-              </View>
-            ))}
-          </Animated.View>
-        )}
-
         {/* ── Title ── */}
+        {/* NOTE: There used to be a "scripture references" chip strip here
+            that displayed reference-only pills above the title in read
+            mode. It was the proximate cause of the bug where inserted
+            scriptures appeared "above the journal entry, outside of the
+            writing context, with only the reference visible." Scriptures
+            now render in-context as blockquote callouts via the TipTap
+            insertion path (see useEffect above) — that's the user's
+            mental model: scripture appears where they typed it.
+
+            The semantic `scriptureRefs[]` data is still persisted on the
+            note (set in handleScriptureInsert) and read by:
+              - getNotesForScripture() for Bible→Notes cross-linking
+              - NoteCard.tsx pill on note list cards
+              - journal index search filter
+            We removed the rendering, NOT the data. */}
         {isEditing ? (
           <TextInput
             value={title}
@@ -1464,18 +1518,6 @@ const styles = StyleSheet.create({
   saveText: {
     fontFamily: FontFamily.ui,
     fontSize: 11,
-  },
-  scriptureSection: {
-    paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['2'],
-    marginBottom: Spacing['1'],
-    gap: Spacing['2'],
-  },
-  scriptureCard: {
-    paddingHorizontal: Spacing['3.5'],
-    paddingVertical: Spacing['2.5'],
-    borderRadius: 10,
-    borderLeftWidth: 2.5,
   },
   titleInput: {
     fontFamily: FontFamily.display,
