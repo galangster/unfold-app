@@ -42,6 +42,7 @@ import {
   PlaceholderBridge,
   useBridgeState,
   useKeyboard,
+  BridgeExtension,
 } from '@10play/tentap-editor';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -55,6 +56,62 @@ import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+
+
+/* ─────────────────────────────────────────────────────────
+ * Scripture ACK bridge
+ *
+ * Fire-and-forget `injectJS` has no error channel. When the WebView is
+ * reloading (tentap force-reloads once on iOS init), in a transitional
+ * state, or the injected chain throws, the RN side never sees the drop
+ * — state says "done", the document is unchanged, no retry possible. We
+ * fix that by having the injected JS post a structured ack back via
+ * `window.ReactNativeWebView.postMessage` and routing it through this
+ * BridgeExtension to a module-level handler ref owned by the currently
+ * mounted note-detail instance.
+ *
+ * See:
+ *   - ~/vault/gotchas/tentap-editor-bridge-quirks.md
+ *   - ~/vault/standards/ack-before-clearing-pending-state.md
+ * ───────────────────────────────────────────────────────── */
+type ScriptureAckPayload = {
+  ok: boolean;
+  reference: string;
+  attempts: number;
+  error?: string;
+};
+
+type ScriptureAckMessage = {
+  type: 'scriptureInserted';
+  payload: ScriptureAckPayload;
+};
+
+const scriptureAckHandlerRef: {
+  current: ((payload: ScriptureAckPayload) => void) | null;
+} = { current: null };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ScriptureAckBridge = new BridgeExtension<any, any, ScriptureAckMessage>({
+  forceName: 'ScriptureAck',
+  onEditorMessage: (message) => {
+    if (
+      message &&
+      typeof message === 'object' &&
+      message.type === 'scriptureInserted' &&
+      message.payload &&
+      typeof message.payload === 'object' &&
+      typeof message.payload.ok === 'boolean' &&
+      typeof message.payload.reference === 'string' &&
+      typeof message.payload.attempts === 'number'
+    ) {
+      scriptureAckHandlerRef.current?.(message.payload);
+    }
+    return false; // let tentap's default handling continue
+  },
+});
+
+const MAX_SCRIPTURE_INSERT_ATTEMPTS = 3;
+const SCRIPTURE_INSERT_TIMEOUT_MS = 3000;
 
 
 /* ─────────────────────────────────────────────────────────
@@ -299,6 +356,8 @@ export default function NoteDetailScreen() {
   const [pendingScriptureInsert, setPendingScriptureInsert] = useState<{
     reference: string;
     text: string;
+    status: 'queued' | 'firing';
+    attempts: number;
   } | null>(null);
   const [scriptureRefs, setScriptureRefs] = useState<ScriptureRef[]>(
     existingNote?.scriptureRefs ?? [],
@@ -341,6 +400,7 @@ export default function NoteDetailScreen() {
       PlaceholderBridge.configureExtension({
         placeholder: 'Start writing\u2026',
       }),
+      ScriptureAckBridge,
     ],
     onChange: () => {
       if (isEditingRef.current) {
@@ -464,9 +524,94 @@ export default function NoteDetailScreen() {
    *     See ~/vault/standards/grep-read-path-when-touching-ui.md
    */
 
+  // Refs used by the scripture insert ACK pipeline. See the ack handler
+  // effect below for details on why each one exists.
+  const pendingScriptureInsertRef = useRef(pendingScriptureInsert);
+  useEffect(() => {
+    pendingScriptureInsertRef.current = pendingScriptureInsert;
+  }, [pendingScriptureInsert]);
+
+  // Fire-once guard: key is `${reference}|${attempts}`. Prevents the fire
+  // effect from double-firing the same attempt even if deps re-run.
+  const scriptureFiredForRef = useRef<string | null>(null);
+
+  // Timeout handle for the ack deadline. Cleared on ack arrival or
+  // unmount. If it fires, we retry (or fail once we hit MAX attempts).
+  const scriptureTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // scheduleAutoSave is declared later in this component. We mirror it
+  // into a ref so the ack handler (registered once on mount) can always
+  // reach the latest callback without re-registering.
+  const scheduleAutoSaveRef = useRef<(() => void) | null>(null);
+
+  // Register the module-level ack handler. The handler reads the latest
+  // pending state via refs (no stale closures) and uses a `reference +
+  // attempts` match to ignore late acks from previous attempts. On
+  // successful ack it clears state and fires auto-save. On failure ack it
+  // alerts the user and clears state. On unmount it only clears the
+  // module-level ref if it still points at this instance's handler —
+  // that way A's cleanup can't stomp B's handler when two instances
+  // transiently coexist during navigation.
+  useEffect(() => {
+    const handler = (payload: ScriptureAckPayload) => {
+      const pending = pendingScriptureInsertRef.current;
+      if (!pending) return;
+      if (
+        pending.reference !== payload.reference ||
+        pending.attempts !== payload.attempts ||
+        pending.status !== 'firing'
+      ) {
+        return; // stale ack — belongs to a previous attempt or wrong insert
+      }
+      if (scriptureTimeoutRef.current) {
+        clearTimeout(scriptureTimeoutRef.current);
+        scriptureTimeoutRef.current = undefined;
+      }
+      if (payload.ok) {
+        setPendingScriptureInsert(null);
+        scriptureFiredForRef.current = null;
+        scheduleAutoSaveRef.current?.();
+        return;
+      }
+      logger.error('[Scripture] Insert failed on webview side', {
+        reference: payload.reference,
+        attempts: payload.attempts,
+        error: payload.error,
+      });
+      Alert.alert(
+        'Scripture insert failed',
+        'Could not add the scripture to your note. Please try again.',
+      );
+      setPendingScriptureInsert(null);
+      scriptureFiredForRef.current = null;
+    };
+    scriptureAckHandlerRef.current = handler;
+    return () => {
+      if (scriptureAckHandlerRef.current === handler) {
+        scriptureAckHandlerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Cleanup any pending ack timeout on unmount so a stale timer can't
+  // fire against a dead component.
+  useEffect(() => {
+    return () => {
+      if (scriptureTimeoutRef.current) {
+        clearTimeout(scriptureTimeoutRef.current);
+        scriptureTimeoutRef.current = undefined;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!pendingScriptureInsert || !editorState.isReady) return;
-    const { reference, text } = pendingScriptureInsert;
+    if (pendingScriptureInsert.status !== 'queued') return;
+    const { reference, text, attempts } = pendingScriptureInsert;
+    const nextAttempts = attempts + 1;
+    const fireKey = `${reference}|${nextAttempts}`;
+    if (scriptureFiredForRef.current === fireKey) return;
+    scriptureFiredForRef.current = fireKey;
 
     // Normalize whitespace in the verse text — TipTap paragraphs render as
     // a single line, so collapse any embedded newlines from the API to spaces.
@@ -496,32 +641,117 @@ export default function NoteDetailScreen() {
       { type: 'paragraph' },
     ]);
 
+    // JSON literals for the values we interpolate into the WebView script.
+    // `referenceJs` and `attemptsJs` are embedded verbatim so the injected
+    // JS can include them in its ack payload.
+    const referenceJs = JSON.stringify(reference);
+    const attemptsJs = JSON.stringify(nextAttempts);
+
     // Restore the saved cursor position before inserting so the blockquote
     // lands where the user's cursor was, not at the top of the document.
     // Falls back to the end of the document if no position was saved.
+    //
+    // The injected JS posts a structured ack via
+    // `ReactNativeWebView.postMessage` — `ScriptureAckBridge.onEditorMessage`
+    // routes it to the module-level handler ref registered by the ack
+    // handler effect above. See
+    // ~/vault/standards/ack-before-clearing-pending-state.md.
     editor.injectJS(`
       (function() {
+        var reference = ${referenceJs};
+        var attempts = ${attemptsJs};
         try {
-          var pos = typeof window.__savedSelection === 'number'
-            ? window.__savedSelection
-            : window.editor.state.doc.content.size - 1;
-          var maxPos = window.editor.state.doc.content.size - 1;
+          var preDocSize = window.editor.state.doc.content.size;
+          var savedSelection = window.__savedSelection;
+          var pos = typeof savedSelection === 'number'
+            ? savedSelection
+            : preDocSize - 1;
+          var maxPos = preDocSize > 0 ? preDocSize - 1 : 0;
           if (pos > maxPos) pos = maxPos;
           if (pos < 0) pos = 0;
-          window.editor
+
+          var chainResult = window.editor
             .chain()
             .focus()
             .setTextSelection(pos)
             .insertContent(${contentJson})
             .run();
+
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'scriptureInserted',
+            payload: {
+              ok: !!chainResult,
+              reference: reference,
+              attempts: attempts,
+              error: chainResult ? undefined : 'chain().run() returned false'
+            }
+          }));
+        } catch (e) {
+          try {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'scriptureInserted',
+              payload: {
+                ok: false,
+                reference: reference,
+                attempts: attempts,
+                error: String(e)
+              }
+            }));
+          } catch (postErr) { /* no-op */ }
         } finally {
           delete window.__savedSelection;
         }
       })();
     `);
 
-    setPendingScriptureInsert(null);
-    scheduleAutoSave();
+    // Transition state to 'firing' and schedule an ack deadline. The ack
+    // handler clears this timeout on arrival; otherwise we retry (or fail
+    // once we hit MAX_SCRIPTURE_INSERT_ATTEMPTS).
+    setPendingScriptureInsert({
+      reference,
+      text,
+      status: 'firing',
+      attempts: nextAttempts,
+    });
+
+    if (scriptureTimeoutRef.current) {
+      clearTimeout(scriptureTimeoutRef.current);
+    }
+    scriptureTimeoutRef.current = setTimeout(() => {
+      scriptureTimeoutRef.current = undefined;
+      const pending = pendingScriptureInsertRef.current;
+      if (
+        !pending ||
+        pending.reference !== reference ||
+        pending.attempts !== nextAttempts ||
+        pending.status !== 'firing'
+      ) {
+        return;
+      }
+      if (nextAttempts >= MAX_SCRIPTURE_INSERT_ATTEMPTS) {
+        logger.error('[Scripture] Insert timed out, giving up', {
+          reference,
+          attempts: nextAttempts,
+        });
+        Alert.alert(
+          'Scripture insert failed',
+          'Could not add the scripture to your note. Please try again.',
+        );
+        setPendingScriptureInsert(null);
+        scriptureFiredForRef.current = null;
+        return;
+      }
+      logger.warn('[Scripture] Insert timed out, retrying', {
+        reference,
+        attempt: nextAttempts,
+      });
+      setPendingScriptureInsert({
+        reference,
+        text,
+        status: 'queued',
+        attempts: nextAttempts,
+      });
+    }, SCRIPTURE_INSERT_TIMEOUT_MS);
   }, [pendingScriptureInsert, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
@@ -574,6 +804,13 @@ export default function NoteDetailScreen() {
       }, 150);
     }, 800);
   }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, gate]);
+
+  // Mirror scheduleAutoSave into a ref so the ack handler effect (which is
+  // registered once on mount with empty deps) can always reach the latest
+  // callback without re-registering and without stale closures.
+  useEffect(() => {
+    scheduleAutoSaveRef.current = scheduleAutoSave;
+  }, [scheduleAutoSave]);
 
   const handleTitleChange = useCallback(
     (text: string) => {
@@ -807,9 +1044,15 @@ export default function NoteDetailScreen() {
 
   const handleScriptureInsert = useCallback(
     (data: { reference: string; text: string; scriptureRef: ScriptureRef }) => {
+      // Reset the fire-once guard so a repeat insert of the same reference
+      // (e.g. after a previous successful insertion) isn't blocked by a
+      // stale key from the prior run.
+      scriptureFiredForRef.current = null;
       setPendingScriptureInsert({
         reference: data.reference,
         text: data.text,
+        status: 'queued',
+        attempts: 0,
       });
 
       // Check for duplicate before updating state — avoids calling
