@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   TextInput,
   StyleSheet,
   LayoutChangeEvent,
@@ -11,6 +11,7 @@ import {
   NativeScrollEvent,
   Share,
   Alert,
+  type ListRenderItem,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -58,6 +59,11 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 type Segment = 'reflections' | 'notebook';
+
+// Module-level empty array — stable identity so FlatList's `data` prop
+// doesn't change reference when the user is on the reflections segment.
+// (A fresh `[]` each render would force FlatList to diff a "new" dataset.)
+const EMPTY_NOTES: Note[] = [];
 
 // ============================================================================
 // Segmented Control Component
@@ -971,6 +977,26 @@ export default function JournalHubScreen() {
     [],
   );
 
+  // FlatList renderers — stable identities so rows don't re-render on
+  // unrelated parent updates (fabVisible, showSearch, etc.).
+  const keyExtractorNote = useCallback((note: Note) => note.id, []);
+
+  const renderNoteItem = useCallback<ListRenderItem<Note>>(
+    ({ item, index }) => (
+      <View style={mainStyles.noteRow}>
+        <SwipeableNoteCard
+          note={item}
+          index={index}
+          onPress={handleNotePress}
+          onShare={handleNoteShare}
+          onMove={handleNoteMove}
+          onDelete={handleNoteDelete}
+        />
+      </View>
+    ),
+    [handleNotePress, handleNoteShare, handleNoteMove, handleNoteDelete],
+  );
+
   // Determine if search toggle should show
   const hasContent =
     journalEntries.length > 0 || notes.length > 0;
@@ -978,12 +1004,20 @@ export default function JournalHubScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView
+        <FlatList
+          data={activeSegment === 'notebook' ? filteredNotes : EMPTY_NOTES}
+          renderItem={renderNoteItem}
+          keyExtractor={keyExtractorNote}
           contentContainerStyle={{ paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-        >
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          windowSize={11}
+          removeClippedSubviews
+          ListHeaderComponent={
+            <>
           {/* Header with search toggle */}
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
@@ -1473,9 +1507,9 @@ export default function JournalHubScreen() {
                 />
               </View>
 
-              {/* Notes list or empty state */}
-              {filteredNotes.length === 0 ? (
-                !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
+              {/* Empty state only — notes themselves render as FlatList items. */}
+              {filteredNotes.length === 0 &&
+                (!searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
                   <View style={{ paddingHorizontal: Spacing['6'] }}>
                     <NotebookEmptyState onCreateNote={handleCreateNote} />
                   </View>
@@ -1494,25 +1528,12 @@ export default function JournalHubScreen() {
                           : 'No notes here yet.'}
                     </Text>
                   </View>
-                )
-              ) : (
-                <View style={mainStyles.notesListContainer}>
-                  {filteredNotes.map((note, index) => (
-                    <SwipeableNoteCard
-                      key={note.id}
-                      note={note}
-                      index={index}
-                      onPress={handleNotePress}
-                      onShare={handleNoteShare}
-                      onMove={handleNoteMove}
-                      onDelete={handleNoteDelete}
-                    />
-                  ))}
-                </View>
-              )}
+                ))}
             </Animated.View>
           )}
-        </ScrollView>
+            </>
+          }
+        />
 
         {/* FAB — only visible when Notebook segment is active */}
         {activeSegment === 'notebook' && (
@@ -1649,7 +1670,7 @@ const mainStyles = StyleSheet.create({
   filterRow: {
     marginBottom: Spacing['4'],
   },
-  notesListContainer: {
+  noteRow: {
     paddingHorizontal: Spacing['6'],
   },
   noResultsContainer: {
