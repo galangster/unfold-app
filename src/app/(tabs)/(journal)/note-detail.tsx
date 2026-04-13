@@ -8,6 +8,8 @@ import {
   Platform,
   Alert,
   AccessibilityInfo,
+  ScrollView,
+  Pressable,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,6 +54,7 @@ import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from 
 import { useShallow } from 'zustand/react/shallow';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
+import { NoteContentView } from '@/components/notebook/NoteContentView';
 import { isHtmlContent } from '@/components/notebook/html-utils';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
@@ -1380,31 +1383,46 @@ export default function NoteDetailScreen() {
           ]}
         />
 
-        {/* ── TipTap rich text body ── */}
+        {/* ── Note body: native reader when !isEditing, TipTap WebView when editing ──
+             Read mode renders a pure RN component so viewing a note pays ZERO
+             WebView cost (no bridge init, CSS race, injectJS ordering). The
+             editor bridge hook stays mounted unconditionally (cheap JS setup);
+             the WebView only materializes when <RichText> enters the tree on
+             tap-to-edit. See ~/vault/standards/webview-editors-native-read-mode.md */}
         <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
-          <RichText
-            editor={editor}
-            style={[styles.richText, { backgroundColor: colors.background }]}
-          />
-          {/* Solid overlay hides WebView white flash */}
-          {!editorReady && (
-            <Animated.View
-              exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
-            />
-          )}
-          {/* Tap-to-edit overlay — covers WebView in read mode so taps enter edit mode.
-              WebView swallows all touches, so GestureDetector cannot intercept taps.
-              This transparent overlay sits above the WebView and captures taps instead. */}
-          {!isEditing && editorReady && (
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={1}
-              onPress={handleEdit}
-              accessibilityRole="button"
-              accessibilityLabel="Tap to edit note"
-            />
+          {isEditing ? (
+            <>
+              <RichText
+                editor={editor}
+                style={[styles.richText, { backgroundColor: colors.background }]}
+              />
+              {/* Solid overlay hides WebView white flash on first paint */}
+              {!editorReady && (
+                <Animated.View
+                  exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
+                  pointerEvents="none"
+                  style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+                />
+              )}
+            </>
+          ) : (
+            <ScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.readModeScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Pressable
+                onPress={handleEdit}
+                accessibilityRole="button"
+                accessibilityLabel="Tap to edit note"
+              >
+                <NoteContentView
+                  html={liveNote?.content ?? ''}
+                  placeholder={'Start writing\u2026'}
+                />
+              </Pressable>
+            </ScrollView>
           )}
         </View>
 
@@ -1749,6 +1767,12 @@ const styles = StyleSheet.create({
   },
   richText: {
     flex: 1,
+  },
+  readModeScrollContent: {
+    // Mirrors buildEditorCSS body padding: 0 4px 200px. The horizontal
+    // padding is already on editorContainer; this is just bottom space
+    // so the last paragraph isn't flush with the tags row / footer.
+    paddingBottom: 200,
   },
   tagsSection: {
     paddingHorizontal: Spacing['6'],
