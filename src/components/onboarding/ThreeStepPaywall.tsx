@@ -295,24 +295,79 @@ function StackCard({
 // Screen 1: Product in Action
 // ---------------------------------------------------------------------------
 
+// Custom Reanimated entering animation for the device mockup. Defined at
+// module scope so the same worklet runs on every mount without re-creation.
+//
+// Option A choreography (cinematic — intentionally longer than Emil's
+// "< 350ms for product UI" rule because this is a premium paywall moment,
+// not a tap response):
+//
+//   - opacity:    0    → 1    over 700ms   (Easing.out(quad))
+//   - translateY: 140  → 0    over 1600ms  (easeOutExpo bezier)
+//   - scale:      0.90 → 1    over 1600ms  (easeOutExpo bezier)
+//
+// Opacity lands first so the phone visibly "materializes," then the
+// transform keeps drifting into place after the fade completes — gives
+// that slow-to-a-stop cinematic feel without any bounce/overshoot.
+// easeOutExpo (0.16, 1, 0.3, 1) is the classic "decelerate dramatically
+// then gently settle" curve. Still no overshoot — final value is reached
+// asymptotically, never crossed.
+//
+// Respects system Reduce Motion via Reanimated's built-in handling of
+// `entering` — when Reduce Motion is on, the view appears at its final
+// state instantly.
+const CINEMATIC_EASE = Easing.bezier(0.16, 1, 0.3, 1);
+function phoneEntering() {
+  'worklet';
+  const animations = {
+    opacity: withTiming(1, { duration: 700, easing: Easing.out(Easing.quad) }),
+    transform: [
+      { translateY: withTiming(0, { duration: 1600, easing: CINEMATIC_EASE }) },
+      { scale: withTiming(1, { duration: 1600, easing: CINEMATIC_EASE }) },
+    ],
+  };
+  const initialValues = {
+    opacity: 0,
+    transform: [{ translateY: 140 }, { scale: 0.9 }],
+  };
+  return { initialValues, animations };
+}
+
 function ScreenProductInAction({
   colors,
   hasFreeTrial,
+  player,
+  hasMountedVideo,
 }: {
   colors: ColorTheme;
   hasFreeTrial: boolean;
+  player: ReturnType<typeof useVideoPlayer>;
+  hasMountedVideo: boolean;
 }) {
-  // Walkthrough video bundled at 1206x2622 (matches the 9:19.5 device bezel
-  // aspect ratio exactly — no letterbox, no crop). Hook is scoped to this
-  // component so the player tears down when the user advances to Screen 2.
-  const player = useVideoPlayer(
-    require('../../../assets/video/paywall-walkthrough.mp4'),
-    (p) => {
-      p.loop = true;
-      p.muted = true;
-      p.play();
-    },
-  );
+  // Walkthrough video player is owned by the parent ThreeStepPaywall so it
+  // stays alive across Screen 1 ↔ Screen 2 transitions. This eliminates the
+  // Screen 2 → Screen 1 race where a freshly-created AVPlayer would wedge
+  // in an error state, AND lets the first frame decode while the user is
+  // first arriving (no load gap).
+
+  // Poster layer: a static JPG of the video's first frame sits behind the
+  // VideoView and fades out once onFirstFrameRender confirms the video
+  // itself is actually rendering. User never sees a black gap.
+  const posterOpacity = useSharedValue(1);
+  const posterStyle = useAnimatedStyle(() => ({
+    opacity: posterOpacity.value,
+  }));
+  const handleFirstFrame = useCallback(() => {
+    posterOpacity.value = withTiming(0, { duration: 200 });
+  }, [posterOpacity]);
+
+  // Deferred VideoView mount. VideoView is a heavy native view —
+  // AVPlayerViewController-backed — and its first mount runs in the same
+  // Fabric commit as Screen 1 entering, which stalls the `phoneEntering`
+  // worklet for ~1s. `hasMountedVideo` is owned by ThreeStepPaywall so it
+  // only pays the cost once per paywall session (not per Screen 1 remount).
+  // When reduced motion is on, the parent initializes it to `true` so there
+  // is no dead zone at all — the phone doesn't animate either way.
 
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60; // 15% of ~400px content area
@@ -359,7 +414,13 @@ function ScreenProductInAction({
             </View>
 
             {/* Device bezel -- clips at the bottom edge of the viewport */}
-            <View style={styles.screen1DeviceWrapper}>
+            {/* Option A entrance: phone rises from 80px below, fades in, and
+                scales from 0.95 → 1 with a critically-damped spring (~500ms).
+                Feels like the mockup is being handed to the user. */}
+            <Animated.View
+              style={styles.screen1DeviceWrapper}
+              entering={phoneEntering}
+            >
               <View
                 style={[
                   styles.deviceBezel,
@@ -370,19 +431,37 @@ function ScreenProductInAction({
                 ]}
               >
                 <View style={styles.deviceInner}>
-                  <VideoView
-                    player={player}
-                    style={styles.deviceVideo}
-                    contentFit="cover"
-                    nativeControls={false}
-                    // Content is a silent app walkthrough — no audio to route
-                    // and no PiP expected from a paywall background element.
-                    allowsPictureInPicture={false}
-                    fullscreenOptions={{ enable: false }}
-                  />
+                  {/* Poster: static first frame, visible until the video's
+                      first real frame renders. Prevents the black-gap flash
+                      while AVPlayerItem initializes. Fades to 0 over 200ms
+                      via onFirstFrameRender so the transition is seamless. */}
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFillObject, posterStyle]}
+                  >
+                    <ExpoImage
+                      source={require('../../../assets/video/paywall-walkthrough-poster.jpg')}
+                      style={StyleSheet.absoluteFillObject}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
+                  </Animated.View>
+                  {hasMountedVideo && (
+                    <VideoView
+                      player={player}
+                      style={styles.deviceVideo}
+                      contentFit="cover"
+                      nativeControls={false}
+                      onFirstFrameRender={handleFirstFrame}
+                      // Content is a silent app walkthrough — no audio to
+                      // route and no PiP expected from a paywall background.
+                      allowsPictureInPicture={false}
+                      fullscreenOptions={{ enable: false }}
+                    />
+                  )}
                 </View>
               </View>
-            </View>
+            </Animated.View>
           </Animated.View>
         </View>
       </GestureDetector>
@@ -965,6 +1044,81 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     : TOTAL_PAGES_NO_TRIAL;
 
   // -----------------------------------------------------------------------
+  // Walkthrough video player (hoisted from ScreenProductInAction)
+  //
+  // Owned by ThreeStepPaywall so the player's lifecycle spans the entire
+  // paywall session — created on paywall open, released on paywall close.
+  // Key benefits:
+  //   1. First frame decodes in parallel with the rest of the paywall
+  //      mounting, so by the time Screen 1's onFirstFrameRender fires the
+  //      video is typically already buffered → instant transition from
+  //      poster image to live video.
+  //   2. Advancing to Screen 2 no longer tears down the player, so the
+  //      Screen 2 → Screen 1 back-nav race (AVPlayer wedging on rapid
+  //      recreate with the same local asset) is impossible by construction.
+  //   3. Video state is preserved across nav — the loop keeps running.
+  //
+  // The statusChange listener is belt-and-suspenders: if play() races the
+  // source load on a cold mount, we retry once the player reports
+  // readyToPlay. Listener is scoped to this player instance and released
+  // when useVideoPlayer tears down at paywall close.
+  const walkthroughPlayer = useVideoPlayer(
+    require('../../../assets/video/paywall-walkthrough-optimized.mp4'),
+    (p) => {
+      p.loop = true;
+      p.muted = true;
+      // iOS AVPlayer default is `automaticallyWaitsToMinimizeStalling = true`
+      // with `preferredForwardBufferDuration = 0` (auto). For a bundled local
+      // asset that's safely decodable, that "auto" can introduce a multi-
+      // second stall before the first frame renders — AVPlayer waits until
+      // it estimates playback won't stall. We want the video to paint
+      // instantly, so we opt out of the stall-minimization heuristic and
+      // ask for a tiny forward buffer. Local file, no network, no stall
+      // risk — safe to start immediately.
+      p.bufferOptions = {
+        waitsToMinimizeStalling: false,
+        preferredForwardBufferDuration: 1,
+        // These two are Android-only but setting them is a no-op on iOS:
+        minBufferForPlayback: 0,
+        maxBufferBytes: 0,
+      };
+      p.addListener('statusChange', ({ status, error }) => {
+        if (status === 'readyToPlay' && !p.playing) {
+          p.play();
+        } else if (status === 'error') {
+          // eslint-disable-next-line no-console
+          console.warn('[ThreeStepPaywall] video player error:', error);
+        }
+      });
+      p.play();
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // Deferred VideoView mount latch
+  //
+  // VideoView is an expensive native view (AVPlayerViewController-backed).
+  // Mounting it in the same initial Fabric commit as Screen 1 `entering`
+  // stalls the JS→UI handshake and the phone `phoneEntering` worklet
+  // waits ~1s before firing. We defer mounting VideoView for 1700ms so
+  // the phone's cinematic entrance has the commit to itself, then flip
+  // the latch and let the video pop in behind the already-painted poster.
+  //
+  // Latch lives on the parent so it is one-shot per paywall session — it
+  // survives Screen 1 → Screen 2 → Screen 1 back-nav and does NOT re-arm
+  // the 1700ms dead zone on every remount.
+  //
+  // Under reduced motion, initialize to true: the phone does not animate
+  // anyway, so there's no entrance to protect and the video should be
+  // live from the first frame.
+  const [hasMountedVideo, setHasMountedVideo] = useState(reducedMotion);
+  useEffect(() => {
+    if (hasMountedVideo) return;
+    const id = setTimeout(() => setHasMountedVideo(true), 1700);
+    return () => clearTimeout(id);
+  }, [hasMountedVideo]);
+
+  // -----------------------------------------------------------------------
   // Navigation — CTA buttons only, no swipe
   // -----------------------------------------------------------------------
 
@@ -1056,6 +1210,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             <ScreenProductInAction
               colors={colors}
               hasFreeTrial={stableHasFreeTrial}
+              player={walkthroughPlayer}
+              hasMountedVideo={hasMountedVideo}
             />
           )}
           {stableHasFreeTrial && currentPage === 1 && (
