@@ -63,11 +63,14 @@ import {
   scheduleDailyReminder,
   cancelAllReminders,
   areNotificationsEnabled,
-  scheduleMiddayCheckIn,
-  scheduleEveningWindDown,
-  cancelMiddayCheckIn,
-  cancelEveningWindDown,
 } from '@/lib/notifications';
+// NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown / cancelMiddayCheckIn /
+// cancelEveningWindDown are NOT imported here anymore. Check-in notification
+// scheduling is owned exclusively by `useCheckInNotifications` — this screen
+// only mutates store state (via setMiddayCheckInEnabled etc.), and the
+// single-owner hook reacts to those changes through its fingerprint watcher.
+// See ~/vault/standards/one-owner-per-os-resource.md
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
@@ -170,6 +173,12 @@ export default function YouScreen() {
   const eveningWindDownEnabled = useUnfoldStore((s) => s.eveningWindDownEnabled);
   const setMiddayCheckInEnabled = useUnfoldStore((s) => s.setMiddayCheckInEnabled);
   const setEveningWindDownEnabled = useUnfoldStore((s) => s.setEveningWindDownEnabled);
+  // Tri-state premium policy for the check-in rows. We route to paywall when
+  // not `granted` — `unknown` is treated the same as `denied` in UI so we
+  // never flash a churn upsell at cold start before RevenueCat has reported.
+  // The row renders a neutral "Premium" affordance for both states.
+  const checkInPolicy = usePremiumAccessPolicy();
+  const checkInGranted = checkInPolicy === 'granted';
   const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
   const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
 
@@ -211,8 +220,10 @@ export default function YouScreen() {
       if (result) {
         setNotificationsEnabled(true);
         updateUser({ reminderTime: time });
-        if (middayCheckInEnabled) await scheduleMiddayCheckIn();
-        if (eveningWindDownEnabled) await scheduleEveningWindDown();
+        // Midday / evening check-in scheduling is owned by
+        // `useCheckInNotifications` — it will detect any permission change
+        // on the next foreground reconcile (or immediately, via its
+        // fingerprint watcher, if policy / enabled flags change here).
       }
     } else {
       await cancelAllReminders();
@@ -220,24 +231,50 @@ export default function YouScreen() {
     }
   };
 
-  const handleToggleMiddayCheckIn = async (value: boolean) => {
+  // These handlers only mutate store state. `useCheckInNotifications` owns
+  // the OS notification queue and reacts to fingerprint changes — never call
+  // schedule/cancel directly from here.
+  const handleToggleMiddayCheckIn = (value: boolean) => {
+    // Tri-state gate: non-granted taps route to paywall instead of toggling.
+    if (!checkInGranted) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      router.push('/paywall');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMiddayCheckInEnabled(value);
-    if (value) {
-      await scheduleMiddayCheckIn();
-    } else {
-      await cancelMiddayCheckIn();
-    }
   };
 
-  const handleToggleEveningWindDown = async (value: boolean) => {
+  const handleToggleEveningWindDown = (value: boolean) => {
+    if (!checkInGranted) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      router.push('/paywall');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEveningWindDownEnabled(value);
-    if (value) {
-      await scheduleEveningWindDown();
-    } else {
-      await cancelEveningWindDown();
+  };
+
+  // Row-level tap handlers: route the entire row to paywall when not premium,
+  // otherwise navigate to the schedule picker. Premium upsell is a tap on
+  // the whole row — not just a tiny toggle at the right edge — so the
+  // affordance is discoverable.
+  const handleOpenMiddaySchedule = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!checkInGranted) {
+      router.push('/paywall');
+      return;
     }
+    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'midday' } });
+  };
+
+  const handleOpenEveningSchedule = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!checkInGranted) {
+      router.push('/paywall');
+      return;
+    }
+    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'evening' } });
   };
 
   const handleSelectTime = async (time: string) => {
@@ -1194,8 +1231,14 @@ export default function YouScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Midday check-in */}
-              <View
+              {/* Midday check-in — outer Pressable owns the whole hit area.
+                  When denied, the whole row routes to paywall (no inner
+                  touchable — "Upgrade" is plain text). When granted, outer
+                  taps open the schedule screen and the inner toggle wins
+                  via RN's responder system (no bubble, no double-fire). */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleOpenMiddaySchedule}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -1206,14 +1249,7 @@ export default function YouScreen() {
                   borderTopColor: colors.border,
                 }}
               >
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'midday' } });
-                  }}
-                  style={{ flex: 1 }}
-                >
+                <View style={{ flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -1231,28 +1267,45 @@ export default function YouScreen() {
                       marginTop: Spacing['0.5'],
                     }}
                   >
-                    {formatCheckInTime(middayCheckInTime)}
+                    {checkInGranted ? formatCheckInTime(middayCheckInTime) : 'Premium'}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
+                </View>
+                {checkInGranted ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => handleToggleMiddayCheckIn(!middayCheckInEnabled)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: FontSize.sm,
+                        color: middayCheckInEnabled ? colors.text : colors.textMuted,
+                      }}
+                    >
+                      {middayCheckInEnabled ? 'On' : 'Off'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
                       fontSize: FontSize.sm,
-                      color: middayCheckInEnabled ? colors.text : colors.textMuted,
+                      color: colors.accent,
                     }}
                   >
-                    {middayCheckInEnabled ? 'On' : 'Off'}
+                    Upgrade
                   </Text>
-                </TouchableOpacity>
-              </View>
+                )}
+              </TouchableOpacity>
 
-              {/* Evening wind-down */}
-              <View
+              {/* Evening wind-down — see midday comment above. Same pattern:
+                  outer TouchableOpacity owns the whole row; denied state has
+                  no inner toggle (pure upsell); granted state has a nested
+                  toggle that wins via RN's responder system. */}
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleOpenEveningSchedule}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -1263,14 +1316,7 @@ export default function YouScreen() {
                   borderTopColor: colors.border,
                 }}
               >
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    router.push({ pathname: '/(tabs)/(you)/checkin-schedule', params: { type: 'evening' } });
-                  }}
-                  style={{ flex: 1 }}
-                >
+                <View style={{ flex: 1 }}>
                   <Text
                     style={{
                       fontFamily: FontFamily.ui,
@@ -1288,25 +1334,37 @@ export default function YouScreen() {
                       marginTop: Spacing['0.5'],
                     }}
                   >
-                    {formatCheckInTime(eveningWindDownTime)}
+                    {checkInGranted ? formatCheckInTime(eveningWindDownTime) : 'Premium'}
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
+                </View>
+                {checkInGranted ? (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => handleToggleEveningWindDown(!eveningWindDownEnabled)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FontFamily.uiMedium,
+                        fontSize: FontSize.sm,
+                        color: eveningWindDownEnabled ? colors.text : colors.textMuted,
+                      }}
+                    >
+                      {eveningWindDownEnabled ? 'On' : 'Off'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
                   <Text
                     style={{
                       fontFamily: FontFamily.uiMedium,
                       fontSize: FontSize.sm,
-                      color: eveningWindDownEnabled ? colors.text : colors.textMuted,
+                      color: colors.accent,
                     }}
                   >
-                    {eveningWindDownEnabled ? 'On' : 'Off'}
+                    Upgrade
                   </Text>
-                </TouchableOpacity>
-              </View>
+                )}
+              </TouchableOpacity>
             </View>
 
             {/* Time options (outside the card for cleaner expand) */}

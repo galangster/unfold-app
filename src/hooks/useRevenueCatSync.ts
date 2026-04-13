@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import Purchases from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnfoldStore } from '@/lib/store';
+import { useUIState } from '@/lib/ui-state';
 import { isRevenueCatEnabled, getOfferings } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
@@ -23,6 +24,11 @@ export function useRevenueCatSync() {
   useEffect(() => {
     // Only sync if RevenueCat is configured
     if (!isRevenueCatEnabled()) {
+      // No external source to wait for — mark as resolved so downstream
+      // tri-state gates (usePremiumAccessPolicy) don't stay in `unknown`
+      // forever. In this state, premium falls back to persisted user.isPremium
+      // (usually false in dev without RC keys) or the __DEV__ override.
+      useUIState.getState().setRevenueCatResolved();
       return;
     }
 
@@ -32,13 +38,21 @@ export function useRevenueCatSync() {
       .then((customerInfo) => {
         const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
         updateUser({ isPremium: hasSubscription });
+        // Mark RevenueCat as resolved for this session. Downstream gates
+        // (useCheckInNotifications, scheduleMidday/Evening*) fail closed
+        // until this flips — even a "no subscription" answer counts.
+        useUIState.getState().setRevenueCatResolved();
         // Re-validate the trial-ending local notification against the latest
         // customer info. Fire-and-forget — failures are logged internally.
         void syncTrialEndingNotification();
       })
       .catch(() => {
-        // Silently fail — stale store value is acceptable as a fallback
-        // The listener below will correct it when connectivity returns
+        // Silently fail — stale store value is acceptable as a fallback.
+        // IMPORTANT: do NOT setRevenueCatResolved() here. A failure means
+        // the source has not told us anything this session; downstream gates
+        // must continue to treat premium policy as `unknown` and fail closed.
+        // The listener below will correct it (and flip resolved) when
+        // connectivity returns.
       });
 
     // Prefetch offerings into React Query cache so the paywall opens instantly.
@@ -63,6 +77,9 @@ export function useRevenueCatSync() {
     const unsubscribe = Purchases.addCustomerInfoUpdateListener((customerInfo) => {
       const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
       updateUser({ isPremium: hasSubscription });
+      // Any callback here is a first-hand answer from RevenueCat, so mark
+      // resolved even if the initial getCustomerInfo() call failed earlier.
+      useUIState.getState().setRevenueCatResolved();
       // Re-sync the trial-ending notification whenever entitlements change
       // (purchase, restore, lapse). Fire-and-forget.
       void syncTrialEndingNotification();

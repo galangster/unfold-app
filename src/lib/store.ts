@@ -695,6 +695,27 @@ interface UnfoldState {
   setMiddayCheckInByDay: (schedule: Record<string, string | null> | null) => void;
   setEveningWindDownByDay: (schedule: Record<string, string | null> | null) => void;
 
+  // Completion tracking (local device YYYY-MM-DD of the last completed check-in).
+  //
+  // Current design: these fields track completion but do NOT drive scheduling.
+  // We always DAILY-schedule regardless of today's completion — the DAILY
+  // trigger recurs tomorrow on its own. This accepts the "scenario A" false
+  // positive (a user who completes the check-in before today's fire time
+  // still receives today's reminder once) in exchange for preserving
+  // recurrence. Imperative "cancel and reschedule for tomorrow" was the old
+  // approach and silently downgraded DAILY triggers into one-shot DATE
+  // triggers — see ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
+  //
+  // If we ever want a "skip today only" mode that truly suppresses today's
+  // notification after completion, wire these fields into the fingerprint in
+  // useCheckInNotifications and have the hook re-schedule with a filtered
+  // trigger. Right now the hook deliberately excludes them from its
+  // fingerprint to avoid spurious re-runs on every completion.
+  lastMiddayCompletedDate: string | null;
+  lastEveningCompletedDate: string | null;
+  markMiddayCheckInCompleted: () => void;
+  markEveningWindDownCompleted: () => void;
+
   // AI data consent (App Store Guideline 5.1.2(i))
   hasConsentedToAI: boolean;
   setHasConsentedToAI: (consented: boolean) => void;
@@ -763,6 +784,8 @@ const initialState = {
   eveningWindDownTime: '20:30',
   middayCheckInByDay: null,
   eveningWindDownByDay: null,
+  lastMiddayCompletedDate: null as string | null,
+  lastEveningCompletedDate: null as string | null,
   // AI data consent
   hasConsentedToAI: false,
   // Notebook
@@ -1424,6 +1447,16 @@ export const useUnfoldStore = create<UnfoldState>()(
       setMiddayCheckInByDay: (schedule) => set({ middayCheckInByDay: schedule }),
       setEveningWindDownByDay: (schedule) => set({ eveningWindDownByDay: schedule }),
 
+      // Check-in completion tracking. Persisted for future skip-today support,
+      // NOT currently read by scheduling. See the field declaration above for
+      // the design rationale. Use `en-CA` locale to get YYYY-MM-DD format in
+      // the device's local timezone (NOT UTC — notifications are scheduled
+      // against local calendar, so the completion date must also be local).
+      markMiddayCheckInCompleted: () =>
+        set({ lastMiddayCompletedDate: new Date().toLocaleDateString('en-CA') }),
+      markEveningWindDownCompleted: () =>
+        set({ lastEveningCompletedDate: new Date().toLocaleDateString('en-CA') }),
+
       // AI data consent
       setHasConsentedToAI: (consented) => set({ hasConsentedToAI: consented }),
 
@@ -1748,7 +1781,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 35, // v35: Add hasEverCreatedDevotional flag for returning user detection
+      version: 36, // v36: Add lastMidday/EveningCompletedDate for completion tracking (future skip-today; not currently read by scheduling)
       // Validate and migrate persisted state
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<UnfoldState>;
@@ -2245,6 +2278,20 @@ export const useUnfoldStore = create<UnfoldState>()(
             logger.log('[store] Migration v34→35: Added hasEverCreatedDevotional flag');
           } catch (err) {
             console.error('[store] Migration v34→35 failed:', err);
+          }
+        }
+
+        // Migration from version 35 to 36: Add check-in completion date tracking.
+        // Defaults to null — the owner hook will re-fingerprint on first mount
+        // and schedule the correct trigger regardless of whether the user
+        // already completed today's check-in before the update.
+        if (version < 36) {
+          try {
+            (state as any).lastMiddayCompletedDate = (state as any).lastMiddayCompletedDate ?? null;
+            (state as any).lastEveningCompletedDate = (state as any).lastEveningCompletedDate ?? null;
+            logger.log('[store] Migration v35→36: Added check-in completion date fields');
+          } catch (err) {
+            console.error('[store] Migration v35→36 failed:', err);
           }
         }
 

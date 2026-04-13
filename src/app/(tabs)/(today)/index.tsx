@@ -15,7 +15,6 @@ import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
-import { cancelAndRescheduleMiddayForTomorrow } from '@/lib/notifications';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { RippleLoader } from '@/components/RippleLoader';
@@ -86,6 +85,7 @@ export default function HomeScreen() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
+  const markMiddayCheckInCompleted = useUnfoldStore((s) => s.markMiddayCheckInCompleted);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const hasSeenDay1Review = useUnfoldStore((s) => s.hasSeenDay1Review);
   const setHasSeenDay1Review = useUnfoldStore((s) => s.setHasSeenDay1Review);
@@ -508,8 +508,13 @@ export default function HomeScreen() {
       freeText: data.freeText,
       timeOfDay: 'midday',
     });
-    // Cancel today's midday notification and reschedule for tomorrow
-    cancelAndRescheduleMiddayForTomorrow();
+    // Record the completion date. The single-owner useCheckInNotifications
+    // hook does NOT react to this field — we keep the DAILY trigger on its
+    // recurring schedule and the trigger naturally recurs tomorrow. This
+    // replaces the old cancelAndRescheduleMiddayForTomorrow() helper which
+    // silently downgraded the DAILY trigger to a one-shot DATE trigger.
+    // See ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
+    markMiddayCheckInCompleted();
     setShowCheckInSheet(false);
   };
 

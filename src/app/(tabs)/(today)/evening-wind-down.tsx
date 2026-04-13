@@ -30,7 +30,6 @@ import { generateExamen, type ExamenPrayer } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
 import { streamDevotionalAudio } from '@/lib/tts-service';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
-import { cancelAndRescheduleEveningForTomorrow } from '@/lib/notifications';
 import { EveningCelebration } from '@/components/EveningCelebration';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
@@ -142,6 +141,7 @@ export default function EveningWindDownScreen() {
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
+  const markEveningWindDownCompleted = useUnfoldStore((s) => s.markEveningWindDownCompleted);
 
   // Premium gate — evening wind-down is premium-only
   const { data: premiumResult } = useQuery({
@@ -276,8 +276,13 @@ export default function EveningWindDownScreen() {
         mood: 3 as const,
         moodLabel: 'completed',
       });
-      // Cancel today's evening notification and reschedule for tomorrow
-      cancelAndRescheduleEveningForTomorrow();
+      // Record the completion date. The single-owner useCheckInNotifications
+      // hook keeps the DAILY trigger recurring on its schedule — the trigger
+      // naturally fires again tomorrow. This replaces the old
+      // cancelAndRescheduleEveningForTomorrow() helper which silently
+      // downgraded the DAILY trigger to a one-shot DATE trigger.
+      // See ~/vault/gotchas/expo-reschedule-helpers-silent-one-shot-downgrade.md
+      markEveningWindDownCompleted();
     }
     const msg = EVENING_CELEBRATION_MESSAGES[Math.floor(Math.random() * EVENING_CELEBRATION_MESSAGES.length)];
     setCelebrationMessage(msg);

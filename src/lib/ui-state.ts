@@ -15,6 +15,16 @@ export const useUIState = create<{
       Not persisted — resets on app launch. */
   debugForceTrialExpired: boolean;
   setDebugForceTrialExpired: (value: boolean) => void;
+  /** True once RevenueCat has returned a customer info payload this session
+      (even a "no entitlement" answer counts). Initial value `false`; flips to
+      `true` on the first successful `getCustomerInfo()` resolution OR the first
+      `addCustomerInfoUpdateListener` callback, whichever comes first.
+      Consumers gating OS-side side-effects (notifications, unlocks) must treat
+      `false` as "premium policy unknown" and fail closed. Not persisted —
+      always resets to `false` on app launch so a stale persisted `isPremium=true`
+      cannot drive side-effects before the source confirms the current session. */
+  revenueCatResolved: boolean;
+  setRevenueCatResolved: () => void;
 }>((set) => ({
   tabBarHidden: false,
   tabBarHideMode: 'slide',
@@ -23,4 +33,6 @@ export const useUIState = create<{
   setRevealTransitioning: (value) => set({ revealTransitioning: value }),
   debugForceTrialExpired: false,
   setDebugForceTrialExpired: (value) => set({ debugForceTrialExpired: value }),
+  revenueCatResolved: false,
+  setRevenueCatResolved: () => set({ revenueCatResolved: true }),
 }));

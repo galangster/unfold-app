@@ -12,10 +12,12 @@ import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import {
-  scheduleMiddayCheckIn,
-  scheduleEveningWindDown,
-} from '@/lib/notifications';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+// NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown are NOT imported here.
+// `useCheckInNotifications` owns the OS queue — this screen only mutates
+// store state (setMiddayCheckInTime / setEveningWindDownTime / setByDay),
+// and the single-owner hook reacts through its fingerprint watcher.
+// See ~/vault/standards/one-owner-per-os-resource.md
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 type DayKey = (typeof DAYS)[number];
@@ -45,41 +47,15 @@ export default function CheckInScheduleScreen() {
   const { type } = useLocalSearchParams<{ type: CheckInType }>();
   const { colors } = useTheme();
 
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  // Tri-state premium gate. `unknown` during boot/RC-unresolved, `denied` for
+  // churned/never-subscribed users, `granted` for active subscribers. We
+  // evaluate the gate AFTER all hooks below so we don't violate Rules of Hooks
+  // (the previous version called hooks conditionally behind an early return).
+  const policy = usePremiumAccessPolicy();
 
   const reducedMotion = useReducedMotion();
   const checkInType: CheckInType = type === 'evening' ? 'evening' : 'midday';
   const isMidday = checkInType === 'midday';
-
-  // Gate to premium
-  if (!isPremium) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
-          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
-            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
-          </TouchableOpacity>
-        </View>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
-          <Text style={{ fontFamily: FontFamily.display, fontSize: 24, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
-            Custom Schedules
-          </Text>
-          <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>
-            Customize your check-in times with Premium.
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/paywall'); }}
-            style={{ backgroundColor: colors.accent, paddingVertical: 16, paddingHorizontal: Spacing['8'], borderRadius: 28 }}
-          >
-            <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: colors.background }}>
-              Unlock Premium
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   const defaultTime = useUnfoldStore((s) =>
     isMidday ? s.middayCheckInTime : s.eveningWindDownTime
@@ -113,7 +89,7 @@ export default function CheckInScheduleScreen() {
     router.back();
   }, [router]);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     setDefaultTime(localDefaultTime);
@@ -124,15 +100,14 @@ export default function CheckInScheduleScreen() {
       setByDay(null);
     }
 
-    // Reschedule notifications with new times
-    if (isMidday) {
-      await scheduleMiddayCheckIn();
-    } else {
-      await scheduleEveningWindDown();
-    }
+    // Notification rescheduling is NOT called from here. `useCheckInNotifications`
+    // owns the OS queue and reacts to the time/byDay state change through its
+    // fingerprint watcher (one-owner-per-OS-resource). This screen only writes
+    // store state; the hook handles OS side-effects. See
+    // ~/vault/standards/one-owner-per-os-resource.md
 
     router.back();
-  }, [localDefaultTime, customizeByDay, localByDay, setDefaultTime, setByDay, isMidday, router]);
+  }, [localDefaultTime, customizeByDay, localByDay, setDefaultTime, setByDay, router]);
 
   const handleToggleCustomize = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -168,6 +143,57 @@ export default function CheckInScheduleScreen() {
     return false;
   }, [localDefaultTime, defaultTime, customizeByDay, byDay, localByDay]);
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Policy-gated rendering (all hooks are above this line — Rules of Hooks)
+  // ─────────────────────────────────────────────────────────────────────
+
+  // Unknown — RevenueCat hasn't reported yet this session. Render a neutral
+  // shell (header only) instead of flashing the upsell at users who are
+  // actually premium but haven't hydrated yet. Fail closed without committing.
+  if (policy === 'unknown') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1 }} />
+      </SafeAreaView>
+    );
+  }
+
+  // Denied — churned or never-subscribed. Show the upsell.
+  if (policy === 'denied') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing['4'], paddingVertical: Spacing['3'] }}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ padding: Spacing['2'] }}>
+            <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
+          <Text style={{ fontFamily: FontFamily.display, fontSize: 24, color: colors.text, textAlign: 'center', marginBottom: Spacing['3'] }}>
+            Custom Schedules
+          </Text>
+          <Text style={{ fontFamily: FontFamily.body, fontSize: 15, color: colors.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: Spacing['6'] }}>
+            Customize your check-in times with Premium.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push('/paywall'); }}
+            style={{ backgroundColor: colors.accent, paddingVertical: 16, paddingHorizontal: Spacing['8'], borderRadius: 28 }}
+          >
+            <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 16, color: colors.background }}>
+              Unlock Premium
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Granted — full schedule UI.
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
       {/* Header */}
