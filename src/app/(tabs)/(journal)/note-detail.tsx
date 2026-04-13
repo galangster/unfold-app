@@ -49,6 +49,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from '@/lib/store';
+import { useShallow } from 'zustand/react/shallow';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { isHtmlContent } from '@/components/notebook/html-utils';
@@ -298,14 +299,24 @@ export default function NoteDetailScreen() {
 
   const { isPremium, gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
-  // Store selectors
-  const notes = useUnfoldStore((s) => s.notes);
-  const addNote = useUnfoldStore((s) => s.addNote);
-  const updateNote = useUnfoldStore((s) => s.updateNote);
-  const deleteNote = useUnfoldStore((s) => s.deleteNote);
-  const folders = useUnfoldStore((s) => s.folders);
-  const addFolder = useUnfoldStore((s) => s.addFolder);
-  const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
+  // Store selectors — consolidated with useShallow.
+  // Data subscription re-renders when notes[] or folders[] array identity
+  // changes (which is whenever the user mutates either slice).
+  // Action subscription never re-renders because Zustand action refs are
+  // stable, so the shallow-compared wrapper object is always equal.
+  const { notes, folders } = useUnfoldStore(
+    useShallow((s) => ({ notes: s.notes, folders: s.folders })),
+  );
+  const { addNote, updateNote, deleteNote, addFolder, moveNoteToFolder } =
+    useUnfoldStore(
+      useShallow((s) => ({
+        addNote: s.addNote,
+        updateNote: s.updateNote,
+        deleteNote: s.deleteNote,
+        addFolder: s.addFolder,
+        moveNoteToFolder: s.moveNoteToFolder,
+      })),
+    );
 
   // Find existing note
   const existingNote = useMemo(
