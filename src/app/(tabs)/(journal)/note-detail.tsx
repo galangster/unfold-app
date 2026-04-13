@@ -56,6 +56,7 @@ import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { NoteContentView } from '@/components/notebook/NoteContentView';
 import { isHtmlContent } from '@/components/notebook/html-utils';
+import { buildScriptureBlockquoteNodes } from '@/components/notebook/scripture-content-builder';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -627,33 +628,17 @@ export default function NoteDetailScreen() {
     if (scriptureFiredForRef.current === fireKey) return;
     scriptureFiredForRef.current = fireKey;
 
-    // Normalize whitespace in the verse text — TipTap paragraphs render as
-    // a single line, so collapse any embedded newlines from the API to spaces.
-    const verseText = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-    const referenceLine = `\u2014 ${reference}`;
-
-    // Use JSON.stringify on the full content array to safely escape every
-    // special character. JSON output is a strict subset of JS literal
-    // syntax, so it embeds cleanly inside the WebView script template.
-    const contentJson = JSON.stringify([
-      {
-        type: 'blockquote',
-        content: [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: verseText }],
-          },
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: referenceLine }],
-          },
-        ],
-      },
-      // Trailing empty paragraph — the cursor lands here after insertion,
-      // outside the blockquote, so the user can keep typing without their
-      // next keystroke being captured by the reference paragraph.
-      { type: 'paragraph' },
-    ]);
+    // Build the ProseMirror JSON for a verse + reference blockquote plus
+    // a trailing empty paragraph (cursor lands outside the blockquote).
+    // The shape contract is OWNED by scripture-content-builder so the
+    // insert-path and render-path (NoteContentView) cannot drift. See
+    // ~/vault/standards/tentap-custom-nodes-require-fork.md for why this
+    // is not a first-class TipTap node.
+    //
+    // JSON.stringify on the tree safely escapes every special character,
+    // and JSON output is a strict subset of JS literal syntax, so it
+    // embeds cleanly inside the WebView script template below.
+    const contentJson = JSON.stringify(buildScriptureBlockquoteNodes(reference, text));
 
     // JSON literals for the values we interpolate into the WebView script.
     // `referenceJs` and `attemptsJs` are embedded verbatim so the injected

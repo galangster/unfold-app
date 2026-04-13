@@ -107,6 +107,21 @@ export function isElement(node: HtmlNode): node is ElementNode {
   return node.type === 'element';
 }
 
+/**
+ * Flatten all text descendants of a node into a single string. Walks
+ * inline marks (strong/em/s/u/a) so a paragraph like
+ *   <p>— <em>Hebrews</em> 11:1</p>
+ * flattens to "— Hebrews 11:1".
+ */
+export function flattenTextContent(node: HtmlNode): string {
+  if (node.type === 'text') return node.value;
+  let out = '';
+  for (const child of node.children) {
+    out += flattenTextContent(child);
+  }
+  return out;
+}
+
 /** True if an HTML string has meaningful visible content. */
 export function htmlHasContent(html: string | undefined | null): boolean {
   if (!html) return false;
@@ -117,4 +132,38 @@ export function htmlHasContent(html: string | undefined | null): boolean {
   // Paragraphs of whitespace only
   const stripped = trimmed.replace(/<[^>]+>/g, '').trim();
   return stripped.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Scripture reference detection
+//
+// A scripture callout's last paragraph is a reference line like
+// "— Hebrews 11:1" or "— 1 Corinthians 13:4-7". Detecting the shape
+// lets the renderer style the last paragraph as a reference cap with
+// high confidence, rather than guessing based on paragraph count.
+//
+// See ./scripture-content-builder.ts for the insert-path builder that
+// writes this shape into the editor.
+// ---------------------------------------------------------------------------
+
+/**
+ * Matches a scripture reference line: em-dash + whitespace + any chars,
+ * then "N:N" (optionally "-N") near the end. Tolerates trailing whitespace.
+ *
+ * Matches:
+ *   "— Hebrews 11:1"
+ *   "— 1 Corinthians 13:4"
+ *   "— Psalm 23:1-6"
+ *   "— Song of Solomon 2:1"
+ *
+ * Does not match:
+ *   "Hebrews 11:1"            (no em-dash prefix)
+ *   "— a quote with no verse" (no chapter:verse)
+ *   "— just text 1 2 3"       (no colon)
+ */
+export const SCRIPTURE_REFERENCE_REGEX = /^\u2014\s.+\d+:\d+(-\d+)?\s*$/;
+
+/** True if a plain-text line reads as a scripture reference. */
+export function isScriptureReferenceLine(text: string): boolean {
+  return SCRIPTURE_REFERENCE_REGEX.test(text.trim());
 }

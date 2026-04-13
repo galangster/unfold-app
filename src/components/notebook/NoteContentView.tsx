@@ -35,12 +35,18 @@ import {
   parseHtml,
   htmlHasContent,
   isElement,
+  flattenTextContent,
+  isScriptureReferenceLine,
   type HtmlNode,
   type ElementNode,
 } from './note-content-parser';
 
 // Re-export so callers can import from this module.
-export { parseHtml, htmlHasContent } from './note-content-parser';
+export {
+  parseHtml,
+  htmlHasContent,
+  isScriptureReferenceLine,
+} from './note-content-parser';
 
 // ---------------------------------------------------------------------------
 // Render
@@ -186,9 +192,16 @@ function renderBlockChildren(
 
 function renderBlockquote(node: ElementNode, ctx: RenderContext, key: string): ReactNode {
   const paragraphs = node.children.filter(isElement).filter((el) => el.tag === 'p');
-  // Multi-paragraph blockquote = scripture callout (verse + reference).
-  // Single-paragraph blockquote = generic quote (italic body).
-  const isScriptureCallout = paragraphs.length >= 2;
+  // Scripture callout detection: a multi-paragraph blockquote whose last
+  // paragraph is a reference line (em-dash + book + chapter:verse). The
+  // regex check distinguishes our scripture callouts from user-typed
+  // multi-paragraph quotes, which would otherwise get their last line
+  // styled as a reference cap (small, non-italic) by mistake.
+  //
+  // See ./scripture-content-builder.ts for the insert-path counterpart.
+  const lastP = paragraphs[paragraphs.length - 1];
+  const isScriptureCallout =
+    paragraphs.length >= 2 && !!lastP && isScriptureReferenceLine(flattenTextContent(lastP));
 
   // Fallback: if a blockquote contains text or non-p blocks, render them raw.
   if (paragraphs.length === 0) {

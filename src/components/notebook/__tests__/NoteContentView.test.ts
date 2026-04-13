@@ -1,16 +1,35 @@
 /**
- * Tests for the NoteContentView HTML parser.
+ * Tests for the NoteContentView HTML parser and scripture content builder.
  *
  * Focuses on parseHtml + htmlHasContent — the pure parser is where
  * rendering bugs live. Render functions are mostly mechanical tag →
  * style mapping and are covered by buildEditorCSS parity (visual
  * regression, not unit tests).
  *
- * Imports from note-content-parser directly (not NoteContentView) so
- * Jest doesn't have to traverse the theme + expo-system-ui chain.
+ * Also covers the scripture-content-builder round-trip: the insert-path
+ * builder output must round-trip cleanly through parseHtml and be
+ * detected as a scripture callout by the shared detection helpers.
+ *
+ * Imports from note-content-parser and scripture-content-builder directly
+ * (not NoteContentView) so Jest doesn't have to traverse the theme +
+ * expo-system-ui chain.
  */
 
-import { parseHtml, htmlHasContent } from '../note-content-parser';
+import {
+  parseHtml,
+  htmlHasContent,
+  isElement,
+  flattenTextContent,
+  isScriptureReferenceLine,
+  SCRIPTURE_REFERENCE_REGEX,
+} from '../note-content-parser';
+import {
+  SCRIPTURE_REFERENCE_PREFIX,
+  normalizeScriptureVerseText,
+  buildScriptureReferenceLine,
+  buildScriptureBlockquoteNodes,
+  buildScriptureBlockquoteHtml,
+} from '../scripture-content-builder';
 
 // ─── htmlHasContent ────────────────────────────────────────────────
 
@@ -245,5 +264,244 @@ describe('parseHtml mixed document', () => {
       .filter((n) => n.type === 'element')
       .map((n) => (n.type === 'element' ? n.tag : ''));
     expect(tags).toEqual(['h2', 'p', 'blockquote', 'ul']);
+  });
+});
+
+// ─── flattenTextContent ────────────────────────────────────────────
+
+describe('flattenTextContent', () => {
+  it('returns the value for a bare text node', () => {
+    expect(flattenTextContent({ type: 'text', value: 'hello' })).toBe('hello');
+  });
+
+  it('concatenates text across inline marks', () => {
+    const tree = parseHtml('<p>— <em>Hebrews</em> <strong>11:1</strong></p>');
+    const p = tree[0];
+    if (!isElement(p)) throw new Error('expected element');
+    expect(flattenTextContent(p)).toBe('\u2014 Hebrews 11:1');
+  });
+
+  it('handles deeply nested inline marks', () => {
+    const tree = parseHtml('<p><strong>bold <em>italic <s>strike</s></em></strong></p>');
+    const p = tree[0];
+    if (!isElement(p)) throw new Error('expected element');
+    expect(flattenTextContent(p)).toBe('bold italic strike');
+  });
+
+  it('returns empty string for an empty element', () => {
+    const tree = parseHtml('<p></p>');
+    const p = tree[0];
+    if (!isElement(p)) throw new Error('expected element');
+    expect(flattenTextContent(p)).toBe('');
+  });
+});
+
+// ─── scripture reference detection ─────────────────────────────────
+
+describe('isScriptureReferenceLine', () => {
+  it('matches canonical em-dash + book + chapter:verse', () => {
+    expect(isScriptureReferenceLine('\u2014 Hebrews 11:1')).toBe(true);
+  });
+
+  it('matches numeric book prefixes (1, 2, 3)', () => {
+    expect(isScriptureReferenceLine('\u2014 1 Corinthians 13:4')).toBe(true);
+    expect(isScriptureReferenceLine('\u2014 2 Samuel 11:2')).toBe(true);
+    expect(isScriptureReferenceLine('\u2014 3 John 1:1')).toBe(true);
+  });
+
+  it('matches verse ranges', () => {
+    expect(isScriptureReferenceLine('\u2014 Psalm 23:1-6')).toBe(true);
+    expect(isScriptureReferenceLine('\u2014 Proverbs 31:10-31')).toBe(true);
+  });
+
+  it('matches multi-word book names', () => {
+    expect(isScriptureReferenceLine('\u2014 Song of Solomon 2:1')).toBe(true);
+  });
+
+  it('tolerates trailing whitespace', () => {
+    expect(isScriptureReferenceLine('\u2014 John 3:16   ')).toBe(true);
+  });
+
+  it('rejects lines without the em-dash prefix', () => {
+    expect(isScriptureReferenceLine('Hebrews 11:1')).toBe(false);
+    expect(isScriptureReferenceLine('- Hebrews 11:1')).toBe(false); // hyphen, not em-dash
+  });
+
+  it('rejects lines without a chapter:verse', () => {
+    expect(isScriptureReferenceLine('\u2014 a quote without a verse')).toBe(false);
+    expect(isScriptureReferenceLine('\u2014 Something random 123')).toBe(false);
+    expect(isScriptureReferenceLine('\u2014 ')).toBe(false);
+  });
+
+  it('rejects empty and whitespace-only strings', () => {
+    expect(isScriptureReferenceLine('')).toBe(false);
+    expect(isScriptureReferenceLine('   ')).toBe(false);
+  });
+
+  it('SCRIPTURE_REFERENCE_REGEX exports the same behavior', () => {
+    expect(SCRIPTURE_REFERENCE_REGEX.test('\u2014 Hebrews 11:1')).toBe(true);
+    expect(SCRIPTURE_REFERENCE_REGEX.test('Hebrews 11:1')).toBe(false);
+  });
+});
+
+// ─── scripture-content-builder ─────────────────────────────────────
+
+describe('normalizeScriptureVerseText', () => {
+  it('collapses embedded newlines to spaces', () => {
+    expect(normalizeScriptureVerseText('Line one\nLine two')).toBe('Line one Line two');
+  });
+
+  it('collapses runs of whitespace', () => {
+    expect(normalizeScriptureVerseText('hello   \t world')).toBe('hello world');
+  });
+
+  it('trims leading and trailing whitespace', () => {
+    expect(normalizeScriptureVerseText('  padded  ')).toBe('padded');
+  });
+
+  it('is idempotent on already-normalized text', () => {
+    const input = 'the quick brown fox';
+    expect(normalizeScriptureVerseText(input)).toBe(input);
+  });
+});
+
+describe('buildScriptureReferenceLine', () => {
+  it('prepends the em-dash prefix', () => {
+    expect(buildScriptureReferenceLine('Hebrews 11:1')).toBe('\u2014 Hebrews 11:1');
+  });
+
+  it('trims the reference argument', () => {
+    expect(buildScriptureReferenceLine('  Hebrews 11:1  ')).toBe('\u2014 Hebrews 11:1');
+  });
+
+  it('uses the exported prefix constant', () => {
+    expect(buildScriptureReferenceLine('X 1:1').startsWith(SCRIPTURE_REFERENCE_PREFIX)).toBe(true);
+  });
+});
+
+describe('buildScriptureBlockquoteNodes', () => {
+  it('emits a blockquote with verse + reference + trailing empty paragraph', () => {
+    const nodes = buildScriptureBlockquoteNodes('Hebrews 11:1', 'Now faith is the substance');
+    expect(nodes).toEqual([
+      {
+        type: 'blockquote',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Now faith is the substance' }],
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: '\u2014 Hebrews 11:1' }],
+          },
+        ],
+      },
+      { type: 'paragraph' },
+    ]);
+  });
+
+  it('normalizes whitespace in verse text before embedding', () => {
+    const nodes = buildScriptureBlockquoteNodes('John 3:16', 'For God\nso loved   the world');
+    const blockquote = nodes[0];
+    if (blockquote.type !== 'blockquote') throw new Error('expected blockquote');
+    const firstP = blockquote.content[0];
+    if (firstP.type !== 'paragraph' || !firstP.content) throw new Error('expected paragraph');
+    const text = firstP.content[0];
+    if (text.type !== 'text') throw new Error('expected text');
+    expect(text.text).toBe('For God so loved the world');
+  });
+
+  it('is JSON.stringify-safe for WebView script embedding', () => {
+    const nodes = buildScriptureBlockquoteNodes('Psalm 23:1', 'The Lord is my shepherd');
+    expect(() => JSON.stringify(nodes)).not.toThrow();
+    const json = JSON.stringify(nodes);
+    expect(json).toContain('"blockquote"');
+    expect(json).toContain('"paragraph"');
+    expect(json).toContain('The Lord is my shepherd');
+  });
+});
+
+describe('buildScriptureBlockquoteHtml', () => {
+  it('matches the shape parseHtml expects', () => {
+    const html = buildScriptureBlockquoteHtml('Hebrews 11:1', 'Now faith is the substance');
+    expect(html).toBe(
+      '<blockquote><p>Now faith is the substance</p><p>\u2014 Hebrews 11:1</p></blockquote>',
+    );
+  });
+
+  it('escapes HTML special characters in verse text', () => {
+    const html = buildScriptureBlockquoteHtml('Test 1:1', 'Tom & Jerry <said> "hi"');
+    expect(html).toContain('Tom &amp; Jerry &lt;said&gt; &quot;hi&quot;');
+    // Should not contain raw special chars that would break HTML
+    expect(html).not.toContain('Tom & Jerry <said>');
+  });
+
+  it('escapes HTML special characters in reference', () => {
+    const html = buildScriptureBlockquoteHtml('<Book> 1:1', 'verse');
+    expect(html).toContain('\u2014 &lt;Book&gt; 1:1');
+  });
+});
+
+// ─── round-trip: builder → parseHtml → detection ──────────────────
+
+describe('scripture callout round-trip', () => {
+  it('builder HTML parses back into a detectable scripture callout', () => {
+    const html = buildScriptureBlockquoteHtml('Hebrews 11:1', 'Now faith is the substance');
+    const tree = parseHtml(html);
+    const bq = tree[0];
+    if (!isElement(bq)) throw new Error('expected element');
+    expect(bq.tag).toBe('blockquote');
+
+    const paragraphs = bq.children.filter(isElement).filter((el) => el.tag === 'p');
+    expect(paragraphs.length).toBe(2);
+
+    const lastP = paragraphs[paragraphs.length - 1];
+    const lastPText = flattenTextContent(lastP);
+    expect(lastPText).toBe('\u2014 Hebrews 11:1');
+    expect(isScriptureReferenceLine(lastPText)).toBe(true);
+  });
+
+  it('round-trips verse text with HTML-sensitive characters', () => {
+    // A verse with `&`, which gets escaped on build and decoded on parse.
+    const html = buildScriptureBlockquoteHtml('James 1:1', 'To the twelve tribes & the dispersion');
+    const tree = parseHtml(html);
+    const bq = tree[0];
+    if (!isElement(bq)) throw new Error('expected element');
+    const firstP = bq.children.filter(isElement)[0];
+    expect(flattenTextContent(firstP)).toBe('To the twelve tribes & the dispersion');
+  });
+
+  it('multi-word book names round-trip', () => {
+    const html = buildScriptureBlockquoteHtml('Song of Solomon 2:1', 'I am the rose of Sharon');
+    const tree = parseHtml(html);
+    const bq = tree[0];
+    if (!isElement(bq)) throw new Error('expected element');
+    const paragraphs = bq.children.filter(isElement).filter((el) => el.tag === 'p');
+    const lastP = paragraphs[paragraphs.length - 1];
+    expect(isScriptureReferenceLine(flattenTextContent(lastP))).toBe(true);
+  });
+
+  it('generic user-typed multi-paragraph blockquote is NOT detected as scripture', () => {
+    // This is the false-positive the detection regex fixes: a plain
+    // multi-paragraph quote should render with both paragraphs as verse
+    // body, not with the last one styled as a reference cap.
+    const html =
+      '<blockquote><p>First quoted line</p><p>Second quoted line</p></blockquote>';
+    const tree = parseHtml(html);
+    const bq = tree[0];
+    if (!isElement(bq)) throw new Error('expected element');
+    const paragraphs = bq.children.filter(isElement).filter((el) => el.tag === 'p');
+    const lastP = paragraphs[paragraphs.length - 1];
+    expect(isScriptureReferenceLine(flattenTextContent(lastP))).toBe(false);
+  });
+
+  it('single-paragraph blockquote is NOT detected as scripture callout', () => {
+    const html = '<blockquote><p>\u2014 Hebrews 11:1</p></blockquote>';
+    const tree = parseHtml(html);
+    const bq = tree[0];
+    if (!isElement(bq)) throw new Error('expected element');
+    const paragraphs = bq.children.filter(isElement).filter((el) => el.tag === 'p');
+    // Only one paragraph — the detection requires ≥2 paragraphs.
+    expect(paragraphs.length).toBe(1);
   });
 });
