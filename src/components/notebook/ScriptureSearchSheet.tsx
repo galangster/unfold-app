@@ -36,14 +36,16 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withSpring,
   runOnJS,
-  Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
 
 // Animation config
 const OFFSCREEN = 500;
-const SLIDE_IN = { duration: Duration.slow, easing: Easing.out(Easing.cubic) };
+// Critically-damped spring for sheet entrance and gesture snap-back.
+// Integrates gesture velocity gracefully on release; no bounce (dampingRatio: 1).
+const SLIDE_SPRING = { duration: Duration.slow, dampingRatio: 1 } as const;
 const DISMISS_DURATION = 180;
 const SWIPE_THRESHOLD = 80;
 const VELOCITY_THRESHOLD = 500;
@@ -117,7 +119,7 @@ export function ScriptureSearchSheet({
       setVerseResult(null);
       setParsedRef(null);
       translateY.value = OFFSCREEN;
-      translateY.value = withTiming(0, SLIDE_IN);
+      translateY.value = withSpring(0, SLIDE_SPRING);
       const focusTimer = setTimeout(() => {
         inputRef.current?.focus();
       }, 350);
@@ -154,7 +156,8 @@ export function ScriptureSearchSheet({
             translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
             runOnJS(dismissSheet)();
           } else {
-            translateY.value = withTiming(0, SLIDE_IN);
+            // Spring handoff: integrates remaining gesture velocity into the snap-back
+            translateY.value = withSpring(0, SLIDE_SPRING);
           }
         }),
     [dismissSheet, translateY],
