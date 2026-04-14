@@ -505,3 +505,66 @@ describe('scripture callout round-trip', () => {
     expect(paragraphs.length).toBe(1);
   });
 });
+
+// ─── parseHtml + htmlHasContent performance smoke ──────────────────
+
+describe('parseHtml performance smoke', () => {
+  /**
+   * Loose ceiling, not a micro-benchmark. Large journal entries (~2K
+   * words, ~150 paragraphs with inline marks) must parse in well under
+   * 50ms on CI hardware so the native read mode stays snappy.
+   *
+   * The parser is called once per note render in NoteContentView, so a
+   * regression here shows up as jank when opening long notes.
+   */
+  it('parses a 2K-word mixed document in under 50ms', () => {
+    // Build a realistic 2K-word document: 150 paragraphs with inline
+    // marks, interleaved with headings, lists, and blockquotes.
+    const paragraphs: string[] = [];
+    for (let i = 0; i < 150; i++) {
+      if (i % 25 === 0) {
+        paragraphs.push(`<h2>Section ${i / 25 + 1}</h2>`);
+      }
+      if (i % 15 === 0) {
+        paragraphs.push(
+          '<ul><li><p>First bullet</p></li><li><p>Second bullet</p></li></ul>',
+        );
+      }
+      if (i % 20 === 0) {
+        paragraphs.push(
+          '<blockquote><p>For God so loved the world that he gave his only son</p><p>\u2014 John 3:16</p></blockquote>',
+        );
+      }
+      // ~14 words per paragraph with inline formatting.
+      paragraphs.push(
+        `<p>Today I was reading about <strong>faith</strong> and how it <em>moves mountains</em>, and I found this <a href="https://example.com/${i}">reference ${i}</a> particularly striking.</p>`,
+      );
+    }
+    const html = paragraphs.join('');
+
+    const start = Date.now();
+    const tree = parseHtml(html);
+    const duration = Date.now() - start;
+
+    // Sanity check: we actually parsed something.
+    expect(tree.length).toBeGreaterThan(100);
+    expect(duration).toBeLessThan(50);
+  });
+
+  it('htmlHasContent on a 2K-word document completes in under 50ms', () => {
+    // htmlHasContent walks the tree until it finds non-empty text. On a
+    // well-formed document it should bail out at the first paragraph.
+    const paragraphs: string[] = [];
+    for (let i = 0; i < 150; i++) {
+      paragraphs.push(`<p>Paragraph ${i} with <strong>some</strong> text.</p>`);
+    }
+    const html = paragraphs.join('');
+
+    const start = Date.now();
+    const result = htmlHasContent(html);
+    const duration = Date.now() - start;
+
+    expect(result).toBe(true);
+    expect(duration).toBeLessThan(50);
+  });
+});

@@ -57,6 +57,13 @@ import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { NoteContentView } from '@/components/notebook/NoteContentView';
 import { isHtmlContent } from '@/components/notebook/html-utils';
 import { buildScriptureBlockquoteNodes } from '@/components/notebook/scripture-content-builder';
+import {
+  isScriptureAckMessage,
+  MAX_SCRIPTURE_INSERT_ATTEMPTS,
+  SCRIPTURE_INSERT_TIMEOUT_MS,
+  type ScriptureAckPayload,
+  type ScriptureAckMessage,
+} from '@/components/notebook/scripture-ack';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -75,22 +82,14 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
  * BridgeExtension to a module-level handler ref owned by the currently
  * mounted note-detail instance.
  *
+ * Types, constants, and the structural `isScriptureAckMessage` validator
+ * live in `./scripture-ack` as a pure module so Jest can unit-test the
+ * validator without pulling in the @10play/tentap-editor module chain.
+ *
  * See:
  *   - ~/vault/gotchas/tentap-editor-bridge-quirks.md
  *   - ~/vault/standards/ack-before-clearing-pending-state.md
  * ───────────────────────────────────────────────────────── */
-type ScriptureAckPayload = {
-  ok: boolean;
-  reference: string;
-  attempts: number;
-  error?: string;
-};
-
-type ScriptureAckMessage = {
-  type: 'scriptureInserted';
-  payload: ScriptureAckPayload;
-};
-
 const scriptureAckHandlerRef: {
   current: ((payload: ScriptureAckPayload) => void) | null;
 } = { current: null };
@@ -99,24 +98,12 @@ const scriptureAckHandlerRef: {
 const ScriptureAckBridge = new BridgeExtension<any, any, ScriptureAckMessage>({
   forceName: 'ScriptureAck',
   onEditorMessage: (message) => {
-    if (
-      message &&
-      typeof message === 'object' &&
-      message.type === 'scriptureInserted' &&
-      message.payload &&
-      typeof message.payload === 'object' &&
-      typeof message.payload.ok === 'boolean' &&
-      typeof message.payload.reference === 'string' &&
-      typeof message.payload.attempts === 'number'
-    ) {
+    if (isScriptureAckMessage(message)) {
       scriptureAckHandlerRef.current?.(message.payload);
     }
     return false; // let tentap's default handling continue
   },
 });
-
-const MAX_SCRIPTURE_INSERT_ATTEMPTS = 3;
-const SCRIPTURE_INSERT_TIMEOUT_MS = 3000;
 
 
 /* ─────────────────────────────────────────────────────────
