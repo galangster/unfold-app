@@ -69,7 +69,9 @@ import type { NoteFolder } from '@/lib/store';
 
 const OFFSCREEN = 500;
 // Critically-damped spring for sheet entrance and gesture snap-back.
-// Integrates gesture velocity gracefully on release; no bounce (dampingRatio: 1).
+// Callers on release paths MUST spread this and pass `velocity: e.velocityY`
+// so remaining gesture momentum carries into the snap-back. No bounce
+// (dampingRatio: 1).
 const SLIDE_SPRING = { duration: Duration.slow, dampingRatio: 1 } as const;
 const DISMISS_DURATION = 180;
 const SWIPE_THRESHOLD = 80;
@@ -234,8 +236,8 @@ export function MoveFolderSheet({
             translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
             runOnJS(dismissSheet)();
           } else {
-            // Spring handoff: integrates remaining gesture velocity into the snap-back
-            translateY.value = withSpring(0, SLIDE_SPRING);
+            // Spring handoff: feed remaining gesture velocity into the snap-back
+            translateY.value = withSpring(0, { ...SLIDE_SPRING, velocity: e.velocityY });
           }
         }),
     [dismissSheet, translateY],

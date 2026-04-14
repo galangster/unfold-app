@@ -433,34 +433,29 @@ export default function NoteDetailScreen() {
     isEditingRef.current = isEditing;
   }, [isEditing]);
 
-  // Overlay covers the WebView until CSS is painted
+  // Overlay covers the WebView on every edit-mode entry until CSS is painted.
+  // RichText is conditionally rendered on `isEditing`, so every false→true
+  // transition boots a fresh WebView. We can't rely on `editorState.isReady`
+  // alone: the bridge state stays `true` across WebView re-mounts (no
+  // disconnected event), so the second entry would never re-fire a CSS
+  // inject and the un-styled editor would briefly flash through.
   const [editorReady, setEditorReady] = useState(false);
 
-  // Fallback: remove overlay after 1.5s
   useEffect(() => {
-    const fallback = setTimeout(() => {
-      setEditorReady(true);
-      editor.injectCSS(buildEditorCSS(colors, isEditingRef.current));
-    }, 1500);
-    return () => clearTimeout(fallback);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Inject CSS once editor is ready
-  useEffect(() => {
-    if (!editorState.isReady) return;
-    editor.injectCSS(buildEditorCSS(colors, isEditing));
-    // Delay removing overlay until CSS has had time to paint
-    setTimeout(() => {
-      setEditorReady(true);
-    }, 120);
-
-    // If new note, auto-focus the editor after it's ready
-    if (shouldStartEditing && isNewNote) {
-      setTimeout(() => {
-        editor.focus('end');
-      }, 300);
+    if (!isEditing) {
+      setEditorReady(false);
+      return;
     }
-  }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+    setEditorReady(false);
+    const ready = setTimeout(() => {
+      editor.injectCSS(buildEditorCSS(colors, true));
+      setEditorReady(true);
+      if (shouldStartEditing && isNewNote) {
+        setTimeout(() => editor.focus('end'), 100);
+      }
+    }, 300);
+    return () => clearTimeout(ready);
+  }, [isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Manage keyboard padding ourselves since avoidIosKeyboard is false.
   // We account for the custom toolbar (48px) that sits above the keyboard.

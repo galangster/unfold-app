@@ -37,7 +37,6 @@ interface NoteCardProps {
   note: Note;
   onPress: (note: Note) => void;
   onLongPress?: (note: Note) => void;
-  /** Index for staggered entry animation (delay = 50ms * index) */
   index?: number;
 }
 
@@ -84,7 +83,7 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const extraTagCount = note.tags.length - visibleTags.length;
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(30 * index).easing(Ease.out)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={handleLongPress}
