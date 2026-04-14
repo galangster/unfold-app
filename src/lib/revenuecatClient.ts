@@ -57,15 +57,54 @@ const isEnabled = !!apiKey && !isWeb;
 
 const LOG_PREFIX = "[RevenueCat]";
 
+// Restore can hang forever if the native StoreKit call deadlocks or the App
+// Store is unreachable. Cap it so the loading UI can always exit. 30s is
+// generous enough for slow networks while still being an actual escape.
+const RESTORE_TIMEOUT_MS = 30_000;
+
+// Purchase can also hang indefinitely — the user might confirm on the Apple
+// sheet but the server-side entitlement grant never completes. 60s gives
+// room for slow networks + user confirmation time without leaving the
+// loading overlay permanently stuck.
+const PURCHASE_TIMEOUT_MS = 60_000;
+
 export type RevenueCatGuardReason =
   | "web_not_supported"
   | "not_configured"
   | "sdk_error"
+  | "timeout"
   | "user_cancelled";
 
 export type RevenueCatResult<T> =
   | { ok: true; data: T }
   | { ok: false; reason: RevenueCatGuardReason; error?: unknown };
+
+class RevenueCatTimeoutError extends Error {
+  readonly isRevenueCatTimeout = true as const;
+  constructor(label: string, ms: number) {
+    super(`${label} timed out after ${ms}ms`);
+    this.name = 'RevenueCatTimeoutError';
+  }
+}
+
+/** Race a promise against a timeout. Rejects if the deadline hits first. */
+const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new RevenueCatTimeoutError(label, ms));
+    }, ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+};
 
 // Internal guard to get consistent success/failure results from RevenueCat.
 const guardRevenueCatUsage = async <T>(
@@ -88,6 +127,12 @@ const guardRevenueCatUsage = async <T>(
     const data = await operation();
     return { ok: true, data };
   } catch (error) {
+    // Our own timeout sentinel — distinguish from SDK errors so the UI can
+    // show "took too long, try again" instead of "something went wrong".
+    if (error instanceof RevenueCatTimeoutError) {
+      logger.log(`${LOG_PREFIX} ${action}: timed out`);
+      return { ok: false, reason: "timeout", error };
+    }
     // RevenueCat sets userCancelled on the error when the user dismisses the payment sheet
     if (error && typeof error === "object" && "userCancelled" in error && (error as { userCancelled: boolean }).userCancelled) {
       logger.log(`${LOG_PREFIX} ${action}: user cancelled`);
@@ -174,7 +219,11 @@ export const purchasePackage = (
   packageToPurchase: PurchasesPackage,
 ): Promise<RevenueCatResult<CustomerInfo>> => {
   return guardRevenueCatUsage("purchasePackage", async () => {
-    const { customerInfo } = await Purchases.purchasePackage(packageToPurchase);
+    const { customerInfo } = await withTimeout(
+      Purchases.purchasePackage(packageToPurchase),
+      PURCHASE_TIMEOUT_MS,
+      "purchasePackage",
+    );
     return customerInfo;
   });
 };
@@ -214,7 +263,11 @@ export const restorePurchases = (): Promise<
   RevenueCatResult<CustomerInfo>
 > => {
   return guardRevenueCatUsage("restorePurchases", () =>
-    Purchases.restorePurchases(),
+    withTimeout(
+      Purchases.restorePurchases(),
+      RESTORE_TIMEOUT_MS,
+      "restorePurchases",
+    ),
   );
 };
 

@@ -365,18 +365,20 @@ export default function NoteDetailScreen() {
     existingNote?.scriptureRefs ?? [],
   );
 
-  // Latest content ref for Done button
-  const latestContentRef = useRef<{ title: string; content: string }>({
-    title: existingNote?.title ?? '',
-    content: existingNote?.content ?? '',
-  });
-
   // Convert legacy plain-text/markdown to HTML for TipTap
   const initialContent = existingNote?.content
     ? isHtmlContent(existingNote.content)
       ? existingNote.content
       : legacyMarkdownToHtml(existingNote.content)
     : '<p></p>';
+
+  // Latest content ref for Done button and re-edit hydration.
+  // Initialized with the converted HTML (not raw legacy markdown) so the
+  // boot-tick setContent call always pushes valid HTML into the WebView.
+  const latestContentRef = useRef<{ title: string; content: string }>({
+    title: existingNote?.title ?? '',
+    content: initialContent,
+  });
 
   /* ───── TipTap editor bridge ───── */
 
@@ -457,6 +459,11 @@ export default function NoteDetailScreen() {
     setEditorReady(false);
     const ready = setTimeout(() => {
       editor.injectCSS(buildEditorCSS(colors, true));
+      // Fresh WebView mounts use stale initialContent baked in at first
+      // useEditorBridge call. Push latest persisted content from ref so
+      // re-edit doesn't lose the user's previous work.
+      const freshContent = latestContentRef.current.content || '<p></p>';
+      editor.setContent(freshContent);
       editor.focus('end');
       setEditorReady(true);
     }, 300);
@@ -624,7 +631,7 @@ export default function NoteDetailScreen() {
   }, []);
 
   useEffect(() => {
-    if (!pendingScriptureInsert || !editorState.isReady) return;
+    if (!pendingScriptureInsert || !editorReady) return;
     if (pendingScriptureInsert.status !== 'queued') return;
     const { reference, text, attempts } = pendingScriptureInsert;
     const nextAttempts = attempts + 1;
@@ -663,7 +670,25 @@ export default function NoteDetailScreen() {
       (function() {
         var reference = ${referenceJs};
         var attempts = ${attemptsJs};
+        function postAck(ok, error) {
+          try {
+            if (!window.ReactNativeWebView || !window.ReactNativeWebView.postMessage) return;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'scriptureInserted',
+              payload: {
+                ok: ok,
+                reference: reference,
+                attempts: attempts,
+                error: error
+              }
+            }));
+          } catch (postErr) { /* no-op */ }
+        }
         try {
+          if (!window.editor || !window.editor.state || !window.editor.chain) {
+            postAck(false, 'editor not ready');
+            return;
+          }
           var preDocSize = window.editor.state.doc.content.size;
           var savedSelection = window.__savedSelection;
           var pos = typeof savedSelection === 'number'
@@ -680,27 +705,9 @@ export default function NoteDetailScreen() {
             .insertContent(${contentJson})
             .run();
 
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'scriptureInserted',
-            payload: {
-              ok: !!chainResult,
-              reference: reference,
-              attempts: attempts,
-              error: chainResult ? undefined : 'chain().run() returned false'
-            }
-          }));
+          postAck(!!chainResult, chainResult ? undefined : 'chain().run() returned false');
         } catch (e) {
-          try {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'scriptureInserted',
-              payload: {
-                ok: false,
-                reference: reference,
-                attempts: attempts,
-                error: String(e)
-              }
-            }));
-          } catch (postErr) { /* no-op */ }
+          postAck(false, String(e));
         } finally {
           delete window.__savedSelection;
         }
@@ -755,7 +762,7 @@ export default function NoteDetailScreen() {
         attempts: nextAttempts,
       });
     }, SCRIPTURE_INSERT_TIMEOUT_MS);
-  }, [pendingScriptureInsert, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingScriptureInsert, editorReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   /* ───── Save command ─────

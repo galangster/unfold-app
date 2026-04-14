@@ -251,6 +251,10 @@ export default function PaywallScreen() {
           setShowExclusiveOffer(true);
         }
         return;
+      } else if (result.reason === 'timeout') {
+        logger.log('[Paywall] Purchase timed out');
+        setSubscribeError('Purchase took too long. Please check your connection and try again.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         // Actual SDK error
         logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
@@ -287,6 +291,10 @@ export default function PaywallScreen() {
         } else {
           router.back();
         }
+      } else if (result.reason === 'timeout') {
+        logger.log('[Paywall] Restore timed out');
+        setSubscribeError('Restore took too long. Please check your connection and try again.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         setSubscribeError('No active subscription found.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
