@@ -428,6 +428,25 @@ export default function NoteDetailScreen() {
   // inject and the un-styled editor would briefly flash through.
   const [editorReady, setEditorReady] = useState(false);
 
+  /* ── WebView boot tick: inject CSS + focus after RichText mounts ──
+   *
+   * RichText is conditionally rendered at the JSX level (`isEditing ?
+   * <RichText> : <ScrollView>`) so the WebView mounts/unmounts with
+   * every edit-mode transition. `editor` (useEditorBridge) is the same
+   * instance across mounts, so calling injectCSS/injectJS/focus before
+   * the WebView has booted silently fails — the commands queue into a
+   * void. See ~/vault/gotchas/tentap-editor-bridge-quirks.md.
+   *
+   * We drive CSS + initial focus off a 300ms boot heuristic instead of
+   * editorState.isReady from useBridgeState, because isReady stays
+   * stale-true across re-mounts (the RN side never sees a disconnected
+   * event). This also serves as the overlay-dismiss tick — setting
+   * editorReady unmounts the absolute-fill fade and reveals the editor
+   * without a white flash.
+   *
+   * Runs on every isEditing transition. Focus always fires in edit
+   * mode — previously handleEdit's own setTimeout(focus, 100) raced
+   * the 300ms boot and focused a not-yet-mounted WebView. */
   useEffect(() => {
     if (!isEditing) {
       setEditorReady(false);
@@ -436,21 +455,27 @@ export default function NoteDetailScreen() {
     setEditorReady(false);
     const ready = setTimeout(() => {
       editor.injectCSS(buildEditorCSS(colors, true));
+      editor.focus('end');
       setEditorReady(true);
-      if (shouldStartEditing && isNewNote) {
-        setTimeout(() => editor.focus('end'), 100);
-      }
     }, 300);
     return () => clearTimeout(ready);
   }, [isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Manage keyboard padding ourselves since avoidIosKeyboard is false.
-  // We account for the custom toolbar (48px) that sits above the keyboard.
-  // Without this, text scrolls behind the toolbar after ~12 lines.
+  /* ── Manage keyboard padding ourselves since avoidIosKeyboard is false.
+   *
+   * We account for the custom toolbar (48px) that sits above the keyboard.
+   * Without this, text scrolls behind the toolbar after ~12 lines.
+   *
+   * Gated on BOTH isEditing and our local editorReady (not
+   * editorState.isReady from useBridgeState, which stays stale-true
+   * across WebView re-mounts). Read mode uses NoteContentView's native
+   * ScrollView — no WebView to inject into — so we skip entirely when
+   * !isEditing. The previous read-mode branch injected into a WebView
+   * that didn't exist. */
   const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
   useEffect(() => {
-    if (!editorState.isReady) return;
-    if (isEditing && isKeyboardUp && keyboardHeight > 0) {
+    if (!isEditing || !editorReady) return;
+    if (isKeyboardUp && keyboardHeight > 0) {
       // Toolbar sits above the keyboard, so total occlusion is keyboard + toolbar
       const totalPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
@@ -460,16 +485,6 @@ export default function NoteDetailScreen() {
         })();
       `);
       editor.updateScrollThresholdAndMargin(totalPadding);
-    } else if (isKeyboardUp && keyboardHeight > 0) {
-      // Read mode with keyboard (e.g., search) — just keyboard padding
-      const padding = keyboardHeight + 10;
-      editor.injectJS(`
-        (function() {
-          var doc = document.querySelector('.ProseMirror');
-          if (doc) doc.style.paddingBottom = '${padding}px';
-        })();
-      `);
-      editor.updateScrollThresholdAndMargin(padding);
     } else {
       editor.injectJS(`
         (function() {
@@ -479,7 +494,7 @@ export default function NoteDetailScreen() {
       `);
       editor.updateScrollThresholdAndMargin(0);
     }
-  }, [isEditing, isKeyboardUp, keyboardHeight, editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isEditing, editorReady, isKeyboardUp, keyboardHeight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup on unmount
   useEffect(() => {
@@ -826,11 +841,11 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsEditing(true);
     editor.setEditable(true);
-    editor.injectCSS(buildEditorCSS(colors, true));
-    setTimeout(() => {
-      editor.focus('end');
-    }, 100);
-  }, [editor, colors, gate]);
+    // CSS inject + focus deferred to the isEditing boot-tick useEffect.
+    // RichText mounts lazily on isEditing=true; calling injectCSS/focus
+    // here races the WebView boot and silently drops on a not-yet-
+    // mounted bridge. See the boot-tick effect above.
+  }, [editor, gate]);
 
 
   const handleDone = useCallback(async () => {
@@ -844,16 +859,20 @@ export default function NoteDetailScreen() {
       return;
     }
 
-    // Switch to read mode
+    // Switch to read mode. RichText is about to unmount (isEditing=false
+    // swaps in the native ScrollView/NoteContentView reader), so we
+    // deliberately skip the read-mode injectCSS call — it would queue
+    // into a WebView that's tearing down. setEditable(false) + blur are
+    // kept so that if the bridge re-attaches on a future edit entry,
+    // the new WebView doesn't boot into an editable state.
     editor.blur();
     editor.setEditable(false);
-    editor.injectCSS(buildEditorCSS(colors, false));
     setIsEditing(false);
 
     // Clear any pending save timers
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setSaveState('idle');
-  }, [editor, noteId, colors, router, saveNote]);
+  }, [editor, noteId, router, saveNote]);
 
 
   /* ───── Navigation ───── */
