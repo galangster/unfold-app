@@ -414,11 +414,13 @@ export default function NoteDetailScreen() {
   const editorState = useBridgeState(editor);
   const { keyboardHeight, isKeyboardUp } = useKeyboard();
 
-  // Keep a ref for isEditing so the onChange callback always has the latest value
+  // Mirror isEditing into a ref so the onChange callback (captured at editor
+  // init time) always sees the latest value. Assigned during render rather
+  // than via useEffect — React explicitly allows ref writes during render as
+  // long as they're idempotent, and this skips the post-paint lag a useEffect
+  // introduces.
   const isEditingRef = useRef(isEditing);
-  useEffect(() => {
-    isEditingRef.current = isEditing;
-  }, [isEditing]);
+  isEditingRef.current = isEditing;
 
   // Overlay covers the WebView on every edit-mode entry until CSS is painted.
   // RichText is conditionally rendered on `isEditing`, so every false→true
@@ -538,10 +540,15 @@ export default function NoteDetailScreen() {
 
   // Refs used by the scripture insert ACK pipeline. See the ack handler
   // effect below for details on why each one exists.
+  //
+  // pendingScriptureInsertRef is written during render (same pattern as
+  // isEditingRef above) so the module-level ack handler — which is
+  // registered once with empty deps — always reads the latest value
+  // without re-registering. React allows idempotent ref writes during
+  // render, and the useEffect-based mirror introduced a post-paint lag
+  // where an ack could arrive before the ref caught up.
   const pendingScriptureInsertRef = useRef(pendingScriptureInsert);
-  useEffect(() => {
-    pendingScriptureInsertRef.current = pendingScriptureInsert;
-  }, [pendingScriptureInsert]);
+  pendingScriptureInsertRef.current = pendingScriptureInsert;
 
   // Fire-once guard: key is `${reference}|${attempts}`. Prevents the fire
   // effect from double-firing the same attempt even if deps re-run.
@@ -819,10 +826,11 @@ export default function NoteDetailScreen() {
 
   // Mirror scheduleAutoSave into a ref so the ack handler effect (which is
   // registered once on mount with empty deps) can always reach the latest
-  // callback without re-registering and without stale closures.
-  useEffect(() => {
-    scheduleAutoSaveRef.current = scheduleAutoSave;
-  }, [scheduleAutoSave]);
+  // callback without re-registering and without stale closures. Assigned
+  // during render — same pattern as isEditingRef above — so an ack that
+  // arrives between paints still sees the freshest callback instead of
+  // the previous render's closure.
+  scheduleAutoSaveRef.current = scheduleAutoSave;
 
   const handleTitleChange = useCallback(
     (text: string) => {
