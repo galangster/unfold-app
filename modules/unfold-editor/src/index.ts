@@ -10,4 +10,6 @@ export type {
   UnfoldEditorChangeHtmlEvent,
   UnfoldEditorScriptureRefsEvent,
   UnfoldEditorFocusEvent,
+  UnfoldEditorSelectionState,
+  UnfoldEditorSelectionChangeEvent,
 } from './UnfoldEditorView';

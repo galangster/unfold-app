@@ -150,6 +150,104 @@ enum HtmlEncoder {
     return output
   }
 
+  // MARK: - Selection state query
+
+  /// Builds a selection-state dictionary for the JS toolbar. Uses the same
+  /// block-detection and inline-attribute logic as `encode`, but runs at a
+  /// single point (the cursor / selection start) rather than walking the
+  /// whole document.
+  ///
+  /// Inline booleans are **suppressed / commandable**: bold is false inside
+  /// headings (implicit), italic is false inside blockquotes, etc. This
+  /// prevents the toolbar from offering to toggle a trait that would break
+  /// block identity.
+  static func querySelectionState(
+    in str: NSAttributedString,
+    selectedRange range: NSRange
+  ) -> [String: Any] {
+    guard str.length > 0 else {
+      return emptySelectionState(range: range)
+    }
+
+    let nsString = str.string as NSString
+    let location = min(range.location, max(0, str.length - 1))
+    let paraRange = nsString.paragraphRange(
+      for: NSRange(location: location, length: 0))
+    let blockType = detectBlockType(in: str, range: paraRange)
+
+    // Read attributes at cursor / selection-start
+    let attrs = str.attributes(at: location, effectiveRange: nil)
+    let font = attrs[.font] as? UIFont
+    let traits = font?.fontDescriptor.symbolicTraits ?? []
+    let rawBold = traits.contains(.traitBold)
+    let rawItalic = traits.contains(.traitItalic)
+    let rawMonospace = traits.contains(.traitMonoSpace)
+    let rawUnderline = (attrs[.underlineStyle] as? Int ?? 0) != 0
+    let rawStrikethrough = (attrs[.strikethroughStyle] as? Int ?? 0) != 0
+    let hasLink = attrs[.link] != nil
+    let linkUrl = (attrs[.link] as? URL)?.absoluteString
+
+    // Suppression: report commandable state, not raw visual state.
+    let isHeading = (blockType == .heading1
+      || blockType == .heading2
+      || blockType == .heading3)
+    let isCodeBlock = (blockType == .codeBlock)
+    let isBlockquote = (blockType == .blockquote)
+    let isCheckedChecklist = (blockType == .checklist)
+      && checklistChecked(in: str, at: paraRange.location)
+
+    let bold = isCodeBlock ? false : (isHeading ? false : rawBold)
+    let italic = isCodeBlock ? false : (isBlockquote ? false : rawItalic)
+    let underline = isCodeBlock ? false : (hasLink ? false : rawUnderline)
+    let strikethrough = isCodeBlock ? false
+      : (isCheckedChecklist ? false : rawStrikethrough)
+    let code = isCodeBlock ? false : rawMonospace
+
+    // Block type string
+    let blockTypeStr: String
+    switch blockType {
+    case .heading1: blockTypeStr = "h1"
+    case .heading2: blockTypeStr = "h2"
+    case .heading3: blockTypeStr = "h3"
+    case .blockquote: blockTypeStr = "blockquote"
+    case .codeBlock: blockTypeStr = "pre"
+    default: blockTypeStr = "p"
+    }
+
+    // List type (null for non-list blocks)
+    let listTypeVal: Any
+    switch blockType {
+    case .bulletList: listTypeVal = "bullet"
+    case .orderedList: listTypeVal = "ordered"
+    case .checklist: listTypeVal = "checklist"
+    default: listTypeVal = NSNull()
+    }
+
+    return [
+      "bold": bold,
+      "italic": italic,
+      "underline": underline,
+      "strikethrough": strikethrough,
+      "code": code,
+      "hasLink": hasLink,
+      "linkUrl": linkUrl as Any? ?? NSNull(),
+      "blockType": blockTypeStr,
+      "listType": listTypeVal,
+      "start": range.location,
+      "end": NSMaxRange(range),
+    ]
+  }
+
+  private static func emptySelectionState(range: NSRange) -> [String: Any] {
+    [
+      "bold": false, "italic": false, "underline": false,
+      "strikethrough": false, "code": false,
+      "hasLink": false, "linkUrl": NSNull(),
+      "blockType": "p", "listType": NSNull(),
+      "start": range.location, "end": NSMaxRange(range),
+    ]
+  }
+
   // MARK: - Block type detection
 
   private enum BlockType: Equatable {

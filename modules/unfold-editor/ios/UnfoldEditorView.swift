@@ -17,6 +17,7 @@ final class UnfoldEditorView: ExpoView {
   let onScriptureRefs = EventDispatcher()
   let onEditorFocus = EventDispatcher()
   let onEditorBlur = EventDispatcher()
+  let onEditorSelectionChange = EventDispatcher()
 
   /// Tracks whether `initialHtml` has been applied yet. RN will push the prop
   /// on first mount (and never again, per the uncontrolled-editor rule in
@@ -74,6 +75,9 @@ final class UnfoldEditorView: ExpoView {
     }
     controller.onBlur = { [weak self] in
       self?.onEditorBlur([:])
+    }
+    controller.onEditorSelectionChange = { [weak self] state in
+      self?.onEditorSelectionChange(state)
     }
   }
 

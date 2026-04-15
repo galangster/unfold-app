@@ -26,6 +26,28 @@ export type UnfoldEditorFocusEvent = {
 };
 
 /**
+ * Formatting + block state at the current cursor / selection start.
+ * Inline booleans are suppressed/commandable (e.g. bold=false inside H1).
+ */
+export type UnfoldEditorSelectionState = {
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strikethrough: boolean;
+  code: boolean;
+  hasLink: boolean;
+  linkUrl: string | null;
+  blockType: UnfoldEditorBlockType;
+  listType: UnfoldEditorListType | null;
+  start: number;
+  end: number;
+};
+
+export type UnfoldEditorSelectionChangeEvent = {
+  nativeEvent: UnfoldEditorSelectionState;
+};
+
+/**
  * Props on the raw native view. Events follow the Expo Modules `onFoo`
  * convention — they are supplied as function props and fired with an
  * `{ nativeEvent }` shape.
@@ -47,6 +69,7 @@ export type UnfoldEditorViewProps = Omit<ViewProps, 'onFocus' | 'onBlur'> & {
   onScriptureRefs?: (event: UnfoldEditorScriptureRefsEvent) => void;
   onEditorFocus?: (event: UnfoldEditorFocusEvent) => void;
   onEditorBlur?: (event: UnfoldEditorFocusEvent) => void;
+  onEditorSelectionChange?: (event: UnfoldEditorSelectionChangeEvent) => void;
 };
 
 export type UnfoldEditorBlockType =
@@ -87,6 +110,9 @@ export type UnfoldEditorViewRef = {
   toggleUnderline: () => Promise<void>;
   toggleStrikethrough: () => Promise<void>;
   insertLink: (url: string) => Promise<void>;
+
+  // Selection state (Day 8)
+  getSelectionState: () => Promise<UnfoldEditorSelectionState>;
 };
 
 const NativeView: ComponentType<UnfoldEditorViewProps & RefAttributes<UnfoldEditorViewRef>> =

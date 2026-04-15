@@ -38,7 +38,7 @@ public class UnfoldEditorModule: Module {
         view.controller.setKeyboardAppearance(appearance)
       }
 
-      Events("onChangeHtml", "onScriptureRefs", "onEditorFocus", "onEditorBlur")
+      Events("onChangeHtml", "onScriptureRefs", "onEditorFocus", "onEditorBlur", "onEditorSelectionChange")
 
       // --- Day 5: bridge proof (getHtml / focus / blur) ---
 
@@ -110,6 +110,12 @@ public class UnfoldEditorModule: Module {
 
       AsyncFunction("insertImage") { (view: UnfoldEditorView, uri: String) in
         view.controller.insertImage(uri)
+      }
+
+      // --- Day 8: selection state ---
+
+      AsyncFunction("getSelectionState") { (view: UnfoldEditorView) -> [String: Any] in
+        view.controller.getSelectionState()
       }
     }
   }

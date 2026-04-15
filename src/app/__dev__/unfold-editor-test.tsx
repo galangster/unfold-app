@@ -7,6 +7,9 @@ import {
   type UnfoldEditorBlockType,
   type UnfoldEditorListType,
   type UnfoldEditorRef,
+  type UnfoldEditorSelectionState,
+  type UnfoldEditorSelectionChangeEvent,
+  type UnfoldEditorChangeHtmlEvent,
 } from 'unfold-editor';
 
 /**
@@ -50,6 +53,23 @@ type ButtonSpec = {
 
 export default function UnfoldEditorTestScreen() {
   const editorRef = React.useRef<UnfoldEditorRef>(null);
+  const [selectionState, setSelectionState] =
+    React.useState<UnfoldEditorSelectionState | null>(null);
+  const [htmlChangeCount, setHtmlChangeCount] = React.useState(0);
+
+  const handleSelectionChange = React.useCallback(
+    (event: UnfoldEditorSelectionChangeEvent) => {
+      setSelectionState(event.nativeEvent);
+    },
+    []
+  );
+
+  const handleChangeHtml = React.useCallback(
+    (_event: UnfoldEditorChangeHtmlEvent) => {
+      setHtmlChangeCount((c) => c + 1);
+    },
+    []
+  );
 
   const handleGetHtml = React.useCallback(async () => {
     const html = await editorRef.current?.getHtml();
@@ -100,6 +120,13 @@ export default function UnfoldEditorTestScreen() {
     { label: 'getHtml', onPress: handleGetHtml },
     { label: 'focus', onPress: call('focus', () => editorRef.current?.focus()) },
     { label: 'blur', onPress: call('blur', () => editorRef.current?.blur()) },
+    {
+      label: 'getState',
+      onPress: async () => {
+        const state = await editorRef.current?.getSelectionState();
+        Alert.alert('getSelectionState()', JSON.stringify(state, null, 2));
+      },
+    },
   ];
 
   const handleInsertLink = React.useCallback(
@@ -174,7 +201,7 @@ export default function UnfoldEditorTestScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'UnfoldEditor Day 6' }} />
+      <Stack.Screen options={{ title: 'UnfoldEditor Day 8' }} />
       <UnfoldEditor
         ref={editorRef}
         style={styles.editor}
@@ -182,10 +209,44 @@ export default function UnfoldEditorTestScreen() {
         placeholder="Write a reflection…"
         editable
         keyboardAppearance="dark"
-        onChangeHtml={() => {
-          // no-op — debounced HTML snapshot
-        }}
+        onChangeHtml={handleChangeHtml}
+        onEditorSelectionChange={handleSelectionChange}
       />
+      {/* Day 8: live selection state + HTML change counter */}
+      <View style={styles.stateBar}>
+        <Text style={styles.stateLabel}>
+          html changes: {htmlChangeCount}
+        </Text>
+        {selectionState && (
+          <View style={styles.stateRow}>
+            {selectionState.bold && (
+              <Text style={[styles.stateBadge, styles.stateBadgeActive]}>B</Text>
+            )}
+            {selectionState.italic && (
+              <Text style={[styles.stateBadge, styles.stateBadgeActive]}>I</Text>
+            )}
+            {selectionState.underline && (
+              <Text style={[styles.stateBadge, styles.stateBadgeActive]}>U</Text>
+            )}
+            {selectionState.strikethrough && (
+              <Text style={[styles.stateBadge, styles.stateBadgeActive]}>S</Text>
+            )}
+            {selectionState.code && (
+              <Text style={[styles.stateBadge, styles.stateBadgeActive]}>{'<>'}</Text>
+            )}
+            {selectionState.hasLink && (
+              <Text style={[styles.stateBadge, styles.stateBadgeActive]}>link</Text>
+            )}
+            <Text style={styles.stateLabel}>
+              {selectionState.blockType}
+              {selectionState.listType ? ` · ${selectionState.listType}` : ''}
+            </Text>
+            <Text style={styles.stateLabel}>
+              [{selectionState.start},{selectionState.end}]
+            </Text>
+          </View>
+        )}
+      </View>
       <ScrollView
         style={styles.toolbarScroll}
         contentContainerStyle={styles.toolbarContent}
@@ -273,5 +334,37 @@ const styles = StyleSheet.create({
     color: '#f5f5f5',
     fontSize: 13,
     fontWeight: '600',
+  },
+  stateBar: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2a2a2a',
+    backgroundColor: '#111',
+  },
+  stateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  stateLabel: {
+    color: '#888',
+    fontSize: 11,
+    fontVariant: ['tabular-nums'],
+  },
+  stateBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#1f1f1f',
+    color: '#555',
+    fontSize: 11,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
+  stateBadgeActive: {
+    backgroundColor: '#2d4a2d',
+    color: '#8bef8b',
   },
 });

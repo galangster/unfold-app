@@ -30,6 +30,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
   var onFocus: (() -> Void)?
   var onBlur: (() -> Void)?
+  var onEditorSelectionChange: (([String: Any]) -> Void)?
 
   // MARK: - Private state
 
@@ -42,6 +43,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   private let changeDebounceQueue = DispatchQueue(
     label: "com.unfold.editor.change-debounce")
   private static let changeDebounceInterval: DispatchTimeInterval = .milliseconds(200)
+
+  /// Selection-change throttle state. 16ms (≈60fps) cap so rapid drag
+  /// selections don't saturate the JS bridge.
+  private var lastSelectionEmitTime: CFTimeInterval = 0
+  private var selectionThrottleWorkItem: DispatchWorkItem?
+  private static let selectionThrottleInterval: CFTimeInterval = 0.016
 
   // MARK: - Init
 
@@ -101,6 +108,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   deinit {
     changeDebounceTimer?.cancel()
     changeDebounceTimer = nil
+    selectionThrottleWorkItem?.cancel()
+    selectionThrottleWorkItem = nil
   }
 
   // MARK: - Host hooks
@@ -147,6 +156,14 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   @discardableResult
   func blur() -> Bool {
     editor.resignFirstResponder()
+  }
+
+  /// Returns the current formatting state at the cursor / selection start.
+  /// Used by JS for initial mount state and post-command toolbar refresh.
+  func getSelectionState() -> [String: Any] {
+    HtmlEncoder.querySelectionState(
+      in: editor.attributedText,
+      selectedRange: editor.selectedRange)
   }
 
   // MARK: - Public commands — text formatting
@@ -433,6 +450,18 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     onBlur?()
   }
 
+  func editor(
+    _ editor: EditorView,
+    didChangeSelectionAt range: NSRange,
+    attributes: [NSAttributedString.Key: Any],
+    contentType: EditorContent.Name
+  ) {
+    let state = HtmlEncoder.querySelectionState(
+      in: editor.attributedText,
+      selectedRange: range)
+    throttleSelectionEmit(state)
+  }
+
   // MARK: - Internals
 
   /// Paragraph range containing the current selection. Returns a zero-length
@@ -490,6 +519,38 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     }
     changeDebounceTimer = timer
     timer.resume()
+  }
+
+  /// Throttled emission of `onEditorSelectionChange`. Emits immediately if
+  /// outside the 16ms cooldown window; otherwise defers to the next window
+  /// boundary so the last state in a burst is never dropped.
+  ///
+  /// Must be called from the main thread (Proton's delegate fires there).
+  private func throttleSelectionEmit(_ state: [String: Any]) {
+    let now = CACurrentMediaTime()
+    let elapsed = now - lastSelectionEmitTime
+
+    if elapsed >= Self.selectionThrottleInterval {
+      // Outside cooldown — emit immediately
+      lastSelectionEmitTime = now
+      selectionThrottleWorkItem?.cancel()
+      selectionThrottleWorkItem = nil
+      onEditorSelectionChange?(state)
+    } else {
+      // Inside cooldown — schedule deferred emit at end of window
+      selectionThrottleWorkItem?.cancel()
+      let item = DispatchWorkItem { [weak self] in
+        guard let self = self else { return }
+        self.lastSelectionEmitTime = CACurrentMediaTime()
+        self.onEditorSelectionChange?(state)
+        self.selectionThrottleWorkItem = nil
+      }
+      selectionThrottleWorkItem = item
+      let delay = Self.selectionThrottleInterval - elapsed
+      DispatchQueue.main.asyncAfter(
+        deadline: .now() + delay,
+        execute: item)
+    }
   }
 
   /// Toggles the checked state of the checklist line containing `charIndex`.

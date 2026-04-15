@@ -80,6 +80,24 @@ const UnfoldEditor = React.forwardRef<UnfoldEditorRef, UnfoldEditorProps>(
         insertLink: async (url: string) => {
           await viewRef.current?.insertLink(url);
         },
+        getSelectionState: async () => {
+          const state = await viewRef.current?.getSelectionState();
+          return (
+            state ?? {
+              bold: false,
+              italic: false,
+              underline: false,
+              strikethrough: false,
+              code: false,
+              hasLink: false,
+              linkUrl: null,
+              blockType: 'p' as const,
+              listType: null,
+              start: 0,
+              end: 0,
+            }
+          );
+        },
       }),
       []
     );
