@@ -3,6 +3,7 @@ export type { UnfoldEditorProps, UnfoldEditorRef } from './UnfoldEditor';
 export type {
   UnfoldEditorBlockType,
   UnfoldEditorListType,
+  UnfoldEditorKeyboardAppearance,
   UnfoldEditorViewProps,
   UnfoldEditorViewRef,
   UnfoldEditorScriptureRef,

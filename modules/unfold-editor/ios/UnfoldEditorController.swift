@@ -161,6 +161,97 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     scheduleHtmlEmit()
   }
 
+  func toggleUnderline() {
+    UnderlineCommand().execute(on: editor)
+    scheduleHtmlEmit()
+  }
+
+  func toggleStrikethrough() {
+    StrikethroughCommand().execute(on: editor)
+    scheduleHtmlEmit()
+  }
+
+  // MARK: - Public commands — inline insertion
+
+  /// Inserts a hyperlink at the current selection. Behavior:
+  /// - Invalid URL (empty, or `URL(string:)` returns nil) → no-op.
+  /// - Non-empty selection → wraps the selected text in the link attribute.
+  /// - Empty selection → inserts the URL string as display text, wrapped in
+  ///   the link attribute, and advances the cursor past it.
+  ///
+  /// The HtmlEncoder already handles `.link` attributes by emitting
+  /// `<a href="...">`, and suppresses the visual underline when serializing
+  /// (links render underlined by convention but the `<u>` is implicit).
+  func insertLink(_ url: String) {
+    guard !url.isEmpty, let linkURL = URL(string: url) else { return }
+    let selectedRange = editor.selectedRange
+    if selectedRange.length > 0 {
+      editor.addAttributes([
+        .link: linkURL,
+        .foregroundColor: UnfoldColors.accent,
+        .underlineStyle: NSUnderlineStyle.single.rawValue,
+        .underlineColor: UnfoldColors.accent,
+      ], at: selectedRange)
+    } else {
+      let display = NSAttributedString(string: url, attributes: [
+        .link: linkURL,
+        .font: UnfoldFonts.body(),
+        .foregroundColor: UnfoldColors.accent,
+        .underlineStyle: NSUnderlineStyle.single.rawValue,
+        .underlineColor: UnfoldColors.accent,
+      ])
+      editor.replaceCharacters(in: selectedRange, with: display)
+      let newCursor = NSRange(
+        location: selectedRange.location + display.length,
+        length: 0)
+      editor.selectedRange = newCursor
+    }
+    scheduleHtmlEmit()
+  }
+
+  // MARK: - Public setters — declarative props
+
+  /// Sets the empty-state placeholder. Pass `nil` (or an empty string from
+  /// JS) to clear. Styling matches the body-muted text color so the hint
+  /// doesn't compete with real content.
+  func setPlaceholder(_ text: String?) {
+    guard let text = text, !text.isEmpty else {
+      editor.placeholderText = nil
+      return
+    }
+    editor.placeholderText = NSAttributedString(
+      string: text,
+      attributes: [
+        .font: UnfoldFonts.body(),
+        .foregroundColor: UnfoldColors.textMuted,
+      ])
+  }
+
+  /// Toggles whether the editor accepts edits. Mirrors `editor.isEditable`.
+  func setEditable(_ editable: Bool) {
+    editor.isEditable = editable
+  }
+
+  /// Sets the keyboard appearance. Accepts `"default"`, `"light"`, or
+  /// `"dark"`; anything else maps to `.default`.
+  func setKeyboardAppearance(_ value: String) {
+    switch value {
+    case "light": editor.keyboardAppearance = .light
+    case "dark":  editor.keyboardAppearance = .dark
+    default:      editor.keyboardAppearance = .default
+    }
+  }
+
+  /// Requests first-responder after a short delay. Matches the spike timing
+  /// (§10.B.6: "call becomeFirstResponder 300ms after mount"). Safe to call
+  /// from the prop setter on first mount — the delay lets layout settle so
+  /// the keyboard doesn't animate in before the view is positioned.
+  func requestAutoFocus() {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+      _ = self?.editor.becomeFirstResponder()
+    }
+  }
+
   // MARK: - Public commands — block types
 
   /// Applies a block type to the current paragraph. Accepted values:

@@ -102,6 +102,13 @@ export default function UnfoldEditorTestScreen() {
     { label: 'blur', onPress: call('blur', () => editorRef.current?.blur()) },
   ];
 
+  const handleInsertLink = React.useCallback(
+    call('insertLink', () =>
+      editorRef.current?.insertLink('https://unfold.app/john-3-16')
+    ),
+    [call]
+  );
+
   const formatButtons: ButtonSpec[] = [
     {
       label: 'bold',
@@ -111,6 +118,19 @@ export default function UnfoldEditorTestScreen() {
       label: 'italic',
       onPress: call('toggleItalic', () => editorRef.current?.toggleItalic()),
     },
+    {
+      label: 'under',
+      onPress: call('toggleUnderline', () =>
+        editorRef.current?.toggleUnderline()
+      ),
+    },
+    {
+      label: 'strike',
+      onPress: call('toggleStrikethrough', () =>
+        editorRef.current?.toggleStrikethrough()
+      ),
+    },
+    { label: 'link', onPress: handleInsertLink },
   ];
 
   const blockButtons: ButtonSpec[] = [
@@ -159,6 +179,9 @@ export default function UnfoldEditorTestScreen() {
         ref={editorRef}
         style={styles.editor}
         initialHtml={SEED_HTML}
+        placeholder="Write a reflection…"
+        editable
+        keyboardAppearance="dark"
         onChangeHtml={() => {
           // no-op — debounced HTML snapshot
         }}

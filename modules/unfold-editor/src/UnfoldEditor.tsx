@@ -21,6 +21,7 @@ export type UnfoldEditorRef = UnfoldEditorViewRef;
 export type {
   UnfoldEditorBlockType,
   UnfoldEditorListType,
+  UnfoldEditorKeyboardAppearance,
 } from './UnfoldEditorView';
 
 const UnfoldEditor = React.forwardRef<UnfoldEditorRef, UnfoldEditorProps>(
@@ -69,6 +70,15 @@ const UnfoldEditor = React.forwardRef<UnfoldEditorRef, UnfoldEditorProps>(
         },
         insertImage: async (uri: string) => {
           await viewRef.current?.insertImage(uri);
+        },
+        toggleUnderline: async () => {
+          await viewRef.current?.toggleUnderline();
+        },
+        toggleStrikethrough: async () => {
+          await viewRef.current?.toggleStrikethrough();
+        },
+        insertLink: async (url: string) => {
+          await viewRef.current?.insertLink(url);
         },
       }),
       []

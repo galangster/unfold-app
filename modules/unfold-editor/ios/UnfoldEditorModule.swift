@@ -17,6 +17,27 @@ public class UnfoldEditorModule: Module {
         view.initialHtml = html
       }
 
+      Prop("placeholder") { (view: UnfoldEditorView, text: String?) in
+        view.controller.setPlaceholder(text)
+      }
+
+      Prop("editable") { (view: UnfoldEditorView, editable: Bool) in
+        view.controller.setEditable(editable)
+      }
+
+      Prop("autoFocus") { (view: UnfoldEditorView, autoFocus: Bool) in
+        // Only trigger on first mount with `true`. The controller's 300ms
+        // delay handles layout settling — calling this multiple times is
+        // harmless (each call just becomes a no-op once firstResponder).
+        if autoFocus {
+          view.controller.requestAutoFocus()
+        }
+      }
+
+      Prop("keyboardAppearance") { (view: UnfoldEditorView, appearance: String) in
+        view.controller.setKeyboardAppearance(appearance)
+      }
+
       Events("onChangeHtml", "onScriptureRefs", "onEditorFocus", "onEditorBlur")
 
       // --- Day 5: bridge proof (getHtml / focus / blur) ---
@@ -41,6 +62,18 @@ public class UnfoldEditorModule: Module {
 
       AsyncFunction("toggleItalic") { (view: UnfoldEditorView) in
         view.controller.toggleItalic()
+      }
+
+      AsyncFunction("toggleUnderline") { (view: UnfoldEditorView) in
+        view.controller.toggleUnderline()
+      }
+
+      AsyncFunction("toggleStrikethrough") { (view: UnfoldEditorView) in
+        view.controller.toggleStrikethrough()
+      }
+
+      AsyncFunction("insertLink") { (view: UnfoldEditorView, url: String) in
+        view.controller.insertLink(url)
       }
 
       AsyncFunction("setBlockType") { (view: UnfoldEditorView, type: String) in

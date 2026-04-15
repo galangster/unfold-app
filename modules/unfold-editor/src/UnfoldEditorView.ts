@@ -35,8 +35,14 @@ export type UnfoldEditorFocusEvent = {
  * and `topBlur` as both direct AND bubbling events — any module declaring
  * them would trip the "Event cannot be both direct and bubbling" invariant.
  */
+export type UnfoldEditorKeyboardAppearance = 'default' | 'light' | 'dark';
+
 export type UnfoldEditorViewProps = Omit<ViewProps, 'onFocus' | 'onBlur'> & {
   initialHtml?: string;
+  placeholder?: string;
+  editable?: boolean;
+  autoFocus?: boolean;
+  keyboardAppearance?: UnfoldEditorKeyboardAppearance;
   onChangeHtml?: (event: UnfoldEditorChangeHtmlEvent) => void;
   onScriptureRefs?: (event: UnfoldEditorScriptureRefsEvent) => void;
   onEditorFocus?: (event: UnfoldEditorFocusEvent) => void;
@@ -76,6 +82,11 @@ export type UnfoldEditorViewRef = {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   insertImage: (uri: string) => Promise<void>;
+
+  // Commands 15–17 (Day 7)
+  toggleUnderline: () => Promise<void>;
+  toggleStrikethrough: () => Promise<void>;
+  insertLink: (url: string) => Promise<void>;
 };
 
 const NativeView: ComponentType<UnfoldEditorViewProps & RefAttributes<UnfoldEditorViewRef>> =
