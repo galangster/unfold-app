@@ -3009,6 +3009,8 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - UMAppLoader (55.0.2)
+  - UnfoldEditor (0.0.1):
+    - ExpoModulesCore
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -3180,6 +3182,7 @@ DEPENDENCIES:
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - "tentap (from `../node_modules/@10play/tentap-editor`)"
   - UMAppLoader (from `../node_modules/unimodules-app-loader/ios`)
+  - UnfoldEditor (from `../modules/unfold-editor/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -3537,6 +3540,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@10play/tentap-editor"
   UMAppLoader:
     :path: "../node_modules/unimodules-app-loader/ios"
+  UnfoldEditor:
+    :path: "../modules/unfold-editor/ios"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -3724,6 +3729,7 @@ SPEC CHECKSUMS:
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   tentap: 60c7b42c6b4c3e91ebccb9917a0217a8009b8112
   UMAppLoader: 71b50bcc31d86495e52c0b4cd17e2708bf297be3
+  UnfoldEditor: 4e6c026a159b6b95986498f2252c1dc2d340dc52
   Yoga: dd994d8c85dca5cc9b10f5df8c01f9ef1d0da191
 
 PODFILE CHECKSUM: 86c7af9f23ae063ee1ae80b5c0e820c46b105d25
