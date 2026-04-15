@@ -1,24 +1,205 @@
+import { Asset } from 'expo-asset';
 import { Stack } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
-import { UnfoldEditorView } from 'unfold-editor';
+import * as React from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  UnfoldEditor,
+  type UnfoldEditorBlockType,
+  type UnfoldEditorListType,
+  type UnfoldEditorRef,
+} from 'unfold-editor';
 
 /**
- * Phase B smoke test screen for the unfold-editor Expo Module.
+ * Phase B Day 6 parity + command screen. Renders the same seed document the
+ * spike renders (John 3:16 devotional) and exposes a test button per command
+ * in §10.B.4. Each button dispatches the command through the Expo Module
+ * bridge. Tap any command → tap `getHtml` to see the updated HTML.
  *
- * Verifies that the module's iOS pod bundles a custom font (Inter_400Regular.ttf)
- * and registers it at view-init time via CTFontManagerRegisterFontsForURL.
- *
- * Expected: "Unfold Editor WIP" renders in Inter-Regular, with a small
- * diagnostic line reading "font: Inter-Regular". If the diagnostic shows
- * "font: SYSTEM FALLBACK", the font bundling path is broken.
- *
- * Route: /__dev__/unfold-editor-test (deep link: unfold://__dev__/unfold-editor-test)
+ * Route: /__dev__/unfold-editor-test  (deep: unfold://__dev__/unfold-editor-test)
  */
+const SEED_HTML = `
+  <h1>John 3:16</h1>
+  <p>For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.</p>
+  <blockquote>This is the most quoted verse in the New Testament — the gospel in a single line.</blockquote>
+  <img src="placeholder" width="320" height="180" />
+  <h2>Observations</h2>
+  <ul>
+    <li data-level="1">God's love is the source</li>
+    <li data-level="1">Belief is the response</li>
+    <li data-level="2">Eternal life is the gift</li>
+  </ul>
+  <h2>To do</h2>
+  <ul data-type="checklist">
+    <li data-level="1" data-checked="false">Pray about this verse</li>
+    <li data-level="1" data-checked="true">Read surrounding context</li>
+    <li data-level="1" data-checked="false">Memorize by Sunday</li>
+  </ul>
+  <h2>Reference snippet</h2>
+  <p>Quick reminder of the Greek root for <i>agape</i>:</p>
+  <pre><code>func devotional(theme: String) -> String {
+    let verses = lookupVerses(theme)
+    return verses.joined(separator: "\\n")
+  }</code></pre>
+  <p>See also Romans 8:28 and 1 Corinthians 13:4-7.</p>
+`;
+
+type ButtonSpec = {
+  label: string;
+  onPress: () => void;
+};
+
 export default function UnfoldEditorTestScreen() {
+  const editorRef = React.useRef<UnfoldEditorRef>(null);
+
+  const handleGetHtml = React.useCallback(async () => {
+    const html = await editorRef.current?.getHtml();
+    Alert.alert('getHtml()', html ?? '(empty)');
+  }, []);
+
+  const call = React.useCallback(
+    (label: string, fn: () => Promise<unknown> | undefined) => {
+      return () => {
+        Promise.resolve(fn()).catch((err) => {
+          Alert.alert(`${label} failed`, String(err));
+        });
+      };
+    },
+    []
+  );
+
+  const handleBlockType = React.useCallback(
+    (type: UnfoldEditorBlockType) =>
+      call(`setBlockType(${type})`, () =>
+        editorRef.current?.setBlockType(type)
+      ),
+    [call]
+  );
+
+  const handleListType = React.useCallback(
+    (type: UnfoldEditorListType) =>
+      call(`setList(${type})`, () => editorRef.current?.setList(type)),
+    [call]
+  );
+
+  const handleInsertImage = React.useCallback(async () => {
+    try {
+      const asset = Asset.fromModule(require('../../../assets/images/icon.png'));
+      await asset.downloadAsync();
+      const uri = asset.localUri ?? asset.uri;
+      if (!uri) {
+        Alert.alert('insertImage', 'Asset has no localUri');
+        return;
+      }
+      await editorRef.current?.insertImage(uri);
+    } catch (err) {
+      Alert.alert('insertImage failed', String(err));
+    }
+  }, []);
+
+  const bridgeButtons: ButtonSpec[] = [
+    { label: 'getHtml', onPress: handleGetHtml },
+    { label: 'focus', onPress: call('focus', () => editorRef.current?.focus()) },
+    { label: 'blur', onPress: call('blur', () => editorRef.current?.blur()) },
+  ];
+
+  const formatButtons: ButtonSpec[] = [
+    {
+      label: 'bold',
+      onPress: call('toggleBold', () => editorRef.current?.toggleBold()),
+    },
+    {
+      label: 'italic',
+      onPress: call('toggleItalic', () => editorRef.current?.toggleItalic()),
+    },
+  ];
+
+  const blockButtons: ButtonSpec[] = [
+    { label: 'p', onPress: handleBlockType('p') },
+    { label: 'h1', onPress: handleBlockType('h1') },
+    { label: 'h2', onPress: handleBlockType('h2') },
+    { label: 'h3', onPress: handleBlockType('h3') },
+    { label: 'quote', onPress: handleBlockType('blockquote') },
+    { label: 'pre', onPress: handleBlockType('pre') },
+  ];
+
+  const listButtons: ButtonSpec[] = [
+    { label: '• list', onPress: handleListType('bullet') },
+    { label: '1. list', onPress: handleListType('ordered') },
+    { label: '☐ list', onPress: handleListType('checklist') },
+    {
+      label: 'clear',
+      onPress: call('clearList', () => editorRef.current?.clearList()),
+    },
+    {
+      label: 'check',
+      onPress: call('toggleChecklist', () =>
+        editorRef.current?.toggleChecklist()
+      ),
+    },
+    {
+      label: 'indent',
+      onPress: call('indentList', () => editorRef.current?.indentList()),
+    },
+    {
+      label: 'outdent',
+      onPress: call('outdentList', () => editorRef.current?.outdentList()),
+    },
+  ];
+
+  const historyButtons: ButtonSpec[] = [
+    { label: 'undo', onPress: call('undo', () => editorRef.current?.undo()) },
+    { label: 'redo', onPress: call('redo', () => editorRef.current?.redo()) },
+    { label: 'image', onPress: handleInsertImage },
+  ];
+
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: 'UnfoldEditor Smoke Test' }} />
-      <UnfoldEditorView style={styles.editor} />
+      <Stack.Screen options={{ title: 'UnfoldEditor Day 6' }} />
+      <UnfoldEditor
+        ref={editorRef}
+        style={styles.editor}
+        initialHtml={SEED_HTML}
+        onChangeHtml={() => {
+          // no-op — debounced HTML snapshot
+        }}
+      />
+      <ScrollView
+        style={styles.toolbarScroll}
+        contentContainerStyle={styles.toolbarContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <ButtonRow label="bridge" buttons={bridgeButtons} />
+        <ButtonRow label="format" buttons={formatButtons} />
+        <ButtonRow label="block" buttons={blockButtons} />
+        <ButtonRow label="list" buttons={listButtons} />
+        <ButtonRow label="other" buttons={historyButtons} />
+      </ScrollView>
+    </View>
+  );
+}
+
+function ButtonRow({
+  label,
+  buttons,
+}: {
+  label: string;
+  buttons: ButtonSpec[];
+}) {
+  return (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <View style={styles.rowButtons}>
+        {buttons.map((btn) => (
+          <Pressable
+            key={btn.label}
+            style={styles.button}
+            onPress={btn.onPress}
+            accessibilityLabel={`cmd-${btn.label}`}
+          >
+            <Text style={styles.buttonText}>{btn.label}</Text>
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -29,5 +210,45 @@ const styles = StyleSheet.create({
   },
   editor: {
     flex: 1,
+  },
+  toolbarScroll: {
+    maxHeight: 260,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#2a2a2a',
+    backgroundColor: '#0d0d0d',
+  },
+  toolbarContent: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  rowLabel: {
+    width: 48,
+    color: '#888',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  rowButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    flex: 1,
+  },
+  button: {
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: '#1f1f1f',
+  },
+  buttonText: {
+    color: '#f5f5f5',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

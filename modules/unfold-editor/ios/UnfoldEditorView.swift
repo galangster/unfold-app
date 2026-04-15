@@ -1,55 +1,92 @@
 import ExpoModulesCore
 import UIKit
 
-/// Phase B smoke-test view. Renders a centered "Unfold Editor WIP" label
-/// in the bundled Inter-Regular font, plus a small diagnostic line showing
-/// which PostScript name actually resolved. If the diagnostic shows
-/// "SYSTEM FALLBACK", the bundled font didn't load and the bundling path
-/// is broken — that's the signal this smoke test is designed to catch.
+/// Native view hosted by the `unfold-editor` Expo Module.
+///
+/// Wraps a `UnfoldEditorController` whose root view contains the Proton
+/// `EditorView`, the scripture chip strip, and the line decoration overlay.
+/// Props come in through `@objc` accessors wired by `UnfoldEditorModule`;
+/// events flow out through `EventDispatcher` instances read from the same
+/// module definition.
 final class UnfoldEditorView: ExpoView {
 
-  private let titleLabel = UILabel()
-  private let diagnosticLabel = UILabel()
+  let controller: UnfoldEditorController
+
+  // Events emitted back to React Native.
+  let onChangeHtml = EventDispatcher()
+  let onScriptureRefs = EventDispatcher()
+  let onEditorFocus = EventDispatcher()
+  let onEditorBlur = EventDispatcher()
+
+  /// Tracks whether `initialHtml` has been applied yet. RN will push the prop
+  /// on first mount (and never again, per the uncontrolled-editor rule in
+  /// §10.B.6), but we still guard so a late prop push doesn't nuke in-progress
+  /// user edits.
+  private var didApplyInitialHtml = false
+
+  /// `initialHtml` prop. Assigned exactly once on the first non-nil, non-empty
+  /// push. Subsequent writes are ignored — to replace content after mount the
+  /// caller must unmount and remount the component.
+  @objc var initialHtml: String = "" {
+    didSet {
+      guard !didApplyInitialHtml else { return }
+      didApplyInitialHtml = true
+      controller.loadHtml(initialHtml)
+    }
+  }
 
   required init(appContext: AppContext? = nil) {
-    super.init(appContext: appContext)
-
+    // Register fonts before the Proton EditorView is instantiated so
+    // `UnfoldFonts.body()` and friends resolve against bundled Inter +
+    // InstrumentSerif TTFs instead of system fallbacks.
     UnfoldEditorFontLoader.registerIfNeeded()
 
-    backgroundColor = UIColor.systemBackground
+    self.controller = UnfoldEditorController()
+    super.init(appContext: appContext)
 
-    let resolvedName = UnfoldEditorFontLoader.resolvedInterPostScriptName()
-    let preferred = resolvedName.flatMap { UIFont(name: $0, size: 32) }
-    let titleFont = preferred ?? UIFont.systemFont(ofSize: 32, weight: .regular)
+    clipsToBounds = true
+    backgroundColor = UnfoldColors.background
 
-    titleLabel.text = "Unfold Editor WIP"
-    titleLabel.font = titleFont
-    titleLabel.textColor = UIColor.label
-    titleLabel.textAlignment = .center
-    titleLabel.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(titleLabel)
-
-    let diagnosticText: String
-    if let resolvedName {
-      diagnosticText = "font: \(resolvedName)"
-    } else {
-      diagnosticText = "font: SYSTEM FALLBACK (bundling failed)"
-    }
-    diagnosticLabel.text = diagnosticText
-    diagnosticLabel.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-    diagnosticLabel.textColor = UIColor.secondaryLabel
-    diagnosticLabel.textAlignment = .center
-    diagnosticLabel.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(diagnosticLabel)
-
+    controller.rootView.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(controller.rootView)
     NSLayoutConstraint.activate([
-      titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-      titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 16),
-      titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
-
-      diagnosticLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 12),
-      diagnosticLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+      controller.rootView.topAnchor.constraint(equalTo: topAnchor),
+      controller.rootView.leadingAnchor.constraint(equalTo: leadingAnchor),
+      controller.rootView.trailingAnchor.constraint(equalTo: trailingAnchor),
+      controller.rootView.bottomAnchor.constraint(equalTo: bottomAnchor),
     ])
+
+    controller.onChangeHtml = { [weak self] html in
+      self?.onChangeHtml(["html": html])
+    }
+    controller.onScriptureRefs = { [weak self] refs in
+      let serialized = refs.map { ref -> [String: Any] in
+        [
+          "rawText": ref.rawText,
+          "location": ref.range.location,
+          "length": ref.range.length,
+        ]
+      }
+      self?.onScriptureRefs(["refs": serialized])
+    }
+    controller.onFocus = { [weak self] in
+      self?.onEditorFocus([:])
+    }
+    controller.onBlur = { [weak self] in
+      self?.onEditorBlur([:])
+    }
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    controller.hostDidLayout()
+  }
+
+  override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+    super.traitCollectionDidChange(previousTraitCollection)
+    guard traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle else {
+      return
+    }
+    controller.hostTraitCollectionDidChange()
   }
 }

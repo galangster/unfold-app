@@ -1,0 +1,94 @@
+//
+//  NSRangeExtensions.swift
+//  Proton
+//
+//  Created by Rajdeep Kwatra on 3/1/20.
+//  Copyright © 2020 Rajdeep Kwatra. All rights reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+//
+
+import Foundation
+import UIKit
+
+public extension NSRange {
+
+    /// Range with 0 location and length
+    static var zero: NSRange {
+        return NSRange(location: 0, length: 0)
+    }
+
+    var firstCharacterRange: NSRange {
+        return NSRange(location: location, length: 1)
+    }
+
+    var lastCharacterRange: NSRange {
+        return NSRange(location: max(location + length - 1, 0), length: 1)
+    }
+
+    var previousPosition: NSRange {
+        return NSRange(location: max(location - 1, 0), length: 0)
+    }
+
+    var nextPosition: NSRange {
+        return NSRange(location: location + 1, length: 0)
+    }
+
+    var endLocation: Int {
+        return location + length
+    }
+
+    var nextCharacterRange: NSRange {
+        NSRange(location: location + length, length: 1)
+    }
+
+    var previousCharacterRange: NSRange? {
+        guard location > 0 else { return nil }
+        return NSRange(location: location - 1, length: 1)
+    }
+
+    /// Converts the range to `UITextRange` in given `UITextInput`. Returns nil if the range is invalid in the `UITextInput`.
+    /// - Parameter textInput: UITextInput to convert the range in.
+    func toTextRange(textInput: UITextInput) -> UITextRange? {
+        guard let rangeStart = textInput.position(from: textInput.beginningOfDocument, offset: location),
+              let rangeEnd = textInput.position(from: rangeStart, offset: length)
+        else { return nil }
+        
+        return textInput.textRange(from: rangeStart, to: rangeEnd)
+    }
+
+    /// Checks if the range is valid in given `UITextInput`
+    /// - Parameter textInput: UITextInput to validate the range in.
+    func isValidIn(_ textInput: UITextInput) -> Bool {
+        guard location >= 0 else { return false }
+        let end = location + length
+        let contentLength = textInput.offset(from: textInput.beginningOfDocument, to: textInput.endOfDocument)
+        return end <= contentLength
+    }
+
+    /// Shifts the range with given shift value
+    /// - Parameter shift: Int value to shift range by.
+    /// - Returns: Shifted range with same length.
+    /// - Important: The shifted range may or may not be valid in a given string. Validity of shifted range must always be checked at the usage site.
+    func shiftedBy(_ shift: Int) -> NSRange {
+        return NSRange(location: self.location + shift, length: length)
+    }
+}
+
+extension NSRange {
+    func clamped(upperBound: Int) -> NSRange {
+        let clampedLocation = max(min(location, upperBound), 0)
+        let clampedLength = max(min(length, upperBound - clampedLocation), 0)
+        return NSRange(location: clampedLocation, length: clampedLength)
+    }
+}

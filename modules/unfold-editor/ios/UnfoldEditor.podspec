@@ -16,8 +16,14 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  s.dependency 'Proton'
 
-  s.source_files = '**/*.{h,m,swift}'
+  # Only ship the module's own sources. `vendor/Proton` is compiled by the
+  # separate ProtonCore/Proton pods (see Podfile), so excluding it here keeps
+  # the Swift + ObjC sources from being built twice.
+  s.source_files = '*.{h,m,swift}'
+  s.exclude_files = 'vendor/**/*'
+
   s.resource_bundles = {
     'UnfoldEditorFonts' => ['Resources/Fonts/*.ttf']
   }

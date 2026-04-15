@@ -25,6 +25,16 @@ prepare_react_native_project!
 target 'Unfold' do
   use_expo_modules!
 
+  # Proton — vendored Swift rich text editor that the unfold-editor Expo
+  # Module wraps. Sources live under modules/unfold-editor/ios/vendor/Proton
+  # so everything the module needs ships inside the module directory.
+  # ProtonCore is the ObjC layer; Proton (Swift) depends on it.
+  # ProtonCore is the ObjC half of the vendored Proton editor. Swift pods
+  # importing an ObjC pod as a static library need modular headers so the
+  # ObjC types are visible through `import ProtonCore`.
+  pod 'ProtonCore', :path => '../modules/unfold-editor/ios/vendor/Proton', :modular_headers => true
+  pod 'Proton', :path => '../modules/unfold-editor/ios/vendor/Proton'
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
