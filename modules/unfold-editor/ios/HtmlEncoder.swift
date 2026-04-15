@@ -356,12 +356,19 @@ enum HtmlEncoder {
 
     var output = ""
     str.enumerateAttributes(in: range, options: []) { attrs, runRange, _ in
-      // Image attachment: emit <img> tag, skip the object-replacement char as text
+      // Image attachment: emit <img> tag, skip the object-replacement char as text.
+      // UnfoldImageAttachment carries the original file URI; plain
+      // NSTextAttachment (legacy / placeholder) falls back to "placeholder".
       if let attachment = attrs[.attachment] as? NSTextAttachment, attachment.image != nil {
         let width = Int(attachment.bounds.width)
         let height = Int(attachment.bounds.height)
-        // Spike: src is a placeholder. Production stores real URLs / data URIs.
-        output += "<img src=\"placeholder\" width=\"\(width)\" height=\"\(height)\" />"
+        let src: String
+        if let imageAttachment = attachment as? UnfoldImageAttachment {
+          src = escape(imageAttachment.sourceURI)
+        } else {
+          src = "placeholder"
+        }
+        output += "<img src=\"\(src)\" width=\"\(width)\" height=\"\(height)\" />"
         return
       }
 

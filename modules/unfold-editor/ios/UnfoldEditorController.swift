@@ -415,9 +415,10 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       width: image.size.width * scale,
       height: image.size.height * scale)
 
-    let attachment = NSTextAttachment()
-    attachment.image = image
-    attachment.bounds = CGRect(origin: .zero, size: displaySize)
+    let attachment = UnfoldImageAttachment(
+      image: image,
+      sourceURI: uri,
+      bounds: CGRect(origin: .zero, size: displaySize))
 
     let attachmentString = NSMutableAttributedString()
     attachmentString.append(NSAttributedString(string: "\n"))

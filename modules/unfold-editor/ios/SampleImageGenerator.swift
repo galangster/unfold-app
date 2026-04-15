@@ -6,6 +6,22 @@ final class UnfoldPlaceholderAttachment: NSTextAttachment {
   var caption: String = "Sample Image"
 }
 
+/// NSTextAttachment subclass that remembers the original file URI so
+/// HtmlEncoder can emit a real `src` instead of `"placeholder"`.
+/// Created by `insertImage()` and by `HtmlDecoder` when the `<img src="...">`
+/// points to a loadable file.
+final class UnfoldImageAttachment: NSTextAttachment {
+  let sourceURI: String
+  init(image: UIImage, sourceURI: String, bounds: CGRect) {
+    self.sourceURI = sourceURI
+    super.init(data: nil, ofType: nil)
+    self.image = image
+    self.bounds = bounds
+  }
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("Not serializable") }
+}
+
 /// Generates a placeholder image with Unfold styling. Used by the seed HTML
 /// decoder for the spike — real user-picked photos go through PHPicker and
 /// are stored as plain NSTextAttachment (not this subclass).

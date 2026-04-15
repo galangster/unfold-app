@@ -153,20 +153,28 @@ enum HtmlDecoder {
   // MARK: - Block rendering
 
   private static func renderBlock(_ block: Block) -> NSAttributedString {
-    // <img> blocks render as a paragraph containing a single placeholder
-    // attachment. We use UnfoldPlaceholderAttachment so EditorViewController
-    // can find them on traitCollectionDidChange and redraw with the new
-    // theme's colors.
+    // <img> blocks: try to load a real image from `src`. If the file
+    // exists, use `UnfoldImageAttachment` (preserves the URI for
+    // round-trip). Otherwise fall back to `UnfoldPlaceholderAttachment`
+    // (theme-aware generated image).
     if block.tag == "img" {
       let width = CGFloat(Int(block.attrs["width"] ?? "320") ?? 320)
       let height = CGFloat(Int(block.attrs["height"] ?? "200") ?? 200)
-      let attachment = UnfoldPlaceholderAttachment()
-      attachment.caption = "Sample Image"
-      attachment.image = SampleImageGenerator.makeImage(
-        width: width,
-        height: height,
-        caption: attachment.caption)
-      attachment.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+      let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+      let src = block.attrs["src"] ?? ""
+
+      let attachment: NSTextAttachment
+      if !src.isEmpty, src != "placeholder", let image = loadImage(from: src) {
+        attachment = UnfoldImageAttachment(image: image, sourceURI: src, bounds: bounds)
+      } else {
+        let placeholder = UnfoldPlaceholderAttachment()
+        placeholder.caption = "Sample Image"
+        placeholder.image = SampleImageGenerator.makeImage(
+          width: width, height: height, caption: placeholder.caption)
+        placeholder.bounds = bounds
+        attachment = placeholder
+      }
+
       let result = NSMutableAttributedString(attachment: attachment)
       result.append(NSAttributedString(string: "\n", attributes: [
         .font: UnfoldFonts.body(),
@@ -441,6 +449,18 @@ enum HtmlDecoder {
       attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
     }
     return attrs
+  }
+
+  // MARK: - Image loading
+
+  /// Loads a UIImage from a file URI or bare path. Returns nil if the path
+  /// doesn't resolve to a decodable image. Same logic as
+  /// `UnfoldEditorController.loadImage(from:)`.
+  private static func loadImage(from uri: String) -> UIImage? {
+    if let url = URL(string: uri), url.isFileURL {
+      return UIImage(contentsOfFile: url.path)
+    }
+    return UIImage(contentsOfFile: uri)
   }
 
   // MARK: - Entity decoding
