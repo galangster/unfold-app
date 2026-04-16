@@ -56,6 +56,12 @@ import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import {
+  UnfoldEditor,
+  type UnfoldEditorRef,
+  type UnfoldEditorSelectionState,
+  type UnfoldEditorChangeHtmlEvent,
+} from 'unfold-editor';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -181,13 +187,35 @@ function buildEditorCSS(colors: any, isEditing: boolean): string {
 }
 
 
+/**
+ * iOS uses the native unfold-editor module (Proton + TextKit 1).
+ * Android falls back to tentap (WebView + TipTap). Both hooks
+ * always run to avoid conditional-hook violations; the tentap
+ * bridge is inert on iOS since <RichText> never mounts.
+ */
+const IS_NATIVE_EDITOR = Platform.OS === 'ios';
+
+const DEFAULT_SELECTION_STATE: UnfoldEditorSelectionState = {
+  bold: false,
+  italic: false,
+  underline: false,
+  strikethrough: false,
+  code: false,
+  hasLink: false,
+  linkUrl: null,
+  blockType: 'p',
+  listType: null,
+  start: 0,
+  end: 0,
+};
+
 /* ─────────────────────────────────────────────────────────
  * Unified Note Screen — reads AND edits in one view
  *
  * Existing notes open in READ mode (editable: false).
  * New notes (no noteId) open in EDIT mode (editable: true).
  * Toggle between modes with Edit/Done header button.
- * Uses @10play/tentap-editor for both read + edit rendering.
+ * iOS: unfold-editor native module. Android: tentap WebView.
  * ───────────────────────────────────────────────────────── */
 
 export default function NoteDetailScreen() {
@@ -287,7 +315,16 @@ export default function NoteDetailScreen() {
       : legacyMarkdownToHtml(existingNote.content)
     : '<p></p>';
 
-  /* ───── TipTap editor bridge ───── */
+  /* ───── Native editor state (iOS) ───── */
+
+  const editorRef = useRef<UnfoldEditorRef>(null);
+  const [selectionState, setSelectionState] = useState(DEFAULT_SELECTION_STATE);
+  // Tracks latest HTML from onChangeHtml for explicit save (Done/Back)
+  const latestHtmlRef = useRef(initialContent);
+  // Remount key — bumped when we need to reload content (e.g. scripture insert)
+  const [editorKey, setEditorKey] = useState(0);
+
+  /* ───── TipTap editor bridge (Android / inert on iOS) ───── */
 
   // IMPORTANT: avoidIosKeyboard is FALSE because we manage keyboard padding
   // ourselves (accounting for the custom toolbar height). The library's internal
@@ -328,11 +365,12 @@ export default function NoteDetailScreen() {
     isEditingRef.current = isEditing;
   }, [isEditing]);
 
-  // Overlay covers the WebView until CSS is painted
-  const [editorReady, setEditorReady] = useState(false);
+  // Overlay covers the WebView until CSS is painted (not needed on native)
+  const [editorReady, setEditorReady] = useState(IS_NATIVE_EDITOR);
 
-  // Fallback: remove overlay after 1.5s
+  // Fallback: remove overlay after 1.5s (tentap only — native editor has no WebView flash)
   useEffect(() => {
+    if (IS_NATIVE_EDITOR) return;
     const fallback = setTimeout(() => {
       setEditorReady(true);
       editor.injectCSS(buildEditorCSS(colors, isEditingRef.current));
@@ -340,8 +378,9 @@ export default function NoteDetailScreen() {
     return () => clearTimeout(fallback);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Inject CSS once editor is ready
+  // Inject CSS once editor is ready (tentap only)
   useEffect(() => {
+    if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
     editor.injectCSS(buildEditorCSS(colors, isEditing));
     // Delay removing overlay until CSS has had time to paint
@@ -357,14 +396,12 @@ export default function NoteDetailScreen() {
     }
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Manage keyboard padding ourselves since avoidIosKeyboard is false.
-  // We account for the custom toolbar (48px) that sits above the keyboard.
-  // Without this, text scrolls behind the toolbar after ~12 lines.
+  // Manage keyboard padding (tentap only — native UITextView handles its own insets)
   const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
   useEffect(() => {
+    if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
     if (isEditing && isKeyboardUp && keyboardHeight > 0) {
-      // Toolbar sits above the keyboard, so total occlusion is keyboard + toolbar
       const totalPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
         (function() {
@@ -374,7 +411,6 @@ export default function NoteDetailScreen() {
       `);
       editor.updateScrollThresholdAndMargin(totalPadding);
     } else if (isKeyboardUp && keyboardHeight > 0) {
-      // Read mode with keyboard (e.g., search) — just keyboard padding
       const padding = keyboardHeight + 10;
       editor.injectJS(`
         (function() {
@@ -406,22 +442,41 @@ export default function NoteDetailScreen() {
 
   /* ───── Scripture insertion via pending prop ───── */
 
+  // Native path: append blockquote HTML and remount the editor
+  const handleNativeScriptureInsert = useCallback(
+    async (reference: string, text: string) => {
+      const currentHtml = (await editorRef.current?.getHtml()) ?? latestHtmlRef.current;
+      const blockquoteHtml =
+        `<blockquote><p>${text}</p><p><i>\u2014 ${reference}</i></p></blockquote><p></p>`;
+      const newHtml = currentHtml + blockquoteHtml;
+      latestHtmlRef.current = newHtml;
+      setEditorKey((k) => k + 1); // force remount with new content
+    },
+    [],
+  );
+
   useEffect(() => {
-    if (!pendingScriptureInsert || !editorState.isReady) return;
+    if (!pendingScriptureInsert) return;
+
+    if (IS_NATIVE_EDITOR) {
+      const { reference, text } = pendingScriptureInsert;
+      handleNativeScriptureInsert(reference, text);
+      setPendingScriptureInsert(null);
+      return;
+    }
+
+    // tentap path: inject into ProseMirror
+    if (!editorState.isReady) return;
     const { reference, text } = pendingScriptureInsert;
 
     const escapedRef = reference.replace(/'/g, "\\'");
     const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
 
-    // Restore the saved cursor position before inserting so the blockquote
-    // lands where the user's cursor was, not at the top of the document.
-    // Falls back to the end of the document if no position was saved.
     editor.injectJS(`
       (function() {
         var pos = typeof window.__savedSelection === 'number'
           ? window.__savedSelection
           : window.editor.state.doc.content.size - 1;
-        // Clamp to valid range
         var maxPos = window.editor.state.doc.content.size - 1;
         if (pos > maxPos) pos = maxPos;
         if (pos < 0) pos = 0;
@@ -462,13 +517,14 @@ export default function NoteDetailScreen() {
 
   /* ───── Debounced auto-save ───── */
 
-  const scheduleAutoSave = useCallback(() => {
+  const scheduleAutoSave = useCallback((htmlFromEvent?: string) => {
     if (!gate()) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     if (savedResetRef.current) clearTimeout(savedResetRef.current);
 
     saveTimeoutRef.current = setTimeout(async () => {
-      const html = await editor.getHTML();
+      // Native path: HTML pushed via onChangeHtml event. tentap: pull via bridge.
+      const html = htmlFromEvent ?? (IS_NATIVE_EDITOR ? latestHtmlRef.current : await editor.getHTML());
       const titleVal = latestTitleRef.current;
 
       if (!titleVal.trim() && (!html || html === '<p></p>')) return;
@@ -526,11 +582,14 @@ export default function NoteDetailScreen() {
     if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsEditing(true);
-    editor.setEditable(true);
-    editor.injectCSS(buildEditorCSS(colors, true));
-    setTimeout(() => {
-      editor.focus('end');
-    }, 100);
+    if (IS_NATIVE_EDITOR) {
+      // editable prop updates via re-render; focus after a tick
+      setTimeout(() => editorRef.current?.focus(), 100);
+    } else {
+      editor.setEditable(true);
+      editor.injectCSS(buildEditorCSS(colors, true));
+      setTimeout(() => editor.focus('end'), 100);
+    }
   }, [editor, colors, gate]);
 
 
@@ -538,7 +597,9 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Get the final content from the editor
-    const html = await editor.getHTML();
+    const html = IS_NATIVE_EDITOR
+      ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
+      : await editor.getHTML();
     const titleVal = latestTitleRef.current;
 
     // Persist
@@ -574,9 +635,13 @@ export default function NoteDetailScreen() {
     }
 
     // Switch to read mode
-    editor.blur();
-    editor.setEditable(false);
-    editor.injectCSS(buildEditorCSS(colors, false));
+    if (IS_NATIVE_EDITOR) {
+      editorRef.current?.blur();
+    } else {
+      editor.blur();
+      editor.setEditable(false);
+      editor.injectCSS(buildEditorCSS(colors, false));
+    }
     setIsEditing(false);
 
     // Clear any pending save timers
@@ -590,7 +655,9 @@ export default function NoteDetailScreen() {
   const handleBack = useCallback(async () => {
     // If editing, save before going back
     if (isEditingRef.current) {
-      const html = await editor.getHTML();
+      const html = IS_NATIVE_EDITOR
+        ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
+        : await editor.getHTML();
       const titleVal = latestTitleRef.current;
 
       if (titleVal.trim() || (html && html !== '<p></p>')) {
@@ -633,7 +700,9 @@ export default function NoteDetailScreen() {
    */
   const ensureNoteSaved = useCallback(async (): Promise<string> => {
     if (noteId) return noteId;
-    const html = await editor.getHTML();
+    const html = IS_NATIVE_EDITOR
+      ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
+      : await editor.getHTML();
     const titleVal = latestTitleRef.current;
     const id = addNote({
       title: titleVal,
@@ -734,9 +803,11 @@ export default function NoteDetailScreen() {
 
   const handleScripturePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Save the current cursor position before the sheet opens and steals focus.
-    // Without this, .focus() defaults to the start of the document on re-entry.
-    editor.injectJS(`window.__savedSelection = window.editor.state.selection.anchor;`);
+    if (!IS_NATIVE_EDITOR) {
+      // tentap: save cursor position before the sheet steals focus
+      editor.injectJS(`window.__savedSelection = window.editor.state.selection.anchor;`);
+    }
+    // Native editor: scripture insert uses remount approach, no cursor save needed
     setShowScriptureSheet(true);
   }, [editor]);
 
@@ -777,42 +848,42 @@ export default function NoteDetailScreen() {
 
   const handleBold = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.toggleBold();
+    IS_NATIVE_EDITOR ? editorRef.current?.toggleBold() : editor.toggleBold();
   }, [editor]);
 
   const handleItalic = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.toggleItalic();
+    IS_NATIVE_EDITOR ? editorRef.current?.toggleItalic() : editor.toggleItalic();
   }, [editor]);
 
   const handleBulletList = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.toggleBulletList();
+    IS_NATIVE_EDITOR ? editorRef.current?.setList('bullet') : editor.toggleBulletList();
   }, [editor]);
 
   const handleOrderedList = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.toggleOrderedList();
+    IS_NATIVE_EDITOR ? editorRef.current?.setList('ordered') : editor.toggleOrderedList();
   }, [editor]);
 
   const handleTaskList = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.toggleTaskList();
+    IS_NATIVE_EDITOR ? editorRef.current?.setList('checklist') : editor.toggleTaskList();
   }, [editor]);
 
   const handleBlockquote = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.toggleBlockquote();
+    IS_NATIVE_EDITOR ? editorRef.current?.setBlockType('blockquote') : editor.toggleBlockquote();
   }, [editor]);
 
   const handleIndent = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.sink();
+    IS_NATIVE_EDITOR ? editorRef.current?.indentList() : editor.sink();
   }, [editor]);
 
   const handleOutdent = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    editor.lift();
+    IS_NATIVE_EDITOR ? editorRef.current?.outdentList() : editor.lift();
   }, [editor]);
 
 
@@ -1088,7 +1159,9 @@ export default function NoteDetailScreen() {
               { color: colors.text },
             ]}
             returnKeyType="next"
-            onSubmitEditing={() => editor.focus('end')}
+            onSubmitEditing={() => {
+              IS_NATIVE_EDITOR ? editorRef.current?.focus() : editor.focus('end');
+            }}
             blurOnSubmit={false}
             maxLength={200}
             accessibilityLabel="Note title"
@@ -1122,23 +1195,49 @@ export default function NoteDetailScreen() {
           ]}
         />
 
-        {/* ── TipTap rich text body ── */}
+        {/* ── Editor body ── */}
         <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
-          <RichText
-            editor={editor}
-            style={[styles.richText, { backgroundColor: colors.background }]}
-          />
-          {/* Solid overlay hides WebView white flash */}
-          {!editorReady && (
-            <Animated.View
-              exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+          {IS_NATIVE_EDITOR ? (
+            <UnfoldEditor
+              key={editorKey}
+              ref={editorRef}
+              initialHtml={latestHtmlRef.current}
+              onChangeHtml={(e: UnfoldEditorChangeHtmlEvent) => {
+                latestHtmlRef.current = e.nativeEvent.html;
+                latestContentRef.current = {
+                  title: latestTitleRef.current,
+                  content: e.nativeEvent.html,
+                };
+                scheduleAutoSave(e.nativeEvent.html);
+              }}
+              onEditorFocus={() => { /* native editor focused */ }}
+              onEditorBlur={() => { /* native editor blurred */ }}
+              onEditorSelectionChange={(e: { nativeEvent: UnfoldEditorSelectionState }) => setSelectionState(e.nativeEvent)}
+              placeholder="Start writing\u2026"
+              editable={isEditing}
+              autoFocus={shouldStartEditing && isNewNote}
+              keyboardAppearance="dark"
+              style={styles.richText}
             />
+          ) : (
+            <>
+              <RichText
+                editor={editor}
+                style={[styles.richText, { backgroundColor: colors.background }]}
+              />
+              {/* Solid overlay hides WebView white flash */}
+              {!editorReady && (
+                <Animated.View
+                  exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
+                  pointerEvents="none"
+                  style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]}
+                />
+              )}
+            </>
           )}
-          {/* Tap-to-edit overlay — covers WebView in read mode so taps enter edit mode.
-              WebView swallows all touches, so GestureDetector cannot intercept taps.
-              This transparent overlay sits above the WebView and captures taps instead. */}
+          {/* Tap-to-edit overlay — captures taps in read mode.
+              Needed for WebView (swallows touches) and native (UITextView in
+              non-editable mode doesn't bubble taps to RN). */}
           {!isEditing && editorReady && (
             <TouchableOpacity
               style={StyleSheet.absoluteFill}
@@ -1181,7 +1280,7 @@ export default function NoteDetailScreen() {
         )}
 
         {/* ── Toolbar (edit mode only, when keyboard is up) ── */}
-        {isEditing && editorState.isReady && isKeyboardUp && (
+        {isEditing && (IS_NATIVE_EDITOR || editorState.isReady) && isKeyboardUp && (
           <View
             style={[
               styles.toolbar,
@@ -1198,44 +1297,64 @@ export default function NoteDetailScreen() {
             ]}
           >
             <View style={styles.toolbarRow}>
-              <ToolbarButton onPress={handleBold} active={editorState.isBoldActive} label="Bold">
+              <ToolbarButton
+                onPress={handleBold}
+                active={IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive}
+                label="Bold"
+              >
                 <TextBIcon
                   size={18}
-                  color={editorState.isBoldActive ? colors.accent : colors.textMuted}
+                  color={(IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive) ? colors.accent : colors.textMuted}
                   weight="regular"
                 />
               </ToolbarButton>
 
-              <ToolbarButton onPress={handleItalic} active={editorState.isItalicActive} label="Italic">
+              <ToolbarButton
+                onPress={handleItalic}
+                active={IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive}
+                label="Italic"
+              >
                 <TextItalicIcon
                   size={18}
-                  color={editorState.isItalicActive ? colors.accent : colors.textMuted}
+                  color={(IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive) ? colors.accent : colors.textMuted}
                   weight="regular"
                 />
               </ToolbarButton>
 
               <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
 
-              <ToolbarButton onPress={handleBulletList} active={editorState.isBulletListActive} label="Bullet list">
+              <ToolbarButton
+                onPress={handleBulletList}
+                active={IS_NATIVE_EDITOR ? selectionState.listType === 'bullet' : editorState.isBulletListActive}
+                label="Bullet list"
+              >
                 <ListBulletsIcon
                   size={18}
-                  color={editorState.isBulletListActive ? colors.accent : colors.textMuted}
+                  color={(IS_NATIVE_EDITOR ? selectionState.listType === 'bullet' : editorState.isBulletListActive) ? colors.accent : colors.textMuted}
                   weight="light"
                 />
               </ToolbarButton>
 
-              <ToolbarButton onPress={handleOrderedList} active={editorState.isOrderedListActive} label="Numbered list">
+              <ToolbarButton
+                onPress={handleOrderedList}
+                active={IS_NATIVE_EDITOR ? selectionState.listType === 'ordered' : editorState.isOrderedListActive}
+                label="Numbered list"
+              >
                 <ListNumbersIcon
                   size={18}
-                  color={editorState.isOrderedListActive ? colors.accent : colors.textMuted}
+                  color={(IS_NATIVE_EDITOR ? selectionState.listType === 'ordered' : editorState.isOrderedListActive) ? colors.accent : colors.textMuted}
                   weight="light"
                 />
               </ToolbarButton>
 
-              <ToolbarButton onPress={handleTaskList} active={editorState.isTaskListActive} label="Checklist">
+              <ToolbarButton
+                onPress={handleTaskList}
+                active={IS_NATIVE_EDITOR ? selectionState.listType === 'checklist' : editorState.isTaskListActive}
+                label="Checklist"
+              >
                 <CheckSquareIcon
                   size={18}
-                  color={editorState.isTaskListActive ? colors.accent : colors.textMuted}
+                  color={(IS_NATIVE_EDITOR ? selectionState.listType === 'checklist' : editorState.isTaskListActive) ? colors.accent : colors.textMuted}
                   weight="light"
                 />
               </ToolbarButton>
@@ -1245,12 +1364,12 @@ export default function NoteDetailScreen() {
               <ToolbarButton
                 onPress={handleIndent}
                 label="Indent"
-                disabled={!editorState.canSink && !editorState.canSinkTaskListItem}
+                disabled={IS_NATIVE_EDITOR ? false : (!editorState.canSink && !editorState.canSinkTaskListItem)}
               >
                 <ArrowLineRightIcon
                   size={18}
                   color={
-                    !editorState.canSink && !editorState.canSinkTaskListItem
+                    !IS_NATIVE_EDITOR && !editorState.canSink && !editorState.canSinkTaskListItem
                       ? colors.textHint
                       : colors.textMuted
                   }
@@ -1261,12 +1380,12 @@ export default function NoteDetailScreen() {
               <ToolbarButton
                 onPress={handleOutdent}
                 label="Outdent"
-                disabled={!editorState.canLift && !editorState.canLiftTaskListItem}
+                disabled={IS_NATIVE_EDITOR ? false : (!editorState.canLift && !editorState.canLiftTaskListItem)}
               >
                 <ArrowLineLeftIcon
                   size={18}
                   color={
-                    !editorState.canLift && !editorState.canLiftTaskListItem
+                    !IS_NATIVE_EDITOR && !editorState.canLift && !editorState.canLiftTaskListItem
                       ? colors.textHint
                       : colors.textMuted
                   }
@@ -1276,10 +1395,14 @@ export default function NoteDetailScreen() {
 
               <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
 
-              <ToolbarButton onPress={handleBlockquote} active={editorState.isBlockquoteActive} label="Blockquote">
+              <ToolbarButton
+                onPress={handleBlockquote}
+                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'blockquote' : editorState.isBlockquoteActive}
+                label="Blockquote"
+              >
                 <QuotesIcon
                   size={18}
-                  color={editorState.isBlockquoteActive ? colors.accent : colors.textMuted}
+                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'blockquote' : editorState.isBlockquoteActive) ? colors.accent : colors.textMuted}
                   weight="light"
                 />
               </ToolbarButton>
