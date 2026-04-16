@@ -39,9 +39,16 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   private let lineDecorationOverlay = LineDecorationOverlay()
   private let formattingProvider = UnfoldListFormattingProvider()
 
+  private var scrollObservation: NSKeyValueObservation?
   private var changeDebounceTimer: DispatchSourceTimer?
   private let changeDebounceQueue = DispatchQueue(
     label: "com.unfold.editor.change-debounce")
+
+  /// Pending blockquote continuation: when the user presses Enter in a
+  /// blockquote, the new paragraph may be empty (length 0) so we can't apply
+  /// attributes yet. Instead we set this flag so that `didChangeTextAt` can
+  /// apply blockquote attributes as soon as text appears.
+  private var pendingBlockquoteContinuation = false
   private static let changeDebounceInterval: DispatchTimeInterval = .milliseconds(200)
 
   /// Tracks the keyboard appearance set by the JS prop so we can re-apply
@@ -59,6 +66,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   /// Observes `willResignActiveNotification` to flush unsaved content.
   private var resignActiveObserver: NSObjectProtocol?
 
+  /// Observes `UITextView.textDidChangeNotification` as a backup for Proton's
+  /// `didChangeTextAt` delegate — the delegate relies on an internal
+  /// `activeTextView` guard that can silently fail depending on the
+  /// editable/focus lifecycle.
+  private var textDidChangeObserver: NSObjectProtocol?
+
   override init() {
     self.rootView = UIView()
     self.editor = EditorView()
@@ -73,6 +86,20 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       queue: .main
     ) { [weak self] _ in
       self?.flushPendingHtml()
+    }
+
+    // Backup text-change observer: Proton's EditorViewDelegate.didChangeTextAt
+    // relies on an internal `activeTextView` guard in RichTextEditorContext that
+    // can silently fail when the editable/focus lifecycle doesn't trigger
+    // textViewDidBeginEditing at the right time. This notification fires
+    // directly from UIKit whenever any UITextView's text changes, bypassing
+    // the Proton delegate chain.
+    textDidChangeObserver = NotificationCenter.default.addObserver(
+      forName: UITextView.textDidChangeNotification,
+      object: editor.textInput, // Only our editor's internal UITextView
+      queue: .main
+    ) { [weak self] _ in
+      self?.handleTextDidChange()
     }
 
     rootView.backgroundColor = UnfoldColors.background
@@ -109,17 +136,27 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       editor.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -8),
     ])
 
-    // Decoration overlay — sits inside the editor's scroll view content and
-    // draws blockquote bars + code block backgrounds. It also intercepts
-    // checklist marker taps in the leftmost zone.
+    // Decoration overlay — positioned as a sibling of the editor, constrained
+    // to the same bounds. Draws blockquote bars + code block backgrounds.
+    // Also intercepts checklist marker taps in the leftmost zone.
     lineDecorationOverlay.editor = editor
     lineDecorationOverlay.translatesAutoresizingMaskIntoConstraints = false
-    editor.scrollView.addSubview(lineDecorationOverlay)
+    rootView.addSubview(lineDecorationOverlay)
     lineDecorationOverlay.onChecklistMarkerTap = { [weak self] charIndex in
       self?.toggleChecklist(at: charIndex)
     }
-    DispatchQueue.main.async { [weak self] in
-      self?.layoutOverlay()
+    NSLayoutConstraint.activate([
+      lineDecorationOverlay.topAnchor.constraint(equalTo: editor.topAnchor),
+      lineDecorationOverlay.leadingAnchor.constraint(equalTo: editor.leadingAnchor),
+      lineDecorationOverlay.trailingAnchor.constraint(equalTo: editor.trailingAnchor),
+      lineDecorationOverlay.bottomAnchor.constraint(equalTo: editor.bottomAnchor),
+    ])
+
+    // Observe scroll changes so the overlay redraws when the user scrolls
+    scrollObservation = editor.scrollView.observe(
+      \.contentOffset, options: [.new]
+    ) { [weak self] _, _ in
+      self?.lineDecorationOverlay.invalidate()
     }
 
     // Ensure chip strip renders above the editor in z-order
@@ -127,7 +164,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   }
 
   deinit {
+    scrollObservation?.invalidate()
+    scrollObservation = nil
     if let observer = resignActiveObserver {
+      NotificationCenter.default.removeObserver(observer)
+    }
+    if let observer = textDidChangeObserver {
       NotificationCenter.default.removeObserver(observer)
     }
     changeDebounceTimer?.cancel()
@@ -160,7 +202,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       refreshScriptureChips()
       return
     }
-    editor.attributedText = HtmlDecoder.decode(html)
+    let decoded = HtmlDecoder.decode(html)
+    editor.attributedText = decoded
     refreshScriptureChips()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
@@ -187,7 +230,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   func getSelectionState() -> [String: Any] {
     HtmlEncoder.querySelectionState(
       in: editor.attributedText,
-      selectedRange: editor.selectedRange)
+      selectedRange: editor.selectedRange,
+      typingAttributes: editor.typingAttributes)
   }
 
   // MARK: - Public commands — text formatting
@@ -195,21 +239,25 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   func toggleBold() {
     BoldCommand().execute(on: editor)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   func toggleItalic() {
     ItalicsCommand().execute(on: editor)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   func toggleUnderline() {
     UnderlineCommand().execute(on: editor)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   func toggleStrikethrough() {
     StrikethroughCommand().execute(on: editor)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   // MARK: - Public commands — inline insertion
@@ -407,6 +455,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
         attrs.removeValue(forKey: .attachment)
         self.editor.typingAttributes = attrs
       }
+      self.refreshSelectionState()
     }
 
     scheduleHtmlEmit()
@@ -448,6 +497,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
     ListCommand().execute(on: editor, attributeValue: value)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   /// Clears list formatting on the current line / selection. Uses
@@ -456,6 +506,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   func clearList() {
     ListCommand().execute(on: editor, attributeValue: nil)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   /// Toggles the checked state of the checklist item on the current line.
@@ -469,11 +520,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   func indentList() {
     ListIndentCommand().execute(on: editor)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   func outdentList() {
     ListOutdentCommand().execute(on: editor)
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   // MARK: - Public commands — history
@@ -481,11 +534,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   func undo() {
     editor.undoManager?.undo()
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   func redo() {
     editor.undoManager?.redo()
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   // MARK: - Public commands — insertion
@@ -534,14 +589,128 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     guard nsString.length > 0 else { return }
 
     let paraRange = nsString.paragraphRange(for: range)
+
+    // Helper: body typingAttributes
+    let bodyPStyle = NSMutableParagraphStyle()
+    bodyPStyle.paragraphSpacing = 4
+    let bodyAttrs: [NSAttributedString.Key: Any] = [
+      .font: UnfoldFonts.body(),
+      .foregroundColor: UnfoldColors.text,
+      .paragraphStyle: bodyPStyle,
+    ]
+
+    // Helper: blockquote typingAttributes
+    let bqStyle = NSMutableParagraphStyle()
+    bqStyle.firstLineHeadIndent = 16
+    bqStyle.headIndent = 16
+    bqStyle.paragraphSpacing = 8
+    bqStyle.paragraphSpacingBefore = 8
+    let bqAttrs: [NSAttributedString.Key: Any] = [
+      .font: UnfoldFonts.bodyItalic(),
+      .foregroundColor: UnfoldColors.textMuted,
+      .paragraphStyle: bqStyle,
+      .unfoldBlockType: "blockquote",
+    ]
+
+    // --- Edge case: cursor at end of text after trailing \n ---
+    // NSString.paragraphRange returns a zero-length range for the virtual
+    // empty paragraph after a trailing newline. Check the PREVIOUS paragraph
+    // to decide whether to continue/exit a blockquote.
+    if paraRange.length == 0 && range.location > 0 {
+      let prevParaRange = nsString.paragraphRange(
+        for: NSRange(location: range.location - 1, length: 0))
+      guard prevParaRange.length > 0 else { return }
+
+      // Detect blockquote via marker or paragraph style fallback
+      let prevMarker = text.attribute(
+        .unfoldBlockType, at: prevParaRange.location,
+        effectiveRange: nil) as? String
+      var prevIsBlockquote = prevMarker == "blockquote"
+      if !prevIsBlockquote {
+        let ps = text.attribute(
+          .paragraphStyle, at: prevParaRange.location,
+          effectiveRange: nil) as? NSParagraphStyle
+        let isListItem = text.attribute(
+          .listItem, at: prevParaRange.location,
+          effectiveRange: nil) != nil
+        if !isListItem, let ps = ps, ps.headIndent >= 16 {
+          prevIsBlockquote = true
+        }
+      }
+      guard prevIsBlockquote else { return }
+
+      let prevText = nsString.substring(with: prevParaRange)
+        .trimmingCharacters(in: .newlines)
+
+      if prevText.isEmpty {
+        // Previous paragraph is an empty blockquote → EXIT
+        handled = true
+        // Convert the empty blockquote paragraph to body style
+        editor.removeAttribute(.unfoldBlockType, at: prevParaRange)
+        editor.addAttributes(bodyAttrs, at: prevParaRange)
+        editor.typingAttributes = bodyAttrs
+        DispatchQueue.main.async { [weak self] in
+          self?.editor.typingAttributes = bodyAttrs
+        }
+        lineDecorationOverlay.invalidate()
+        scheduleHtmlEmit()
+      } else {
+        // Previous paragraph has content → CONTINUATION
+        // Let Proton handle Enter (insert \n), then set blockquote
+        // typingAttributes so the next typed text looks right.
+        DispatchQueue.main.async { [weak self] in
+          guard let self = self else { return }
+          // Try to set attributes on the new paragraph
+          let curRange = (self.editor.attributedText.string as NSString)
+            .paragraphRange(for: self.editor.selectedRange)
+          if curRange.length > 0 {
+            self.editor.addAttributes(bqAttrs, at: curRange)
+          } else {
+            // New paragraph is empty — defer attribute application
+            self.pendingBlockquoteContinuation = true
+          }
+          self.editor.typingAttributes = bqAttrs
+          self.lineDecorationOverlay.invalidate()
+        }
+      }
+      return
+    }
+
+    // --- Normal case: cursor inside a real paragraph ---
     guard paraRange.length > 0 else { return }
 
-    // Check if current paragraph is a blockquote via explicit marker
+    // Check if current paragraph is a blockquote via explicit marker or
+    // paragraph style (handles continuation lines where marker was lost).
     let blockMarker = text.attribute(
       .unfoldBlockType,
       at: paraRange.location,
       effectiveRange: nil) as? String
-    let isBlockquote = blockMarker == "blockquote"
+    var isBlockquote = blockMarker == "blockquote"
+    if !isBlockquote {
+      let ps = text.attribute(
+        .paragraphStyle, at: paraRange.location,
+        effectiveRange: nil) as? NSParagraphStyle
+      let isListItem = text.attribute(
+        .listItem, at: paraRange.location,
+        effectiveRange: nil) != nil
+      if !isListItem, let ps = ps, ps.headIndent >= 16 {
+        isBlockquote = true
+      }
+    }
+
+    // Check if current paragraph is a heading (font size >= 18 = h3 minimum)
+    let paraFont = text.attribute(
+      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
+    let isHeading = !isBlockquote && (paraFont?.pointSize ?? 0) >= 18
+
+    if isHeading {
+      // Let Proton handle Enter, then reset typingAttributes to body so
+      // the new paragraph doesn't inherit the heading's bold font.
+      DispatchQueue.main.async { [weak self] in
+        self?.editor.typingAttributes = bodyAttrs
+      }
+      return
+    }
 
     guard isBlockquote else { return }
 
@@ -551,39 +720,85 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
     // Empty blockquote paragraph → exit to plain paragraph
     if paraText.isEmpty {
-      // Reset the current paragraph to plain "p" style
-      let pStyle = NSMutableParagraphStyle()
-      pStyle.paragraphSpacing = 4
-      pStyle.paragraphSpacingBefore = 0
-      editor.removeAttribute(.unfoldBlockType, at: paraRange)
-      editor.addAttributes([
-        .font: UnfoldFonts.body(),
-        .foregroundColor: UnfoldColors.text,
-        .paragraphStyle: pStyle,
-      ], at: paraRange)
+      handled = true
+
+      // Replace the empty blockquote paragraph with a body-style \n.
+      let bodyNewline = NSAttributedString(string: "\n", attributes: bodyAttrs)
+      editor.replaceCharacters(in: paraRange, with: bodyNewline)
+      editor.selectedRange = NSRange(location: paraRange.location, length: 0)
+      editor.typingAttributes = bodyAttrs
+      DispatchQueue.main.async { [weak self] in
+        self?.editor.typingAttributes = bodyAttrs
+      }
       lineDecorationOverlay.invalidate()
       scheduleHtmlEmit()
-      handled = true
     } else {
       // Non-empty blockquote → let Proton handle Enter, then ensure the
-      // new paragraph gets the blockquote marker so the overlay draws bars.
+      // new paragraph gets the blockquote marker + full blockquote styling
+      // so the overlay draws bars and text stays italic/muted.
       DispatchQueue.main.async { [weak self] in
         guard let self = self else { return }
         let newRange = (self.editor.attributedText.string as NSString)
           .paragraphRange(for: self.editor.selectedRange)
-        guard newRange.length > 0 else { return }
-        let existing = self.editor.attributedText.attribute(
-          .unfoldBlockType, at: newRange.location, effectiveRange: nil) as? String
-        if existing != "blockquote" {
-          self.editor.addAttribute(.unfoldBlockType, value: "blockquote", at: newRange)
-          self.lineDecorationOverlay.invalidate()
+        if newRange.length > 0 {
+          self.editor.addAttributes(bqAttrs, at: newRange)
+        } else {
+          // New paragraph is empty — defer attribute application
+          self.pendingBlockquoteContinuation = true
         }
+        self.editor.typingAttributes = bqAttrs
+        self.lineDecorationOverlay.invalidate()
       }
     }
   }
 
   func editor(_ editor: EditorView, didChangeTextAt range: NSRange) {
+    handleTextDidChange()
+  }
+
+  /// Core text-change handler called from both Proton's `didChangeTextAt`
+  /// delegate AND the `UITextView.textDidChangeNotification` backup observer.
+  /// Uses `textChangeGeneration` to avoid double-processing when both fire.
+  private var textChangeGeneration: UInt64 = 0
+  private var lastProcessedGeneration: UInt64 = 0
+
+  private func handleTextDidChange() {
+    textChangeGeneration &+= 1
+    let gen = textChangeGeneration
+    guard gen != lastProcessedGeneration else { return }
+    lastProcessedGeneration = gen
+
+    // Consume pending blockquote continuation: the Enter handler deferred
+    // attribute application because the new paragraph was empty. Now that
+    // text exists, apply blockquote attributes to the current paragraph.
+    if pendingBlockquoteContinuation {
+      pendingBlockquoteContinuation = false
+      let nsString = editor.attributedText.string as NSString
+      let paraRange = nsString.paragraphRange(for: editor.selectedRange)
+      if paraRange.length > 0 {
+        let bqStyle = NSMutableParagraphStyle()
+        bqStyle.firstLineHeadIndent = 16
+        bqStyle.headIndent = 16
+        bqStyle.paragraphSpacing = 8
+        bqStyle.paragraphSpacingBefore = 8
+        editor.addAttributes([
+          .font: UnfoldFonts.bodyItalic(),
+          .foregroundColor: UnfoldColors.textMuted,
+          .paragraphStyle: bqStyle,
+          .unfoldBlockType: "blockquote",
+        ], at: paraRange)
+        // Re-set typingAttributes so subsequent typed chars inherit style
+        editor.typingAttributes = [
+          .font: UnfoldFonts.bodyItalic(),
+          .foregroundColor: UnfoldColors.textMuted,
+          .paragraphStyle: bqStyle,
+          .unfoldBlockType: "blockquote",
+        ]
+      }
+    }
+
     refreshScriptureChips()
+    extendBlockMarkers()
     lineDecorationOverlay.invalidate()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
@@ -614,7 +829,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
     let state = HtmlEncoder.querySelectionState(
       in: editor.attributedText,
-      selectedRange: range)
+      selectedRange: range,
+      typingAttributes: editor.typingAttributes)
     throttleSelectionEmit(state)
   }
 
@@ -648,6 +864,48 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     }
   }
 
+  /// UITextView's typingAttributes ignores custom NSAttributedString keys, so
+  /// when typing inside a blockquote/code-block paragraph the `.unfoldBlockType`
+  /// marker only stays on the terminator `\n` (set during continuation). This
+  /// method scans the paragraph containing the cursor, looking for the marker
+  /// on any character (reverse scan from end), and extends it to the full
+  /// paragraph range. Does NOT infer block type from paragraph style — that
+  /// would re-add the marker to paragraphs intentionally converted to body
+  /// via the exit handler. Paragraph-style-based detection is handled by the
+  /// overlay for visual rendering only.
+  private func extendBlockMarkers() {
+    let text = editor.attributedText
+    let nsString = text.string as NSString
+    guard nsString.length > 0 else { return }
+
+    let paraRange = nsString.paragraphRange(for: editor.selectedRange)
+    guard paraRange.length > 0 else { return }
+
+    // Check first character for marker — if present, already extended
+    let firstMarker = text.attribute(
+      .unfoldBlockType, at: paraRange.location, effectiveRange: nil) as? String
+    if firstMarker != nil { return }
+
+    // Scan from end of paragraph backwards for the marker on any character
+    // (typically it lives on the `\n` terminator set by the continuation handler).
+    var foundMarker: String? = nil
+    if paraRange.length > 1 {
+      for i in stride(from: NSMaxRange(paraRange) - 1,
+                      through: paraRange.location, by: -1) {
+        if let m = text.attribute(
+          .unfoldBlockType, at: i, effectiveRange: nil) as? String {
+          foundMarker = m
+          break
+        }
+      }
+    }
+
+    guard let marker = foundMarker else { return }
+
+    // Extend marker to full paragraph so HtmlEncoder and overlay see it
+    editor.addAttribute(.unfoldBlockType, value: marker, at: paraRange)
+  }
+
   /// Paragraph range containing the current selection. Returns a zero-length
   /// range if the editor is empty.
   private func currentParagraphRange() -> NSRange {
@@ -678,13 +936,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   }
 
   private func layoutOverlay() {
-    let contentSize = editor.scrollView.contentSize
-    let editorWidth = editor.bounds.width
-    lineDecorationOverlay.frame = CGRect(
-      x: 0,
-      y: 0,
-      width: max(editorWidth, contentSize.width),
-      height: max(contentSize.height, editor.bounds.height))
+    // The overlay is now constrained to the editor's bounds via Auto Layout.
+    // Just trigger a redraw.
     lineDecorationOverlay.invalidate()
   }
 
@@ -745,6 +998,18 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
         deadline: .now() + delay,
         execute: item)
     }
+  }
+
+  /// Re-queries the current selection state and emits it to JS.
+  /// Call after commands that change formatting but don't move the cursor
+  /// (e.g., toggleBold on empty selection), since `didChangeSelectionAt`
+  /// only fires when the cursor position changes.
+  private func refreshSelectionState() {
+    let state = HtmlEncoder.querySelectionState(
+      in: editor.attributedText,
+      selectedRange: editor.selectedRange,
+      typingAttributes: editor.typingAttributes)
+    throttleSelectionEmit(state)
   }
 
   /// Toggles the checked state of the checklist line containing `charIndex`.

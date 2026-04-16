@@ -38,21 +38,32 @@ final class LineDecorationOverlay: UIView {
     let textInput = editor.textInput
     guard let cgContext = UIGraphicsGetCurrentContext() else { return }
 
+    // The overlay is now a sibling of the editor (same bounds), not inside
+    // the scroll view. Offset all rects by the negative content offset so
+    // decorations track the scrolled content.
+    let scrollOffset = editor.scrollView.contentOffset
+
     // Walk paragraphs once and draw both blockquote bars and code block
-    // backgrounds. Code block backgrounds render BEFORE text — the overlay
-    // sits behind the editor's text content area because it's added as a
-    // subview of the scroll view with z-order 0; the editor redraws text
-    // on top every layout pass.
+    // backgrounds.
     var paragraphStart = 0
     while paragraphStart < nsString.length {
       let paragraphRange = nsString.paragraphRange(
         for: NSRange(location: paragraphStart, length: 0))
       defer { paragraphStart = NSMaxRange(paragraphRange) }
 
-      let blockMarker = attributedText.attribute(
+      // Check first character for block marker; if missing, also check the
+      // last character (the \n terminator) because UITextView's typingAttributes
+      // ignores custom keys — typed text won't inherit the marker, but the
+      // terminator set by the continuation handler retains it.
+      var blockMarker = attributedText.attribute(
         .unfoldBlockType,
         at: paragraphRange.location,
         effectiveRange: nil) as? String
+      if blockMarker == nil, paragraphRange.length > 1 {
+        let lastIdx = NSMaxRange(paragraphRange) - 1
+        blockMarker = attributedText.attribute(
+          .unfoldBlockType, at: lastIdx, effectiveRange: nil) as? String
+      }
       let paragraphStyle = attributedText.attribute(
         .paragraphStyle,
         at: paragraphRange.location,
@@ -63,7 +74,18 @@ final class LineDecorationOverlay: UIView {
         effectiveRange: nil) != nil
 
       let isCodeBlock = blockMarker == "codeBlock"
-      let isBlockquote = blockMarker == "blockquote"
+      var isBlockquote = blockMarker == "blockquote"
+
+      // Fallback: UITextView strips custom NSAttributedString keys from
+      // typingAttributes, so typed text on blockquote continuation lines
+      // loses the .unfoldBlockType marker. Detect blockquotes by paragraph
+      // style (headIndent >= 16) as a secondary signal — standard attributes
+      // ARE propagated across Enter. Exclude list items (own indent scheme).
+      if !isBlockquote && !isCodeBlock && !isListItem {
+        if let ps = paragraphStyle, ps.headIndent >= 16 {
+          isBlockquote = true
+        }
+      }
 
       guard isCodeBlock || isBlockquote else { continue }
 
@@ -82,14 +104,13 @@ final class LineDecorationOverlay: UIView {
         var unionRect: CGRect = .null
         for selRect in rects {
           guard let r = selRect as? UITextSelectionRect else { continue }
-          let line = r.rect
+          var line = r.rect
+          line.origin.y -= scrollOffset.y
+          line.origin.x -= scrollOffset.x
           guard line.height > 1, line.width > 1 else { continue }
           unionRect = unionRect.union(line)
         }
         guard !unionRect.isNull else { continue }
-        // Horizontal padding: 4pt of "breathing room" on both sides so the
-        // background doesn't hug the glyphs. Extend right to the editor
-        // width so soft-wrapped lines stay visually contained.
         let codeRect = CGRect(
           x: max(0, unionRect.minX - 4),
           y: unionRect.minY - 4,
@@ -104,9 +125,11 @@ final class LineDecorationOverlay: UIView {
         cgContext.setFillColor(UnfoldColors.accent.cgColor)
         for selRect in rects {
           guard let rect = selRect as? UITextSelectionRect else { continue }
-          let r = rect.rect
+          var r = rect.rect
+          r.origin.y -= scrollOffset.y
+          r.origin.x -= scrollOffset.x
           guard r.height > 1, r.width > 1 else { continue }
-          // Draw a 3pt accent bar at the left edge, slightly inset from the very edge
+          // Draw a 3pt accent bar at the left edge, slightly inset
           let bar = CGRect(
             x: r.minX - 12,
             y: r.minY,
@@ -120,13 +143,22 @@ final class LineDecorationOverlay: UIView {
 
   // MARK: - Hit testing
 
+  /// Converts a point from the overlay's coordinate space to the editor's
+  /// text input coordinate space (accounting for scroll offset).
+  private func editorPoint(from overlayPoint: CGPoint) -> CGPoint {
+    guard let editor = editor else { return overlayPoint }
+    let offset = editor.scrollView.contentOffset
+    return CGPoint(x: overlayPoint.x + offset.x, y: overlayPoint.y + offset.y)
+  }
+
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     // Only intercept taps in the leftmost marker zone for checklist lines.
     // Everything else falls through to the editor underneath.
     guard point.x < markerHitZone, let editor = editor else { return nil }
     let text = editor.attributedText.string as NSString
     let textInput = editor.textInput
-    guard let position = textInput.closestPosition(to: point) else { return nil }
+    let ep = editorPoint(from: point)
+    guard let position = textInput.closestPosition(to: ep) else { return nil }
     let charIndex = textInput.offset(from: textInput.beginningOfDocument, to: position)
     guard charIndex >= 0, charIndex < text.length else { return nil }
     let lineRange = text.lineRange(for: NSRange(location: charIndex, length: 0))
@@ -141,8 +173,9 @@ final class LineDecorationOverlay: UIView {
     super.touchesEnded(touches, with: event)
     guard let touch = touches.first, let editor = editor else { return }
     let point = touch.location(in: self)
+    let ep = editorPoint(from: point)
     let textInput = editor.textInput
-    guard let position = textInput.closestPosition(to: point) else { return }
+    guard let position = textInput.closestPosition(to: ep) else { return }
     let charIndex = textInput.offset(from: textInput.beginningOfDocument, to: position)
     onChecklistMarkerTap?(charIndex)
   }
