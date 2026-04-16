@@ -5,12 +5,14 @@ final class ScriptureChipStrip: UIView {
 
   private let scrollView = UIScrollView()
   private let stack = UIStackView()
-  private let emptyLabel = UILabel()
   private var currentRefs: [ScriptureRef] = []
+  /// Controls the chip strip's own height — 0 when empty, 36 when chips exist.
+  private var heightConstraint: NSLayoutConstraint!
 
   override init(frame: CGRect) {
     super.init(frame: frame)
     backgroundColor = .clear
+    clipsToBounds = true
 
     scrollView.showsHorizontalScrollIndicator = false
     scrollView.alwaysBounceHorizontal = true
@@ -24,27 +26,23 @@ final class ScriptureChipStrip: UIView {
     stack.translatesAutoresizingMaskIntoConstraints = false
     scrollView.addSubview(stack)
 
-    emptyLabel.text = "Type a scripture reference to see chips"
-    emptyLabel.font = .systemFont(ofSize: 13, weight: .regular)
-    emptyLabel.textColor = .tertiaryLabel
-    emptyLabel.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(emptyLabel)
+    // Height constraint on self — directly controls this view's height in the
+    // parent layout. Start collapsed (no chips = no vertical space).
+    heightConstraint = heightAnchor.constraint(equalToConstant: 0)
 
     NSLayoutConstraint.activate([
+      heightConstraint,
+
       scrollView.topAnchor.constraint(equalTo: topAnchor),
       scrollView.leadingAnchor.constraint(equalTo: leadingAnchor),
       scrollView.trailingAnchor.constraint(equalTo: trailingAnchor),
       scrollView.bottomAnchor.constraint(equalTo: bottomAnchor),
-      scrollView.heightAnchor.constraint(equalToConstant: 36),
 
       stack.topAnchor.constraint(equalTo: scrollView.topAnchor),
       stack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
       stack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
       stack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
       stack.heightAnchor.constraint(equalTo: scrollView.heightAnchor),
-
-      emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      emptyLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
     ])
   }
 
@@ -58,11 +56,17 @@ final class ScriptureChipStrip: UIView {
     currentRefs = unique
 
     stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-    emptyLabel.isHidden = !unique.isEmpty
 
     for ref in unique {
       stack.addArrangedSubview(makeChip(for: ref))
     }
+
+    // Collapse to 0 height when empty so no vertical space is wasted.
+    let targetHeight: CGFloat = unique.isEmpty ? 0 : 36
+    guard heightConstraint.constant != targetHeight else { return }
+    heightConstraint.constant = targetHeight
+    superview?.setNeedsLayout()
+    superview?.layoutIfNeeded()
   }
 
   private func makeChip(for ref: ScriptureRef) -> UIView {

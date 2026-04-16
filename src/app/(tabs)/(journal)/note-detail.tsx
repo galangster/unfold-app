@@ -1126,7 +1126,8 @@ export default function NoteDetailScreen() {
         {/* ── Scripture references (read mode only) ── */}
         {!isEditing && liveScriptureRefs.length > 0 && (
           <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={styles.scriptureSection}
           >
             {liveScriptureRefs.map((ref, idx) => (
@@ -1253,7 +1254,8 @@ export default function NoteDetailScreen() {
         {/* ── Tags section (read mode only) ── */}
         {!isEditing && liveNote && liveNote.tags.length > 0 && (
           <Animated.View
-            entering={reducedMotion ? undefined : FadeIn.duration(Duration.slow).easing(Ease.out)}
+            entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+            exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
             style={styles.tagsSection}
           >
             <Text style={[styles.tagsSectionLabel, { color: colors.textSubtle }]}>
@@ -1623,7 +1625,7 @@ const styles = StyleSheet.create({
   editorContainer: {
     flex: 1,
     position: 'relative',
-    paddingHorizontal: Spacing['5'],
+    paddingHorizontal: Spacing['2'],
   },
   richText: {
     flex: 1,

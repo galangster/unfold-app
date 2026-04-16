@@ -94,12 +94,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     rootView.addSubview(editor)
 
     NSLayoutConstraint.activate([
-      chipStrip.topAnchor.constraint(equalTo: rootView.topAnchor, constant: 8),
+      chipStrip.topAnchor.constraint(equalTo: rootView.topAnchor),
       chipStrip.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
       chipStrip.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-      chipStrip.heightAnchor.constraint(equalToConstant: 36),
+      // Height is managed internally by ScriptureChipStrip (0 when empty, 36 with chips).
 
-      editor.topAnchor.constraint(equalTo: chipStrip.bottomAnchor, constant: 12),
+      editor.topAnchor.constraint(equalTo: chipStrip.bottomAnchor, constant: 4),
       editor.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
       editor.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
       editor.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -8),
@@ -117,6 +117,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
     }
+
+    // Ensure chip strip renders above the editor in z-order
+    rootView.bringSubviewToFront(chipStrip)
   }
 
   deinit {
