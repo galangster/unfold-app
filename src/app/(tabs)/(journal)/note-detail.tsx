@@ -61,7 +61,9 @@ import {
   type UnfoldEditorRef,
   type UnfoldEditorSelectionState,
   type UnfoldEditorChangeHtmlEvent,
+  type UnfoldEditorScriptureRefsEvent,
 } from 'unfold-editor';
+import { referenceToRoute, routeToReference } from '@/lib/bible-constants';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -845,6 +847,49 @@ export default function NoteDetailScreen() {
     [noteId, updateNote, scriptureRefs],
   );
 
+  /** Auto-detect: native editor fires onScriptureRefs on every text change.
+   *  Parse rawText → ScriptureRef, deduplicate, and persist new ones. */
+  const handleNativeScriptureRefs = useCallback(
+    (event: UnfoldEditorScriptureRefsEvent) => {
+      const nativeRefs = event.nativeEvent.refs;
+
+      const parsed: ScriptureRef[] = [];
+      for (const nr of nativeRefs) {
+        const route = referenceToRoute(nr.rawText);
+        if (!route) continue;
+        parsed.push({
+          reference: routeToReference(route) ?? nr.rawText,
+          bookId: route.bookId,
+          chapter: route.chapter,
+          verse: route.verse,
+          verseEnd: route.verseEnd,
+        });
+      }
+
+      // Only add refs not already tracked (additive — never removes manual refs)
+      const newRefs = parsed.filter(
+        (p) =>
+          !scriptureRefs.some(
+            (r) =>
+              r.bookId === p.bookId &&
+              r.chapter === p.chapter &&
+              r.verse === p.verse &&
+              r.verseEnd === p.verseEnd,
+          ),
+      );
+
+      if (newRefs.length === 0) return;
+
+      const updated = [...scriptureRefs, ...newRefs];
+      setScriptureRefs(updated);
+
+      if (noteId) {
+        updateNote(noteId, { scriptureRefs: updated });
+      }
+    },
+    [scriptureRefs, noteId, updateNote],
+  );
+
 
   /* ───── Toolbar actions ───── */
 
@@ -1213,6 +1258,7 @@ export default function NoteDetailScreen() {
                 };
                 scheduleAutoSave(e.nativeEvent.html);
               }}
+              onScriptureRefs={handleNativeScriptureRefs}
               onEditorFocus={() => { /* native editor focused */ }}
               onEditorBlur={() => { /* native editor blurred */ }}
               onEditorSelectionChange={(e: { nativeEvent: UnfoldEditorSelectionState }) => setSelectionState(e.nativeEvent)}
