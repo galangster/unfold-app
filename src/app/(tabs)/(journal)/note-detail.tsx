@@ -460,8 +460,10 @@ export default function NoteDetailScreen() {
 
     if (IS_NATIVE_EDITOR) {
       const { reference, text } = pendingScriptureInsert;
-      handleNativeScriptureInsert(reference, text);
       setPendingScriptureInsert(null);
+      handleNativeScriptureInsert(reference, text).then(() => {
+        scheduleAutoSave(latestHtmlRef.current);
+      });
       return;
     }
 
