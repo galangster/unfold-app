@@ -294,6 +294,9 @@ enum HtmlEncoder {
     if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "codeBlock" {
       return .codeBlock
     }
+    if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "blockquote" {
+      return .blockquote
+    }
 
     if let listValue = firstAttribute(.listItem, in: str, range: range) {
       if listValue is ChecklistItem {
@@ -314,19 +317,6 @@ enum HtmlEncoder {
         if font.pointSize >= 20 { return .heading2 }
         if font.pointSize >= 17 { return .heading3 }
       }
-    }
-
-    if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "blockquote" {
-      return .blockquote
-    }
-
-    // Fallback: detect blockquote by paragraph style. UITextView propagates
-    // standard attributes (headIndent) across Enter but strips the custom
-    // .unfoldBlockType marker. Check headIndent >= 16 + not a list item.
-    if firstAttribute(.listItem, in: str, range: range) == nil,
-       let ps = firstAttribute(.paragraphStyle, in: str, range: range) as? NSParagraphStyle,
-       ps.headIndent >= 16 {
-      return .blockquote
     }
 
     return .body

@@ -64,28 +64,8 @@ final class LineDecorationOverlay: UIView {
         blockMarker = attributedText.attribute(
           .unfoldBlockType, at: lastIdx, effectiveRange: nil) as? String
       }
-      let paragraphStyle = attributedText.attribute(
-        .paragraphStyle,
-        at: paragraphRange.location,
-        effectiveRange: nil) as? NSParagraphStyle
-      let isListItem = attributedText.attribute(
-        .listItem,
-        at: paragraphRange.location,
-        effectiveRange: nil) != nil
-
       let isCodeBlock = blockMarker == "codeBlock"
-      var isBlockquote = blockMarker == "blockquote"
-
-      // Fallback: UITextView strips custom NSAttributedString keys from
-      // typingAttributes, so typed text on blockquote continuation lines
-      // loses the .unfoldBlockType marker. Detect blockquotes by paragraph
-      // style (headIndent >= 16) as a secondary signal — standard attributes
-      // ARE propagated across Enter. Exclude list items (own indent scheme).
-      if !isBlockquote && !isCodeBlock && !isListItem {
-        if let ps = paragraphStyle, ps.headIndent >= 16 {
-          isBlockquote = true
-        }
-      }
+      let isBlockquote = blockMarker == "blockquote"
 
       guard isCodeBlock || isBlockquote else { continue }
 

@@ -54,11 +54,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   private let changeDebounceQueue = DispatchQueue(
     label: "com.unfold.editor.change-debounce")
 
-  /// Pending blockquote continuation: when the user presses Enter in a
-  /// blockquote, the new paragraph may be empty (length 0) so we can't apply
-  /// attributes yet. Instead we set this flag so that `didChangeTextAt` can
-  /// apply blockquote attributes as soon as text appears.
-  private var pendingBlockquoteContinuation = false
   private static let changeDebounceInterval: DispatchTimeInterval = .milliseconds(200)
 
   /// Tracks the keyboard appearance set by the JS prop so we can re-apply
@@ -493,9 +488,10 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     default: return
     }
 
-    // Clear blockquote attributes before applying list — otherwise the
-    // inherited headIndent=16 triggers blockquote detection in
-    // LineDecorationOverlay, making list items show a blockquote bar.
+    // Reset font/color when converting a blockquote (italic + muted) into a
+    // list — ListCommand manages indent via its own paragraph style but
+    // doesn't touch font or color, so without this reset the new bullet
+    // would render in italic/muted. Detected via inherited headIndent.
     let paraRange = currentParagraphRange()
     if paraRange.length > 0 {
       let paragraphStyle = editor.attributedText.attribute(
@@ -608,8 +604,14 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     guard nsString.length > 0 else { return }
 
     let paraRange = nsString.paragraphRange(for: range)
+    guard paraRange.length > 0 else { return }
 
-    // Helper: body typingAttributes
+    // Heading → body on Enter: headings have font size >= 18 (h3 minimum).
+    // Without this, pressing Enter in an H1 keeps the H1 font on the new line.
+    let paraFont = text.attribute(
+      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
+    guard (paraFont?.pointSize ?? 0) >= 18 else { return }
+
     let bodyPStyle = NSMutableParagraphStyle()
     bodyPStyle.paragraphSpacing = 4
     let bodyAttrs: [NSAttributedString.Key: Any] = [
@@ -618,156 +620,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       .paragraphStyle: bodyPStyle,
     ]
 
-    // Helper: blockquote typingAttributes
-    let bqStyle = NSMutableParagraphStyle()
-    bqStyle.firstLineHeadIndent = 16
-    bqStyle.headIndent = 16
-    bqStyle.paragraphSpacing = 8
-    bqStyle.paragraphSpacingBefore = 8
-    let bqAttrs: [NSAttributedString.Key: Any] = [
-      .font: UnfoldFonts.bodyItalic(),
-      .foregroundColor: UnfoldColors.textMuted,
-      .paragraphStyle: bqStyle,
-      .unfoldBlockType: "blockquote",
-    ]
-
-    // --- Edge case: cursor at end of text after trailing \n ---
-    // NSString.paragraphRange returns a zero-length range for the virtual
-    // empty paragraph after a trailing newline. Check the PREVIOUS paragraph
-    // to decide whether to continue/exit a blockquote.
-    if paraRange.length == 0 && range.location > 0 {
-      let prevParaRange = nsString.paragraphRange(
-        for: NSRange(location: range.location - 1, length: 0))
-      guard prevParaRange.length > 0 else { return }
-
-      // Detect blockquote via marker or paragraph style fallback
-      let prevMarker = text.attribute(
-        .unfoldBlockType, at: prevParaRange.location,
-        effectiveRange: nil) as? String
-      var prevIsBlockquote = prevMarker == "blockquote"
-      if !prevIsBlockquote {
-        let ps = text.attribute(
-          .paragraphStyle, at: prevParaRange.location,
-          effectiveRange: nil) as? NSParagraphStyle
-        let isListItem = text.attribute(
-          .listItem, at: prevParaRange.location,
-          effectiveRange: nil) != nil
-        if !isListItem, let ps = ps, ps.headIndent >= 16 {
-          prevIsBlockquote = true
-        }
-      }
-      guard prevIsBlockquote else { return }
-
-      let prevText = nsString.substring(with: prevParaRange)
-        .trimmingCharacters(in: .newlines)
-
-      if prevText.isEmpty {
-        // Previous paragraph is an empty blockquote → EXIT
-        handled = true
-        // Convert the empty blockquote paragraph to body style
-        editor.removeAttribute(.unfoldBlockType, at: prevParaRange)
-        editor.addAttributes(bodyAttrs, at: prevParaRange)
-        editor.typingAttributes = bodyAttrs
-        DispatchQueue.main.async { [weak self] in
-          self?.editor.typingAttributes = bodyAttrs
-        }
-        lineDecorationOverlay.invalidate()
-        scheduleHtmlEmit()
-      } else {
-        // Previous paragraph has content → CONTINUATION
-        // Let Proton handle Enter (insert \n), then set blockquote
-        // typingAttributes so the next typed text looks right.
-        DispatchQueue.main.async { [weak self] in
-          guard let self = self else { return }
-          // Try to set attributes on the new paragraph
-          let curRange = (self.editor.attributedText.string as NSString)
-            .paragraphRange(for: self.editor.selectedRange)
-          if curRange.length > 0 {
-            self.editor.addAttributes(bqAttrs, at: curRange)
-          } else {
-            // New paragraph is empty — defer attribute application
-            self.pendingBlockquoteContinuation = true
-          }
-          self.editor.typingAttributes = bqAttrs
-          self.lineDecorationOverlay.invalidate()
-        }
-      }
-      return
-    }
-
-    // --- Normal case: cursor inside a real paragraph ---
-    guard paraRange.length > 0 else { return }
-
-    // Check if current paragraph is a blockquote via explicit marker or
-    // paragraph style (handles continuation lines where marker was lost).
-    let blockMarker = text.attribute(
-      .unfoldBlockType,
-      at: paraRange.location,
-      effectiveRange: nil) as? String
-    var isBlockquote = blockMarker == "blockquote"
-    if !isBlockquote {
-      let ps = text.attribute(
-        .paragraphStyle, at: paraRange.location,
-        effectiveRange: nil) as? NSParagraphStyle
-      let isListItem = text.attribute(
-        .listItem, at: paraRange.location,
-        effectiveRange: nil) != nil
-      if !isListItem, let ps = ps, ps.headIndent >= 16 {
-        isBlockquote = true
-      }
-    }
-
-    // Check if current paragraph is a heading (font size >= 18 = h3 minimum)
-    let paraFont = text.attribute(
-      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
-    let isHeading = !isBlockquote && (paraFont?.pointSize ?? 0) >= 18
-
-    if isHeading {
-      // Let Proton handle Enter, then reset typingAttributes to body so
-      // the new paragraph doesn't inherit the heading's bold font.
-      DispatchQueue.main.async { [weak self] in
-        self?.editor.typingAttributes = bodyAttrs
-      }
-      return
-    }
-
-    guard isBlockquote else { return }
-
-    // Get the paragraph text (strip trailing newline)
-    let paraText = nsString.substring(with: paraRange)
-      .trimmingCharacters(in: .newlines)
-
-    // Empty blockquote paragraph → exit to plain paragraph
-    if paraText.isEmpty {
-      handled = true
-
-      // Replace the empty blockquote paragraph with a body-style \n.
-      let bodyNewline = NSAttributedString(string: "\n", attributes: bodyAttrs)
-      editor.replaceCharacters(in: paraRange, with: bodyNewline)
-      editor.selectedRange = NSRange(location: paraRange.location, length: 0)
-      editor.typingAttributes = bodyAttrs
-      DispatchQueue.main.async { [weak self] in
-        self?.editor.typingAttributes = bodyAttrs
-      }
-      lineDecorationOverlay.invalidate()
-      scheduleHtmlEmit()
-    } else {
-      // Non-empty blockquote → let Proton handle Enter, then ensure the
-      // new paragraph gets the blockquote marker + full blockquote styling
-      // so the overlay draws bars and text stays italic/muted.
-      DispatchQueue.main.async { [weak self] in
-        guard let self = self else { return }
-        let newRange = (self.editor.attributedText.string as NSString)
-          .paragraphRange(for: self.editor.selectedRange)
-        if newRange.length > 0 {
-          self.editor.addAttributes(bqAttrs, at: newRange)
-        } else {
-          // New paragraph is empty — defer attribute application
-          self.pendingBlockquoteContinuation = true
-        }
-        self.editor.typingAttributes = bqAttrs
-        self.lineDecorationOverlay.invalidate()
-      }
+    DispatchQueue.main.async { [weak self] in
+      self?.editor.typingAttributes = bodyAttrs
     }
   }
 
@@ -786,35 +640,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     let gen = textChangeGeneration
     guard gen != lastProcessedGeneration else { return }
     lastProcessedGeneration = gen
-
-    // Consume pending blockquote continuation: the Enter handler deferred
-    // attribute application because the new paragraph was empty. Now that
-    // text exists, apply blockquote attributes to the current paragraph.
-    if pendingBlockquoteContinuation {
-      pendingBlockquoteContinuation = false
-      let nsString = editor.attributedText.string as NSString
-      let paraRange = nsString.paragraphRange(for: editor.selectedRange)
-      if paraRange.length > 0 {
-        let bqStyle = NSMutableParagraphStyle()
-        bqStyle.firstLineHeadIndent = 16
-        bqStyle.headIndent = 16
-        bqStyle.paragraphSpacing = 8
-        bqStyle.paragraphSpacingBefore = 8
-        editor.addAttributes([
-          .font: UnfoldFonts.bodyItalic(),
-          .foregroundColor: UnfoldColors.textMuted,
-          .paragraphStyle: bqStyle,
-          .unfoldBlockType: "blockquote",
-        ], at: paraRange)
-        // Re-set typingAttributes so subsequent typed chars inherit style
-        editor.typingAttributes = [
-          .font: UnfoldFonts.bodyItalic(),
-          .foregroundColor: UnfoldColors.textMuted,
-          .paragraphStyle: bqStyle,
-          .unfoldBlockType: "blockquote",
-        ]
-      }
-    }
 
     refreshScriptureChips()
     extendBlockMarkers()

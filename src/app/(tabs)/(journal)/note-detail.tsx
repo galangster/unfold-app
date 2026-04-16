@@ -29,7 +29,6 @@ import {
   TextItalicIcon,
   ArrowLineLeftIcon,
   ArrowLineRightIcon,
-  QuotesIcon,
   TextHOneIcon,
   TextHTwoIcon,
   TextHThreeIcon,
@@ -921,11 +920,6 @@ export default function NoteDetailScreen() {
     IS_NATIVE_EDITOR ? editorRef.current?.setList('checklist') : editor.toggleTaskList();
   }, [editor]);
 
-  const handleBlockquote = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    IS_NATIVE_EDITOR ? editorRef.current?.setBlockType('blockquote') : editor.toggleBlockquote();
-  }, [editor]);
-
   const handleHeadingCycle = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (IS_NATIVE_EDITOR) {
@@ -1217,6 +1211,7 @@ export default function NoteDetailScreen() {
             placeholder="Title"
             placeholderTextColor={colors.textHint}
             editable
+            autoFocus={isNewNote}
             style={[
               styles.titleInput,
               { color: colors.text },
@@ -1279,7 +1274,7 @@ export default function NoteDetailScreen() {
               onEditorSelectionChange={(e: { nativeEvent: UnfoldEditorSelectionState }) => setSelectionState(e.nativeEvent)}
               placeholder="Start writing\u2026"
               editable={isEditing}
-              autoFocus={shouldStartEditing && isNewNote}
+              autoFocus={shouldStartEditing && !isNewNote}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               colorScheme={isDark ? 'dark' : 'light'}
               style={styles.richText}
@@ -1488,18 +1483,6 @@ export default function NoteDetailScreen() {
               </ToolbarButton>
 
               <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
-
-              <ToolbarButton
-                onPress={handleBlockquote}
-                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'blockquote' : editorState.isBlockquoteActive}
-                label="Blockquote"
-              >
-                <QuotesIcon
-                  size={18}
-                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'blockquote' : editorState.isBlockquoteActive) ? colors.accent : colors.textMuted}
-                  weight="light"
-                />
-              </ToolbarButton>
 
               <ToolbarButton onPress={handleScripturePress} label="Add scripture">
                 <BookBookmarkIcon size={18} color={colors.textMuted} weight="light" />
