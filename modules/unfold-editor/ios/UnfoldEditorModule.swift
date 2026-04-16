@@ -38,6 +38,10 @@ public class UnfoldEditorModule: Module {
         view.controller.setKeyboardAppearance(appearance)
       }
 
+      Prop("colorScheme") { (view: UnfoldEditorView, scheme: String) in
+        view.setColorScheme(scheme)
+      }
+
       Events("onChangeHtml", "onScriptureRefs", "onEditorFocus", "onEditorBlur", "onEditorSelectionChange")
 
       // --- Day 5: bridge proof (getHtml / focus / blur) ---

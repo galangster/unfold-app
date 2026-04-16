@@ -268,7 +268,12 @@ enum HtmlDecoder {
         style.firstLineHeadIndent = indent
         style.headIndent = indent
         style.paragraphSpacing = 4
-        let isChecklist = block.attrs["__listType"] == "ul" && block.attrs["data-type"] == "checklist"
+        // Accept both native format (`data-type="checklist"` on <ul>) and
+        // tentap format (`data-type="taskList"` on <ul> + `data-type="taskItem"` on <li>).
+        let isChecklist = block.attrs["__listType"] == "ul"
+          && (block.attrs["data-type"] == "checklist"
+              || block.attrs["data-type"] == "taskList"
+              || block.attrs["data-type"] == "taskItem")
         let isOrdered = block.attrs["__listType"] == "ol"
         let listValue: Any = if isChecklist {
           ChecklistItem(checked: block.attrs["data-checked"] == "true")

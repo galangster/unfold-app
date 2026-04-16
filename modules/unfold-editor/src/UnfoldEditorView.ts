@@ -58,6 +58,7 @@ export type UnfoldEditorSelectionChangeEvent = {
  * them would trip the "Event cannot be both direct and bubbling" invariant.
  */
 export type UnfoldEditorKeyboardAppearance = 'default' | 'light' | 'dark';
+export type UnfoldEditorColorScheme = 'dark' | 'light';
 
 export type UnfoldEditorViewProps = Omit<ViewProps, 'onFocus' | 'onBlur'> & {
   initialHtml?: string;
@@ -65,6 +66,9 @@ export type UnfoldEditorViewProps = Omit<ViewProps, 'onFocus' | 'onBlur'> & {
   editable?: boolean;
   autoFocus?: boolean;
   keyboardAppearance?: UnfoldEditorKeyboardAppearance;
+  /** Overrides the native view's UIKit trait collection so dynamic colors
+   *  resolve against the app's theme, not the system theme. */
+  colorScheme?: UnfoldEditorColorScheme;
   onChangeHtml?: (event: UnfoldEditorChangeHtmlEvent) => void;
   onScriptureRefs?: (event: UnfoldEditorScriptureRefsEvent) => void;
   onEditorFocus?: (event: UnfoldEditorFocusEvent) => void;

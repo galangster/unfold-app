@@ -46,6 +46,10 @@ final class UnfoldEditorView: ExpoView {
     super.init(appContext: appContext)
 
     clipsToBounds = true
+    // Default to dark — the RN theme defaults to dark and will push the
+    // correct colorScheme prop on mount. Setting it here prevents a flash
+    // of light-mode colors before the prop arrives.
+    overrideUserInterfaceStyle = .dark
     backgroundColor = UnfoldColors.background
 
     controller.rootView.translatesAutoresizingMaskIntoConstraints = false
@@ -84,6 +88,18 @@ final class UnfoldEditorView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     controller.hostDidLayout()
+  }
+
+  /// Sets the color scheme from the RN theme system. RN manages its own
+  /// dark/light state (Zustand + React context), which doesn't propagate to
+  /// UIKit's trait collection. This override ensures `UnfoldColors`' dynamic
+  /// providers resolve against the app's chosen theme, not the system theme.
+  func setColorScheme(_ scheme: String) {
+    switch scheme {
+    case "dark":  overrideUserInterfaceStyle = .dark
+    case "light": overrideUserInterfaceStyle = .light
+    default:      overrideUserInterfaceStyle = .unspecified
+    }
   }
 
   override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {

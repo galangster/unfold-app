@@ -1216,7 +1216,8 @@ export default function NoteDetailScreen() {
               placeholder="Start writing\u2026"
               editable={isEditing}
               autoFocus={shouldStartEditing && isNewNote}
-              keyboardAppearance="dark"
+              keyboardAppearance={isDark ? 'dark' : 'light'}
+              colorScheme={isDark ? 'dark' : 'light'}
               style={styles.richText}
             />
           ) : (

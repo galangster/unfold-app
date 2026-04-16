@@ -22,6 +22,7 @@ export type {
   UnfoldEditorBlockType,
   UnfoldEditorListType,
   UnfoldEditorKeyboardAppearance,
+  UnfoldEditorColorScheme,
 } from './UnfoldEditorView';
 
 const UnfoldEditor = React.forwardRef<UnfoldEditorRef, UnfoldEditorProps>(

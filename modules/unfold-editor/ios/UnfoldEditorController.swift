@@ -52,10 +52,24 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
   // MARK: - Init
 
+  /// Observes `willResignActiveNotification` to flush unsaved content.
+  private var resignActiveObserver: NSObjectProtocol?
+
   override init() {
     self.rootView = UIView()
     self.editor = EditorView()
     super.init()
+
+    // Flush any pending debounced HTML on app background. Without this,
+    // a keystroke within 200ms of backgrounding would be lost because the
+    // debounce timer hasn't fired yet.
+    resignActiveObserver = NotificationCenter.default.addObserver(
+      forName: UIApplication.willResignActiveNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      self?.flushPendingHtml()
+    }
 
     rootView.backgroundColor = UnfoldColors.background
     rootView.translatesAutoresizingMaskIntoConstraints = false
@@ -106,6 +120,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   }
 
   deinit {
+    if let observer = resignActiveObserver {
+      NotificationCenter.default.removeObserver(observer)
+    }
     changeDebounceTimer?.cancel()
     changeDebounceTimer = nil
     selectionThrottleWorkItem?.cancel()
@@ -503,6 +520,16 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       width: max(editorWidth, contentSize.width),
       height: max(contentSize.height, editor.bounds.height))
     lineDecorationOverlay.invalidate()
+  }
+
+  /// Immediately emits the current HTML, cancelling any pending debounce.
+  /// Called on `willResignActive` to ensure content isn't lost when the user
+  /// backgrounds the app within the 200ms debounce window.
+  private func flushPendingHtml() {
+    changeDebounceTimer?.cancel()
+    changeDebounceTimer = nil
+    let html = getHtml()
+    onChangeHtml?(html)
   }
 
   /// Debounced emission of `onChangeHtml`. Re-entering the 200ms window
