@@ -163,7 +163,8 @@ enum HtmlEncoder {
   /// block identity.
   static func querySelectionState(
     in str: NSAttributedString,
-    selectedRange range: NSRange
+    selectedRange range: NSRange,
+    typingAttributes: [NSAttributedString.Key: Any]? = nil
   ) -> [String: Any] {
     guard str.length > 0 else {
       return emptySelectionState(range: range)
@@ -175,8 +176,16 @@ enum HtmlEncoder {
       for: NSRange(location: location, length: 0))
     let blockType = detectBlockType(in: str, range: paraRange)
 
-    // Read attributes at cursor / selection-start
-    let attrs = str.attributes(at: location, effectiveRange: nil)
+    // Read attributes at cursor / selection-start. For zero-length selections
+    // (cursor), prefer typingAttributes because they reflect the user's
+    // formatting intent for the NEXT character (e.g., after toggling Bold on
+    // an empty line), whereas str.attributes reads the existing text.
+    let attrs: [NSAttributedString.Key: Any]
+    if range.length == 0, let typing = typingAttributes, !typing.isEmpty {
+      attrs = typing
+    } else {
+      attrs = str.attributes(at: location, effectiveRange: nil)
+    }
     let font = attrs[.font] as? UIFont
     let traits = font?.fontDescriptor.symbolicTraits ?? []
     let rawBold = traits.contains(.traitBold)
@@ -308,6 +317,15 @@ enum HtmlEncoder {
     }
 
     if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "blockquote" {
+      return .blockquote
+    }
+
+    // Fallback: detect blockquote by paragraph style. UITextView propagates
+    // standard attributes (headIndent) across Enter but strips the custom
+    // .unfoldBlockType marker. Check headIndent >= 16 + not a list item.
+    if firstAttribute(.listItem, in: str, range: range) == nil,
+       let ps = firstAttribute(.paragraphStyle, in: str, range: range) as? NSParagraphStyle,
+       ps.headIndent >= 16 {
       return .blockquote
     }
 

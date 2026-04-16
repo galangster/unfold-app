@@ -1,25 +1,25 @@
 import UIKit
 import Proton
 
-/// A transparent overlay positioned in the editor's scroll-view content area.
-/// Draws line decorations (blockquote bars, code block backgrounds, etc.)
-/// behind the text by walking the attributed string and asking the underlying
+/// A transparent overlay positioned as a sibling of the editor (same bounds).
+/// Draws line decorations (blockquote bars, code block backgrounds) on top of
+/// the editor by walking the attributed string and asking the underlying
 /// UITextInput for line geometry.
 ///
-/// Hit-test forwards everything except taps in checklist marker zones, which
-/// fire the `onChecklistMarkerTap` closure.
+/// The overlay is fully non-interactive (`isUserInteractionEnabled = false`):
+/// any interactive view sitting on top of a Proton `EditorView` breaks
+/// long-press-drag text selection because iOS 16+ uses `UITextInteraction`
+/// (UIInteraction framework), which consults the view hierarchy for touch
+/// ownership — returning `nil` from `hitTest` isn't sufficient for those
+/// pathways. Checklist marker taps are handled by a `UITapGestureRecognizer`
+/// on the editor (see `UnfoldEditorController`) instead.
 final class LineDecorationOverlay: UIView {
   weak var editor: EditorView?
-  /// Width of the leftmost zone reserved for checklist marker taps.
-  var markerHitZone: CGFloat = 32
-  /// Called when the user taps inside the marker hit zone of a checklist line.
-  /// The closure receives the character index of the tapped line.
-  var onChecklistMarkerTap: ((Int) -> Void)?
 
   init() {
     super.init(frame: .zero)
     backgroundColor = .clear
-    isUserInteractionEnabled = true
+    isUserInteractionEnabled = false
     contentMode = .redraw
   }
 
@@ -141,42 +141,4 @@ final class LineDecorationOverlay: UIView {
     }
   }
 
-  // MARK: - Hit testing
-
-  /// Converts a point from the overlay's coordinate space to the editor's
-  /// text input coordinate space (accounting for scroll offset).
-  private func editorPoint(from overlayPoint: CGPoint) -> CGPoint {
-    guard let editor = editor else { return overlayPoint }
-    let offset = editor.scrollView.contentOffset
-    return CGPoint(x: overlayPoint.x + offset.x, y: overlayPoint.y + offset.y)
-  }
-
-  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-    // Only intercept taps in the leftmost marker zone for checklist lines.
-    // Everything else falls through to the editor underneath.
-    guard point.x < markerHitZone, let editor = editor else { return nil }
-    let text = editor.attributedText.string as NSString
-    let textInput = editor.textInput
-    let ep = editorPoint(from: point)
-    guard let position = textInput.closestPosition(to: ep) else { return nil }
-    let charIndex = textInput.offset(from: textInput.beginningOfDocument, to: position)
-    guard charIndex >= 0, charIndex < text.length else { return nil }
-    let lineRange = text.lineRange(for: NSRange(location: charIndex, length: 0))
-    guard lineRange.length > 0 else { return nil }
-    // Only intercept if this line is a checklist item
-    let attr = editor.attributedText.attribute(.listItem, at: lineRange.location, effectiveRange: nil)
-    guard attr is ChecklistItem else { return nil }
-    return self
-  }
-
-  override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-    super.touchesEnded(touches, with: event)
-    guard let touch = touches.first, let editor = editor else { return }
-    let point = touch.location(in: self)
-    let ep = editorPoint(from: point)
-    let textInput = editor.textInput
-    guard let position = textInput.closestPosition(to: ep) else { return }
-    let charIndex = textInput.offset(from: textInput.beginningOfDocument, to: position)
-    onChecklistMarkerTap?(charIndex)
-  }
 }

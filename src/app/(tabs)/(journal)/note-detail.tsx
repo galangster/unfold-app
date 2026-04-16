@@ -1554,11 +1554,13 @@ function ToolbarButton({
   disabled?: boolean;
   children: React.ReactNode;
 }) {
+  const { colors } = useTheme();
   return (
     <TouchableOpacity
       onPress={onPress}
       style={[
         styles.toolbarButton,
+        active && { backgroundColor: colors.accent + '33' },
         disabled && styles.toolbarButtonDisabled,
       ]}
       activeOpacity={disabled ? 1 : 0.6}
