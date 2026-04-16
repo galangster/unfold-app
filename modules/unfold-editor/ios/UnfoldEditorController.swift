@@ -271,6 +271,14 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   /// Toggles whether the editor accepts edits. Mirrors `editor.isEditable`.
   func setEditable(_ editable: Bool) {
     editor.isEditable = editable
+    // Proton's AutogrowingTextView starts with isScrollEnabled=false and
+    // manages it dynamically during layout. When entering read mode, the
+    // content likely exceeds the view bounds — force scrolling on so the
+    // user can scroll through the note. AutogrowingTextView will re-manage
+    // this when layout changes occur (e.g. keyboard appears in edit mode).
+    if !editable {
+      editor.isScrollEnabled = true
+    }
   }
 
   /// Sets the keyboard appearance. Accepts `"default"`, `"light"`, or
@@ -303,14 +311,23 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   /// are silently ignored so JS callers can't crash the bridge by typoing.
   func setBlockType(_ type: String) {
     let paraRange = currentParagraphRange()
-    guard paraRange.length > 0 else { return }
 
-    // Switching out of a code block must strip the `.unfoldBlockType`
-    // marker + any pre-specific background fill, otherwise the HtmlEncoder
-    // keeps emitting <pre><code> for the paragraph and the visual bg bleeds
-    // into the new block type.
+    // For empty content (length 0), skip attribute manipulation — just set
+    // typingAttributes so the next typed character inherits the block style.
+    if paraRange.length == 0 {
+      var attrs = blockTypeAttributes(type)
+      if attrs.isEmpty { return }
+      DispatchQueue.main.async { [weak self] in
+        self?.editor.typingAttributes = attrs
+      }
+      scheduleHtmlEmit()
+      return
+    }
+
+    // Always clear previous block-type marker so switching between
+    // blockquote / code / plain doesn't leave stale markers.
+    editor.removeAttribute(.unfoldBlockType, at: paraRange)
     if type != "pre" {
-      editor.removeAttribute(.unfoldBlockType, at: paraRange)
       editor.removeAttribute(.backgroundColor, at: paraRange)
     }
 
@@ -353,6 +370,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
         .font: UnfoldFonts.bodyItalic(),
         .foregroundColor: UnfoldColors.textMuted,
         .paragraphStyle: paragraph,
+        .unfoldBlockType: "blockquote",
       ], at: paraRange)
 
     case "pre":
@@ -370,6 +388,25 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
     default:
       return
+    }
+
+    // Sync typing attributes so new characters typed on a freshly-formatted
+    // empty line inherit the block style (font, color, paragraph, marker).
+    // Deferred to next run-loop tick because Proton resets typingAttributes
+    // synchronously during attribute changes.
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      let loc = self.editor.selectedRange.location
+      if loc < self.editor.attributedText.length {
+        var attrs = self.editor.attributedText.attributes(at: loc, effectiveRange: nil)
+        attrs.removeValue(forKey: .attachment)
+        self.editor.typingAttributes = attrs
+      } else if self.editor.attributedText.length > 0 {
+        let last = self.editor.attributedText.length - 1
+        var attrs = self.editor.attributedText.attributes(at: last, effectiveRange: nil)
+        attrs.removeValue(forKey: .attachment)
+        self.editor.typingAttributes = attrs
+      }
     }
 
     scheduleHtmlEmit()
@@ -499,16 +536,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     let paraRange = nsString.paragraphRange(for: range)
     guard paraRange.length > 0 else { return }
 
-    // Check if current paragraph is a blockquote (headIndent >= 16, no list item)
-    let paragraphStyle = text.attribute(
-      .paragraphStyle,
+    // Check if current paragraph is a blockquote via explicit marker
+    let blockMarker = text.attribute(
+      .unfoldBlockType,
       at: paraRange.location,
-      effectiveRange: nil) as? NSParagraphStyle
-    let isListItem = text.attribute(
-      .listItem,
-      at: paraRange.location,
-      effectiveRange: nil) != nil
-    let isBlockquote = !isListItem && (paragraphStyle?.headIndent ?? 0) >= 16
+      effectiveRange: nil) as? String
+    let isBlockquote = blockMarker == "blockquote"
 
     guard isBlockquote else { return }
 
@@ -522,6 +555,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       let pStyle = NSMutableParagraphStyle()
       pStyle.paragraphSpacing = 4
       pStyle.paragraphSpacingBefore = 0
+      editor.removeAttribute(.unfoldBlockType, at: paraRange)
       editor.addAttributes([
         .font: UnfoldFonts.body(),
         .foregroundColor: UnfoldColors.text,
@@ -530,6 +564,21 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
       lineDecorationOverlay.invalidate()
       scheduleHtmlEmit()
       handled = true
+    } else {
+      // Non-empty blockquote → let Proton handle Enter, then ensure the
+      // new paragraph gets the blockquote marker so the overlay draws bars.
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        let newRange = (self.editor.attributedText.string as NSString)
+          .paragraphRange(for: self.editor.selectedRange)
+        guard newRange.length > 0 else { return }
+        let existing = self.editor.attributedText.attribute(
+          .unfoldBlockType, at: newRange.location, effectiveRange: nil) as? String
+        if existing != "blockquote" {
+          self.editor.addAttribute(.unfoldBlockType, value: "blockquote", at: newRange)
+          self.lineDecorationOverlay.invalidate()
+        }
+      }
     }
   }
 
@@ -570,6 +619,34 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   }
 
   // MARK: - Internals
+
+  /// Returns the set of attributes for a given block type, suitable for
+  /// setting as typingAttributes on an empty paragraph.
+  private func blockTypeAttributes(_ type: String) -> [NSAttributedString.Key: Any] {
+    switch type {
+    case "p":
+      let p = NSMutableParagraphStyle()
+      p.paragraphSpacing = 4
+      return [.font: UnfoldFonts.body(), .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+    case "h1":
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 16; p.lineHeightMultiple = 1.15
+      return [.font: UnfoldFonts.h1, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+    case "h2":
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 12; p.lineHeightMultiple = 1.15
+      return [.font: UnfoldFonts.h2, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+    case "h3":
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 10; p.lineHeightMultiple = 1.15
+      return [.font: UnfoldFonts.h3, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+    case "blockquote":
+      let p = NSMutableParagraphStyle(); p.firstLineHeadIndent = 16; p.headIndent = 16; p.paragraphSpacing = 8; p.paragraphSpacingBefore = 8
+      return [.font: UnfoldFonts.bodyItalic(), .foregroundColor: UnfoldColors.textMuted, .paragraphStyle: p, .unfoldBlockType: "blockquote"]
+    case "pre":
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 6; p.paragraphSpacingBefore = 6
+      return [.font: UIFont.monospacedSystemFont(ofSize: 15, weight: .regular), .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "codeBlock"]
+    default:
+      return [:]
+    }
+  }
 
   /// Paragraph range containing the current selection. Returns a zero-length
   /// range if the editor is empty.

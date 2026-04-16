@@ -321,6 +321,9 @@ enum HtmlDecoder {
         mutable.addAttribute(.font, value: font, range: paragraphRange)
         mutable.addAttribute(.unfoldBlockType, value: "codeBlock", range: paragraphRange)
       }
+      if block.tag == "blockquote" {
+        mutable.addAttribute(.unfoldBlockType, value: "blockquote", range: paragraphRange)
+      }
       // Strikethrough for checked items
       if let item = listItem as? ChecklistItem, item.checked {
         mutable.addAttributes([
@@ -342,6 +345,9 @@ enum HtmlDecoder {
     ]
     if isCodeBlock {
       terminatorAttrs[.unfoldBlockType] = "codeBlock"
+    }
+    if block.tag == "blockquote" {
+      terminatorAttrs[.unfoldBlockType] = "blockquote"
     }
     if let listItem = listItem {
       terminatorAttrs[.listItem] = listItem

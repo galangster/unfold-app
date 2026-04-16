@@ -7,7 +7,7 @@ extension NSAttributedString.Key {
   /// ambiguous with inline <code>) — reserved for future uses if we add
   /// more block types (callouts, etc.).
   ///
-  /// Value: String. Known values: `"codeBlock"`.
+  /// Value: String. Known values: `"codeBlock"`, `"blockquote"`.
   static let unfoldBlockType = NSAttributedString.Key("unfoldBlockType")
 }
 
@@ -307,8 +307,7 @@ enum HtmlEncoder {
       }
     }
 
-    if let style = firstAttribute(.paragraphStyle, in: str, range: range) as? NSParagraphStyle,
-       style.headIndent >= 16 {
+    if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "blockquote" {
       return .blockquote
     }
 

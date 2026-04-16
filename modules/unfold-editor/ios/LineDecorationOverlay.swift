@@ -63,9 +63,7 @@ final class LineDecorationOverlay: UIView {
         effectiveRange: nil) != nil
 
       let isCodeBlock = blockMarker == "codeBlock"
-      let isBlockquote = !isCodeBlock
-        && !isListItem
-        && (paragraphStyle?.headIndent ?? 0) >= 16
+      let isBlockquote = blockMarker == "blockquote"
 
       guard isCodeBlock || isBlockquote else { continue }
 

@@ -732,7 +732,7 @@ interface UnfoldState {
 }
 
 const initialState = {
-  user: null,
+  user: null as UserProfile | null,
   devotionals: [],
   currentDevotionalId: null,
   hasEverCreatedDevotional: false,
