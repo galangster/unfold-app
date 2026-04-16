@@ -30,6 +30,9 @@ import {
   ArrowLineLeftIcon,
   ArrowLineRightIcon,
   QuotesIcon,
+  TextHOneIcon,
+  TextHTwoIcon,
+  TextHThreeIcon,
 } from 'phosphor-react-native';
 import {
   useEditorBridge,
@@ -923,6 +926,18 @@ export default function NoteDetailScreen() {
     IS_NATIVE_EDITOR ? editorRef.current?.setBlockType('blockquote') : editor.toggleBlockquote();
   }, [editor]);
 
+  const handleHeadingCycle = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (IS_NATIVE_EDITOR) {
+      // Cycle: p → h1 → h2 → h3 → p
+      const current = selectionState.blockType;
+      const next = current === 'h1' ? 'h2' : current === 'h2' ? 'h3' : current === 'h3' ? 'p' : 'h1';
+      editorRef.current?.setBlockType(next);
+    } else {
+      editor.toggleHeading(1);
+    }
+  }, [editor, selectionState.blockType]);
+
   const handleIndent = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     IS_NATIVE_EDITOR ? editorRef.current?.indentList() : editor.sink();
@@ -1170,8 +1185,8 @@ export default function NoteDetailScreen() {
           )}
         </View>
 
-        {/* ── Scripture references (read mode only) ── */}
-        {!isEditing && liveScriptureRefs.length > 0 && (
+        {/* ── Scripture references (read mode only, non-native — native uses chip strip) ── */}
+        {!isEditing && !IS_NATIVE_EDITOR && liveScriptureRefs.length > 0 && (
           <Animated.View
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
@@ -1286,9 +1301,9 @@ export default function NoteDetailScreen() {
             </>
           )}
           {/* Tap-to-edit overlay — captures taps in read mode.
-              Needed for WebView (swallows touches) and native (UITextView in
-              non-editable mode doesn't bubble taps to RN). */}
-          {!isEditing && editorReady && (
+              Only for WebView (swallows touches). Native UITextView scrolls
+              fine when non-editable; tap-to-edit via title or header Edit button. */}
+          {!isEditing && editorReady && !IS_NATIVE_EDITOR && (
             <TouchableOpacity
               style={StyleSheet.absoluteFill}
               activeOpacity={1}
@@ -1370,6 +1385,34 @@ export default function NoteDetailScreen() {
                   color={(IS_NATIVE_EDITOR ? selectionState.italic : editorState.isItalicActive) ? colors.accent : colors.textMuted}
                   weight="regular"
                 />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onPress={handleHeadingCycle}
+                active={IS_NATIVE_EDITOR
+                  ? ['h1', 'h2', 'h3'].includes(selectionState.blockType)
+                  : !!editorState.headingLevel}
+                label="Heading"
+              >
+                {selectionState.blockType === 'h2' ? (
+                  <TextHTwoIcon
+                    size={18}
+                    color={['h1', 'h2', 'h3'].includes(selectionState.blockType) ? colors.accent : colors.textMuted}
+                    weight="regular"
+                  />
+                ) : selectionState.blockType === 'h3' ? (
+                  <TextHThreeIcon
+                    size={18}
+                    color={['h1', 'h2', 'h3'].includes(selectionState.blockType) ? colors.accent : colors.textMuted}
+                    weight="regular"
+                  />
+                ) : (
+                  <TextHOneIcon
+                    size={18}
+                    color={['h1', 'h2', 'h3'].includes(selectionState.blockType) ? colors.accent : colors.textMuted}
+                    weight="regular"
+                  />
+                )}
               </ToolbarButton>
 
               <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />

@@ -44,6 +44,10 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     label: "com.unfold.editor.change-debounce")
   private static let changeDebounceInterval: DispatchTimeInterval = .milliseconds(200)
 
+  /// Tracks the keyboard appearance set by the JS prop so we can re-apply
+  /// it after block-type changes (UIKit may reset it when font attributes change).
+  private var currentKeyboardAppearance: UIKeyboardAppearance = .default
+
   /// Selection-change throttle state. 16ms (≈60fps) cap so rapid drag
   /// selections don't saturate the JS bridge.
   private var lastSelectionEmitTime: CFTimeInterval = 0
@@ -272,11 +276,14 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   /// Sets the keyboard appearance. Accepts `"default"`, `"light"`, or
   /// `"dark"`; anything else maps to `.default`.
   func setKeyboardAppearance(_ value: String) {
+    let appearance: UIKeyboardAppearance
     switch value {
-    case "light": editor.keyboardAppearance = .light
-    case "dark":  editor.keyboardAppearance = .dark
-    default:      editor.keyboardAppearance = .default
+    case "light": appearance = .light
+    case "dark":  appearance = .dark
+    default:      appearance = .default
     }
+    currentKeyboardAppearance = appearance
+    editor.keyboardAppearance = appearance
   }
 
   /// Requests first-responder after a short delay. Matches the spike timing
@@ -380,6 +387,28 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     case "checklist": value = ChecklistItem(checked: false)
     default: return
     }
+
+    // Clear blockquote attributes before applying list — otherwise the
+    // inherited headIndent=16 triggers blockquote detection in
+    // LineDecorationOverlay, making list items show a blockquote bar.
+    let paraRange = currentParagraphRange()
+    if paraRange.length > 0 {
+      let paragraphStyle = editor.attributedText.attribute(
+        .paragraphStyle,
+        at: paraRange.location,
+        effectiveRange: nil) as? NSParagraphStyle
+      if (paragraphStyle?.headIndent ?? 0) >= 16 {
+        let pStyle = NSMutableParagraphStyle()
+        pStyle.paragraphSpacing = 4
+        pStyle.paragraphSpacingBefore = 0
+        editor.addAttributes([
+          .font: UnfoldFonts.body(),
+          .foregroundColor: UnfoldColors.text,
+          .paragraphStyle: pStyle,
+        ], at: paraRange)
+      }
+    }
+
     ListCommand().execute(on: editor, attributeValue: value)
     scheduleHtmlEmit()
   }
@@ -454,6 +483,56 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
   // MARK: - EditorViewDelegate
 
+  func editor(
+    _ editor: EditorView,
+    shouldHandle key: EditorKey,
+    modifierFlags: UIKeyModifierFlags,
+    at range: NSRange,
+    handled: inout Bool
+  ) {
+    guard key == .enter else { return }
+
+    let text = editor.attributedText
+    let nsString = text.string as NSString
+    guard nsString.length > 0 else { return }
+
+    let paraRange = nsString.paragraphRange(for: range)
+    guard paraRange.length > 0 else { return }
+
+    // Check if current paragraph is a blockquote (headIndent >= 16, no list item)
+    let paragraphStyle = text.attribute(
+      .paragraphStyle,
+      at: paraRange.location,
+      effectiveRange: nil) as? NSParagraphStyle
+    let isListItem = text.attribute(
+      .listItem,
+      at: paraRange.location,
+      effectiveRange: nil) != nil
+    let isBlockquote = !isListItem && (paragraphStyle?.headIndent ?? 0) >= 16
+
+    guard isBlockquote else { return }
+
+    // Get the paragraph text (strip trailing newline)
+    let paraText = nsString.substring(with: paraRange)
+      .trimmingCharacters(in: .newlines)
+
+    // Empty blockquote paragraph → exit to plain paragraph
+    if paraText.isEmpty {
+      // Reset the current paragraph to plain "p" style
+      let pStyle = NSMutableParagraphStyle()
+      pStyle.paragraphSpacing = 4
+      pStyle.paragraphSpacingBefore = 0
+      editor.addAttributes([
+        .font: UnfoldFonts.body(),
+        .foregroundColor: UnfoldColors.text,
+        .paragraphStyle: pStyle,
+      ], at: paraRange)
+      lineDecorationOverlay.invalidate()
+      scheduleHtmlEmit()
+      handled = true
+    }
+  }
+
   func editor(_ editor: EditorView, didChangeTextAt range: NSRange) {
     refreshScriptureChips()
     lineDecorationOverlay.invalidate()
@@ -477,6 +556,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     attributes: [NSAttributedString.Key: Any],
     contentType: EditorContent.Name
   ) {
+    // Re-apply keyboard appearance — UIKit can reset it when the cursor
+    // moves between paragraphs with different font attributes (e.g.
+    // heading → body), causing light/dark keyboard mismatch.
+    if editor.keyboardAppearance != currentKeyboardAppearance {
+      editor.keyboardAppearance = currentKeyboardAppearance
+    }
+
     let state = HtmlEncoder.querySelectionState(
       in: editor.attributedText,
       selectedRange: range)

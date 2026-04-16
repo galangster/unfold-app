@@ -83,13 +83,21 @@ final class UnfoldListFormattingProvider: EditorListFormattingProvider {
   }
 
   private func checklistMarker(checked: Bool) -> ListLineMarker {
-    let size = CGSize(width: 20, height: 20)
     let config = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
     let symbolName = checked ? "checkmark.square.fill" : "square"
     let tint = checked ? UnfoldColors.accent : UnfoldColors.textMuted
     let image = UIImage(systemName: symbolName, withConfiguration: config)?
       .withTintColor(tint, renderingMode: .alwaysOriginal)
       ?? UIImage()
-    return ListLineMarker.image(image, size: size)
+
+    // Use NSTextAttachment with explicit bounds to vertically center the
+    // checkbox with the text baseline. The -3pt Y offset shifts the marker
+    // down so it aligns with the body text's midline instead of sitting high.
+    let attachment = NSTextAttachment()
+    attachment.image = image
+    let size: CGFloat = 20
+    attachment.bounds = CGRect(x: 0, y: -3, width: size, height: size)
+    let attrStr = NSAttributedString(attachment: attachment)
+    return ListLineMarker.string(attrStr)
   }
 }
