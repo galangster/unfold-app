@@ -546,6 +546,55 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     onBlur?()
   }
 
+  /// Resets typingAttributes to body when Enter is pressed at the end of a
+  /// heading paragraph. Without this, pressing Enter in an H1/H2/H3 keeps the
+  /// heading font + paragraph style on the new line until the user manually
+  /// toggles the heading button off. Only fires for non-list paragraphs whose
+  /// first-character font is >= 18pt (the h3 minimum).
+  func editor(
+    _ editor: EditorView,
+    shouldHandle key: EditorKey,
+    modifierFlags: UIKeyModifierFlags,
+    at range: NSRange,
+    handled: inout Bool
+  ) {
+    guard key == .enter else { return }
+
+    let text = editor.attributedText
+    let nsString = text.string as NSString
+    guard nsString.length > 0 else { return }
+
+    let paraRange = nsString.paragraphRange(for: range)
+    guard paraRange.length > 0 else { return }
+
+    // Skip list paragraphs — Proton's ListTextProcessor owns their
+    // continuation + exit logic, and overwriting typingAttributes here
+    // would strip the .listItem attr off the next character.
+    if text.attribute(.listItem, at: paraRange.location, effectiveRange: nil) != nil {
+      return
+    }
+
+    let paraFont = text.attribute(
+      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
+    guard (paraFont?.pointSize ?? 0) >= 18 else { return }
+
+    let bodyPStyle = NSMutableParagraphStyle()
+    bodyPStyle.paragraphSpacing = 4
+    let bodyAttrs: [NSAttributedString.Key: Any] = [
+      .font: UnfoldFonts.body(),
+      .foregroundColor: UnfoldColors.text,
+      .paragraphStyle: bodyPStyle,
+    ]
+
+    // Defer to next runloop so our reset runs AFTER Proton inserts the \n
+    // and UITextView recomputes typingAttributes from attrs-at-cursor. If we
+    // set it synchronously here, Proton's downstream processing overrides it.
+    DispatchQueue.main.async { [weak self] in
+      self?.editor.typingAttributes = bodyAttrs
+      self?.refreshSelectionState()
+    }
+  }
+
   func editor(
     _ editor: EditorView,
     didChangeSelectionAt range: NSRange,
