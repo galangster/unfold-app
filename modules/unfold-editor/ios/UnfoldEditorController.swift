@@ -637,12 +637,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     let paraRange = nsString.paragraphRange(for: range)
     guard paraRange.length > 0 else { return }
 
-    // Heading → body on Enter: headings have font size >= 18 (h3 minimum).
-    // Without this, pressing Enter in an H1 keeps the H1 font on the new line.
-    let paraFont = text.attribute(
-      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
-    guard (paraFont?.pointSize ?? 0) >= 18 else { return }
-
     let bodyPStyle = NSMutableParagraphStyle()
     bodyPStyle.paragraphSpacing = 4
     let bodyAttrs: [NSAttributedString.Key: Any] = [
@@ -650,6 +644,103 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       .foregroundColor: UnfoldColors.text,
       .paragraphStyle: bodyPStyle,
     ]
+
+    // List continuation: if the current paragraph is a list item, we need to
+    // explicitly carry `.listItem` + list paragraph style onto the new line.
+    // Proton's upstream `shouldProcess` tries via typingAttributes but
+    // paragraph-style attributes get stripped at paragraph boundaries on
+    // iOS, so the visible marker disappears on the new empty line. We force
+    // it here on the main-queue bounce AFTER Proton inserts the \n.
+    if let listItemValue = text.attribute(
+      .listItem, at: paraRange.location, effectiveRange: nil)
+    {
+      let listParaStyle = text.attribute(
+        .paragraphStyle, at: paraRange.location, effectiveRange: nil
+      ) as? NSParagraphStyle
+      let listFont = text.attribute(
+        .font, at: paraRange.location, effectiveRange: nil
+      ) as? UIFont ?? UnfoldFonts.body()
+      let listColor = text.attribute(
+        .foregroundColor, at: paraRange.location, effectiveRange: nil
+      ) as? UIColor ?? UnfoldColors.text
+
+      let trimmed = nsString.substring(with: paraRange)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .replacingOccurrences(of: "\u{200B}", with: "")
+
+      if trimmed.isEmpty {
+        // Empty list line + Enter → exit the list (double-Enter pattern).
+        // Proton's `exitListsIfRequired` will call `terminateList` to strip
+        // `.listItem`; we reset typing attributes to body so the next char
+        // renders plainly without list indent or marker.
+        DispatchQueue.main.async { [weak self] in
+          self?.editor.typingAttributes = bodyAttrs
+        }
+        return
+      }
+
+      // Non-empty list line + Enter → continuation. Strategy:
+      // 1) Attribute Proton's just-inserted `\n` with `.listItem` + list
+      //    paragraph style so the terminator joins the list range.
+      // 2) Insert a ZWSP (`\u{200B}`) at the cursor with the same list
+      //    attributes. This gives `NSLayoutManager` a real glyph on the new
+      //    empty line so `enumerateLineFragments` produces a fragment there
+      //    and `drawListMarkers` reliably paints a marker on every new line,
+      //    not just the first (the post-loop `extraLineFragmentRect` path in
+      //    `LayoutManager.drawListMarkers` only draws one trailing marker).
+      // 3) Cursor sits AFTER the ZWSP so the next char the user types lands
+      //    inside the list paragraph; ZWSP is invisible so the user sees a
+      //    clean empty line with a bullet. Matches Proton's own
+      //    `createListItemInANewLine` pattern (ListTextProcessor.swift:296).
+      //
+      // Re-entrancy note: `editor.replaceCharacters` triggers another
+      // `willProcessEditing` cycle, but `TextProcessor.willProcessEditing`
+      // only invokes `handleKeyWithModifiers(.enter)` when `changedText ==
+      // "\n"` (TextProcessor.swift:78). ZWSP is not `\n`, so
+      // `exitListsIfRequired` does NOT fire — our attributes are preserved.
+      var listAttrs: [NSAttributedString.Key: Any] = [
+        .listItem: listItemValue,
+        .font: listFont,
+        .foregroundColor: listColor,
+      ]
+      if let style = listParaStyle {
+        listAttrs[.paragraphStyle] = style
+      }
+
+      // INTERCEPT: prevent UITextView from inserting a plain `\n`. We insert
+      // `\n` + ZWSP ourselves with full list attrs so the new paragraph has
+      // `.listItem` AND a paragraphStyle with `firstLineHeadIndent > 0`.
+      //
+      // Why the paragraphStyle matters: Proton's `ListTextProcessor.shouldProcess`
+      // (ListTextProcessor.swift:64) only carries `.listItem` onto newly-typed
+      // characters when BOTH conditions hold at cursor-1:
+      //   1) `.listItem` attribute present
+      //   2) paragraphStyle.firstLineHeadIndent > 0
+      // A bare `\n` with only `.listItem` but no list paragraphStyle fails
+      // condition 2 → typed chars are orphaned → list ends on line 3+.
+      //
+      // Inserting `\n` + ZWSP with BOTH attrs (matching Proton's
+      // `createListItemInANewLine` pattern at line 296-311) satisfies both.
+      // Cursor moves past the ZWSP; the ZWSP is invisible but provides a real
+      // glyph so `NSLayoutManager.enumerateLineFragments` produces a fragment
+      // on the new line and `drawListMarkers` paints the marker reliably.
+      let newline = NSAttributedString(string: "\n\u{200B}", attributes: listAttrs)
+      let insertRange = NSRange(location: range.location, length: 0)
+      editor.replaceCharacters(in: insertRange, with: newline)
+      editor.selectedRange = NSRange(
+        location: range.location + 2, length: 0
+      )
+      editor.typingAttributes = listAttrs
+      lineDecorationOverlay.invalidate()
+      handled = true
+      return
+    }
+
+    // Heading → body on Enter: headings have font size >= 18 (h3 minimum).
+    // Without this, pressing Enter in an H1 keeps the H1 font on the new line.
+    let paraFont = text.attribute(
+      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
+    guard (paraFont?.pointSize ?? 0) >= 18 else { return }
 
     DispatchQueue.main.async { [weak self] in
       self?.editor.typingAttributes = bodyAttrs

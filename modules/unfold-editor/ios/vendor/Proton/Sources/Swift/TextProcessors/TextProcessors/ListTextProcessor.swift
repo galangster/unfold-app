@@ -200,58 +200,12 @@ open class ListTextProcessor: TextProcessing {
             attributeValue = previousLine.text.attribute(.listItem, at: 0, effectiveRange: nil)
         }
 
-        // Enter-twice-to-exit pattern: only terminate the list if the previous
-        // line was ALSO empty (i.e. user pressed Enter on an already-empty
-        // list item to exit). If previousLine has content, the user is
-        // continuing the list — insert a new blank-line-filler item instead
-        // so the marker renders on the new line.
-        guard attributeValue != nil,
-              (currentLine.text.length == 0 || currentLine.text.string == ListTextProcessor.blankLineFiller)
-        else { return }
-
-        if previousLine.text.length == 0 || previousLine.text.string == ListTextProcessor.blankLineFiller {
+        if (currentLine.text.length == 0 || currentLine.text.string == ListTextProcessor.blankLineFiller),
+           attributeValue != nil {
             executeOnDidProcess = { [weak self] editor in
                 self?.terminateList(editor: editor, editedRange: currentLine.range)
             }
-        } else {
-            // Continue the list: insert a ZWSP on the new line with the full
-            // list attributes (paragraph style with indent + listItem). The
-            // blank-line-filler keeps the line non-empty so the marker draws,
-            // and gets consumed by the first real character the user types.
-            executeOnDidProcess = { [weak self] editor in
-                self?.continueListOnNewLine(editor: editor, currentLine: currentLine, previousLine: previousLine, attributeValue: attributeValue!)
-            }
         }
-    }
-
-    /// Continues a list onto a freshly-created empty line after Enter. Inserts
-    /// a blank-line-filler (ZWSP) with the previous line's paragraph style +
-    /// listItem attribute so the marker renders on the new line. Cursor is
-    /// positioned on the ZWSP; typing replaces it.
-    private func continueListOnNewLine(editor: EditorView, currentLine: EditorLine, previousLine: EditorLine, attributeValue: Any) {
-        let previousParaStyle = previousLine.text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
-        let previousFont = previousLine.text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont
-        let previousColor = previousLine.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
-
-        var attrs: [NSAttributedString.Key: Any] = [
-            .listItem: attributeValue,
-        ]
-        if let style = previousParaStyle { attrs[.paragraphStyle] = style }
-        if let font = previousFont { attrs[.font] = font }
-        if let color = previousColor { attrs[.foregroundColor] = color }
-
-        let filler = NSAttributedString(
-            string: ListTextProcessor.blankLineFiller,
-            attributes: attrs)
-        editor.replaceCharacters(in: NSRange(location: currentLine.range.location, length: 0), with: filler)
-        editor.selectedRange = NSRange(location: currentLine.range.location, length: 0)
-
-        // Also propagate to typingAttributes so the first real char typed
-        // inherits the list formatting (replacing the ZWSP).
-        editor.typingAttributes[.listItem] = attributeValue
-        if let style = previousParaStyle { editor.typingAttributes[.paragraphStyle] = style }
-        if let font = previousFont { editor.typingAttributes[.font] = font }
-        if let color = previousColor { editor.typingAttributes[.foregroundColor] = color }
     }
 
     private func updateListItemIfRequired(editor: EditorView, editedRange: NSRange, indentMode: Indentation, attributeValue: Any?) {
