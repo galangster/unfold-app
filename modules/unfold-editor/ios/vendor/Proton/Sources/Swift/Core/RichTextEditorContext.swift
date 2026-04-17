@@ -26,7 +26,7 @@ class RichTextEditorContext: RichTextViewContext {
     static let `default` = RichTextEditorContext()
 
     func textViewDidBeginEditing(_ textView: UITextView) {
-        guard textView.delegate === self else { return }
+        guard textView is RichTextView else { return }
         selectedTextView = textView.asRichTextView
         activeTextView = textView.asRichTextView
 
@@ -48,7 +48,7 @@ class RichTextEditorContext: RichTextViewContext {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
-        guard textView.delegate === self else { return }
+        guard textView is RichTextView else { return }
 
         defer {
             activeTextView = nil
@@ -59,7 +59,7 @@ class RichTextEditorContext: RichTextViewContext {
     }
 
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        guard textView.delegate === self,
+        guard textView is RichTextView,
               let richTextView = activeTextView
         else { return true }
 
@@ -155,7 +155,7 @@ class RichTextEditorContext: RichTextViewContext {
     }
 
     func textViewDidChange(_ textView: UITextView) {
-        guard textView.delegate === self else { return }
+        guard textView is RichTextView else { return }
         selectedTextView = textView.asRichTextView
 
         guard let richTextView = activeTextView else { return }

@@ -2,19 +2,18 @@ import UIKit
 import Proton
 
 /// Controller that owns a Proton `EditorView` and its surrounding UI (scripture
-/// chip strip above, line decoration overlay behind the text). This is the
-/// bridged analogue of the spike's `EditorViewController` — with the
-/// UIViewController wrapper removed so the view hierarchy can be hosted
-/// directly inside an `ExpoView`.
+/// chip strip above, line decoration overlay behind the text). Bridged
+/// analogue of the spike's `EditorViewController` — UIViewController wrapper
+/// removed so the view hierarchy can be hosted directly inside an `ExpoView`.
 ///
-/// The host view is responsible for:
-///   - Registering fonts via `UnfoldEditorFontLoader.registerIfNeeded()` before
+/// Host responsibilities:
+///   - Register fonts via `UnfoldEditorFontLoader.registerIfNeeded()` before
 ///     instantiating this controller (so `UnfoldFonts` lookups resolve).
-///   - Adding `rootView` as a subview and forwarding `layoutSubviews` /
+///   - Add `rootView` as a subview and forward `layoutSubviews` /
 ///     `traitCollectionDidChange` so content tracks its container.
-///   - Hooking the `onChangeHtml` / `onScriptureRefs` / `onFocus` / `onBlur`
-///     callbacks to `EventDispatcher` instances on the Expo View.
-final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecognizerDelegate {
+///   - Hook `onChangeHtml` / `onScriptureRefs` / `onFocus` / `onBlur` /
+///     `onEditorSelectionChange` to `EventDispatcher` instances on the Expo View.
+final class UnfoldEditorController: NSObject, EditorViewDelegate {
 
   // MARK: - Public surface
 
@@ -39,16 +38,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   private let lineDecorationOverlay = LineDecorationOverlay()
   private let formattingProvider = UnfoldListFormattingProvider()
 
-  /// Tap gesture attached to the editor that toggles checklist items when
-  /// the user taps inside the leftmost marker zone of a checklist line.
-  /// Replaces the overlay's former hit-test interception — keeping the
-  /// overlay interactive breaks iOS 16+ long-press-drag text selection.
-  private var checklistTapGesture: UITapGestureRecognizer?
-
-  /// Width of the leftmost zone reserved for checklist marker taps. Matches
-  /// the indent used by the list formatting provider.
-  private static let checklistMarkerHitZone: CGFloat = 32
-
   private var scrollObservation: NSKeyValueObservation?
   private var changeDebounceTimer: DispatchSourceTimer?
   private let changeDebounceQueue = DispatchQueue(
@@ -71,19 +60,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// Observes `willResignActiveNotification` to flush unsaved content.
   private var resignActiveObserver: NSObjectProtocol?
 
-  /// Observes `UITextView.textDidChangeNotification` as a backup for Proton's
-  /// `didChangeTextAt` delegate — the delegate relies on an internal
-  /// `activeTextView` guard that can silently fail depending on the
-  /// editable/focus lifecycle.
-  private var textDidChangeObserver: NSObjectProtocol?
-
-  /// Observers for keyboard frame changes — used to adjust the editor's
-  /// bottom content inset so the cursor stays visible when the keyboard
-  /// covers the lower portion of the view.
-  private var keyboardWillShowObserver: NSObjectProtocol?
-  private var keyboardWillHideObserver: NSObjectProtocol?
-  private var keyboardWillChangeFrameObserver: NSObjectProtocol?
-
   override init() {
     self.rootView = UIView()
     self.editor = EditorView()
@@ -99,35 +75,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     ) { [weak self] _ in
       self?.flushPendingHtml()
     }
-
-    // Backup text-change observer: Proton's EditorViewDelegate.didChangeTextAt
-    // relies on an internal `activeTextView` guard in RichTextEditorContext that
-    // can silently fail when the editable/focus lifecycle doesn't trigger
-    // textViewDidBeginEditing at the right time. This notification fires
-    // directly from UIKit whenever any UITextView's text changes, bypassing
-    // the Proton delegate chain.
-    textDidChangeObserver = NotificationCenter.default.addObserver(
-      forName: UITextView.textDidChangeNotification,
-      object: editor.textInput, // Only our editor's internal UITextView
-      queue: .main
-    ) { [weak self] _ in
-      self?.handleTextDidChange()
-    }
-
-    // Keyboard inset tracking: push the editor's bottom contentInset up by
-    // the keyboard height so the cursor stays visible. UITextView normally
-    // handles this automatically via UITextInputTraits, but Proton's
-    // internal scroll view is separate from the page-level scroll, so iOS
-    // doesn't adjust the cursor for us.
-    keyboardWillShowObserver = NotificationCenter.default.addObserver(
-      forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main
-    ) { [weak self] note in self?.applyKeyboardInset(from: note) }
-    keyboardWillChangeFrameObserver = NotificationCenter.default.addObserver(
-      forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main
-    ) { [weak self] note in self?.applyKeyboardInset(from: note) }
-    keyboardWillHideObserver = NotificationCenter.default.addObserver(
-      forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main
-    ) { [weak self] note in self?.clearKeyboardInset(from: note) }
 
     rootView.backgroundColor = UnfoldColors.background
     rootView.translatesAutoresizingMaskIntoConstraints = false
@@ -160,33 +107,24 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       editor.topAnchor.constraint(equalTo: chipStrip.bottomAnchor, constant: 4),
       editor.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 16),
       editor.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -16),
-      editor.bottomAnchor.constraint(equalTo: rootView.bottomAnchor, constant: -8),
+      // iOS-native keyboard avoidance via UIView.keyboardLayoutGuide.
+      // Follows the keyboard's top edge when shown and the safe-area bottom
+      // when hidden, so the editor's bottom is always the correct anchor
+      // point for the caret — no manual observers required.
+      editor.bottomAnchor.constraint(equalTo: rootView.keyboardLayoutGuide.topAnchor, constant: -8),
     ])
 
-    // Decoration overlay — positioned as a sibling of the editor, constrained
-    // to the same bounds. Draws blockquote bars + code block backgrounds.
-    // The overlay is non-interactive; checklist marker taps are handled by a
-    // tap gesture on the editor instead (see below).
+    // Decoration overlay — lives INSIDE the editor's scroll view so it
+    // scrolls with the content naturally. The overlay is interactive: it
+    // forwards everything except taps inside the leftmost checklist-marker
+    // zone, which fire `onChecklistMarkerTap`. Matches the spike exactly —
+    // no tap gesture on the editor, no hit-test interception that breaks
+    // iOS 16+ long-press-drag text selection.
     lineDecorationOverlay.editor = editor
-    lineDecorationOverlay.translatesAutoresizingMaskIntoConstraints = false
-    rootView.addSubview(lineDecorationOverlay)
-    NSLayoutConstraint.activate([
-      lineDecorationOverlay.topAnchor.constraint(equalTo: editor.topAnchor),
-      lineDecorationOverlay.leadingAnchor.constraint(equalTo: editor.leadingAnchor),
-      lineDecorationOverlay.trailingAnchor.constraint(equalTo: editor.trailingAnchor),
-      lineDecorationOverlay.bottomAnchor.constraint(equalTo: editor.bottomAnchor),
-    ])
-
-    // Checklist marker tap — gated by the gesture delegate so it only
-    // recognizes inside the leftmost marker zone of checklist lines. All
-    // other touches (including long-press-drag for text selection) pass
-    // through to the editor's own text-interaction pathways.
-    let checklistTap = UITapGestureRecognizer(
-      target: self,
-      action: #selector(handleChecklistMarkerTap(_:)))
-    checklistTap.delegate = self
-    editor.addGestureRecognizer(checklistTap)
-    checklistTapGesture = checklistTap
+    editor.scrollView.addSubview(lineDecorationOverlay)
+    lineDecorationOverlay.onChecklistMarkerTap = { [weak self] charIndex in
+      self?.toggleChecklist(at: charIndex)
+    }
 
     // Observe scroll changes so the overlay redraws when the user scrolls
     scrollObservation = editor.scrollView.observe(
@@ -202,13 +140,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   deinit {
     scrollObservation?.invalidate()
     scrollObservation = nil
-    for observer in [
-      resignActiveObserver,
-      textDidChangeObserver,
-      keyboardWillShowObserver,
-      keyboardWillHideObserver,
-      keyboardWillChangeFrameObserver,
-    ].compactMap({ $0 }) {
+    if let observer = resignActiveObserver {
       NotificationCenter.default.removeObserver(observer)
     }
     changeDebounceTimer?.cancel()
@@ -400,15 +332,18 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   // MARK: - Public commands — block types
 
   /// Applies a block type to the current paragraph. Accepted values:
-  /// `"p"`, `"h1"`, `"h2"`, `"h3"`, `"blockquote"`, `"pre"`. Unknown values
-  /// are silently ignored so JS callers can't crash the bridge by typoing.
+  /// `"p"`, `"h1"`, `"h2"`, `"h3"`, `"pre"`. Unknown values are silently
+  /// ignored so JS callers can't crash the bridge by typoing. Blockquote
+  /// isn't exposed as a toolbar block type — blockquotes only enter the
+  /// document via scripture-insert HTML, and the round-trip path preserves
+  /// them via `.unfoldBlockType = "blockquote"`.
   func setBlockType(_ type: String) {
     let paraRange = currentParagraphRange()
 
     // For empty content (length 0), skip attribute manipulation — just set
     // typingAttributes so the next typed character inherits the block style.
     if paraRange.length == 0 {
-      var attrs = blockTypeAttributes(type)
+      let attrs = blockTypeAttributes(type)
       if attrs.isEmpty { return }
       DispatchQueue.main.async { [weak self] in
         self?.editor.typingAttributes = attrs
@@ -451,19 +386,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         .font: font,
         .foregroundColor: UnfoldColors.text,
         .paragraphStyle: paragraph,
-      ], at: paraRange)
-
-    case "blockquote":
-      let paragraph = NSMutableParagraphStyle()
-      paragraph.firstLineHeadIndent = 16
-      paragraph.headIndent = 16
-      paragraph.paragraphSpacing = 8
-      paragraph.paragraphSpacingBefore = 8
-      editor.addAttributes([
-        .font: UnfoldFonts.bodyItalic(),
-        .foregroundColor: UnfoldColors.textMuted,
-        .paragraphStyle: paragraph,
-        .unfoldBlockType: "blockquote",
       ], at: paraRange)
 
     case "pre":
@@ -517,28 +439,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     case "ordered":   value = "ordered"
     case "checklist": value = ChecklistItem(checked: false)
     default: return
-    }
-
-    // Reset font/color when converting a blockquote (italic + muted) into a
-    // list — ListCommand manages indent via its own paragraph style but
-    // doesn't touch font or color, so without this reset the new bullet
-    // would render in italic/muted. Detected via inherited headIndent.
-    let paraRange = currentParagraphRange()
-    if paraRange.length > 0 {
-      let paragraphStyle = editor.attributedText.attribute(
-        .paragraphStyle,
-        at: paraRange.location,
-        effectiveRange: nil) as? NSParagraphStyle
-      if (paragraphStyle?.headIndent ?? 0) >= 16 {
-        let pStyle = NSMutableParagraphStyle()
-        pStyle.paragraphSpacing = 4
-        pStyle.paragraphSpacingBefore = 0
-        editor.addAttributes([
-          .font: UnfoldFonts.body(),
-          .foregroundColor: UnfoldColors.text,
-          .paragraphStyle: pStyle,
-        ], at: paraRange)
-      }
     }
 
     ListCommand().execute(on: editor, attributeValue: value)
@@ -621,175 +521,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
   // MARK: - EditorViewDelegate
 
-  func editor(
-    _ editor: EditorView,
-    shouldHandle key: EditorKey,
-    modifierFlags: UIKeyModifierFlags,
-    at range: NSRange,
-    handled: inout Bool
-  ) {
-    guard key == .enter else { return }
-
-    let text = editor.attributedText
-    let nsString = text.string as NSString
-    guard nsString.length > 0 else { return }
-
-    let paraRange = nsString.paragraphRange(for: range)
-    guard paraRange.length > 0 else { return }
-
-    let bodyPStyle = NSMutableParagraphStyle()
-    bodyPStyle.paragraphSpacing = 4
-    let bodyAttrs: [NSAttributedString.Key: Any] = [
-      .font: UnfoldFonts.body(),
-      .foregroundColor: UnfoldColors.text,
-      .paragraphStyle: bodyPStyle,
-    ]
-
-    // List continuation: if the current paragraph is a list item, we need to
-    // explicitly carry `.listItem` + list paragraph style onto the new line.
-    // Proton's upstream `shouldProcess` tries via typingAttributes but
-    // paragraph-style attributes get stripped at paragraph boundaries on
-    // iOS, so the visible marker disappears on the new empty line. We force
-    // it here on the main-queue bounce AFTER Proton inserts the \n.
-    if let listItemValue = text.attribute(
-      .listItem, at: paraRange.location, effectiveRange: nil)
-    {
-      let listParaStyle = text.attribute(
-        .paragraphStyle, at: paraRange.location, effectiveRange: nil
-      ) as? NSParagraphStyle
-      let listFont = text.attribute(
-        .font, at: paraRange.location, effectiveRange: nil
-      ) as? UIFont ?? UnfoldFonts.body()
-      let listColor = text.attribute(
-        .foregroundColor, at: paraRange.location, effectiveRange: nil
-      ) as? UIColor ?? UnfoldColors.text
-
-      let trimmed = nsString.substring(with: paraRange)
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-        .replacingOccurrences(of: "\u{200B}", with: "")
-
-      if trimmed.isEmpty {
-        // Empty list line + Enter → exit the list (double-Enter pattern).
-        // Proton's `exitListsIfRequired` will call `terminateList` to strip
-        // `.listItem`; we reset typing attributes to body so the next char
-        // renders plainly without list indent or marker.
-        DispatchQueue.main.async { [weak self] in
-          self?.editor.typingAttributes = bodyAttrs
-        }
-        return
-      }
-
-      // Non-empty list line + Enter → continuation. Strategy:
-      // 1) Attribute Proton's just-inserted `\n` with `.listItem` + list
-      //    paragraph style so the terminator joins the list range.
-      // 2) Insert a ZWSP (`\u{200B}`) at the cursor with the same list
-      //    attributes. This gives `NSLayoutManager` a real glyph on the new
-      //    empty line so `enumerateLineFragments` produces a fragment there
-      //    and `drawListMarkers` reliably paints a marker on every new line,
-      //    not just the first (the post-loop `extraLineFragmentRect` path in
-      //    `LayoutManager.drawListMarkers` only draws one trailing marker).
-      // 3) Cursor sits AFTER the ZWSP so the next char the user types lands
-      //    inside the list paragraph; ZWSP is invisible so the user sees a
-      //    clean empty line with a bullet. Matches Proton's own
-      //    `createListItemInANewLine` pattern (ListTextProcessor.swift:296).
-      //
-      // Re-entrancy note: `editor.replaceCharacters` triggers another
-      // `willProcessEditing` cycle, but `TextProcessor.willProcessEditing`
-      // only invokes `handleKeyWithModifiers(.enter)` when `changedText ==
-      // "\n"` (TextProcessor.swift:78). ZWSP is not `\n`, so
-      // `exitListsIfRequired` does NOT fire — our attributes are preserved.
-      var listAttrs: [NSAttributedString.Key: Any] = [
-        .listItem: listItemValue,
-        .font: listFont,
-        .foregroundColor: listColor,
-      ]
-      if let style = listParaStyle {
-        listAttrs[.paragraphStyle] = style
-      }
-
-      // INTERCEPT: prevent UITextView from inserting a plain `\n`. We insert
-      // `\n` + ZWSP ourselves with full list attrs so the new paragraph has
-      // `.listItem` AND a paragraphStyle with `firstLineHeadIndent > 0`.
-      //
-      // Why the paragraphStyle matters: Proton's `ListTextProcessor.shouldProcess`
-      // (ListTextProcessor.swift:64) only carries `.listItem` onto newly-typed
-      // characters when BOTH conditions hold at cursor-1:
-      //   1) `.listItem` attribute present
-      //   2) paragraphStyle.firstLineHeadIndent > 0
-      // A bare `\n` with only `.listItem` but no list paragraphStyle fails
-      // condition 2 → typed chars are orphaned → list ends on line 3+.
-      //
-      // Inserting `\n` + ZWSP with BOTH attrs (matching Proton's
-      // `createListItemInANewLine` pattern at line 296-311) satisfies both.
-      // Cursor moves past the ZWSP; the ZWSP is invisible but provides a real
-      // glyph so `NSLayoutManager.enumerateLineFragments` produces a fragment
-      // on the new line and `drawListMarkers` paints the marker reliably.
-      let newline = NSAttributedString(string: "\n\u{200B}", attributes: listAttrs)
-      let insertRange = NSRange(location: range.location, length: 0)
-      editor.replaceCharacters(in: insertRange, with: newline)
-      editor.selectedRange = NSRange(
-        location: range.location + 2, length: 0
-      )
-      editor.typingAttributes = listAttrs
-      lineDecorationOverlay.invalidate()
-      handled = true
-      return
-    }
-
-    // Heading → body on Enter: headings have font size >= 18 (h3 minimum).
-    // Without this, pressing Enter in an H1 keeps the H1 font on the new line.
-    let paraFont = text.attribute(
-      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
-    guard (paraFont?.pointSize ?? 0) >= 18 else { return }
-
-    DispatchQueue.main.async { [weak self] in
-      self?.editor.typingAttributes = bodyAttrs
-    }
-  }
-
   func editor(_ editor: EditorView, didChangeTextAt range: NSRange) {
-    handleTextDidChange()
-  }
-
-  /// Core text-change handler called from both Proton's `didChangeTextAt`
-  /// delegate AND the `UITextView.textDidChangeNotification` backup observer.
-  /// Uses `textChangeGeneration` to avoid double-processing when both fire.
-  private var textChangeGeneration: UInt64 = 0
-  private var lastProcessedGeneration: UInt64 = 0
-
-  private func handleTextDidChange() {
-    textChangeGeneration &+= 1
-    let gen = textChangeGeneration
-    guard gen != lastProcessedGeneration else { return }
-    lastProcessedGeneration = gen
-
     refreshScriptureChips()
-    extendBlockMarkers()
     lineDecorationOverlay.invalidate()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
-      self?.ensureCaretVisible()
     }
     scheduleHtmlEmit()
-  }
-
-  /// Forces the current caret to be visible above the keyboard. UIKit's
-  /// UITextView normally handles this, but Proton's EditorView composes
-  /// the text view inside a custom scroll container and the built-in
-  /// behaviour doesn't fire as the user types past the visible area. We
-  /// call this from `handleTextDidChange` (new char typed) and
-  /// `didChangeSelectionAt` (cursor moved) so the caret is always in view.
-  private func ensureCaretVisible() {
-    guard editor.isFirstResponder else { return }
-    guard let selectedRange = editor.textInput.selectedTextRange else { return }
-    let caretInTextView = editor.textInput.caretRect(for: selectedRange.end)
-    // caretRect is in the text view's coord space, but `editor.scrollView`
-    // IS the text view (UITextView : UIScrollView in Proton's setup), so
-    // no conversion is needed.
-    guard !caretInTextView.isNull, !caretInTextView.isInfinite else { return }
-    // Expand the rect slightly so we have breathing room above the keyboard.
-    let padded = caretInTextView.insetBy(dx: 0, dy: -12)
-    editor.scrollView.scrollRectToVisible(padded, animated: false)
   }
 
   func editor(_ editor: EditorView, didReceiveFocusAt range: NSRange) {
@@ -821,12 +559,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       selectedRange: range,
       typingAttributes: editor.typingAttributes)
     throttleSelectionEmit(state)
-
-    // Keep the caret on-screen as it moves (typing, tap-to-reposition,
-    // arrow keys, etc). Deferred to next runloop so layout is settled.
-    DispatchQueue.main.async { [weak self] in
-      self?.ensureCaretVisible()
-    }
   }
 
   // MARK: - Internals
@@ -848,57 +580,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     case "h3":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 10; p.lineHeightMultiple = 1.15
       return [.font: UnfoldFonts.h3, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
-    case "blockquote":
-      let p = NSMutableParagraphStyle(); p.firstLineHeadIndent = 16; p.headIndent = 16; p.paragraphSpacing = 8; p.paragraphSpacingBefore = 8
-      return [.font: UnfoldFonts.bodyItalic(), .foregroundColor: UnfoldColors.textMuted, .paragraphStyle: p, .unfoldBlockType: "blockquote"]
     case "pre":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 6; p.paragraphSpacingBefore = 6
       return [.font: UIFont.monospacedSystemFont(ofSize: 15, weight: .regular), .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "codeBlock"]
     default:
       return [:]
     }
-  }
-
-  /// UITextView's typingAttributes ignores custom NSAttributedString keys, so
-  /// when typing inside a blockquote/code-block paragraph the `.unfoldBlockType`
-  /// marker only stays on the terminator `\n` (set during continuation). This
-  /// method scans the paragraph containing the cursor, looking for the marker
-  /// on any character (reverse scan from end), and extends it to the full
-  /// paragraph range. Does NOT infer block type from paragraph style — that
-  /// would re-add the marker to paragraphs intentionally converted to body
-  /// via the exit handler. Paragraph-style-based detection is handled by the
-  /// overlay for visual rendering only.
-  private func extendBlockMarkers() {
-    let text = editor.attributedText
-    let nsString = text.string as NSString
-    guard nsString.length > 0 else { return }
-
-    let paraRange = nsString.paragraphRange(for: editor.selectedRange)
-    guard paraRange.length > 0 else { return }
-
-    // Check first character for marker — if present, already extended
-    let firstMarker = text.attribute(
-      .unfoldBlockType, at: paraRange.location, effectiveRange: nil) as? String
-    if firstMarker != nil { return }
-
-    // Scan from end of paragraph backwards for the marker on any character
-    // (typically it lives on the `\n` terminator set by the continuation handler).
-    var foundMarker: String? = nil
-    if paraRange.length > 1 {
-      for i in stride(from: NSMaxRange(paraRange) - 1,
-                      through: paraRange.location, by: -1) {
-        if let m = text.attribute(
-          .unfoldBlockType, at: i, effectiveRange: nil) as? String {
-          foundMarker = m
-          break
-        }
-      }
-    }
-
-    guard let marker = foundMarker else { return }
-
-    // Extend marker to full paragraph so HtmlEncoder and overlay see it
-    editor.addAttribute(.unfoldBlockType, value: marker, at: paraRange)
   }
 
   /// Paragraph range containing the current selection. Returns a zero-length
@@ -930,9 +617,17 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     onScriptureRefs?(refs)
   }
 
+  /// Sizes the overlay to the editor's scroll-view content and triggers a
+  /// redraw. Mirrors the spike's `layoutOverlay` — the overlay is a subview
+  /// of the scroll view so it scrolls with the content.
   private func layoutOverlay() {
-    // The overlay is now constrained to the editor's bounds via Auto Layout.
-    // Just trigger a redraw.
+    let contentSize = editor.scrollView.contentSize
+    let editorWidth = editor.bounds.width
+    lineDecorationOverlay.frame = CGRect(
+      x: 0,
+      y: 0,
+      width: max(editorWidth, contentSize.width),
+      height: max(contentSize.height, editor.bounds.height))
     lineDecorationOverlay.invalidate()
   }
 
@@ -1007,51 +702,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     throttleSelectionEmit(state)
   }
 
-  /// Handles a tap inside the checklist marker zone. The gesture delegate
-  /// has already verified the tap location, so we trust it here.
-  @objc private func handleChecklistMarkerTap(_ gr: UITapGestureRecognizer) {
-    let point = gr.location(in: editor)
-    guard let charIndex = checklistLineCharIndex(for: point) else { return }
-    toggleChecklist(at: charIndex)
-  }
-
-  /// Resolves a point (in the editor's view coordinate space) to the
-  /// character index of the line it hits — but only if that line is a
-  /// `ChecklistItem`. Returns `nil` for any point outside the marker zone
-  /// or on a non-checklist line. Accounts for scroll offset when mapping
-  /// to the text's document coordinate space.
-  private func checklistLineCharIndex(for viewPoint: CGPoint) -> Int? {
-    guard viewPoint.x < Self.checklistMarkerHitZone else { return nil }
-    let scrollOffset = editor.scrollView.contentOffset
-    let textPoint = CGPoint(
-      x: viewPoint.x + scrollOffset.x,
-      y: viewPoint.y + scrollOffset.y)
-    let textInput = editor.textInput
-    guard let position = textInput.closestPosition(to: textPoint) else { return nil }
-    let charIndex = textInput.offset(from: textInput.beginningOfDocument, to: position)
-    let text = editor.attributedText.string as NSString
-    guard charIndex >= 0, charIndex < text.length else { return nil }
-    let lineRange = text.lineRange(for: NSRange(location: charIndex, length: 0))
-    guard lineRange.length > 0 else { return nil }
-    let attr = editor.attributedText.attribute(
-      .listItem, at: lineRange.location, effectiveRange: nil)
-    return (attr is ChecklistItem) ? charIndex : nil
-  }
-
-  // MARK: - UIGestureRecognizerDelegate
-
-  func gestureRecognizer(
-    _ gestureRecognizer: UIGestureRecognizer,
-    shouldReceive touch: UITouch
-  ) -> Bool {
-    // Only gate our own tap gesture. Every other gesture (Proton's selection
-    // loupe, long-press-drag, scroll pan) must be untouched.
-    guard gestureRecognizer === checklistTapGesture else { return true }
-    let viewPoint = touch.location(in: editor)
-    return checklistLineCharIndex(for: viewPoint) != nil
-  }
-
   /// Toggles the checked state of the checklist line containing `charIndex`.
+  /// Called from the overlay's marker tap callback.
   private func toggleChecklist(at charIndex: Int) {
     let text = editor.attributedText.string as NSString
     let safeIndex = min(max(0, charIndex), max(0, text.length - 1))
@@ -1078,55 +730,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
     lineDecorationOverlay.invalidate()
     scheduleHtmlEmit()
-  }
-
-  /// Adjusts the editor's internal scrollView.contentInset.bottom so the
-  /// cursor stays above the keyboard. Called from keyboardWillShow and
-  /// keyboardWillChangeFrame so that rotation / external keyboard swap is
-  /// handled too.
-  private func applyKeyboardInset(from note: Notification) {
-    guard let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
-    else { return }
-    // Convert the keyboard's window-space frame to the editor's coordinate
-    // space so we only account for the portion that actually overlaps.
-    let keyboardInView = editor.convert(frame, from: nil)
-    let overlap = max(0, editor.bounds.maxY - keyboardInView.minY)
-    let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval) ?? 0.25
-    let curveRaw = (note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
-    UIView.animate(
-      withDuration: duration,
-      delay: 0,
-      options: UIView.AnimationOptions(rawValue: curveRaw << 16),
-      animations: { [weak self] in
-        guard let self = self else { return }
-        var inset = self.editor.scrollView.contentInset
-        inset.bottom = overlap + 12 // small padding so cursor isn't flush against the keyboard top
-        self.editor.scrollView.contentInset = inset
-        self.editor.scrollView.verticalScrollIndicatorInsets = inset
-        // Ensure the cursor is visible after the inset change.
-        if let selectedRange = self.editor.textInput.selectedTextRange {
-          let caret = self.editor.textInput.caretRect(for: selectedRange.end)
-          self.editor.scrollView.scrollRectToVisible(caret, animated: false)
-        }
-      },
-      completion: nil)
-  }
-
-  private func clearKeyboardInset(from note: Notification) {
-    let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval) ?? 0.25
-    let curveRaw = (note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
-    UIView.animate(
-      withDuration: duration,
-      delay: 0,
-      options: UIView.AnimationOptions(rawValue: curveRaw << 16),
-      animations: { [weak self] in
-        guard let self = self else { return }
-        var inset = self.editor.scrollView.contentInset
-        inset.bottom = 0
-        self.editor.scrollView.contentInset = inset
-        self.editor.scrollView.verticalScrollIndicatorInsets = inset
-      },
-      completion: nil)
   }
 
   /// Walks the editor's attributed text, finds every `UnfoldPlaceholderAttachment`,

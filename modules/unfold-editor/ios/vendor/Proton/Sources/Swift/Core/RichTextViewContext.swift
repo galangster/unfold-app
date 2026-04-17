@@ -31,7 +31,12 @@ class RichTextViewContext: NSObject, UITextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
-        guard textView.delegate === self,
+        // Accept any RichTextView, not just ones where delegate === self.
+        // react-native-keyboard-controller's KCTextInputCompositeDelegate swaps
+        // itself as the delegate of every focused UITextView and forwards via
+        // ObjC messaging; the strict identity check would otherwise bail here
+        // even though this is our own text view.
+        guard textView is RichTextView,
               textView.asRichTextView?.ignoreSelectedRangeChangeCallback == false,
               textView.asRichTextView?.editorView?.isSettingAttributedText != true else { return }
         
@@ -74,7 +79,7 @@ class RichTextViewContext: NSObject, UITextViewDelegate {
     }
 
     func resetAttachmentSelection(_ textView: UITextView) {
-        guard textView.delegate === self else { return }
+        guard textView is RichTextView else { return }
 
         guard let attributedText = textView.attributedText else { return }
         attributedText.enumerateAttribute(.attachment, in: attributedText.fullRange, options: .longestEffectiveRangeNotRequired) { attachment, _, _ in

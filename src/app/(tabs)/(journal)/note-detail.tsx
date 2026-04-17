@@ -1305,7 +1305,7 @@ export default function NoteDetailScreen() {
               onEditorFocus={() => { /* native editor focused */ }}
               onEditorBlur={() => { /* native editor blurred */ }}
               onEditorSelectionChange={(e: { nativeEvent: UnfoldEditorSelectionState }) => setSelectionState(e.nativeEvent)}
-              placeholder="Start writing\u2026"
+              placeholder={'Start writing\u2026'}
               editable={isEditing}
               autoFocus={shouldStartEditing && !isNewNote}
               keyboardAppearance={isDark ? 'dark' : 'light'}
