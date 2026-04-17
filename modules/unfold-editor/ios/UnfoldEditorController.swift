@@ -104,6 +104,15 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // Apple Notes-style rubber-band scroll — always draggable even when
     // content is shorter than viewport, so the canvas feels like a real
     // document surface in both edit and view mode.
+    //
+    // Proton's `AutogrowingTextView.recalculateHeight()` dynamically toggles
+    // `isScrollEnabled=false` whenever content fits inside bounds, which
+    // silently kills `alwaysBounceVertical`. Setting `maxHeight = .infinite`
+    // short-circuits that recalculation so scrolling stays enabled regardless
+    // of content length — we already manage height via autolayout constraints
+    // (chipStrip.bottom → editor.top → keyboardLayoutGuide.top).
+    editor.maxHeight = .infinite
+    editor.scrollView.isScrollEnabled = true
     editor.scrollView.alwaysBounceVertical = true
     rootView.addSubview(editor)
 
@@ -633,6 +642,26 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         attrs[.foregroundColor] = UnfoldColors.text
       }
       self.editor.typingAttributes = attrs
+
+      // typingAttributes only controls attrs for FUTURE characters. The \n
+      // that was just inserted above still carries the heading's
+      // paragraphStyle — and because paragraph styles apply to the whole
+      // paragraph (the new empty paragraph IS just that \n), the empty line
+      // below the heading renders with H1's paragraphSpacingBefore + line
+      // height until the user types at least one character. Retroactively
+      // patch the just-inserted \n so the empty paragraph renders with body
+      // metrics immediately.
+      let cursor = self.editor.selectedRange.location
+      let textLength = self.editor.attributedText.length
+      if cursor > 0 && cursor <= textLength {
+        let newlineRange = NSRange(location: cursor - 1, length: 1)
+        var nlAttrs: [NSAttributedString.Key: Any] = [.paragraphStyle: bodyPStyle]
+        if isHeading {
+          nlAttrs[.font] = UnfoldFonts.body()
+          nlAttrs[.foregroundColor] = UnfoldColors.text
+        }
+        self.editor.addAttributes(nlAttrs, at: newlineRange)
+      }
       self.refreshSelectionState()
     }
   }
@@ -683,8 +712,11 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     let visibleBottom = visibleTop + visibleHeight
 
     // Reserve enough breathing room below the caret so descenders, paragraph
-    // spacing, and any minor layout jitter all fit above the keyboard.
-    let bottomSafeZone: CGFloat = 60
+    // spacing, toolbar, and accessory bar all fit above the keyboard. 60pt
+    // left the active line right against the keyboard edge on device even
+    // though the sim looked OK; bumping to 120pt gives a full line of gap
+    // plus padding to match Notes/Bear behavior across the device range.
+    let bottomSafeZone: CGFloat = 120
     let topSafeZone: CGFloat = 20
 
     let caretTop = caretRect.minY
