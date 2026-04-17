@@ -1,4 +1,4 @@
-# Build 84 — Editor QA fixes from Build 83: bullets, keyboard parity, H1/H2/H3 split, caret tracking
+# Build 85 — Editor QA fixes from Build 83: bullets, keyboard parity, H1/H2/H3 split, caret tracking
 
 ## Fixed
 
@@ -9,16 +9,9 @@
 - **H1 / H2 / H3 are now three separate buttons** — The single "H" button cycled H1 → H2 → H3 → Body which was hard to use. The toolbar now shows `H₁ H₂ H₃` and each button is a direct toggle.
 - **Caret stays visible above the keyboard** — When typing past the visible area, the cursor no longer slides behind the keyboard. The native editor now scrolls the caret into view on every text change and selection change, not only when the keyboard first appears.
 
-## Under the hood
-
-- `UnfoldEditorController.editor(_:shouldHandle:…)` intercepts Enter in a list paragraph, sets `handled=true` to suppress UITextView's plain `\n`, and manually inserts `"\n" + ZWSP` with the full list attributes (`.listItem`, list `paragraphStyle` with `firstLineHeadIndent`, font, color). Mirrors Proton's internal `createListItemInANewLine` pattern so the new paragraph keeps list identity and `LayoutManager.drawListMarkers` reliably paints a marker.
-- Double-Enter exit path: when the current list paragraph is empty (just the ZWSP filler), we reset `typingAttributes` to body and let Proton's `exitListsIfRequired` strip `.listItem`.
-- `UnfoldEditorController.ensureCaretVisible()` runs after `handleTextDidChange` and `didChangeSelectionAt`, calling `scrollRectToVisible` on the editor's internal scroll view with a 12pt padding band.
-- Toolbar handlers in `note-detail.tsx` call `editorRef.current?.getSelectionState()` and branch on the live response instead of the cached selection state, avoiding stale-cache misfires after tap-to-reposition.
-
 ## Known issues
 
-- **Live numbered counter may drift during typing** (e.g. show `1, 2, 2` instead of `1, 2, 3` while actively editing). The persisted HTML is correct and the counter renders properly after Done → Edit. Underlying cause is UITextView recomputing typing attributes mid-paragraph which fragments `.listItem` ranges. Tracked for Build 85.
+- **Live numbered counter may drift during typing** (e.g. show `1, 2, 2` instead of `1, 2, 3` while actively editing). The persisted HTML is correct and the counter renders properly after Done → Edit. Tracked for Build 86.
 
 ## What to Test
 
