@@ -77,6 +77,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// editable/focus lifecycle.
   private var textDidChangeObserver: NSObjectProtocol?
 
+  /// Observers for keyboard frame changes — used to adjust the editor's
+  /// bottom content inset so the cursor stays visible when the keyboard
+  /// covers the lower portion of the view.
+  private var keyboardWillShowObserver: NSObjectProtocol?
+  private var keyboardWillHideObserver: NSObjectProtocol?
+  private var keyboardWillChangeFrameObserver: NSObjectProtocol?
+
   override init() {
     self.rootView = UIView()
     self.editor = EditorView()
@@ -106,6 +113,21 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     ) { [weak self] _ in
       self?.handleTextDidChange()
     }
+
+    // Keyboard inset tracking: push the editor's bottom contentInset up by
+    // the keyboard height so the cursor stays visible. UITextView normally
+    // handles this automatically via UITextInputTraits, but Proton's
+    // internal scroll view is separate from the page-level scroll, so iOS
+    // doesn't adjust the cursor for us.
+    keyboardWillShowObserver = NotificationCenter.default.addObserver(
+      forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main
+    ) { [weak self] note in self?.applyKeyboardInset(from: note) }
+    keyboardWillChangeFrameObserver = NotificationCenter.default.addObserver(
+      forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main
+    ) { [weak self] note in self?.applyKeyboardInset(from: note) }
+    keyboardWillHideObserver = NotificationCenter.default.addObserver(
+      forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main
+    ) { [weak self] note in self?.clearKeyboardInset(from: note) }
 
     rootView.backgroundColor = UnfoldColors.background
     rootView.translatesAutoresizingMaskIntoConstraints = false
@@ -180,10 +202,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   deinit {
     scrollObservation?.invalidate()
     scrollObservation = nil
-    if let observer = resignActiveObserver {
-      NotificationCenter.default.removeObserver(observer)
-    }
-    if let observer = textDidChangeObserver {
+    for observer in [
+      resignActiveObserver,
+      textDidChangeObserver,
+      keyboardWillShowObserver,
+      keyboardWillHideObserver,
+      keyboardWillChangeFrameObserver,
+    ].compactMap({ $0 }) {
       NotificationCenter.default.removeObserver(observer)
     }
     changeDebounceTimer?.cancel()
@@ -345,6 +370,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
   /// Sets the keyboard appearance. Accepts `"default"`, `"light"`, or
   /// `"dark"`; anything else maps to `.default`.
+  /// UIKit does not live-update an already-showing keyboard when
+  /// `keyboardAppearance` changes — `reloadInputViews()` forces a refresh so
+  /// the keyboard chrome matches the current app theme immediately.
   func setKeyboardAppearance(_ value: String) {
     let appearance: UIKeyboardAppearance
     switch value {
@@ -354,6 +382,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
     currentKeyboardAppearance = appearance
     editor.keyboardAppearance = appearance
+    if editor.isFirstResponder {
+      editor.reloadInputViews()
+    }
   }
 
   /// Requests first-responder after a short delay. Matches the spike timing
@@ -646,8 +677,28 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     lineDecorationOverlay.invalidate()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
+      self?.ensureCaretVisible()
     }
     scheduleHtmlEmit()
+  }
+
+  /// Forces the current caret to be visible above the keyboard. UIKit's
+  /// UITextView normally handles this, but Proton's EditorView composes
+  /// the text view inside a custom scroll container and the built-in
+  /// behaviour doesn't fire as the user types past the visible area. We
+  /// call this from `handleTextDidChange` (new char typed) and
+  /// `didChangeSelectionAt` (cursor moved) so the caret is always in view.
+  private func ensureCaretVisible() {
+    guard editor.isFirstResponder else { return }
+    guard let selectedRange = editor.textInput.selectedTextRange else { return }
+    let caretInTextView = editor.textInput.caretRect(for: selectedRange.end)
+    // caretRect is in the text view's coord space, but `editor.scrollView`
+    // IS the text view (UITextView : UIScrollView in Proton's setup), so
+    // no conversion is needed.
+    guard !caretInTextView.isNull, !caretInTextView.isInfinite else { return }
+    // Expand the rect slightly so we have breathing room above the keyboard.
+    let padded = caretInTextView.insetBy(dx: 0, dy: -12)
+    editor.scrollView.scrollRectToVisible(padded, animated: false)
   }
 
   func editor(_ editor: EditorView, didReceiveFocusAt range: NSRange) {
@@ -669,6 +720,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // heading → body), causing light/dark keyboard mismatch.
     if editor.keyboardAppearance != currentKeyboardAppearance {
       editor.keyboardAppearance = currentKeyboardAppearance
+      if editor.isFirstResponder {
+        editor.reloadInputViews()
+      }
     }
 
     let state = HtmlEncoder.querySelectionState(
@@ -676,6 +730,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       selectedRange: range,
       typingAttributes: editor.typingAttributes)
     throttleSelectionEmit(state)
+
+    // Keep the caret on-screen as it moves (typing, tap-to-reposition,
+    // arrow keys, etc). Deferred to next runloop so layout is settled.
+    DispatchQueue.main.async { [weak self] in
+      self?.ensureCaretVisible()
+    }
   }
 
   // MARK: - Internals
@@ -927,6 +987,55 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
     lineDecorationOverlay.invalidate()
     scheduleHtmlEmit()
+  }
+
+  /// Adjusts the editor's internal scrollView.contentInset.bottom so the
+  /// cursor stays above the keyboard. Called from keyboardWillShow and
+  /// keyboardWillChangeFrame so that rotation / external keyboard swap is
+  /// handled too.
+  private func applyKeyboardInset(from note: Notification) {
+    guard let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
+    else { return }
+    // Convert the keyboard's window-space frame to the editor's coordinate
+    // space so we only account for the portion that actually overlaps.
+    let keyboardInView = editor.convert(frame, from: nil)
+    let overlap = max(0, editor.bounds.maxY - keyboardInView.minY)
+    let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval) ?? 0.25
+    let curveRaw = (note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
+    UIView.animate(
+      withDuration: duration,
+      delay: 0,
+      options: UIView.AnimationOptions(rawValue: curveRaw << 16),
+      animations: { [weak self] in
+        guard let self = self else { return }
+        var inset = self.editor.scrollView.contentInset
+        inset.bottom = overlap + 12 // small padding so cursor isn't flush against the keyboard top
+        self.editor.scrollView.contentInset = inset
+        self.editor.scrollView.verticalScrollIndicatorInsets = inset
+        // Ensure the cursor is visible after the inset change.
+        if let selectedRange = self.editor.textInput.selectedTextRange {
+          let caret = self.editor.textInput.caretRect(for: selectedRange.end)
+          self.editor.scrollView.scrollRectToVisible(caret, animated: false)
+        }
+      },
+      completion: nil)
+  }
+
+  private func clearKeyboardInset(from note: Notification) {
+    let duration = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval) ?? 0.25
+    let curveRaw = (note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? UInt(UIView.AnimationCurve.easeInOut.rawValue)
+    UIView.animate(
+      withDuration: duration,
+      delay: 0,
+      options: UIView.AnimationOptions(rawValue: curveRaw << 16),
+      animations: { [weak self] in
+        guard let self = self else { return }
+        var inset = self.editor.scrollView.contentInset
+        inset.bottom = 0
+        self.editor.scrollView.contentInset = inset
+        self.editor.scrollView.verticalScrollIndicatorInsets = inset
+      },
+      completion: nil)
   }
 
   /// Walks the editor's attributed text, finds every `UnfoldPlaceholderAttachment`,

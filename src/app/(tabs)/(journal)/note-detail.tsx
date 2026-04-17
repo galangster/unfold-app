@@ -907,30 +907,62 @@ export default function NoteDetailScreen() {
 
   const handleBulletList = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    IS_NATIVE_EDITOR ? editorRef.current?.setList('bullet') : editor.toggleBulletList();
+    if (IS_NATIVE_EDITOR) {
+      // Pull fresh state from native — `didChangeSelectionAt` doesn't
+      // always fire on tap-to-reposition, so the cached selectionState
+      // can be stale. This guarantees correct toggle direction.
+      editorRef.current?.getSelectionState().then((state) => {
+        state.listType === 'bullet'
+          ? editorRef.current?.clearList()
+          : editorRef.current?.setList('bullet');
+      });
+    } else {
+      editor.toggleBulletList();
+    }
   }, [editor]);
 
   const handleOrderedList = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    IS_NATIVE_EDITOR ? editorRef.current?.setList('ordered') : editor.toggleOrderedList();
+    if (IS_NATIVE_EDITOR) {
+      editorRef.current?.getSelectionState().then((state) => {
+        state.listType === 'ordered'
+          ? editorRef.current?.clearList()
+          : editorRef.current?.setList('ordered');
+      });
+    } else {
+      editor.toggleOrderedList();
+    }
   }, [editor]);
 
   const handleTaskList = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    IS_NATIVE_EDITOR ? editorRef.current?.setList('checklist') : editor.toggleTaskList();
+    if (IS_NATIVE_EDITOR) {
+      editorRef.current?.getSelectionState().then((state) => {
+        state.listType === 'checklist'
+          ? editorRef.current?.clearList()
+          : editorRef.current?.setList('checklist');
+      });
+    } else {
+      editor.toggleTaskList();
+    }
   }, [editor]);
 
-  const handleHeadingCycle = useCallback(() => {
+  const handleHeading = useCallback((level: 'h1' | 'h2' | 'h3') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (IS_NATIVE_EDITOR) {
-      // Cycle: p → h1 → h2 → h3 → p
-      const current = selectionState.blockType;
-      const next = current === 'h1' ? 'h2' : current === 'h2' ? 'h3' : current === 'h3' ? 'p' : 'h1';
-      editorRef.current?.setBlockType(next);
+      editorRef.current?.getSelectionState().then((state) => {
+        const next = state.blockType === level ? 'p' : level;
+        editorRef.current?.setBlockType(next);
+      });
     } else {
-      editor.toggleHeading(1);
+      const numericLevel = level === 'h1' ? 1 : level === 'h2' ? 2 : 3;
+      editor.toggleHeading(numericLevel);
     }
-  }, [editor, selectionState.blockType]);
+  }, [editor]);
+
+  const handleH1 = useCallback(() => handleHeading('h1'), [handleHeading]);
+  const handleH2 = useCallback(() => handleHeading('h2'), [handleHeading]);
+  const handleH3 = useCallback(() => handleHeading('h3'), [handleHeading]);
 
   const handleIndent = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1222,6 +1254,7 @@ export default function NoteDetailScreen() {
             }}
             blurOnSubmit={false}
             maxLength={200}
+            keyboardAppearance={isDark ? 'dark' : 'light'}
             accessibilityLabel="Note title"
           />
         ) : (
@@ -1383,31 +1416,39 @@ export default function NoteDetailScreen() {
               </ToolbarButton>
 
               <ToolbarButton
-                onPress={handleHeadingCycle}
-                active={IS_NATIVE_EDITOR
-                  ? ['h1', 'h2', 'h3'].includes(selectionState.blockType)
-                  : !!editorState.headingLevel}
-                label="Heading"
+                onPress={handleH1}
+                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h1' : editorState.headingLevel === 1}
+                label="Heading 1"
               >
-                {selectionState.blockType === 'h2' ? (
-                  <TextHTwoIcon
-                    size={18}
-                    color={['h1', 'h2', 'h3'].includes(selectionState.blockType) ? colors.accent : colors.textMuted}
-                    weight="regular"
-                  />
-                ) : selectionState.blockType === 'h3' ? (
-                  <TextHThreeIcon
-                    size={18}
-                    color={['h1', 'h2', 'h3'].includes(selectionState.blockType) ? colors.accent : colors.textMuted}
-                    weight="regular"
-                  />
-                ) : (
-                  <TextHOneIcon
-                    size={18}
-                    color={['h1', 'h2', 'h3'].includes(selectionState.blockType) ? colors.accent : colors.textMuted}
-                    weight="regular"
-                  />
-                )}
+                <TextHOneIcon
+                  size={18}
+                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h1' : editorState.headingLevel === 1) ? colors.accent : colors.textMuted}
+                  weight="regular"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onPress={handleH2}
+                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h2' : editorState.headingLevel === 2}
+                label="Heading 2"
+              >
+                <TextHTwoIcon
+                  size={18}
+                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h2' : editorState.headingLevel === 2) ? colors.accent : colors.textMuted}
+                  weight="regular"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onPress={handleH3}
+                active={IS_NATIVE_EDITOR ? selectionState.blockType === 'h3' : editorState.headingLevel === 3}
+                label="Heading 3"
+              >
+                <TextHThreeIcon
+                  size={18}
+                  color={(IS_NATIVE_EDITOR ? selectionState.blockType === 'h3' : editorState.headingLevel === 3) ? colors.accent : colors.textMuted}
+                  weight="regular"
+                />
               </ToolbarButton>
 
               <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
