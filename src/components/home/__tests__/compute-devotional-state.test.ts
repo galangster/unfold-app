@@ -208,14 +208,14 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('reveal-ready');
   });
 
-  it('returns reveal-ready when day is unrevealed (server controls day pacing)', () => {
+  it('returns tomorrow-locked when today\'s reading is done, even if the next day is still unrevealed', () => {
     const state = computeDevotionalState({
       ...baseInput,
       hasReadToday: true,
       currentDayData: makeDayData({ dayNumber: 3, isRead: false, isRevealed: false }),
       daysCompleted: 2,
     });
-    expect(state.type).toBe('reveal-ready');
+    expect(state.type).toBe('tomorrow-locked');
   });
 
   // ─── Priority order ──────────────────────────────────────────

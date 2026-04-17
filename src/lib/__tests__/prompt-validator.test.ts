@@ -7,7 +7,14 @@ jest.mock('@/lib/api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://test.example.com',
 }));
 jest.mock('@/lib/logger', () => ({
-  logger: { warn: jest.fn(), log: jest.fn() },
+  logger: { warn: jest.fn(), log: jest.fn(), error: jest.fn() },
+}));
+jest.mock('@/lib/mmkv-storage', () => ({
+  mmkvStorage: {
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
 }));
 
 import { parseValidationResponse, applyValidation } from '@/lib/prompt-validator';
