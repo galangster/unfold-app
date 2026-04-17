@@ -534,6 +534,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     lineDecorationOverlay.invalidate()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
+      self?.ensureCaretVisible()
     }
     scheduleHtmlEmit()
   }
@@ -616,6 +617,26 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       selectedRange: range,
       typingAttributes: editor.typingAttributes)
     throttleSelectionEmit(state)
+
+    // Keep caret visible above the keyboard on cursor moves too (arrow keys,
+    // tapping into a paragraph below the fold, etc.) — not just on typing.
+    ensureCaretVisible()
+  }
+
+  /// Forces the current caret to be visible above the keyboard. UIKit's
+  /// UITextView normally auto-scrolls to keep the caret in view, but Proton's
+  /// EditorView wraps the text view in a custom scroll container and the
+  /// built-in behaviour doesn't fire as the user types past the visible area.
+  /// Called from `didChangeTextAt` (new char typed) and `didChangeSelectionAt`
+  /// (cursor moved) so the caret is always in view.
+  private func ensureCaretVisible() {
+    guard editor.isFirstResponder else { return }
+    guard let selectedRange = editor.textInput.selectedTextRange else { return }
+    let caretInTextView = editor.textInput.caretRect(for: selectedRange.end)
+    guard !caretInTextView.isNull, !caretInTextView.isInfinite else { return }
+    // Pad slightly so the caret sits a few pixels above the keyboard top.
+    let padded = caretInTextView.insetBy(dx: 0, dy: -12)
+    editor.scrollView.scrollRectToVisible(padded, animated: false)
   }
 
   // MARK: - Internals
