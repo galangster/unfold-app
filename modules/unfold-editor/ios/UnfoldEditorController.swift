@@ -13,7 +13,7 @@ import Proton
 ///     `traitCollectionDidChange` so content tracks its container.
 ///   - Hook `onChangeHtml` / `onScriptureRefs` / `onFocus` / `onBlur` /
 ///     `onEditorSelectionChange` to `EventDispatcher` instances on the Expo View.
-final class UnfoldEditorController: NSObject, EditorViewDelegate {
+final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecognizerDelegate {
 
   // MARK: - Public surface
 
@@ -37,6 +37,11 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
   private let chipStrip = ScriptureChipStrip()
   private let lineDecorationOverlay = LineDecorationOverlay()
   private let formattingProvider = UnfoldListFormattingProvider()
+  private var checklistTapGesture: UITapGestureRecognizer?
+
+  /// Width of the leftmost zone reserved for checklist marker taps. Matches
+  /// the indent used by the list formatting provider.
+  private static let checklistMarkerHitZone: CGFloat = 32
 
   private var scrollObservation: NSKeyValueObservation?
   private var changeDebounceTimer: DispatchSourceTimer?
@@ -115,16 +120,19 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     ])
 
     // Decoration overlay — lives INSIDE the editor's scroll view so it
-    // scrolls with the content naturally. The overlay is interactive: it
-    // forwards everything except taps inside the leftmost checklist-marker
-    // zone, which fire `onChecklistMarkerTap`. Matches the spike exactly —
-    // no tap gesture on the editor, no hit-test interception that breaks
-    // iOS 16+ long-press-drag text selection.
+    // scrolls with the content naturally, but it must stay non-interactive in
+    // the RN/Expo host so UIKit's own UITextInteraction keeps ownership of
+    // long-press-drag selection. Checklist taps are handled by a gated tap
+    // recognizer on the editor instead.
     lineDecorationOverlay.editor = editor
     editor.scrollView.addSubview(lineDecorationOverlay)
-    lineDecorationOverlay.onChecklistMarkerTap = { [weak self] charIndex in
-      self?.toggleChecklist(at: charIndex)
-    }
+
+    let checklistTap = UITapGestureRecognizer(
+      target: self,
+      action: #selector(handleChecklistMarkerTap(_:)))
+    checklistTap.delegate = self
+    editor.addGestureRecognizer(checklistTap)
+    checklistTapGesture = checklistTap
 
     // Observe scroll changes so the overlay redraws when the user scrolls
     scrollObservation = editor.scrollView.observe(
@@ -702,8 +710,39 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate {
     throttleSelectionEmit(state)
   }
 
+  @objc private func handleChecklistMarkerTap(_ gestureRecognizer: UITapGestureRecognizer) {
+    let point = gestureRecognizer.location(in: editor)
+    guard let charIndex = checklistLineCharIndex(for: point) else { return }
+    toggleChecklist(at: charIndex)
+  }
+
+  private func checklistLineCharIndex(for viewPoint: CGPoint) -> Int? {
+    guard viewPoint.x < Self.checklistMarkerHitZone else { return nil }
+    let scrollOffset = editor.scrollView.contentOffset
+    let textPoint = CGPoint(
+      x: viewPoint.x + scrollOffset.x,
+      y: viewPoint.y + scrollOffset.y)
+    let textInput = editor.textInput
+    guard let position = textInput.closestPosition(to: textPoint) else { return nil }
+    let charIndex = textInput.offset(from: textInput.beginningOfDocument, to: position)
+    let text = editor.attributedText.string as NSString
+    guard charIndex >= 0, charIndex < text.length else { return nil }
+    let lineRange = text.lineRange(for: NSRange(location: charIndex, length: 0))
+    guard lineRange.length > 0 else { return nil }
+    let attr = editor.attributedText.attribute(.listItem, at: lineRange.location, effectiveRange: nil)
+    return (attr is ChecklistItem) ? charIndex : nil
+  }
+
+  func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldReceive touch: UITouch
+  ) -> Bool {
+    guard gestureRecognizer === checklistTapGesture else { return true }
+    let viewPoint = touch.location(in: editor)
+    return checklistLineCharIndex(for: viewPoint) != nil
+  }
+
   /// Toggles the checked state of the checklist line containing `charIndex`.
-  /// Called from the overlay's marker tap callback.
   private func toggleChecklist(at charIndex: Int) {
     let text = editor.attributedText.string as NSString
     let safeIndex = min(max(0, charIndex), max(0, text.length - 1))
