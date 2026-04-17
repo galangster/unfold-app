@@ -1304,7 +1304,27 @@ export default function NoteDetailScreen() {
               onScriptureRefs={handleNativeScriptureRefs}
               onEditorFocus={() => { /* native editor focused */ }}
               onEditorBlur={() => { /* native editor blurred */ }}
-              onEditorSelectionChange={(e: { nativeEvent: UnfoldEditorSelectionState }) => setSelectionState(e.nativeEvent)}
+              onEditorSelectionChange={(e: { nativeEvent: UnfoldEditorSelectionState }) => {
+                // Skip setState when only `start`/`end` changed (rapid typing
+                // at a fixed format). Nothing in this screen reads them and
+                // the toolbar only re-renders off the formatting fields — so
+                // short-circuiting here avoids ~60 React re-renders per second
+                // during fast typing (root cause of the visible micro-jump).
+                const next = e.nativeEvent;
+                setSelectionState(prev =>
+                  prev.bold === next.bold &&
+                  prev.italic === next.italic &&
+                  prev.underline === next.underline &&
+                  prev.strikethrough === next.strikethrough &&
+                  prev.code === next.code &&
+                  prev.hasLink === next.hasLink &&
+                  prev.linkUrl === next.linkUrl &&
+                  prev.blockType === next.blockType &&
+                  prev.listType === next.listType
+                    ? prev
+                    : next,
+                );
+              }}
               placeholder={'Start writing\u2026'}
               editable={isEditing}
               autoFocus={shouldStartEditing && !isNewNote}
