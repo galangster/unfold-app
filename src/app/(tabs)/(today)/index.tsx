@@ -377,7 +377,7 @@ export default function HomeScreen() {
   }, [currentDevotional, user?.name, user?.currentSituation, checkIns]);
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
-    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber],
+    queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, bridgeInput?.input],
     queryFn: () => generateBridge(bridgeInput!.input, bridgeInput!.devotionalId, bridgeInput!.dayNumber),
     enabled: isPremium && !!bridgeInput,
     staleTime: 1000 * 60 * 60, // 1 hour — bridge is cached in MMKV anyway
