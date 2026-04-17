@@ -174,7 +174,26 @@ enum HtmlEncoder {
     let location = min(range.location, max(0, str.length - 1))
     let paraRange = nsString.paragraphRange(
       for: NSRange(location: location, length: 0))
-    let blockType = detectBlockType(in: str, range: paraRange)
+
+    // When the cursor sits on a FRESH paragraph that hasn't been typed into
+    // yet — e.g. right after pressing Enter on a heading — there is no
+    // character in the new paragraph to sample. Without special-casing this,
+    // detectBlockType falls back to reading the previous paragraph's
+    // attributes (the heading), so the toolbar keeps reporting "H1" until
+    // the user types a character. Whenever the cursor is at string end on a
+    // trailing newline, prefer typingAttributes for block-type detection —
+    // those reflect the user's intent for the NEXT character.
+    let cursorAtStringEnd = range.length == 0 && range.location >= str.length
+    let prevIsNewline = str.length > 0 &&
+      nsString.substring(with: NSRange(location: str.length - 1, length: 1)) == "\n"
+    let useTypingForBlock = cursorAtStringEnd && prevIsNewline
+
+    let blockType: BlockType
+    if useTypingForBlock, let typing = typingAttributes, !typing.isEmpty {
+      blockType = detectBlockTypeFromAttrs(typing)
+    } else {
+      blockType = detectBlockType(in: str, range: paraRange)
+    }
 
     // Read attributes at cursor / selection-start. For zero-length selections
     // (cursor), prefer typingAttributes because they reflect the user's
@@ -319,6 +338,32 @@ enum HtmlEncoder {
       }
     }
 
+    return .body
+  }
+
+  /// Block-type detection from a single attribute dictionary (used for
+  /// typingAttributes when the cursor sits on a fresh empty paragraph
+  /// after Enter — there's no character in the new paragraph to sample).
+  private static func detectBlockTypeFromAttrs(
+    _ attrs: [NSAttributedString.Key: Any]
+  ) -> BlockType {
+    if (attrs[.unfoldBlockType] as? String) == "codeBlock" { return .codeBlock }
+    if (attrs[.unfoldBlockType] as? String) == "blockquote" { return .blockquote }
+    if let listValue = attrs[.listItem] {
+      if listValue is ChecklistItem { return .checklist }
+      if (listValue as? String) == "ordered" { return .orderedList }
+      return .bulletList
+    }
+    if let font = attrs[.font] as? UIFont {
+      let isBoldish = font.fontDescriptor.symbolicTraits.contains(.traitBold)
+        || font.fontName.lowercased().contains("semibold")
+        || font.fontName.lowercased().contains("bold")
+      if isBoldish {
+        if font.pointSize >= 26 { return .heading1 }
+        if font.pointSize >= 20 { return .heading2 }
+        if font.pointSize >= 17 { return .heading3 }
+      }
+    }
     return .body
   }
 

@@ -101,6 +101,10 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // Don't let vertical drags auto-dismiss the keyboard — same rule as
     // the spike so toolbar interactions don't accidentally kill focus.
     editor.scrollView.keyboardDismissMode = .none
+    // Apple Notes-style rubber-band scroll — always draggable even when
+    // content is shorter than viewport, so the canvas feels like a real
+    // document surface in both edit and view mode.
+    editor.scrollView.alwaysBounceVertical = true
     rootView.addSubview(editor)
 
     NSLayoutConstraint.activate([
@@ -449,6 +453,26 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     default: return
     }
 
+    // Pre-seed typingAttributes with a full body style when the current
+    // paragraph is empty. Proton's `createListItemInANewLine` inserts a
+    // blank-line filler (ZWSP) that inherits whatever typingAttributes are
+    // present at the moment. Without a body font / paragraphStyle set,
+    // the first bullet ends up using the default system font metrics and
+    // the marker rect (drawn at paragraphSpacingBefore from the line top)
+    // sits low relative to the text baseline — while subsequent bullets,
+    // created via Enter from an already-styled line, inherit consistent
+    // metrics and render correctly.
+    let paraRange = currentParagraphRange()
+    if paraRange.length == 0 {
+      var attrs = editor.typingAttributes
+      attrs[.font] = UnfoldFonts.body()
+      attrs[.foregroundColor] = UnfoldColors.text
+      let p = NSMutableParagraphStyle()
+      p.paragraphSpacing = 4
+      attrs[.paragraphStyle] = p
+      editor.typingAttributes = attrs
+    }
+
     ListCommand().execute(on: editor, attributeValue: value)
     scheduleHtmlEmit()
     refreshSelectionState()
@@ -547,11 +571,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     onBlur?()
   }
 
-  /// Resets typingAttributes to body when Enter is pressed at the end of a
-  /// heading paragraph. Without this, pressing Enter in an H1/H2/H3 keeps the
-  /// heading font + paragraph style on the new line until the user manually
-  /// toggles the heading button off. Only fires for non-list paragraphs whose
-  /// first-character font is >= 18pt (the h3 minimum).
+  /// Resets typingAttributes to body when Enter is pressed. Without this,
+  /// pressing Enter in an H1/H2/H3 keeps the heading font + paragraph style
+  /// on the new line; pressing Enter in body that followed a heading leaves
+  /// the heading's `paragraphSpacingBefore` on the new empty paragraph
+  /// (visible as an outsized gap). Skips list + code-block paragraphs since
+  /// those have their own continuation/style rules.
   func editor(
     _ editor: EditorView,
     shouldHandle key: EditorKey,
@@ -575,24 +600,40 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       return
     }
 
+    // Skip code blocks — mono font + distinct paragraph spacing we want to keep.
+    if text.attribute(
+      .unfoldBlockType, at: paraRange.location, effectiveRange: nil) as? String == "codeBlock" {
+      return
+    }
+
     let paraFont = text.attribute(
       .font, at: paraRange.location, effectiveRange: nil) as? UIFont
-    guard (paraFont?.pointSize ?? 0) >= 18 else { return }
+    let isHeading = (paraFont?.pointSize ?? 0) >= 18
 
     let bodyPStyle = NSMutableParagraphStyle()
     bodyPStyle.paragraphSpacing = 4
-    let bodyAttrs: [NSAttributedString.Key: Any] = [
-      .font: UnfoldFonts.body(),
-      .foregroundColor: UnfoldColors.text,
-      .paragraphStyle: bodyPStyle,
-    ]
+    bodyPStyle.paragraphSpacingBefore = 0
+    bodyPStyle.lineHeightMultiple = 0
+    bodyPStyle.firstLineHeadIndent = 0
+    bodyPStyle.headIndent = 0
 
     // Defer to next runloop so our reset runs AFTER Proton inserts the \n
     // and UITextView recomputes typingAttributes from attrs-at-cursor. If we
     // set it synchronously here, Proton's downstream processing overrides it.
     DispatchQueue.main.async { [weak self] in
-      self?.editor.typingAttributes = bodyAttrs
-      self?.refreshSelectionState()
+      guard let self = self else { return }
+      var attrs = self.editor.typingAttributes
+      // Always reset paragraphStyle so heading paragraphSpacingBefore can't
+      // bleed into the new paragraph and produce an oversized gap.
+      attrs[.paragraphStyle] = bodyPStyle
+      // Strip any stale block-type marker so the new paragraph is plain body.
+      attrs[.unfoldBlockType] = nil
+      if isHeading {
+        attrs[.font] = UnfoldFonts.body()
+        attrs[.foregroundColor] = UnfoldColors.text
+      }
+      self.editor.typingAttributes = attrs
+      self.refreshSelectionState()
     }
   }
 
@@ -623,20 +664,45 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     ensureCaretVisible()
   }
 
-  /// Forces the current caret to be visible above the keyboard. UIKit's
-  /// UITextView normally auto-scrolls to keep the caret in view, but Proton's
-  /// EditorView wraps the text view in a custom scroll container and the
-  /// built-in behaviour doesn't fire as the user types past the visible area.
-  /// Called from `didChangeTextAt` (new char typed) and `didChangeSelectionAt`
-  /// (cursor moved) so the caret is always in view.
+  /// Keeps the caret comfortably above the keyboard as the user types or
+  /// moves the cursor. Proton's EditorView is itself a UIScrollView + custom
+  /// content; `scrollRectToVisible` only scrolls the MINIMUM amount needed,
+  /// which parks the caret right at the bottom of visible bounds (the
+  /// keyboard's top edge) so the line the user is typing on is still clipped.
+  /// Instead, compute the caret's Y in content coords and force a scroll
+  /// offset that keeps ≥`bottomSafeZone` points of breathing room below.
   private func ensureCaretVisible() {
     guard editor.isFirstResponder else { return }
     guard let selectedRange = editor.textInput.selectedTextRange else { return }
-    let caretInTextView = editor.textInput.caretRect(for: selectedRange.end)
-    guard !caretInTextView.isNull, !caretInTextView.isInfinite else { return }
-    // Pad slightly so the caret sits a few pixels above the keyboard top.
-    let padded = caretInTextView.insetBy(dx: 0, dy: -12)
-    editor.scrollView.scrollRectToVisible(padded, animated: false)
+    let caretRect = editor.textInput.caretRect(for: selectedRange.end)
+    guard !caretRect.isNull, !caretRect.isInfinite else { return }
+
+    let scrollView = editor.scrollView
+    let visibleTop = scrollView.contentOffset.y
+    let visibleHeight = scrollView.bounds.height
+    let visibleBottom = visibleTop + visibleHeight
+
+    // Reserve enough breathing room below the caret so descenders, paragraph
+    // spacing, and any minor layout jitter all fit above the keyboard.
+    let bottomSafeZone: CGFloat = 60
+    let topSafeZone: CGFloat = 20
+
+    let caretTop = caretRect.minY
+    let caretBottom = caretRect.maxY
+
+    var targetOffsetY = scrollView.contentOffset.y
+    if caretBottom > visibleBottom - bottomSafeZone {
+      targetOffsetY = caretBottom - visibleHeight + bottomSafeZone
+    } else if caretTop < visibleTop + topSafeZone {
+      targetOffsetY = caretTop - topSafeZone
+    } else {
+      return
+    }
+
+    let maxOffsetY = max(0, scrollView.contentSize.height - visibleHeight)
+    targetOffsetY = min(max(0, targetOffsetY), maxOffsetY)
+    if abs(targetOffsetY - scrollView.contentOffset.y) < 0.5 { return }
+    scrollView.setContentOffset(CGPoint(x: 0, y: targetOffsetY), animated: false)
   }
 
   // MARK: - Internals
