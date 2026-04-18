@@ -21,7 +21,6 @@ import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
-import type { ThemeCategory } from '@/constants/devotional-types';
 
 type PlanChoice = 'yearly' | 'monthly';
 
