@@ -28,7 +28,7 @@ function shuffleOrder(length: number): number[] {
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 
 // ─── Single character with fade + color transition ───────────────
-const ScatterChar = React.memo(({
+const ScatterChar = React.memo(function ScatterChar({
   char,
   animDelay,
   startColor,
@@ -40,7 +40,7 @@ const ScatterChar = React.memo(({
   startColor: string;
   endColor: string;
   fontSize: number;
-}) => {
+}) {
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
 
