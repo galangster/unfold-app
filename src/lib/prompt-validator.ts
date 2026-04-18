@@ -144,7 +144,7 @@ export async function logGenerationToBackend(params: {
   seriesLength: number;
   promptHash: string;
   hadViolations: boolean;
-  violations: Array<{ rule: string; original: string; fixed: string | null; location: string; autoFixed: boolean }>;
+  violations: { rule: string; original: string; fixed: string | null; location: string; autoFixed: boolean }[];
 }): Promise<{ activeDynamicExample: { rule: string; badText: string; goodText: string } | null }> {
   try {
     const headers = await getAuthHeaders();

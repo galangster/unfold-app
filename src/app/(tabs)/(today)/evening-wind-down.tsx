@@ -16,19 +16,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
-import { useAudioPlayer } from 'expo-audio';
-import { CaretLeftIcon, BookOpenIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, MoonIcon, ArrowClockwiseIcon } from 'phosphor-react-native';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
-import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
-import { generateExamen, type ExamenPrayer } from '@/lib/examen-service';
+import { generateExamen } from '@/lib/examen-service';
 import { fetchVerse } from '@/lib/bible-api';
-import { streamDevotionalAudio } from '@/lib/tts-service';
 import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { EveningCelebration } from '@/components/EveningCelebration';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -143,24 +139,10 @@ export default function EveningWindDownScreen() {
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markEveningWindDownCompleted = useUnfoldStore((s) => s.markEveningWindDownCompleted);
 
-  // Premium gate — evening wind-down is premium-only
-  const { data: premiumResult } = useQuery({
-    queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('Unfold Premium'),
-    enabled: isRevenueCatEnabled(),
-    staleTime: 1000 * 60,
-  });
-  const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
-
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
-  const [audioUri, setAudioUri] = useState<string | null>(null);
-  const [audioLoading, setAudioLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
-
-  const player = useAudioPlayer(audioUri);
 
   const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
   // Evening wind-down is for the day just completed, which may be currentDay - 1
@@ -226,7 +208,6 @@ export default function EveningWindDownScreen() {
   });
 
   const {
-    data: scriptureResult,
     isLoading: scriptureLoading,
   } = useQuery({
     queryKey: ['evening-scripture', currentDay?.eveningScriptureRef],
@@ -239,43 +220,6 @@ export default function EveningWindDownScreen() {
     staleTime: Infinity,
     retry: 1,
   });
-
-  const scriptureText = scriptureResult?.text ?? null;
-
-  const handlePlayScripture = useCallback(async () => {
-    if (!scriptureText) return;
-
-    if (audioUri && player) {
-      if (isPlaying) {
-        player.pause();
-        setIsPlaying(false);
-      } else {
-        player.play();
-        setIsPlaying(true);
-      }
-      return;
-    }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setAudioLoading(true);
-    try {
-      const result = await streamDevotionalAudio(scriptureText);
-      setAudioUri(result.audioUrl);
-    } catch (e) {
-      logger.error('[EveningWindDown] Failed to load audio:', e);
-    } finally {
-      setAudioLoading(false);
-    }
-  }, [scriptureText, audioUri, player, isPlaying]);
-
-  // Auto-play when player initializes after audioUri is set
-  // useAudioPlayer creates the player on re-render — this bridges the async gap
-  useEffect(() => {
-    if (audioUri && player) {
-      player.play();
-      setIsPlaying(true);
-    }
-  }, [audioUri, player]);
 
   const handleShowCelebration = useCallback(() => {
     if (!gate()) return;
