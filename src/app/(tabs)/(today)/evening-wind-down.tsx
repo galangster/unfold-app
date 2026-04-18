@@ -184,7 +184,18 @@ export default function EveningWindDownScreen() {
     isError: error,
     refetch: refetchExamen,
   } = useQuery({
-    queryKey: ['examen', currentDevotional?.id, currentDay?.dayNumber, middayCheckIn?.mood],
+    queryKey: [
+      'examen',
+      currentDevotional?.id,
+      currentDay?.dayNumber,
+      currentDay?.title,
+      user?.name,
+      middayCheckIn,
+      middayCheckIn?.mood,
+      middayCheckIn?.moodLabel,
+      middayCheckIn?.chipAnswer,
+      middayCheckIn?.freeText,
+    ],
     queryFn: async () => {
       const result = await generateExamen(
         {
