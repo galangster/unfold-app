@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
@@ -16,7 +16,6 @@ import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
-import { useUnfoldStore } from '@/lib/store';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -294,13 +293,11 @@ export default function TabLayout() {
   // DEV bypass: force premium in dev so the overlay doesn't block routine
   // development. Toggleable via the Dev Tools "Simulate Trial Expired" button
   // which sets debugForceTrialExpired=true to preview the churned-user UX.
-  const [activeTabName, setActiveTabName] = useState<string>('(today)');
-
   return (
     <View style={{ flex: 1 }}>
       <Tabs
         tabBar={(props: any) => (
-          <CustomTabBar {...props} onTabChange={setActiveTabName} />
+          <CustomTabBar {...props} />
         )}
         screenOptions={{
           headerShown: false,
