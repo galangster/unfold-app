@@ -55,7 +55,6 @@ interface BookChapterNavigatorProps {
 const SINGLE_CHAPTER_BOOK_IDS = new Set([31, 57, 63, 64, 65]);
 
 const TAB_LABELS = ['Book', 'Chapter', 'Verse'] as const;
-const TAB_GAP = 4;
 const TAB_PADDING = 3;
 
 // No animations — navigator appears instantly, content swaps instantly
