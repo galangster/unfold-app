@@ -4,13 +4,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
   withDelay,
   withSpring,
   withRepeat,
   Easing,
   interpolate,
-  runOnJS,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
@@ -23,7 +21,6 @@ import { GoldEmberField } from '@/components/home/GoldEmberField';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CENTER_X = SCREEN_WIDTH / 2;
 const CENTER_Y = SCREEN_HEIGHT / 2;
-const DIAGONAL = Math.sqrt(SCREEN_WIDTH ** 2 + SCREEN_HEIGHT ** 2);
 
 // ─── Pre-baked completion messages ───────────────────────────────────────────
 // God/Jesus-focused: glory goes to Him, not to the reader.
