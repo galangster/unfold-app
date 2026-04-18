@@ -38,6 +38,10 @@ public class UnfoldEditorModule: Module {
         view.controller.setKeyboardAppearance(appearance)
       }
 
+      Prop("keyboardToolbarHeight") { (view: UnfoldEditorView, height: Double) in
+        view.controller.setKeyboardToolbarHeight(height)
+      }
+
       Prop("colorScheme") { (view: UnfoldEditorView, scheme: String) in
         view.setColorScheme(scheme)
       }

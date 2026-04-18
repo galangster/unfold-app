@@ -54,6 +54,15 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// it after block-type changes (UIKit may reset it when font attributes change).
   private var currentKeyboardAppearance: UIKeyboardAppearance = .default
 
+  /// Height of the React Native formatting toolbar that visually sits above the
+  /// iOS keyboard. The native editor itself only knows the keyboard's top edge,
+  /// so RN passes this extra occlusion height down explicitly.
+  private var keyboardToolbarHeight: CGFloat = 0
+
+  /// Coalesces repeated caret-visibility requests from text + selection changes
+  /// into a single main-runloop scroll correction.
+  private var hasPendingCaretVisibilityUpdate = false
+
   /// Selection-change throttle state. 16ms (≈60fps) cap so rapid drag
   /// selections don't saturate the JS bridge.
   private var lastSelectionEmitTime: CFTimeInterval = 0
@@ -326,22 +335,27 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// UIKit does not live-update an already-showing keyboard when
   /// `keyboardAppearance` changes — `reloadInputViews()` forces a refresh so
   /// the keyboard chrome matches the current app theme immediately.
-  func setKeyboardAppearance(_ value: String) {
-    let appearance: UIKeyboardAppearance
-    switch value {
-    case "light": appearance = .light
-    case "dark":  appearance = .dark
-    default:      appearance = .default
+  func setKeyboardAppearance(_ appearance: String) {
+    let nextAppearance: UIKeyboardAppearance
+    switch appearance {
+    case "light": nextAppearance = .light
+    case "dark": nextAppearance = .dark
+    default: nextAppearance = .default
     }
-    currentKeyboardAppearance = appearance
-    editor.keyboardAppearance = appearance
+    currentKeyboardAppearance = nextAppearance
+    editor.keyboardAppearance = appearance == "light" ? .light : appearance == "dark" ? .dark : .default
     if editor.isFirstResponder {
       editor.reloadInputViews()
     }
   }
 
-  /// Requests first-responder after a short delay. Matches the spike timing
-  /// (§10.B.6: "call becomeFirstResponder 300ms after mount"). Safe to call
+  func setKeyboardToolbarHeight(_ height: Double) {
+    keyboardToolbarHeight = max(0, CGFloat(height))
+    scheduleCaretVisibilityUpdate()
+  }
+
+  /// Requests focus 300ms after mount so the host view has finished layout and
+
   /// from the prop setter on first mount — the delay lets layout settle so
   /// the keyboard doesn't animate in before the view is positioned.
   func requestAutoFocus() {
@@ -570,7 +584,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     lineDecorationOverlay.invalidate()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
-      self?.ensureCaretVisible()
+      self?.scheduleCaretVisibilityUpdate()
     }
     scheduleHtmlEmit()
   }
@@ -608,18 +622,17 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // Skip list paragraphs — Proton's ListTextProcessor owns their
     // continuation + exit logic, and overwriting typingAttributes here
     // would strip the .listItem attr off the next character.
-    if text.attribute(.listItem, at: paraRange.location, effectiveRange: nil) != nil {
+    if firstAttribute(.listItem, in: text, range: paraRange) != nil {
       return
     }
+
+    let blockType = firstAttribute(.unfoldBlockType, in: text, range: paraRange) as? String
 
     // Skip code blocks — mono font + distinct paragraph spacing we want to keep.
-    if text.attribute(
-      .unfoldBlockType, at: paraRange.location, effectiveRange: nil) as? String == "codeBlock" {
+    if blockType == "codeBlock" {
       return
     }
 
-    let blockType = text.attribute(
-      .unfoldBlockType, at: paraRange.location, effectiveRange: nil) as? String
     let isHeading = blockType == "h1" || blockType == "h2" || blockType == "h3"
 
     if isHeading {
@@ -724,7 +737,17 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
     // Keep caret visible above the keyboard on cursor moves too (arrow keys,
     // tapping into a paragraph below the fold, etc.) — not just on typing.
-    ensureCaretVisible()
+    scheduleCaretVisibilityUpdate()
+  }
+
+  private func scheduleCaretVisibilityUpdate() {
+    guard !hasPendingCaretVisibilityUpdate else { return }
+    hasPendingCaretVisibilityUpdate = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.hasPendingCaretVisibilityUpdate = false
+      self.ensureCaretVisible()
+    }
   }
 
   /// Keeps the caret comfortably above the keyboard as the user types or
@@ -746,11 +769,11 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     let visibleBottom = visibleTop + visibleHeight
 
     // Reserve enough breathing room below the caret so descenders, paragraph
-    // spacing, toolbar, and accessory bar all fit above the keyboard. 60pt
-    // left the active line right against the keyboard edge on device even
-    // though the sim looked OK; bumping to 200pt gives a full line of gap
-    // plus extra breathing room for the current line on device.
-    let bottomSafeZone: CGFloat = 200
+    // spacing, and the React Native toolbar sitting above the keyboard all stay
+    // visible. A large hardcoded cushion caused needless scroll corrections and
+    // visible jitter; instead, use the real toolbar occlusion plus a smaller
+    // line-level comfort buffer.
+    let bottomSafeZone = max(28, keyboardToolbarHeight + 28)
     let topSafeZone: CGFloat = 20
 
     let caretTop = caretRect.minY
@@ -796,6 +819,24 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     default:
       return [:]
     }
+  }
+
+  /// Returns the first non-nil attribute value inside `range`, scanning left to
+  /// right. Block identity can disappear at `range.location` after user edits,
+  /// so Enter-handling and list/code detection must inspect the whole paragraph.
+  private func firstAttribute(
+    _ key: NSAttributedString.Key,
+    in str: NSAttributedString,
+    range: NSRange
+  ) -> Any? {
+    var result: Any? = nil
+    str.enumerateAttribute(key, in: range, options: []) { value, _, stop in
+      if let value = value {
+        result = value
+        stop.pointee = true
+      }
+    }
+    return result
   }
 
   /// Paragraph range containing the current selection. Returns a zero-length

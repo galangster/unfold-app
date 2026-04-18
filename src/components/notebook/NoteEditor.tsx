@@ -42,6 +42,11 @@ import {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
+import {
+  NOTEBOOK_TOOLBAR_BOTTOM_PADDING_IOS,
+  NOTEBOOK_TOOLBAR_ROW_HEIGHT,
+  NOTEBOOK_TOOLBAR_TOTAL_HEIGHT,
+} from '@/lib/notebook-editor-layout';
 
 import { Note } from '@/lib/store';
 
@@ -177,14 +182,12 @@ export function NoteEditor({
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Manage keyboard padding ourselves since avoidIosKeyboard is false.
-  // We account for the custom toolbar (48px) that sits above the keyboard.
-  // Without this, text scrolls behind the toolbar after ~12 lines.
-  const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
+  // We account for the custom toolbar that sits above the keyboard.
   useEffect(() => {
     if (!editorState.isReady) return;
     if (isKeyboardUp && keyboardHeight > 0) {
       // Toolbar sits above the keyboard, so total occlusion is keyboard + toolbar
-      const totalPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 20;
+      const totalPadding = keyboardHeight + NOTEBOOK_TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
         (function() {
           var doc = document.querySelector('.ProseMirror');
@@ -709,13 +712,13 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingBottom: Platform.OS === 'ios' ? 4 : 0,
+    paddingBottom: Platform.OS === 'ios' ? NOTEBOOK_TOOLBAR_BOTTOM_PADDING_IOS : 0,
   },
   toolbarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 6,
-    height: 44,
+    height: NOTEBOOK_TOOLBAR_ROW_HEIGHT,
   },
   toolbarButton: {
     width: 34,

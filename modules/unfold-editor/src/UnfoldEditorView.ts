@@ -66,6 +66,7 @@ export type UnfoldEditorViewProps = Omit<ViewProps, 'onFocus' | 'onBlur'> & {
   editable?: boolean;
   autoFocus?: boolean;
   keyboardAppearance?: UnfoldEditorKeyboardAppearance;
+  keyboardToolbarHeight?: number;
   /** Overrides the native view's UIKit trait collection so dynamic colors
    *  resolve against the app's theme, not the system theme. */
   colorScheme?: UnfoldEditorColorScheme;

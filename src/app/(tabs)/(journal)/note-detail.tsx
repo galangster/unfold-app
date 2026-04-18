@@ -66,6 +66,13 @@ import {
   type UnfoldEditorScriptureRefsEvent,
 } from 'unfold-editor';
 import { referenceToRoute, routeToReference } from '@/lib/bible-constants';
+import {
+  NOTEBOOK_TOOLBAR_BOTTOM_PADDING_IOS,
+  NOTEBOOK_TOOLBAR_ROW_HEIGHT,
+  NOTEBOOK_TOOLBAR_TOTAL_HEIGHT,
+  getNativeEditorToolbarInset,
+  shouldReuseSelectionFormattingState,
+} from '@/lib/notebook-editor-layout';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -362,6 +369,10 @@ export default function NoteDetailScreen() {
 
   const editorState = useBridgeState(editor);
   const { keyboardHeight, isKeyboardUp } = useKeyboard();
+  const nativeEditorToolbarInset = getNativeEditorToolbarInset({
+    isEditing,
+    isKeyboardUp,
+  });
 
   // Keep a ref for isEditing so the onChange callback always has the latest value
   const isEditingRef = useRef(isEditing);
@@ -401,12 +412,11 @@ export default function NoteDetailScreen() {
   }, [editorState.isReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Manage keyboard padding (tentap only — native UITextView handles its own insets)
-  const TOOLBAR_TOTAL_HEIGHT = 48; // 44px row + 4px paddingBottom
   useEffect(() => {
     if (IS_NATIVE_EDITOR) return;
     if (!editorState.isReady) return;
     if (isEditing && isKeyboardUp && keyboardHeight > 0) {
-      const totalPadding = keyboardHeight + TOOLBAR_TOTAL_HEIGHT + 20;
+      const totalPadding = keyboardHeight + NOTEBOOK_TOOLBAR_TOTAL_HEIGHT + 20;
       editor.injectJS(`
         (function() {
           var doc = document.querySelector('.ProseMirror');
@@ -1312,15 +1322,7 @@ export default function NoteDetailScreen() {
                 // during fast typing (root cause of the visible micro-jump).
                 const next = e.nativeEvent;
                 setSelectionState(prev =>
-                  prev.bold === next.bold &&
-                  prev.italic === next.italic &&
-                  prev.underline === next.underline &&
-                  prev.strikethrough === next.strikethrough &&
-                  prev.code === next.code &&
-                  prev.hasLink === next.hasLink &&
-                  prev.linkUrl === next.linkUrl &&
-                  prev.blockType === next.blockType &&
-                  prev.listType === next.listType
+                  shouldReuseSelectionFormattingState(prev, next)
                     ? prev
                     : next,
                 );
@@ -1330,6 +1332,7 @@ export default function NoteDetailScreen() {
               autoFocus={shouldStartEditing && !isNewNote}
               keyboardAppearance={isDark ? 'dark' : 'light'}
               colorScheme={isDark ? 'dark' : 'light'}
+              keyboardToolbarHeight={nativeEditorToolbarInset}
               style={styles.richText}
             />
           ) : (
@@ -1797,13 +1800,13 @@ const styles = StyleSheet.create({
   },
   toolbar: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingBottom: Platform.OS === 'ios' ? Spacing['1'] : Spacing['0'],
+    paddingBottom: Platform.OS === 'ios' ? NOTEBOOK_TOOLBAR_BOTTOM_PADDING_IOS : 0,
   },
   toolbarRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing['1.5'],
-    height: 44,
+    height: NOTEBOOK_TOOLBAR_ROW_HEIGHT,
   },
   toolbarButton: {
     width: 34,
