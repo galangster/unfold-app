@@ -152,7 +152,7 @@ const VerseItem = React.memo(function VerseItem({
     } else {
       flashOpacity.value = 0;
     }
-  }, [isFlashing]);
+  }, [flashOpacity, isFlashing]);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -355,7 +355,7 @@ export default function BibleReaderScreen() {
     } else {
       contextBarSlideY.value = 8;
     }
-  }, [showActions]);
+  }, [contextBarSlideY, showActions]);
   const contextBarSlideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: contextBarSlideY.value }],
   }));
