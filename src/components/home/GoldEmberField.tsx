@@ -179,8 +179,6 @@ export function GoldEmberField({
   const { colors, isDark } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
 
-  if (reducedMotion) return null;
-
   const tier = useMemo<EmberTier>(() => getEmberTier(streakLevel), [streakLevel]);
 
   // Derive 3 ember color variants from the current accent color.
@@ -203,7 +201,7 @@ export function GoldEmberField({
 
   // Generate particles once — they self-loop, no recycling needed
   const particles = useMemo(() => {
-    if (!active) return [];
+    if (reducedMotion || !active) return [];
     const sizeRange = tier.sizeMax - tier.sizeMin;
     return Array.from({ length: tier.count }, (_, i): EmberParticle => ({
       id: i,
@@ -216,14 +214,14 @@ export function GoldEmberField({
       maxOpacity: tier.opacityMin + Math.random() * (tier.opacityMax - tier.opacityMin),
       colorIdx: i % 3,
     }));
-  }, [active, tier]);
+  }, [active, reducedMotion, tier]);
 
   // For glow gradient, darken the accent on light mode for better contrast
   const glowHex = isDark ? colors.accent : darken(colors.accent, 0.15);
   const { r, g, b } = useMemo(() => hexToRgb(glowHex), [glowHex]);
   const glowBase = `rgba(${r}, ${g}, ${b},`;
 
-  if (!active) return null;
+  if (reducedMotion || !active) return null;
 
   return (
     <View style={[StyleSheet.absoluteFill, styles.container, style]} pointerEvents="none">
