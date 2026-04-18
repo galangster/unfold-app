@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Alert, Linking, Platform, ActivityIndicator, Te
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
@@ -25,7 +25,6 @@ import {
   PaletteIcon,
   TextAaIcon,
   HourglassIcon,
-  UserCircleIcon,
   LockIcon,
   CreditCardIcon,
   TrashIcon,
@@ -44,9 +43,7 @@ import {
   LifeStage,
   ThemeMode,
   ACCENT_THEMES,
-  AccentThemeId,
   READING_FONTS,
-  ReadingFontId,
 } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { debugFireTrialEndingNotification } from '@/lib/trial-notification';
@@ -168,7 +165,6 @@ export default function YouScreen() {
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
   const highlights = useUnfoldStore((s) => s.highlights);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
-  const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const middayCheckInEnabled = useUnfoldStore((s) => s.middayCheckInEnabled);
   const eveningWindDownEnabled = useUnfoldStore((s) => s.eveningWindDownEnabled);
   const setMiddayCheckInEnabled = useUnfoldStore((s) => s.setMiddayCheckInEnabled);
