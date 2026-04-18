@@ -6,9 +6,6 @@ import { logger } from '@/lib/logger';
 import type { Devotional } from './store';
 
 const DEFAULT_ACCENT = '#5B8DEF';
-const COVER_BG = '#121214';
-const COVER_TEXT = '#FFFFFF';
-const COVER_SUBTLE = 'rgba(255, 255, 255, 0.45)';
 const BODY_COLOR = '#2A2A2E';
 const MUTED_COLOR = '#8E8E93';
 const HEADING_COLOR = '#1C1C1E';
@@ -60,14 +57,6 @@ function accentLight(accent: string): string {
   const g = parseInt(accent.slice(3, 5), 16);
   const b = parseInt(accent.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, 0.08)`;
-}
-
-/** Get a translucent version of the accent color */
-function accentAlpha(accent: string, alpha: number): string {
-  const r = parseInt(accent.slice(1, 3), 16);
-  const g = parseInt(accent.slice(3, 5), 16);
-  const b = parseInt(accent.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /** Map mood number to emoji */

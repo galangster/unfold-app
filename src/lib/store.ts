@@ -6,7 +6,7 @@ import { logBugError } from './bug-logger';
 import { logger } from './logger';
 import { mmkvStorage } from './mmkv-storage';
 import { compositeId, newId } from './sync-ids';
-import type { NudgeType, NudgeImpression, NudgeState } from './nudges';
+import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 
 // Types
