@@ -110,7 +110,7 @@ type TextLine = { x: number; y: number; width: number; height: number };
 //   20px+  → Pan activates (chapter swipe)
 const VERSE_TAP_MAX_DISTANCE = 8;
 
-const VerseItem = React.memo(({
+const VerseItem = React.memo(function VerseItem({
   verse,
   fontSize,
   lineHeight,
@@ -136,7 +136,7 @@ const VerseItem = React.memo(({
   isDark: boolean;
   textColor: string;
   onPress: () => void;
-}) => {
+}) {
   const [textLines, setTextLines] = useState<TextLine[]>([]);
 
   // Flash animation: quick fade in → hold → smooth fade out
