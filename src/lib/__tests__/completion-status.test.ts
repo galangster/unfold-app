@@ -1,6 +1,5 @@
 import {
   computeCompletionStatus,
-  type CompletionStatus,
 } from '../completion-status';
 
 describe('computeCompletionStatus', () => {

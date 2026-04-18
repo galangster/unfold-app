@@ -15,7 +15,6 @@ import Animated, {
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
-import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 
