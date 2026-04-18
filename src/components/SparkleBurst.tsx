@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -9,7 +9,6 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { useEffect, useMemo } from 'react';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
