@@ -10,6 +10,81 @@ import { logger } from "./logger";
 
 const MIGRATION_KEY = "generation-migration-v1-complete";
 
+type MigrationStore = ReturnType<typeof useUnfoldStore.getState>;
+
+function buildMemoryPayload(memory: NonNullable<MigrationStore["devotionals"][number]["progressiveMemory"]>) {
+  return {
+    fullDays: (memory.fullDays ?? [])
+      .filter((day) => typeof day?.dayNumber === "number")
+      .map((day) => ({
+        dayNumber: day.dayNumber,
+        content: day,
+      })),
+    summaries: (memory.summaries ?? [])
+      .filter((summary) => typeof summary?.startDay === "number" && typeof summary?.endDay === "number")
+      .map((summary) => ({
+        dayRangeStart: summary.startDay,
+        dayRangeEnd: summary.endDay,
+        content: summary,
+      })),
+    narrative: memory.narrative
+      ? {
+          content: memory.narrative,
+        }
+      : null,
+  };
+}
+
+function buildScriptureDayLookup(devotionals: MigrationStore["devotionals"]) {
+  const lookup = new Map<string, number[]>();
+
+  for (const devotional of devotionals) {
+    for (const day of devotional.days ?? []) {
+      if (!day?.scriptureReference || typeof day.dayNumber !== "number") continue;
+      const key = `${devotional.id}::${day.scriptureReference}`;
+      const matches = lookup.get(key) ?? [];
+      matches.push(day.dayNumber);
+      lookup.set(key, matches);
+    }
+  }
+
+  return lookup;
+}
+
+function buildScripturesPayload(store: MigrationStore) {
+  const lookup = buildScriptureDayLookup(store.devotionals ?? []);
+  const nextMatchIndex = new Map<string, number>();
+
+  return (store.usedScriptures ?? []).flatMap((scripture) => {
+    const directDayNumber = (scripture as { dayNumber?: unknown }).dayNumber;
+    const key = `${scripture.devotionalId}::${scripture.reference}`;
+    const matchingDays = lookup.get(key) ?? [];
+    const matchIndex = nextMatchIndex.get(key) ?? 0;
+    const derivedDayNumber =
+      typeof directDayNumber === "number"
+        ? directDayNumber
+        : matchingDays[matchIndex];
+
+    if (typeof derivedDayNumber !== "number") {
+      logger.warn(
+        `[gen-migration] Skipping scripture without resolvable dayNumber: ${scripture.devotionalId} ${scripture.reference}`,
+      );
+      return [];
+    }
+
+    if (typeof directDayNumber !== "number") {
+      nextMatchIndex.set(key, matchIndex + 1);
+    }
+
+    return [{
+      reference: scripture.reference,
+      book: scripture.book,
+      devotionalId: scripture.devotionalId,
+      dayNumber: derivedDayNumber,
+    }];
+  });
+}
+
 async function postMigrationStep(
   headers: Record<string, string>,
   path: string,
@@ -70,7 +145,7 @@ export async function migrateGenerationDataToServer(): Promise<void> {
           "/api/jobs/migrate-memory",
           {
             devotionalId: devo.id,
-            memory: devo.progressiveMemory,
+            memory: buildMemoryPayload(devo.progressiveMemory),
           },
         );
         migrationSucceeded = migrationSucceeded && stepSucceeded;
@@ -78,7 +153,7 @@ export async function migrateGenerationDataToServer(): Promise<void> {
     }
 
     // Push used scriptures
-    const scriptures = store.usedScriptures ?? [];
+    const scriptures = buildScripturesPayload(store);
     if (scriptures.length > 0) {
       const stepSucceeded = await postMigrationStep(
         headers,
