@@ -310,6 +310,15 @@ enum HtmlEncoder {
     // (Codex M3 — see gotchas/attributed-string-block-identity-not-location-zero.md).
 
     // Explicit block-type marker wins over any heuristic.
+    if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "h1" {
+      return .heading1
+    }
+    if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "h2" {
+      return .heading2
+    }
+    if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "h3" {
+      return .heading3
+    }
     if firstAttribute(.unfoldBlockType, in: str, range: range) as? String == "codeBlock" {
       return .codeBlock
     }
@@ -347,6 +356,9 @@ enum HtmlEncoder {
   private static func detectBlockTypeFromAttrs(
     _ attrs: [NSAttributedString.Key: Any]
   ) -> BlockType {
+    if (attrs[.unfoldBlockType] as? String) == "h1" { return .heading1 }
+    if (attrs[.unfoldBlockType] as? String) == "h2" { return .heading2 }
+    if (attrs[.unfoldBlockType] as? String) == "h3" { return .heading3 }
     if (attrs[.unfoldBlockType] as? String) == "codeBlock" { return .codeBlock }
     if (attrs[.unfoldBlockType] as? String) == "blockquote" { return .blockquote }
     if let listValue = attrs[.listItem] {

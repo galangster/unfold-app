@@ -321,6 +321,9 @@ enum HtmlDecoder {
         mutable.addAttribute(.font, value: font, range: paragraphRange)
         mutable.addAttribute(.unfoldBlockType, value: "codeBlock", range: paragraphRange)
       }
+      if block.tag == "h1" || block.tag == "h2" || block.tag == "h3" {
+        mutable.addAttribute(.unfoldBlockType, value: block.tag, range: paragraphRange)
+      }
       if block.tag == "blockquote" {
         mutable.addAttribute(.unfoldBlockType, value: "blockquote", range: paragraphRange)
       }
@@ -345,6 +348,9 @@ enum HtmlDecoder {
     ]
     if isCodeBlock {
       terminatorAttrs[.unfoldBlockType] = "codeBlock"
+    }
+    if block.tag == "h1" || block.tag == "h2" || block.tag == "h3" {
+      terminatorAttrs[.unfoldBlockType] = block.tag
     }
     if block.tag == "blockquote" {
       terminatorAttrs[.unfoldBlockType] = "blockquote"

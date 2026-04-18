@@ -1742,7 +1742,8 @@ const styles = StyleSheet.create({
   },
   titleInput: {
     fontFamily: FontFamily.display,
-    fontSize: FontSize['2xl'],
+    fontSize: FontSize['5xl'],
+    lineHeight: 56,
     letterSpacing: -0.3,
     paddingHorizontal: Spacing['6'],
     paddingTop: Spacing['4'],

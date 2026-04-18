@@ -407,6 +407,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         .font: font,
         .foregroundColor: UnfoldColors.text,
         .paragraphStyle: paragraph,
+        .unfoldBlockType: type,
       ], at: paraRange)
 
     case "pre":
@@ -615,9 +616,40 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       return
     }
 
-    let paraFont = text.attribute(
-      .font, at: paraRange.location, effectiveRange: nil) as? UIFont
-    let isHeading = (paraFont?.pointSize ?? 0) >= 18
+    let blockType = text.attribute(
+      .unfoldBlockType, at: paraRange.location, effectiveRange: nil) as? String
+    let isHeading = blockType == "h1" || blockType == "h2" || blockType == "h3"
+
+    if isHeading {
+      handled = true
+
+      let insertionLocation = range.location + range.length
+      let bodyAttrs = blockTypeAttributes("p")
+      let newline = NSAttributedString(string: "\n", attributes: bodyAttrs)
+
+      self.editor.replaceCharacters(in: range, with: newline)
+
+      let bodyParagraphStart = insertionLocation + 1
+      let newString = self.editor.attributedText.string as NSString
+      let bodyParagraphRange: NSRange
+      if bodyParagraphStart < self.editor.attributedText.length {
+        bodyParagraphRange = newString.paragraphRange(
+          for: NSRange(location: bodyParagraphStart, length: 0))
+      } else {
+        bodyParagraphRange = NSRange(location: insertionLocation, length: 1)
+      }
+
+      if bodyParagraphRange.length > 0 {
+        self.editor.removeAttribute(.unfoldBlockType, at: bodyParagraphRange)
+        self.editor.addAttributes(bodyAttrs, at: bodyParagraphRange)
+      }
+
+      self.editor.typingAttributes = bodyAttrs
+      self.editor.selectedRange = NSRange(location: bodyParagraphStart, length: 0)
+      self.refreshSelectionState()
+      self.scheduleHtmlEmit()
+      return
+    }
 
     let bodyPStyle = NSMutableParagraphStyle()
     bodyPStyle.paragraphSpacing = 4
@@ -714,9 +746,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // Reserve enough breathing room below the caret so descenders, paragraph
     // spacing, toolbar, and accessory bar all fit above the keyboard. 60pt
     // left the active line right against the keyboard edge on device even
-    // though the sim looked OK; bumping to 120pt gives a full line of gap
-    // plus padding to match Notes/Bear behavior across the device range.
-    let bottomSafeZone: CGFloat = 120
+    // though the sim looked OK; bumping to 200pt gives a full line of gap
+    // plus extra breathing room for the current line on device.
+    let bottomSafeZone: CGFloat = 200
     let topSafeZone: CGFloat = 20
 
     let caretTop = caretRect.minY
@@ -749,13 +781,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       return [.font: UnfoldFonts.body(), .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
     case "h1":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 16; p.lineHeightMultiple = 1.15
-      return [.font: UnfoldFonts.h1, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+      return [.font: UnfoldFonts.h1, .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "h1"]
     case "h2":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 12; p.lineHeightMultiple = 1.15
-      return [.font: UnfoldFonts.h2, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+      return [.font: UnfoldFonts.h2, .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "h2"]
     case "h3":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 10; p.lineHeightMultiple = 1.15
-      return [.font: UnfoldFonts.h3, .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
+      return [.font: UnfoldFonts.h3, .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "h3"]
     case "pre":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 6; p.paragraphSpacingBefore = 6
       return [.font: UIFont.monospacedSystemFont(ofSize: 15, weight: .regular), .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "codeBlock"]
