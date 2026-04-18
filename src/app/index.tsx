@@ -36,7 +36,7 @@ const BG = 'transparent';
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 
 // ─── Single character with pre-rendered fade ───────────────────────
-const RevealChar = React.memo(({
+const RevealChar = React.memo(function RevealChar({
   char,
   animDelay,
   fontFamily,
@@ -48,7 +48,7 @@ const RevealChar = React.memo(({
   fontFamily?: string;
   fontSize?: number;
   letterSpacing?: number;
-}) => {
+}) {
   const { colors } = useTheme();
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
@@ -112,13 +112,13 @@ function shuffleOrder(length: number): number[] {
 }
 
 // ─── Subtitle word that fades in like title chars ─────────────────
-const RevealWord = React.memo(({
+const RevealWord = React.memo(function RevealWord({
   word,
   animDelay,
 }: {
   word: string;
   animDelay: number;
-}) => {
+}) {
   const { colors } = useTheme();
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
