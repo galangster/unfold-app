@@ -159,6 +159,16 @@ export default function EveningWindDownScreen() {
     return getCheckIn(currentDevotional.id, currentDay.dayNumber, 'midday');
   }, [currentDevotional, currentDay, getCheckIn]);
 
+  const middayCheckInInput = useMemo(() => {
+    if (!middayCheckIn) return undefined;
+    return {
+      mood: middayCheckIn.mood,
+      moodLabel: middayCheckIn.moodLabel,
+      chipAnswer: middayCheckIn.chipAnswer,
+      freeText: middayCheckIn.freeText,
+    };
+  }, [middayCheckIn]);
+
   // Rule 2 fix: useQuery replaces manual useEffect + setState data fetching
   const {
     data: examen,
@@ -172,11 +182,7 @@ export default function EveningWindDownScreen() {
       currentDay?.dayNumber,
       currentDay?.title,
       user?.name,
-      middayCheckIn,
-      middayCheckIn?.mood,
-      middayCheckIn?.moodLabel,
-      middayCheckIn?.chipAnswer,
-      middayCheckIn?.freeText,
+      middayCheckInInput,
     ],
     queryFn: async () => {
       const result = await generateExamen(
@@ -184,14 +190,7 @@ export default function EveningWindDownScreen() {
           userName: user!.name,
           todayTheme: currentDay!.title,
           todayScripture: currentDay!.scriptureReference,
-          middayCheckIn: middayCheckIn
-            ? {
-                mood: middayCheckIn.mood,
-                moodLabel: middayCheckIn.moodLabel,
-                chipAnswer: middayCheckIn.chipAnswer,
-                freeText: middayCheckIn.freeText,
-              }
-            : undefined,
+          middayCheckIn: middayCheckInInput,
           currentSituation: user!.currentSituation,
         },
         {
@@ -242,7 +241,7 @@ export default function EveningWindDownScreen() {
     const msg = EVENING_CELEBRATION_MESSAGES[Math.floor(Math.random() * EVENING_CELEBRATION_MESSAGES.length)];
     setCelebrationMessage(msg);
     setShowCelebration(true);
-  }, [currentDevotional, currentDay, addCheckIn, gate]);
+  }, [currentDevotional, currentDay, addCheckIn, gate, markEveningWindDownCompleted]);
 
   const handleDismissCelebration = useCallback(() => {
     setShowCelebration(false);
