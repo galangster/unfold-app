@@ -164,8 +164,6 @@ export function TypewriterText({
     return lastSpace >= 0 ? lastSpace + 1 : 0;
   }, [normalizedText]);
 
-  const isComplete = visibleCount >= totalChars;
-
   // Progressively reveal characters
   useEffect(() => {
     setVisibleCount(0);
