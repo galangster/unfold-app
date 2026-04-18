@@ -3,10 +3,6 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
   FadeIn,
   FadeInUp,
   useReducedMotion,
@@ -26,7 +22,6 @@ export default function WelcomeCelebrationScreen() {
   const cardColor = isDark ? '#111214' : colors.backgroundElevated;
   const borderColor = isDark ? '#24262B' : colors.border;
   const textColor = isDark ? '#F5F5F7' : colors.text;
-  const mutedColor = isDark ? '#9DA3AE' : colors.textMuted;
   const user = useUnfoldStore((s) => s.user);
 
   const name = user?.name || 'Friend';

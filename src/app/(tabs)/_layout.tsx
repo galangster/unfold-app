@@ -20,7 +20,7 @@ import { useUnfoldStore } from '@/lib/store';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
-  state: { routes: Array<{ key: string; name: string; params?: object }>; index: number };
+  state: { routes: { key: string; name: string; params?: object }[]; index: number };
   descriptors: Record<string, { options: Record<string, any> }>;
   navigation: { emit: (event: any) => any; navigate: (...args: any[]) => void };
 };
@@ -58,11 +58,6 @@ function AnimatedTabIcon({
 
   const iconAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-  }));
-
-  const dotAnimStyle = useAnimatedStyle(() => ({
-    opacity: dotOpacity.value,
-    transform: [{ scale: dotScale.value }],
   }));
 
   return (
@@ -293,15 +288,12 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
 }
 
 export default function TabLayout() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   // Subscription gate state
   // DEV bypass: force premium in dev so the overlay doesn't block routine
   // development. Toggleable via the Dev Tools "Simulate Trial Expired" button
   // which sets debugForceTrialExpired=true to preview the churned-user UX.
-  const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? true);
-  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
-  const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
   const [activeTabName, setActiveTabName] = useState<string>('(today)');
 
   return (
