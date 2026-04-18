@@ -54,7 +54,7 @@ interface Props {
 
 const REVEAL_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 
-const RevealChar = React.memo(({ char, animDelay }: { char: string; animDelay: number }) => {
+const RevealChar = React.memo(function RevealChar({ char, animDelay }: { char: string; animDelay: number }) {
   const { colors } = useTheme();
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
