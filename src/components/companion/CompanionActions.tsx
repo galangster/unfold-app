@@ -4,7 +4,7 @@
  * Staggered 80ms fade-in per Storyboard D.
  */
 import { useEffect, useState } from 'react';
-import { View, TouchableOpacity, Alert } from 'react-native';
+import { Share, TouchableOpacity, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import Animated, {
@@ -17,8 +17,6 @@ import Animated, {
 import {
   CopyIcon,
   ShareNetworkIcon,
-  BookmarkSimpleIcon,
-  SpeakerHighIcon,
   ThumbsUpIcon,
   ThumbsDownIcon,
   CheckIcon,
@@ -27,7 +25,6 @@ import { useTheme } from '@/lib/theme';
 import { Duration } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
-import { Share } from 'react-native';
 
 const EASE_OUT = Easing.out(Easing.cubic);
 const STAGGER = 80;

@@ -86,7 +86,7 @@ export function Button({
   style,
   ...rest
 }: ButtonProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const sizeConfig = SIZE_CONFIG[size];
 
   // Dev warning for icon variant without accessibility

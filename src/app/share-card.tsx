@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,6 @@ import {
   useFonts as useSkiaFonts,
   Fill,
   Group,
-  RoundedRect,
   Rect,
   Paragraph,
   drawAsImage,
@@ -38,7 +37,7 @@ import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─── Output image dimensions (9:16 Instagram Stories) ─────────────────────────
 const IMG_W = 1080;
@@ -235,9 +234,6 @@ export default function ShareCardScreen() {
 
       // Calculate verse height and center vertically
       const verseH = verseParagraph.getHeight();
-      const refH = refParagraph.getHeight();
-      const brandH = brandParagraph.getHeight();
-
       // Layout: verse centered in top 70%, ref + brand in bottom area
       const contentTop = (IMG_H * 0.5) - (verseH / 2) - 40;
       const refY = contentTop + verseH + 60;

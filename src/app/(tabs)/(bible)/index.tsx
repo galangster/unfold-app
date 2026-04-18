@@ -10,7 +10,7 @@ import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useBibleDb } from '@/hooks/useBibleDb';
-import { BIBLE_BOOKS, OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
+import { OT_BOOKS, NT_BOOKS, getBookColor, getBookCategory, CATEGORY_LABELS, type BibleBookInfo, type BibleCategory } from '@/lib/bible-constants';
 import { DownloadBibleSheet } from '@/components/bible/DownloadBibleSheet';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
@@ -68,7 +68,7 @@ export default function BibleHomeScreen() {
   /** Group books by literary category and render with sub-labels */
   const renderCategorizedBooks = useCallback((books: BibleBookInfo[]) => {
     // Group books into contiguous category runs
-    const groups: Array<{ category: BibleCategory; books: BibleBookInfo[] }> = [];
+    const groups: { category: BibleCategory; books: BibleBookInfo[] }[] = [];
     for (const book of books) {
       const cat = getBookCategory(book.id);
       const last = groups[groups.length - 1];

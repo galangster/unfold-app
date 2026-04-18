@@ -5,36 +5,31 @@
  */
 import React, { useCallback, useRef, useMemo, useState } from 'react';
 import {
+  FlatList,
+  ListRenderItemInfo,
   View,
   Text,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { FlatList, ListRenderItemInfo } from 'react-native';
 // react-native-gesture-handler not needed — scroll banner uses normal TouchableOpacity
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  CaretDownIcon,
   CrownIcon,
   List,
   NotePencil,
 } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
-import Animated, {
+import {
   useSharedValue,
-  useAnimatedStyle,
-  withTiming,
   withSpring,
-  Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { Shadow } from '@/constants/shadows';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { useCompanionChat } from '@/lib/use-companion-chat';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
@@ -178,35 +173,6 @@ export default function CompanionScreen() {
 
   const handleVerseClose = useCallback(() => {
     setVerseSheetRef(null);
-  }, []);
-
-  // Scroll-to-bottom visibility
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const showScrollButtonRef = useRef(false);
-  const scrollButtonOpacity = useSharedValue(0);
-
-  const scrollButtonStyle = useAnimatedStyle(() => ({
-    opacity: scrollButtonOpacity.value,
-  }));
-
-  const handleScroll = useCallback(
-    (event: any) => {
-      const offsetY = event.nativeEvent.contentOffset.y;
-      const shouldShow = offsetY > 300;
-      if (shouldShow !== showScrollButtonRef.current) {
-        showScrollButtonRef.current = shouldShow;
-        setShowScrollButton(shouldShow);
-        scrollButtonOpacity.value = withTiming(shouldShow ? 1 : 0, {
-          duration: shouldShow ? 200 : 150,
-          easing: Easing.out(Easing.cubic),
-        });
-      }
-    },
-    [scrollButtonOpacity]
-  );
-
-  const scrollToBottom = useCallback(() => {
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
   const handleSend = useCallback(
@@ -368,8 +334,6 @@ export default function CompanionScreen() {
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             inverted
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="always"
             initialNumToRender={15}

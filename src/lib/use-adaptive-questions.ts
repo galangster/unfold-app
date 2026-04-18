@@ -13,7 +13,7 @@ import {
 import { logBugEvent } from './bug-logger';
 import { logger } from '@/lib/logger';
 import { PERSONA_BRIEF } from '@/constants/persona';
-import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/api-config';
+import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 
 interface UseAdaptiveQuestionsOptions {
   studyContext: StudyContext;

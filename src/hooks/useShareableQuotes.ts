@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Dimensions, Appearance } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -26,8 +26,7 @@ export function useShareableQuotes(): UseShareableQuotesReturn {
   const [quotes, setQuotes] = useState<ShareableQuote[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<ShareableQuote | null>(null);
-  const viewShotRef = useRef<any>(null);
-  
+
   // Extract quotes from a devotional day
   const extractQuotes = useCallback(async (day: DevotionalDay) => {
     setIsExtracting(true);

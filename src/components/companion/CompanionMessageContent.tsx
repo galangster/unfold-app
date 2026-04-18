@@ -19,7 +19,6 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { RichMessageText } from './RichMessageText';
 import { DevotionalCard } from './DevotionalCard';
 import type { CompanionMessage } from '@/lib/companion-chat-store';
-import type { DeepLinkData } from '@/lib/parse-deep-links';
 
 /** Lightweight markdown strip for streaming text — removes syntax chars only */
 function stripMarkdownLight(text: string): string {

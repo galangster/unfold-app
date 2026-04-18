@@ -52,8 +52,8 @@ export interface UseBibleSearchOptions {
 
 export const bibleSearchKeys = {
   all: ['bible-search'] as const,
-  search: (query: string, translation?: BibleTranslation) =>
-    ['bible-search', query, translation ?? 'all'] as const,
+  search: (query: string, translation: BibleTranslation | undefined, limit: number) =>
+    ['bible-search', query, translation ?? 'all', limit] as const,
 };
 
 // ─── Debounce hook ───────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ function useBibleSearchCore(
   const isQueryValid = debouncedQuery.length >= 2;
 
   const { data, isLoading, isError, error } = useQuery<BibleSearchResultRaw[]>({
-    queryKey: bibleSearchKeys.search(debouncedQuery, translation),
+    queryKey: bibleSearchKeys.search(debouncedQuery, translation, limit),
     queryFn: async () => {
       logger.log('[useBibleSearch] Searching:', debouncedQuery);
       return searchBible(debouncedQuery, translation, limit);

@@ -22,12 +22,12 @@ import { StudyContext } from '@/lib/adaptive-questions';
 
 interface AdaptiveQuestionFlowProps {
   studyContext: StudyContext;
-  onComplete: (answers: Array<{ question: string; answer: string }>) => void;
+  onComplete: (answers: { question: string; answer: string }[]) => void;
   onBack?: () => void;
 }
 
 export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: AdaptiveQuestionFlowProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const [answer, setAnswer] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -39,7 +39,6 @@ export function AdaptiveQuestionFlow({ studyContext, onComplete, onBack }: Adapt
     shouldGenerateNow,
     progressMessage,
     submitAnswer,
-    questionCount,
     estimatedProgress,
   } = useAdaptiveQuestions({
     studyContext,

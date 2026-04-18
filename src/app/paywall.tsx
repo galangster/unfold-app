@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { XIcon, PaletteIcon, BookOpenTextIcon, PencilSimpleLineIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BookmarkSimpleIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
+import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { GoldEmberField } from '@/components/home/GoldEmberField';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -19,76 +19,10 @@ import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
-import { getThemeById } from '@/constants/devotional-types';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
-import type { ThemeCategory } from '@/constants/devotional-types';
 
 type PlanChoice = 'yearly' | 'monthly';
-
-/** Maps a theme category to an identity-oriented transformation phrase */
-function getThemeIdentityPhrase(theme: ThemeCategory): string {
-  const map: Record<ThemeCategory, string> = {
-    trust: 'someone who rests easy, even when life doesn\u2019t',
-    identity: 'someone grounded in who they actually are',
-    rest: 'someone who can finally exhale',
-    purpose: 'someone who sees meaning in the everyday',
-    healing: 'someone walking toward wholeness',
-    gratitude: 'someone who notices what\u2019s already good',
-    surrender: 'someone free from needing to control it all',
-    courage: 'someone who steps forward anyway',
-    hope: 'someone who keeps their eyes on the light',
-    presence: 'someone who notices God in the ordinary',
-    conviction: 'someone whose faith has real edges',
-    joy: 'someone whose joy survives the hard days',
-    lament: 'someone brave enough to grieve honestly',
-    justice: 'someone who acts on what they believe',
-    discipline: 'someone whose habits match their heart',
-    wonder: 'someone who hasn\u2019t stopped being amazed',
-  };
-  return map[theme] ?? 'the version of yourself that follows through';
-}
-
-/** Build 2 concise identity statements — one sentence each, punchy */
-function buildIdentityStatements(
-  userName: string | undefined,
-  emotionalState: string | undefined,
-  spiritualSeeking: string | undefined,
-  selectedTheme: ThemeCategory | undefined,
-): string[] {
-  const statements: string[] = [];
-  const name = userName?.split(' ')[0];
-
-  // Statement 1: Anchor on their theme / seeking
-  if (selectedTheme) {
-    const identityPhrase = getThemeIdentityPhrase(selectedTheme);
-    statements.push(`Premium helps you become ${identityPhrase}.`);
-  } else if (spiritualSeeking) {
-    const seeking = spiritualSeeking.length > 60
-      ? spiritualSeeking.slice(0, 57).replace(/\s+\S*$/, '') + '...'
-      : spiritualSeeking;
-    statements.push(`You\u2019re looking for "${seeking}" \u2014 this is where you find it.`);
-  } else {
-    statements.push('Devotionals that grow with you, not generic content that stays the same.');
-  }
-
-  // Statement 2: Emotional or story-based
-  if (emotionalState && emotionalState.length > 10) {
-    statements.push('You opened up about something real. Premium keeps meeting you there.');
-  } else {
-    statements.push('Your story shapes every reading. Premium makes that personal.');
-  }
-
-  return statements;
-}
-
-/** Determine if a package has a free trial intro offer */
-function packageHasFreeTrial(pkg: PurchasesPackage | undefined | null): boolean {
-  if (!pkg) return false;
-  const intro = pkg.product.introPrice;
-  if (!intro) return false;
-  return intro.price === 0;
-}
 
 /** Get human-readable trial duration from a package */
 function getTrialDuration(pkg: PurchasesPackage | undefined | null): string | null {
@@ -122,19 +56,9 @@ export default function PaywallScreen() {
 
   // Pull user's onboarding data for personalization
   const userName = useUnfoldStore((s) => s.user?.name);
-  const emotionalState = useUnfoldStore((s) => s.user?.emotionalState);
-  const spiritualSeeking = useUnfoldStore((s) => s.user?.spiritualSeeking);
-  const selectedTheme = useUnfoldStore((s) => s.user?.selectedTheme);
-
   const firstName = userName?.split(' ')[0];
 
-  // Build the personalized identity statements (2 concise lines)
-  const identityStatements = useMemo(
-    () => buildIdentityStatements(userName, emotionalState, spiritualSeeking, selectedTheme),
-    [userName, emotionalState, spiritualSeeking, selectedTheme],
-  );
-
-  const { data: offeringsResult, isLoading: isLoadingOfferings, isError: isOfferingsError, refetch: refetchOfferings } = useQuery({
+  const { data: offeringsResult, isLoading: isLoadingOfferings, refetch: refetchOfferings } = useQuery({
     queryKey: ['revenuecat', 'offerings'],
     queryFn: getOfferings,
     enabled: isRevenueCatEnabled(),
@@ -151,9 +75,6 @@ export default function PaywallScreen() {
     (pkg) => pkg.identifier === '$rc_annual'
   );
 
-  // Track whether offerings loaded but packages are missing (configuration issue)
-  const offeringsLoaded = !isLoadingOfferings && offeringsResult !== undefined;
-  const hasPackages = !!(monthlyPackage || yearlyPackage);
   const isRevenueCatDisabled = !isRevenueCatEnabled();
 
   // Check trial eligibility via RevenueCat SDK
@@ -185,19 +106,6 @@ export default function PaywallScreen() {
     const eligibility = trialEligibility[selectedPkg.product.identifier];
     return eligibility?.status === 2;
   }, [selectedPlan, yearlyPackage, monthlyPackage, trialEligibility]);
-
-  // Check if either plan has a trial (for badge on plan cards)
-  const yearlyHasTrial = useMemo(() => {
-    if (!trialEligibility || !yearlyPackage) return false;
-    const e = trialEligibility[yearlyPackage.product.identifier];
-    return e?.status === 2;
-  }, [yearlyPackage, trialEligibility]);
-
-  const monthlyHasTrial = useMemo(() => {
-    if (!trialEligibility || !monthlyPackage) return false;
-    const e = trialEligibility[monthlyPackage.product.identifier];
-    return e?.status === 2;
-  }, [monthlyPackage, trialEligibility]);
 
   // Trial duration strings
   const yearlyTrialDuration = getTrialDuration(yearlyPackage) ?? '7-day';

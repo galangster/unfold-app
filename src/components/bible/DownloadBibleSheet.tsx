@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { BookBookmarkIcon, WifiHighIcon, WarningCircleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';

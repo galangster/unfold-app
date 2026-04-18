@@ -3,7 +3,7 @@
  * Run: npx expo start --web
  * Then open: http://localhost:8081/showcase
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';

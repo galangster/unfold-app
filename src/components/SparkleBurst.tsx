@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -9,7 +9,6 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { useEffect, useMemo } from 'react';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
@@ -181,9 +180,6 @@ export function SparkleBurst({
   const color = propColor ?? colors.accent;
   const count = Math.min(particleCount, MAX_PARTICLES);
 
-  // Skip particle burst entirely when reduced motion is on
-  if (reducedMotion) return null;
-
   const particles = useMemo(() => {
     return Array.from({ length: count }, (_, i) => {
       const baseAngle = (i * (360 / count)) * (Math.PI / 180);
@@ -197,6 +193,9 @@ export function SparkleBurst({
       };
     });
   }, [count]);
+
+  // Skip particle burst entirely when reduced motion is on
+  if (reducedMotion) return null;
 
   return (
     <View

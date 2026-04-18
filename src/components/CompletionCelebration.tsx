@@ -4,13 +4,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSequence,
   withDelay,
   withSpring,
   withRepeat,
   Easing,
   interpolate,
-  runOnJS,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
@@ -23,7 +21,6 @@ import { GoldEmberField } from '@/components/home/GoldEmberField';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CENTER_X = SCREEN_WIDTH / 2;
 const CENTER_Y = SCREEN_HEIGHT / 2;
-const DIAGONAL = Math.sqrt(SCREEN_WIDTH ** 2 + SCREEN_HEIGHT ** 2);
 
 // ─── Pre-baked completion messages ───────────────────────────────────────────
 // God/Jesus-focused: glory goes to Him, not to the reader.
@@ -99,71 +96,6 @@ const SERIES_MESSAGES = [
 
 function pickRandom(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]!;
-}
-
-// ─── Ripple ring that expands from center ────────────────────────────────────
-function RippleRing({ delay, maxRadius, accentColor }: { delay: number; maxRadius: number; accentColor: string }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withDelay(
-      delay,
-      withTiming(1, { duration: 1800, easing: Easing.out(Easing.cubic) })
-    );
-  }, [delay, progress]);
-
-  const style = useAnimatedStyle(() => {
-    const size = interpolate(progress.value, [0, 1], [0, maxRadius * 2]);
-    const opacity = interpolate(progress.value, [0, 0.15, 0.7, 1], [0, 0.25, 0.08, 0]);
-    return {
-      width: size,
-      height: size,
-      borderRadius: size / 2,
-      opacity,
-      borderWidth: 1.5,
-      borderColor: accentColor,
-      position: 'absolute' as const,
-      left: CENTER_X - size / 2,
-      top: CENTER_Y - size / 2,
-    };
-  });
-
-  return <Animated.View style={style} />;
-}
-
-// ─── Expanding circle that fills the screen ─────────────────────────────────
-function ExpandingCircle({ accentColor, onExpandComplete }: { accentColor: string; onExpandComplete?: () => void }) {
-  const scale = useSharedValue(0);
-  const opacity = useSharedValue(0.8);
-
-  useEffect(() => {
-    // Start small and expand to fill screen
-    scale.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.cubic) }, (finished) => {
-      if (finished && onExpandComplete) {
-        runOnJS(onExpandComplete)();
-      }
-    });
-    
-    // Fade out slightly as it fills
-    opacity.value = withSequence(
-      withTiming(0.6, { duration: 400 }),
-      withTiming(0.25, { duration: 800 })
-    );
-  }, [scale, opacity, onExpandComplete]);
-
-  const style = useAnimatedStyle(() => ({
-    position: 'absolute' as const,
-    width: DIAGONAL,
-    height: DIAGONAL,
-    borderRadius: DIAGONAL / 2,
-    left: CENTER_X - DIAGONAL / 2,
-    top: CENTER_Y - DIAGONAL / 2,
-    backgroundColor: accentColor,
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
-
-  return <Animated.View style={style} />;
 }
 
 // ─── Luminous mote that drifts upward with organic sway ─────────────────────

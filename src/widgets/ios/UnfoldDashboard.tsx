@@ -18,15 +18,14 @@ import {
   frame,
   padding,
   background,
-  cornerRadius,
   opacity,
   lineLimit,
   truncationMode,
   lineSpacing,
   kerning,
   accessibilityLabel,
+  shapes,
 } from '@expo/ui/swift-ui/modifiers';
-import { shapes } from '@expo/ui/swift-ui/modifiers';
 
 type DashboardWidgetProps = {
   streakCount: number;

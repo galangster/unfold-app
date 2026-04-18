@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
@@ -16,11 +16,10 @@ import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
-import { useUnfoldStore } from '@/lib/store';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
-  state: { routes: Array<{ key: string; name: string; params?: object }>; index: number };
+  state: { routes: { key: string; name: string; params?: object }[]; index: number };
   descriptors: Record<string, { options: Record<string, any> }>;
   navigation: { emit: (event: any) => any; navigate: (...args: any[]) => void };
 };
@@ -30,39 +29,24 @@ const SPRING_CONFIG = Spring.snappy;
 /** Animated wrapper for each tab icon -- handles scale spring + dot indicator */
 function AnimatedTabIcon({
   focused,
-  color,
-  accentColor,
   children,
 }: {
   focused: boolean;
-  color: string;
-  accentColor: string;
   children: React.ReactNode;
 }) {
   const scale = useSharedValue(focused ? 1 : 1);
-  const dotOpacity = useSharedValue(focused ? 1 : 0);
-  const dotScale = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
     if (focused) {
       // Spring pop on select
       scale.value = withSpring(1.12, SPRING_CONFIG);
-      dotOpacity.value = withSpring(1, SPRING_CONFIG);
-      dotScale.value = withSpring(1, SPRING_CONFIG);
     } else {
       scale.value = withSpring(1, SPRING_CONFIG);
-      dotOpacity.value = withTiming(0, { duration: Duration.normal });
-      dotScale.value = withTiming(0, { duration: Duration.normal });
     }
-  }, [focused, scale, dotOpacity, dotScale]);
+  }, [focused, scale]);
 
   const iconAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
-  }));
-
-  const dotAnimStyle = useAnimatedStyle(() => ({
-    opacity: dotOpacity.value,
-    transform: [{ scale: dotScale.value }],
   }));
 
   return (
@@ -75,7 +59,7 @@ function AnimatedTabIcon({
 }
 
 /** Fully custom tab bar with frosted glass, animated indicators, and premium feel */
-function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarProps & { onTabChange?: (name: string) => void }) {
+function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const tabBarHidden = useUIState((s) => s.tabBarHidden);
@@ -84,14 +68,6 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
   // Audio player auto-collapse: sheet → pill on tab switch
   const playerTier = useAudioPlayerState((s) => s.playerTier);
   const setPlayerTier = useAudioPlayerState((s) => s.setTier);
-
-  // Report active tab to parent for paywall gating
-  useEffect(() => {
-    const activeRoute = state.routes[state.index];
-    if (activeRoute && onTabChange) {
-      onTabChange(activeRoute.name);
-    }
-  }, [state.index, state.routes, onTabChange]);
 
   // Slide channel (scroll-based) and instant channel (verse selection)
   const translateY = useSharedValue(0);
@@ -293,22 +269,17 @@ function CustomTabBar({ state, descriptors, navigation, onTabChange }: TabBarPro
 }
 
 export default function TabLayout() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   // Subscription gate state
   // DEV bypass: force premium in dev so the overlay doesn't block routine
   // development. Toggleable via the Dev Tools "Simulate Trial Expired" button
   // which sets debugForceTrialExpired=true to preview the churned-user UX.
-  const isPremiumReal = useUnfoldStore((s) => s.user?.isPremium ?? true);
-  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
-  const isPremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremiumReal;
-  const [activeTabName, setActiveTabName] = useState<string>('(today)');
-
   return (
     <View style={{ flex: 1 }}>
       <Tabs
         tabBar={(props: any) => (
-          <CustomTabBar {...props} onTabChange={setActiveTabName} />
+          <CustomTabBar {...props} />
         )}
         screenOptions={{
           headerShown: false,

@@ -23,22 +23,18 @@ import {
   HeartIcon,
   BookmarkSimpleIcon,
   PencilSimpleIcon,
-  CheckIcon,
-  XIcon,
   BookOpenIcon,
-  FolderSimpleIcon,
   SparkleIcon,
   FireIcon,
   HeartStraightIcon,
   CompassIcon,
   ChatCircleIcon,
+  MagnifyingGlassIcon,
 } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
-import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { Button, Card, Chip, Input, Sheet, alpha } from '@/components/ui';
-import { MagnifyingGlassIcon } from 'phosphor-react-native';
 
 // ---------------------------------------------------------------------------
 // Section Header
@@ -67,7 +63,7 @@ function SubLabel({ text }: { text: string }) {
 // ---------------------------------------------------------------------------
 
 export default function ComponentCatalogScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['All Notes']));

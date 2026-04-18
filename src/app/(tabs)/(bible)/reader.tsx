@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, KeyboardAvoidingView, Platform, Keyboard, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TextInput, Platform, Keyboard, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, withDelay, withSpring, Easing, runOnJS, useReducedMotion } from 'react-native-reanimated';
@@ -42,7 +42,7 @@ const HIGHLIGHT_BG: Record<BibleHighlightColor, { light: string; dark: string }>
   red: { light: 'rgba(232, 112, 112, 0.30)', dark: 'rgba(232, 112, 112, 0.25)' },
 };
 
-const HIGHLIGHT_COLORS: Array<{ key: BibleHighlightColor; color: string }> = [
+const HIGHLIGHT_COLORS: { key: BibleHighlightColor; color: string }[] = [
   { key: 'yellow', color: '#F0C850' },
   { key: 'green', color: '#6BBF7B' },
   { key: 'blue', color: '#6BA3D6' },
@@ -76,7 +76,6 @@ const ANIM = {
   toastExit:     150,   // toast fade out
 };
 
-const FLASH_SPRING = { damping: 20, stiffness: 400 };
 const EASE_OUT_QUART = Easing.bezier(0.165, 0.84, 0.44, 1);
 
 // ─── Chapter swipe config ─────────────────────────────────────────────────
@@ -110,7 +109,7 @@ type TextLine = { x: number; y: number; width: number; height: number };
 //   20px+  → Pan activates (chapter swipe)
 const VERSE_TAP_MAX_DISTANCE = 8;
 
-const VerseItem = React.memo(({
+const VerseItem = React.memo(function VerseItem({
   verse,
   fontSize,
   lineHeight,
@@ -136,7 +135,7 @@ const VerseItem = React.memo(({
   isDark: boolean;
   textColor: string;
   onPress: () => void;
-}) => {
+}) {
   const [textLines, setTextLines] = useState<TextLine[]>([]);
 
   // Flash animation: quick fade in → hold → smooth fade out
@@ -153,7 +152,7 @@ const VerseItem = React.memo(({
     } else {
       flashOpacity.value = 0;
     }
-  }, [isFlashing]);
+  }, [flashOpacity, isFlashing]);
 
   const flashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
@@ -356,7 +355,7 @@ export default function BibleReaderScreen() {
     } else {
       contextBarSlideY.value = 8;
     }
-  }, [showActions]);
+  }, [contextBarSlideY, showActions]);
   const contextBarSlideStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: contextBarSlideY.value }],
   }));
