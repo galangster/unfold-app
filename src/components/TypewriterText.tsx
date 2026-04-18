@@ -37,7 +37,7 @@ interface TypewriterTextProps {
 }
 
 // ─── Magical character that animates on mount ──────────────────────
-const MagicalChar = React.memo(({
+const MagicalChar = React.memo(function MagicalChar({
   char,
   accentColor,
   textColor,
@@ -51,7 +51,7 @@ const MagicalChar = React.memo(({
   style?: TextStyle;
   isWordStart: boolean;
   shimmer?: boolean;
-}) => {
+}) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(6);
   const scale = useSharedValue(0.85);
