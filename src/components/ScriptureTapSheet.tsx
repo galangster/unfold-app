@@ -51,15 +51,12 @@ export function ScriptureTapSheet({
   dayTitle,
   devotionalTitle,
 }: ScriptureTapSheetProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const router = useRouter();
   const addBookmark = useUnfoldStore((s) => s.addBookmark);
   const isBookmarked = useUnfoldStore((s) => s.isBookmarked);
   const user = useUnfoldStore((s) => s.user);
-
-  const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
-  const devotionals = useUnfoldStore((s) => s.devotionals);
 
   const [verse, setVerse] = useState<VerseResult | null>(null);
   const [loading, setLoading] = useState(false);
