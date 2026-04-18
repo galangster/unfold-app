@@ -1,5 +1,3 @@
-import { DevotionalType, ThemeCategory } from '@/constants/devotional-types';
-
 export interface QA {
   question: string;
   answer: string;
@@ -50,7 +48,6 @@ export function calculateConfidence(qa: QA[]): ConfidenceResult {
 
   const latest = qa[qa.length - 1];
   const allText = qa.map(q => q.answer).join(' ').toLowerCase();
-  const allQuestions = qa.map(q => q.question).join(' ').toLowerCase();
 
   // Spiritual context scoring (0-25)
   const spiritualKeywords = [
