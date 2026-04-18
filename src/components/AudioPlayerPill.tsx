@@ -15,7 +15,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, {
   FadeInDown,
   FadeOutDown,

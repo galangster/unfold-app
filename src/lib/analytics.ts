@@ -2,7 +2,7 @@
  * Firebase Analytics Module
  * Tracks user behavior and app usage for data-driven decisions
  */
-import analytics, { FirebaseAnalyticsTypes } from '@/lib/mockFirebaseAnalytics';
+import analytics from '@/lib/mockFirebaseAnalytics';
 import { logger } from './logger';
 
 // Analytics event names - centralized for consistency

@@ -30,13 +30,13 @@ export interface VerseResult {
 /** Shape of the bible-api.com JSON response */
 interface BibleApiResponse {
   reference: string;
-  verses: Array<{
+  verses: {
     book_id: string;
     book_name: string;
     chapter: number;
     verse: number;
     text: string;
-  }>;
+  }[];
   text: string;
   translation_id: string;
   translation_name: string;

@@ -12,7 +12,6 @@ import {
   type NudgeContext,
   type NudgeState,
   type EligibleNudge,
-  type NudgeType,
 } from '@/lib/nudges';
 
 interface UsePremiumNudgeParams {
