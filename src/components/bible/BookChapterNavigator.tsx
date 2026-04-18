@@ -62,7 +62,7 @@ const TAB_PADDING = 3;
 
 // ─── Animated Tab Indicator ─────────────────────────────────────────────────
 
-const StepTabs = React.memo(({
+const StepTabs = React.memo(function StepTabs({
   activeIndex,
   onTabPress,
   colors,
@@ -72,7 +72,7 @@ const StepTabs = React.memo(({
   onTabPress: (index: number) => void;
   colors: any;
   isDark: boolean;
-}) => {
+}) {
   const trackBg = isDark ? 'rgba(245, 240, 235, 0.08)' : 'rgba(28, 23, 16, 0.06)';
   const pillBg = isDark ? 'rgba(245, 240, 235, 0.18)' : 'rgba(28, 23, 16, 0.12)';
 
