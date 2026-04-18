@@ -590,14 +590,12 @@ interface MainCardProps {
 
 function MainCard({ state }: MainCardProps) {
   const { colors, isDark } = useTheme();
-  const { entering } = useAccessibleAnimation();
   const scale = useSharedValue(1);
 
   const scaleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
-  const isTomorrow = state.type === 'tomorrow-locked';
   const isCompleted = state.type === 'complete-today' || state.type === 'tomorrow-locked';
   const dayData = state.dayData;
   const dayLabel = state.dayLabel;
