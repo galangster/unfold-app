@@ -55,10 +55,14 @@ export function normalizeDevotionalIdentity(devotional: Devotional): Devotional 
 
 export function reconcileGenerationResultIdentity(
   result: GenerationResultPayload,
-  fallbackDevotionalId: string,
+  fallbackDevotionalId?: string | null,
   fallbackDayNumber?: number,
 ): GenerationResultPayload {
   const devotionalId = result.devotionalId ?? fallbackDevotionalId;
+
+  if (!devotionalId) {
+    throw new Error('Generation result is missing a canonical devotionalId');
+  }
 
   return {
     ...result,

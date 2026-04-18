@@ -22,7 +22,7 @@ import {
   normalizeGeneratedDayIdentity,
   reconcileGenerationResultIdentity,
 } from '../generation-reconciliation';
-import { recoverCompletedGenerationResult } from '../generation-api';
+import { normalizeGenerationResult, recoverCompletedGenerationResult } from '../generation-api';
 import { compositeId } from '../sync-ids';
 
 describe('generation reconciliation', () => {
@@ -173,5 +173,25 @@ describe('generation reconciliation', () => {
     expect(recovered?.devotionalDay.devotionalId).toBe('server-devo');
     expect(recovered?.devotionalDay.id).toBe(compositeId('server-devo', 7));
     expect(mockFetch.mock.calls[0][0]).toContain('/api/jobs/job-409');
+  });
+
+  it('throws when neither backend nor local context can provide a canonical devotional id', () => {
+    expect(() =>
+      normalizeGenerationResult(
+        {
+          devotionalDay: {
+            dayNumber: 1,
+            title: 'Missing ID',
+            scriptureReference: 'Psalm 1:1',
+            scriptureText: 'Blessed is the one',
+            bodyText: 'Body',
+            quotableLine: 'Quote',
+            isRead: false,
+          },
+        },
+        null,
+        1,
+      ),
+    ).toThrow('canonical devotionalId');
   });
 });

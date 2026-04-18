@@ -10,6 +10,30 @@ import { logger } from "./logger";
 
 const MIGRATION_KEY = "generation-migration-v1-complete";
 
+async function postMigrationStep(
+  headers: Record<string, string>,
+  path: string,
+  body: unknown,
+): Promise<boolean> {
+  try {
+    const response = await fetch(`${PRIMARY_BACKEND_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      logger.warn(`[gen-migration] ${path} failed with status ${response.status}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    logger.warn(`[gen-migration] ${path} request failed:`, error);
+    return false;
+  }
+}
+
 export async function migrateGenerationDataToServer(): Promise<void> {
   // Check if already migrated
   if (mmkvStorage.getItem(MIGRATION_KEY) === "true") return;
@@ -18,6 +42,8 @@ export async function migrateGenerationDataToServer(): Promise<void> {
   const headers = await getAuthHeaders();
 
   try {
+    let migrationSucceeded = true;
+
     // Gather progressive devotionals to migrate
     const devotionals = store.devotionals.filter(
       (d) => d.generationMode === "progressive"
@@ -26,47 +52,56 @@ export async function migrateGenerationDataToServer(): Promise<void> {
     for (const devo of devotionals) {
       // Push series arc
       if (devo.seriesArc) {
-        await fetch(`${PRIMARY_BACKEND_URL}/api/jobs/migrate-arc`, {
-          method: "POST",
+        const stepSucceeded = await postMigrationStep(
           headers,
-          body: JSON.stringify({
+          "/api/jobs/migrate-arc",
+          {
             devotionalId: devo.id,
             arc: devo.seriesArc,
-          }),
-        }).catch(() => {});
+          },
+        );
+        migrationSucceeded = migrationSucceeded && stepSucceeded;
       }
 
       // Push progressive memory
       if (devo.progressiveMemory) {
-        await fetch(`${PRIMARY_BACKEND_URL}/api/jobs/migrate-memory`, {
-          method: "POST",
+        const stepSucceeded = await postMigrationStep(
           headers,
-          body: JSON.stringify({
+          "/api/jobs/migrate-memory",
+          {
             devotionalId: devo.id,
             memory: devo.progressiveMemory,
-          }),
-        }).catch(() => {});
+          },
+        );
+        migrationSucceeded = migrationSucceeded && stepSucceeded;
       }
     }
 
     // Push used scriptures
     const scriptures = store.usedScriptures ?? [];
     if (scriptures.length > 0) {
-      await fetch(`${PRIMARY_BACKEND_URL}/api/jobs/migrate-scriptures`, {
-        method: "POST",
+      const stepSucceeded = await postMigrationStep(
         headers,
-        body: JSON.stringify({ scriptures }),
-      }).catch(() => {});
+        "/api/jobs/migrate-scriptures",
+        { scriptures },
+      );
+      migrationSucceeded = migrationSucceeded && stepSucceeded;
     }
 
     // Push persona history
     const personas = store.seriesPersonaHistory ?? [];
     if (personas.length > 0) {
-      await fetch(`${PRIMARY_BACKEND_URL}/api/jobs/migrate-personas`, {
-        method: "POST",
+      const stepSucceeded = await postMigrationStep(
         headers,
-        body: JSON.stringify({ personas }),
-      }).catch(() => {});
+        "/api/jobs/migrate-personas",
+        { personas },
+      );
+      migrationSucceeded = migrationSucceeded && stepSucceeded;
+    }
+
+    if (!migrationSucceeded) {
+      logger.warn("[gen-migration] Migration incomplete — will retry next launch");
+      return;
     }
 
     // Mark migration complete

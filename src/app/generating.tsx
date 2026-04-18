@@ -66,6 +66,14 @@ const WAITING_MESSAGES = [
 // Polling interval for server job status (ms)
 const POLL_INTERVAL_MS = 3000;
 
+function requireCanonicalDevotionalId(devotionalId?: string | null): string {
+  if (!devotionalId) {
+    throw new Error('Generation completed without a canonical devotionalId');
+  }
+
+  return devotionalId;
+}
+
 function toFriendlyGenerationError(errorMessage: string): string {
   const normalized = errorMessage.toLowerCase();
 
@@ -359,9 +367,9 @@ export default function GeneratingScreen() {
     seriesTitle?: string;
     totalDays?: number;
     arc?: import('@/lib/store').SeriesArc;
-    devotionalId?: string;
+    devotionalId: string;
   }) => {
-    const devotionalId = result.devotionalId ?? `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
     const seriesTitle = result.seriesTitle ?? 'Your Devotional';
     const totalDays = result.totalDays ?? devotionalLength;
     const day1 = result.devotionalDay;
@@ -459,7 +467,7 @@ export default function GeneratingScreen() {
           handleGenerationComplete(
             normalizeGenerationResult(
               status.result,
-              status.result.devotionalId ?? useUnfoldStore.getState().generationSession.devotionalId ?? 'unknown',
+              useUnfoldStore.getState().generationSession.devotionalId,
               1,
             ),
           );
@@ -514,6 +522,9 @@ export default function GeneratingScreen() {
         // Only resume if not expired (15 min)
         if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
           logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+          if (inflight.devotionalId) {
+            startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
+          }
           setPendingJobId(inflight.jobId);
           pollStartTime.current = inflight.submittedAt;
           startPolling(inflight.jobId);
@@ -651,6 +662,7 @@ export default function GeneratingScreen() {
         // Update MMKV with new jobId
         mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
           jobId,
+          devotionalId: useUnfoldStore.getState().generationSession.devotionalId,
           submittedAt: Date.now(),
         }));
         startPolling(jobId);

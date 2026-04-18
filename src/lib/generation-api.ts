@@ -51,7 +51,7 @@ export interface GenerationJobResponse {
 
 export function normalizeGenerationResult(
   result: GenerationResultPayload,
-  fallbackDevotionalId: string,
+  fallbackDevotionalId?: string | null,
   fallbackDayNumber?: number,
 ): GenerationResultPayload {
   return reconcileGenerationResultIdentity(
