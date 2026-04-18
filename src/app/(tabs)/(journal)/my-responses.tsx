@@ -17,7 +17,7 @@ const MAX_CONTENT_HEIGHT = 100; // Max height for content preview
 
 export default function MyResponsesScreen() {
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const devotionals = useUnfoldStore((s) => s.devotionals);

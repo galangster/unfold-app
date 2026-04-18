@@ -1,5 +1,4 @@
 import * as StoreReview from 'expo-store-review';
-import { Platform } from 'react-native';
 import { logger } from '@/lib/logger';
 
 interface ReviewPromptConfig {
