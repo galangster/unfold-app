@@ -18,7 +18,7 @@ import Animated, {
 // Old Swipeable API removed — crashes on Fabric. Using Gesture.Pan() instead (see SwipeableStudyCard).
 import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
-import { CaretLeftIcon, BookOpenIcon, LockIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from 'phosphor-react-native';
+import { CaretLeftIcon, BookOpenIcon, CheckIcon, DownloadSimpleIcon, MagnifyingGlassIcon, XCircleIcon, TrashIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -466,7 +466,6 @@ export default function PastDevotionalsScreen() {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
   const user = useUnfoldStore((s) => s.user);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);

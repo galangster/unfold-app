@@ -20,7 +20,6 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 // See ~/vault/standards/one-owner-per-os-resource.md
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
-type DayKey = (typeof DAYS)[number];
 
 function timeStringToDate(time: string): Date {
   const [h, m] = time.split(':').map(Number);
