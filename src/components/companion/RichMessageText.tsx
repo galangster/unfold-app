@@ -30,16 +30,6 @@ type TextSegment =
   | { type: 'italic'; content: string }
   | { type: 'verse'; reference: string };
 
-// ── Strip markdown from a line (headers, horizontal rules) ───────────────
-
-function stripLineMarkdown(line: string): string {
-  // Remove header markers: # Header → Header
-  let cleaned = line.replace(/^#{1,6}\s+/, '');
-  // Remove horizontal rules
-  if (/^[-*_]{3,}\s*$/.test(cleaned)) return '';
-  return cleaned;
-}
-
 // ── Pre-process full text: strip markdown line-level syntax ──────────────
 
 function preprocessMarkdown(text: string): string {
