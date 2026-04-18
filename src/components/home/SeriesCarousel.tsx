@@ -133,9 +133,6 @@ export function SeriesCarousel() {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
 
-  // Zone 5 collapses when there's 1 or fewer past series
-  if (sortedSeries.length <= 1) return null;
-
   const showSeeAll = sortedSeries.length >= 4;
 
   const handleSeriesPress = useCallback(
@@ -166,6 +163,9 @@ export function SeriesCarousel() {
     ),
     [scrollX, colors, handleSeriesPress],
   );
+
+  // Zone 5 collapses when there's 1 or fewer past series
+  if (sortedSeries.length <= 1) return null;
 
   return (
     <Animated.View
