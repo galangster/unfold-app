@@ -9,7 +9,6 @@ import { Text, VStack, HStack, Image, Spacer } from '@expo/ui/swift-ui';
 import {
   font,
   foregroundStyle,
-  frame,
   padding,
 } from '@expo/ui/swift-ui/modifiers';
 
