@@ -400,7 +400,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         }
       }()
       let paragraph = NSMutableParagraphStyle()
-      paragraph.paragraphSpacing = 8
+      // Keep headings visually distinct, but keep the handoff into body copy
+      // tight enough that the first paragraph doesn't feel detached.
+      paragraph.paragraphSpacing = 2
       paragraph.paragraphSpacingBefore = spacingBefore
       paragraph.lineHeightMultiple = 1.15
       editor.addAttributes([
@@ -780,13 +782,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       p.paragraphSpacing = 4
       return [.font: UnfoldFonts.body(), .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
     case "h1":
-      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 16; p.lineHeightMultiple = 1.15
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 2; p.paragraphSpacingBefore = 16; p.lineHeightMultiple = 1.15
       return [.font: UnfoldFonts.h1, .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "h1"]
     case "h2":
-      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 12; p.lineHeightMultiple = 1.15
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 2; p.paragraphSpacingBefore = 12; p.lineHeightMultiple = 1.15
       return [.font: UnfoldFonts.h2, .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "h2"]
     case "h3":
-      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 8; p.paragraphSpacingBefore = 10; p.lineHeightMultiple = 1.15
+      let p = NSMutableParagraphStyle(); p.paragraphSpacing = 2; p.paragraphSpacingBefore = 10; p.lineHeightMultiple = 1.15
       return [.font: UnfoldFonts.h3, .foregroundColor: UnfoldColors.text, .paragraphStyle: p, .unfoldBlockType: "h3"]
     case "pre":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 6; p.paragraphSpacingBefore = 6
