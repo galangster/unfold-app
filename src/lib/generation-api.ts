@@ -7,6 +7,7 @@
  *   3. retryJob            — POST /api/jobs/:jobId/retry
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
+import { reconcileGenerationResultIdentity, type GenerationResultPayload } from './generation-reconciliation';
 import { mmkvStorage } from "./mmkv-storage";
 
 /** MMKV key for caching the active dynamic prompt example */
@@ -40,18 +41,24 @@ function fetchWithTimeout(
 export interface GenerationJobResponse {
   jobId: string;
   status: "pending" | "processing" | "complete" | "failed";
-  result?: {
-    devotionalDay: import("./store").DevotionalDay;
-    seriesTitle?: string;
-    totalDays?: number;
-    arc?: import("./store").SeriesArc;
-    devotionalId?: string;
-  };
+  result?: GenerationResultPayload;
   error?: string;
   retryCount?: number;
   canRetry?: boolean;
   createdAt?: string;
   completedAt?: string;
+}
+
+export function normalizeGenerationResult(
+  result: GenerationResultPayload,
+  fallbackDevotionalId: string,
+  fallbackDayNumber?: number,
+): GenerationResultPayload {
+  return reconcileGenerationResultIdentity(
+    result,
+    fallbackDevotionalId,
+    fallbackDayNumber,
+  );
 }
 
 export async function submitGenerationJob(params: {
@@ -187,4 +194,27 @@ export async function findCompletedJob(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Find job failed: ${response.status}`);
   return response.json();
+}
+
+/**
+ * Shared recovery path for screens that need to reconcile a completed job back
+ * into local state. Uses direct job lookup for 409 recovery when possible,
+ * otherwise falls back to devotionalId/dayNumber discovery.
+ */
+export async function recoverCompletedGenerationResult(params: {
+  devotionalId: string;
+  dayNumber: number;
+  existingJobId?: string | null;
+}): Promise<GenerationResultPayload | null> {
+  const response = params.existingJobId
+    ? await fetchJobResult(params.existingJobId).catch(() => null)
+    : await findCompletedJob(params.devotionalId, params.dayNumber);
+
+  if (!response?.result?.devotionalDay) return null;
+
+  return normalizeGenerationResult(
+    response.result,
+    params.devotionalId,
+    params.dayNumber,
+  );
 }

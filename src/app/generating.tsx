@@ -25,7 +25,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
-import { submitGenerationJob, pollJobStatus, retryJob } from '@/lib/generation-api';
+import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, normalizeGenerationResult, ApiError } from '@/lib/generation-api';
 
 import {
   requestNotificationPermissions,
@@ -456,7 +456,13 @@ export default function GeneratingScreen() {
 
         if (status.status === 'complete' && status.result) {
           pollingRef.current = false;
-          handleGenerationComplete(status.result);
+          handleGenerationComplete(
+            normalizeGenerationResult(
+              status.result,
+              status.result.devotionalId ?? useUnfoldStore.getState().generationSession.devotionalId ?? 'unknown',
+              1,
+            ),
+          );
           return;
         }
 
@@ -565,6 +571,19 @@ export default function GeneratingScreen() {
         pollStartTime.current = Date.now();
         startPolling(jobId);
       } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          const recovered = await recoverCompletedGenerationResult({
+            devotionalId,
+            dayNumber: 1,
+            existingJobId: err.existingJobId,
+          }).catch(() => null);
+
+          if (recovered?.devotionalDay) {
+            handleGenerationComplete(recovered);
+            return;
+          }
+        }
+
         const errorMessage = err instanceof Error ? err.message : String(err);
         logger.error('[generating] Job submission failed:', errorMessage);
         Sentry.captureException(err, {

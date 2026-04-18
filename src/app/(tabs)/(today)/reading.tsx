@@ -38,7 +38,7 @@ import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
 import type { FontSize as FontSizePreference } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
-import { submitGenerationJob } from '@/lib/generation-api';
+import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -166,6 +166,7 @@ export default function ReadingScreen() {
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
+  const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const user = useUnfoldStore((s) => s.user);
@@ -1084,8 +1085,22 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       try {
-        // Progressive mode: submit server-side generation job
+        // Progressive mode: reconcile any completed server-side day before submitting another job
         if (currentDevotional.generationMode === 'progressive') {
+          const recovered = await recoverCompletedGenerationResult({
+            devotionalId: currentDevotionalId!,
+            dayNumber: viewingDay,
+          }).catch(() => null);
+
+          if (recovered?.devotionalDay) {
+            addGeneratedDay(currentDevotionalId!, recovered.devotionalDay);
+            void logBugEvent('reading-generation', 'manual-retry-progressive-recovered', {
+              viewingDay,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            return;
+          }
+
           await submitGenerationJob({
             devotionalId: currentDevotionalId!,
             dayNumber: viewingDay,
@@ -1126,6 +1141,27 @@ export default function ReadingScreen() {
         }
         // After generation, the store update triggers re-render automatically
       } catch (err) {
+        if (
+          currentDevotional.generationMode === 'progressive' &&
+          err instanceof ApiError &&
+          err.status === 409
+        ) {
+          const recovered = await recoverCompletedGenerationResult({
+            devotionalId: currentDevotionalId!,
+            dayNumber: viewingDay,
+            existingJobId: err.existingJobId,
+          }).catch(() => null);
+
+          if (recovered?.devotionalDay) {
+            addGeneratedDay(currentDevotionalId!, recovered.devotionalDay);
+            void logBugEvent('reading-generation', 'manual-retry-progressive-recovered-409', {
+              viewingDay,
+            });
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            return;
+          }
+        }
+
         const msg = err instanceof Error ? err.message : 'Something went wrong';
         logger.error('[Reading] Retry generation failed:', msg);
         void logBugError('reading-generation', err, {
