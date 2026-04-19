@@ -351,7 +351,14 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
   func setKeyboardToolbarHeight(_ height: Double) {
     keyboardToolbarHeight = max(0, CGFloat(height))
+    updateEditorScrollInsets()
     scheduleCaretVisibilityUpdate()
+  }
+
+  private func updateEditorScrollInsets() {
+    let bottomInset = keyboardToolbarHeight > 0 ? keyboardToolbarHeight + 16 : 0
+    editor.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
+    editor.verticalScrollIndicatorInsets = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
   }
 
   /// Requests focus 300ms after mount so the host view has finished layout and
@@ -580,6 +587,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   // MARK: - EditorViewDelegate
 
   func editor(_ editor: EditorView, didChangeTextAt range: NSRange) {
+    normalizeTrailingNewlineAfterHeadingIfNeeded()
     refreshScriptureChips()
     lineDecorationOverlay.invalidate()
     DispatchQueue.main.async { [weak self] in
@@ -626,7 +634,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       return
     }
 
-    let blockType = firstAttribute(.unfoldBlockType, in: text, range: paraRange) as? String
+    let blockType = detectedBlockType(in: text, range: paraRange)
 
     // Skip code blocks — mono font + distinct paragraph spacing we want to keep.
     if blockType == "codeBlock" {
@@ -719,6 +727,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     attributes: [NSAttributedString.Key: Any],
     contentType: EditorContent.Name
   ) {
+    normalizeSelectionAfterHeadingBreakIfNeeded(range)
+
     // Re-apply keyboard appearance — UIKit can reset it when the cursor
     // moves between paragraphs with different font attributes (e.g.
     // heading → body), causing light/dark keyboard mismatch.
@@ -764,8 +774,10 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     guard !caretRect.isNull, !caretRect.isInfinite else { return }
 
     let scrollView = editor.scrollView
-    let visibleTop = scrollView.contentOffset.y
-    let visibleHeight = scrollView.bounds.height
+    let adjustedInsets = scrollView.adjustedContentInset
+    let visibleTop = scrollView.contentOffset.y + adjustedInsets.top
+    let visibleHeight = scrollView.bounds.height - adjustedInsets.top - adjustedInsets.bottom
+    guard visibleHeight > 0 else { return }
     let visibleBottom = visibleTop + visibleHeight
 
     // Reserve enough breathing room below the caret so descenders, paragraph
@@ -773,7 +785,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // visible. A large hardcoded cushion caused needless scroll corrections and
     // visible jitter; instead, use the real toolbar occlusion plus a smaller
     // line-level comfort buffer.
-    let bottomSafeZone = max(44, keyboardToolbarHeight + 44)
+    let bottomSafeZone: CGFloat = 20
     let topSafeZone: CGFloat = 20
 
     let caretTop = caretRect.minY
@@ -781,9 +793,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
     var targetOffsetY = scrollView.contentOffset.y
     if caretBottom > visibleBottom - bottomSafeZone {
-      targetOffsetY = caretBottom - visibleHeight + bottomSafeZone
+      targetOffsetY = caretBottom - scrollView.bounds.height + adjustedInsets.bottom + bottomSafeZone
     } else if caretTop < visibleTop + topSafeZone {
-      targetOffsetY = caretTop - topSafeZone
+      targetOffsetY = caretTop - adjustedInsets.top - topSafeZone
     } else {
       return
     }
@@ -839,6 +851,78 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       }
     }
     return result
+  }
+
+  private func detectedBlockType(in str: NSAttributedString, range: NSRange) -> String? {
+    if let explicit = firstAttribute(.unfoldBlockType, in: str, range: range) as? String {
+      return explicit
+    }
+
+    if firstAttribute(.listItem, in: str, range: range) != nil {
+      return "list"
+    }
+
+    if let font = firstAttribute(.font, in: str, range: range) as? UIFont {
+      let isBoldish = font.fontDescriptor.symbolicTraits.contains(.traitBold)
+        || font.fontName.lowercased().contains("semibold")
+        || font.fontName.lowercased().contains("bold")
+
+      if isBoldish {
+        if font.pointSize >= 26 { return "h1" }
+        if font.pointSize >= 20 { return "h2" }
+        if font.pointSize >= 17 { return "h3" }
+      }
+    }
+
+    return nil
+  }
+
+  private func normalizeTrailingNewlineAfterHeadingIfNeeded() {
+    let cursor = editor.selectedRange.location
+    let text = editor.attributedText
+    let nsString = text.string as NSString
+
+    guard cursor > 0, cursor <= text.length else { return }
+    let newlineRange = NSRange(location: cursor - 1, length: 1)
+    guard nsString.substring(with: newlineRange) == "\n" else { return }
+
+    let previousProbeLocation = max(0, cursor - 2)
+    let previousParagraphRange = nsString.paragraphRange(
+      for: NSRange(location: previousProbeLocation, length: 0))
+
+    let previousBlockType = detectedBlockType(in: text, range: previousParagraphRange)
+    let wasHeading = previousBlockType == "h1" || previousBlockType == "h2" || previousBlockType == "h3"
+    guard wasHeading else { return }
+
+    let bodyAttrs = blockTypeAttributes("p")
+    editor.removeAttribute(.unfoldBlockType, at: newlineRange)
+    editor.addAttributes(bodyAttrs, at: newlineRange)
+    editor.typingAttributes = bodyAttrs
+    refreshSelectionState()
+  }
+
+  private func normalizeSelectionAfterHeadingBreakIfNeeded(_ range: NSRange) {
+    guard range.length == 0 else { return }
+
+    let text = editor.attributedText
+    let nsString = text.string as NSString
+    let cursor = range.location
+
+    guard cursor > 0, cursor <= text.length else { return }
+    let newlineRange = NSRange(location: cursor - 1, length: 1)
+    guard nsString.substring(with: newlineRange) == "\n" else { return }
+
+    let previousProbeLocation = max(0, cursor - 2)
+    let previousParagraphRange = nsString.paragraphRange(
+      for: NSRange(location: previousProbeLocation, length: 0))
+    let previousBlockType = detectedBlockType(in: text, range: previousParagraphRange)
+    let wasHeading = previousBlockType == "h1" || previousBlockType == "h2" || previousBlockType == "h3"
+    guard wasHeading else { return }
+
+    let bodyAttrs = blockTypeAttributes("p")
+    editor.removeAttribute(.unfoldBlockType, at: newlineRange)
+    editor.addAttributes(bodyAttrs, at: newlineRange)
+    editor.typingAttributes = bodyAttrs
   }
 
   /// Paragraph range containing the current selection. Returns a zero-length
