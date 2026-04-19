@@ -53,6 +53,7 @@ import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from 
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
+import { NoteDetailSaveIndicator } from '@/components/notebook/NoteDetailSaveIndicator';
 import { isHtmlContent } from '@/components/notebook/NoteEditor';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
@@ -1203,20 +1204,13 @@ export default function NoteDetailScreen() {
             </>
           )}
 
-          {/* Auto-save indicator (shown in edit mode) */}
-          {isEditing && saveState === 'saved' && (
-            <View style={styles.saveIndicatorSpacer} />
-          )}
-          {isEditing && saveState === 'saved' && (
-            <Animated.View
-              entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-              exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-              style={styles.saveIndicator}
-            >
-              <CheckIcon size={14} color={colors.textSubtle} weight="bold" />
-              <Text style={[styles.saveText, { color: colors.textHint }]}>Saved</Text>
-            </Animated.View>
-          )}
+          <NoteDetailSaveIndicator
+            isEditing={isEditing}
+            saveState={saveState}
+            reducedMotion={!!reducedMotion}
+            textColor={colors.textHint}
+            iconColor={colors.textSubtle}
+          />
         </View>
 
         {/* ── Scripture references (read mode only, non-native — native uses chip strip) ── */}
@@ -1712,18 +1706,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
-  },
-  saveIndicatorSpacer: {
-    flex: 1,
-  },
-  saveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['1'],
-  },
-  saveText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 11,
   },
   scriptureSection: {
     paddingHorizontal: Spacing['6'],
