@@ -23,10 +23,33 @@ import UIKit
 
 private struct ListSelectionBehavior {
     static func selectionAfterMaterializingEmptyListItem(
+        editor: EditorView,
         editedRange: NSRange,
-        insertedMarkerLength: Int
+        insertedMarkerLength: Int,
+        attributeValue: Any?
     ) -> NSRange {
-        guard editedRange.location == 0, insertedMarkerLength > 0 else {
+        guard insertedMarkerLength > 0,
+              attributeValue != nil,
+              editedRange.length == 0
+        else {
+            return NSRange(location: editedRange.location + insertedMarkerLength, length: 0)
+        }
+
+        if editedRange.location == 0 {
+            return NSRange(location: editedRange.location, length: insertedMarkerLength)
+        }
+
+        guard editor.contentLength > 0,
+              editedRange.location > 0,
+              editedRange.location <= editor.contentLength
+        else {
+            return NSRange(location: editedRange.location + insertedMarkerLength, length: 0)
+        }
+
+        let previousChar = editor.attributedText.substring(
+            from: NSRange(location: editedRange.location - 1, length: 1)
+        )
+        guard previousChar == "\n" else {
             return NSRange(location: editedRange.location + insertedMarkerLength, length: 0)
         }
 
@@ -343,8 +366,10 @@ open class ListTextProcessor: TextProcessing {
         editor.replaceCharacters(in: editedRange, with: marker)
         editor.typingAttributes = attrs
         editor.selectedRange = ListSelectionBehavior.selectionAfterMaterializingEmptyListItem(
+            editor: editor,
             editedRange: editedRange,
-            insertedMarkerLength: marker.length
+            insertedMarkerLength: marker.length,
+            attributeValue: attributeValue
         )
         if editor.isFirstResponder, editedRange.location == 0 {
             editor.reloadInputViews()

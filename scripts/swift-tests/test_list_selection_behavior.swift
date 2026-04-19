@@ -2,10 +2,27 @@ import Foundation
 
 struct ListSelectionBehavior {
   static func selectionAfterMaterializingEmptyListItem(
+    hasContent: Bool,
+    previousCharacter: Character?,
     editedRange: NSRange,
-    insertedMarkerLength: Int
+    insertedMarkerLength: Int,
+    attributeValueIsPresent: Bool
   ) -> NSRange {
-    guard editedRange.location == 0, insertedMarkerLength > 0 else {
+    guard insertedMarkerLength > 0,
+          attributeValueIsPresent,
+          editedRange.length == 0
+    else {
+      return NSRange(location: editedRange.location + insertedMarkerLength, length: 0)
+    }
+
+    if editedRange.location == 0 {
+      return NSRange(location: editedRange.location, length: insertedMarkerLength)
+    }
+
+    guard hasContent,
+          editedRange.location > 0,
+          previousCharacter == "\n"
+    else {
       return NSRange(location: editedRange.location + insertedMarkerLength, length: 0)
     }
 
@@ -21,23 +38,42 @@ func assertEqual(_ lhs: NSRange, _ rhs: NSRange, _ message: String) {
 }
 
 let startOfDocument = ListSelectionBehavior.selectionAfterMaterializingEmptyListItem(
+  hasContent: false,
+  previousCharacter: nil,
   editedRange: NSRange(location: 0, length: 0),
-  insertedMarkerLength: 1
+  insertedMarkerLength: 1,
+  attributeValueIsPresent: true
 )
 assertEqual(
   startOfDocument,
   NSRange(location: 0, length: 1),
-  "first toolbar-created bullet should select the filler at document start so the first typed character replaces it"
+  "first toolbar-created bullet at document start should select the filler"
 )
 
-let laterParagraph = ListSelectionBehavior.selectionAfterMaterializingEmptyListItem(
-  editedRange: NSRange(location: 5, length: 0),
-  insertedMarkerLength: 1
+let emptyParagraphAfterExistingNewline = ListSelectionBehavior.selectionAfterMaterializingEmptyListItem(
+  hasContent: true,
+  previousCharacter: "\n",
+  editedRange: NSRange(location: 1, length: 0),
+  insertedMarkerLength: 1,
+  attributeValueIsPresent: true
 )
 assertEqual(
-  laterParagraph,
+  emptyParagraphAfterExistingNewline,
+  NSRange(location: 1, length: 1),
+  "first toolbar-created bullet in an already-materialized empty paragraph should also select the filler"
+)
+
+let laterContinuation = ListSelectionBehavior.selectionAfterMaterializingEmptyListItem(
+  hasContent: true,
+  previousCharacter: "x",
+  editedRange: NSRange(location: 5, length: 0),
+  insertedMarkerLength: 1,
+  attributeValueIsPresent: true
+)
+assertEqual(
+  laterContinuation,
   NSRange(location: 6, length: 0),
-  "later list continuations should keep the caret after the inserted filler"
+  "later list continuations without paragraph-start context should keep the caret after the filler"
 )
 
 print("ok")
