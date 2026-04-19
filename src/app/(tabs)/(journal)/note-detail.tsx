@@ -73,6 +73,12 @@ import {
   getNativeEditorToolbarInset,
   shouldReuseSelectionFormattingState,
 } from '@/lib/notebook-editor-layout';
+import {
+  buildNotePersistencePayload,
+  getNativeBlockTypeCommand,
+  getNativeListCommand,
+  hasMeaningfulNoteContent,
+} from '@/lib/note-detail-editor';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -313,12 +319,6 @@ export default function NoteDetailScreen() {
     existingNote?.scriptureRefs ?? [],
   );
 
-  // Latest content ref for Done button
-  const latestContentRef = useRef<{ title: string; content: string }>({
-    title: existingNote?.title ?? '',
-    content: existingNote?.content ?? '',
-  });
-
   // Convert legacy plain-text/markdown to HTML for TipTap
   const initialContent = existingNote?.content
     ? isHtmlContent(existingNote.content)
@@ -543,10 +543,7 @@ export default function NoteDetailScreen() {
       const html = htmlFromEvent ?? (IS_NATIVE_EDITOR ? latestHtmlRef.current : await editor.getHTML());
       const titleVal = latestTitleRef.current;
 
-      if (!titleVal.trim() && (!html || html === '<p></p>')) return;
-
-      // Update the content ref
-      latestContentRef.current = { title: titleVal, content: html };
+      if (!hasMeaningfulNoteContent({ title: titleVal, html })) return;
 
       setSaveState('saving');
 
@@ -555,21 +552,22 @@ export default function NoteDetailScreen() {
           title: titleVal,
           content: html,
           category,
+          scriptureRefs,
         });
       } else {
-        const id = addNote({
-          title: titleVal,
-          content: html,
-          category,
-          tags: [],
-          isFavorite: false,
-          scriptureRefs,
-          devotionalId: params.devotionalId,
-          dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-          bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-          bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-          folderId: initialFolderIdRef.current,
-        });
+        const id = addNote(
+          buildNotePersistencePayload({
+            title: titleVal,
+            html,
+            category,
+            scriptureRefs,
+            devotionalId: params.devotionalId,
+            dayNumber: params.dayNumber,
+            bookId: params.bookId,
+            chapter: params.chapter,
+            folderId: initialFolderIdRef.current,
+          }),
+        );
         setNoteId(id);
         logger.log('[NoteDetail] Auto-saved new note:', id);
       }
@@ -581,6 +579,57 @@ export default function NoteDetailScreen() {
       }, 150);
     }, 800);
   }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, gate]);
+
+  const getCurrentEditorHtml = useCallback(async () => {
+    return IS_NATIVE_EDITOR
+      ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
+      : await editor.getHTML();
+  }, [editor]);
+
+  const persistCurrentSnapshot = useCallback(({
+    title,
+    html,
+    allowEmpty = false,
+    newNoteLog,
+  }: {
+    title: string;
+    html: string;
+    allowEmpty?: boolean;
+    newNoteLog?: string;
+  }): string | undefined => {
+    if (!allowEmpty && !hasMeaningfulNoteContent({ title, html })) {
+      return undefined;
+    }
+
+    if (noteId) {
+      updateNote(noteId, {
+        title,
+        content: html,
+        category,
+        scriptureRefs,
+      });
+      return noteId;
+    }
+
+    const id = addNote(
+      buildNotePersistencePayload({
+        title,
+        html: allowEmpty ? (html || '<p></p>') : html,
+        category,
+        scriptureRefs,
+        devotionalId: params.devotionalId,
+        dayNumber: params.dayNumber,
+        bookId: params.bookId,
+        chapter: params.chapter,
+        folderId: initialFolderIdRef.current,
+      }),
+    );
+    setNoteId(id);
+    if (newNoteLog) {
+      logger.log(newNoteLog, id);
+    }
+    return id;
+  }, [noteId, updateNote, category, scriptureRefs, addNote, params]);
 
   const handleTitleChange = useCallback(
     (text: string) => {
@@ -613,38 +662,15 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     // Get the final content from the editor
-    const html = IS_NATIVE_EDITOR
-      ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
-      : await editor.getHTML();
+    const html = await getCurrentEditorHtml();
     const titleVal = latestTitleRef.current;
 
     // Persist
-    if (titleVal.trim() || (html && html !== '<p></p>')) {
-      if (noteId) {
-        updateNote(noteId, {
-          title: titleVal,
-          content: html,
-          category,
-          scriptureRefs,
-        });
-      } else {
-        const id = addNote({
-          title: titleVal,
-          content: html,
-          category,
-          tags: [],
-          isFavorite: false,
-          scriptureRefs,
-          devotionalId: params.devotionalId,
-          dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-          bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-          bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-          folderId: initialFolderIdRef.current,
-        });
-        setNoteId(id);
-        logger.log('[NoteDetail] Created new note on Done:', id);
-      }
-    } else if (!noteId) {
+    if (!persistCurrentSnapshot({
+      title: titleVal,
+      html,
+      newNoteLog: '[NoteDetail] Created new note on Done:',
+    }) && !noteId) {
       // Empty new note — just go back
       router.back();
       return;
@@ -663,7 +689,7 @@ export default function NoteDetailScreen() {
     // Clear any pending save timers
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     setSaveState('idle');
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, router, colors]);
+  }, [editor, noteId, router, colors, getCurrentEditorHtml, persistCurrentSnapshot]);
 
 
   /* ───── Navigation ───── */
@@ -671,41 +697,18 @@ export default function NoteDetailScreen() {
   const handleBack = useCallback(async () => {
     // If editing, save before going back
     if (isEditingRef.current) {
-      const html = IS_NATIVE_EDITOR
-        ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
-        : await editor.getHTML();
+      const html = await getCurrentEditorHtml();
       const titleVal = latestTitleRef.current;
 
-      if (titleVal.trim() || (html && html !== '<p></p>')) {
-        if (noteId) {
-          updateNote(noteId, {
-            title: titleVal,
-            content: html,
-            category,
-            scriptureRefs,
-          });
-        } else {
-          const id = addNote({
-            title: titleVal,
-            content: html,
-            category,
-            tags: [],
-            isFavorite: false,
-            scriptureRefs,
-            devotionalId: params.devotionalId,
-            dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-            bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-            bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-            folderId: initialFolderIdRef.current,
-          });
-          setNoteId(id);
-          logger.log('[NoteDetail] Saved new note on back:', id);
-        }
-      }
+      persistCurrentSnapshot({
+        title: titleVal,
+        html,
+        newNoteLog: '[NoteDetail] Saved new note on back:',
+      });
     }
 
     router.back();
-  }, [editor, noteId, category, scriptureRefs, params, addNote, updateNote, router]);
+  }, [router, getCurrentEditorHtml, persistCurrentSnapshot]);
 
 
   /* ───── Menu actions ───── */
@@ -716,27 +719,19 @@ export default function NoteDetailScreen() {
    */
   const ensureNoteSaved = useCallback(async (): Promise<string> => {
     if (noteId) return noteId;
-    const html = IS_NATIVE_EDITOR
-      ? ((await editorRef.current?.getHtml()) ?? latestHtmlRef.current)
-      : await editor.getHTML();
+    const html = await getCurrentEditorHtml();
     const titleVal = latestTitleRef.current;
-    const id = addNote({
+    const id = persistCurrentSnapshot({
       title: titleVal,
-      content: html || '<p></p>',
-      category,
-      tags: [],
-      isFavorite: false,
-      scriptureRefs,
-      devotionalId: params.devotionalId,
-      dayNumber: params.dayNumber ? Number(params.dayNumber) : undefined,
-      bibleBookId: params.bookId ? Number(params.bookId) : undefined,
-      bibleChapter: params.chapter ? Number(params.chapter) : undefined,
-      folderId: initialFolderIdRef.current,
+      html,
+      allowEmpty: true,
+      newNoteLog: '[NoteDetail] Saved note via menu action:',
     });
-    setNoteId(id);
-    logger.log('[NoteDetail] Saved note via menu action:', id);
+    if (!id) {
+      throw new Error('Expected note to be persisted before menu action');
+    }
     return id;
-  }, [noteId, editor, category, scriptureRefs, params, addNote]);
+  }, [noteId, getCurrentEditorHtml, persistCurrentSnapshot]);
 
   const handleToggleFavorite = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -922,9 +917,10 @@ export default function NoteDetailScreen() {
       // always fire on tap-to-reposition, so the cached selectionState
       // can be stale. This guarantees correct toggle direction.
       editorRef.current?.getSelectionState().then((state) => {
-        state.listType === 'bullet'
+        const command = getNativeListCommand(state.listType, 'bullet');
+        command.kind === 'clear-list'
           ? editorRef.current?.clearList()
-          : editorRef.current?.setList('bullet');
+          : editorRef.current?.setList(command.value);
       });
     } else {
       editor.toggleBulletList();
@@ -935,9 +931,10 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (IS_NATIVE_EDITOR) {
       editorRef.current?.getSelectionState().then((state) => {
-        state.listType === 'ordered'
+        const command = getNativeListCommand(state.listType, 'ordered');
+        command.kind === 'clear-list'
           ? editorRef.current?.clearList()
-          : editorRef.current?.setList('ordered');
+          : editorRef.current?.setList(command.value);
       });
     } else {
       editor.toggleOrderedList();
@@ -948,9 +945,10 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (IS_NATIVE_EDITOR) {
       editorRef.current?.getSelectionState().then((state) => {
-        state.listType === 'checklist'
+        const command = getNativeListCommand(state.listType, 'checklist');
+        command.kind === 'clear-list'
           ? editorRef.current?.clearList()
-          : editorRef.current?.setList('checklist');
+          : editorRef.current?.setList(command.value);
       });
     } else {
       editor.toggleTaskList();
@@ -961,7 +959,7 @@ export default function NoteDetailScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (IS_NATIVE_EDITOR) {
       editorRef.current?.getSelectionState().then((state) => {
-        const next = state.blockType === level ? 'p' : level;
+        const next = getNativeBlockTypeCommand(state.blockType, level);
         editorRef.current?.setBlockType(next);
       });
     } else {
@@ -1305,10 +1303,6 @@ export default function NoteDetailScreen() {
               initialHtml={latestHtmlRef.current}
               onChangeHtml={(e: UnfoldEditorChangeHtmlEvent) => {
                 latestHtmlRef.current = e.nativeEvent.html;
-                latestContentRef.current = {
-                  title: latestTitleRef.current,
-                  content: e.nativeEvent.html,
-                };
                 scheduleAutoSave(e.nativeEvent.html);
               }}
               onScriptureRefs={handleNativeScriptureRefs}
