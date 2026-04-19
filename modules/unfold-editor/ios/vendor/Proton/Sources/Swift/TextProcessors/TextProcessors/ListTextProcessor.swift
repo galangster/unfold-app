@@ -21,6 +21,19 @@
 import Foundation
 import UIKit
 
+private struct ListSelectionBehavior {
+    static func selectionAfterMaterializingEmptyListItem(
+        editedRange: NSRange,
+        insertedMarkerLength: Int
+    ) -> NSRange {
+        guard editedRange.location == 0, insertedMarkerLength > 0 else {
+            return NSRange(location: editedRange.location + insertedMarkerLength, length: 0)
+        }
+
+        return NSRange(location: editedRange.location, length: insertedMarkerLength)
+    }
+}
+
 public enum ListMarkerDebugOption {
     case `default`
     case replace(with: String)
@@ -329,7 +342,10 @@ open class ListTextProcessor: TextProcessing {
         let marker = NSAttributedString(string: ListTextProcessor.blankLineFiller, attributes: attrs)
         editor.replaceCharacters(in: editedRange, with: marker)
         editor.typingAttributes = attrs
-        editor.selectedRange = editedRange.nextPosition
+        editor.selectedRange = ListSelectionBehavior.selectionAfterMaterializingEmptyListItem(
+            editedRange: editedRange,
+            insertedMarkerLength: marker.length
+        )
         if editor.isFirstResponder, editedRange.location == 0 {
             editor.reloadInputViews()
         }
