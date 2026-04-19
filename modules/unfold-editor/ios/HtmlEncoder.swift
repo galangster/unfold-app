@@ -189,7 +189,12 @@ enum HtmlEncoder {
     let useTypingForBlock = cursorAtStringEnd && prevIsNewline
 
     let blockType: BlockType
-    if useTypingForBlock, let typing = typingAttributes, !typing.isEmpty {
+    if let typing = typingAttributes,
+       range.length == 0,
+       typing[.listItem] != nil,
+       firstAttribute(.listItem, in: str, range: paraRange) == nil {
+      blockType = detectBlockTypeFromAttrs(typing)
+    } else if useTypingForBlock, let typing = typingAttributes, !typing.isEmpty {
       blockType = detectBlockTypeFromAttrs(typing)
     } else {
       blockType = detectBlockType(in: str, range: paraRange)

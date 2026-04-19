@@ -95,6 +95,7 @@ open class ListTextProcessor: TextProcessing {
         let callback = executeOnDidProcess
         executeOnDidProcess = nil
         callback?(editor)
+        canonicalizeMissingListContinuationIfNeeded(editor: editor)
         guard editor.selectedRange.endLocation < editor.contentLength else { return }
         let lastChar = editor.attributedText.substring(from: NSRange(location: editor.selectedRange.location, length: 1))
         if lastChar == ListTextProcessor.blankLineFiller {
@@ -328,6 +329,43 @@ open class ListTextProcessor: TextProcessing {
         let marker = NSAttributedString(string: ListTextProcessor.blankLineFiller, attributes: attrs)
         editor.replaceCharacters(in: editedRange, with: marker)
         editor.selectedRange = editedRange.nextPosition
+    }
+
+    private func canonicalizeMissingListContinuationIfNeeded(editor: EditorView) {
+        guard let currentLine = editor.contentLinesInRange(editor.selectedRange).first,
+              let previousLine = editor.previousContentLine(from: currentLine.range.location),
+              previousLine.text.length > 0,
+              let previousListValue = previousLine.text.attribute(.listItem, at: 0, effectiveRange: nil)
+        else { return }
+
+        let currentString = currentLine.text.string
+        let currentLooksEmpty = currentString.isEmpty
+            || currentString == "\n"
+            || currentString == ListTextProcessor.blankLineFiller
+            || currentString == "\(ListTextProcessor.blankLineFiller)\n"
+        guard currentLooksEmpty else { return }
+        guard currentLine.text.attribute(.listItem, at: 0, effectiveRange: nil) == nil else { return }
+
+        let paragraphStyle = (editor.attributedText.attribute(.paragraphStyle, at: max(currentLine.range.location, 0), effectiveRange: nil) as? NSParagraphStyle)
+            ?? (previousLine.text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+            ?? editor.paragraphStyle
+        let font = (editor.attributedText.attribute(.font, at: max(currentLine.range.location, 0), effectiveRange: nil) as? UIFont)
+            ?? (previousLine.text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        let foregroundColor = (editor.attributedText.attribute(.foregroundColor, at: max(currentLine.range.location, 0), effectiveRange: nil) as? UIColor)
+            ?? (previousLine.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor)
+
+        editor.addAttribute(.listItem, value: previousListValue, at: currentLine.range)
+        editor.addAttribute(.paragraphStyle, value: paragraphStyle, at: currentLine.range)
+        if let font {
+            editor.addAttribute(.font, value: font, at: currentLine.range)
+            editor.typingAttributes[.font] = font
+        }
+        if let foregroundColor {
+            editor.addAttribute(.foregroundColor, value: foregroundColor, at: currentLine.range)
+            editor.typingAttributes[.foregroundColor] = foregroundColor
+        }
+        editor.typingAttributes[.paragraphStyle] = paragraphStyle
+        editor.typingAttributes[.listItem] = previousListValue
     }
 
     func updatedParagraphStyle(paraStyle: NSParagraphStyle?, listLineFormatting: LineFormatting, indentMode: Indentation, defaultParaStyle: NSParagraphStyle) -> NSParagraphStyle? {

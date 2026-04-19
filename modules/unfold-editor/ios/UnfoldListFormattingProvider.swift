@@ -89,6 +89,10 @@ final class UnfoldListFormattingProvider: EditorListFormattingProvider {
     let image = UIImage(systemName: symbolName, withConfiguration: config)?
       .withTintColor(tint, renderingMode: .alwaysOriginal)
       ?? UIImage()
-    return .image(image, size: CGSize(width: 18, height: 18))
+
+    let attachment = NSTextAttachment()
+    attachment.image = image
+    attachment.bounds = CGRect(x: 0, y: -2, width: 18, height: 18)
+    return .string(NSAttributedString(attachment: attachment))
   }
 }

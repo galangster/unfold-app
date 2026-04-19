@@ -63,6 +63,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// into a single main-runloop scroll correction.
   private var hasPendingCaretVisibilityUpdate = false
 
+  /// When true, a text edit changed content/selection and we should wait for
+  /// Proton/TextKit layout to finish before performing the next caret-visibility
+  /// correction. This avoids auto-scrolling once on stale geometry and then
+  /// correcting again a moment later near the overflow boundary.
+  private var needsCaretVisibilityAfterLayout = false
+
   /// Selection-change throttle state. 16ms (≈60fps) cap so rapid drag
   /// selections don't saturate the JS bridge.
   private var lastSelectionEmitTime: CFTimeInterval = 0
@@ -350,7 +356,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   }
 
   func setKeyboardToolbarHeight(_ height: Double) {
-    keyboardToolbarHeight = max(0, CGFloat(height))
+    let nextHeight = max(0, CGFloat(height))
+    guard abs(nextHeight - keyboardToolbarHeight) >= 0.5 else { return }
+    keyboardToolbarHeight = nextHeight
     updateEditorScrollInsets()
     scheduleCaretVisibilityUpdate()
   }
@@ -529,6 +537,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// `ListCommand`'s nil-value branch which resets paragraph style and
   /// removes `.listItem`.
   func clearList() {
+    if normalizeIndentedParagraphWithoutListIfNeeded() {
+      scheduleHtmlEmit()
+      refreshSelectionState()
+      return
+    }
+
     ListCommand().execute(on: editor, attributeValue: nil)
     scheduleHtmlEmit()
     refreshSelectionState()
@@ -549,6 +563,24 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   }
 
   func outdentList() {
+    if normalizeIndentedParagraphWithoutListIfNeeded() {
+      scheduleHtmlEmit()
+      refreshSelectionState()
+      return
+    }
+
+    if editor.selectedRange.length == 0 {
+      let lineRange = currentLineRange()
+      if lineRange.length > 0 {
+        editor.selectedRange = lineRange
+        ListOutdentCommand().execute(on: editor)
+        editor.selectedRange = NSRange(location: lineRange.location, length: 0)
+        scheduleHtmlEmit()
+        refreshSelectionState()
+        return
+      }
+    }
+
     ListOutdentCommand().execute(on: editor)
     scheduleHtmlEmit()
     refreshSelectionState()
@@ -604,11 +636,15 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     normalizeTrailingNewlineAfterHeadingIfNeeded()
     refreshScriptureChips()
     lineDecorationOverlay.invalidate()
-    DispatchQueue.main.async { [weak self] in
-      self?.layoutOverlay()
-      self?.scheduleCaretVisibilityUpdate()
-    }
+    needsCaretVisibilityAfterLayout = true
     scheduleHtmlEmit()
+  }
+
+  func editor(_ editor: EditorView, didLayout content: NSAttributedString) {
+    layoutOverlay()
+    guard needsCaretVisibilityAfterLayout else { return }
+    needsCaretVisibilityAfterLayout = false
+    scheduleCaretVisibilityUpdate()
   }
 
   func editor(_ editor: EditorView, didReceiveFocusAt range: NSRange) {
@@ -761,7 +797,12 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
     // Keep caret visible above the keyboard on cursor moves too (arrow keys,
     // tapping into a paragraph below the fold, etc.) — not just on typing.
-    scheduleCaretVisibilityUpdate()
+    // But if a text edit already requested a post-layout correction, let that
+    // later pass own the scroll so we don't auto-scroll once on stale line
+    // geometry and then correct again after layout settles.
+    if !needsCaretVisibilityAfterLayout {
+      scheduleCaretVisibilityUpdate()
+    }
   }
 
   private func scheduleCaretVisibilityUpdate() {
@@ -963,6 +1004,31 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     default:
       return false
     }
+  }
+
+  @discardableResult
+  private func normalizeIndentedParagraphWithoutListIfNeeded() -> Bool {
+    let lineRange = currentLineRange()
+    guard lineRange.length > 0 else { return false }
+    guard firstAttribute(.listItem, in: editor.attributedText, range: lineRange) == nil else { return false }
+
+    let attrs = editor.attributedText.attributes(at: lineRange.location, effectiveRange: nil)
+    guard let paragraphStyle = attrs[.paragraphStyle] as? NSParagraphStyle,
+          paragraphStyle.firstLineHeadIndent > 0 || paragraphStyle.headIndent > 0 else {
+      return false
+    }
+
+    let bodyAttrs = blockTypeAttributes("p")
+    editor.addAttributes(bodyAttrs, at: lineRange)
+    editor.removeAttribute(.listItem, at: lineRange)
+
+    var typing = editor.typingAttributes
+    typing[.listItem] = nil
+    typing[.paragraphStyle] = bodyAttrs[.paragraphStyle]
+    typing[.font] = bodyAttrs[.font]
+    typing[.foregroundColor] = bodyAttrs[.foregroundColor]
+    editor.typingAttributes = typing
+    return true
   }
 
   private func normalizeTrailingNewlineAfterHeadingIfNeeded() {
