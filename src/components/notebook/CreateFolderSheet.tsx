@@ -45,6 +45,7 @@ import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Button, alpha } from '@/components/ui';
+import { getCreateFolderInputLayout } from '@/lib/create-folder-input-layout';
 
 // ---------------------------------------------------------------------------
 // Animation config
@@ -68,6 +69,8 @@ const FOLDER_COLORS = [
   '#9B8EC4', // Lavender
   '#C8A55C', // Gold
 ];
+
+const CREATE_FOLDER_INPUT_LAYOUT = getCreateFolderInputLayout();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -233,6 +236,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                   returnKeyType="done"
                   onSubmitEditing={handleCreate}
                   maxLength={40}
+                  textAlignVertical={CREATE_FOLDER_INPUT_LAYOUT.textAlignVertical}
                 />
 
                 {/* Color selection */}
@@ -334,7 +338,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: FontSize.base,
     paddingHorizontal: Spacing['4'],
-    paddingVertical: 14,
+    paddingVertical: CREATE_FOLDER_INPUT_LAYOUT.paddingVertical,
+    height: CREATE_FOLDER_INPUT_LAYOUT.height,
     borderRadius: Radius.md,
     marginBottom: Spacing['4'],
   },
