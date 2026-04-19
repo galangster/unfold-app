@@ -67,6 +67,15 @@ open class ListTextProcessor: TextProcessing {
            let value = editorView.attributedText.attribute(.listItem, at: rangeToCheck, effectiveRange: nil),
            (editorView.attributedText.attribute(.paragraphStyle, at: rangeToCheck, effectiveRange: nil) as? NSParagraphStyle)?.firstLineHeadIndent ?? 0 > 0 {
             editorView.typingAttributes[.listItem] = value
+            if let font = editorView.attributedText.attribute(.font, at: rangeToCheck, effectiveRange: nil) {
+                editorView.typingAttributes[.font] = font
+            }
+            if let color = editorView.attributedText.attribute(.foregroundColor, at: rangeToCheck, effectiveRange: nil) {
+                editorView.typingAttributes[.foregroundColor] = color
+            }
+            if let paragraphStyle = editorView.attributedText.attribute(.paragraphStyle, at: rangeToCheck, effectiveRange: nil) {
+                editorView.typingAttributes[.paragraphStyle] = paragraphStyle
+            }
         }
         return true
     }
@@ -305,6 +314,17 @@ open class ListTextProcessor: TextProcessing {
         let updatedStyle = updatedParagraphStyle(paraStyle: paraStyle, listLineFormatting: editor.listLineFormatting, indentMode: indentMode, defaultParaStyle: editor.paragraphStyle)
         attrs[.paragraphStyle] = updatedStyle
         attrs[.listItem] = updatedStyle?.firstLineHeadIndent ?? 0 > 0.0 ? listAttributeValue : nil
+
+        let styleProbeLocation = min(max(editedRange.location - 1, 0), max(editor.contentLength - 1, 0))
+        if editor.contentLength > 0 {
+            if let font = editor.attributedText.attribute(.font, at: styleProbeLocation, effectiveRange: nil) {
+                attrs[.font] = font
+            }
+            if let color = editor.attributedText.attribute(.foregroundColor, at: styleProbeLocation, effectiveRange: nil) {
+                attrs[.foregroundColor] = color
+            }
+        }
+
         let marker = NSAttributedString(string: ListTextProcessor.blankLineFiller, attributes: attrs)
         editor.replaceCharacters(in: editedRange, with: marker)
         editor.selectedRange = editedRange.nextPosition

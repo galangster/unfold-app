@@ -486,6 +486,20 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     default: return
     }
 
+    let lineRange = currentLineRange()
+    if lineRange.length > 0,
+       let existingValue = firstAttribute(.listItem, in: editor.attributedText, range: lineRange) {
+      if sameListKind(existingValue, value) {
+        ListCommand().execute(on: editor, attributeValue: nil)
+      } else {
+        editor.addAttribute(.listItem, value: value, at: lineRange)
+        editor.typingAttributes[.listItem] = value
+      }
+      scheduleHtmlEmit()
+      refreshSelectionState()
+      return
+    }
+
     // Pre-seed typingAttributes with a full body style when the current
     // paragraph is empty. Proton's `createListItemInANewLine` inserts a
     // blank-line filler (ZWSP) that inherits whatever typingAttributes are
@@ -770,8 +784,9 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   private func ensureCaretVisible() {
     guard editor.isFirstResponder else { return }
     guard let selectedRange = editor.textInput.selectedTextRange else { return }
-    let caretRect = editor.textInput.caretRect(for: selectedRange.end)
-    guard !caretRect.isNull, !caretRect.isInfinite else { return }
+    guard let targetRect = currentSelectedLineRect(fallbackTo: selectedRange.end),
+          !targetRect.isNull,
+          !targetRect.isInfinite else { return }
 
     let scrollView = editor.scrollView
     let adjustedInsets = scrollView.adjustedContentInset
@@ -780,16 +795,14 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     guard visibleHeight > 0 else { return }
     let visibleBottom = visibleTop + visibleHeight
 
-    // Reserve enough breathing room below the caret so descenders, paragraph
-    // spacing, and the React Native toolbar sitting above the keyboard all stay
-    // visible. A large hardcoded cushion caused needless scroll corrections and
-    // visible jitter; instead, use the real toolbar occlusion plus a smaller
-    // line-level comfort buffer.
-    let bottomSafeZone: CGFloat = 20
-    let topSafeZone: CGFloat = 20
+    // Reserve enough breathing room below the active line so descenders,
+    // list markers, and the React Native toolbar sitting above the keyboard all
+    // stay visible without tugging the scroll position on every keystroke.
+    let bottomSafeZone: CGFloat = 24
+    let topSafeZone: CGFloat = 16
 
-    let caretTop = caretRect.minY
-    let caretBottom = caretRect.maxY
+    let caretTop = targetRect.minY
+    let caretBottom = targetRect.maxY
 
     var targetOffsetY = scrollView.contentOffset.y
     if caretBottom > visibleBottom - bottomSafeZone {
@@ -800,10 +813,74 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       return
     }
 
-    let maxOffsetY = max(0, scrollView.contentSize.height - visibleHeight)
-    targetOffsetY = min(max(0, targetOffsetY), maxOffsetY)
-    if abs(targetOffsetY - scrollView.contentOffset.y) < 0.5 { return }
+    let minOffsetY = -adjustedInsets.top
+    let maxOffsetY = max(minOffsetY, scrollView.contentSize.height - scrollView.bounds.height + adjustedInsets.bottom)
+    targetOffsetY = min(max(minOffsetY, targetOffsetY), maxOffsetY)
+    if abs(targetOffsetY - scrollView.contentOffset.y) < 1.5 { return }
     scrollView.setContentOffset(CGPoint(x: 0, y: targetOffsetY), animated: false)
+  }
+
+  private func currentSelectedLineRect(fallbackTo position: UITextPosition) -> CGRect? {
+    let textInput = editor.textInput
+    guard let textView = textInput as? UITextView else {
+      let caretRect = textInput.caretRect(for: position)
+      return (!caretRect.isNull && !caretRect.isInfinite) ? caretRect.insetBy(dx: 0, dy: -6) : nil
+    }
+
+    let text = textView.attributedText.string as NSString
+    if text.length == 0 {
+      let caretRect = textInput.caretRect(for: position)
+      return (!caretRect.isNull && !caretRect.isInfinite) ? caretRect.insetBy(dx: 0, dy: -6) : nil
+    }
+
+    let probeLocation = min(max(editor.selectedRange.location, 0), max(text.length - 1, 0))
+    let lineRange = text.lineRange(for: NSRange(location: probeLocation, length: 0))
+    if lineRange.location != NSNotFound,
+       textView.layoutManager.numberOfGlyphs > 0 {
+      let glyphRange = textView.layoutManager.glyphRange(forCharacterRange: lineRange, actualCharacterRange: nil)
+      if glyphRange.location != NSNotFound,
+         textView.layoutManager.isValidGlyphIndex(glyphRange.location) {
+        var effectiveRange = NSRange()
+        var lineRect = textView.layoutManager.lineFragmentUsedRect(forGlyphAt: glyphRange.location, effectiveRange: &effectiveRange)
+        if !lineRect.isNull && effectiveRange.location != NSNotFound {
+          lineRect.origin.x += textView.textContainerInset.left
+          lineRect.origin.y += textView.textContainerInset.top
+
+          if lineRange.endLocation >= text.length,
+             textView.layoutManager.extraLineFragmentRect.height > 0 {
+            var extraRect = textView.layoutManager.extraLineFragmentRect
+            extraRect.origin.x += textView.textContainerInset.left
+            extraRect.origin.y += textView.textContainerInset.top
+            lineRect = lineRect.union(extraRect)
+          }
+
+          return lineRect.insetBy(dx: 0, dy: -6)
+        }
+      }
+    }
+
+    guard lineRange.length > 0,
+          let start = textInput.position(from: textInput.beginningOfDocument, offset: lineRange.location),
+          let end = textInput.position(from: textInput.beginningOfDocument, offset: NSMaxRange(lineRange)),
+          let textRange = textInput.textRange(from: start, to: end) else {
+      let caretRect = textInput.caretRect(for: position)
+      return (!caretRect.isNull && !caretRect.isInfinite) ? caretRect.insetBy(dx: 0, dy: -6) : nil
+    }
+
+    var unionRect: CGRect = .null
+    for selectionRect in textInput.selectionRects(for: textRange) {
+      let rect = selectionRect.rect
+      guard rect.height > 1, rect.width > 0 else { continue }
+      unionRect = unionRect.union(rect)
+    }
+
+    let caretRect = textInput.caretRect(for: position)
+    if !caretRect.isNull && !caretRect.isInfinite {
+      unionRect = unionRect.isNull ? caretRect : unionRect.union(caretRect)
+    }
+
+    guard !unionRect.isNull else { return nil }
+    return unionRect.insetBy(dx: 0, dy: -6)
   }
 
   // MARK: - Internals
@@ -875,6 +952,17 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
 
     return nil
+  }
+
+  private func sameListKind(_ lhs: Any, _ rhs: Any) -> Bool {
+    switch (lhs, rhs) {
+    case (_ as ChecklistItem, _ as ChecklistItem):
+      return true
+    case let (lhs as String, rhs as String):
+      return lhs == rhs
+    default:
+      return false
+    }
   }
 
   private func normalizeTrailingNewlineAfterHeadingIfNeeded() {

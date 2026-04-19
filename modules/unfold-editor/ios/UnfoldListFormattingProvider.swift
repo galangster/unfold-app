@@ -89,15 +89,6 @@ final class UnfoldListFormattingProvider: EditorListFormattingProvider {
     let image = UIImage(systemName: symbolName, withConfiguration: config)?
       .withTintColor(tint, renderingMode: .alwaysOriginal)
       ?? UIImage()
-
-    // Use NSTextAttachment with explicit bounds to vertically center the
-    // checkbox with the text baseline. The -3pt Y offset shifts the marker
-    // down so it aligns with the body text's midline instead of sitting high.
-    let attachment = NSTextAttachment()
-    attachment.image = image
-    let size: CGFloat = 20
-    attachment.bounds = CGRect(x: 0, y: -3, width: size, height: size)
-    let attrStr = NSAttributedString(attachment: attachment)
-    return ListLineMarker.string(attrStr)
+    return .image(image, size: CGSize(width: 18, height: 18))
   }
 }

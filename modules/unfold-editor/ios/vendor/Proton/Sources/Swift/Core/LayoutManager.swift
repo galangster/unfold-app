@@ -66,6 +66,17 @@ class LayoutManager: NSLayoutManager {
         return layoutManagerDelegate?.font ?? UIFont.preferredFont(forTextStyle: .body)
     }
 
+    private func listMarkerKind(for value: Any?) -> String? {
+        guard let value else { return nil }
+        if String(describing: type(of: value)).contains("ChecklistItem") {
+            return "checklist"
+        }
+        if (value as? String) == "ordered" {
+            return "ordered"
+        }
+        return "bullet"
+    }
+
     private func drawListMarkers(textStorage: NSTextStorage, listRange: NSRange, attributeValue: Any?) {
         var lastLayoutRect: CGRect?
         var lastLayoutParaStyle: NSParagraphStyle?
@@ -86,6 +97,11 @@ class LayoutManager: NSLayoutManager {
 
         if prevStyle == nil {
             counters = [:]
+        } else if listRange.location > 0 {
+            let previousValue = textStorage.attribute(.listItem, at: listRange.location - 1, effectiveRange: nil)
+            if listMarkerKind(for: previousValue) != listMarkerKind(for: attributeValue) {
+                counters = [:]
+            }
         }
 
         let listGlyphRange = glyphRange(forCharacterRange: listRange, actualCharacterRange: nil)
@@ -123,6 +139,12 @@ class LayoutManager: NSLayoutManager {
             let paraStyle = textStorage.attribute(.paragraphStyle, at: characterRange.location, effectiveRange: nil) as? NSParagraphStyle ?? self.defaultParagraphStyle
             previousLevel = Int(previousParaStyle?.firstLineHeadIndent ?? 0)/Int(listIndent)
             if isPreviousLineComplete, skipMarker == false {
+                let previousValue = characterRange.location > 0
+                    ? textStorage.attribute(.listItem, at: characterRange.location - 1, effectiveRange: nil)
+                    : nil
+                if listMarkerKind(for: previousValue) != listMarkerKind(for: attributeValue) {
+                    self.counters = [:]
+                }
 
                 level = Int(paraStyle.firstLineHeadIndent/listIndent)
                 var index = (self.counters[level] ?? 0)
@@ -170,9 +192,13 @@ class LayoutManager: NSLayoutManager {
         var para: NSParagraphStyle?
         if textStorage.length > listRange.endLocation {
             para = textStorage.attribute(.paragraphStyle, at: listRange.endLocation, effectiveRange: nil) as? NSParagraphStyle
+            let nextValue = textStorage.attribute(.listItem, at: listRange.endLocation, effectiveRange: nil)
             let paraLevel = Int((para?.firstLineHeadIndent ?? 0)/listIndent)
             // don't draw last rect if there's a following list item (in another indent level)
             if para != nil, paraLevel != level {
+                return
+            }
+            if listMarkerKind(for: nextValue) != listMarkerKind(for: attributeValue) {
                 return
             }
         }
