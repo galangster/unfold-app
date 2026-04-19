@@ -223,19 +223,19 @@ enum HtmlDecoder {
       switch block.tag {
       case "h1":
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = 8
+        style.paragraphSpacing = 2
         style.paragraphSpacingBefore = 16
         style.lineHeightMultiple = 1.15
         return (UnfoldFonts.h1, style, nil, UnfoldColors.text)
       case "h2":
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = 8
+        style.paragraphSpacing = 2
         style.paragraphSpacingBefore = 12
         style.lineHeightMultiple = 1.15
         return (UnfoldFonts.h2, style, nil, UnfoldColors.text)
       case "h3":
         let style = NSMutableParagraphStyle()
-        style.paragraphSpacing = 8
+        style.paragraphSpacing = 2
         style.paragraphSpacingBefore = 10
         style.lineHeightMultiple = 1.15
         return (UnfoldFonts.h3, style, nil, UnfoldColors.text)
@@ -292,6 +292,7 @@ enum HtmlDecoder {
       default: // "p"
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 4
+        style.paragraphSpacingBefore = 0
         return (UnfoldFonts.body(), style, nil, UnfoldColors.text)
       }
     }()

@@ -773,7 +773,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // visible. A large hardcoded cushion caused needless scroll corrections and
     // visible jitter; instead, use the real toolbar occlusion plus a smaller
     // line-level comfort buffer.
-    let bottomSafeZone = max(28, keyboardToolbarHeight + 28)
+    let bottomSafeZone = max(44, keyboardToolbarHeight + 44)
     let topSafeZone: CGFloat = 20
 
     let caretTop = caretRect.minY
@@ -803,6 +803,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     case "p":
       let p = NSMutableParagraphStyle()
       p.paragraphSpacing = 4
+      p.paragraphSpacingBefore = 0
+      p.lineHeightMultiple = 0
       return [.font: UnfoldFonts.body(), .foregroundColor: UnfoldColors.text, .paragraphStyle: p]
     case "h1":
       let p = NSMutableParagraphStyle(); p.paragraphSpacing = 2; p.paragraphSpacingBefore = 16; p.lineHeightMultiple = 1.15
