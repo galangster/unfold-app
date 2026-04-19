@@ -344,14 +344,30 @@ open class ListTextProcessor: TextProcessing {
             || currentString == ListTextProcessor.blankLineFiller
             || currentString == "\(ListTextProcessor.blankLineFiller)\n"
         guard currentLooksEmpty else { return }
-        guard currentLine.text.attribute(.listItem, at: 0, effectiveRange: nil) == nil else { return }
 
-        let paragraphStyle = (editor.attributedText.attribute(.paragraphStyle, at: max(currentLine.range.location, 0), effectiveRange: nil) as? NSParagraphStyle)
+        let currentLineHasListItem: Bool = {
+            guard currentLine.text.length > 0 else { return false }
+            return currentLine.text.attribute(.listItem, at: 0, effectiveRange: nil) != nil
+        }()
+        guard !currentLineHasListItem else { return }
+
+        let editorProbeLocation: Int? = {
+            guard editor.attributedText.length > 0 else { return nil }
+            return min(max(currentLine.range.location, 0), editor.attributedText.length - 1)
+        }()
+
+        let paragraphStyle = (editorProbeLocation.flatMap {
+            editor.attributedText.attribute(.paragraphStyle, at: $0, effectiveRange: nil) as? NSParagraphStyle
+        })
             ?? (previousLine.text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
             ?? editor.paragraphStyle
-        let font = (editor.attributedText.attribute(.font, at: max(currentLine.range.location, 0), effectiveRange: nil) as? UIFont)
+        let font = editorProbeLocation.flatMap {
+            editor.attributedText.attribute(.font, at: $0, effectiveRange: nil) as? UIFont
+        }
             ?? (previousLine.text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
-        let foregroundColor = (editor.attributedText.attribute(.foregroundColor, at: max(currentLine.range.location, 0), effectiveRange: nil) as? UIColor)
+        let foregroundColor = editorProbeLocation.flatMap {
+            editor.attributedText.attribute(.foregroundColor, at: $0, effectiveRange: nil) as? UIColor
+        }
             ?? (previousLine.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor)
 
         editor.addAttribute(.listItem, value: previousListValue, at: currentLine.range)
