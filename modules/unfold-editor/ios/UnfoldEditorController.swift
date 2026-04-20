@@ -503,6 +503,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         editor.addAttribute(.listItem, value: value, at: lineRange)
         editor.typingAttributes[.listItem] = value
       }
+      normalizeCurrentLineMetricsAfterListChange()
       scheduleHtmlEmit()
       refreshSelectionState()
       return
@@ -529,6 +530,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
 
     ListCommand().execute(on: editor, attributeValue: value)
+    normalizeCurrentLineMetricsAfterListChange()
     scheduleHtmlEmit()
     refreshSelectionState()
   }
@@ -544,6 +546,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
 
     ListCommand().execute(on: editor, attributeValue: nil)
+    normalizeCurrentLineMetricsAfterListChange()
     scheduleHtmlEmit()
     refreshSelectionState()
   }
@@ -558,6 +561,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
   func indentList() {
     ListIndentCommand().execute(on: editor)
+    normalizeCurrentLineMetricsAfterListChange()
     scheduleHtmlEmit()
     refreshSelectionState()
   }
@@ -575,6 +579,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
         editor.selectedRange = lineRange
         ListOutdentCommand().execute(on: editor)
         editor.selectedRange = NSRange(location: lineRange.location, length: 0)
+        normalizeCurrentLineMetricsAfterListChange()
         scheduleHtmlEmit()
         refreshSelectionState()
         return
@@ -582,6 +587,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
 
     ListOutdentCommand().execute(on: editor)
+    normalizeCurrentLineMetricsAfterListChange()
     scheduleHtmlEmit()
     refreshSelectionState()
   }
@@ -1003,6 +1009,75 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       return lhs == rhs
     default:
       return false
+    }
+  }
+
+  /// Re-samples the current line after list commands so caret geometry and
+  /// typingAttributes don't keep stale heading-era metrics. Proton's list
+  /// indent/outdent flow updates `.paragraphStyle` / `.listItem`, but it can
+  /// leave the current insertion line carrying old block-style font or
+  /// line-height metadata, which then makes the caret/selection handles look
+  /// oversized even though visible list text is body-sized.
+  private func normalizeCurrentLineMetricsAfterListChange() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+
+      let lineRange = self.currentLineRange()
+      guard lineRange.length > 0 else { return }
+
+      let blankLineFiller = "\u{200B}"
+      let lineText = self.editor.attributedText.substring(from: lineRange)
+      let isEmptyListLine = lineText.isEmpty
+        || lineText == "\n"
+        || lineText == blankLineFiller
+        || lineText == "\(blankLineFiller)\n"
+
+      let existingParagraphStyle = self.firstAttribute(
+        .paragraphStyle,
+        in: self.editor.attributedText,
+        range: lineRange
+      ) as? NSParagraphStyle
+      let listValue = self.firstAttribute(
+        .listItem,
+        in: self.editor.attributedText,
+        range: lineRange
+      )
+
+      var normalizedParagraph = (existingParagraphStyle?.mutableCopy() as? NSMutableParagraphStyle)
+        ?? NSMutableParagraphStyle()
+      normalizedParagraph.lineHeightMultiple = 0
+      normalizedParagraph.paragraphSpacingBefore = listValue != nil
+        ? self.formattingProvider.listLineFormatting.spacingBefore
+        : 0
+      if listValue == nil {
+        normalizedParagraph.firstLineHeadIndent = 0
+        normalizedParagraph.headIndent = 0
+        normalizedParagraph.paragraphSpacing = 4
+      }
+
+      var normalizedAttrs = self.editor.typingAttributes
+      normalizedAttrs[.font] = UnfoldFonts.body()
+      normalizedAttrs[.foregroundColor] = UnfoldColors.text
+      normalizedAttrs[.paragraphStyle] = normalizedParagraph
+      normalizedAttrs[.unfoldBlockType] = nil
+      if let listValue {
+        normalizedAttrs[.listItem] = listValue
+      } else {
+        normalizedAttrs[.listItem] = nil
+      }
+      self.editor.typingAttributes = normalizedAttrs
+
+      guard isEmptyListLine || listValue == nil else { return }
+
+      self.editor.removeAttribute(.unfoldBlockType, at: lineRange)
+      self.editor.addAttribute(.font, value: UnfoldFonts.body(), at: lineRange)
+      self.editor.addAttribute(.foregroundColor, value: UnfoldColors.text, at: lineRange)
+      self.editor.addAttribute(.paragraphStyle, value: normalizedParagraph, at: lineRange)
+      if let listValue {
+        self.editor.addAttribute(.listItem, value: listValue, at: lineRange)
+      } else {
+        self.editor.removeAttribute(.listItem, at: lineRange)
+      }
     }
   }
 

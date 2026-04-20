@@ -834,11 +834,45 @@ class RichTextView: AutogrowingTextView {
         }
 
         let location = offset(from: beginningOfDocument, to: position)
-        let lineRect = layoutManager.boundingRect(forGlyphRange: NSRange(location: location, length: 0), in: textContainer)
-
         var caretRect = super.caretRect(for: position)
-        // For non-Latin chars, the line height is calculated differently. Hence, using the higher of
-        // existing Caret rect or lineHeight.y position for caret positioning.
+
+        // When the insertion point sits at a paragraph boundary (especially
+        // right after `\n` or at document end), TextKit can report a zero-length
+        // glyph rect for the *previous* line fragment. If that previous fragment
+        // is a heading, forcing the caret to that rect makes the caret/marked-
+        // text underline appear H1-sized and too low. In those boundary cases,
+        // prefer UIKit's own caret geometry, or the extra-line fragment when
+        // we're truly at the trailing empty paragraph.
+        let textLength = attributedText.length
+        let isAtDocumentEnd = location >= textLength
+        let isAfterNewline: Bool = {
+            guard location > 0, location <= textLength else { return false }
+            return attributedText.substring(from: NSRange(location: location - 1, length: 1)) == "\n"
+        }()
+
+        if isAtDocumentEnd,
+           !layoutManager.extraLineFragmentRect.isEmpty,
+           layoutManager.extraLineFragmentRect.height > 0 {
+            let extraRect = layoutManager.extraLineFragmentRect
+            caretRect.origin.y = max(caretRect.origin.y, extraRect.minY + textContainerInset.top)
+            caretRect.size.height = extraRect.height
+            return caretRect
+        }
+
+        if isAfterNewline {
+            return caretRect
+        }
+
+        let lineRect = layoutManager.boundingRect(
+            forGlyphRange: NSRange(location: location, length: 0),
+            in: textContainer)
+        guard !lineRect.isEmpty, lineRect.height > 0 else {
+            return caretRect
+        }
+
+        // For non-Latin chars, the line height is calculated differently. Hence,
+        // using the higher of existing caret rect or lineHeight.y position for
+        // caret positioning.
         caretRect.origin.y = max(caretRect.origin.y, lineRect.minY + textContainerInset.top)
         caretRect.size.height = lineRect.height
         return caretRect
