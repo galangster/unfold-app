@@ -32,7 +32,7 @@ import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
-import { submitGenerationJob, findCompletedJob, fetchJobResult, ApiError } from '@/lib/generation-api';
+import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
@@ -289,23 +289,16 @@ export default function HomeScreen() {
 
     let cancelled = false;
 
-    // Normalize a discovered day payload so it has sync-compatible identity fields.
-    // Without this, the day has no `id` and sync pull appends a duplicate row.
-    const normalizeDayForSync = (day: any) => ({
-      ...day,
-      id: day.id ?? `day-${devId}-${dayNum}`,
-      devotionalId: day.devotionalId ?? devId,
-      dayNumber: day.dayNumber ?? dayNum,
-    });
-
     (async () => {
       try {
-        // Step 1: Check if content already exists on server
-        const existing = await findCompletedJob(devId, dayNum);
+        const recovered = await recoverCompletedGenerationResult({
+          devotionalId: devId,
+          dayNumber: dayNum,
+        });
         if (cancelled) return;
 
-        if (existing?.result?.devotionalDay) {
-          addGeneratedDay(devId, normalizeDayForSync(existing.result.devotionalDay));
+        if (recovered?.devotionalDay) {
+          addGeneratedDay(devId, recovered.devotionalDay);
           autoGenAttemptedRef.current = key;
           console.log('[home] Applied existing server content for day', dayNum);
           return;
@@ -324,11 +317,15 @@ export default function HomeScreen() {
         if (cancelled) return;
 
         // Handle 409 with structured error — server already has this day's content
-        if (err instanceof ApiError && err.status === 409 && err.existingJobId) {
-          const jobResult = await fetchJobResult(err.existingJobId).catch(() => null);
+        if (err instanceof ApiError && err.status === 409) {
+          const recovered = await recoverCompletedGenerationResult({
+            devotionalId: devId,
+            dayNumber: dayNum,
+            existingJobId: err.existingJobId,
+          }).catch(() => null);
           if (cancelled) return;
-          if (jobResult?.result?.devotionalDay) {
-            addGeneratedDay(devId, normalizeDayForSync(jobResult.result.devotionalDay));
+          if (recovered?.devotionalDay) {
+            addGeneratedDay(devId, recovered.devotionalDay);
             autoGenAttemptedRef.current = key;
             return;
           }
@@ -401,7 +398,7 @@ export default function HomeScreen() {
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
-  const getReadingDayLabel = (): 'Yesterday' | 'Today' | 'Tomorrow' => {
+  const getReadingDayLabel = (): 'Overdue' | 'Today' | 'Tomorrow' => {
     if (!currentDevotional) return 'Today';
     const dayData = (currentDevotional.days ?? []).find(d => d.dayNumber === currentDevotional.currentDay);
     if (!dayData) return 'Today';
@@ -415,13 +412,12 @@ export default function HomeScreen() {
       return 'Today';
     }
 
-    // Case 2: Current day NOT read — check if it's overdue
-    // If the content was generated before today, the user missed it yesterday
+    // Case 2: Current day NOT read — check if it's overdue.
+    // If the content was generated before today, the user missed it on a prior day.
     if (!dayData.isRead && dayData.generatedAt) {
       const genDate = new Date(dayData.generatedAt);
       if (genDate.toDateString() !== todayStr) {
-        // Generated on a different day than today — content is overdue
-        return 'Yesterday';
+        return 'Overdue';
       }
     }
 

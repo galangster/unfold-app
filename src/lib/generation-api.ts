@@ -7,6 +7,7 @@
  *   3. retryJob            — POST /api/jobs/:jobId/retry
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
+import { reconcileGenerationResultIdentity, type GeneratedDayWithIdentity, type GenerationResultPayload } from './generation-reconciliation';
 import { mmkvStorage } from "./mmkv-storage";
 
 /** MMKV key for caching the active dynamic prompt example */
@@ -40,18 +41,29 @@ function fetchWithTimeout(
 export interface GenerationJobResponse {
   jobId: string;
   status: "pending" | "processing" | "complete" | "failed";
-  result?: {
-    devotionalDay: import("./store").DevotionalDay;
-    seriesTitle?: string;
-    totalDays?: number;
-    arc?: import("./store").SeriesArc;
-    devotionalId?: string;
-  };
+  result?: GenerationResultPayload;
   error?: string;
   retryCount?: number;
   canRetry?: boolean;
   createdAt?: string;
   completedAt?: string;
+}
+
+export type CanonicalGenerationResultPayload = Omit<GenerationResultPayload, 'devotionalDay' | 'devotionalId'> & {
+  devotionalDay: GeneratedDayWithIdentity;
+  devotionalId: string;
+};
+
+export function normalizeGenerationResult(
+  result: GenerationResultPayload,
+  fallbackDevotionalId?: string | null,
+  fallbackDayNumber?: number,
+): CanonicalGenerationResultPayload {
+  return reconcileGenerationResultIdentity(
+    result,
+    fallbackDevotionalId,
+    fallbackDayNumber,
+  ) as CanonicalGenerationResultPayload;
 }
 
 export async function submitGenerationJob(params: {
@@ -80,7 +92,7 @@ export async function submitGenerationJob(params: {
   // Read cached dynamic prompt example (if any) for self-improving generation quality
   let dynamicExample: { rule: string; badText: string; goodText: string } | undefined;
   try {
-    const cached = mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY);
+    const cached = await Promise.resolve(mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY));
     if (cached) {
       dynamicExample = JSON.parse(cached);
     }
@@ -187,4 +199,27 @@ export async function findCompletedJob(
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Find job failed: ${response.status}`);
   return response.json();
+}
+
+/**
+ * Shared recovery path for screens that need to reconcile a completed job back
+ * into local state. Uses direct job lookup for 409 recovery when possible,
+ * otherwise falls back to devotionalId/dayNumber discovery.
+ */
+export async function recoverCompletedGenerationResult(params: {
+  devotionalId: string;
+  dayNumber: number;
+  existingJobId?: string | null;
+}): Promise<CanonicalGenerationResultPayload | null> {
+  const response = params.existingJobId
+    ? await fetchJobResult(params.existingJobId).catch(() => null)
+    : await findCompletedJob(params.devotionalId, params.dayNumber);
+
+  if (!response?.result?.devotionalDay) return null;
+
+  return normalizeGenerationResult(
+    response.result,
+    params.devotionalId,
+    params.dayNumber,
+  );
 }

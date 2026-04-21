@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react';
+import { useCallback, memo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS, useReducedMotion } from 'react-native-reanimated';
@@ -42,6 +42,8 @@ interface Props {
   isDark: boolean;
   companionName: string;
   onCompanionNameChange: (name: string) => void;
+  currentPage: number;
+  onPageChange: (page: number | ((prev: number) => number)) => void;
   onComplete: () => void;
 }
 
@@ -50,11 +52,12 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
   isDark,
   companionName,
   onCompanionNameChange,
+  currentPage,
+  onPageChange,
   onComplete,
 }: Props) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
-  const [currentPage, setCurrentPage] = useState(0);
 
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
@@ -65,19 +68,19 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
     if (isLastPage) {
       onComplete();
     } else {
-      setCurrentPage((p) => p + 1);
+      onPageChange((p) => Math.min((typeof p === 'number' ? p : currentPage) + 1, ALL_PAGES.length - 1));
     }
-  }, [isLastPage, onComplete]);
+  }, [currentPage, isLastPage, onComplete, onPageChange]);
 
   const handleSwipeLeft = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentPage((p) => Math.min(p + 1, ALL_PAGES.length - 1));
-  }, []);
+    onPageChange((p) => Math.min((typeof p === 'number' ? p : currentPage) + 1, ALL_PAGES.length - 1));
+  }, [currentPage, onPageChange]);
 
   const handleSwipeRight = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCurrentPage((p) => Math.max(p - 1, 0));
-  }, []);
+    onPageChange((p) => Math.max((typeof p === 'number' ? p : currentPage) - 1, 0));
+  }, [currentPage, onPageChange]);
 
   const swipeGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
@@ -103,9 +106,9 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
               <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
                 {/* Animation or companion orb */}
-                <View style={{ transform: [{ scale: 1.2 }] }}>
+                <View>
                   {isCompanionPage ? (
-                    <CompanionOrb accentColor={colors.accent} size={80} isActive showBadge={false} />
+                    <CompanionOrb accentColor={colors.accent} size={96} isActive showBadge={false} />
                   ) : (
                     <CardAnimation type={page.animation} accent={colors.accent} />
                   )}

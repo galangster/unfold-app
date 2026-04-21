@@ -1,0 +1,15 @@
+{
+  "name": "unfold-editor",
+  "version": "0.0.1",
+  "description": "Native iOS notebook editor for Unfold — Phase B scaffolding (font bundling smoke test).",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true,
+  "sideEffects": false,
+  "keywords": ["unfold", "editor", "expo-module"],
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

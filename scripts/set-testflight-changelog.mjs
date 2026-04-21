@@ -18,6 +18,7 @@
 //
 // No external deps — pure Node (global fetch, node:crypto, node:fs, node:path).
 
+import { Buffer } from 'node:buffer';
 import { readFileSync, existsSync } from 'node:fs';
 import { createSign } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';

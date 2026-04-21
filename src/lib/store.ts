@@ -5,9 +5,11 @@ import type { ThemeCategory, DevotionalType } from '../constants/devotional-type
 import { logBugError } from './bug-logger';
 import { logger } from './logger';
 import { mmkvStorage } from './mmkv-storage';
+import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity, normalizeGeneratedDaysIdentity } from './generation-reconciliation';
 import { compositeId, newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
+import { reconcileStreakState } from './streak-helpers';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -202,6 +204,7 @@ export interface DevotionalDay {
   seriesReflectionSummary?: string;
   closureArchetype?: string;
   // Sync fields
+  devotionalId?: string; // Canonical parent devotional id for generated-day reconciliation/sync
   id?: string; // Added for sync — composite from devotionalId:dayNumber
   updatedAt?: string; // ISO timestamp
 }
@@ -570,6 +573,7 @@ interface UnfoldState {
   streakWeekendAmnesty: boolean;
   streakFreezes: number;
   recordStreakRead: () => void;
+  reconcileStreakState: () => void;
   resetStreakGraceDays: () => void;
   toggleWeekendAmnesty: () => void;
 
@@ -732,7 +736,7 @@ interface UnfoldState {
 }
 
 const initialState = {
-  user: null,
+  user: null as UserProfile | null,
   devotionals: [],
   currentDevotionalId: null,
   hasEverCreatedDevotional: false,
@@ -831,8 +835,10 @@ export const useUnfoldStore = create<UnfoldState>()(
           if (state.devotionals.some((d) => d.id === devotional.id)) {
             return { currentDevotionalId: devotional.id, hasEverCreatedDevotional: true };
           }
+
+          const normalizedDevotional = normalizeDevotionalIdentity(devotional);
           return {
-            devotionals: [{ ...devotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
+            devotionals: [{ ...normalizedDevotional, updatedAt: new Date().toISOString() }, ...state.devotionals],
             currentDevotionalId: devotional.id,
             hasEverCreatedDevotional: true,
           };
@@ -857,11 +863,13 @@ export const useUnfoldStore = create<UnfoldState>()(
             devotionals: state.devotionals.map((d) => {
               if (d.id !== devotionalId) return d;
 
+              const normalizedIncomingDays = normalizeGeneratedDaysIdentity(devotionalId, days);
+
               // Merge incoming days with existing days by dayNumber.
               // Preserve read status/readAt from existing entries so late generation updates
               // never reset a day the user already completed.
               const existingByDay = new Map(d.days.map((day) => [day.dayNumber, day]));
-              const incomingByDay = new Map(days.map((day) => [day.dayNumber, day]));
+              const incomingByDay = new Map(normalizedIncomingDays.map((day) => [day.dayNumber, day]));
               const mergedByDay = new Map<number, DevotionalDay>();
 
               for (const [dayNumber, existingDay] of existingByDay.entries()) {
@@ -873,6 +881,8 @@ export const useUnfoldStore = create<UnfoldState>()(
 
                 mergedByDay.set(dayNumber, {
                   ...incomingDay,
+                  id: incomingDay.id ?? existingDay.id ?? compositeId(devotionalId, dayNumber),
+                  devotionalId,
                   isRead: existingDay.isRead || incomingDay.isRead,
                   readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
                   updatedAt: now,
@@ -881,7 +891,12 @@ export const useUnfoldStore = create<UnfoldState>()(
 
               for (const [dayNumber, incomingDay] of incomingByDay.entries()) {
                 if (!mergedByDay.has(dayNumber)) {
-                  mergedByDay.set(dayNumber, { ...incomingDay, updatedAt: now });
+                  mergedByDay.set(dayNumber, {
+                    ...incomingDay,
+                    id: incomingDay.id ?? compositeId(devotionalId, dayNumber),
+                    devotionalId,
+                    updatedAt: now,
+                  });
                 }
               }
 
@@ -1339,6 +1354,19 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakFreezes: newFreezes,
           };
         }),
+      reconcileStreakState: () =>
+        set((state) =>
+          reconcileStreakState({
+            streakCurrent: state.streakCurrent,
+            streakLastReadDate: state.streakLastReadDate,
+            streakGraceDaysUsedThisWeek: state.streakGraceDaysUsedThisWeek,
+            streakWeekStart: state.streakWeekStart,
+            streakWeekendAmnesty: state.streakWeekendAmnesty,
+            streakFreezes: state.streakFreezes,
+            isPremium: Boolean(state.user?.isPremium),
+            streakJustReset: state.streakJustReset,
+          })
+        ),
       resetStreakGraceDays: () =>
         set({
           streakGraceDaysUsedThisWeek: 0,
@@ -1538,12 +1566,13 @@ export const useUnfoldStore = create<UnfoldState>()(
       addGeneratedDay: (devotionalId, day) =>
         set((state) => {
           const now = new Date().toISOString();
+          const normalizedDay = normalizeGeneratedDayIdentity(devotionalId, day, day.dayNumber);
           return {
             devotionals: state.devotionals.map((d) => {
               if (d.id !== devotionalId) return d;
               // Don't duplicate if day already exists
-              if (d.days.some((existing) => existing.dayNumber === day.dayNumber)) return d;
-              const updatedDays = [...d.days, { ...day, updatedAt: now }].sort((a, b) => a.dayNumber - b.dayNumber);
+              if (d.days.some((existing) => existing.dayNumber === normalizedDay.dayNumber)) return d;
+              const updatedDays = [...d.days, { ...normalizedDay, updatedAt: now }].sort((a, b) => a.dayNumber - b.dayNumber);
               return { ...d, days: updatedDays, updatedAt: now };
             }),
           };
@@ -2107,6 +2136,7 @@ export const useUnfoldStore = create<UnfoldState>()(
               if (Array.isArray(d.days)) {
                 for (const day of d.days) {
                   if (!day) continue;
+                  day.devotionalId = day.devotionalId || d.id;
                   if (!day.id) day.id = compositeId(d.id, day.dayNumber);
                   if (!day.updatedAt) day.updatedAt = day.readAt || day.generatedAt || d.createdAt || now;
                 }

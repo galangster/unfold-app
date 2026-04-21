@@ -17,7 +17,7 @@ import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { ScriptureRefPill } from './ScriptureRefPill';
-import { stripHtml, isHtmlContent } from './html-utils';
+import { stripHtml, isHtmlContent } from './NoteEditor';
 
 import { Note, NoteCategory } from '@/lib/store';
 
@@ -37,6 +37,7 @@ interface NoteCardProps {
   note: Note;
   onPress: (note: Note) => void;
   onLongPress?: (note: Note) => void;
+  /** Index for staggered entry animation (delay = 50ms * index) */
   index?: number;
 }
 
@@ -83,7 +84,7 @@ export function NoteCard({ note, onPress, onLongPress, index = 0 }: NoteCardProp
   const extraTagCount = note.tags.length - visibleTags.length;
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(30 * index).easing(Ease.out)}>
       <TouchableOpacity
         onPress={handlePress}
         onLongPress={handleLongPress}

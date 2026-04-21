@@ -126,6 +126,21 @@ describe('computeDevotionalState', () => {
     }
   });
 
+  it('returns unread with overdue label when current content is stale', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      dayLabel: 'Overdue',
+      daysCompleted: 3,
+      progress: 42.9,
+      ctaText: 'Keep Going',
+      currentDayData: makeDayData({ dayNumber: 4, isRead: false, isRevealed: true }),
+    });
+    expect(state.type).toBe('unread');
+    if (state.type === 'unread') {
+      expect(state.dayLabel).toBe('Overdue');
+    }
+  });
+
   it('returns unread with daysCompleted when some days completed but current day unread', () => {
     const state = computeDevotionalState({
       ...baseInput,
@@ -208,14 +223,14 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('reveal-ready');
   });
 
-  it('returns reveal-ready when day is unrevealed (server controls day pacing)', () => {
+  it('returns tomorrow-locked when today\'s reading is done, even if the next day is still unrevealed', () => {
     const state = computeDevotionalState({
       ...baseInput,
       hasReadToday: true,
       currentDayData: makeDayData({ dayNumber: 3, isRead: false, isRevealed: false }),
       daysCompleted: 2,
     });
-    expect(state.type).toBe('reveal-ready');
+    expect(state.type).toBe('tomorrow-locked');
   });
 
   // ─── Priority order ──────────────────────────────────────────

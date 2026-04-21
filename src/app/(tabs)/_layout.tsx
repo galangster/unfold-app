@@ -244,8 +244,6 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
             >
               <AnimatedTabIcon
                 focused={isFocused}
-                color={currentColor}
-                accentColor={activeColor}
               >
                 {renderIcon()}
               </AnimatedTabIcon>

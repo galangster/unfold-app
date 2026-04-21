@@ -7,7 +7,8 @@
 //
 // Reads credentials from eas.json submit.production.ios.
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
 import { createSign } from 'node:crypto';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

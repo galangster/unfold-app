@@ -31,9 +31,9 @@ import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-g
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -45,17 +45,14 @@ import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Button, alpha } from '@/components/ui';
+import { getCreateFolderInputLayout } from '@/lib/create-folder-input-layout';
 
 // ---------------------------------------------------------------------------
 // Animation config
 // ---------------------------------------------------------------------------
 
 const OFFSCREEN = 500;
-// Critically-damped spring for sheet entrance and gesture snap-back.
-// Callers on release paths MUST spread this and pass `velocity: e.velocityY`
-// so remaining gesture momentum carries into the snap-back. No bounce
-// (dampingRatio: 1).
-const SLIDE_SPRING = { duration: Duration.slow, dampingRatio: 1 } as const;
+const SLIDE_IN = { duration: Duration.slow, easing: Easing.out(Easing.cubic) };
 const DISMISS_DURATION = 180;
 const SWIPE_THRESHOLD = 80;
 const VELOCITY_THRESHOLD = 500;
@@ -72,6 +69,8 @@ const FOLDER_COLORS = [
   '#9B8EC4', // Lavender
   '#C8A55C', // Gold
 ];
+
+const CREATE_FOLDER_INPUT_LAYOUT = getCreateFolderInputLayout();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,7 +109,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
       setFolderName('');
       setSelectedColor(undefined);
       translateY.value = OFFSCREEN;
-      translateY.value = withSpring(0, SLIDE_SPRING);
+      translateY.value = withTiming(0, SLIDE_IN);
       const focusTimer = setTimeout(() => {
         inputRef.current?.focus();
       }, 350);
@@ -153,8 +152,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
             translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
             runOnJS(dismissSheet)();
           } else {
-            // Spring handoff: feed remaining gesture velocity into the snap-back
-            translateY.value = withSpring(0, { ...SLIDE_SPRING, velocity: e.velocityY });
+            translateY.value = withTiming(0, SLIDE_IN);
           }
         }),
     [dismissSheet, translateY],
@@ -238,6 +236,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                   returnKeyType="done"
                   onSubmitEditing={handleCreate}
                   maxLength={40}
+                  textAlignVertical={CREATE_FOLDER_INPUT_LAYOUT.textAlignVertical}
                 />
 
                 {/* Color selection */}
@@ -339,7 +338,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.ui,
     fontSize: FontSize.base,
     paddingHorizontal: Spacing['4'],
-    paddingVertical: 14,
+    paddingVertical: CREATE_FOLDER_INPUT_LAYOUT.paddingVertical,
+    height: CREATE_FOLDER_INPUT_LAYOUT.height,
     borderRadius: Radius.md,
     marginBottom: Spacing['4'],
   },

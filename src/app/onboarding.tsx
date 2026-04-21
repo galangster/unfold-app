@@ -18,6 +18,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -65,8 +66,8 @@ import { EmberParticles } from '@/components/EmberParticles';
 import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { isDevotionalLengthFree, isReadingDurationFree } from '@/lib/premium-gating';
 import { submitGenerationJob } from '@/lib/generation-api';
+import { getFilteredOnboardingSteps, getInitialOnboardingStepId } from '@/lib/onboarding-step-helpers';
 import { ShockStat } from '@/components/onboarding/ShockStat';
 import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
 import { MultiSelectPills } from '@/components/onboarding/MultiSelectPills';
@@ -258,7 +259,7 @@ const ALL_STEPS = [
   // UNFOLD INTRO: The answer — what Unfold is, particles rise
   { id: 'unfoldIntro', question: '', subtext: '', type: 'unfoldIntro' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: "The more you share, the more personal your devotionals become. Your story stays on your device \u2014 never used to train\u00A0AI.", type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: 'The more you share, the more personal your devotionals become. Your story stays on your device.', type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
   { id: 'stylePreferences1', question: "Your walk right\u00A0now.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // STYLE PREFERENCES: Tone + depth
@@ -271,7 +272,7 @@ const ALL_STEPS = [
     { value: 'starting', label: 'Just starting or rebuilding' },
   ]},
   // CONFRONT: Bible reading frequency — feeds shock stat
-  { id: 'bibleFrequency', question: "How often do you spend time in God's\u00A0word?", subtext: '', type: 'choice' as const, adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
+  { id: 'bibleFrequency', question: "How often do you spend time in God's\u00A0Word?", subtext: '', type: 'choice' as const, adaptive: false, skipIfHasValue: false, hasVariations: false, options: [
     { value: 'daily', label: 'Every day' },
     { value: 'few-times-week', label: 'A few times a week' },
     { value: 'weekly', label: 'Once a week' },
@@ -330,9 +331,22 @@ const ALL_STEPS = [
   { id: 'commitment2', question: '', subtext: '', type: 'commitment2' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   // THREE STEP PAYWALL: Final premium pitch before generating — shown to ALL users
   { id: 'threeStepPaywall', question: '', subtext: '', type: 'threeStepPaywall' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // PURCHASE CONFIRMATION: premium success moment before discovery
+  { id: 'purchaseConfirmation', question: '', subtext: '', type: 'purchaseConfirmation' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // EXPLORATION: Theme/topic selection (optional)
+  { id: 'themeType', question: 'Is there something specific you want\u00A0to\u00A0explore?', subtext: 'Pick one that resonates, or skip to let us\u00A0guide\u00A0you.', type: 'themeType' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
+  // SUBJECT SELECTION: After choosing a study type, pick the specific subject (book, character, etc.)
+  { id: 'studySubject', question: 'Which would you like to study?', subtext: 'Pick one to walk through together.', type: 'studySubject' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, conditionalOn: 'selectedType' },
+  // DISCOVERY STEP 1: Opening - Where are you right now?
+  { id: 'currentSituation', question: "What's been on your\u00A0heart\u00A0lately?", subtext: "The thing that's there when the noise\u00A0quiets\u00A0down.", type: 'multiline' as const, placeholder: "Lately, I've been thinking about...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  // DISCOVERY STEP 2: The longing - What would breakthrough look like?
+  { id: 'spiritualSeeking', question: "When you imagine your faith 6 months from now, what's\u00A0different?", subtext: "If something could shift, what would you hope it\u00A0would\u00A0be?", type: 'multiline' as const, placeholder: "I think what I really need is...", adaptive: true, skipIfHasValue: false, hasVariations: true },
+  { id: 'readingDuration', question: 'How long should each devotional be?', subtext: 'Each day is crafted to fit your rhythm.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 5, label: '5 minutes', description: 'A quick breath' }, { value: 15, label: '15 minutes', description: 'A thoughtful pause' }, { value: 30, label: '30 minutes', description: 'A deep dive' }] },
+  { id: 'devotionalLength', question: 'How long should this devotional series\u00A0be?', subtext: 'You can always create another when this\u00A0one\u00A0ends.', type: 'choice' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false, hasDynamicOptions: true, options: [{ value: 3, label: '3 days', description: 'Just a taste' }, { value: 7, label: '7 days', description: 'Enough to build a rhythm' }, { value: 14, label: '14 days', description: 'Room to go deep' }, { value: 30, label: '30 days', description: 'A real transformation' }] },
+  { id: 'reminderTime', question: 'When should the\u00A0reminder\u00A0come?', subtext: 'A gentle nudge to pause and reflect. You can change\u00A0this\u00A0anytime.', type: 'timeChoice' as const, placeholder: '', adaptive: false, skipIfHasValue: true, hasVariations: false, options: [{ value: '6:00 AM', label: 'Early morning', time: '6:00 AM' }, { value: '8:00 AM', label: 'Morning', time: '8:00 AM' }, { value: '12:00 PM', label: 'Midday', time: '12:00 PM' }, { value: '6:00 PM', label: 'Evening', time: '6:00 PM' }, { value: '9:00 PM', label: 'Night', time: '9:00 PM' }] },
 ];
 
-type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall';
+type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'stylePreferences1' | 'stylePreferences2' | 'relationshipWithGod' | 'bibleFrequency' | 'shockStat' | 'growthGraph' | 'growthGoals' | 'obstacles' | 'aspiration' | 'vulnerabilityValidation' | 'mirrorBack' | 'featureSummary' | 'founderNote' | 'devotionalSegue' | 'readDevotional' | 'celebration' | 'commitment1' | 'commitment2' | 'threeStepPaywall' | 'purchaseConfirmation' | 'themeType' | 'studySubject' | 'currentSituation' | 'spiritualSeeking' | 'readingDuration' | 'devotionalLength' | 'reminderTime';
 
 // Discovery chips — tappable quick-select options for the 3 discovery questions
 // Each chip is a feeling/situation that seeds context without requiring typing
@@ -531,7 +545,7 @@ export default function OnboardingScreen() {
   const yearlyHasFreeTrial = yearlyHasZeroIntro && yearlyEligible === true;
   const yearlyTrialDuration = (() => {
     const intro = yearlyPackage?.product.introPrice;
-    if (!intro || intro.price !== 0) return '7-day';
+    if (!intro || intro.price !== 0) return '3-day';
     const count = intro.periodNumberOfUnits;
     const unit = intro.periodUnit.toLowerCase();
     if (unit === 'day') return `${count}-day`;
@@ -585,7 +599,9 @@ export default function OnboardingScreen() {
   }, [data?.selectedThemes, data?.currentSituation, data?.spiritualSeeking, data?.name]);
 
   // Track which step we're on (from filtered list)
-  const [currentStepId, setCurrentStepId] = useState<StepId>('hook');
+  const [currentStepId, setCurrentStepId] = useState<StepId>(() =>
+    getInitialOnboardingStepId(ALL_STEPS, existingUser) as StepId,
+  );
 
   // Dev: step picker visibility + show-all toggle
   const [devStepPickerVisible, setDevStepPickerVisible] = useState(false);
@@ -684,6 +700,7 @@ export default function OnboardingScreen() {
   const [commitmentLevel, setCommitmentLevel] = useState<string>('');
   const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(null);
   const [onboardingDevotionalId, setOnboardingDevotionalId] = useState<string>('');
+  const [featureSummaryPage, setFeatureSummaryPage] = useState(0);
   
   // Animated styles
   const inputAnimatedStyle = useAnimatedStyle(() => ({
@@ -766,42 +783,11 @@ export default function OnboardingScreen() {
     // Dev: bypass all filtering to show every screen
     if (__DEV__ && devShowAllSteps) return ALL_STEPS;
 
-    const filtered = ALL_STEPS.filter((step) => {
-      // Skip study subject if user selected themes or guided mode (not a study type)
-      if (step.id === 'studySubject') {
-        // If they selected themes or guided, skip subject selection
-        if (data.selectedMainOption === 'theme' || data.selectedMainOption === 'guided') {
-          return false;
-        }
-        // If they selected "type" mode but haven't picked a specific type yet, skip
-        if (data.selectedMainOption === 'type' && !data.selectedType) {
-          return false;
-        }
-        // If they selected a type that doesn't need subject selection, skip
-        if (data.selectedType && !TYPES_WITH_SUBJECT_SELECTION.includes(data.selectedType)) {
-          return false;
-        }
-      }
-      
-      // Skip first-time-only steps for returning users
-      // These are first-time onboarding only — not shown when building new devotionals
-      if (existingUser?.hasCompletedOnboarding) {
-        if (step.id === 'founderNote' || step.id === 'featureSummary' || step.id === 'threeStepPaywall' || step.id === 'stylePreferences1' || step.id === 'stylePreferences2') {
-          return false;
-        }
-      }
-
-      if (step.skipIfHasValue) {
-        const stepId = step.id as StepId;
-        if (stepId === 'name' && existingUser?.name) return false;
-        if (stepId === 'aboutMe' && existingUser?.aboutMe) return false;
-        if (stepId === 'reminderTime' && existingUser?.reminderTime) return false;
-      }
-      return true;
+    return getFilteredOnboardingSteps(ALL_STEPS, existingUser, {
+      selectedMainOption: data.selectedMainOption,
+      selectedType: data.selectedType,
     });
-    
-    return filtered;
-  }, [existingUser, data.selectedMainOption, data.selectedType, hasConsentedToAI, devShowAllSteps]);
+  }, [existingUser, data.selectedMainOption, data.selectedType, devShowAllSteps]);
   
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
@@ -898,7 +884,7 @@ export default function OnboardingScreen() {
     }
 
     // Mirror-back, AI consent, founder note, companion naming, style preferences, cinematic steps, and three-step paywall always allow proceeding
-    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
+    if (step.type === 'mirrorBack' || step.type === 'founderNote' || step.type === 'featureSummary' || step.type === 'devotionalSegue' || step.type === 'readDevotional' || step.type === 'stylePreferences1' || step.type === 'stylePreferences2' || step.type === 'threeStepPaywall' || step.type === 'purchaseConfirmation' || step.type === 'shockStat' || step.type === 'growthGraph' || step.type === 'vulnerabilityValidation' || step.type === 'celebration' || step.type === 'commitment1' || step.type === 'commitment2') {
       return true;
     }
 
@@ -1164,6 +1150,11 @@ export default function OnboardingScreen() {
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+    if (currentStepId === 'featureSummary' && featureSummaryPage > 0) {
+      setFeatureSummaryPage((prev) => Math.max(prev - 1, 0));
+      return;
+    }
+
     // If in theme sub-mode, go back to main selection (but stay on same step)
     if (themeSelectionMode !== 'none') {
       setThemeSelectionMode('none');
@@ -1196,6 +1187,10 @@ export default function OnboardingScreen() {
       chaosDrift.value = withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) });
       setShowStillWord(false);
       setScreenReady(false);
+
+      if (currentStepId === 'featureSummary') {
+        setFeatureSummaryPage(0);
+      }
 
       setCurrentStepId(prevStepId);
       setShowInput(false);
@@ -1472,6 +1467,61 @@ export default function OnboardingScreen() {
             </View>
           </View>
 
+        </TouchableOpacity>
+      );
+    }
+
+    if (step.type === 'purchaseConfirmation') {
+      return (
+        <TouchableOpacity
+          activeOpacity={1}
+          disabled={!screenReady}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            advanceToNextStep();
+          }}
+          style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
+        >
+          <EmberParticles color={colors.accent} count={16} bidirectional />
+          <View style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 320,
+            pointerEvents: 'none',
+          }}>
+            <LinearGradient
+              colors={['transparent', `${colors.accent}20`, `${colors.accent}40`]}
+              style={{ flex: 1 }}
+            />
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ExpoImage
+              source={require('../../assets/icon-paywall.png')}
+              style={{ width: 42, height: 42, opacity: 0.92, marginBottom: Spacing['6'] }}
+              contentFit="contain"
+              tintColor={colors.accent}
+              cachePolicy="memory-disk"
+            />
+
+            <TypewriterText
+              text="Welcome to Unfold Premium. Now let's shape a devotional journey around where you are right now."
+              style={{ fontSize: 32, lineHeight: 42, color: colors.text, textAlign: 'center', fontFamily: FontFamily.display }}
+              charDelay={34}
+              delay={350}
+              highlightWord="Unfold"
+              highlightColor={colors.accent}
+              onComplete={() => setScreenReady(true)}
+            />
+
+            <View style={{ marginTop: Spacing['4'], opacity: screenReady ? 1 : 0 }}>
+              <PulsingText
+                text="Tap anywhere to continue"
+                style={{ fontFamily: FontFamily.ui, fontSize: 15, color: colors.textMuted }}
+              />
+            </View>
+          </View>
         </TouchableOpacity>
       );
     }
@@ -2203,11 +2253,10 @@ export default function OnboardingScreen() {
           {options.map((option) => {
             const isSelected = data[step.id as keyof OnboardingData] === option.value;
 
-            // Premium gating for duration and length options
-            const isLockedOption = !isPremium && (
-              (step.id === 'readingDuration' && !isReadingDurationFree(option.value as number)) ||
-              (step.id === 'devotionalLength' && !isDevotionalLengthFree(option.value as number))
-            );
+            // Onboarding should let users configure the experience they want
+            // up front. If they churn later, backend progressive generation
+            // stops via the premium gate in cron.ts.
+            const isLockedOption = false;
 
             return (
               <TouchableOpacity activeOpacity={0.7}
@@ -2431,12 +2480,17 @@ export default function OnboardingScreen() {
           isDark={isDark}
           companionName={companionNameInput}
           onCompanionNameChange={setCompanionNameInput}
-          onComplete={advanceToNextStep}
+          currentPage={featureSummaryPage}
+          onPageChange={setFeatureSummaryPage}
+          onComplete={() => {
+            setFeatureSummaryPage(0);
+            updateUser({ companionName: companionNameInput.trim() || 'Grace' });
+            advanceToNextStep();
+          }}
         />
       );
     }
 
-    // Devotional segue: build anticipation before the reveal
     if (step.type === 'devotionalSegue') {
       return (
         <DevotionalSegue
@@ -2824,57 +2878,6 @@ export default function OnboardingScreen() {
       );
     }
 
-    // Companion step: orb + naming input on a single screen
-    if (step.type === 'companionNaming') {
-      return (
-        <View style={{ alignItems: 'center', gap: Spacing['4'], marginTop: Spacing['2'] }}>
-          <Animated.View
-            entering={FadeIn.delay(200).duration(600)}
-          >
-            <CompanionOrb accentColor={colors.accent} size={80} isActive showBadge={false} />
-          </Animated.View>
-          <Animated.View
-            entering={FadeIn.delay(350).duration(500)}
-            style={{ width: '100%', paddingHorizontal: Spacing['1'] }}
-          >
-            <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: Spacing['2'], marginLeft: Spacing['1'] }}>
-              Companion name
-            </Text>
-            <TextInput
-              value={companionNameInput}
-              onChangeText={setCompanionNameInput}
-              placeholder="e.g. Grace, Selah, Guide"
-              placeholderTextColor={colors.textMuted}
-              style={{
-                fontFamily: FontFamily.body,
-                fontSize: FontSize.lg,
-                color: colors.text,
-                height: 54,
-                paddingHorizontal: Spacing['5'],
-                backgroundColor: colors.inputBackground,
-                borderRadius: Radius.lg,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-              maxLength={30}
-            />
-          </Animated.View>
-          <Animated.Text
-            entering={FadeIn.delay(500).duration(500)}
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.sm,
-              color: colors.textSubtle,
-              textAlign: 'center',
-              paddingHorizontal: Spacing['5'],
-            }}
-          >
-            You can always change this later.
-          </Animated.Text>
-        </View>
-      );
-    }
-
     // Three-step paywall: final premium pitch before generating
     if (step.type === 'threeStepPaywall') {
       const monthlyPkg = rcOfferings?.current?.availablePackages.find(
@@ -2885,11 +2888,11 @@ export default function OnboardingScreen() {
       const yRaw = yearlyPackage?.product.price ?? 59.99;
       const tDays = (() => {
         const intro = yearlyPackage?.product.introPrice;
-        if (!intro || intro.price !== 0) return 7;
+        if (!intro || intro.price !== 0) return 3;
         const unit = intro.periodUnit.toLowerCase();
         if (unit === 'day') return intro.periodNumberOfUnits;
         if (unit === 'week') return intro.periodNumberOfUnits * 7;
-        return 7;
+        return 3;
       })();
 
       return (
@@ -2910,7 +2913,12 @@ export default function OnboardingScreen() {
             updateUser({ isPremium: true });
             advanceToNextStep();
           }}
-          onSkip={advanceToNextStep}
+          onSkip={() => {
+            setCurrentStepId('themeType');
+            setScreenReady(false);
+            setShowInput(false);
+            inputOpacity.value = 0;
+          }}
         />
       );
     }
@@ -2953,12 +2961,12 @@ export default function OnboardingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       {/* Currents — one continuous particle layer across intro screens */}
-      {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (
+      {(currentStepId === 'hook' || currentStepId === 'solution' || currentStepId === 'unfoldIntro' || currentStepId === 'purchaseConfirmation' || currentStepId === 'shockStat' || currentStepId === 'growthGraph') && (
         <Current type="chaos" color={colors.accent} speed={chaosSpeed} drift={chaosDrift} />
       )}
 
       {/* Accent gradient — fades in on Screen 3 (unfoldIntro) */}
-      {currentStepId === 'unfoldIntro' && (
+      {(currentStepId === 'unfoldIntro' || currentStepId === 'purchaseConfirmation') && (
         <Animated.View entering={FadeIn.duration(1500)} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1 }} pointerEvents="none">
           <LinearGradient
             colors={['transparent', `${colors.accent}20`, `${colors.accent}40`]}
@@ -2994,7 +3002,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'threeStepPaywall' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
+            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'purchaseConfirmation' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'threeStepPaywall' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -3020,9 +3028,14 @@ export default function OnboardingScreen() {
             colors={colors} 
           />
 
-          <View key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`} style={{ flex: 1 }}>
+          <Animated.View
+            key={`${currentStepId}-${JSON.stringify(adaptedSteps[currentStepId] || {})}`}
+            entering={FadeIn.duration(180)}
+            exiting={FadeOut.duration(120)}
+            style={{ flex: 1 }}
+          >
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'commitment1' || step?.type === 'commitment2' || step?.type === 'threeStepPaywall' ? (
+            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'purchaseConfirmation' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'commitment1' || step?.type === 'commitment2' || step?.type === 'threeStepPaywall' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
@@ -3108,36 +3121,42 @@ export default function OnboardingScreen() {
                                 ripple3Style,
                               ]}
                             />
-                            <View
-                              style={{
-                                width: 14,
-                                height: 14,
-                                borderRadius: 7,
-                                backgroundColor: colors.accent,
-                                opacity: 0.9,
-                              }}
-                            />
+                            <CompanionOrb accentColor={colors.accent} size={36} isActive showBadge={false} />
                           </View>
+                          <Text style={{
+                            fontFamily: FontFamily.body,
+                            fontSize: 15,
+                            color: colors.textMuted,
+                            letterSpacing: 0.5,
+                            textAlign: 'center',
+                            marginTop: Spacing['6'],
+                          }}>
+                            {preparingQuip}
+                          </Text>
                         </View>
                       </>
                     ) : (
-                      <TypewriterText
-                        text={getStepQuestion()}
-                        onComplete={handleTypewriterComplete}
-                        style={{ fontSize: 32, lineHeight: 40, color: colors.text }}
-                      />
+                      <>
+                        <TypewriterText
+                          text={getStepQuestion()}
+                          onComplete={handleTypewriterComplete}
+                          style={{ fontSize: 32, lineHeight: 40, color: colors.text }}
+                        />
+                        {showInput && (
+                          <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['6'] }}>
+                            <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.lg, color: colors.textMuted, lineHeight: 26 }}>
+                              {getStepSubtext()}
+                            </Text>
+                          </Animated.View>
+                        )}
+                        {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
+                      </>
                     )}
                   </View>
-                  {showInput && (
-                    <Animated.View entering={FadeIn.duration(Duration.slow)} style={{ marginTop: Spacing['3'], marginBottom: Spacing['8'] }}>
-                      <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.lg, color: colors.textMuted, lineHeight: 26 }}>{getStepSubtext()}</Text>
-                    </Animated.View>
-                  )}
-                  {showInput && <Animated.View style={inputAnimatedStyle}>{renderInput()}</Animated.View>}
                 </View>
               </KeyboardAwareScrollView>
             )}
-          </View>
+          </Animated.View>
         </View>
       </SafeAreaView>
 

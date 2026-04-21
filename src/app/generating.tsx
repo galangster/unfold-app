@@ -25,7 +25,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
-import { submitGenerationJob, pollJobStatus, retryJob } from '@/lib/generation-api';
+import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, normalizeGenerationResult, ApiError } from '@/lib/generation-api';
 
 import {
   requestNotificationPermissions,
@@ -65,6 +65,14 @@ const WAITING_MESSAGES = [
 
 // Polling interval for server job status (ms)
 const POLL_INTERVAL_MS = 3000;
+
+function requireCanonicalDevotionalId(devotionalId?: string | null): string {
+  if (!devotionalId) {
+    throw new Error('Generation completed without a canonical devotionalId');
+  }
+
+  return devotionalId;
+}
 
 function toFriendlyGenerationError(errorMessage: string): string {
   const normalized = errorMessage.toLowerCase();
@@ -359,9 +367,9 @@ export default function GeneratingScreen() {
     seriesTitle?: string;
     totalDays?: number;
     arc?: import('@/lib/store').SeriesArc;
-    devotionalId?: string;
+    devotionalId: string;
   }) => {
-    const devotionalId = result.devotionalId ?? `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const devotionalId = requireCanonicalDevotionalId(result.devotionalId);
     const seriesTitle = result.seriesTitle ?? 'Your Devotional';
     const totalDays = result.totalDays ?? devotionalLength;
     const day1 = result.devotionalDay;
@@ -456,7 +464,13 @@ export default function GeneratingScreen() {
 
         if (status.status === 'complete' && status.result) {
           pollingRef.current = false;
-          handleGenerationComplete(status.result);
+          handleGenerationComplete(
+            normalizeGenerationResult(
+              status.result,
+              useUnfoldStore.getState().generationSession.devotionalId,
+              1,
+            ),
+          );
           return;
         }
 
@@ -508,6 +522,9 @@ export default function GeneratingScreen() {
         // Only resume if not expired (15 min)
         if (Date.now() - inflight.submittedAt < 15 * 60 * 1000) {
           logger.log('[generating] Resuming inflight job from MMKV:', inflight.jobId);
+          if (inflight.devotionalId) {
+            startGenerationSession({ devotionalId: inflight.devotionalId, totalDays: user.devotionalLength });
+          }
           setPendingJobId(inflight.jobId);
           pollStartTime.current = inflight.submittedAt;
           startPolling(inflight.jobId);
@@ -565,6 +582,19 @@ export default function GeneratingScreen() {
         pollStartTime.current = Date.now();
         startPolling(jobId);
       } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          const recovered = await recoverCompletedGenerationResult({
+            devotionalId,
+            dayNumber: 1,
+            existingJobId: err.existingJobId,
+          }).catch(() => null);
+
+          if (recovered?.devotionalDay) {
+            handleGenerationComplete(recovered);
+            return;
+          }
+        }
+
         const errorMessage = err instanceof Error ? err.message : String(err);
         logger.error('[generating] Job submission failed:', errorMessage);
         Sentry.captureException(err, {
@@ -632,6 +662,7 @@ export default function GeneratingScreen() {
         // Update MMKV with new jobId
         mmkvStorage.setItem(INFLIGHT_KEY, JSON.stringify({
           jobId,
+          devotionalId: useUnfoldStore.getState().generationSession.devotionalId,
           submittedAt: Date.now(),
         }));
         startPolling(jobId);

@@ -87,6 +87,7 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
   const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const streakWeekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);
   const streakFreezes = useUnfoldStore((s) => s.streakFreezes);
+  const streakJustResetFlag = useUnfoldStore((s) => s.streakJustReset);
   const hasUsedAudio = useUnfoldStore((s) => s.hasUsedAudio);
   const justCompletedSeriesTitle = useUnfoldStore((s) => s.justCompletedSeriesTitle);
   const nudgeShownThisSession = useUnfoldStore((s) => s.nudgeShownThisSession);
@@ -109,8 +110,8 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
 
   // Detect streak loss
   const streakJustReset = useMemo(
-    () => detectStreakLoss(streakCurrent, streakLastReadDate, streakWeekendAmnesty, streakFreezes),
-    [streakCurrent, streakLastReadDate, streakWeekendAmnesty, streakFreezes]
+    () => streakJustResetFlag || detectStreakLoss(streakCurrent, streakLastReadDate, streakWeekendAmnesty, streakFreezes),
+    [streakJustResetFlag, streakCurrent, streakLastReadDate, streakWeekendAmnesty, streakFreezes]
   );
 
   // Build context and evaluate

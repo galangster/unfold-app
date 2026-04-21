@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Modal, Linking } from 'react-native';
+import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -324,7 +325,7 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
               activeOpacity={0.7}
               onPress={() =>
                 Linking.openURL(
-                  'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/',
+                  LEGAL_LINKS.terms,
                 )
               }
             >
@@ -333,7 +334,7 @@ export function ExclusiveOfferSheet({ visible, onDismiss, context }: ExclusiveOf
             <Text style={[styles.legalSeparator, { color: colors.textHint }]}>{'\u00B7'}</Text>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() => Linking.openURL('https://useunfold.com/privacy')}
+              onPress={() => Linking.openURL(LEGAL_LINKS.privacy)}
             >
               <Text style={[styles.legalText, { color: colors.textHint }]}>Privacy</Text>
             </TouchableOpacity>

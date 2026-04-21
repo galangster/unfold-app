@@ -398,6 +398,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - Proton (1.0.0):
+    - ProtonCore
+  - ProtonCore (1.0.0)
   - PurchasesHybridCommon (17.23.0):
     - RevenueCat (= 5.50.0)
   - PurchasesHybridCommonUI (17.23.0):
@@ -3009,6 +3012,9 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - UMAppLoader (55.0.2)
+  - UnfoldEditor (0.0.1):
+    - ExpoModulesCore
+    - Proton
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -3080,6 +3086,8 @@ DEPENDENCIES:
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - ImageColors (from `../node_modules/react-native-image-colors/ios`)
   - lottie-react-native (from `../node_modules/lottie-react-native`)
+  - Proton (from `../modules/unfold-editor/ios/vendor/Proton`)
+  - ProtonCore (from `../modules/unfold-editor/ios/vendor/Proton`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
   - RCTSwiftUI (from `../node_modules/react-native/ReactApple/RCTSwiftUI`)
@@ -3180,6 +3188,7 @@ DEPENDENCIES:
   - RNWorklets (from `../node_modules/react-native-worklets`)
   - "tentap (from `../node_modules/@10play/tentap-editor`)"
   - UMAppLoader (from `../node_modules/unimodules-app-loader/ios`)
+  - UnfoldEditor (from `../modules/unfold-editor/ios`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -3339,6 +3348,10 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-image-colors/ios"
   lottie-react-native:
     :path: "../node_modules/lottie-react-native"
+  Proton:
+    :path: "../modules/unfold-editor/ios/vendor/Proton"
+  ProtonCore:
+    :path: "../modules/unfold-editor/ios/vendor/Proton"
   RCTDeprecation:
     :path: "../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation"
   RCTRequired:
@@ -3537,6 +3550,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@10play/tentap-editor"
   UMAppLoader:
     :path: "../node_modules/unimodules-app-loader/ios"
+  UnfoldEditor:
+    :path: "../modules/unfold-editor/ios"
   Yoga:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
@@ -3613,6 +3628,8 @@ SPEC CHECKSUMS:
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   lottie-ios: a881093fab623c467d3bce374367755c272bdd59
   lottie-react-native: 8e5dd0e51847600666057d2c9b95815ac9fdb165
+  Proton: 8225ea078c1b0de53d42d357ca5d195bd5961c05
+  ProtonCore: fa362a705c71ae52a464e88f5060aa31cd8d864b
   PurchasesHybridCommon: e95a0b9bb01f6e9101d44f411343fb91030e26ae
   PurchasesHybridCommonUI: 476200612e1f5be556ef20327d5da8886d657a3d
   RCTDeprecation: a522c536d2c7be8f518dd834883cf6dce1d4f545
@@ -3724,8 +3741,9 @@ SPEC CHECKSUMS:
   SwiftUIIntrospect: fee9aa07293ee280373a591e1824e8ddc869ba5d
   tentap: 60c7b42c6b4c3e91ebccb9917a0217a8009b8112
   UMAppLoader: 71b50bcc31d86495e52c0b4cd17e2708bf297be3
+  UnfoldEditor: c1ef7e1e0c5a0a62ffb1e25072f9adbfa550ef6e
   Yoga: dd994d8c85dca5cc9b10f5df8c01f9ef1d0da191
 
-PODFILE CHECKSUM: 86c7af9f23ae063ee1ae80b5c0e820c46b105d25
+PODFILE CHECKSUM: f2288363efff97f8340db813ac9964c83ec6e8a5
 
 COCOAPODS: 1.16.2

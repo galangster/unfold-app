@@ -8,8 +8,10 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
+import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -23,6 +25,7 @@ import Animated, {
   cancelAnimation,
   useReducedMotion,
 } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,6 +43,11 @@ import type { ColorTheme } from '@/constants/colors';
 import { EmberParticles } from '@/components/EmberParticles';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import {
+  getThreeStepPaywallPrimaryAction,
+  resolvePurchaseOutcome,
+  resolveRestoreOutcome,
+} from '@/lib/paywall-guardrails';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,7 +123,7 @@ function ctaLabel(page: number, totalPages: number, hasFreeTrial: boolean): stri
     return isFinal ? 'Subscribe' : 'Continue';
   }
   if (page === 0) return 'Start Free Trial';
-  if (page === 1) return 'Continue for FREE';
+  if (page === 1) return 'See your free trial';
   return 'Try for $0.00';
 }
 
@@ -174,8 +182,8 @@ function StackCard({
 }: {
   review: (typeof REVIEWS)[number];
   index: number;
-  activeIndex: Animated.SharedValue<number>;
-  dismissX: Animated.SharedValue<number>;
+  activeIndex: SharedValue<number>;
+  dismissX: SharedValue<number>;
   colors: ColorTheme;
   total: number;
 }) {
@@ -556,7 +564,7 @@ function ScreenTrialReminder({
                 paddingHorizontal: Spacing['4'],
               }}
             >
-              You'll get a notification {trialDays === 7 ? '2 days' : '1 day'} before
+              You'll get a notification {trialDays <= 3 ? '1 day' : trialDays === 7 ? '2 days' : '1 day'} before
               your trial ends. No surprises, ever.
             </Text>
           </Animated.View>
@@ -1138,11 +1146,8 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     setPurchaseError(null);
     const result = await purchasePackage(pkg);
     setIsLoading(false);
-    if (result.ok) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await syncTrialEndingNotification();
-      onPurchaseSuccess();
-    } else {
+
+    if (!result.ok) {
       if (result.reason === 'user_cancelled') {
         const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
         if (!hasSeenOnboardingOffer) {
@@ -1151,7 +1156,19 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
       } else {
         setPurchaseError('Something went wrong. Please try again.');
       }
+      return;
     }
+
+    const outcome = resolvePurchaseOutcome(result);
+    if (outcome.kind === 'success') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await syncTrialEndingNotification();
+      onPurchaseSuccess();
+      return;
+    }
+
+    setPurchaseError(outcome.message);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess]);
 
   const handleRestore = useCallback(async () => {
@@ -1159,21 +1176,19 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
     setPurchaseError(null);
     const result = await restorePurchases();
     setIsLoading(false);
-    if (result.ok) {
-      const isPremium = Boolean(
-        result.data.entitlements.active['Unfold Premium'],
-      );
-      if (isPremium) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        await syncTrialEndingNotification();
-        onPurchaseSuccess();
-      } else {
-        setPurchaseError('No previous purchases found.');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      }
-    } else {
-      setPurchaseError('Could not restore purchases. Please try again.');
+
+    const outcome = resolveRestoreOutcome(result);
+    if (outcome.kind === 'success') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await syncTrialEndingNotification();
+      onPurchaseSuccess();
+      return;
     }
+
+    setPurchaseError(outcome.message);
+    Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Warning,
+    );
   }, [onPurchaseSuccess]);
 
   // -----------------------------------------------------------------------
@@ -1181,12 +1196,19 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // -----------------------------------------------------------------------
 
   const handleCTAPress = useCallback(() => {
-    if (currentPage < totalPages - 1) {
+    const action = getThreeStepPaywallPrimaryAction(
+      currentPage,
+      totalPages,
+      stableHasFreeTrial,
+    );
+
+    if (action === 'next') {
       nextPage();
-    } else {
-      handlePurchase();
+      return;
     }
-  }, [currentPage, totalPages, nextPage, handlePurchase]);
+
+    handlePurchase();
+  }, [currentPage, totalPages, stableHasFreeTrial, nextPage, handlePurchase]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -1231,7 +1253,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
         </Animated.View>
       </View>
 
-      {/* Bottom section: CTA + Restore */}
+      {/* Bottom section: CTA + restore/legal links */}
       <View
         style={[
           styles.bottomSection,
@@ -1251,23 +1273,72 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           purchaseError={purchaseError}
           onPress={handleCTAPress}
         />
-        <TouchableOpacity
-          onPress={handleRestore}
-          hitSlop={12}
-          style={{ alignSelf: 'center', marginTop: Spacing['2'] }}
-          accessibilityRole="button"
-          accessibilityLabel="Restore purchases"
+        <View
+          style={{
+            alignSelf: 'center',
+            marginTop: Spacing['2'],
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            columnGap: Spacing['1.5'],
+          }}
         >
-          <Text
-            style={{
-              fontFamily: FontFamily.ui,
-              fontSize: FontSize.xs,
-              color: colors.textHint,
-            }}
+          <TouchableOpacity
+            onPress={handleRestore}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Restore purchases"
           >
-            Restore purchases
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textHint,
+              }}
+            >
+              Restore purchases
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
+            ·
           </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(LEGAL_LINKS.terms)}
+            hitSlop={12}
+            accessibilityRole="link"
+            accessibilityLabel="Terms"
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textHint,
+              }}
+            >
+              Terms
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
+            ·
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(LEGAL_LINKS.privacy)}
+            hitSlop={12}
+            accessibilityRole="link"
+            accessibilityLabel="Privacy"
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.ui,
+                fontSize: FontSize.xs,
+                color: colors.textHint,
+              }}
+            >
+              Privacy
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <ExclusiveOfferSheet
         visible={showExclusiveOffer}

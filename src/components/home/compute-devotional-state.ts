@@ -10,7 +10,7 @@ import type { DevotionalDay, Devotional } from '@/lib/store';
 
 // ─── State discriminated union ──────────────────────────────────
 
-export type DayLabel = 'Yesterday' | 'Today' | 'Tomorrow';
+export type DayLabel = 'Overdue' | 'Today' | 'Tomorrow';
 
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
