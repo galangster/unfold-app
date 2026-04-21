@@ -110,6 +110,7 @@ export type UnfoldEditorViewRef = {
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   insertImage: (uri: string) => Promise<void>;
+  insertScripture: (reference: string, text: string) => Promise<void>;
 
   // Commands 15–17 (Day 7)
   toggleUnderline: () => Promise<void>;

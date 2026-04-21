@@ -120,6 +120,10 @@ public class UnfoldEditorModule: Module {
         view.controller.insertImage(uri)
       }
 
+      AsyncFunction("insertScripture") { (view: UnfoldEditorView, reference: String, text: String) in
+        view.controller.insertScripture(reference: reference, text: text)
+      }
+
       // --- Day 8: selection state ---
 
       AsyncFunction("getSelectionState") { (view: UnfoldEditorView) -> [String: Any] in

@@ -333,8 +333,6 @@ export default function NoteDetailScreen() {
   const [selectionState, setSelectionState] = useState(DEFAULT_SELECTION_STATE);
   // Tracks latest HTML from onChangeHtml for explicit save (Done/Back)
   const latestHtmlRef = useRef(initialContent);
-  // Remount key — bumped when we need to reload content (e.g. scripture insert)
-  const [editorKey, setEditorKey] = useState(0);
 
   /* ───── TipTap editor bridge (Android / inert on iOS) ───── */
 
@@ -457,15 +455,10 @@ export default function NoteDetailScreen() {
 
   /* ───── Scripture insertion via pending prop ───── */
 
-  // Native path: append blockquote HTML and remount the editor
   const handleNativeScriptureInsert = useCallback(
     async (reference: string, text: string) => {
-      const currentHtml = (await editorRef.current?.getHtml()) ?? latestHtmlRef.current;
-      const blockquoteHtml =
-        `<blockquote><p>${text}</p><p><i>\u2014 ${reference}</i></p></blockquote><p></p>`;
-      const newHtml = currentHtml + blockquoteHtml;
-      latestHtmlRef.current = newHtml;
-      setEditorKey((k) => k + 1); // force remount with new content
+      await editorRef.current?.insertScripture(reference, text);
+      latestHtmlRef.current = (await editorRef.current?.getHtml()) ?? latestHtmlRef.current;
     },
     [],
   );
@@ -1292,7 +1285,6 @@ export default function NoteDetailScreen() {
         <View style={[styles.editorContainer, { backgroundColor: colors.background }]}>
           {IS_NATIVE_EDITOR ? (
             <UnfoldEditor
-              key={editorKey}
               ref={editorRef}
               initialHtml={latestHtmlRef.current}
               onChangeHtml={(e: UnfoldEditorChangeHtmlEvent) => {

@@ -72,6 +72,9 @@ const UnfoldEditor = React.forwardRef<UnfoldEditorRef, UnfoldEditorProps>(
         insertImage: async (uri: string) => {
           await viewRef.current?.insertImage(uri);
         },
+        insertScripture: async (reference: string, text: string) => {
+          await viewRef.current?.insertScripture(reference, text);
+        },
         toggleUnderline: async () => {
           await viewRef.current?.toggleUnderline();
         },

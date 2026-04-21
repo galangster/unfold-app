@@ -305,6 +305,25 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     scheduleHtmlEmit()
   }
 
+  /// Inserts a scripture blockquote at the active selection and leaves the
+  /// caret in the trailing empty body paragraph so the user can keep typing in
+  /// place.
+  func insertScripture(reference: String, text: String) {
+    let escapedReference = Self.escapeHTML(reference)
+    let escapedText = Self.escapeHTML(text.replacingOccurrences(of: "\n", with: " "))
+    let html = "<blockquote><p>\(escapedText)</p><p><i>\u{2014} \(escapedReference)</i></p></blockquote><p></p>"
+    let attributed = HtmlDecoder.decode(html)
+    let selectedRange = editor.selectedRange
+    editor.replaceCharacters(in: selectedRange, with: attributed)
+    editor.typingAttributes = blockTypeAttributes("p")
+    editor.selectedRange = NSRange(location: selectedRange.location + attributed.length, length: 0)
+    refreshScriptureChips()
+    lineDecorationOverlay.invalidate()
+    needsCaretVisibilityAfterLayout = true
+    scheduleHtmlEmit()
+    refreshSelectionState()
+  }
+
   // MARK: - Public setters — declarative props
 
   /// Sets the empty-state placeholder. Pass `nil` (or an empty string from
@@ -999,6 +1018,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     }
 
     return nil
+  }
+
+  private static func escapeHTML(_ s: String) -> String {
+    s.replacingOccurrences(of: "&", with: "&amp;")
+      .replacingOccurrences(of: "<", with: "&lt;")
+      .replacingOccurrences(of: ">", with: "&gt;")
+      .replacingOccurrences(of: "\"", with: "&quot;")
   }
 
   private func sameListKind(_ lhs: Any, _ rhs: Any) -> Bool {
