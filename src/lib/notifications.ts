@@ -243,6 +243,13 @@ export function getNotificationContent(): { title: string; body: string } {
   return { title: currentDay.title, body: 'Your next reading is waiting.' };
 }
 
+function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotionalReadyNotificationData> {
+  const state = useUnfoldStore.getState();
+  const currentDevotional = state.devotionals.find((d) => d.id === state.currentDevotionalId);
+  if (!currentDevotional) return null;
+  return buildDevotionalReadyNotificationData(currentDevotional, currentDevotional.currentDay);
+}
+
 // Schedule a daily reminder notification
 export async function scheduleDailyReminder(timeString: string): Promise<string | null> {
   if (Platform.OS === 'web') {
@@ -261,11 +268,17 @@ export async function scheduleDailyReminder(timeString: string): Promise<string 
 
   const { hours, minutes } = parseTimeString(timeString);
   const { title, body } = getNotificationContent();
+  const data = getCurrentDevotionalNotificationData();
 
   try {
     const identifier = await Notifications.scheduleNotificationAsync({
       identifier: NOTIFICATION_IDS.DAILY_REMINDER,
-      content: { title, body, sound: true },
+      content: {
+        title,
+        body,
+        sound: true,
+        ...(data ? { data } : {}),
+      },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour: hours,
@@ -290,8 +303,12 @@ export async function cancelAllReminders(): Promise<void> {
 
   await Promise.all([
     cancelNotificationById(NOTIFICATION_IDS.DAILY_REMINDER),
-    cancelNotificationById(NOTIFICATION_IDS.MIDDAY_CHECKIN),
-    cancelNotificationById(NOTIFICATION_IDS.EVENING_WINDDOWN),
+    ...getAllCheckInIdentifiers(NOTIFICATION_IDS.MIDDAY_CHECKIN).map((identifier) =>
+      cancelNotificationById(identifier),
+    ),
+    ...getAllCheckInIdentifiers(NOTIFICATION_IDS.EVENING_WINDDOWN).map((identifier) =>
+      cancelNotificationById(identifier),
+    ),
   ]);
   logger.log('[Notifications] All Unfold reminders cancelled');
 }
