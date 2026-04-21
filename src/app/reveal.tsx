@@ -25,6 +25,7 @@ import { useUIState } from '@/lib/ui-state';
 import { alpha } from '@/components/ui';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { ShimmerText } from '@/components/ShimmerText';
+import { buildReadingRouteFromRevealParams } from '@/lib/push-notification-helpers';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -169,11 +170,16 @@ export default function RevealScreen() {
     }, 2000);
     // Use a single POP_TO action so native stack dismissal and nested route
     // activation happen atomically under Expo Router / React Navigation.
-    console.log('[Reveal] dismissTo → /(tabs)/(today)/reading', { dayNumber: String(dayNumber ?? '1') });
-    router.dismissTo({
-      pathname: '/(tabs)/(today)/reading',
-      params: { dayNumber: String(dayNumber ?? '1') },
+    console.log('[Reveal] dismissTo → /(tabs)/(today)/reading', {
+      devotionalId,
+      dayNumber: String(dayNumber ?? '1'),
     });
+    router.dismissTo(
+      buildReadingRouteFromRevealParams({
+        devotionalId,
+        dayNumber,
+      }),
+    );
     console.log('[Reveal] navigateToReading DONE');
   }, [devotionalId, dayNumber, router, markDayAsRevealed, setCurrentDevotional]);
 

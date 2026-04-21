@@ -132,12 +132,21 @@ open class ListTextProcessor: TextProcessing {
         executeOnDidProcess = nil
         callback?(editor)
         canonicalizeMissingListContinuationIfNeeded(editor: editor)
-        guard editor.selectedRange.endLocation < editor.contentLength else { return }
-        let lastChar = editor.attributedText.substring(from: NSRange(location: editor.selectedRange.location, length: 1))
-        if lastChar == ListTextProcessor.blankLineFiller {
-            editor.selectedRange = editor.selectedRange.nextPosition
-        }
+        collapseMaterializedListBootstrapSelectionIfNeeded(editor: editor)
         editor.typingAttributes[.skipNextListMarker] = nil
+    }
+
+    private func collapseMaterializedListBootstrapSelectionIfNeeded(editor: EditorView) {
+        let selectedRange = editor.selectedRange
+        guard selectedRange.length > 0,
+              selectedRange.endLocation <= editor.contentLength,
+              selectedRange.location < editor.contentLength
+        else { return }
+
+        let selectedText = editor.attributedText.substring(from: selectedRange)
+        guard selectedText == ListTextProcessor.blankLineFiller else { return }
+
+        editor.selectedRange = selectedRange.nextPosition
     }
     
     open func handleKeyWithModifiers(editor: EditorView, key: EditorKey, modifierFlags: UIKeyModifierFlags, range editedRange: NSRange)  {

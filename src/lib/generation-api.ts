@@ -7,7 +7,7 @@
  *   3. retryJob            — POST /api/jobs/:jobId/retry
  */
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from "./api-config";
-import { reconcileGenerationResultIdentity, type GenerationResultPayload } from './generation-reconciliation';
+import { reconcileGenerationResultIdentity, type GeneratedDayWithIdentity, type GenerationResultPayload } from './generation-reconciliation';
 import { mmkvStorage } from "./mmkv-storage";
 
 /** MMKV key for caching the active dynamic prompt example */
@@ -49,16 +49,21 @@ export interface GenerationJobResponse {
   completedAt?: string;
 }
 
+export type CanonicalGenerationResultPayload = Omit<GenerationResultPayload, 'devotionalDay' | 'devotionalId'> & {
+  devotionalDay: GeneratedDayWithIdentity;
+  devotionalId: string;
+};
+
 export function normalizeGenerationResult(
   result: GenerationResultPayload,
   fallbackDevotionalId?: string | null,
   fallbackDayNumber?: number,
-): GenerationResultPayload {
+): CanonicalGenerationResultPayload {
   return reconcileGenerationResultIdentity(
     result,
     fallbackDevotionalId,
     fallbackDayNumber,
-  );
+  ) as CanonicalGenerationResultPayload;
 }
 
 export async function submitGenerationJob(params: {
@@ -87,7 +92,7 @@ export async function submitGenerationJob(params: {
   // Read cached dynamic prompt example (if any) for self-improving generation quality
   let dynamicExample: { rule: string; badText: string; goodText: string } | undefined;
   try {
-    const cached = mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY);
+    const cached = await Promise.resolve(mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY));
     if (cached) {
       dynamicExample = JSON.parse(cached);
     }
@@ -205,7 +210,7 @@ export async function recoverCompletedGenerationResult(params: {
   devotionalId: string;
   dayNumber: number;
   existingJobId?: string | null;
-}): Promise<GenerationResultPayload | null> {
+}): Promise<CanonicalGenerationResultPayload | null> {
   const response = params.existingJobId
     ? await fetchJobResult(params.existingJobId).catch(() => null)
     : await findCompletedJob(params.devotionalId, params.dayNumber);

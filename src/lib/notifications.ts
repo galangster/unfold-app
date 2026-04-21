@@ -1,9 +1,10 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { useUnfoldStore } from './store';
+import { useUnfoldStore, type Devotional } from './store';
 import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
+import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
@@ -399,6 +400,72 @@ export async function sendDevotionalReadyNotification(title: string): Promise<bo
     return true;
   } catch (error) {
     logger.error('[Notifications] Failed to send completion notification:', error);
+    return false;
+  }
+}
+
+export async function scheduleDevotionalReadyTapTestNotification(
+  devotional: Pick<Devotional, 'id' | 'title' | 'totalDays' | 'days'>,
+  {
+    dayNumber = 1,
+    delaySeconds = 2,
+  }: {
+    dayNumber?: number;
+    delaySeconds?: number;
+  } = {},
+): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    logger.log('[Notifications] Not available on web');
+    return false;
+  }
+
+  let hasPermission = await areNotificationsEnabled();
+  logger.log('[Notifications] Devotional tap-test permission status:', hasPermission);
+  if (!hasPermission) {
+    const permission = await Notifications.requestPermissionsAsync();
+    hasPermission = permission.status === 'granted';
+    logger.log('[Notifications] Devotional tap-test permission request result:', permission.status);
+  }
+  if (!hasPermission) {
+    logger.log('[Notifications] Permission not granted for devotional tap-test notification');
+    return false;
+  }
+
+  const data = buildDevotionalReadyNotificationData(devotional, dayNumber);
+  if (!data) {
+    logger.warn('[Notifications] Cannot schedule devotional tap-test notification: day missing', {
+      devotionalId: devotional.id,
+      dayNumber,
+    });
+    return false;
+  }
+
+  try {
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: dayNumber === 1 ? 'Day 1 is ready' : 'Your devotional is ready',
+        body:
+          dayNumber === 1
+            ? `"${data.dayTitle}" — your first day is waiting for you.`
+            : `"${data.dayTitle}" is ready in ${data.seriesTitle}.`,
+        sound: true,
+        data,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(1, Math.floor(delaySeconds)),
+      },
+    });
+
+    logger.log('[Notifications] Devotional tap-test notification scheduled', {
+      notificationId,
+      devotionalId: data.devotionalId,
+      dayNumber: data.dayNumber,
+      delaySeconds: Math.max(1, Math.floor(delaySeconds)),
+    });
+    return true;
+  } catch (error) {
+    logger.error('[Notifications] Failed to schedule devotional tap-test notification:', error);
     return false;
   }
 }

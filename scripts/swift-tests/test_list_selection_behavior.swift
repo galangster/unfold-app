@@ -28,6 +28,22 @@ struct ListSelectionBehavior {
 
     return NSRange(location: editedRange.location, length: insertedMarkerLength)
   }
+
+  static func collapseMaterializedListBootstrapSelectionIfNeeded(
+    selectedRange: NSRange,
+    contentLength: Int,
+    selectedText: String
+  ) -> NSRange {
+    guard selectedRange.length > 0,
+          selectedRange.location < contentLength,
+          selectedRange.location + selectedRange.length <= contentLength,
+          selectedText == "\u{200B}"
+    else {
+      return selectedRange
+    }
+
+    return NSRange(location: selectedRange.location + 1, length: 0)
+  }
 }
 
 func assertEqual(_ lhs: NSRange, _ rhs: NSRange, _ message: String) {
@@ -74,6 +90,28 @@ assertEqual(
   laterContinuation,
   NSRange(location: 6, length: 0),
   "later list continuations without paragraph-start context should keep the caret after the filler"
+)
+
+let collapsedAtDocumentEnd = ListSelectionBehavior.collapseMaterializedListBootstrapSelectionIfNeeded(
+  selectedRange: NSRange(location: 0, length: 1),
+  contentLength: 1,
+  selectedText: "\u{200B}"
+)
+assertEqual(
+  collapsedAtDocumentEnd,
+  NSRange(location: 1, length: 0),
+  "selected filler at document end should collapse to a caret so the user doesn't see drag handles"
+)
+
+let unchangedPlainSelection = ListSelectionBehavior.collapseMaterializedListBootstrapSelectionIfNeeded(
+  selectedRange: NSRange(location: 4, length: 1),
+  contentLength: 8,
+  selectedText: "A"
+)
+assertEqual(
+  unchangedPlainSelection,
+  NSRange(location: 4, length: 1),
+  "non-filler selections should be preserved"
 )
 
 print("ok")

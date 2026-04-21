@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Alert, Linking, Platform, ActivityIndicator, Te
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Duration, Ease } from '@/constants/animations';
@@ -60,6 +61,7 @@ import {
   scheduleDailyReminder,
   cancelAllReminders,
   areNotificationsEnabled,
+  scheduleDevotionalReadyTapTestNotification,
 } from '@/lib/notifications';
 // NOTE: scheduleMiddayCheckIn / scheduleEveningWindDown / cancelMiddayCheckIn /
 // cancelEveningWindDown are NOT imported here anymore. Check-in notification
@@ -75,6 +77,7 @@ import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { buildDevotionalSeed } from '@/lib/dev-seed';
 
 // --- Constants (from settings) ---
 
@@ -1909,7 +1912,7 @@ export default function YouScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity activeOpacity={0.7}
-                onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
+                onPress={() => Linking.openURL(LEGAL_LINKS.privacy)}
                 accessibilityRole="link"
                 accessibilityLabel="Privacy Policy"
                 style={{
@@ -1937,7 +1940,7 @@ export default function YouScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity activeOpacity={0.7}
-                onPress={() => Linking.openURL('https://unfoldapp.co/terms')}
+                onPress={() => Linking.openURL(LEGAL_LINKS.terms)}
                 accessibilityRole="link"
                 accessibilityLabel="Terms of Use"
                 style={{
@@ -1963,11 +1966,10 @@ export default function YouScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* --- Dev Tools --- Always rendered (not __DEV__ gated) so they
-                are available in dev AND TestFlight builds. Each button is
-                labeled "(Dev)". Remove this block or gate behind a feature
-                flag before public App Store release. */}
-            <SectionHeader label="Dev Tools" />
+            {__DEV__ && (
+              <>
+                {/* --- Dev Tools --- Dev-only QA affordances for local builds. */}
+                <SectionHeader label="Dev Tools" />
 
             <TouchableOpacity
               activeOpacity={0.7}
@@ -1982,6 +1984,75 @@ export default function YouScreen() {
             >
               <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
                 Replay Onboarding (Dev)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                const seeded = buildDevotionalSeed();
+                const store = useUnfoldStore.getState();
+                store.addDevotional(seeded);
+                store.setCurrentDevotional(seeded.id);
+                router.push({
+                  pathname: '/reveal',
+                  params: {
+                    devotionalId: seeded.id,
+                    dayNumber: String(seeded.currentDay),
+                    seriesTitle: seeded.title,
+                    dayTitle: seeded.days[0]?.title ?? '',
+                    totalDays: String(seeded.totalDays),
+                  },
+                });
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Seed Real Devotional + Reveal (Dev)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={async () => {
+                const seeded = buildDevotionalSeed();
+                const store = useUnfoldStore.getState();
+                store.addDevotional(seeded);
+                store.setCurrentDevotional(seeded.id);
+
+                const scheduled = await scheduleDevotionalReadyTapTestNotification(seeded, {
+                  dayNumber: seeded.currentDay,
+                  delaySeconds: 2,
+                });
+
+                if (scheduled) {
+                  Alert.alert(
+                    'Tap-test notification scheduled',
+                    'A devotional-ready notification with the real routing payload should appear in about 2 seconds.',
+                  );
+                } else {
+                  Alert.alert(
+                    'Notification not scheduled',
+                    'Check notification permission on this simulator/device before retrying.',
+                  );
+                }
+              }}
+              style={{
+                padding: Spacing['4'],
+                borderRadius: Radius.md,
+                backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                alignItems: 'center',
+                marginBottom: Spacing['3'],
+              }}
+            >
+              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                Seed Devotional + Notification Tap Test (Dev)
               </Text>
             </TouchableOpacity>
 
@@ -2164,6 +2235,8 @@ export default function YouScreen() {
                 Test Trial-Ending Notification (Dev)
               </Text>
             </TouchableOpacity>
+              </>
+            )}
 
             {/* --- Data / Danger zone --- */}
             <SectionHeader label="Data" />

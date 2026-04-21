@@ -126,6 +126,21 @@ describe('computeDevotionalState', () => {
     }
   });
 
+  it('returns unread with overdue label when current content is stale', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      dayLabel: 'Overdue',
+      daysCompleted: 3,
+      progress: 42.9,
+      ctaText: 'Keep Going',
+      currentDayData: makeDayData({ dayNumber: 4, isRead: false, isRevealed: true }),
+    });
+    expect(state.type).toBe('unread');
+    if (state.type === 'unread') {
+      expect(state.dayLabel).toBe('Overdue');
+    }
+  });
+
   it('returns unread with daysCompleted when some days completed but current day unread', () => {
     const state = computeDevotionalState({
       ...baseInput,

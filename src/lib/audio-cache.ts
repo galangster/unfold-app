@@ -121,7 +121,9 @@ export function loadMetadata(): CacheMetadata {
     if (!metaFile.exists) {
       return { version: 1, entries: {} };
     }
-    const raw = metaFile.text();
+    const raw = typeof (metaFile as { textSync?: () => string }).textSync === 'function'
+      ? (metaFile as { textSync: () => string }).textSync()
+      : (metaFile as { text: () => string }).text();
     const parsed = JSON.parse(raw) as CacheMetadata;
     if (parsed.version !== 1 || typeof parsed.entries !== 'object') {
       logger.warn('[AudioCache] Invalid metadata format — resetting');

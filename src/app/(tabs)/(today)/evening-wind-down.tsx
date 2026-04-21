@@ -211,6 +211,7 @@ export default function EveningWindDownScreen() {
   });
 
   const {
+    data: scripture,
     isLoading: scriptureLoading,
   } = useQuery({
     queryKey: ['evening-scripture', currentDay?.eveningScriptureRef],
@@ -223,6 +224,8 @@ export default function EveningWindDownScreen() {
     staleTime: Infinity,
     retry: 1,
   });
+
+  const scriptureText = scripture?.text;
 
   const handleShowCelebration = useCallback(() => {
     if (!gate()) return;

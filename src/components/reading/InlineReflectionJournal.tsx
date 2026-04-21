@@ -18,7 +18,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { preventOrphan } from '@/lib/cn';
-import { useUIState } from '@/lib/ui-state';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
 interface InlineReflectionJournalProps {
   questions: string[];
@@ -46,9 +46,8 @@ export function InlineReflectionJournal({
   const reducedMotion = useReducedMotion();
   const readingFont = useReadingFont();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
-  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
-  const effectivePremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremium;
+  const premiumPolicy = usePremiumAccessPolicy();
+  const editable = premiumPolicy === 'granted';
 
   // Store actions
   const getJournalEntry = useUnfoldStore((s) => s.getJournalEntry);
@@ -264,7 +263,7 @@ export function InlineReflectionJournal({
             readingFont={readingFont}
             fontSizes={fontSizes}
             scrollViewRef={scrollViewRef}
-            editable={effectivePremium}
+            editable={editable}
             reducedMotion={reducedMotion ?? false}
           />
         );

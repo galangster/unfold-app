@@ -14,10 +14,50 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
 import { logger } from '@/lib/logger';
+import { useUnfoldStore } from '@/lib/store';
+import {
+  buildNotificationPreferenceRequestBody,
+  buildPushRegistrationRequestBody,
+  createNotificationNavigationCoordinator,
+  shouldHydrateNotificationResponse,
+} from '@/lib/push-notification-helpers';
+
+const notificationNavigationCoordinator = createNotificationNavigationCoordinator({
+  replace: (route) => router.replace(route),
+});
+
+function getNotificationResponseKey(
+  response: Notifications.NotificationResponse | null | undefined,
+): string | undefined {
+  return response?.notification?.request?.identifier;
+}
+
+async function hydrateLastNotificationResponse(): Promise<void> {
+  const response = await Notifications.getLastNotificationResponseAsync();
+  if (!response) return;
+
+  const tappedAt = response.notification.date;
+  const now = Date.now();
+  if (!shouldHydrateNotificationResponse({ tappedAtMs: tappedAt, nowMs: now })) {
+    return;
+  }
+
+  const data = response.notification.request.content.data;
+  if (!data) return;
+
+  logger.log('[push] Notification tapped (cold start), data:', data);
+  const queued = notificationNavigationCoordinator.queueFromData(
+    data,
+    getNotificationResponseKey(response),
+  );
+  if (queued) {
+    await Notifications.clearLastNotificationResponseAsync();
+  }
+}
 
 /**
  * Request push notification permissions, obtain an Expo push token,
@@ -79,16 +119,20 @@ export async function registerPushToken(): Promise<void> {
 
     const headers = await getAuthHeaders();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const preferredNotificationTime = useUnfoldStore.getState().user?.reminderTime;
 
     const response = await fetch(
       `${PRIMARY_BACKEND_URL}/api/users/push-token`,
       {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          expoPushToken: token,
-          timezone: tz,
-        }),
+        body: JSON.stringify(
+          buildPushRegistrationRequestBody({
+            expoPushToken: token,
+            timezone: tz,
+            preferredNotificationTime,
+          }),
+        ),
       },
     );
 
@@ -105,34 +149,43 @@ export async function registerPushToken(): Promise<void> {
   }
 }
 
-/**
- * Navigate to the reveal screen from a notification's data payload.
- */
-function handleNotificationNavigation(data: Record<string, unknown>): void {
-  if (data?.type !== 'devotional_ready') return;
+export async function syncNotificationPreferences(): Promise<void> {
+  try {
+    const preferredNotificationTime = useUnfoldStore.getState().user?.reminderTime;
+    if (!preferredNotificationTime) return;
 
-  const { devotionalId, dayNumber, dayTitle, seriesTitle, totalDays } = data as {
-    type: string;
-    devotionalId?: string;
-    dayNumber?: number;
-    dayTitle?: string;
-    seriesTitle?: string;
-    totalDays?: number;
-  };
+    const headers = await getAuthHeaders();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  if (devotionalId && dayNumber != null) {
-    // replace prevents the home screen from showing underneath
-    router.replace({
-      pathname: '/reveal',
-      params: {
-        devotionalId: String(devotionalId),
-        dayNumber: String(dayNumber),
-        seriesTitle: seriesTitle ?? '',
-        dayTitle: dayTitle ?? '',
-        totalDays: String(totalDays ?? 0),
+    const response = await fetch(
+      `${PRIMARY_BACKEND_URL}/api/users/notification-preferences`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(
+          buildNotificationPreferenceRequestBody({
+            preferredNotificationTime,
+            timezone,
+          }),
+        ),
       },
-    });
+    );
+
+    if (!response.ok) {
+      logger.warn(
+        `[push] Backend rejected notification preferences: ${response.status} ${response.statusText}`,
+      );
+      return;
+    }
+
+    logger.log('[push] Notification preferences synced with backend');
+  } catch (err) {
+    logger.warn('[push] Failed to sync notification preferences:', err);
   }
+}
+
+export function setNotificationNavigationReady(ready: boolean): void {
+  notificationNavigationCoordinator.setNavigationReady(ready);
 }
 
 /**
@@ -149,23 +202,34 @@ export function setupNotificationListeners(): () => void {
       const data = response.notification.request.content.data;
       if (!data) return;
       logger.log('[push] Notification tapped (warm), data:', data);
-      handleNotificationNavigation(data);
+      const queued = notificationNavigationCoordinator.queueFromData(
+        data,
+        getNotificationResponseKey(response),
+      );
+      if (queued) {
+        Notifications.clearLastNotificationResponseAsync().catch((error) => {
+          logger.warn('[push] Failed to clear handled warm notification response:', error);
+        });
+      }
     });
 
-  // Cold start: check if a notification launched the app
-  Notifications.getLastNotificationResponseAsync().then((response) => {
-    if (!response) return;
-
-    // Only handle if the notification was tapped recently (within 5s of app start)
-    const tappedAt = response.notification.date;
-    const now = Date.now();
-    if (now - tappedAt > 5000) return;
-
-    const data = response.notification.request.content.data;
-    if (!data) return;
-    logger.log('[push] Notification tapped (cold start), data:', data);
-    handleNotificationNavigation(data);
+  // Background resume fallback: some iOS resume paths are racey and can miss the
+  // warm listener callback, so re-hydrate the last response whenever the app
+  // becomes active. The coordinator deduplicates by notification identifier.
+  const appStateSubscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+    if (nextState !== 'active') return;
+    hydrateLastNotificationResponse().catch((error) => {
+      logger.warn('[push] Failed to hydrate foreground notification response:', error);
+    });
   });
 
-  return () => subscription.remove();
+  // Cold start: check if a notification launched the app
+  hydrateLastNotificationResponse().catch((error) => {
+    logger.warn('[push] Failed to hydrate cold-start notification response:', error);
+  });
+
+  return () => {
+    subscription.remove();
+    appStateSubscription.remove();
+  };
 }

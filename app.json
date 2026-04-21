@@ -27,7 +27,7 @@
         "NSMicrophoneUsageDescription": "Allow Unfold to use the microphone for voice input.",
         "NSPhotoLibraryAddUsageDescription": "Allow Unfold to save devotional quotes and wallpapers to your photo library.",
         "NSPhotoLibraryUsageDescription": "Allow Unfold to access your photos for sharing devotional content.",
-        "UIBackgroundModes": ["audio", "fetch"]
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
       }
     },
     "android": {
@@ -79,7 +79,8 @@
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#0A0A0A"
+          "color": "#0A0A0A",
+          "enableBackgroundRemoteNotifications": true
         }
       ],
       [

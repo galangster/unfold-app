@@ -1164,7 +1164,7 @@ async function generateBatch(
   let dynamicExampleDirective = '';
   if (retryLevel === 0) {
     try {
-      const cached = mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY);
+      const cached = await Promise.resolve(mmkvStorage.getItem(DYNAMIC_EXAMPLE_KEY));
       if (cached) {
         const example: { rule: string; badText: string; goodText: string } = JSON.parse(cached);
         if (example.rule && example.badText && example.goodText) {

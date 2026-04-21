@@ -1128,7 +1128,7 @@ export default function HowItWorksScreen() {
             >
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
                 <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
-                  <View style={{ transform: [{ scale: 1.2 }] }}>
+                  <View>
                     <CardAnimation type={page.animation} accent={colors.accent} />
                   </View>
 

@@ -1,21 +1,20 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { useUnfoldStore } from '@/lib/store';
-import { useUIState } from '@/lib/ui-state';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
 const EXCLUSIVE_OFFER_SEEN_KEY = '@unfold_exclusive_offer_seen';
 
 export function useCreationGate() {
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
-  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
-  const effectivePremium = debugForceTrialExpired ? false : __DEV__ ? true : isPremium;
+  const policy = usePremiumAccessPolicy();
+  const isPremium = policy === 'granted';
 
   const [showExclusiveOffer, setShowExclusiveOffer] = useState(false);
   const router = useRouter();
 
   const gate = useCallback((): boolean => {
-    if (effectivePremium) return true;
+    if (policy === 'granted') return true;
+    if (policy === 'unknown') return false;
 
     const hasSeenOffer = mmkvStorage.getItem(EXCLUSIVE_OFFER_SEEN_KEY) === 'true';
     if (!hasSeenOffer) {
@@ -24,7 +23,7 @@ export function useCreationGate() {
     }
     router.push('/paywall');
     return false;
-  }, [effectivePremium, router]);
+  }, [policy, router]);
 
   const dismissOffer = useCallback(() => {
     mmkvStorage.setItem(EXCLUSIVE_OFFER_SEEN_KEY, 'true');
@@ -32,7 +31,8 @@ export function useCreationGate() {
   }, []);
 
   return {
-    isPremium: effectivePremium,
+    policy,
+    isPremium,
     gate,
     showExclusiveOffer,
     dismissOffer,

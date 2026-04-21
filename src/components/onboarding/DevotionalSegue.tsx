@@ -211,9 +211,9 @@ function TypewriterText({
     <Text
       style={{
         fontFamily: FontFamily.display,
-        fontSize: FontSize.xl,
+        fontSize: 32,
         color: colors.text,
-        lineHeight: Math.round(FontSize.xl * 1.4),
+        lineHeight: 42,
       }}
     >
       {chars.slice(0, visibleCount).join('')}

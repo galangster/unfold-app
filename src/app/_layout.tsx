@@ -1,5 +1,5 @@
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack, useNavigationContainerRef } from 'expo-router';
+import { Stack, useNavigationContainerRef, usePathname } from 'expo-router';
 import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Application from 'expo-application';
@@ -16,8 +16,9 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
+import { useStreakReconcile } from '@/hooks/useStreakReconcile';
 import { useUnfoldStore } from '@/lib/store';
-import { registerPushToken, setupNotificationListeners } from '@/lib/push-notifications';
+import { registerPushToken, setNotificationNavigationReady, setupNotificationListeners, syncNotificationPreferences } from '@/lib/push-notifications';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 // GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
@@ -90,6 +91,8 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
   const ref = useNavigationContainerRef();
+  const pathname = usePathname();
+  const reminderTime = useUnfoldStore((s) => s.user?.reminderTime ?? '');
 
   // Sync RevenueCat subscription status with Zustand store
   useRevenueCatSync();
@@ -101,15 +104,30 @@ function RootLayoutNav() {
   // Without this, the iOS/Android recurring trigger fires stale copy forever.
   useDailyReminderSync();
 
+  // Reconcile streak state on hydration + foreground so stale persisted values
+  // don't survive missed days until the next reading completion.
+  useStreakReconcile();
+
   // Register push token with backend (anonymous, keyed by X-Device-ID)
   useEffect(() => {
     registerPushToken();
   }, []);
 
+  // Keep backend-side devotional-ready push timing aligned with the user's
+  // current reminder preference, not just the initial token-registration time.
+  useEffect(() => {
+    if (!reminderTime) return;
+    syncNotificationPreferences();
+  }, [reminderTime]);
+
   useEffect(() => {
     const cleanup = setupNotificationListeners();
     return cleanup;
   }, []);
+
+  useEffect(() => {
+    setNotificationNavigationReady(pathname !== '/');
+  }, [pathname]);
 
   // One-time migration of local generation data to server
   useEffect(() => {

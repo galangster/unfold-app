@@ -324,7 +324,7 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
 function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { type: 'reveal-ready' }> }) {
   const { colors, isDark } = useTheme();
   const { entering } = useAccessibleAnimation();
-  const isYesterday = state.dayLabel === 'Yesterday';
+  const isYesterday = state.dayLabel === 'Overdue';
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
@@ -599,7 +599,7 @@ function MainCard({ state }: MainCardProps) {
   const isCompleted = state.type === 'complete-today' || state.type === 'tomorrow-locked';
   const dayData = state.dayData;
   const dayLabel = state.dayLabel;
-  const isYesterday = dayLabel === 'Yesterday';
+  const isYesterday = dayLabel === 'Overdue';
 
   // Progress data — show progress bar when days have been completed
   const progress = state.progress;

@@ -22,7 +22,7 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { CaretLeftIcon, SunIcon, MoonIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 
@@ -116,6 +116,10 @@ function Section({
 // ---------------------------------------------------------------------------
 
 export default function DebugLightModeScreen() {
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)/(you)" />;
+  }
+
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const themeMode = useUnfoldStore((s) => s.user?.themeMode ?? 'dark');

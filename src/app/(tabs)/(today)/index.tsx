@@ -398,7 +398,7 @@ export default function HomeScreen() {
     return resumeContext.dayNumber !== resumeDevotional.currentDay;
   }, [resumeContext, resumeDevotional]);
 
-  const getReadingDayLabel = (): 'Yesterday' | 'Today' | 'Tomorrow' => {
+  const getReadingDayLabel = (): 'Overdue' | 'Today' | 'Tomorrow' => {
     if (!currentDevotional) return 'Today';
     const dayData = (currentDevotional.days ?? []).find(d => d.dayNumber === currentDevotional.currentDay);
     if (!dayData) return 'Today';
@@ -412,13 +412,12 @@ export default function HomeScreen() {
       return 'Today';
     }
 
-    // Case 2: Current day NOT read — check if it's overdue
-    // If the content was generated before today, the user missed it yesterday
+    // Case 2: Current day NOT read — check if it's overdue.
+    // If the content was generated before today, the user missed it on a prior day.
     if (!dayData.isRead && dayData.generatedAt) {
       const genDate = new Date(dayData.generatedAt);
       if (genDate.toDateString() !== todayStr) {
-        // Generated on a different day than today — content is overdue
-        return 'Yesterday';
+        return 'Overdue';
       }
     }
 

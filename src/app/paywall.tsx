@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet } from 'react-native';
+import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +16,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
+import { resolvePurchaseOutcome, resolveRestoreOutcome } from '@/lib/paywall-guardrails';
 import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
@@ -108,8 +110,8 @@ export default function PaywallScreen() {
   }, [selectedPlan, yearlyPackage, monthlyPackage, trialEligibility]);
 
   // Trial duration strings
-  const yearlyTrialDuration = getTrialDuration(yearlyPackage) ?? '7-day';
-  const monthlyTrialDuration = getTrialDuration(monthlyPackage) ?? '7-day';
+  const yearlyTrialDuration = getTrialDuration(yearlyPackage) ?? '3-day';
+  const monthlyTrialDuration = getTrialDuration(monthlyPackage) ?? '3-day';
   const selectedTrialDuration = selectedPlan === 'yearly' ? yearlyTrialDuration : monthlyTrialDuration;
 
   const purchaseMutation = useMutation({
@@ -125,11 +127,10 @@ export default function PaywallScreen() {
           'allEntitlements:', JSON.stringify(Object.keys(result.data.entitlements.all ?? {})),
         );
 
-        if (!hasPremium) {
-          // Purchase went through StoreKit but entitlement not granted — likely
-          // a RevenueCat dashboard config issue (product not linked to entitlement)
+        const outcome = resolvePurchaseOutcome(result);
+        if (outcome.kind !== 'success') {
           logger.log('[Paywall] WARNING: Purchase ok but no Unfold Premium entitlement. Check RevenueCat dashboard.');
-          setSubscribeError('Purchase completed but premium was not activated. Please tap Restore below.');
+          setSubscribeError(outcome.message);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           return;
         }
@@ -180,9 +181,9 @@ export default function PaywallScreen() {
   const restoreMutation = useMutation({
     mutationFn: restorePurchases,
     onSuccess: async (result) => {
-      if (result.ok) {
-        const hasPremium = Boolean(result.data.entitlements.active?.['Unfold Premium']);
-        updateUser({ isPremium: hasPremium });
+      const outcome = resolveRestoreOutcome(result);
+      if (outcome.kind === 'success' && result.ok) {
+        updateUser({ isPremium: true });
 
         await syncTrialEndingNotification();
 
@@ -199,14 +200,21 @@ export default function PaywallScreen() {
         } else {
           router.back();
         }
-      } else if (result.reason === 'timeout') {
-        logger.log('[Paywall] Restore timed out');
-        setSubscribeError('Restore took too long. Please check your connection and try again.');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      } else {
-        setSubscribeError('No active subscription found.');
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
       }
+
+      if (!result.ok && result.reason === 'timeout') {
+        logger.log('[Paywall] Restore timed out');
+      }
+      const restoreErrorMessage = outcome.kind === 'error'
+        ? outcome.message
+        : 'Could not restore purchases. Please try again.';
+      setSubscribeError(restoreErrorMessage);
+      Haptics.notificationAsync(
+        result.ok
+          ? Haptics.NotificationFeedbackType.Warning
+          : Haptics.NotificationFeedbackType.Error,
+      );
     },
     onError: (error) => {
       logger.log('[Paywall] Restore error:', error);
@@ -762,7 +770,7 @@ export default function PaywallScreen() {
           )}
           <TouchableOpacity
             activeOpacity={0.6}
-            onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}
+            onPress={() => Linking.openURL(LEGAL_LINKS.terms)}
             accessibilityRole="link"
             hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             style={{ padding: 6 }}
@@ -774,7 +782,7 @@ export default function PaywallScreen() {
           <Text style={{ color: colors.textSubtle, fontSize: 11 }}>{'\u00B7'}</Text>
           <TouchableOpacity
             activeOpacity={0.6}
-            onPress={() => Linking.openURL('https://unfoldapp.co/privacy')}
+            onPress={() => Linking.openURL(LEGAL_LINKS.privacy)}
             accessibilityRole="link"
             hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
             style={{ padding: 6 }}

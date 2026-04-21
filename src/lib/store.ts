@@ -9,6 +9,7 @@ import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity, normalizeGe
 import { compositeId, newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
+import { reconcileStreakState } from './streak-helpers';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -572,6 +573,7 @@ interface UnfoldState {
   streakWeekendAmnesty: boolean;
   streakFreezes: number;
   recordStreakRead: () => void;
+  reconcileStreakState: () => void;
   resetStreakGraceDays: () => void;
   toggleWeekendAmnesty: () => void;
 
@@ -1352,6 +1354,19 @@ export const useUnfoldStore = create<UnfoldState>()(
             streakFreezes: newFreezes,
           };
         }),
+      reconcileStreakState: () =>
+        set((state) =>
+          reconcileStreakState({
+            streakCurrent: state.streakCurrent,
+            streakLastReadDate: state.streakLastReadDate,
+            streakGraceDaysUsedThisWeek: state.streakGraceDaysUsedThisWeek,
+            streakWeekStart: state.streakWeekStart,
+            streakWeekendAmnesty: state.streakWeekendAmnesty,
+            streakFreezes: state.streakFreezes,
+            isPremium: Boolean(state.user?.isPremium),
+            streakJustReset: state.streakJustReset,
+          })
+        ),
       resetStreakGraceDays: () =>
         set({
           streakGraceDaysUsedThisWeek: 0,
