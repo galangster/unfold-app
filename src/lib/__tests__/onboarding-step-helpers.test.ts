@@ -15,6 +15,8 @@ describe('onboarding step helpers', () => {
     { id: 'featureSummary' },
     { id: 'threeStepPaywall' },
     { id: 'purchaseConfirmation' },
+    { id: 'studySubject' },
+    { id: 'currentSituation' },
   ];
 
   it('starts returning users at the first non-cinematic series-building step', () => {
@@ -24,11 +26,14 @@ describe('onboarding step helpers', () => {
       aboutMe: 'Builder',
     };
 
-    const filtered = getFilteredOnboardingSteps(allSteps, existingUser);
+    const filtered = getFilteredOnboardingSteps(allSteps, existingUser, {
+      selectedMainOption: 'guided',
+    });
 
     expect(filtered.map((step) => step.id)).toEqual([
       'relationshipWithGod',
       'bibleFrequency',
+      'currentSituation',
     ]);
     expect(getInitialOnboardingStepId(allSteps, existingUser)).toBe('relationshipWithGod');
   });
@@ -40,13 +45,16 @@ describe('onboarding step helpers', () => {
       aboutMe: '',
     };
 
-    const filtered = getFilteredOnboardingSteps(allSteps, existingUser);
+    const filtered = getFilteredOnboardingSteps(allSteps, existingUser, {
+      selectedMainOption: 'guided',
+    });
 
     expect(filtered.map((step) => step.id)).toEqual([
       'name',
       'aboutMe',
       'relationshipWithGod',
       'bibleFrequency',
+      'currentSituation',
     ]);
     expect(getInitialOnboardingStepId(allSteps, existingUser)).toBe('name');
   });
@@ -56,5 +64,29 @@ describe('onboarding step helpers', () => {
 
     expect(filtered.map((step) => step.id)).toEqual(allSteps.map((step) => step.id));
     expect(getInitialOnboardingStepId(allSteps, null)).toBe('hook');
+  });
+
+  it('skips study subject for theme and guided flows', () => {
+    expect(
+      getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'theme' }).map((step) => step.id),
+    ).not.toContain('studySubject');
+
+    expect(
+      getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'guided' }).map((step) => step.id),
+    ).not.toContain('studySubject');
+  });
+
+  it('skips study subject until a type needing it is selected', () => {
+    expect(
+      getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'type' }).map((step) => step.id),
+    ).not.toContain('studySubject');
+
+    expect(
+      getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'type', selectedType: 'personal' }).map((step) => step.id),
+    ).not.toContain('studySubject');
+
+    expect(
+      getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'type', selectedType: 'book_study' }).map((step) => step.id),
+    ).toContain('studySubject');
   });
 });

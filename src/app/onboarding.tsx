@@ -783,8 +783,11 @@ export default function OnboardingScreen() {
     // Dev: bypass all filtering to show every screen
     if (__DEV__ && devShowAllSteps) return ALL_STEPS;
 
-    return getFilteredOnboardingSteps(ALL_STEPS, existingUser);
-  }, [existingUser, devShowAllSteps]);
+    return getFilteredOnboardingSteps(ALL_STEPS, existingUser, {
+      selectedMainOption: data.selectedMainOption,
+      selectedType: data.selectedType,
+    });
+  }, [existingUser, data.selectedMainOption, data.selectedType, devShowAllSteps]);
   
   // Find current step from filtered STEPS array
   const step = useMemo(() => STEPS.find((s) => s.id === currentStepId), [STEPS, currentStepId]);
