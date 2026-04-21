@@ -7,14 +7,12 @@ import { useUnfoldStore } from '@/lib/store';
 import { buildDevotionalSeed } from '@/lib/dev-seed';
 
 export default function DebugSeedRevealScreen() {
-  if (!__DEV__) {
-    return <Redirect href="/(tabs)/(you)" />;
-  }
-
   const router = useRouter();
   const { colors } = useTheme();
 
   useEffect(() => {
+    if (!__DEV__) return;
+
     const seeded = buildDevotionalSeed();
     const store = useUnfoldStore.getState();
     store.addDevotional(seeded);
@@ -31,6 +29,10 @@ export default function DebugSeedRevealScreen() {
       },
     });
   }, [router]);
+
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)/(you)" />;
+  }
 
   return (
     <View

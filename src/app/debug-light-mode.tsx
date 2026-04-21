@@ -116,10 +116,6 @@ function Section({
 // ---------------------------------------------------------------------------
 
 export default function DebugLightModeScreen() {
-  if (!__DEV__) {
-    return <Redirect href="/(tabs)/(you)" />;
-  }
-
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const themeMode = useUnfoldStore((s) => s.user?.themeMode ?? 'dark');
@@ -134,6 +130,10 @@ export default function DebugLightModeScreen() {
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [showDownloadSheet, setShowDownloadSheet] = useState(false);
+
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)/(you)" />;
+  }
 
   const toggleTheme = () => {
     const next: ThemeMode = themeMode === 'light' ? 'dark' : 'light';

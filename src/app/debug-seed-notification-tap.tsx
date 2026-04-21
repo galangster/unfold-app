@@ -8,14 +8,12 @@ import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 
 export default function DebugSeedNotificationTapScreen() {
-  if (!__DEV__) {
-    return <Redirect href="/(tabs)/(you)" />;
-  }
-
   const { colors } = useTheme();
   const [status, setStatus] = useState('Scheduling devotional-ready tap test…');
 
   useEffect(() => {
+    if (!__DEV__) return;
+
     let cancelled = false;
 
     const run = async () => {
@@ -46,6 +44,10 @@ export default function DebugSeedNotificationTapScreen() {
       cancelled = true;
     };
   }, []);
+
+  if (!__DEV__) {
+    return <Redirect href="/(tabs)/(you)" />;
+  }
 
   return (
     <View
