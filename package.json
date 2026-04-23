@@ -15,6 +15,7 @@
     "lint": "eslint src scripts/*.mjs eslint.config.js babel.config.js metro.config.js --ext .ts,.tsx,.js,.mjs",
     "typecheck": "tsc --noEmit",
     "health:adaptive": "node scripts/adaptive-healthcheck.mjs",
+    "verify:profiles": "node scripts/verify-profile-safety.mjs",
     "verify:changed": "node scripts/verify-changed.mjs",
     "verify:smoke": "node scripts/verify-smoke.mjs",
     "verify:device": "node scripts/verify-device-flow.mjs",
