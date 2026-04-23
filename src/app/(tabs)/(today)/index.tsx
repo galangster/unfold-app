@@ -73,6 +73,8 @@ function formatResumeRelativeTime(iso?: string): string {
   return `Saved ${days}d ago`;
 }
 
+const REVEAL_RESUME_WINDOW_MS = 15_000;
+
 export default function HomeScreen() {
   const router = useRouter();
   const { colors } = useTheme();
@@ -109,12 +111,15 @@ export default function HomeScreen() {
     // auto-navigate to reading — that steals focus from the journal.
     if (resumeContext.route !== 'reading') return;
     const age = Date.now() - new Date(resumeContext.touchedAt).getTime();
-    if (age < 3000) {
+    if (age < REVEAL_RESUME_WINDOW_MS) {
       // Fresh from reveal — auto-navigate and clear
       clearResumeContext();
       router.push({
         pathname: '/(tabs)/(today)/reading',
-        params: { dayNumber: String(resumeContext.dayNumber) },
+        params: {
+          devotionalId: resumeContext.devotionalId,
+          dayNumber: String(resumeContext.dayNumber),
+        },
       });
     }
   }, [resumeContext?.touchedAt]);

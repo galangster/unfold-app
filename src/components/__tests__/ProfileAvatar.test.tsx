@@ -46,10 +46,15 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg' },
 }));
 
+const mockCopyAsync = jest.fn();
+const mockDeleteAsync = jest.fn();
+const mockGetInfoAsync = jest.fn(async (uri: string) => ({ exists: uri.includes('missing-avatar') ? true : false }));
+
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///documents/',
-  copyAsync: jest.fn(),
-  deleteAsync: jest.fn(),
+  copyAsync: mockCopyAsync,
+  deleteAsync: mockDeleteAsync,
+  getInfoAsync: mockGetInfoAsync,
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -66,23 +71,22 @@ jest.mock('phosphor-react-native', () => ({
 describe('ProfileAvatar', () => {
   beforeEach(() => {
     mockUpdateUser.mockClear();
+    mockCopyAsync.mockClear();
+    mockDeleteAsync.mockClear();
+    mockGetInfoAsync.mockClear();
+    mockGetInfoAsync.mockImplementation(async (uri: string) => ({ exists: uri.includes('missing-avatar') }));
     mockStoreState.user.name = 'Nick';
     mockStoreState.user.profilePicture = 'file:///missing-avatar.jpg';
   });
 
-  it('falls back to the user initial when the stored profile image fails to load', () => {
+  it('falls back to the user initial and clears stored photo when no valid avatar file exists', async () => {
+    mockStoreState.user.profilePicture = 'file:///missing-avatar.jpg';
+    mockGetInfoAsync.mockImplementation(async () => ({ exists: false }));
+
     let tree: any;
-
-    act(() => {
+    await act(async () => {
       tree = renderer.create(<ProfileAvatar size={80} editable />);
-    });
-
-    expect(() => tree.root.findByType(Text)).toThrow();
-
-    const image = tree.root.findByType(Image);
-
-    act(() => {
-      image.props.onError?.({ nativeEvent: { error: 'missing file' } });
+      await Promise.resolve();
     });
 
     const fallbackText = tree.root.findByType(Text);

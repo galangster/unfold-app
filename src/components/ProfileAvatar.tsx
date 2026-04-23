@@ -1,7 +1,7 @@
 import { View, Text, Image, TouchableOpacity, ActionSheetIOS, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { documentDirectory, copyAsync, deleteAsync } from 'expo-file-system/legacy';
+import { documentDirectory, copyAsync, deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
 import * as Haptics from 'expo-haptics';
 import { CameraIcon } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
@@ -19,6 +19,19 @@ interface ProfileAvatarProps {
   onPress?: () => void;
 }
 
+function getProfileAvatarFileName(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const segments = trimmed.split('/').filter(Boolean);
+  return segments.length ? segments[segments.length - 1] : null;
+}
+
+function toDocumentAvatarUri(fileName: string | null): string | null {
+  if (!fileName || !documentDirectory) return null;
+  return `${documentDirectory}${fileName}`;
+}
+
 /**
  * Profile avatar component — shows user photo or initial letter fallback.
  * When `editable`, tapping shows an action sheet to pick a photo.
@@ -31,14 +44,59 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
 
   const initial = (userName || '?')[0].toUpperCase();
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
-  const hasRenderableProfilePicture = Boolean(profilePicture) && !imageLoadFailed;
+  const [resolvedProfilePicture, setResolvedProfilePicture] = useState<string | null>(null);
+  const hasRenderableProfilePicture = Boolean(resolvedProfilePicture) && !imageLoadFailed;
   const fontSize = size * 0.42;
   const badgeSize = size * 0.32;
   const badgeIconSize = badgeSize * 0.55;
 
   useEffect(() => {
-    setImageLoadFailed(false);
-  }, [profilePicture]);
+    let cancelled = false;
+
+    const reconcileProfilePicture = async () => {
+      setImageLoadFailed(false);
+      if (!profilePicture) {
+        setResolvedProfilePicture(null);
+        return;
+      }
+
+      const fileName = getProfileAvatarFileName(profilePicture);
+      const canonicalUri = toDocumentAvatarUri(fileName);
+      const candidates = [profilePicture, canonicalUri].filter(
+        (value, index, array): value is string => Boolean(value) && array.indexOf(value) === index,
+      );
+
+      for (const candidate of candidates) {
+        try {
+          const info = await getInfoAsync(candidate);
+          if (info.exists) {
+            if (cancelled) return;
+            setResolvedProfilePicture(candidate);
+            if (fileName && profilePicture !== fileName) {
+              updateUser({ profilePicture: fileName });
+            }
+            return;
+          }
+        } catch {
+          // try the next candidate
+        }
+      }
+
+      if (cancelled) return;
+      setResolvedProfilePicture(null);
+      updateUser({ profilePicture: null });
+    };
+
+    reconcileProfilePicture().catch(() => {
+      if (!cancelled) {
+        setResolvedProfilePicture(null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profilePicture, updateUser]);
 
   const savePhoto = useCallback(async (uri: string) => {
     try {
@@ -63,7 +121,8 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
         }
       }
 
-      updateUser({ profilePicture: destPath });
+      updateUser({ profilePicture: fileName });
+      setResolvedProfilePicture(destPath);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Error', 'Could not save photo. Please try again.');
@@ -89,12 +148,14 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
   const removePhoto = useCallback(async () => {
     if (profilePicture) {
       try {
-        await deleteAsync(profilePicture, { idempotent: true });
+        const existingPath = toDocumentAvatarUri(getProfileAvatarFileName(profilePicture)) ?? profilePicture;
+        await deleteAsync(existingPath, { idempotent: true });
       } catch {
         // ignore
       }
     }
     updateUser({ profilePicture: null });
+    setResolvedProfilePicture(null);
     setImageLoadFailed(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [profilePicture, updateUser]);
