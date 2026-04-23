@@ -285,6 +285,26 @@ describe('push notification helpers', () => {
       expect(replace).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps notification navigation marked active briefly after flushing so startup redirects do not stomp it', () => {
+      const replace = jest.fn();
+      const coordinator = createNotificationNavigationCoordinator({ replace, recentNavigationWindowMs: 5000 });
+      const nowSpy = jest.spyOn(Date, 'now');
+
+      nowSpy.mockReturnValue(1_000);
+      coordinator.queueFromData(devotionalReadyData, 'notif-1');
+      coordinator.setNavigationReady(true);
+
+      expect(coordinator.hasPendingRoute()).toBe(true);
+
+      nowSpy.mockReturnValue(5_999);
+      expect(coordinator.hasPendingRoute()).toBe(true);
+
+      nowSpy.mockReturnValue(6_001);
+      expect(coordinator.hasPendingRoute()).toBe(false);
+
+      nowSpy.mockRestore();
+    });
+
     it('deduplicates the same notification key across cold-start and warm handling', () => {
       const replace = jest.fn();
       const onEvent = jest.fn();

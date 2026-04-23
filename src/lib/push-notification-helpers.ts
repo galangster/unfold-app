@@ -201,9 +201,11 @@ export type NotificationNavigationDebugEvent =
 export function createNotificationNavigationCoordinator({
   replace,
   onEvent,
+  recentNavigationWindowMs = 5_000,
 }: {
   replace: (route: RevealNotificationRoute) => void;
   onEvent?: (event: NotificationNavigationDebugEvent) => void;
+  recentNavigationWindowMs?: number;
 }): {
   queueFromData: (
     data: Record<string, unknown> | null | undefined,
@@ -215,6 +217,7 @@ export function createNotificationNavigationCoordinator({
   let navigationReady = false;
   let pendingRoute: RevealNotificationRoute | null = null;
   let pendingNotificationKey: string | null = null;
+  let lastRouteActivityAt = 0;
   const handledNotificationKeys = new Set<string>();
 
   const flushPendingRoute = () => {
@@ -229,6 +232,7 @@ export function createNotificationNavigationCoordinator({
     }
 
     replace(pendingRoute);
+    lastRouteActivityAt = Date.now();
     onEvent?.({
       type: 'flushed',
       notificationKey: pendingNotificationKey ?? undefined,
@@ -257,6 +261,7 @@ export function createNotificationNavigationCoordinator({
 
       pendingRoute = route;
       pendingNotificationKey = notificationKey ?? null;
+      lastRouteActivityAt = Date.now();
       onEvent?.({
         type: 'queued',
         notificationKey,
@@ -273,7 +278,8 @@ export function createNotificationNavigationCoordinator({
     },
 
     hasPendingRoute() {
-      return pendingRoute !== null;
+      if (pendingRoute !== null) return true;
+      return lastRouteActivityAt !== 0 && Date.now() - lastRouteActivityAt <= recentNavigationWindowMs;
     },
   };
 }
