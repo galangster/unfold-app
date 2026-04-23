@@ -191,6 +191,10 @@ export function setNotificationNavigationReady(ready: boolean): void {
   notificationNavigationCoordinator.setNavigationReady(ready);
 }
 
+export function hasPendingNotificationNavigation(): boolean {
+  return notificationNavigationCoordinator.hasPendingRoute();
+}
+
 /**
  * Set up a listener for notification taps (user opens a notification).
  * Handles both warm start (listener fires immediately) and cold start

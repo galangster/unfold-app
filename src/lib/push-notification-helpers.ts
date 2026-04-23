@@ -210,6 +210,7 @@ export function createNotificationNavigationCoordinator({
     notificationKey?: string,
   ) => boolean;
   setNavigationReady: (ready: boolean) => void;
+  hasPendingRoute: () => boolean;
 } {
   let navigationReady = false;
   let pendingRoute: RevealNotificationRoute | null = null;
@@ -269,6 +270,10 @@ export function createNotificationNavigationCoordinator({
       navigationReady = ready;
       onEvent?.({ type: 'navigation_ready_changed', ready });
       flushPendingRoute();
+    },
+
+    hasPendingRoute() {
+      return pendingRoute !== null;
     },
   };
 }

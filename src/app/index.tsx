@@ -25,6 +25,7 @@ import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
+import { hasPendingNotificationNavigation } from '@/lib/push-notifications';
 import {
   FEATURE_PAGES,
   CardAnimation,
@@ -258,6 +259,10 @@ export default function WelcomeScreen() {
   // ─── Initial mount animations ───────────────────────────────────
   useEffect(() => {
     if (user?.hasCompletedOnboarding) {
+      if (hasPendingNotificationNavigation()) {
+        console.log('[Welcome] pending notification navigation detected, skipping completed-user home redirect');
+        return;
+      }
       router.replace('/(tabs)/(today)');
       return;
     }
