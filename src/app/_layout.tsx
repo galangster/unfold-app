@@ -17,8 +17,10 @@ import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
 import { useStreakReconcile } from '@/hooks/useStreakReconcile';
+import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
 import { registerPushToken, setNotificationNavigationReady, setupNotificationListeners, syncNotificationPreferences } from '@/lib/push-notifications';
+import { shouldMarkNotificationNavigationReady } from '@/lib/push-notification-helpers';
 import { migrateGenerationDataToServer } from '@/lib/generation-migration';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 // GlowBackground disabled — 18 infinite Reanimated animations saturate the main thread,
@@ -126,7 +128,11 @@ function RootLayoutNav() {
   }, []);
 
   useEffect(() => {
-    setNotificationNavigationReady(pathname !== '/');
+    // The root `/` welcome screen is a real, mounted route. Cold-start
+    // notification navigation must be allowed to replace it immediately.
+    const ready = shouldMarkNotificationNavigationReady(pathname);
+    logger.log('[push] notification navigation readiness', { pathname, ready });
+    setNotificationNavigationReady(ready);
   }, [pathname]);
 
   // One-time migration of local generation data to server

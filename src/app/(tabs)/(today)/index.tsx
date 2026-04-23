@@ -10,6 +10,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
@@ -829,8 +830,8 @@ export default function HomeScreen() {
           {/* Zone 7: Bento Grid */}
           <BentoGrid />
 
-          {/* DEBUG: Preview reveal screen (dev only, works without active devotional) */}
-          {__DEV__ && (
+          {/* QA: Preview reveal screen (QA builds, works without active devotional) */}
+          {isQaToolsEnabled() && (
             <TouchableOpacity
               onPress={() => {
                 // Use real devotional if available, otherwise fake params
@@ -860,7 +861,7 @@ export default function HomeScreen() {
               }}
             >
               <Text style={{ fontFamily: FontFamily.ui, fontSize: 11, color: colors.textSubtle }}>
-                DEBUG: Preview reveal
+                QA: Preview reveal
               </Text>
             </TouchableOpacity>
           )}

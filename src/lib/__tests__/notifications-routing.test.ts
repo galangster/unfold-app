@@ -3,7 +3,7 @@ jest.mock('react-native', () => ({
 }));
 
 const mockScheduleNotificationAsync = jest.fn(async () => 'notif-id');
-const mockCancelScheduledNotificationAsync = jest.fn(async () => {});
+const mockCancelScheduledNotificationAsync = jest.fn(async (_identifier: string) => {});
 const mockGetPermissionsAsync = jest.fn(async () => ({ status: 'granted' }));
 const mockRequestPermissionsAsync = jest.fn(async () => ({ status: 'granted' }));
 const mockSetNotificationHandler = jest.fn();

@@ -64,6 +64,61 @@ const INACTIVITY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ── Title helper ──────────────────────────────────────────────────────────
 
+const TITLE_FILLER_PREFIXES = [
+  /^can you\s+/i,
+  /^could you\s+/i,
+  /^would you\s+/i,
+  /^will you\s+/i,
+  /^please\s+/i,
+  /^help me\s+(?:understand|with|figure out|talk through)?\s*/i,
+  /^i need\s+(?:help\s+with\s+)?/i,
+  /^let'?s\s+talk\s+about\s+/i,
+  /^i want to\s+(?:talk about|understand|process)\s+/i,
+  /^what does\s+/i,
+  /^why does\s+/i,
+  /^how do i\s+/i,
+  /^how can i\s+/i,
+];
+
+function toTitleCase(words: string[]): string {
+  const smallWords = new Set(['a', 'an', 'and', 'as', 'at', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
+  return words
+    .map((word, index) => {
+      const lower = word.toLowerCase();
+      if (index > 0 && smallWords.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+export function deriveConversationTitleFromText(text: string): string | null {
+  const normalized = text
+    .replace(/[\n\r\t]+/g, ' ')
+    .replace(/[“”"'`]/g, '')
+    .replace(/[?!]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized) return null;
+
+  let stripped = normalized;
+  for (const pattern of TITLE_FILLER_PREFIXES) {
+    stripped = stripped.replace(pattern, '').trim();
+  }
+
+  const source = stripped || normalized;
+  const words = source
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9:/-]+$/g, ''))
+    .filter(Boolean);
+
+  if (words.length === 0) return null;
+
+  const selected = words.slice(0, 6);
+  const title = toTitleCase(selected);
+  return title.length > 0 ? title : null;
+}
+
 export function generateTitle(conversation: Conversation): string {
   // Primary: use topic tags if available
   const tags = conversation.topicTags ?? [];
@@ -72,15 +127,13 @@ export function generateTitle(conversation: Conversation): string {
     return topics.charAt(0).toUpperCase() + topics.slice(1);
   }
 
-  // Fallback: first user message, truncated
+  // Fallback: derive from first user message
   const msgs = conversation.messages ?? [];
   const firstUserMsg = msgs.find(m => m.role === 'user');
-  if (firstUserMsg) {
-    const text = firstUserMsg.content.slice(0, 80);
-    return text.length < firstUserMsg.content.length ? `${text}...` : text;
-  }
+  const derived = firstUserMsg ? deriveConversationTitleFromText(firstUserMsg.content) : null;
+  if (derived) return derived;
 
-  return 'Conversation';
+  return 'New Chat';
 }
 
 // ── External selectors (proper Zustand subscription tracking) ─────────────
@@ -127,12 +180,15 @@ export const useCompanionChatStore = create<CompanionChatState>()(
 
           // Auto-create conversation if none active
           if (!s.activeConversationId) {
+            const seededTitle = timestampedMsg.role === 'user'
+              ? deriveConversationTitleFromText(timestampedMsg.content)
+              : null;
             const newConv: Conversation = {
               id: makeId(),
               messages: [timestampedMsg],
               createdAt: Date.now(),
               lastMessageAt: Date.now(),
-              title: null,
+              title: seededTitle,
               topicTags: [],
               archived: false,
               updatedAt: now,
@@ -147,12 +203,16 @@ export const useCompanionChatStore = create<CompanionChatState>()(
             conversations: s.conversations.map(c => {
               if (c.id !== s.activeConversationId) return c;
               const updated = [...(c.messages ?? []), timestampedMsg];
+              const nextTitle = c.title ?? (timestampedMsg.role === 'user'
+                ? deriveConversationTitleFromText(timestampedMsg.content)
+                : null);
               return {
                 ...c,
                 messages: updated.length > MAX_STORED_MESSAGES
                   ? updated.slice(-MAX_STORED_MESSAGES)
                   : updated,
                 lastMessageAt: Date.now(),
+                title: nextTitle,
                 updatedAt: now,
               };
             }),

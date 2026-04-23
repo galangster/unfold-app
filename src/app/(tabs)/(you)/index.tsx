@@ -35,6 +35,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 import {
   useUnfoldStore,
   FontSize as FontSizePreference,
@@ -1966,10 +1967,10 @@ export default function YouScreen() {
               </TouchableOpacity>
             </View>
 
-            {__DEV__ && (
+            {isQaToolsEnabled() && (
               <>
-                {/* --- Dev Tools --- Dev-only QA affordances for local builds. */}
-                <SectionHeader label="Dev Tools" />
+                {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
+                <SectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
 
             <TouchableOpacity
               activeOpacity={0.7}

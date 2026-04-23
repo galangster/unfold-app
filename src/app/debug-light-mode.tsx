@@ -30,6 +30,7 @@ import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useTheme } from '@/lib/theme';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type Note, type ThemeMode } from '@/lib/store';
 
 import { EveningCelebration } from '@/components/EveningCelebration';
@@ -131,7 +132,7 @@ export default function DebugLightModeScreen() {
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [showDownloadSheet, setShowDownloadSheet] = useState(false);
 
-  if (!__DEV__) {
+  if (!isQaToolsEnabled()) {
     return <Redirect href="/(tabs)/(you)" />;
   }
 

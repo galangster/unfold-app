@@ -43,6 +43,7 @@ import { alpha } from '@/components/ui';
 import {
   useCompanionChatStore,
   type Conversation,
+  deriveConversationTitleFromText,
 } from '@/lib/companion-chat-store';
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -86,10 +87,10 @@ function getConversationTitle(conv: Conversation): string {
   // Fallback: first user message, truncated
   const firstUser = (conv.messages ?? []).find(m => m.role === 'user');
   if (firstUser) {
-    const truncated = firstUser.content.slice(0, 40);
-    return truncated.length < firstUser.content.length ? `${truncated}…` : truncated;
+    const derived = deriveConversationTitleFromText(firstUser.content);
+    if (derived) return derived;
   }
-  return 'Conversation';
+  return 'New Chat';
 }
 
 function formatRelativeDate(timestamp: number): string {

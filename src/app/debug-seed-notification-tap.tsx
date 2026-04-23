@@ -4,6 +4,7 @@ import { Redirect } from 'expo-router';
 
 import { buildDevotionalSeed } from '@/lib/dev-seed';
 import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 
@@ -12,7 +13,7 @@ export default function DebugSeedNotificationTapScreen() {
   const [status, setStatus] = useState('Scheduling devotional-ready tap test…');
 
   useEffect(() => {
-    if (!__DEV__) return;
+    if (!isQaToolsEnabled()) return;
 
     let cancelled = false;
 
@@ -45,7 +46,7 @@ export default function DebugSeedNotificationTapScreen() {
     };
   }, []);
 
-  if (!__DEV__) {
+  if (!isQaToolsEnabled()) {
     return <Redirect href="/(tabs)/(you)" />;
   }
 

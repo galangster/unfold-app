@@ -87,6 +87,29 @@ async function consumeSSE(
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let sawDone = false;
+
+  const processLine = (line: string) => {
+    if (!line.startsWith('data: ')) return;
+    const json = line.slice(6).trim();
+    if (!json) return;
+
+    try {
+      const event = JSON.parse(json);
+      if (event.thinking) {
+        onThinking();
+        return;
+      }
+      if (event.t) onToken(event.t);
+      if (event.d) {
+        sawDone = true;
+        onDone(event.s || [], event.ct);
+      }
+      if (event.error) onError(event.error);
+    } catch {
+      // Skip malformed JSON
+    }
+  };
 
   try {
     while (true) {
@@ -98,26 +121,19 @@ async function consumeSSE(
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const json = line.slice(6).trim();
-        if (!json) continue;
-
-        try {
-          const event = JSON.parse(json);
-          if (event.thinking) { onThinking(); continue; }
-          if (event.t) onToken(event.t);
-          if (event.d) onDone(event.s || [], event.ct);
-          if (event.error) onError(event.error);
-        } catch {
-          // Skip malformed JSON
-        }
+        processLine(line);
       }
+    }
+
+    const trailing = buffer.trim();
+    if (trailing) {
+      processLine(trailing);
     }
   } finally {
     reader.releaseLock();
   }
 
-  return true;
+  return sawDone;
 }
 
 // ── Fallback: non-streaming request with progressive reveal ───────────────────

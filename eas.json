@@ -20,6 +20,20 @@
         "EAS_USE_CACHE": "1"
       }
     },
+    "qa-testflight": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_BACKEND_URL": "https://unfold-backend-production.up.railway.app",
+        "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
+        "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
+        "EXPO_PUBLIC_ENABLE_QA_TOOLS": "1",
+        "EAS_USE_CACHE": "1",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "ios": {
+        "distribution": "store"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {
@@ -39,6 +53,14 @@
   },
   "submit": {
     "production": {
+      "ios": {
+        "ascAppId": "6760814444",
+        "ascApiKeyId": "38BW73P7M5",
+        "ascApiKeyIssuerId": "52f4e617-a4b3-4cee-bcd0-23f8e653d7b5",
+        "ascApiKeyPath": "./keys/AuthKey_38BW73P7M5.p8"
+      }
+    },
+    "qa-testflight": {
       "ios": {
         "ascAppId": "6760814444",
         "ascApiKeyId": "38BW73P7M5",

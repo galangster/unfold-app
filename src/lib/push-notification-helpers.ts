@@ -114,6 +114,10 @@ export function shouldHydrateNotificationResponse({
   return nowMs >= tappedAtMs && nowMs - tappedAtMs <= maxAgeMs;
 }
 
+export function shouldMarkNotificationNavigationReady(pathname?: string | null): boolean {
+  return Boolean(pathname);
+}
+
 export type RevealNotificationRoute = {
   pathname: '/reveal';
   params: {
@@ -180,10 +184,20 @@ export function buildReadingRouteFromRevealParams({
   };
 }
 
+export type NotificationNavigationDebugEvent =
+  | { type: 'ignored_invalid'; notificationKey?: string }
+  | { type: 'ignored_duplicate'; notificationKey?: string }
+  | { type: 'queued'; notificationKey?: string; route: RevealNotificationRoute }
+  | { type: 'flush_skipped_not_ready'; notificationKey?: string; route: RevealNotificationRoute }
+  | { type: 'navigation_ready_changed'; ready: boolean }
+  | { type: 'flushed'; notificationKey?: string; route: RevealNotificationRoute };
+
 export function createNotificationNavigationCoordinator({
   replace,
+  onEvent,
 }: {
   replace: (route: RevealNotificationRoute) => void;
+  onEvent?: (event: NotificationNavigationDebugEvent) => void;
 }): {
   queueFromData: (
     data: Record<string, unknown> | null | undefined,
@@ -197,9 +211,22 @@ export function createNotificationNavigationCoordinator({
   const handledNotificationKeys = new Set<string>();
 
   const flushPendingRoute = () => {
-    if (!navigationReady || !pendingRoute) return;
+    if (!pendingRoute) return;
+    if (!navigationReady) {
+      onEvent?.({
+        type: 'flush_skipped_not_ready',
+        notificationKey: pendingNotificationKey ?? undefined,
+        route: pendingRoute,
+      });
+      return;
+    }
 
     replace(pendingRoute);
+    onEvent?.({
+      type: 'flushed',
+      notificationKey: pendingNotificationKey ?? undefined,
+      route: pendingRoute,
+    });
 
     if (pendingNotificationKey) {
       handledNotificationKeys.add(pendingNotificationKey);
@@ -212,19 +239,29 @@ export function createNotificationNavigationCoordinator({
   return {
     queueFromData(data, notificationKey) {
       const route = buildRevealNotificationRoute(data);
-      if (!route) return false;
+      if (!route) {
+        onEvent?.({ type: 'ignored_invalid', notificationKey });
+        return false;
+      }
       if (notificationKey && handledNotificationKeys.has(notificationKey)) {
+        onEvent?.({ type: 'ignored_duplicate', notificationKey });
         return false;
       }
 
       pendingRoute = route;
       pendingNotificationKey = notificationKey ?? null;
+      onEvent?.({
+        type: 'queued',
+        notificationKey,
+        route,
+      });
       flushPendingRoute();
       return true;
     },
 
     setNavigationReady(ready) {
       navigationReady = ready;
+      onEvent?.({ type: 'navigation_ready_changed', ready });
       flushPendingRoute();
     },
   };

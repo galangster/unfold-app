@@ -5,13 +5,14 @@ import { Redirect, useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { buildDevotionalSeed } from '@/lib/dev-seed';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 
 export default function DebugSeedRevealScreen() {
   const router = useRouter();
   const { colors } = useTheme();
 
   useEffect(() => {
-    if (!__DEV__) return;
+    if (!isQaToolsEnabled()) return;
 
     const seeded = buildDevotionalSeed();
     const store = useUnfoldStore.getState();
@@ -30,7 +31,7 @@ export default function DebugSeedRevealScreen() {
     });
   }, [router]);
 
-  if (!__DEV__) {
+  if (!isQaToolsEnabled()) {
     return <Redirect href="/(tabs)/(you)" />;
   }
 

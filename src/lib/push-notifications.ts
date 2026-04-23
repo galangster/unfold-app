@@ -28,6 +28,9 @@ import {
 
 const notificationNavigationCoordinator = createNotificationNavigationCoordinator({
   replace: (route) => router.replace(route),
+  onEvent: (event) => {
+    logger.log('[push] coordinator event', event);
+  },
 });
 
 function getNotificationResponseKey(

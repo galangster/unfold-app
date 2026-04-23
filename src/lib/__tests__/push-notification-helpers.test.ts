@@ -13,6 +13,7 @@ import {
   normalizePreferredNotificationTime,
   shouldHandleNotificationData,
   shouldHydrateNotificationResponse,
+  shouldMarkNotificationNavigationReady,
 } from '../push-notification-helpers';
 import { buildDevotionalSeed } from '../dev-seed';
 
@@ -184,6 +185,16 @@ describe('push notification helpers', () => {
     });
   });
 
+  describe('shouldMarkNotificationNavigationReady', () => {
+    it('treats the root welcome screen as navigation-ready so cold-start notifications can replace it', () => {
+      expect(shouldMarkNotificationNavigationReady('/')).toBe(true);
+    });
+
+    it('treats unresolved pathname values as not ready', () => {
+      expect(shouldMarkNotificationNavigationReady('')).toBe(false);
+    });
+  });
+
   describe('createNotificationNavigationCoordinator', () => {
     const devotionalReadyData = {
       type: 'devotional_ready',
@@ -193,6 +204,45 @@ describe('push notification helpers', () => {
       seriesTitle: 'Psalm Walk',
       totalDays: 7,
     };
+
+    it('emits coordinator debug events when a notification is queued then flushed', () => {
+      const replace = jest.fn();
+      const onEvent = jest.fn();
+      const coordinator = createNotificationNavigationCoordinator({ replace, onEvent });
+
+      coordinator.queueFromData(devotionalReadyData, 'notif-1');
+      coordinator.setNavigationReady(true);
+
+      expect(onEvent.mock.calls).toEqual([
+        [
+          expect.objectContaining({
+            type: 'queued',
+            notificationKey: 'notif-1',
+            route: expect.objectContaining({ pathname: '/reveal' }),
+          }),
+        ],
+        [
+          expect.objectContaining({
+            type: 'flush_skipped_not_ready',
+            notificationKey: 'notif-1',
+            route: expect.objectContaining({ pathname: '/reveal' }),
+          }),
+        ],
+        [
+          expect.objectContaining({
+            type: 'navigation_ready_changed',
+            ready: true,
+          }),
+        ],
+        [
+          expect.objectContaining({
+            type: 'flushed',
+            notificationKey: 'notif-1',
+            route: expect.objectContaining({ pathname: '/reveal' }),
+          }),
+        ],
+      ]);
+    });
 
     it('queues a cold-start devotional notification until navigation is ready', () => {
       const replace = jest.fn();
@@ -227,13 +277,20 @@ describe('push notification helpers', () => {
 
     it('deduplicates the same notification key across cold-start and warm handling', () => {
       const replace = jest.fn();
-      const coordinator = createNotificationNavigationCoordinator({ replace });
+      const onEvent = jest.fn();
+      const coordinator = createNotificationNavigationCoordinator({ replace, onEvent });
 
       coordinator.queueFromData(devotionalReadyData, 'notif-1');
       coordinator.setNavigationReady(true);
       coordinator.queueFromData(devotionalReadyData, 'notif-1');
 
       expect(replace).toHaveBeenCalledTimes(1);
+      expect(onEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ignored_duplicate',
+          notificationKey: 'notif-1',
+        }),
+      );
     });
   });
 });
