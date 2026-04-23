@@ -103,15 +103,13 @@ export function shouldHandleNotificationData(
 }
 
 export function shouldHydrateNotificationResponse({
-  tappedAtMs,
+  notificationDateMs,
   nowMs,
-  maxAgeMs = 5 * 60_000,
 }: {
-  tappedAtMs: number;
+  notificationDateMs: number;
   nowMs: number;
-  maxAgeMs?: number;
 }): boolean {
-  return nowMs >= tappedAtMs && nowMs - tappedAtMs <= maxAgeMs;
+  return Number.isFinite(notificationDateMs) && notificationDateMs > 0 && nowMs >= notificationDateMs;
 }
 
 export function shouldMarkNotificationNavigationReady({

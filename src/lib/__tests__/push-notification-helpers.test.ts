@@ -166,20 +166,20 @@ describe('push notification helpers', () => {
   });
 
   describe('shouldHydrateNotificationResponse', () => {
-    it('keeps a recently tapped cold-start notification eligible during normal app launch delay', () => {
+    it('keeps a tapped cold-start notification eligible even if it was delivered well before the user opened it', () => {
       expect(
         shouldHydrateNotificationResponse({
-          tappedAtMs: 1_000,
-          nowMs: 16_000,
+          notificationDateMs: 1_000,
+          nowMs: 1_000 + 30 * 60_000,
         }),
       ).toBe(true);
     });
 
-    it('ignores stale notification responses from much older launches', () => {
+    it('ignores impossible future-dated notification responses', () => {
       expect(
         shouldHydrateNotificationResponse({
-          tappedAtMs: 1_000,
-          nowMs: 1_000 + 5 * 60_000 + 1,
+          notificationDateMs: 5_000,
+          nowMs: 4_999,
         }),
       ).toBe(false);
     });

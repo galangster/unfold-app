@@ -46,22 +46,31 @@ async function hydrateLastNotificationResponse(): Promise<void> {
     const response = await Notifications.getLastNotificationResponseAsync();
     if (!response) return;
 
-    const tappedAt = response.notification.date;
-    const now = Date.now();
-    if (!shouldHydrateNotificationResponse({ tappedAtMs: tappedAt, nowMs: now })) {
-      return;
-    }
+    let shouldClearLastResponse = true;
 
-    const data = response.notification.request.content.data;
-    if (!data) return;
+    try {
+      const notificationDate = response.notification.date;
+      const now = Date.now();
+      if (!shouldHydrateNotificationResponse({ notificationDateMs: notificationDate, nowMs: now })) {
+        logger.warn('[push] Ignoring notification response with impossible future notification date', {
+          notificationDate,
+          now,
+        });
+        return;
+      }
 
-    logger.log('[push] Notification tapped (cold start), data:', data);
-    const queued = notificationNavigationCoordinator.queueFromData(
-      data,
-      getNotificationResponseKey(response),
-    );
-    if (queued) {
-      await Notifications.clearLastNotificationResponseAsync();
+      const data = response.notification.request.content.data;
+      if (!data) return;
+
+      logger.log('[push] Notification tapped (cold start), data:', data);
+      notificationNavigationCoordinator.queueFromData(
+        data,
+        getNotificationResponseKey(response),
+      );
+    } finally {
+      if (shouldClearLastResponse) {
+        await Notifications.clearLastNotificationResponseAsync();
+      }
     }
   } finally {
     initialNotificationHydrationSettled = true;
