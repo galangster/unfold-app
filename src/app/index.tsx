@@ -331,6 +331,13 @@ export default function WelcomeScreen() {
 
   const currentFeature = FEATURE_PAGES[Math.min(featurePage, FEATURE_PAGES.length - 1)];
 
+  // Completed users should not briefly render the decorated welcome screen on
+  // ordinary cold launch. Keep the surface opaque/quiet while the redirect
+  // decision resolves so no ember/gradient frame leaks through.
+  if (user?.hasCompletedOnboarding) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
+
   // ─── Render ─────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
