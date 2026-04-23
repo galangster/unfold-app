@@ -10,6 +10,7 @@ import {
   buildNotificationPreferenceRequestBody,
   buildReadingRouteFromRevealParams,
   createNotificationNavigationCoordinator,
+  getCompletedUserRedirectDisposition,
   normalizePreferredNotificationTime,
   shouldHandleNotificationData,
   shouldHydrateNotificationResponse,
@@ -202,6 +203,52 @@ describe('push notification helpers', () => {
       expect(
         shouldMarkNotificationNavigationReady({ pathname: '/', rootNavigationKey: undefined }),
       ).toBe(false);
+    });
+  });
+
+  describe('getCompletedUserRedirectDisposition', () => {
+    it('skips the completed-user home redirect when notification navigation is pending', () => {
+      expect(
+        getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: true,
+          hasSettledInitialNotificationHydration: false,
+          startedAtMs: 1_000,
+          nowMs: 1_100,
+        }),
+      ).toBe('skip');
+    });
+
+    it('waits briefly while initial notification hydration is still unresolved', () => {
+      expect(
+        getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: false,
+          hasSettledInitialNotificationHydration: false,
+          startedAtMs: 1_000,
+          nowMs: 1_500,
+        }),
+      ).toBe('wait');
+    });
+
+    it('redirects immediately once hydration settles and no notification route is pending', () => {
+      expect(
+        getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: false,
+          hasSettledInitialNotificationHydration: true,
+          startedAtMs: 1_000,
+          nowMs: 1_050,
+        }),
+      ).toBe('redirect');
+    });
+
+    it('redirects after the hydration wait window expires even if hydration never explicitly settles', () => {
+      expect(
+        getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: false,
+          hasSettledInitialNotificationHydration: false,
+          startedAtMs: 1_000,
+          nowMs: 5_100,
+        }),
+      ).toBe('redirect');
     });
   });
 

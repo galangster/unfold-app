@@ -26,6 +26,7 @@ import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
 import { hasPendingNotificationNavigation, hasSettledInitialNotificationHydration } from '@/lib/push-notifications';
+import { getCompletedUserRedirectDisposition } from '@/lib/push-notification-helpers';
 import {
   FEATURE_PAGES,
   CardAnimation,
@@ -35,7 +36,6 @@ import {
 
 const BG = 'transparent';
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
-const COMPLETED_USER_REDIRECT_DELAY_MS = 1200;
 
 // ─── Single character with pre-rendered fade ───────────────────────
 const RevealChar = React.memo(function RevealChar({
@@ -262,24 +262,37 @@ export default function WelcomeScreen() {
     if (user?.hasCompletedOnboarding) {
       let cancelled = false;
       const startedAt = Date.now();
+      let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
       const maybeRedirectCompletedUser = () => {
         if (cancelled) return;
-        if (hasPendingNotificationNavigation()) {
+
+        const disposition = getCompletedUserRedirectDisposition({
+          hasPendingNotificationNavigation: hasPendingNotificationNavigation(),
+          hasSettledInitialNotificationHydration: hasSettledInitialNotificationHydration(),
+          startedAtMs: startedAt,
+          nowMs: Date.now(),
+        });
+
+        if (disposition === 'skip') {
           console.log('[Welcome] pending notification navigation detected after hydration check, skipping completed-user home redirect');
           return;
         }
-        if (!hasSettledInitialNotificationHydration() && Date.now() - startedAt < 4000) {
-          setTimeout(maybeRedirectCompletedUser, 150);
+
+        if (disposition === 'wait') {
+          retryTimer = setTimeout(maybeRedirectCompletedUser, 150);
           return;
         }
+
         router.replace('/(tabs)/(today)');
       };
 
-      const redirectTimer = setTimeout(maybeRedirectCompletedUser, COMPLETED_USER_REDIRECT_DELAY_MS);
+      maybeRedirectCompletedUser();
       return () => {
         cancelled = true;
-        clearTimeout(redirectTimer);
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+        }
       };
     }
     iconOpacity.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));

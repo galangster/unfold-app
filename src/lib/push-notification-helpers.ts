@@ -122,6 +122,30 @@ export function shouldMarkNotificationNavigationReady({
   return Boolean(pathname && rootNavigationKey);
 }
 
+export function getCompletedUserRedirectDisposition({
+  hasPendingNotificationNavigation,
+  hasSettledInitialNotificationHydration,
+  startedAtMs,
+  nowMs,
+  hydrationWaitWindowMs = 4_000,
+}: {
+  hasPendingNotificationNavigation: boolean;
+  hasSettledInitialNotificationHydration: boolean;
+  startedAtMs: number;
+  nowMs: number;
+  hydrationWaitWindowMs?: number;
+}): 'skip' | 'wait' | 'redirect' {
+  if (hasPendingNotificationNavigation) {
+    return 'skip';
+  }
+
+  if (!hasSettledInitialNotificationHydration && nowMs - startedAtMs < hydrationWaitWindowMs) {
+    return 'wait';
+  }
+
+  return 'redirect';
+}
+
 export type RevealNotificationRoute = {
   pathname: '/reveal';
   params: {
