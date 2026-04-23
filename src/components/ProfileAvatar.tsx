@@ -169,7 +169,6 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
   }, [profilePicture, updateUser]);
 
   const showEditOptions = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const options = profilePicture
       ? ['Choose Photo', 'Remove Photo', 'Cancel']
       : ['Choose Photo', 'Cancel'];

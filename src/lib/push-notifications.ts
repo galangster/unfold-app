@@ -33,6 +33,8 @@ const notificationNavigationCoordinator = createNotificationNavigationCoordinato
   },
 });
 
+let initialNotificationHydrationSettled = false;
+
 function getNotificationResponseKey(
   response: Notifications.NotificationResponse | null | undefined,
 ): string | undefined {
@@ -40,25 +42,29 @@ function getNotificationResponseKey(
 }
 
 async function hydrateLastNotificationResponse(): Promise<void> {
-  const response = await Notifications.getLastNotificationResponseAsync();
-  if (!response) return;
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (!response) return;
 
-  const tappedAt = response.notification.date;
-  const now = Date.now();
-  if (!shouldHydrateNotificationResponse({ tappedAtMs: tappedAt, nowMs: now })) {
-    return;
-  }
+    const tappedAt = response.notification.date;
+    const now = Date.now();
+    if (!shouldHydrateNotificationResponse({ tappedAtMs: tappedAt, nowMs: now })) {
+      return;
+    }
 
-  const data = response.notification.request.content.data;
-  if (!data) return;
+    const data = response.notification.request.content.data;
+    if (!data) return;
 
-  logger.log('[push] Notification tapped (cold start), data:', data);
-  const queued = notificationNavigationCoordinator.queueFromData(
-    data,
-    getNotificationResponseKey(response),
-  );
-  if (queued) {
-    await Notifications.clearLastNotificationResponseAsync();
+    logger.log('[push] Notification tapped (cold start), data:', data);
+    const queued = notificationNavigationCoordinator.queueFromData(
+      data,
+      getNotificationResponseKey(response),
+    );
+    if (queued) {
+      await Notifications.clearLastNotificationResponseAsync();
+    }
+  } finally {
+    initialNotificationHydrationSettled = true;
   }
 }
 
@@ -193,6 +199,10 @@ export function setNotificationNavigationReady(ready: boolean): void {
 
 export function hasPendingNotificationNavigation(): boolean {
   return notificationNavigationCoordinator.hasPendingRoute();
+}
+
+export function hasSettledInitialNotificationHydration(): boolean {
+  return initialNotificationHydrationSettled;
 }
 
 /**

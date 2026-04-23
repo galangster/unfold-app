@@ -25,7 +25,7 @@ import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
 import { EmberParticles } from '@/components/EmberParticles';
-import { hasPendingNotificationNavigation } from '@/lib/push-notifications';
+import { hasPendingNotificationNavigation, hasSettledInitialNotificationHydration } from '@/lib/push-notifications';
 import {
   FEATURE_PAGES,
   CardAnimation,
@@ -260,15 +260,27 @@ export default function WelcomeScreen() {
   // ─── Initial mount animations ───────────────────────────────────
   useEffect(() => {
     if (user?.hasCompletedOnboarding) {
-      const redirectTimer = setTimeout(() => {
+      let cancelled = false;
+      const startedAt = Date.now();
+
+      const maybeRedirectCompletedUser = () => {
+        if (cancelled) return;
         if (hasPendingNotificationNavigation()) {
-          console.log('[Welcome] pending notification navigation detected after startup delay, skipping completed-user home redirect');
+          console.log('[Welcome] pending notification navigation detected after hydration check, skipping completed-user home redirect');
+          return;
+        }
+        if (!hasSettledInitialNotificationHydration() && Date.now() - startedAt < 4000) {
+          setTimeout(maybeRedirectCompletedUser, 150);
           return;
         }
         router.replace('/(tabs)/(today)');
-      }, COMPLETED_USER_REDIRECT_DELAY_MS);
+      };
 
-      return () => clearTimeout(redirectTimer);
+      const redirectTimer = setTimeout(maybeRedirectCompletedUser, COMPLETED_USER_REDIRECT_DELAY_MS);
+      return () => {
+        cancelled = true;
+        clearTimeout(redirectTimer);
+      };
     }
     iconOpacity.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
     iconScale.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
