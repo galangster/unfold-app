@@ -58,6 +58,7 @@ export default function RevealScreen() {
 
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
+  const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
 
 
   // ─── Entrance stagger state ────────────────────────────────────
@@ -155,6 +156,15 @@ export default function RevealScreen() {
       console.log('[Reveal] setCurrentDevotional', devotionalId);
       setCurrentDevotional(devotionalId);
     }
+    console.log('[Reveal] setResumeContext for reading handoff', { devotionalId, dayNumber });
+    setResumeContext({
+      route: 'reading',
+      devotionalId,
+      dayNumber: Number(dayNumber ?? '1'),
+      devotionalTitle: seriesTitle,
+      dayTitle,
+      touchedAt: new Date().toISOString(),
+    });
     // Flag the transition so the home screen renders blank during the brief
     // moment React Navigation renders the tab index before the reading screen.
     console.log('[Reveal] setRevealTransitioning(true)');
@@ -181,7 +191,7 @@ export default function RevealScreen() {
       }),
     );
     console.log('[Reveal] navigateToReading DONE');
-  }, [devotionalId, dayNumber, router, markDayAsRevealed, setCurrentDevotional]);
+  }, [devotionalId, dayNumber, router, markDayAsRevealed, setCurrentDevotional, setResumeContext, seriesTitle, dayTitle]);
 
   const fireApproachHaptic = useCallback(() => {
     Haptics.selectionAsync();

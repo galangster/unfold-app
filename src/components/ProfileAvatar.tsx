@@ -8,7 +8,7 @@ import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface ProfileAvatarProps {
   /** Circle diameter in points */
@@ -30,9 +30,15 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
   const initial = (userName || '?')[0].toUpperCase();
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const hasRenderableProfilePicture = Boolean(profilePicture) && !imageLoadFailed;
   const fontSize = size * 0.42;
   const badgeSize = size * 0.32;
   const badgeIconSize = badgeSize * 0.55;
+
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [profilePicture]);
 
   const savePhoto = useCallback(async (uri: string) => {
     try {
@@ -89,7 +95,15 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
       }
     }
     updateUser({ profilePicture: null });
+    setImageLoadFailed(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [profilePicture, updateUser]);
+
+  const handleImageError = useCallback(() => {
+    setImageLoadFailed(true);
+    if (profilePicture) {
+      updateUser({ profilePicture: null });
+    }
   }, [profilePicture, updateUser]);
 
   const showEditOptions = useCallback(() => {
@@ -124,17 +138,18 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: profilePicture ? 'transparent' : alpha(colors.accent, 0.13),
+          backgroundColor: hasRenderableProfilePicture ? 'transparent' : alpha(colors.accent, 0.13),
           justifyContent: 'center',
           alignItems: 'center',
           overflow: 'hidden',
         }}
       >
-        {profilePicture ? (
+        {hasRenderableProfilePicture ? (
           <Image
-            source={{ uri: profilePicture }}
+            source={{ uri: profilePicture! }}
             style={{ width: size, height: size, borderRadius: size / 2 }}
             resizeMode="cover"
+            onError={handleImageError}
           />
         ) : (
           <Text
