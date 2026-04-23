@@ -115,7 +115,8 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
       // Delete old photo if exists
       if (profilePicture) {
         try {
-          await deleteAsync(profilePicture, { idempotent: true });
+          const existingPath = toDocumentAvatarUri(getProfileAvatarFileName(profilePicture)) ?? profilePicture;
+          await deleteAsync(existingPath, { idempotent: true });
         } catch {
           // ignore cleanup failures
         }
@@ -132,7 +133,7 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
   const pickPhoto = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
@@ -207,7 +208,7 @@ export function ProfileAvatar({ size = 36, editable = false, onPress }: ProfileA
       >
         {hasRenderableProfilePicture ? (
           <Image
-            source={{ uri: profilePicture! }}
+            source={{ uri: resolvedProfilePicture! }}
             style={{ width: size, height: size, borderRadius: size / 2 }}
             resizeMode="cover"
             onError={handleImageError}

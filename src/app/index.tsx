@@ -35,6 +35,7 @@ import {
 
 const BG = 'transparent';
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
+const COMPLETED_USER_REDIRECT_DELAY_MS = 1200;
 
 // ─── Single character with pre-rendered fade ───────────────────────
 const RevealChar = React.memo(function RevealChar({
@@ -259,12 +260,15 @@ export default function WelcomeScreen() {
   // ─── Initial mount animations ───────────────────────────────────
   useEffect(() => {
     if (user?.hasCompletedOnboarding) {
-      if (hasPendingNotificationNavigation()) {
-        console.log('[Welcome] pending notification navigation detected, skipping completed-user home redirect');
-        return;
-      }
-      router.replace('/(tabs)/(today)');
-      return;
+      const redirectTimer = setTimeout(() => {
+        if (hasPendingNotificationNavigation()) {
+          console.log('[Welcome] pending notification navigation detected after startup delay, skipping completed-user home redirect');
+          return;
+        }
+        router.replace('/(tabs)/(today)');
+      }, COMPLETED_USER_REDIRECT_DELAY_MS);
+
+      return () => clearTimeout(redirectTimer);
     }
     iconOpacity.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
     iconScale.value = withDelay(100, withTiming(1, { duration: 800, easing: EASE }));
