@@ -186,12 +186,22 @@ describe('push notification helpers', () => {
   });
 
   describe('shouldMarkNotificationNavigationReady', () => {
-    it('treats the root welcome screen as navigation-ready so cold-start notifications can replace it', () => {
-      expect(shouldMarkNotificationNavigationReady('/')).toBe(true);
+    it('treats the root welcome screen as navigation-ready once the root stack exists so cold-start notifications can replace it', () => {
+      expect(
+        shouldMarkNotificationNavigationReady({ pathname: '/', rootNavigationKey: 'root-key' }),
+      ).toBe(true);
     });
 
     it('treats unresolved pathname values as not ready', () => {
-      expect(shouldMarkNotificationNavigationReady('')).toBe(false);
+      expect(
+        shouldMarkNotificationNavigationReady({ pathname: '', rootNavigationKey: 'root-key' }),
+      ).toBe(false);
+    });
+
+    it('waits for the root navigation container before declaring cold-start notification routing ready', () => {
+      expect(
+        shouldMarkNotificationNavigationReady({ pathname: '/', rootNavigationKey: undefined }),
+      ).toBe(false);
     });
   });
 

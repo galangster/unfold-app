@@ -1,5 +1,5 @@
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack, useNavigationContainerRef, usePathname } from 'expo-router';
+import { Stack, useNavigationContainerRef, usePathname, useRootNavigationState } from 'expo-router';
 import * as Sentry from '@sentry/react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Application from 'expo-application';
@@ -94,6 +94,7 @@ function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
   const ref = useNavigationContainerRef();
   const pathname = usePathname();
+  const rootNavigationState = useRootNavigationState();
   const reminderTime = useUnfoldStore((s) => s.user?.reminderTime ?? '');
 
   // Sync RevenueCat subscription status with Zustand store
@@ -128,12 +129,21 @@ function RootLayoutNav() {
   }, []);
 
   useEffect(() => {
-    // The root `/` welcome screen is a real, mounted route. Cold-start
-    // notification navigation must be allowed to replace it immediately.
-    const ready = shouldMarkNotificationNavigationReady(pathname);
-    logger.log('[push] notification navigation readiness', { pathname, ready });
+    // Cold-start notification routing needs both a concrete pathname AND a
+    // mounted root navigation state. Pathname alone can become truthy before
+    // the native stack is ready to honor a replace(), causing the queued route
+    // to be lost and the app to settle on Home.
+    const ready = shouldMarkNotificationNavigationReady({
+      pathname,
+      rootNavigationKey: rootNavigationState?.key,
+    });
+    logger.log('[push] notification navigation readiness', {
+      pathname,
+      rootNavigationKey: rootNavigationState?.key,
+      ready,
+    });
     setNotificationNavigationReady(ready);
-  }, [pathname]);
+  }, [pathname, rootNavigationState?.key]);
 
   // One-time migration of local generation data to server
   useEffect(() => {

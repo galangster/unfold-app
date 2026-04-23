@@ -114,8 +114,14 @@ export function shouldHydrateNotificationResponse({
   return nowMs >= tappedAtMs && nowMs - tappedAtMs <= maxAgeMs;
 }
 
-export function shouldMarkNotificationNavigationReady(pathname?: string | null): boolean {
-  return Boolean(pathname);
+export function shouldMarkNotificationNavigationReady({
+  pathname,
+  rootNavigationKey,
+}: {
+  pathname?: string | null;
+  rootNavigationKey?: string | null;
+}): boolean {
+  return Boolean(pathname && rootNavigationKey);
 }
 
 export type RevealNotificationRoute = {
