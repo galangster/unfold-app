@@ -67,7 +67,12 @@ import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { submitGenerationJob } from '@/lib/generation-api';
-import { getFilteredOnboardingSteps, getInitialOnboardingStepId } from '@/lib/onboarding-step-helpers';
+import {
+  buildOnboardingSampleGenerationRequest,
+  getFilteredOnboardingSteps,
+  getInitialOnboardingStepId,
+  shouldStartOnboardingSampleGeneration,
+} from '@/lib/onboarding-step-helpers';
 import { ShockStat } from '@/components/onboarding/ShockStat';
 import { GrowthGraph } from '@/components/onboarding/GrowthGraph';
 import { MultiSelectPills } from '@/components/onboarding/MultiSelectPills';
@@ -1083,32 +1088,21 @@ export default function OnboardingScreen() {
       }
     }
 
-    // Fire-and-forget: trigger onboarding devotional generation after aspiration
+    // Fire-and-forget: trigger the one-off onboarding sample devotional after aspiration
     // so content generates in the background while the user continues through buffer screens.
-    if (currentStepId === 'aspiration') {
-      submitGenerationJob({
-        jobType: 'onboarding',
-        dayNumber: 1,
-        userContext: {
-          name: data.name || existingUser?.name || '',
-          aboutMe: data.aboutMe || existingUser?.aboutMe || '',
-          situation: data.currentSituation || '',
-          emotion: '',
-          faith: '',
-          seeking: data.aspiration || '',
-          themeCategory: '',
-          devotionalType: '',
-          readingDuration: 5,
-          bibleTranslation: existingUser?.bibleTranslation || 'BSB',
-          relationshipWithGod: data.relationshipWithGod || 'ups-and-downs',
-          growthGoals: data.growthGoals || [],
-          obstacles: data.obstacles || [],
-        },
-      }).then(({ jobId }) => {
+    if (shouldStartOnboardingSampleGeneration({
+      currentStepId,
+      existingJobId: onboardingJobIdRef.current,
+      existingDevotionalDay: onboardingDevotionalDay,
+    })) {
+      submitGenerationJob(buildOnboardingSampleGenerationRequest({
+        answers: data,
+        existingUser,
+      })).then(({ jobId }) => {
         onboardingJobIdRef.current = jobId;
-        console.log('[Onboarding] Generation triggered, jobId:', jobId);
+        console.log('[Onboarding] Sample generation triggered, jobId:', jobId);
       }).catch((err) => {
-        console.warn('[Onboarding] Background generation failed:', err);
+        console.warn('[Onboarding] Background sample generation failed:', err);
       });
     }
 
@@ -2498,25 +2492,10 @@ export default function OnboardingScreen() {
           colors={colors}
           jobId={onboardingJobIdRef.current}
           submitFallback={!onboardingJobIdRef.current ? async () => {
-            const { jobId } = await submitGenerationJob({
-              jobType: 'onboarding',
-              dayNumber: 1,
-              userContext: {
-                name: data.name || existingUser?.name || '',
-                aboutMe: data.aboutMe || existingUser?.aboutMe || '',
-                situation: '',
-                emotion: '',
-                faith: '',
-                seeking: data.aspiration || data.spiritualSeeking || '',
-                themeCategory: '',
-                devotionalType: '',
-                readingDuration: 5,
-                bibleTranslation: existingUser?.bibleTranslation || 'BSB',
-                relationshipWithGod: data.relationshipWithGod || 'ups-and-downs',
-                growthGoals: data.growthGoals || [],
-                obstacles: data.obstacles || [],
-              },
-            });
+            const { jobId } = await submitGenerationJob(buildOnboardingSampleGenerationRequest({
+              answers: data,
+              existingUser,
+            }));
             onboardingJobIdRef.current = jobId;
             return jobId;
           } : undefined}

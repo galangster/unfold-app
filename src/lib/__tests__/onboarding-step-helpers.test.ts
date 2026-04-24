@@ -1,4 +1,13 @@
-import { getFilteredOnboardingSteps, getInitialOnboardingStepId } from '../onboarding-step-helpers';
+jest.mock('@/lib/mmkv-storage', () => ({
+  getDeviceId: jest.fn(() => 'device-123'),
+}));
+
+import {
+  buildOnboardingSampleGenerationRequest,
+  getFilteredOnboardingSteps,
+  getInitialOnboardingStepId,
+  shouldStartOnboardingSampleGeneration,
+} from '../onboarding-step-helpers';
 
 describe('onboarding step helpers', () => {
   const allSteps = [
@@ -88,5 +97,65 @@ describe('onboarding step helpers', () => {
     expect(
       getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'type', selectedType: 'book_study' }).map((step) => step.id),
     ).toContain('studySubject');
+  });
+
+  describe('onboarding sample generation', () => {
+    const answers = {
+      name: 'Nick',
+      aboutMe: 'Building Unfold',
+      currentSituation: 'I need peace in a launch week',
+      aspiration: 'I want to trust God with the outcome',
+      relationshipWithGod: 'ups-and-downs',
+      growthGoals: ['pray more honestly'],
+      obstacles: ['anxiety'],
+    };
+
+    it('uses a backend-scoped anonymous sample devotional identity and onboarding job type', () => {
+      const request = buildOnboardingSampleGenerationRequest({
+        answers,
+        existingUser: { name: 'Nicholas', aboutMe: 'Fallback', bibleTranslation: 'ESV' },
+      });
+
+      expect(request).toMatchObject({
+        devotionalId: 'onboarding-sample-anon_device-123',
+        dayNumber: 1,
+        jobType: 'onboarding',
+      });
+      expect(request.jobType).not.toBe('initial_arc');
+      expect(request.jobType).not.toBe('day');
+      expect(request.userContext).toMatchObject({
+        name: 'Nick',
+        aboutMe: 'Building Unfold',
+        situation: 'I need peace in a launch week',
+        seeking: 'I want to trust God with the outcome',
+        bibleTranslation: 'ESV',
+      });
+    });
+
+    it('dedupes repeated transitions out of aspiration once a sample job exists', () => {
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: null,
+          existingDevotionalDay: null,
+        }),
+      ).toBe(true);
+
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: 'job-1',
+          existingDevotionalDay: null,
+        }),
+      ).toBe(false);
+
+      expect(
+        shouldStartOnboardingSampleGeneration({
+          currentStepId: 'aspiration',
+          existingJobId: null,
+          existingDevotionalDay: { id: 'day-1' },
+        }),
+      ).toBe(false);
+    });
   });
 });

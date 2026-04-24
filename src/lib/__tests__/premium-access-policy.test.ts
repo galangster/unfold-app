@@ -12,6 +12,8 @@
  * why tri-state exists.
  */
 
+import { canUsePremiumFeature } from '../premium-access-helpers';
+
 type Policy = 'granted' | 'denied' | 'unknown';
 
 interface Inputs {
@@ -178,6 +180,17 @@ describe('Premium access policy — tri-state decision logic', () => {
           isPremium: false,
         }),
       ).toBe('unknown');
+    });
+  });
+
+  describe('premium feature gates', () => {
+    it('fails closed for premium unlocks while entitlement is unknown', () => {
+      expect(canUsePremiumFeature('unknown')).toBe(false);
+    });
+
+    it('only unlocks premium features when policy is granted', () => {
+      expect(canUsePremiumFeature('granted')).toBe(true);
+      expect(canUsePremiumFeature('denied')).toBe(false);
     });
   });
 });

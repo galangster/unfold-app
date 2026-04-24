@@ -1,13 +1,17 @@
+import { getDeviceId } from '@/lib/mmkv-storage';
+
 type OnboardingStepLike = {
   id: string;
   skipIfHasValue?: boolean;
 };
 
 type ExistingUserLike = {
+  id?: string | null;
   hasCompletedOnboarding?: boolean;
   name?: string | null;
   aboutMe?: string | null;
   reminderTime?: string | null;
+  bibleTranslation?: string | null;
 } | null | undefined;
 
 type OnboardingSelectionContext = {
@@ -77,4 +81,85 @@ export function getInitialOnboardingStepId<T extends OnboardingStepLike>(
   selectionContext?: OnboardingSelectionContext,
 ): string {
   return getFilteredOnboardingSteps(allSteps, existingUser, selectionContext)[0]?.id ?? 'hook';
+}
+
+type OnboardingSampleAnswers = {
+  name?: string | null;
+  aboutMe?: string | null;
+  currentSituation?: string | null;
+  spiritualSeeking?: string | null;
+  aspiration?: string | null;
+  relationshipWithGod?: string | null;
+  growthGoals?: string[] | null;
+  obstacles?: string[] | null;
+};
+
+export type OnboardingSampleGenerationRequest = {
+  devotionalId: string;
+  dayNumber: 1;
+  jobType: 'onboarding';
+  userContext: {
+    name: string;
+    aboutMe: string;
+    situation: string;
+    emotion: string;
+    faith: string;
+    seeking: string;
+    themeCategory: string;
+    devotionalType: string;
+    readingDuration: number;
+    bibleTranslation: string;
+    relationshipWithGod: string;
+    growthGoals: string[];
+    obstacles: string[];
+  };
+};
+
+function sampleValue(value: string | null | undefined): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function buildOnboardingSampleDevotionalId(): string {
+  return `onboarding-sample-anon_${getDeviceId()}`;
+}
+
+export function buildOnboardingSampleGenerationRequest({
+  answers,
+  existingUser,
+}: {
+  answers: OnboardingSampleAnswers;
+  existingUser: ExistingUserLike;
+}): OnboardingSampleGenerationRequest {
+  return {
+    devotionalId: buildOnboardingSampleDevotionalId(),
+    dayNumber: 1,
+    jobType: 'onboarding',
+    userContext: {
+      name: sampleValue(answers.name).trim() || sampleValue(existingUser?.name),
+      aboutMe: sampleValue(answers.aboutMe).trim() || sampleValue(existingUser?.aboutMe),
+      situation: sampleValue(answers.currentSituation),
+      emotion: '',
+      faith: '',
+      seeking: sampleValue(answers.aspiration).trim() || sampleValue(answers.spiritualSeeking),
+      themeCategory: '',
+      devotionalType: '',
+      readingDuration: 5,
+      bibleTranslation: sampleValue(existingUser?.bibleTranslation).trim() || 'BSB',
+      relationshipWithGod: sampleValue(answers.relationshipWithGod).trim() || 'ups-and-downs',
+      growthGoals: answers.growthGoals ?? [],
+      obstacles: answers.obstacles ?? [],
+    },
+  };
+}
+
+export function shouldStartOnboardingSampleGeneration({
+  currentStepId,
+  existingJobId,
+  existingDevotionalDay,
+}: {
+  currentStepId: string;
+  existingJobId?: string | null;
+  existingDevotionalDay?: unknown | null;
+}): boolean {
+  return currentStepId === 'aspiration' && !existingJobId && !existingDevotionalDay;
 }

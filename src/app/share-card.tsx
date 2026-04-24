@@ -34,8 +34,9 @@ import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
+import { canUsePremiumFeature } from '@/lib/premium-access-helpers';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -125,7 +126,8 @@ export default function ShareCardScreen() {
     type?: string;
   }>();
 
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = canUsePremiumFeature(premiumPolicy);
 
   const text = params.text ?? '';
   const reference = params.reference ?? '';
