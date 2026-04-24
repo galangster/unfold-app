@@ -663,6 +663,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     lineDecorationOverlay.invalidate()
     needsCaretVisibilityAfterLayout = true
     scheduleHtmlEmit()
+    refreshSelectionState()
   }
 
   func editor(_ editor: EditorView, didLayout content: NSAttributedString) {

@@ -56,6 +56,7 @@ import { PRIMARY_BACKEND_URL, getAuthHeaders, sanitizeForPrompt } from '@/lib/ap
 import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
+import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
@@ -892,7 +893,7 @@ Their journal entry:
                     ref={inputRef}
                     value={content}
                     onChangeText={handleTextChange}
-                    placeholder={currentDay?.reflectionQuestions?.[0] ?? "Write your thoughts..."}
+                    placeholder={buildFreeWritePlaceholder({ reflectionQuestions: currentDay?.reflectionQuestions })}
                     placeholderTextColor={colors.textHint}
                     multiline
                     textAlignVertical="top"
