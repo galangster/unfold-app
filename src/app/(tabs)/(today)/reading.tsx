@@ -35,7 +35,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
-import type { FontSize as FontSizePreference } from '@/lib/store';
+import type { FontSize as FontSizePreference, Highlight } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
@@ -140,7 +140,7 @@ function ShimmerBar({ bg, width, delay }: { bg: string; width: DimensionValue; d
 export default function ReadingScreen() {
   console.log('[Reading] RENDER CALLED');
   const router = useRouter();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string }>();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
 
@@ -287,9 +287,31 @@ export default function ReadingScreen() {
 
   // Get highlights for current day
   const currentDayHighlights = useMemo(() => {
-    if (!currentDevotionalId) return [];
-    return highlights.filter((h) => h.devotionalId === currentDevotionalId && h.dayNumber === viewingDay);
-  }, [highlights, currentDevotionalId, viewingDay]);
+    if (!effectiveDevotionalId) return [];
+    return highlights.filter((h) => h.devotionalId === effectiveDevotionalId && h.dayNumber === viewingDay);
+  }, [highlights, effectiveDevotionalId, viewingDay]);
+
+  const targetHighlight = useMemo<Highlight | null>(() => {
+    if (!params.highlightId || !effectiveDevotionalId) return null;
+    const match = highlights.find((h) => h.id === params.highlightId);
+    if (!match) return null;
+    if (match.devotionalId !== effectiveDevotionalId || match.dayNumber !== viewingDay) return null;
+    return match;
+  }, [highlights, params.highlightId, effectiveDevotionalId, viewingDay]);
+
+  const handleTargetHighlightLocated = useCallback((contentY: number) => {
+    const y = Math.max(0, contentY - 96);
+    const scrollToTarget = () => {
+      scrollViewRef.current?.scrollTo({
+        y,
+        animated: true,
+      });
+    };
+
+    scrollToTarget();
+    setTimeout(scrollToTarget, 250);
+    setTimeout(scrollToTarget, 650);
+  }, []);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   // Only show retry banner if this specific series has ungenerated days
   // Compare against totalDays (the series plan), not expectedDays (user preference)
@@ -1571,6 +1593,8 @@ export default function ReadingScreen() {
                 onQuoteSelected={handleQuoteSelected}
                 onHighlightRemoved={handleHighlightRemoved}
                 existingHighlights={currentDayHighlights}
+                targetHighlight={targetHighlight}
+                onTargetHighlightLocated={handleTargetHighlightLocated}
                 scrollViewRef={scrollViewRef}
                 onScriptureTap={(ref) => {
                   const parsed = referenceToRoute(ref);

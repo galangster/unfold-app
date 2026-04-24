@@ -147,6 +147,7 @@ export default function MyContentScreen() {
         params: {
           devotionalId: h.devotionalId,
           dayNumber: h.dayNumber.toString(),
+          highlightId: h.id,
         },
       });
       return;

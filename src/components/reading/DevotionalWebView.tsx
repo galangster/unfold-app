@@ -28,6 +28,8 @@ interface DevotionalWebViewProps {
   onQuoteSelected?: (quote: Quote) => void;
   onHighlightRemoved?: (event: HighlightRemovedEvent) => void;
   existingHighlights?: Highlight[];
+  targetHighlight?: Highlight | null;
+  onTargetHighlightLocated?: (y: number) => void;
   onScriptureTap?: (reference: string) => void;
   devotionalId?: string;
   devotionalTitle?: string;
@@ -53,6 +55,8 @@ export function DevotionalWebView({
   onQuoteSelected,
   onHighlightRemoved,
   existingHighlights = [],
+  targetHighlight,
+  onTargetHighlightLocated,
   onScriptureTap,
   devotionalId,
   devotionalTitle,
@@ -74,6 +78,16 @@ export function DevotionalWebView({
         allSerializedRanges.push(h.serializedRange);
       }
     });
+    const targetHighlightPayload = targetHighlight
+      ? {
+          id: targetHighlight.id,
+          highlightedText: targetHighlight.highlightedText,
+          serializedRange: targetHighlight.serializedRange,
+          color: targetHighlight.color,
+          contextBefore: targetHighlight.contextBefore,
+          contextAfter: targetHighlight.contextAfter,
+        }
+      : null;
 
     return `
       // Wait for rangy to load (loaded from CDN in HTML head)
@@ -112,6 +126,7 @@ export function DevotionalWebView({
         // Each stored range may or may not include the "type:textContent" header;
         // we ensure exactly one header is present at the front.
         const allRanges = ${JSON.stringify(allSerializedRanges)};
+        const targetHighlight = ${JSON.stringify(targetHighlightPayload)};
         if (allRanges.length > 0) {
           var typeHeader = 'type:textContent';
           var dataEntriesSet = {};
@@ -149,6 +164,9 @@ export function DevotionalWebView({
         
         // Report height after highlights applied
         setTimeout(reportHeight, 100);
+        setTimeout(locateTargetHighlight, 150);
+        setTimeout(locateTargetHighlight, 500);
+        setTimeout(locateTargetHighlight, 1000);
       }
       
       function reportHeight() {
@@ -156,6 +174,88 @@ export function DevotionalWebView({
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'HEIGHT_CHANGE',
           height: height
+        }));
+      }
+
+      function normalizeText(value) {
+        return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      }
+
+      function serializedEntries(value) {
+        return String(value || '')
+          .split('|')
+          .filter(function(part) { return part && !part.startsWith('type:'); });
+      }
+
+      function getTextAroundMark(mark) {
+        try {
+          const beforeRange = document.createRange();
+          beforeRange.setStart(document.body, 0);
+          beforeRange.setEndBefore(mark);
+
+          const afterRange = document.createRange();
+          afterRange.setStartAfter(mark);
+          afterRange.setEnd(document.body, document.body.childNodes.length);
+
+          return {
+            before: normalizeText(beforeRange.toString()).slice(-160),
+            after: normalizeText(afterRange.toString()).slice(0, 160)
+          };
+        } catch (_) {
+          return { before: '', after: '' };
+        }
+      }
+
+      function locateTargetHighlight() {
+        if (!targetHighlight) return;
+        const targetText = normalizeText(targetHighlight.highlightedText);
+        if (!targetText) return;
+
+        const targetColor = normalizeText(targetHighlight.color);
+        const contextBefore = normalizeText(targetHighlight.contextBefore).slice(-80);
+        const contextAfter = normalizeText(targetHighlight.contextAfter).slice(0, 80);
+        const targetSerializedEntries = serializedEntries(targetHighlight.serializedRange);
+        const marks = Array.from(document.querySelectorAll('mark'));
+        let best = null;
+        let bestScore = -1;
+
+        marks.forEach(function(mark) {
+          const markText = normalizeText(mark.textContent);
+          if (!markText) return;
+
+          let score = 0;
+          try {
+            const rangyHighlight = window.rangyHighlighter && window.rangyHighlighter.getHighlightForElement
+              ? window.rangyHighlighter.getHighlightForElement(mark)
+              : null;
+            const markSerialized = getRangySerial(rangyHighlight);
+            if (markSerialized && targetSerializedEntries.indexOf(markSerialized) >= 0) {
+              score += 10000;
+            }
+          } catch (_) {}
+
+          if (markText === targetText) score += 100;
+          else if (markText.includes(targetText) || targetText.includes(markText)) score += 60;
+          else return;
+
+          if (targetColor && String(mark.className || '').toLowerCase().includes(targetColor)) score += 20;
+
+          const surrounding = getTextAroundMark(mark);
+          if (contextBefore && surrounding.before.includes(contextBefore)) score += 10;
+          if (contextAfter && surrounding.after.includes(contextAfter)) score += 10;
+
+          if (score > bestScore) {
+            best = mark;
+            bestScore = score;
+          }
+        });
+
+        if (!best) return;
+        const rect = best.getBoundingClientRect();
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'TARGET_HIGHLIGHT_LOCATED',
+          highlightId: targetHighlight.id,
+          y: rect.top + window.scrollY,
         }));
       }
       
@@ -1195,7 +1295,7 @@ export function DevotionalWebView({
 </body>
 </html>
     `;
-  }, [day, fontSize, colors, isDark, readingFont]);
+  }, [day, fontSize, colors, isDark, readingFont, existingHighlights, targetHighlight]);
 
   const handleMessage = (event: any) => {
     try {
@@ -1218,6 +1318,8 @@ export function DevotionalWebView({
         onScriptureTap(data.reference);
       } else if (data.type === 'HEIGHT_CHANGE') {
         setWebViewHeight(Math.max(data.height, 200));
+      } else if (data.type === 'TARGET_HIGHLIGHT_LOCATED' && onTargetHighlightLocated) {
+        onTargetHighlightLocated(Math.max(0, Number(data.y) || 0));
       } else if (data.type === 'HAPTIC_SELECTION') {
         Haptics.selectionAsync();
       } else if (data.type === 'HAPTIC_IMPACT') {

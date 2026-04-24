@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
 import Animated, {
@@ -33,6 +33,8 @@ interface DevotionalContentProps {
   onQuoteSelected?: (quote: { text: string; context: string }) => void;
   onHighlightRemoved?: (event: { text: string; color: HighlightColor; context: string }) => void;
   existingHighlights?: Highlight[];
+  targetHighlight?: Highlight | null;
+  onTargetHighlightLocated?: (contentY: number) => void;
   onScriptureTap?: (reference: string) => void;
   devotionalId?: string;
   dayNumber?: number;
@@ -82,6 +84,8 @@ export function DevotionalContent({
   onQuoteSelected,
   onHighlightRemoved,
   existingHighlights,
+  targetHighlight,
+  onTargetHighlightLocated,
   onScriptureTap,
   devotionalId,
   dayNumber,
@@ -115,6 +119,15 @@ export function DevotionalContent({
   }, [day.scriptureReference]);
 
   const displayScripture = versedScripture ?? day.scriptureText;
+  const devotionalWebViewTopRef = useRef(0);
+
+  const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
+    devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
+  }, []);
+
+  const handleTargetHighlightLocated = useCallback((webViewY: number) => {
+    onTargetHighlightLocated?.(devotionalWebViewTopRef.current + webViewY);
+  }, [onTargetHighlightLocated]);
 
   // Accent line grow animation -- editorial entrance
   const accentLineWidth = useSharedValue(0);
@@ -255,17 +268,21 @@ export function DevotionalContent({
       {/* Section divider: scripture -> body */}
       <SectionDivider color={colors.textMuted} style={{ marginTop: 20, marginBottom: 8 }} />
 
-      <DevotionalWebView
-        day={day}
-        fontSize={fontSize}
-        onQuoteSelected={onQuoteSelected}
-        onHighlightRemoved={onHighlightRemoved}
-        existingHighlights={existingHighlights}
-        onScriptureTap={onScriptureTap}
-        devotionalId={devotionalId}
-        dayNumber={dayNumber}
-        dayTitle={day.title}
-      />
+      <View onLayout={handleDevotionalWebViewLayout}>
+        <DevotionalWebView
+          day={day}
+          fontSize={fontSize}
+          onQuoteSelected={onQuoteSelected}
+          onHighlightRemoved={onHighlightRemoved}
+          existingHighlights={existingHighlights}
+          targetHighlight={targetHighlight}
+          onTargetHighlightLocated={handleTargetHighlightLocated}
+          onScriptureTap={onScriptureTap}
+          devotionalId={devotionalId}
+          dayNumber={dayNumber}
+          dayTitle={day.title}
+        />
+      </View>
 
       {/* Cross References Section */}
       {day.crossReferences && day.crossReferences.length > 0 && (
