@@ -1,4 +1,4 @@
-Unfold is a Christian devotional, Bible reading, and journaling app.
+Unfold is a Christian devotional, Bible reading, and journaling app. The main experience is personalized devotional generation based on onboarding answers, followed by daily reading, journaling, Bible, and Companion reflection features.
 
 Suggested reviewer path:
 1. Open the app.
@@ -11,13 +11,19 @@ Suggested reviewer path:
 
 Important notes for review:
 - No reviewer login/account is required to access the core app flow.
-- The app’s main experience is personalized devotional generation based on onboarding answers.
+- The current release candidate is iOS build 1.0.0 (137).
 - The app includes a premium subscription paywall. Restore Purchases is available in the paywall flow.
+- Monthly and yearly subscription products use a 3-day free trial in App Store Connect.
 - Terms: https://unfoldapp.co/terms
 - Privacy: https://unfoldapp.co/privacy
 - The Companion/chat feature is intended for spiritual reflection/support and is not presented as professional counseling, therapy, crisis support, or emergency response.
 
 Permissions that may appear during review depending on feature use:
-- Notifications
-- Microphone / Speech Recognition
-- Photos
+- Notifications, for devotional and check-in reminders
+- Microphone / Speech Recognition, for voice input / dictation
+- Photos, for saving or sharing devotional images/content
+
+iOS background modes declared by the app:
+- audio
+- fetch
+- remote-notification

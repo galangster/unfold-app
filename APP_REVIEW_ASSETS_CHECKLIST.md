@@ -3,6 +3,11 @@
 ## Goal
 Capture assets that make the app legible to App Review and App Store visitors.
 
+Use the current release candidate state:
+- iOS build: **1.0.0 (137)**
+- backend: Railway production URL configured in the production EAS profile
+- no QA/debug UI should be visible in production-profile captures
+
 Prioritize the real habit loop:
 1. onboarding
 2. personalized setup
@@ -44,7 +49,8 @@ Capture a paywall screen that clearly shows:
 - premium framing
 - pricing/billing cadence
 - visual polish
-- legal/restore area if visible and not cluttered
+- Restore Purchases / legal area if visible and not cluttered
+- current 3-day trial copy if the user is eligible and the UI displays it
 
 Best candidate:
 - strongest final `ThreeStepPaywall` screen
@@ -95,6 +101,9 @@ Capture:
 - navigation/header visible enough to read as Bible context
 - clean typography and spacing
 
+Important current check:
+- Bible DB download should be verified on build 137 because build 136 still used the custom API domain for this asset.
+
 ### 8) Companion
 **Why:** shows the supportive conversational side of the app.
 
@@ -122,6 +131,7 @@ That order tells the product story clearly.
 
 ## Screenshot capture rules
 For every screenshot:
+- [ ] Use build 137 or later, not build 136
 - [ ] No debug/dev controls visible
 - [ ] No system alerts covering the UI
 - [ ] No keyboard unless intentionally part of the story
@@ -199,14 +209,14 @@ Those are the screens most likely to help Apple quickly understand what Unfold a
 ## Internal practical capture plan
 Recommended capture session order:
 1. clear simulator/device state
-2. launch app
+2. install/launch build 137 or later
 3. capture onboarding shot
 4. capture paywall shot
 5. capture generating shot
 6. capture Today shot
 7. capture Reading shot
 8. capture Journal shot
-9. capture Bible shot
+9. capture Bible shot, including successful Bible DB/content load
 10. capture Companion shot
 11. if making preview video, record in the same order
 
