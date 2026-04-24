@@ -123,15 +123,7 @@
           ]
         }
       ],
-      "./plugins/withRemoveAppGroups",
-      [
-        "@sentry/react-native",
-        {
-          "url": "https://sentry.io/",
-          "project": "unfold-react-native",
-          "organization": "the-creative-company"
-        }
-      ]
+      "./plugins/withRemoveAppGroups"
     ],
     "experiments": {
       "typedRoutes": true,

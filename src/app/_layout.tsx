@@ -1,8 +1,6 @@
 import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/native';
-import { Stack, useNavigationContainerRef, usePathname, useRootNavigationState } from 'expo-router';
-import * as Sentry from '@sentry/react-native';
+import { Stack, usePathname, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import * as Application from 'expo-application';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -28,48 +26,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 // import { GlowBackground } from '@/components/GlowBackground';
 import { AudioPlayerOverlay } from '@/components/AudioPlayerOverlay';
 
-const navigationIntegration = Sentry.reactNavigationIntegration({
-  enableTimeToInitialDisplay: true,
-});
-
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  environment: __DEV__ ? 'development' : 'production',
-  release: `unfold@${Application.nativeApplicationVersion ?? '1.0.0'}`,
-  dist: Application.nativeBuildVersion ?? '1',
-
-  // Performance: 20% of transactions in production, 5% profiled
-  tracesSampleRate: __DEV__ ? 0 : 0.2,
-  profilesSampleRate: __DEV__ ? 0 : 0.05,
-
-  // Attach screenshots and view hierarchy on crash
-  attachScreenshot: true,
-  attachViewHierarchy: true,
-  sendDefaultPii: false,
-  enableCaptureFailedRequests: true,
-  maxBreadcrumbs: 100,
-
-  integrations: [
-    navigationIntegration,
-    Sentry.mobileReplayIntegration(),
-    Sentry.httpClientIntegration(),
-    Sentry.feedbackIntegration(),
-  ],
-
-  // Session Replay — capture 10% of sessions, 100% on error
-  replaysSessionSampleRate: __DEV__ ? 0 : 0.1,
-  replaysOnErrorSampleRate: 1.0,
-
-  // Defense-in-depth: strip any PII that leaks through
-  beforeSend(event) {
-    if (event.user) {
-      delete event.user.email;
-      delete event.user.username;
-    }
-    return event;
-  },
-});
-
 export const unstable_settings = {
   initialRouteName: 'index',
 };
@@ -92,7 +48,6 @@ const queryClient = new QueryClient({
 
 function RootLayoutNav() {
   const { colors, navigationTheme, isDark } = useTheme();
-  const ref = useNavigationContainerRef();
   const pathname = usePathname();
   const rootNavigationState = useRootNavigationState();
   const reminderTime = useUnfoldStore((s) => s.user?.reminderTime ?? '');
@@ -149,30 +104,6 @@ function RootLayoutNav() {
   useEffect(() => {
     migrateGenerationDataToServer().catch(() => {});
   }, []);
-
-  // Register navigation container with Sentry for screen tracking
-  useEffect(() => {
-    if (ref) {
-      navigationIntegration.registerNavigationContainer(ref);
-    }
-  }, [ref]);
-
-  // Track premium state in Sentry tags — subscribes directly to the store
-  // so tag updates bypass the component render cycle entirely
-  useEffect(() => {
-    let prev = useUnfoldStore.getState().user?.isPremium ?? false;
-    Sentry.setTag('is_premium', String(prev));
-
-    const unsubscribe = useUnfoldStore.subscribe((state) => {
-      const current = state.user?.isPremium ?? false;
-      if (current !== prev) {
-        prev = current;
-        Sentry.setTag('is_premium', String(current));
-      }
-    });
-    return unsubscribe;
-  }, []);
-
 
   return (
     <NavigationThemeProvider value={navigationTheme}>
@@ -307,4 +238,4 @@ function RootLayout() {
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default RootLayout;

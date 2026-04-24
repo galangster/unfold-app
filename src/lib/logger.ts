@@ -18,6 +18,5 @@ export const logger = {
       console.error(...args);
     }
     // In production, errors are silently dropped from console.
-    // Crash reporting (e.g., Sentry) should be added here if needed.
   },
 };
