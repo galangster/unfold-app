@@ -32,6 +32,7 @@ import {
   TextHOneIcon,
   TextHTwoIcon,
   TextHThreeIcon,
+  ArrowsInSimpleIcon,
 } from 'phosphor-react-native';
 import {
   useEditorBridge,
@@ -54,7 +55,7 @@ import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
 import { NoteDetailSaveIndicator } from '@/components/notebook/NoteDetailSaveIndicator';
-import { isHtmlContent } from '@/components/notebook/NoteEditor';
+import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
 import { logger } from '@/lib/logger';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
@@ -80,6 +81,7 @@ import {
   getNativeListCommand,
   hasMeaningfulNoteContent,
 } from '@/lib/note-detail-editor';
+import { buildNoteDraftDockPreview, useNoteDraftDock } from '@/lib/note-draft-dock';
 
 
 /* ─────────────────────────────────────────────────────────
@@ -265,6 +267,7 @@ export default function NoteDetailScreen() {
   const folders = useUnfoldStore((s) => s.folders);
   const addFolder = useUnfoldStore((s) => s.addFolder);
   const moveNoteToFolder = useUnfoldStore((s) => s.moveNoteToFolder);
+  const setDraftDock = useNoteDraftDock((s) => s.setDraft);
 
   // Find existing note
   const existingNote = useMemo(
@@ -333,6 +336,7 @@ export default function NoteDetailScreen() {
   const [selectionState, setSelectionState] = useState(DEFAULT_SELECTION_STATE);
   // Tracks latest HTML from onChangeHtml for explicit save (Done/Back)
   const latestHtmlRef = useRef(initialContent);
+  const isMinimizingRef = useRef(false);
 
   /* ───── TipTap editor bridge (Android / inert on iOS) ───── */
 
@@ -704,6 +708,46 @@ export default function NoteDetailScreen() {
     router.back();
   }, [router, getCurrentEditorHtml, persistCurrentSnapshot]);
 
+  const handleMinimizeToBible = useCallback(async () => {
+    if (!gate() || isMinimizingRef.current) return;
+    isMinimizingRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const html = await getCurrentEditorHtml();
+      const titleVal = latestTitleRef.current;
+      const id = persistCurrentSnapshot({
+        title: titleVal,
+        html,
+        allowEmpty: true,
+        newNoteLog: '[NoteDetail] Saved note before Bible dock:',
+      });
+      if (!id) {
+        isMinimizingRef.current = false;
+        return;
+      }
+
+      const dockCopy = buildNoteDraftDockPreview({
+        title: titleVal,
+        plainText: stripHtml(html),
+      });
+      setDraftDock({
+        noteId: id,
+        title: dockCopy.title,
+        preview: dockCopy.preview,
+        updatedAt: new Date().toISOString(),
+      });
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      setSaveState('idle');
+      IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
+      router.push('/(tabs)/(bible)');
+    } catch (error) {
+      isMinimizingRef.current = false;
+      logger.error('[NoteDetail] Failed to minimize note for Bible:', error);
+    }
+  }, [editor, gate, getCurrentEditorHtml, persistCurrentSnapshot, router, setDraftDock]);
+
 
   /* ───── Menu actions ───── */
 
@@ -1047,6 +1091,19 @@ export default function NoteDetailScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerRight}>
+            {isEditing && (
+              <TouchableOpacity
+                onPress={handleMinimizeToBible}
+                style={styles.headerButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel="Minimize note and open Bible"
+              >
+                <ArrowsInSimpleIcon size={22} color={colors.textMuted} weight="light" />
+              </TouchableOpacity>
+            )}
+
             {/* Edit / Done toggle */}
             {isEditing ? (
               <TouchableOpacity
