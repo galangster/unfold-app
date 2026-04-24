@@ -21,6 +21,30 @@
 
 ---
 
+## Context: Clerk / cloud sync are intentionally on hold
+
+**Confirmed with owner 2026-04-24:** Clerk (the auth service the team was going to adopt) and the cloud-sync feature it was meant to unlock are deliberately **paused** for this release. The existing scaffolding (`feat/clerk-auth-migration` branch, FE `sync-types.ts` / `sync-ids.ts`, backend `/api/sync/push` + `/api/sync/pull` routes) is future-work, not missed work.
+
+**Near-term architecture = device-local only.** The app's identity is a device UUID in encrypted MMKV. Backend stores generation artifacts and some personal content (journals, prayers, mood check-ins, companion chats) indexed by that UUID. Reinstalling the app wipes MMKV and loses everything. Cross-device sync is a v1.1+ feature.
+
+### What this changes in the audit
+
+**Findings that soften:**
+- **UNF-006** (cloud sync unwired). The unwired state is intentional. The right move is **remove the scaffolding now** (routes + FE types) to reduce dead surface area, or leave it dormant and explicitly guarded.
+- **UNF-066** (`usesAppleSignIn: true` with no UI). Still cosmetic; can stay as-is pending Clerk.
+- **UNF-069** (`feat/clerk-auth-migration` unmerged). Not a loose end — it's parked by design.
+
+**Findings that stay critical (and some intensify):**
+- **UNF-001** (device-ID impersonation). Clerk was the clean fix; since it's on hold, the **HMAC-binding fallback is now the primary recommendation**, not the secondary. Any actor who learns a device UUID still gets the user's journals, prayers, companion chats. See the amended UNF-001 below.
+- **UNF-002** (no account deletion). Apple will treat server-stored personal content as an "account" regardless of whether you call it that. Still required. `DELETE /api/users/me` must ship.
+- **UNF-047** (Reset-data button doesn't hit server) and **UNF-048** (reinstall = data loss). Both become **more important** with sync on hold — users should be told plainly that their data is device-local and reinstalling will erase it.
+
+**A bigger question worth considering:** if sync is on hold and the app's near-term model is "device-local," does the backend even need to *persist* personal content (journals, prayers, mood check-ins)? If the app keeps all personal content in MMKV and only calls the backend for AI generation + devotional content delivery, you eliminate most of UNF-001's blast radius and drop the account-deletion requirement. The backend becomes stateless for user content. Bigger refactor, but simplifies everything. Worth a 30-minute conversation before committing to HMAC-binding the device ID.
+
+**See also:** the amended UNF-001 (HMAC primary) and UNF-006 (strip scaffolding) below.
+
+---
+
 ## Severity legend
 
 | | Meaning |
@@ -78,9 +102,60 @@
 - The word "anon" in the internal uid is misleading — device IDs tied to journaling content are not anonymous.
 - Attack surface is compounded by rate limits (see UNF-021) being in-memory per pod — horizontal scale multiplies the brute-force / replay budget.
 
-**Fix.** One of:
-- **Preferred:** ship the Clerk migration (`feat/clerk-auth-migration`). Verify every route goes through `requireAuth()`, that JWKS is cached, and that `uid` on `req` always comes from the verified token (never from the request body/query).
-- **Minimum:** require a per-install secret that the app stores in SecureStore/Keychain + Android Keystore and sends as an HMAC over the request (e.g. `X-Device-Signature: hmac_sha256(secret, timestamp + path + body_hash)`). Rotate on suspicious collisions. Treat `X-Device-ID` as a username, not a credential.
+**Fix (Clerk is on hold — HMAC is the primary path).**
+
+Since Clerk / cloud sync are paused (see Context section above), the Clerk migration is not the near-term fix. Ship device-bound HMAC request signing instead. High-level shape:
+
+**On first launch (app):**
+1. Generate a 256-bit random `deviceSecret` in `expo-crypto`.
+2. Store in SecureStore (iOS Keychain + Android Keystore). Never in MMKV.
+3. On first call to backend, register the secret's public fingerprint: `POST /api/devices/register { deviceId, secretFingerprint }` — backend stores the fingerprint associated with the device UUID. Backend rejects later re-registrations for the same device UUID (one-shot on install).
+
+**On every authenticated request (app):**
+```ts
+const timestamp = Date.now().toString();
+const bodyHash = sha256(JSON.stringify(body));
+const canonicalString = `${timestamp}\n${method}\n${path}\n${bodyHash}`;
+const signature = hmacSha256(deviceSecret, canonicalString);
+headers['X-Device-ID'] = deviceId;
+headers['X-Device-Timestamp'] = timestamp;
+headers['X-Device-Signature'] = signature;
+```
+
+**On every authenticated request (backend `authMiddleware`):**
+1. Read `X-Device-ID`, `X-Device-Timestamp`, `X-Device-Signature`.
+2. Reject if `|now - timestamp| > 5 minutes` (replay window).
+3. Load `deviceSecret` from `device_secrets` table by `deviceId`. Reject if no row.
+4. Recompute signature over `timestamp + method + path + sha256(body)`. Constant-time compare.
+5. Only then set `req.uid = 'anon_' + deviceId`.
+
+**New `device_secrets` table (Drizzle migration):**
+```ts
+export const deviceSecrets = pgTable('device_secrets', {
+  deviceId: text('device_id').primaryKey(),
+  // Store secret encrypted-at-rest if possible (pg pgcrypto), or at least ensure
+  // DB-level access is tightly restricted.
+  secretHash: text('secret_hash').notNull(), // argon2id of deviceSecret
+  registeredAt: timestamp('registered_at').defaultNow().notNull(),
+  lastSeenAt: timestamp('last_seen_at'),
+  rotatedAt: timestamp('rotated_at'),
+});
+```
+
+Note: you can't simply store the secret — you need to verify signatures against it, which means either (a) keep the plain secret server-side (reasonable since DB access is already privileged — treat it like a session token), or (b) move to a challenge-response model. Option (a) is simpler; option (b) is stronger but 2× the round-trips.
+
+**Rotation / key compromise:**
+- App detects rotation by receiving `401 rotate_required` from any endpoint. On rotation, generate a new secret, call `POST /api/devices/rotate` with both old signature and new fingerprint, backend verifies old signature and replaces.
+- Any suspicious signal (timestamp drift, signature mismatch > N times in M minutes) = flag device for rotation on next call.
+
+**Why this beats raw X-Device-ID.**
+- A leaked `X-Device-ID` header is no longer sufficient to impersonate — the attacker also needs `deviceSecret`, which only leaves the device via SecureStore compromise (much higher bar).
+- Replay attacks are bounded by the 5-minute window.
+- Revocation is a single DB row delete.
+
+**Longer-term.** When Clerk is unblocked, layer Clerk auth on top of HMAC-signed device identity. Don't rip out HMAC — it's a good "device identity" layer even in a fully-authed world.
+
+**Also valid: avoid the problem entirely.** If you decide (per the Context section's "bigger question") to stop persisting personal content on the backend, UNF-001 mostly dissolves — the backend becomes a stateless AI proxy and the only thing leaking a device ID exposes is historical generation metadata. Worth considering before committing to the HMAC build-out.
 
 **How to verify the fix.**
 1. Pick any `/api/*` device-auth route.
@@ -93,6 +168,8 @@
 ---
 
 ### <a name="unf-002"></a>UNF-002 — No account-deletion endpoint (App Store 5.1.1(v))
+
+**[AMENDED 2026-04-24]** Still required even with Clerk/sync on hold. Apple treats server-stored personal content as an "account" regardless of the auth model. If the backend keeps any `clerk_user_id`-indexed user content, this must ship.
 
 **Repo / files:**
 - `unfold-backend` — `src/routes/*` (no DELETE user route exists)
@@ -254,32 +331,37 @@ The knock-on: `TTS_VOICES` catalog, `AudioPlayerSheet`, LRU `audio-cache` — al
 - `unfold-backend` — `src/routes/sync.ts` (serves `POST /api/sync/push` and `POST /api/sync/pull` correctly)
 - `unfold-app` — `src/lib/sync-types.ts`, `src/lib/sync-ids.ts` (scaffolding exists), plus MMKV store migrations v28→29 and v32→33 backfill `updatedAt` and sync IDs
 
-**Problem.** The backend exposes `/api/sync/push` and `/api/sync/pull`. The FE has type definitions, sync IDs, and store migrations that prepare data for sync. But **no FE file actually calls either endpoint**. Grep the app repo: no `fetch` or `postJson` hits `/api/sync/push` or `/api/sync/pull`. The sync client is missing.
+**[AMENDED 2026-04-24]** Owner confirmed Clerk + cloud sync are intentionally on hold (see Context section). This section's recommendation updates accordingly.
 
-**Why it matters.**
-- Users who reinstall the app lose everything (MMKV is wiped on install). No cross-device sync, no cloud backup.
-- UI that implies persistence ("your journal", "your streak") is misleading.
-- Combined with UNF-002 (no account deletion), the backend accumulates orphaned data from reinstalls nobody can clean up.
+**Problem.** The backend exposes `/api/sync/push` and `/api/sync/pull`. The FE has type definitions, sync IDs, and store migrations that prepare data for sync. No FE file actually calls either endpoint. The sync client was meant to land alongside Clerk auth; both are parked.
 
-**Decision required.** Either ship the sync client, or remove the scaffolding.
+**Why it still matters.**
+- Dead routes on the backend = attack surface for no benefit. Anyone who impersonates a device ID (UNF-001) can dump all sync data via `/api/sync/pull`, even if the FE never calls it.
+- Store migrations v28→29 and v32→33 backfill sync-related fields that will never be read until sync ships — harmless but confusing.
+- UI copy that implies persistence ("your journal", "your streak") is misleading given sync is on hold.
 
-**If shipping sync:**
-1. Write `unfold-app/src/lib/sync-client.ts` with `syncPush(changes: SyncChange[])` and `syncPull(lastPulledAt: number)`.
-2. On app foreground + on store mutations, debounce-push unsynced changes.
-3. On cold start (after rehydration), pull since `lastPulledAt`.
-4. Handle LWW conflict resolution on pull (server's `updated_at` wins, but apply client-only deletions).
-5. Cap push payload at 500 changes per batch (backend already enforces).
-6. **Be careful**: the backend's `/sync/push` has a documented LWW race (UNF-033). Fix that before heavy use.
+**Recommendation: strip the backend routes now, leave FE scaffolding dormant.**
 
-**If removing scaffolding:**
-1. Delete `sync-types.ts`, `sync-ids.ts`.
-2. Roll back the store migrations v28→29 and v32→33 — or rather, leave them in place (they don't hurt) but remove all `updatedAt`/`id` fields from new records.
-3. Remove `/api/sync/push` and `/api/sync/pull` from the backend router.
-4. Explicitly document: "Unfold is a device-local app. Reinstalling will erase your data."
+**Backend (`unfold-backend`):**
+1. Remove the router mount: delete the line that mounts `src/routes/sync.ts` in `src/index.ts`.
+2. Keep `src/routes/sync.ts` file in the repo but don't mount it — you'll need it when sync ships.
+3. (Optional) Add a temporary `POST /api/sync/push → 410 Gone` stub that returns `{ error: 'sync not yet available' }` for discoverability if anyone's testing.
+4. Verify: `curl -X POST $BACKEND/api/sync/push` → 404.
 
-**Recommendation.** For TestFlight, ship option 2 (remove) — sync is a significant feature and shouldn't go live without testing. Add it as a v1.1 milestone.
+**Frontend (`unfold-app`):**
+1. **Don't delete** `sync-types.ts`, `sync-ids.ts`, or the store migrations v28→29 / v32→33. These are cheap to keep and annoying to rebuild when sync comes back.
+2. **Do delete** any UI copy that implies cloud persistence. Grep for phrases like "synced", "backed up", "across devices" and remove.
+3. Add UX honesty: in Profile/Settings, a small note "Your Unfold data is stored on this device only." Combine with UNF-048 (reinstall warning).
+4. Keep the `generation-migration.ts` flow (that one actually runs and pushes specific artifact data to the backend — different from `/sync/push`). See UNF-011.
 
-**Source:** cross-stack agent (finding #11), flows agent.
+**When sync comes back (v1.1+):**
+1. Re-mount `src/routes/sync.ts`.
+2. Write `unfold-app/src/lib/sync-client.ts` with `syncPush(changes)` and `syncPull(lastPulledAt)`.
+3. Fix UNF-033 (LWW race) before enabling heavy use.
+4. Fix UNF-034 (nullable timestamps) as part of the same migration.
+5. Wire auth first (see amended UNF-001).
+
+**Source:** cross-stack agent (finding #11), flows agent, owner confirmation.
 
 ---
 
@@ -1461,6 +1543,8 @@ Rebuild. Confirm in Sentry dashboard that the release's artifacts include source
 
 ### <a name="unf-047"></a>UNF-047 — "Reset all data" doesn't hit the server
 
+**[AMENDED 2026-04-24]** Intensified by Clerk/sync being on hold. Since backend-side personal content accumulates indefinitely with no cleanup path and no sync to reconcile, the Reset button's local-only scope is now a harder privacy miss.
+
 **Repo / file:** `unfold-app` — `src/app/(tabs)/(you)/index.tsx` (`handleResetData`)
 
 **Problem.** Already flagged as part of UNF-002 (no account deletion). Worth a separate entry because the UX lie is specific: the button says "Delete Everything" but only wipes local MMKV. The user's journal entries, prayers, mood check-ins, companion chats remain on the backend indexed by their device UUID.
@@ -1476,6 +1560,8 @@ Rebuild. Confirm in Sentry dashboard that the release's artifacts include source
 ---
 
 ### <a name="unf-048"></a>UNF-048 — Reinstall loses all data (no export, no cloud backup)
+
+**[AMENDED 2026-04-24]** Intensified by Clerk/sync being on hold. Since "sync later" is not a near-term fallback, the export-my-data path and the warning copy become table-stakes for this release, not nice-to-have.
 
 **Repo / file:** `unfold-app` — store (no backup path)
 
@@ -1758,6 +1844,8 @@ Recommend simplifying — a single-URL "fallback chain" just confuses future rea
 
 ### <a name="unf-066"></a>UNF-066 — `usesAppleSignIn: true` with no Sign in with Apple UI
 
+**[AMENDED 2026-04-24]** Can stay as-is pending Clerk restart. Cosmetic only.
+
 **Repo / file:** `unfold-app` — `app.json` (`usesAppleSignIn: true`), `package.json` (`expo-apple-authentication` installed)
 
 **Problem.** The capability is declared but no button, hook, or call to `expo-apple-authentication` is present in code. Harmless but confusing — a reviewer (or future dev) will wonder where the Apple Sign-In flow is.
@@ -1799,20 +1887,22 @@ Also: `expo-image-picker` is in deps but I found no code that actually invokes t
 
 ### <a name="unf-069"></a>UNF-069 — Unmerged long-lived feature branches
 
+**[AMENDED 2026-04-24]** `feat/clerk-auth-migration` is parked by design, not a loose end. Still audit the others.
+
 **Repo / branches (app):**
-- `feat/clerk-auth-migration`
+- `feat/clerk-auth-migration` — **parked; keep**
 - `feat/persona-onboarding-optimization`
 - `feature/audioplayer-integration`
 - `revert/notebook-to-april-10`
 
-**Problem.** Each branch has been diverging from the release-candidate for weeks+. Audit what's on each.
+**Problem.** Each non-Clerk branch has been diverging from the release-candidate for weeks+. Audit what's on each.
 
-**Fix.** For each branch:
+**Fix.** For each non-Clerk branch:
 1. Check the last commit date and divergence count (`git log main..<branch> | wc -l`).
 2. Decide: merge, cherry-pick specific fixes, or explicitly abandon.
 3. Abandoned branches should be deleted to reduce noise.
 
-For `feat/clerk-auth-migration` specifically: this is the UNF-001 fix. Prioritize.
+Keep `feat/clerk-auth-migration` untouched — it's the future home for UNF-001's long-term fix (see amended UNF-001).
 
 **Source:** FE code quality agent.
 
@@ -1901,14 +1991,28 @@ Hand Codex this list in order. Each block is roughly a session's worth of work.
 24. **UNF-048** — Add "export my data" + warning copy (if keeping device-local storage).
 25. **UNF-012** — Patch V2 companion system prompt against confidentiality leak.
 
-### Session 4 — Auth & account deletion (1 day)
+### Session 4 — Auth & account deletion (1–2 days, given Clerk is on hold)
 
-26. **UNF-001** — Ship the Clerk migration (or HMAC-binding fallback).
+**First, decide:** before starting this session, have the 30-minute conversation flagged in the Context section — does the backend need to persist personal content at all (journals/prayers/moods/companion chats) if sync is on hold? If the answer is "no, move it all to MMKV," then UNF-001 dissolves and this session shrinks dramatically.
+
+**If keeping server-side storage (default path):**
+26. **UNF-001** — Ship HMAC request signing with device-bound SecureStore secret. See amended UNF-001 for shape.
 27. **UNF-002** — Implement `DELETE /api/users/me` and wire FE "Reset all data" button.
 28. **UNF-047** — Update "Delete Everything" copy to mention server-side deletion.
-29. **UNF-024** — Separate admin auth from user auth.
-30. **UNF-022** — Add App Attest / Play Integrity for `/api/generate/adaptive-question`.
-31. **UNF-025** — Clamp V1 companion `system` to allowlisted persona IDs (or 410 the V1 path).
+29. **UNF-048** — Add "Export my data" button + pre-reset warning copy.
+30. **UNF-024** — Separate admin auth from user auth.
+31. **UNF-022** — Add App Attest / Play Integrity for `/api/generate/adaptive-question`.
+32. **UNF-025** — Clamp V1 companion `system` to allowlisted persona IDs (or 410 the V1 path).
+33. **UNF-006** — Strip the unused `/api/sync/*` backend routes; leave FE scaffolding dormant.
+
+**If moving to "device-local, backend is stateless AI proxy":**
+- Skip 26 (UNF-001 mostly dissolves).
+- Skip 27/28 (UNF-002/047 dissolve — no server-side account to delete).
+- Do a data-migration pass: pull any existing `sync_*` user content server-side, write it to an export endpoint the app can one-time-fetch on next launch, then drop the columns/tables. Treat this as a separate mini-session.
+- Keep 29 (UNF-048) — local warning + export still applies.
+- Keep 30, 31, 32, 33.
+
+When Clerk eventually ships, both paths converge: Clerk identity + HMAC device signing layered together.
 
 ### Session 5 — Entitlements & data integrity (1 day)
 
@@ -1978,7 +2082,7 @@ Medium: UNF-051 through UNF-070
 
 ## Appendix C — Single-sentence summary
 
-Auth is impersonatable by design, one paid feature is silently broken, sync is wired to nowhere, two App Store rejection risks are latent, and there's no CI — fix those and the rest before promoting build 137 to TestFlight.
+With Clerk + sync intentionally on hold, the near-term shape of the fix list is: ship HMAC-bound device auth (or remove server-side personal content entirely), add `DELETE /api/users/me`, fix the two App Store rejection risks (Android package ID, iOS aps-environment), decide TTS (re-enable or gate), strip dead sync routes, add CI, and patch the rest before promoting build 137 to TestFlight.
 
 
 
