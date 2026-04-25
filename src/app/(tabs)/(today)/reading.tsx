@@ -41,6 +41,7 @@ import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import { buildDevotionalSyncMetadataPatch } from '@/lib/devotional-sync-metadata';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -1104,6 +1105,18 @@ export default function ReadingScreen() {
       const pulled = await pullDevotionalContent(currentDevotional.id);
       if (pulled.days.length > 0) {
         updateDevotionalDays(currentDevotional.id, pulled.days, pulled.devotional?.title);
+      }
+
+      if (pulled.devotional) {
+        useUnfoldStore.setState((state) => ({
+          devotionals: state.devotionals.map((devotional) => {
+            if (devotional.id !== currentDevotional.id) return devotional;
+            const patch = buildDevotionalSyncMetadataPatch(devotional, pulled.devotional);
+            return Object.keys(patch).length > 0
+              ? { ...devotional, ...patch }
+              : devotional;
+          }),
+        }));
       }
 
       const targetDay = pulled.days.find((day) => day.dayNumber === viewingDay);

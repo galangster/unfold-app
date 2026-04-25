@@ -37,6 +37,8 @@ import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from 
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
+import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
+import { buildDevotionalSyncMetadataPatch } from '@/lib/devotional-sync-metadata';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -86,6 +88,7 @@ export default function HomeScreen() {
   const resumeContext = useUnfoldStore((s) => s.resumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const updateUser = useUnfoldStore((s) => s.updateUser);
+  const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markMiddayCheckInCompleted = useUnfoldStore((s) => s.markMiddayCheckInCompleted);
@@ -235,6 +238,44 @@ export default function HomeScreen() {
       syncWidgets();
       useUnfoldStore.getState().resetNudgeSession();
     }, [])
+  );
+
+  // Refresh the current devotional from server sync when Today gains focus.
+  // Reading already has a missing-day fallback, but Home needs the same pull
+  // because the hero card is where users expect to discover Day 2+.
+  useFocusEffect(
+    useCallback(() => {
+      const devotionalId = currentDevotionalId;
+      if (!devotionalId) return;
+
+      let cancelled = false;
+      void (async () => {
+        try {
+          const pulled = await pullDevotionalContent(devotionalId);
+          if (cancelled) return;
+
+          if (pulled.days.length > 0) {
+            updateDevotionalDays(devotionalId, pulled.days, pulled.devotional?.title);
+          }
+
+          if (pulled.devotional) {
+            useUnfoldStore.setState((state) => ({
+              devotionals: state.devotionals.map((devotional) => {
+                if (devotional.id !== devotionalId) return devotional;
+                const patch = buildDevotionalSyncMetadataPatch(devotional, pulled.devotional);
+                return Object.keys(patch).length > 0
+                  ? { ...devotional, ...patch }
+                  : devotional;
+              }),
+            }));
+          }
+        } catch (err) {
+          console.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
+        }
+      })();
+
+      return () => { cancelled = true; };
+    }, [currentDevotionalId, updateDevotionalDays])
   );
 
   // Check if today's reading has been completed — drives ember visibility
