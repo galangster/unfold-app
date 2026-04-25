@@ -2,7 +2,9 @@ import {
   buildNotePersistencePayload,
   getNativeBlockTypeCommand,
   getNativeListCommand,
+  getTitleDividerPresentation,
   hasMeaningfulNoteContent,
+  normalizeNativeInitialHtml,
 } from '../note-detail-editor';
 
 describe('note-detail editor helpers', () => {
@@ -63,5 +65,19 @@ describe('note-detail editor helpers', () => {
 
   it('switches to the requested heading when a different block is active', () => {
     expect(getNativeBlockTypeCommand('p', 'h3')).toBe('h3');
+  });
+
+  it('normalizes empty native html to truly empty content so placeholder starts on first body line', () => {
+    expect(normalizeNativeInitialHtml('<p></p>')).toBe('');
+    expect(normalizeNativeInitialHtml('<p><br></p>')).toBe('');
+    expect(normalizeNativeInitialHtml('  <p>Real text</p>  ')).toBe('  <p>Real text</p>  ');
+  });
+
+  it('keeps the note title divider gold and visible while editing', () => {
+    expect(getTitleDividerPresentation({ isEditing: true, accentColor: '#C8A55C', borderColor: '#222' })).toEqual({
+      backgroundColor: '#C8A55C',
+      height: 2,
+      marginHorizontal: 24,
+    });
   });
 });

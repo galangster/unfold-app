@@ -206,10 +206,24 @@ open class ListTextProcessor: TextProcessing {
 
     private func exitEmptyListItemOnBackspace(editor: EditorView, editedRange: NSRange) -> Bool {
         guard editor.contentLength > 0,
-              let currentLine = editor.contentLinesInRange(editedRange).first,
-              currentLine.text.string == ListTextProcessor.blankLineFiller,
-              currentLine.text.attribute(.listItem, at: 0, effectiveRange: nil) != nil
+              let currentLine = editor.contentLinesInRange(editedRange).first
         else { return false }
+
+        let lineString = currentLine.text.string
+        let lineLooksEmpty = lineString.isEmpty
+            || lineString == "\n"
+            || lineString == ListTextProcessor.blankLineFiller
+            || lineString == "\(ListTextProcessor.blankLineFiller)\n"
+        guard lineLooksEmpty else { return false }
+
+        let lineHasListItem: Bool = {
+            guard currentLine.text.length > 0 else {
+                return editor.typingAttributes[.listItem] != nil
+            }
+            return currentLine.text.attribute(.listItem, at: 0, effectiveRange: nil) != nil
+                || editor.typingAttributes[.listItem] != nil
+        }()
+        guard lineHasListItem else { return false }
 
         editor.typingAttributes[.listItem] = nil
         editor.typingAttributes[.paragraphStyle] = editor.paragraphStyle
@@ -219,9 +233,13 @@ open class ListTextProcessor: TextProcessing {
             editor.addAttribute(.paragraphStyle, value: editor.paragraphStyle, at: currentLine.range)
         }
 
-        let fillerRange = NSRange(location: currentLine.range.location, length: min(currentLine.range.length, ListTextProcessor.blankLineFiller.utf16.count))
-        if fillerRange.length > 0, fillerRange.endLocation <= editor.contentLength {
-            editor.replaceCharacters(in: fillerRange, with: "")
+        if let fillerRange = lineString.range(of: ListTextProcessor.blankLineFiller) {
+            let start = lineString.distance(from: lineString.startIndex, to: fillerRange.lowerBound)
+            let length = lineString.distance(from: fillerRange.lowerBound, to: fillerRange.upperBound)
+            let nsRange = NSRange(location: currentLine.range.location + start, length: length)
+            if nsRange.length > 0, nsRange.endLocation <= editor.contentLength {
+                editor.replaceCharacters(in: nsRange, with: "")
+            }
         }
 
         editor.selectedRange = NSRange(location: min(currentLine.range.location, editor.contentLength), length: 0)
@@ -410,8 +428,26 @@ open class ListTextProcessor: TextProcessing {
             insertedMarkerLength: marker.length,
             attributeValue: attributeValue
         )
+        collapseMaterializedListBootstrapSelectionOnNextTick(editor: editor)
         if editor.isFirstResponder, editedRange.location == 0 {
             editor.reloadInputViews()
+        }
+    }
+
+    private func collapseMaterializedListBootstrapSelectionOnNextTick(editor: EditorView) {
+        let selectedRangeAtMaterialization = editor.selectedRange
+        guard selectedRangeAtMaterialization.length > 0 else { return }
+
+        DispatchQueue.main.async { [weak editor] in
+            guard let editor = editor,
+                  NSEqualRanges(editor.selectedRange, selectedRangeAtMaterialization),
+                  selectedRangeAtMaterialization.endLocation <= editor.contentLength,
+                  selectedRangeAtMaterialization.location < editor.contentLength
+            else { return }
+
+            let selectedText = editor.attributedText.substring(from: selectedRangeAtMaterialization)
+            guard selectedText == ListTextProcessor.blankLineFiller else { return }
+            editor.selectedRange = selectedRangeAtMaterialization.nextPosition
         }
     }
 

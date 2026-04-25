@@ -68,3 +68,33 @@ export function getNativeBlockTypeCommand(
 ): 'p' | 'h1' | 'h2' | 'h3' {
   return activeBlockType === requestedType ? 'p' : requestedType;
 }
+
+export function normalizeNativeInitialHtml(html: string): string {
+  const normalized = html.trim().toLowerCase();
+  if (normalized === '<p></p>' || normalized === '<p><br></p>') {
+    return '';
+  }
+
+  return html;
+}
+
+export function getTitleDividerPresentation({
+  isEditing,
+  accentColor,
+  borderColor,
+}: {
+  isEditing: boolean;
+  accentColor: string;
+  borderColor: string;
+}): { backgroundColor: string; height?: number; marginHorizontal?: number } {
+  if (!isEditing) {
+    return { backgroundColor: accentColor };
+  }
+
+  const visibleAccent = accentColor || borderColor;
+  return {
+    backgroundColor: visibleAccent,
+    height: 2,
+    marginHorizontal: 24,
+  };
+}

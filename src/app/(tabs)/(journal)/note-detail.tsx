@@ -82,7 +82,9 @@ import {
   buildNotePersistencePayload,
   getNativeBlockTypeCommand,
   getNativeListCommand,
+  getTitleDividerPresentation,
   hasMeaningfulNoteContent,
+  normalizeNativeInitialHtml,
 } from '@/lib/note-detail-editor';
 import { buildNoteDraftDockPreview, useNoteDraftDock } from '@/lib/note-draft-dock';
 
@@ -336,6 +338,7 @@ export default function NoteDetailScreen() {
       ? existingNote.content
       : legacyMarkdownToHtml(existingNote.content)
     : '<p></p>';
+  const nativeInitialContent = normalizeNativeInitialHtml(initialContent);
 
   /* ───── Native editor state (iOS) ───── */
 
@@ -1368,6 +1371,7 @@ export default function NoteDetailScreen() {
             placeholderTextColor={colors.textHint}
             editable
             autoFocus={isNewNote}
+            selectionColor={colors.accent}
             style={[
               styles.titleInput,
               { color: colors.text },
@@ -1405,8 +1409,11 @@ export default function NoteDetailScreen() {
         <View
           style={[
             styles.titleDivider,
-            { backgroundColor: isEditing ? colors.border : colors.accent },
-            isEditing && { marginHorizontal: 24, height: StyleSheet.hairlineWidth },
+            getTitleDividerPresentation({
+              isEditing,
+              accentColor: colors.accent,
+              borderColor: colors.border,
+            }),
           ]}
         />
 
@@ -1415,7 +1422,7 @@ export default function NoteDetailScreen() {
           {IS_NATIVE_EDITOR ? (
             <UnfoldEditor
               ref={editorRef}
-              initialHtml={latestHtmlRef.current}
+              initialHtml={nativeInitialContent}
               onChangeHtml={(e: UnfoldEditorChangeHtmlEvent) => {
                 latestHtmlRef.current = e.nativeEvent.html;
                 scheduleAutoSave(e.nativeEvent.html);
