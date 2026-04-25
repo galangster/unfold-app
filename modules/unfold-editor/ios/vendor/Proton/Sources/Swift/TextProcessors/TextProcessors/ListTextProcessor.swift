@@ -215,6 +215,8 @@ open class ListTextProcessor: TextProcessing {
         if editor.selectedRange.endLocation >= rangeToReplace.endLocation {
             editor.selectedRange = NSRange(location: editor.selectedRange.location - 1, length: 0)
         }
+        editor.typingAttributes[.listItem] = nil
+        editor.typingAttributes[.paragraphStyle] = editor.paragraphStyle
     }
 
     private func handleShiftReturn(editor: EditorView, editedRange: NSRange, attrs: [NSAttributedString.Key: Any]) {
@@ -428,12 +430,20 @@ open class ListTextProcessor: TextProcessing {
             return min(max(currentLine.range.location, 0), editor.attributedText.length - 1)
         }()
 
-        let paragraphStyle = currentParagraphStyle
+        var paragraphStyle = currentParagraphStyle
             ?? (editorProbeLocation.flatMap {
                 editor.attributedText.attribute(.paragraphStyle, at: $0, effectiveRange: nil) as? NSParagraphStyle
             })
             ?? (previousLine.text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
             ?? editor.paragraphStyle
+        if paragraphStyle.firstLineHeadIndent <= 0 {
+            paragraphStyle = updatedParagraphStyle(
+                paraStyle: paragraphStyle,
+                listLineFormatting: editor.listLineFormatting,
+                indentMode: .indent,
+                defaultParaStyle: editor.paragraphStyle
+            ) ?? paragraphStyle
+        }
         let font = currentFont
             ?? editorProbeLocation.flatMap {
                 editor.attributedText.attribute(.font, at: $0, effectiveRange: nil) as? UIFont
@@ -445,14 +455,34 @@ open class ListTextProcessor: TextProcessing {
             }
             ?? (previousLine.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor)
 
-        editor.addAttribute(.listItem, value: previousListValue, at: currentLine.range)
-        editor.addAttribute(.paragraphStyle, value: paragraphStyle, at: currentLine.range)
+        let rangeToCanonicalize: NSRange
+        if currentLine.text.length == 0 {
+            var attrs = editor.typingAttributes
+            attrs[.listItem] = previousListValue
+            attrs[.paragraphStyle] = paragraphStyle
+            if let font { attrs[.font] = font }
+            if let foregroundColor { attrs[.foregroundColor] = foregroundColor }
+
+            let filler = NSAttributedString(string: ListTextProcessor.blankLineFiller, attributes: attrs)
+            editor.replaceCharacters(in: currentLine.range, with: filler)
+            rangeToCanonicalize = NSRange(location: currentLine.range.location, length: filler.length)
+            editor.selectedRange = NSRange(location: rangeToCanonicalize.endLocation, length: 0)
+        } else {
+            rangeToCanonicalize = currentLine.range
+        }
+
+        guard rangeToCanonicalize.length > 0,
+              rangeToCanonicalize.endLocation <= editor.contentLength
+        else { return }
+
+        editor.addAttribute(.listItem, value: previousListValue, at: rangeToCanonicalize)
+        editor.addAttribute(.paragraphStyle, value: paragraphStyle, at: rangeToCanonicalize)
         if let font {
-            editor.addAttribute(.font, value: font, at: currentLine.range)
+            editor.addAttribute(.font, value: font, at: rangeToCanonicalize)
             editor.typingAttributes[.font] = font
         }
         if let foregroundColor {
-            editor.addAttribute(.foregroundColor, value: foregroundColor, at: currentLine.range)
+            editor.addAttribute(.foregroundColor, value: foregroundColor, at: rangeToCanonicalize)
             editor.typingAttributes[.foregroundColor] = foregroundColor
         }
         editor.typingAttributes[.paragraphStyle] = paragraphStyle

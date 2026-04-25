@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeOut,
+  runOnJS,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -25,6 +26,7 @@ import Animated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
   PencilLineIcon,
@@ -58,6 +60,17 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 type Segment = 'reflections' | 'notebook';
+
+const JOURNAL_SWIPE_ACTIVE_OFFSET = 18;
+const JOURNAL_SWIPE_FAIL_OFFSET_Y = 32;
+const JOURNAL_SWIPE_THRESHOLD = 72;
+const JOURNAL_SWIPE_VELOCITY = 520;
+const JOURNAL_SWIPE_MAX_TRANSLATE = 24;
+const JOURNAL_SWIPE_RESET_CONFIG = {
+  duration: 120,
+  easing: Easing.out(Easing.cubic),
+};
+const JOURNAL_SWIPE_DIRECTION_LIMIT = 100_000;
 
 // ============================================================================
 // Segmented Control Component
@@ -971,6 +984,116 @@ export default function JournalHubScreen() {
     [],
   );
 
+  const reflectionsSwipeX = useSharedValue(0);
+  const notebookSwipeX = useSharedValue(0);
+
+  const switchToNotebookFromSwipe = useCallback(() => {
+    if (activeSegment === 'notebook') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveSegment('notebook');
+  }, [activeSegment]);
+
+  const switchToReflectionsFromSwipe = useCallback(() => {
+    if (activeSegment === 'reflections') return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveSegment('reflections');
+  }, [activeSegment]);
+
+  const reflectionsSwipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        // Left swipes only: right swipes stay inert and vertical scroll can win.
+        .activeOffsetX([
+          -JOURNAL_SWIPE_ACTIVE_OFFSET,
+          JOURNAL_SWIPE_DIRECTION_LIMIT,
+        ])
+        .failOffsetY([
+          -JOURNAL_SWIPE_FAIL_OFFSET_Y,
+          JOURNAL_SWIPE_FAIL_OFFSET_Y,
+        ])
+        .onUpdate((e) => {
+          if (reducedMotion) return;
+          reflectionsSwipeX.value = Math.min(
+            0,
+            Math.max(e.translationX, -JOURNAL_SWIPE_MAX_TRANSLATE),
+          );
+        })
+        .onEnd((e) => {
+          const shouldSwitch =
+            e.translationX <= -JOURNAL_SWIPE_THRESHOLD ||
+            e.velocityX <= -JOURNAL_SWIPE_VELOCITY;
+
+          reflectionsSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
+          if (shouldSwitch) {
+            runOnJS(switchToNotebookFromSwipe)();
+          }
+        })
+        .onFinalize(() => {
+          reflectionsSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
+        }),
+    [reducedMotion, reflectionsSwipeX, switchToNotebookFromSwipe],
+  );
+
+  const notebookSwipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        // Right swipes only so note-card left-swipe actions remain safe.
+        .activeOffsetX([
+          -JOURNAL_SWIPE_DIRECTION_LIMIT,
+          JOURNAL_SWIPE_ACTIVE_OFFSET,
+        ])
+        .failOffsetY([
+          -JOURNAL_SWIPE_FAIL_OFFSET_Y,
+          JOURNAL_SWIPE_FAIL_OFFSET_Y,
+        ])
+        .onUpdate((e) => {
+          if (reducedMotion) return;
+          notebookSwipeX.value = Math.max(
+            0,
+            Math.min(e.translationX, JOURNAL_SWIPE_MAX_TRANSLATE),
+          );
+        })
+        .onEnd((e) => {
+          const shouldSwitch =
+            e.translationX >= JOURNAL_SWIPE_THRESHOLD ||
+            e.velocityX >= JOURNAL_SWIPE_VELOCITY;
+
+          notebookSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
+          if (shouldSwitch) {
+            runOnJS(switchToReflectionsFromSwipe)();
+          }
+        })
+        .onFinalize(() => {
+          notebookSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
+        }),
+    [notebookSwipeX, reducedMotion, switchToReflectionsFromSwipe],
+  );
+
+  const segmentedSwipeGesture = useMemo(
+    () =>
+      Gesture.Exclusive(
+        Gesture.Fling()
+          .direction(Directions.LEFT)
+          .onEnd(() => {
+            runOnJS(switchToNotebookFromSwipe)();
+          }),
+        Gesture.Fling()
+          .direction(Directions.RIGHT)
+          .onEnd(() => {
+            runOnJS(switchToReflectionsFromSwipe)();
+          }),
+      ),
+    [switchToNotebookFromSwipe, switchToReflectionsFromSwipe],
+  );
+
+  const reflectionsSwipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: reflectionsSwipeX.value }],
+  }));
+
+  const notebookSwipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: notebookSwipeX.value }],
+  }));
+
   // Determine if search toggle should show
   const hasContent =
     journalEntries.length > 0 || notes.length > 0;
@@ -1055,18 +1178,24 @@ export default function JournalHubScreen() {
           )}
 
           {/* Segmented Control */}
-          <View style={mainStyles.segmentContainer}>
-            <SegmentedControl
-              activeSegment={activeSegment}
-              onSegmentChange={setActiveSegment}
-            />
-          </View>
+          <GestureDetector gesture={segmentedSwipeGesture}>
+            <View style={mainStyles.segmentContainer}>
+              <SegmentedControl
+                activeSegment={activeSegment}
+                onSegmentChange={setActiveSegment}
+              />
+            </View>
+          </GestureDetector>
 
           {/* ================================================================ */}
           {/* REFLECTIONS TAB (existing content — unchanged) */}
           {/* ================================================================ */}
           {activeSegment === 'reflections' && (
-            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
+            <GestureDetector gesture={reflectionsSwipeGesture}>
+              <Animated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                style={reflectionsSwipeStyle}
+              >
               {/* Today's Reflection Card */}
               {currentDevotional && (
                 <Animated.View
@@ -1442,16 +1571,21 @@ export default function JournalHubScreen() {
                   )}
                 </Animated.View>
               )}
-            </Animated.View>
+              </Animated.View>
+            </GestureDetector>
           )}
 
           {/* ================================================================ */}
           {/* NOTEBOOK TAB (new content) */}
           {/* ================================================================ */}
           {activeSegment === 'notebook' && (
-            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
-              {/* Folder filter chips */}
-              <View style={mainStyles.filterRow}>
+            <GestureDetector gesture={notebookSwipeGesture}>
+              <Animated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                style={notebookSwipeStyle}
+              >
+                {/* Folder filter chips */}
+                <View style={mainStyles.filterRow}>
                 <FolderChips
                   folders={folders}
                   activeFolderId={activeFolderId}
@@ -1475,42 +1609,43 @@ export default function JournalHubScreen() {
 
               {/* Notes list or empty state */}
               {filteredNotes.length === 0 ? (
-                !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
-                  <View style={{ paddingHorizontal: Spacing['6'] }}>
-                    <NotebookEmptyState onCreateNote={handleCreateNote} />
-                  </View>
-                ) : (
-                  <View style={mainStyles.noResultsContainer}>
-                    <Text
-                      style={[
-                        mainStyles.noResultsText,
-                        { color: colors.textMuted },
-                      ]}
-                    >
-                      {searchQuery.trim()
-                        ? `No notes match "${searchQuery}"`
-                        : activeFolderId !== null
-                          ? 'No notes in this folder yet.\nLong-press a folder to add subfolders.'
-                          : 'No notes here yet.'}
-                    </Text>
-                  </View>
-                )
-              ) : (
-                <View style={mainStyles.notesListContainer}>
-                  {filteredNotes.map((note, index) => (
-                    <SwipeableNoteCard
-                      key={note.id}
-                      note={note}
-                      index={index}
-                      onPress={handleNotePress}
-                      onShare={handleNoteShare}
-                      onMove={handleNoteMove}
-                      onDelete={handleNoteDelete}
-                    />
-                  ))}
-                </View>
-              )}
-            </Animated.View>
+                    !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
+                      <View style={{ paddingHorizontal: Spacing['6'] }}>
+                        <NotebookEmptyState onCreateNote={handleCreateNote} />
+                      </View>
+                    ) : (
+                      <View style={mainStyles.noResultsContainer}>
+                        <Text
+                          style={[
+                            mainStyles.noResultsText,
+                            { color: colors.textMuted },
+                          ]}
+                        >
+                          {searchQuery.trim()
+                            ? `No notes match "${searchQuery}"`
+                            : activeFolderId !== null
+                              ? 'No notes in this folder yet.\nLong-press a folder to add subfolders.'
+                              : 'No notes here yet.'}
+                        </Text>
+                      </View>
+                    )
+                  ) : (
+                    <View style={mainStyles.notesListContainer}>
+                      {filteredNotes.map((note, index) => (
+                        <SwipeableNoteCard
+                          key={note.id}
+                          note={note}
+                          index={index}
+                          onPress={handleNotePress}
+                          onShare={handleNoteShare}
+                          onMove={handleNoteMove}
+                          onDelete={handleNoteDelete}
+                        />
+                      ))}
+                    </View>
+                  )}
+              </Animated.View>
+            </GestureDetector>
           )}
         </ScrollView>
 

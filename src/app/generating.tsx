@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, AppState, AppStateStatus, AccessibilityInfo, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Sentry from '@sentry/react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -478,10 +477,6 @@ export default function GeneratingScreen() {
           pollingRef.current = false;
           const errorMsg = status.error ?? 'Generation failed on server';
           logger.error('[generating] Server job failed:', errorMsg);
-          Sentry.captureMessage(`Server generation job failed: ${errorMsg}`, {
-            level: 'error',
-            extra: { jobId },
-          });
           mmkvStorage.removeItem(INFLIGHT_KEY);
           failGenerationSession(errorMsg);
           void logBugError('generation', new Error(errorMsg), { jobId, phase: 'server-poll' });
@@ -597,10 +592,6 @@ export default function GeneratingScreen() {
 
         const errorMessage = err instanceof Error ? err.message : String(err);
         logger.error('[generating] Job submission failed:', errorMessage);
-        Sentry.captureException(err, {
-          tags: { phase: 'server-job-submission' },
-          extra: { devotionalId, devotionalLength: user.devotionalLength },
-        });
         mmkvStorage.removeItem(INFLIGHT_KEY);
         failGenerationSession(errorMessage);
         void logBugError('generation', err, { devotionalId, phase: 'server-job-submission' });

@@ -34,20 +34,24 @@ const HIGHLIGHT_COLORS: Record<HighlightKey, { label: string; light: string; dar
 };
 
 type Tab = 'journal' | 'highlights' | 'bookmarks';
-type HighlightFilter = 'all' | SavedItemSource;
+type HighlightTypeFilter = 'all' | 'notes' | 'highlights';
+type HighlightSourceFilter = 'all' | SavedItemSource;
+type HighlightChip = 'all' | 'notes' | 'highlights' | 'devotional' | 'bible';
 
 const VALID_TABS: Tab[] = ['journal', 'highlights', 'bookmarks'];
-const VALID_SOURCES: HighlightFilter[] = ['all', 'devotional', 'bible'];
+const VALID_TYPES: HighlightTypeFilter[] = ['all', 'notes', 'highlights'];
+const VALID_SOURCES: HighlightSourceFilter[] = ['all', 'devotional', 'bible'];
 
 export default function MyContentScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
-  const params = useLocalSearchParams<{ tab?: string; source?: string; from?: string }>();
+  const params = useLocalSearchParams<{ tab?: string; source?: string; type?: string; from?: string }>();
 
   const [activeTab, setActiveTab] = useState<Tab>('journal');
-  const [highlightFilter, setHighlightFilter] = useState<HighlightFilter>('all');
+  const [highlightTypeFilter, setHighlightTypeFilter] = useState<HighlightTypeFilter>('all');
+  const [highlightSourceFilter, setHighlightSourceFilter] = useState<HighlightSourceFilter>('all');
 
   // Re-sync param-driven state on every focus so repeat pushes with different
   // ?tab=… or ?source=… values actually take effect (useState initializer
@@ -57,10 +61,13 @@ export default function MyContentScreen() {
       if (params.tab && (VALID_TABS as string[]).includes(params.tab)) {
         setActiveTab(params.tab as Tab);
       }
-      if (params.source && (VALID_SOURCES as string[]).includes(params.source)) {
-        setHighlightFilter(params.source as HighlightFilter);
+      if (params.type && (VALID_TYPES as string[]).includes(params.type)) {
+        setHighlightTypeFilter(params.type as HighlightTypeFilter);
       }
-    }, [params.tab, params.source]),
+      if (params.source && (VALID_SOURCES as string[]).includes(params.source)) {
+        setHighlightSourceFilter(params.source as HighlightSourceFilter);
+      }
+    }, [params.tab, params.type, params.source]),
   );
 
   const bookmarks = useUnfoldStore((s) => s.bookmarks);
@@ -83,19 +90,23 @@ export default function MyContentScreen() {
   }, [journalEntries, searchQuery]);
 
   const highlightsForFilter = useMemo(() => {
-    switch (highlightFilter) {
-      case 'devotional': return saved.devotional;
-      case 'bible': return saved.bible;
-      case 'all':
-      default: return saved.all;
-    }
-  }, [highlightFilter, saved.all, saved.devotional, saved.bible]);
+    const byType =
+      highlightTypeFilter === 'notes'
+        ? saved.notes
+        : highlightTypeFilter === 'highlights'
+          ? saved.highlights
+          : saved.all;
+
+    if (highlightSourceFilter === 'all') return byType;
+    return byType.filter((item) => item.source === highlightSourceFilter);
+  }, [highlightTypeFilter, highlightSourceFilter, saved.all, saved.highlights, saved.notes]);
 
   const filteredHighlights = useMemo(() => {
     if (!searchQuery.trim()) return highlightsForFilter;
     const q = searchQuery.toLowerCase();
     return highlightsForFilter.filter(item =>
       item.text.toLowerCase().includes(q) ||
+      item.note?.toLowerCase().includes(q) ||
       item.contextLabel.toLowerCase().includes(q),
     );
   }, [highlightsForFilter, searchQuery]);
@@ -113,9 +124,18 @@ export default function MyContentScreen() {
     setActiveTab(tab);
   };
 
-  const handleFilterPress = (filter: HighlightFilter) => {
+  const handleFilterPress = (filter: HighlightChip) => {
     Haptics.selectionAsync();
-    setHighlightFilter(filter);
+    if (filter === 'all') {
+      setHighlightTypeFilter('all');
+      setHighlightSourceFilter('all');
+    } else if (filter === 'notes' || filter === 'highlights') {
+      setHighlightTypeFilter(filter);
+      setHighlightSourceFilter('all');
+    } else {
+      setHighlightTypeFilter('all');
+      setHighlightSourceFilter(filter);
+    }
   };
 
   const handleHighlightPress = (item: SavedItem) => {
@@ -127,6 +147,7 @@ export default function MyContentScreen() {
         params: {
           devotionalId: h.devotionalId,
           dayNumber: h.dayNumber.toString(),
+          highlightId: h.id,
         },
       });
       return;
@@ -138,6 +159,7 @@ export default function MyContentScreen() {
         bookId: b.bookId.toString(),
         chapter: b.chapter.toString(),
         verse: b.verseStart.toString(),
+        ...(item.kind === 'note' ? { openNote: 'true', noteId: b.id } : {}),
       },
     });
   };
@@ -148,11 +170,20 @@ export default function MyContentScreen() {
     { id: 'bookmarks', label: 'Bookmarks', count: bookmarks.length },
   ];
 
-  const highlightFilters: { id: HighlightFilter; label: string; count: number }[] = [
+  const highlightFilters: { id: HighlightChip; label: string; count: number }[] = [
     { id: 'all', label: 'All', count: saved.count.all },
+    { id: 'notes', label: 'Notes', count: saved.count.notes },
+    { id: 'highlights', label: 'Highlights', count: saved.count.highlights },
     { id: 'devotional', label: 'Devotional', count: saved.count.devotional },
     { id: 'bible', label: 'Bible', count: saved.count.bible },
   ];
+
+  const activeHighlightChip: HighlightChip =
+    highlightSourceFilter !== 'all'
+      ? highlightSourceFilter
+      : highlightTypeFilter === 'notes' || highlightTypeFilter === 'highlights'
+        ? highlightTypeFilter
+        : 'all';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
@@ -436,12 +467,13 @@ export default function MyContentScreen() {
             <View
               style={{
                 flexDirection: 'row',
+                flexWrap: 'wrap',
                 gap: Spacing['2'],
                 marginBottom: Spacing['4'],
               }}
             >
               {highlightFilters.map((f) => {
-                const isActive = highlightFilter === f.id;
+                const isActive = activeHighlightChip === f.id;
                 return (
                   <TouchableOpacity
                     key={f.id}
@@ -490,11 +522,15 @@ export default function MyContentScreen() {
                 icon={HighlighterIcon}
                 title="No highlights yet"
                 subtitle={
-                  highlightFilter === 'bible'
+                  activeHighlightChip === 'bible'
                     ? 'Tap a verse in the Bible reader to save it here.'
-                    : highlightFilter === 'devotional'
+                    : activeHighlightChip === 'devotional'
                       ? 'Select text while reading a devotional to save it here.'
-                      : 'Select text in a devotional or Bible verse to save it here.'
+                      : activeHighlightChip === 'notes'
+                        ? 'Add a note to a Bible verse to save it here.'
+                        : activeHighlightChip === 'highlights'
+                          ? 'Highlight a devotional or Bible verse to save it here.'
+                          : 'Select text in a devotional or Bible verse to save it here.'
                 }
               />
             ) : (
@@ -513,42 +549,93 @@ export default function MyContentScreen() {
                       marginBottom: 12,
                     }}
                     accessibilityRole="button"
-                    accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} highlight: ${item.text}`}
+                    accessibilityLabel={`${item.source === 'bible' ? 'Bible' : 'Devotional'} ${item.kind}: ${item.note ?? item.text}`}
                   >
-                    {/* Quoted text with inline highlight tint */}
-                    <View
-                      style={{
-                        backgroundColor: `${accent}14`,
-                        borderRadius: 6,
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                        marginBottom: Spacing['3'],
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontFamily: FontFamily.bodyItalic,
-                          fontSize: FontSize.base,
-                          color: colors.text,
-                          lineHeight: 24,
-                        }}
-                      >
-                        "{item.text}"
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
-                      <View
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: 4,
-                          backgroundColor: accent,
-                        }}
-                      />
-                      <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
-                        {item.contextLabel}
-                      </Text>
-                    </View>
+                    {item.kind === 'note' ? (
+                      <>
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.body,
+                            fontSize: FontSize.base,
+                            color: colors.text,
+                            lineHeight: 24,
+                            marginBottom: Spacing['3'],
+                          }}
+                          numberOfLines={4}
+                        >
+                          {item.note}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing['2'], marginBottom: Spacing['2'] }}>
+                          <PencilLineIcon size={13} color={colors.accent} weight="light" />
+                          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.xs, color: colors.accent }}>
+                            Note · {item.contextLabel}
+                          </Text>
+                          {item.color !== null && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                              <View
+                                style={{
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: 3.5,
+                                  backgroundColor: accent,
+                                }}
+                              />
+                              <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textSubtle }}>
+                                Highlighted verse
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text
+                          style={{
+                            fontFamily: FontFamily.body,
+                            fontSize: 14,
+                            color: colors.textMuted,
+                            lineHeight: 21,
+                          }}
+                          numberOfLines={2}
+                        >
+                          {item.text}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        {/* Quoted text with inline highlight tint */}
+                        <View
+                          style={{
+                            backgroundColor: `${accent}14`,
+                            borderRadius: 6,
+                            paddingHorizontal: 10,
+                            paddingVertical: 8,
+                            marginBottom: Spacing['3'],
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: FontFamily.bodyItalic,
+                              fontSize: FontSize.base,
+                              color: colors.text,
+                              lineHeight: 24,
+                            }}
+                          >
+                            "{item.text}"
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing['2'] }}>
+                          <View
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 4,
+                              backgroundColor: accent,
+                            }}
+                          />
+                          <Text style={{ fontFamily: FontFamily.ui, fontSize: FontSize.xs, color: colors.textMuted }}>
+                            {item.contextLabel}
+                          </Text>
+                        </View>
+                      </>
+                    )}
                   </TouchableOpacity>
                 );
               })

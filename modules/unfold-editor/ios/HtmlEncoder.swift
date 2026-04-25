@@ -187,15 +187,32 @@ enum HtmlEncoder {
     let prevIsNewline = str.length > 0 &&
       nsString.substring(with: NSRange(location: str.length - 1, length: 1)) == "\n"
     let useTypingForBlock = cursorAtStringEnd && prevIsNewline
+    let paragraphText = nsString.substring(with: paraRange)
+    let paragraphLooksEmpty = paragraphText.isEmpty
+      || paragraphText == "\n"
+      || paragraphText == "\u{200B}"
+      || paragraphText == "\u{200B}\n"
+    let typingListHasListIndent: Bool = {
+      guard let typing = typingAttributes,
+            typing[.listItem] != nil,
+            let style = typing[.paragraphStyle] as? NSParagraphStyle
+      else { return false }
+      return style.firstLineHeadIndent > 0
+    }()
 
     let blockType: BlockType
     if let typing = typingAttributes,
        range.length == 0,
-       typing[.listItem] != nil,
+       typingListHasListIndent,
+       paragraphLooksEmpty,
        firstAttribute(.listItem, in: str, range: paraRange) == nil {
       blockType = detectBlockTypeFromAttrs(typing)
     } else if useTypingForBlock, let typing = typingAttributes, !typing.isEmpty {
-      blockType = detectBlockTypeFromAttrs(typing)
+      if typing[.listItem] == nil || typingListHasListIndent {
+        blockType = detectBlockTypeFromAttrs(typing)
+      } else {
+        blockType = detectBlockType(in: str, range: paraRange)
+      }
     } else {
       blockType = detectBlockType(in: str, range: paraRange)
     }

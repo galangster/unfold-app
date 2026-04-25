@@ -1,6 +1,5 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import * as Sentry from '@sentry/react-native';
 import { logBugError } from '@/lib/bug-logger';
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -32,13 +31,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Report to Sentry
-    Sentry.captureException(error, {
-      tags: { source: 'error-boundary' },
-      extra: { componentStack: errorInfo.componentStack },
-    });
-
-    // Also log locally
     void logBugError('error-boundary', error, {
       componentStack: errorInfo.componentStack,
       timestamp: new Date().toISOString(),

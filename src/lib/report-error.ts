@@ -1,8 +1,8 @@
-import * as Sentry from '@sentry/react-native';
 import { logger } from '@/lib/logger';
+import { logBugError } from '@/lib/bug-logger';
 
 /**
- * Report an error to Sentry and log it locally.
+ * Report an error locally.
  * Use in catch blocks for user-facing failures.
  */
 export function reportError(
@@ -14,8 +14,9 @@ export function reportError(
 
   logger.error(`[${source}]`, err.message);
 
-  Sentry.captureException(err, {
-    tags: { source },
-    extra,
-  });
+  if (extra) {
+    logger.error(`[${source}] extra`, extra);
+  }
+
+  void logBugError(source, err, extra);
 }

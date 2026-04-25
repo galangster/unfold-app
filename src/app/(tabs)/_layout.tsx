@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { StyleSheet, Platform, View, TouchableOpacity, Text } from 'react-native';
 import { HouseIcon, BookBookmarkIcon, BookOpenIcon, UserIcon, CircleNotchIcon } from 'phosphor-react-native';
@@ -8,6 +8,9 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
+  FadeInDown,
+  FadeOutDown,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/lib/theme';
@@ -16,6 +19,7 @@ import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
+import { useNoteDraftDock } from '@/lib/note-draft-dock';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -25,6 +29,66 @@ type TabBarProps = {
 };
 
 const SPRING_CONFIG = Spring.snappy;
+
+function NoteDraftDock() {
+  const router = useRouter();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
+  const reducedMotion = useReducedMotion();
+  const draft = useNoteDraftDock((s) => s.draft);
+  const clearDraft = useNoteDraftDock((s) => s.clearDraft);
+
+  if (!draft) return null;
+
+  const handleRestore = () => {
+    const noteId = draft.noteId;
+    clearDraft();
+    router.push({
+      pathname: '/(tabs)/(journal)/note-detail',
+      params: { noteId, startEditing: 'true' },
+    });
+  };
+
+  return (
+    <Animated.View
+      entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal)}
+      exiting={reducedMotion ? undefined : FadeOutDown.duration(Duration.fast)}
+      pointerEvents="box-none"
+      style={[
+        styles.draftDockWrap,
+        { bottom: Math.max(insets.bottom, 8) + 72 },
+      ]}
+    >
+      <TouchableOpacity
+        onPress={handleRestore}
+        activeOpacity={0.82}
+        accessibilityRole="button"
+        accessibilityLabel="Restore minimized note"
+        style={[
+          styles.draftDock,
+          {
+            backgroundColor: isDark ? 'rgba(28, 24, 20, 0.96)' : 'rgba(255, 252, 247, 0.98)',
+            borderColor: colors.border,
+            shadowColor: '#000',
+          },
+        ]}
+      >
+        <View style={[styles.draftDockIcon, { backgroundColor: colors.accent + '1A' }]}>
+          <BookOpenIcon size={18} color={colors.accent} weight="light" />
+        </View>
+        <View style={styles.draftDockCopy}>
+          <Text style={[styles.draftDockTitle, { color: colors.text }]} numberOfLines={1}>
+            {draft.title}
+          </Text>
+          <Text style={[styles.draftDockPreview, { color: colors.textMuted }]} numberOfLines={1}>
+            {draft.preview}
+          </Text>
+        </View>
+        <Text style={[styles.draftDockAction, { color: colors.accent }]}>Restore</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 /** Animated wrapper for each tab icon -- handles scale spring + dot indicator */
 function AnimatedTabIcon({
@@ -316,6 +380,54 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+      <NoteDraftDock />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  draftDockWrap: {
+    position: 'absolute',
+    left: Spacing['4'],
+    right: Spacing['4'],
+    zIndex: 40,
+  },
+  draftDock: {
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['3'],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  draftDockIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  draftDockCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  draftDockTitle: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 14,
+  },
+  draftDockPreview: {
+    fontFamily: FontFamily.ui,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  draftDockAction: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 13,
+  },
+});
