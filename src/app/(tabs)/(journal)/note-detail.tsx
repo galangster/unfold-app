@@ -8,8 +8,9 @@ import {
   Platform,
   Alert,
   AccessibilityInfo,
+  ScrollView,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
@@ -33,6 +34,8 @@ import {
   TextHTwoIcon,
   TextHThreeIcon,
   ArrowsInSimpleIcon,
+  ArrowCounterClockwiseIcon,
+  ArrowClockwiseIcon,
 } from 'phosphor-react-native';
 import {
   useEditorBridge,
@@ -341,6 +344,7 @@ export default function NoteDetailScreen() {
   // Tracks latest HTML from onChangeHtml for explicit save (Done/Back)
   const latestHtmlRef = useRef(initialContent);
   const isMinimizingRef = useRef(false);
+  const appliedStartEditingKeyRef = useRef<string | null>(null);
 
   /* ───── TipTap editor bridge (Android / inert on iOS) ───── */
 
@@ -389,6 +393,21 @@ export default function NoteDetailScreen() {
   useEffect(() => {
     isEditingRef.current = isEditing;
   }, [isEditing]);
+
+  useFocusEffect(
+    useCallback(() => {
+      isMinimizingRef.current = false;
+      const startEditingKey = `${params.noteId ?? 'new'}:${params.startEditing ?? ''}`;
+      if (
+        isPremium &&
+        params.startEditing === 'true' &&
+        appliedStartEditingKeyRef.current !== startEditingKey
+      ) {
+        appliedStartEditingKeyRef.current = startEditingKey;
+        setIsEditing(true);
+      }
+    }, [isPremium, params.noteId, params.startEditing]),
+  );
 
   // Overlay covers the WebView until CSS is painted (not needed on native)
   const [editorReady, setEditorReady] = useState(IS_NATIVE_EDITOR);
@@ -748,7 +767,7 @@ export default function NoteDetailScreen() {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       setSaveState('idle');
       IS_NATIVE_EDITOR ? editorRef.current?.blur() : editor.blur();
-      router.push('/(tabs)/(bible)');
+      router.replace('/(tabs)/(bible)');
     } catch (error) {
       isMinimizingRef.current = false;
       logger.error('[NoteDetail] Failed to minimize note for Bible:', error);
@@ -945,6 +964,16 @@ export default function NoteDetailScreen() {
 
   /* ───── Toolbar actions ───── */
 
+  const handleUndo = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    IS_NATIVE_EDITOR ? editorRef.current?.undo() : editor.undo();
+  }, [editor]);
+
+  const handleRedo = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    IS_NATIVE_EDITOR ? editorRef.current?.redo() : editor.redo();
+  }, [editor]);
+
   const handleBold = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     IS_NATIVE_EDITOR ? editorRef.current?.toggleBold() : editor.toggleBold();
@@ -1103,7 +1132,7 @@ export default function NoteDetailScreen() {
                 onPress={handleMinimizeToBible}
                 style={styles.headerButton}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                activeOpacity={0.6}
+                activeOpacity={1}
                 accessibilityRole="button"
                 accessibilityLabel="Minimize note and open Bible"
               >
@@ -1116,7 +1145,7 @@ export default function NoteDetailScreen() {
               <TouchableOpacity
                 onPress={handleDone}
                 style={styles.actionButton}
-                activeOpacity={0.6}
+                activeOpacity={1}
                 accessibilityRole="button"
                 accessibilityLabel="Done editing"
               >
@@ -1128,7 +1157,7 @@ export default function NoteDetailScreen() {
               <TouchableOpacity
                 onPress={handleEdit}
                 style={styles.actionButton}
-                activeOpacity={0.6}
+                activeOpacity={1}
                 accessibilityRole="button"
                 accessibilityLabel="Edit note"
               >
@@ -1458,7 +1487,38 @@ export default function NoteDetailScreen() {
               },
             ]}
           >
-            <View style={styles.toolbarRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.toolbarRow}
+            >
+              <ToolbarButton
+                onPress={handleUndo}
+                label="Undo"
+                disabled={!IS_NATIVE_EDITOR && !editorState.canUndo}
+              >
+                <ArrowCounterClockwiseIcon
+                  size={18}
+                  color={!IS_NATIVE_EDITOR && !editorState.canUndo ? colors.textHint : colors.textMuted}
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <ToolbarButton
+                onPress={handleRedo}
+                label="Redo"
+                disabled={!IS_NATIVE_EDITOR && !editorState.canRedo}
+              >
+                <ArrowClockwiseIcon
+                  size={18}
+                  color={!IS_NATIVE_EDITOR && !editorState.canRedo ? colors.textHint : colors.textMuted}
+                  weight="light"
+                />
+              </ToolbarButton>
+
+              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
+
               <ToolbarButton
                 onPress={handleBold}
                 active={IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive}
@@ -1596,7 +1656,7 @@ export default function NoteDetailScreen() {
               <ToolbarButton onPress={handleScripturePress} label="Add scripture">
                 <BookBookmarkIcon size={18} color={colors.textMuted} weight="light" />
               </ToolbarButton>
-            </View>
+            </ScrollView>
           </View>
         )}
       </SafeAreaView>
@@ -1650,6 +1710,7 @@ function ToolbarButton({
   return (
     <TouchableOpacity
       onPress={onPress}
+      disabled={!!disabled}
       style={[
         styles.toolbarButton,
         active && { backgroundColor: colors.accent + '33' },
@@ -1696,6 +1757,10 @@ const styles = StyleSheet.create({
     gap: Spacing['1'],
   },
   actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: Spacing['2'],
     paddingVertical: Spacing['2'],
   },
@@ -1838,12 +1903,12 @@ const styles = StyleSheet.create({
   toolbarRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: NOTEBOOK_TOOLBAR_ROW_HEIGHT,
     paddingHorizontal: Spacing['1.5'],
-    height: NOTEBOOK_TOOLBAR_ROW_HEIGHT,
   },
   toolbarButton: {
-    width: 34,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 6,

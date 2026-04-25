@@ -1,5 +1,22 @@
 import { create } from 'zustand';
 
+const DOCK_VISIBLE_TAB_BAR_OFFSET = 72;
+const DOCK_HIDDEN_TAB_BAR_GAP = 12;
+
+export function getNoteDraftDockOffset({
+  safeAreaBottom,
+  tabBarHidden,
+}: {
+  safeAreaBottom: number;
+  tabBarHidden: boolean;
+}): { bottom: number; translateY: number } {
+  const bottom = Math.max(safeAreaBottom, 8) + DOCK_VISIBLE_TAB_BAR_OFFSET;
+  return {
+    bottom,
+    translateY: tabBarHidden ? DOCK_VISIBLE_TAB_BAR_OFFSET - DOCK_HIDDEN_TAB_BAR_GAP : 0,
+  };
+}
+
 export type NoteDraftDock = {
   noteId: string;
   title: string;

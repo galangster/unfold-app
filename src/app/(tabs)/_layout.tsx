@@ -19,7 +19,7 @@ import { Duration, Spring } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
-import { useNoteDraftDock } from '@/lib/note-draft-dock';
+import { getNoteDraftDockOffset, useNoteDraftDock } from '@/lib/note-draft-dock';
 // expo-router bundles its own @react-navigation/bottom-tabs which has
 // type mismatches with the project-level version. Use structural typing.
 type TabBarProps = {
@@ -37,6 +37,22 @@ function NoteDraftDock() {
   const reducedMotion = useReducedMotion();
   const draft = useNoteDraftDock((s) => s.draft);
   const clearDraft = useNoteDraftDock((s) => s.clearDraft);
+  const tabBarHidden = useUIState((s) => s.tabBarHidden);
+  const dockOffset = getNoteDraftDockOffset({
+    safeAreaBottom: insets.bottom,
+    tabBarHidden,
+  });
+  const dockTranslateY = useSharedValue(dockOffset.translateY);
+
+  useEffect(() => {
+    dockTranslateY.value = reducedMotion
+      ? dockOffset.translateY
+      : withTiming(dockOffset.translateY, { duration: Duration.fast });
+  }, [dockOffset.translateY, dockTranslateY, reducedMotion]);
+
+  const dockAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dockTranslateY.value }],
+  }));
 
   if (!draft) return null;
 
@@ -56,7 +72,8 @@ function NoteDraftDock() {
       pointerEvents="box-none"
       style={[
         styles.draftDockWrap,
-        { bottom: Math.max(insets.bottom, 8) + 72 },
+        { bottom: dockOffset.bottom },
+        dockAnimatedStyle,
       ]}
     >
       <TouchableOpacity
@@ -64,6 +81,7 @@ function NoteDraftDock() {
         activeOpacity={0.82}
         accessibilityRole="button"
         accessibilityLabel="Restore minimized note"
+        accessibilityHint="Opens the minimized note in edit mode"
         style={[
           styles.draftDock,
           {

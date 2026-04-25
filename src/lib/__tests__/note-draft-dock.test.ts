@@ -1,4 +1,7 @@
-import { buildNoteDraftDockPreview } from '@/lib/note-draft-dock';
+import {
+  buildNoteDraftDockPreview,
+  getNoteDraftDockOffset,
+} from '@/lib/note-draft-dock';
 
 describe('buildNoteDraftDockPreview', () => {
   it('uses the explicit title and normalized preview text', () => {
@@ -22,6 +25,22 @@ describe('buildNoteDraftDockPreview', () => {
     expect(buildNoteDraftDockPreview({ title: ' ', plainText: ' ' })).toEqual({
       title: 'Untitled note',
       preview: 'Draft saved — tap to restore.',
+    });
+  });
+});
+
+describe('getNoteDraftDockOffset', () => {
+  it('keeps the dock above the visible tab bar', () => {
+    expect(getNoteDraftDockOffset({ safeAreaBottom: 34, tabBarHidden: false })).toEqual({
+      bottom: 106,
+      translateY: 0,
+    });
+  });
+
+  it('moves the dock down when the tab bar is hidden without changing layout bottom', () => {
+    expect(getNoteDraftDockOffset({ safeAreaBottom: 34, tabBarHidden: true })).toEqual({
+      bottom: 106,
+      translateY: 60,
     });
   });
 });
