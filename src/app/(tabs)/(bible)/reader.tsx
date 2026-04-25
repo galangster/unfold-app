@@ -28,6 +28,12 @@ import type { BibleHighlightColor } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
 import { isRedLetterVerse } from '@/lib/red-letter-verses';
 import { getSectionHeadings } from '@/lib/bible-section-headings';
+import {
+  BIBLE_SELECTED_OVERLAY_BG,
+  getBibleTextOverlayStyle,
+  nextBibleTabBarStateAfterActions,
+  type BibleTextLine,
+} from '@/lib/bible-reader-visuals';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { isHighlightColorFree } from '@/lib/premium-gating';
 // VerseShareModal removed — now uses share-card route
@@ -100,8 +106,6 @@ const SWIPE_SPRING_BACK = { damping: 22, stiffness: 260, mass: 0.9 };
 
 // ─── Verse Item with per-line highlight via onTextLayout ────────────────────
 
-type TextLine = { x: number; y: number; width: number; height: number };
-
 // Max finger movement (px) before a tap is cancelled — prevents verse selection
 // during swipe attempts. Creates clear zones:
 //   0-8px  → tap (verse selected)
@@ -136,7 +140,7 @@ const VerseItem = React.memo(function VerseItem({
   textColor: string;
   onPress: () => void;
 }) {
-  const [textLines, setTextLines] = useState<TextLine[]>([]);
+  const [textLines, setTextLines] = useState<BibleTextLine[]>([]);
 
   // Flash animation: quick fade in → hold → smooth fade out
   const flashOpacity = useSharedValue(0);
@@ -185,9 +189,8 @@ const VerseItem = React.memo(function VerseItem({
 
   const hasOverlay = isSelected || !!highlightColor;
 
-  // Selection: inverted colors
-  const selectionBg = isDark ? 'rgba(225, 220, 210, 0.88)' : 'rgba(50, 50, 55, 0.85)';
-  const selectionText = isDark ? '#1A1A1A' : '#F0F0F0';
+  // Selection: subtle text-line mark, not a chunky inverted block.
+  const selectionBg = isDark ? BIBLE_SELECTED_OVERLAY_BG.dark : BIBLE_SELECTED_OVERLAY_BG.light;
 
   // Highlight bg
   const hlBg = highlightColor
@@ -199,7 +202,7 @@ const VerseItem = React.memo(function VerseItem({
 
   // Red-letter: bright warm red for Jesus's words
   const redLetterColor = isDark ? '#F56B5E' : '#C0392B';
-  const displayText = isSelected ? selectionText : (isRedLetter ? redLetterColor : textColor);
+  const displayText = isRedLetter ? redLetterColor : textColor;
   const overlayBg = isSelected ? selectionBg : hlBg;
 
   const handleTextLayout = useCallback((e: any) => {
@@ -234,15 +237,10 @@ const VerseItem = React.memo(function VerseItem({
         {hasOverlay && overlayBg && textLines.map((line, i) => (
           <View
             key={i}
-            style={{
-              position: 'absolute',
-              left: line.x - 3,
-              top: line.y - 1,
-              width: line.width + 6,
-              height: line.height + 2,
-              backgroundColor: overlayBg,
-              borderRadius: 4,
-            }}
+            style={[
+              getBibleTextOverlayStyle(line, isSelected ? (isDark ? 'selectedDark' : 'selectedLight') : 'saved'),
+              { backgroundColor: overlayBg },
+            ]}
           />
         ))}
 
@@ -832,23 +830,28 @@ export default function BibleReaderScreen() {
 
   // Hide tab bar when context actions show — instant snap, no animation (prevents flash)
   useEffect(() => {
+    const tabBarState = nextBibleTabBarStateAfterActions({
+      showActions,
+      wasScrollHiddenBeforeActions: wasScrollHiddenRef.current,
+    });
+
     if (showActions) {
       // Remember if tab bar was already hidden from scrolling
       wasScrollHiddenRef.current = tabBarHiddenRef.current;
       // Instantly hide tab bar (context bar covers its spot)
-      setTabBarHidden(true, 'instant');
-      tabBarHiddenRef.current = true;
+      setTabBarHidden(tabBarState.hidden, tabBarState.mode);
+      tabBarHiddenRef.current = tabBarState.hidden;
     } else {
       if (wasScrollHiddenRef.current) {
-        // Tab bar was already scroll-hidden — don't touch it at all.
-        // It's already hidden (instant mode). Scroll handler will manage it
-        // when user scrolls back up.
-        tabBarHiddenRef.current = true;
+        // Tab bar was already scroll-hidden — keep it hidden, but force instant
+        // mode so the context bar cannot briefly reveal content underneath.
+        setTabBarHidden(tabBarState.hidden, tabBarState.mode);
+        tabBarHiddenRef.current = tabBarState.hidden;
       } else {
         // Instantly restore tab bar — it renders on top of context bar (higher z),
         // so context bar unmount happens invisibly behind it. Zero flash.
-        setTabBarHidden(false, 'instant');
-        tabBarHiddenRef.current = false;
+        setTabBarHidden(tabBarState.hidden, tabBarState.mode);
+        tabBarHiddenRef.current = tabBarState.hidden;
       }
     }
   }, [showActions, setTabBarHidden]);
