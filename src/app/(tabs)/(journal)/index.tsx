@@ -90,15 +90,18 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
 
   const indicatorTranslateX = useSharedValue(activeIndex * segmentWidth);
 
-  // Update animation when segment changes — fast ease-out, no bounce
+  // Update animation when segment changes — fast ease-out, no bounce.
+  // Keep shared-value writes out of render to avoid Reanimated runtime warnings.
   const prevIndex = useRef(activeIndex);
-  if (prevIndex.current !== activeIndex && segmentWidth > 0) {
-    indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-    });
-    prevIndex.current = activeIndex;
-  }
+  useEffect(() => {
+    if (prevIndex.current !== activeIndex && segmentWidth > 0) {
+      indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+      });
+      prevIndex.current = activeIndex;
+    }
+  }, [activeIndex, indicatorTranslateX, segmentWidth]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorTranslateX.value }],
@@ -110,12 +113,14 @@ function SegmentedControl({ activeSegment, onSegmentChange }: SegmentedControlPr
     setContainerWidth(width);
   }, []);
 
-  // When containerWidth changes and we know the index, set position without animation
+  // When containerWidth changes and we know the index, set position without animation.
   const containerWidthRef = useRef(0);
-  if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {
-    containerWidthRef.current = containerWidth;
-    indicatorTranslateX.value = activeIndex * ((containerWidth - 4) / 2);
-  }
+  useEffect(() => {
+    if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {
+      containerWidthRef.current = containerWidth;
+      indicatorTranslateX.value = activeIndex * ((containerWidth - 4) / 2);
+    }
+  }, [activeIndex, containerWidth, indicatorTranslateX]);
 
   const handlePress = useCallback(
     (segment: Segment) => {
