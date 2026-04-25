@@ -10,7 +10,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
@@ -229,6 +229,9 @@ const DEFAULT_SELECTION_STATE: UnfoldEditorSelectionState = {
   end: 0,
 };
 
+const JOURNAL_TAB_BAR_CONTENT_HEIGHT = 56;
+const JOURNAL_EDITOR_BOTTOM_BREATHING_ROOM = 24;
+
 /* ─────────────────────────────────────────────────────────
  * Unified Note Screen — reads AND edits in one view
  *
@@ -256,6 +259,7 @@ export default function NoteDetailScreen() {
   }>();
 
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const { isPremium, gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
@@ -376,6 +380,9 @@ export default function NoteDetailScreen() {
     isEditing,
     isKeyboardUp,
   });
+  const nativeEditorBottomOverlayInset = isKeyboardUp
+    ? 0
+    : JOURNAL_TAB_BAR_CONTENT_HEIGHT + insets.bottom + JOURNAL_EDITOR_BOTTOM_BREATHING_ROOM;
 
   // Keep a ref for isEditing so the onChange callback always has the latest value
   const isEditingRef = useRef(isEditing);
@@ -1370,6 +1377,7 @@ export default function NoteDetailScreen() {
               keyboardAppearance={isDark ? 'dark' : 'light'}
               colorScheme={isDark ? 'dark' : 'light'}
               keyboardToolbarHeight={nativeEditorToolbarInset}
+              bottomOverlayInset={nativeEditorBottomOverlayInset}
               style={styles.richText}
             />
           ) : (

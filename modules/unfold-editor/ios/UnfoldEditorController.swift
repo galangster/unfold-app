@@ -59,6 +59,11 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// so RN passes this extra occlusion height down explicitly.
   private var keyboardToolbarHeight: CGFloat = 0
 
+  /// Extra bottom inset for app chrome that overlays the native editor host view
+  /// without affecting keyboard toolbar semantics (for example the custom tab bar
+  /// while a note is in read mode).
+  private var bottomOverlayInset: CGFloat = 0
+
   /// Coalesces repeated caret-visibility requests from text + selection changes
   /// into a single main-runloop scroll correction.
   private var hasPendingCaretVisibilityUpdate = false
@@ -382,8 +387,17 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     scheduleCaretVisibilityUpdate()
   }
 
+  func setBottomOverlayInset(_ inset: Double) {
+    let nextInset = max(0, CGFloat(inset))
+    guard abs(nextInset - bottomOverlayInset) >= 0.5 else { return }
+    bottomOverlayInset = nextInset
+    updateEditorScrollInsets()
+    scheduleCaretVisibilityUpdate()
+  }
+
   private func updateEditorScrollInsets() {
-    let bottomInset = keyboardToolbarHeight > 0 ? keyboardToolbarHeight + 16 : 0
+    let toolbarInset = keyboardToolbarHeight > 0 ? keyboardToolbarHeight + 16 : 0
+    let bottomInset = max(toolbarInset, bottomOverlayInset)
     editor.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
     editor.verticalScrollIndicatorInsets = UIEdgeInsets(top: 0, left: 0, bottom: bottomInset, right: 0)
   }

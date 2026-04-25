@@ -67,6 +67,10 @@ export type UnfoldEditorViewProps = Omit<ViewProps, 'onFocus' | 'onBlur'> & {
   autoFocus?: boolean;
   keyboardAppearance?: UnfoldEditorKeyboardAppearance;
   keyboardToolbarHeight?: number;
+  /** Extra bottom inset for app chrome that overlays the editor host view
+   *  (for example the custom tab bar in read mode). This is separate from
+   *  keyboardToolbarHeight so keyboard/editing semantics stay independent. */
+  bottomOverlayInset?: number;
   /** Overrides the native view's UIKit trait collection so dynamic colors
    *  resolve against the app's theme, not the system theme. */
   colorScheme?: UnfoldEditorColorScheme;

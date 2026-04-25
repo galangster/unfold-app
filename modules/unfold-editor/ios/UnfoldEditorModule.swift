@@ -42,6 +42,10 @@ public class UnfoldEditorModule: Module {
         view.controller.setKeyboardToolbarHeight(height)
       }
 
+      Prop("bottomOverlayInset") { (view: UnfoldEditorView, inset: Double) in
+        view.controller.setBottomOverlayInset(inset)
+      }
+
       Prop("colorScheme") { (view: UnfoldEditorView, scheme: String) in
         view.setColorScheme(scheme)
       }
