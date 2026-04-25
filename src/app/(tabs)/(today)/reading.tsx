@@ -197,13 +197,15 @@ export default function ReadingScreen() {
   // Honor ?devotionalId=… so deep links (e.g., from the library) open the
   // correct devotional instead of whatever happens to be current in the store.
   // We resolve the effective devotional locally from the param *immediately*
-  // so first-render state (viewingDay) picks the right days, and we also
-  // mirror it to the store in the same render so downstream consumers
-  // (audio player, highlights filters) see the right id next tick.
+  // so first-render state (viewingDay) picks the right days. We mirror it to
+  // the store from an effect so downstream consumers (audio player, highlight
+  // filters) see the right id without mutating Zustand during render.
   const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
-  if (params.devotionalId && params.devotionalId !== currentDevotionalId) {
-    setCurrentDevotional(params.devotionalId);
-  }
+  useEffect(() => {
+    if (params.devotionalId && params.devotionalId !== currentDevotionalId) {
+      setCurrentDevotional(params.devotionalId);
+    }
+  }, [params.devotionalId, currentDevotionalId, setCurrentDevotional]);
 
   // Derive via useMemo instead of inline .find() in a Zustand selector.
   // .find() inside a selector returns a new reference on every store update,
@@ -218,7 +220,7 @@ export default function ReadingScreen() {
   const [viewingDay, setViewingDay] = useState(() => {
     if (requestedDayNumber) return requestedDayNumber;
     // Read fresh state from the store to ensure the param devotional is used
-    // even before the render-phase sync has flushed.
+    // even before the effect-based store sync has flushed.
     const devs = useUnfoldStore.getState().devotionals;
     const d = devs.find((x) => x.id === effectiveDevotionalId);
     if (!d) return 1;

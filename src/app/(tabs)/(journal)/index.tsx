@@ -26,7 +26,7 @@ import Animated, {
   Easing,
   useReducedMotion,
 } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
   PencilLineIcon,
@@ -62,7 +62,7 @@ import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 type Segment = 'reflections' | 'notebook';
 
 const JOURNAL_SWIPE_ACTIVE_OFFSET = 18;
-const JOURNAL_SWIPE_FAIL_OFFSET_Y = 14;
+const JOURNAL_SWIPE_FAIL_OFFSET_Y = 32;
 const JOURNAL_SWIPE_THRESHOLD = 72;
 const JOURNAL_SWIPE_VELOCITY = 520;
 const JOURNAL_SWIPE_MAX_TRANSLATE = 24;
@@ -988,14 +988,16 @@ export default function JournalHubScreen() {
   const notebookSwipeX = useSharedValue(0);
 
   const switchToNotebookFromSwipe = useCallback(() => {
+    if (activeSegment === 'notebook') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveSegment('notebook');
-  }, []);
+  }, [activeSegment]);
 
   const switchToReflectionsFromSwipe = useCallback(() => {
+    if (activeSegment === 'reflections') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setActiveSegment('reflections');
-  }, []);
+  }, [activeSegment]);
 
   const reflectionsSwipeGesture = useMemo(
     () =>
@@ -1065,6 +1067,23 @@ export default function JournalHubScreen() {
           notebookSwipeX.value = withTiming(0, JOURNAL_SWIPE_RESET_CONFIG);
         }),
     [notebookSwipeX, reducedMotion, switchToReflectionsFromSwipe],
+  );
+
+  const segmentedSwipeGesture = useMemo(
+    () =>
+      Gesture.Exclusive(
+        Gesture.Fling()
+          .direction(Directions.LEFT)
+          .onEnd(() => {
+            runOnJS(switchToNotebookFromSwipe)();
+          }),
+        Gesture.Fling()
+          .direction(Directions.RIGHT)
+          .onEnd(() => {
+            runOnJS(switchToReflectionsFromSwipe)();
+          }),
+      ),
+    [switchToNotebookFromSwipe, switchToReflectionsFromSwipe],
   );
 
   const reflectionsSwipeStyle = useAnimatedStyle(() => ({
@@ -1159,12 +1178,14 @@ export default function JournalHubScreen() {
           )}
 
           {/* Segmented Control */}
-          <View style={mainStyles.segmentContainer}>
-            <SegmentedControl
-              activeSegment={activeSegment}
-              onSegmentChange={setActiveSegment}
-            />
-          </View>
+          <GestureDetector gesture={segmentedSwipeGesture}>
+            <View style={mainStyles.segmentContainer}>
+              <SegmentedControl
+                activeSegment={activeSegment}
+                onSegmentChange={setActiveSegment}
+              />
+            </View>
+          </GestureDetector>
 
           {/* ================================================================ */}
           {/* REFLECTIONS TAB (existing content — unchanged) */}
@@ -1558,9 +1579,13 @@ export default function JournalHubScreen() {
           {/* NOTEBOOK TAB (new content) */}
           {/* ================================================================ */}
           {activeSegment === 'notebook' && (
-            <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
-              {/* Folder filter chips */}
-              <View style={mainStyles.filterRow}>
+            <GestureDetector gesture={notebookSwipeGesture}>
+              <Animated.View
+                entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
+                style={notebookSwipeStyle}
+              >
+                {/* Folder filter chips */}
+                <View style={mainStyles.filterRow}>
                 <FolderChips
                   folders={folders}
                   activeFolderId={activeFolderId}
@@ -1583,9 +1608,7 @@ export default function JournalHubScreen() {
               </View>
 
               {/* Notes list or empty state */}
-              <GestureDetector gesture={notebookSwipeGesture}>
-                <Animated.View style={notebookSwipeStyle}>
-                  {filteredNotes.length === 0 ? (
+              {filteredNotes.length === 0 ? (
                     !searchQuery.trim() && activeFolderId === null && currentParentId === null ? (
                       <View style={{ paddingHorizontal: Spacing['6'] }}>
                         <NotebookEmptyState onCreateNote={handleCreateNote} />
@@ -1621,9 +1644,8 @@ export default function JournalHubScreen() {
                       ))}
                     </View>
                   )}
-                </Animated.View>
-              </GestureDetector>
-            </Animated.View>
+              </Animated.View>
+            </GestureDetector>
           )}
         </ScrollView>
 
