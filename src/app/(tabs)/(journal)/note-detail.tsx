@@ -1128,16 +1128,52 @@ export default function NoteDetailScreen() {
 
           <View style={styles.headerRight}>
             {isEditing && (
-              <TouchableOpacity
-                onPress={handleMinimizeToBible}
-                style={styles.headerButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                activeOpacity={1}
-                accessibilityRole="button"
-                accessibilityLabel="Minimize note and open Bible"
-              >
-                <ArrowsInSimpleIcon size={22} color={colors.textMuted} weight="light" />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  onPress={handleUndo}
+                  disabled={!IS_NATIVE_EDITOR && !editorState.canUndo}
+                  style={styles.headerButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={!IS_NATIVE_EDITOR && !editorState.canUndo ? 1 : 0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Undo note edit"
+                  accessibilityState={{ disabled: !IS_NATIVE_EDITOR && !editorState.canUndo }}
+                >
+                  <ArrowCounterClockwiseIcon
+                    size={21}
+                    color={!IS_NATIVE_EDITOR && !editorState.canUndo ? colors.textHint : colors.textMuted}
+                    weight="light"
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleRedo}
+                  disabled={!IS_NATIVE_EDITOR && !editorState.canRedo}
+                  style={styles.headerButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={!IS_NATIVE_EDITOR && !editorState.canRedo ? 1 : 0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Redo note edit"
+                  accessibilityState={{ disabled: !IS_NATIVE_EDITOR && !editorState.canRedo }}
+                >
+                  <ArrowClockwiseIcon
+                    size={21}
+                    color={!IS_NATIVE_EDITOR && !editorState.canRedo ? colors.textHint : colors.textMuted}
+                    weight="light"
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleMinimizeToBible}
+                  style={styles.headerButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={1}
+                  accessibilityRole="button"
+                  accessibilityLabel="Minimize note and open Bible"
+                >
+                  <ArrowsInSimpleIcon size={22} color={colors.textMuted} weight="light" />
+                </TouchableOpacity>
+              </>
             )}
 
             {/* Edit / Done toggle */}
@@ -1494,32 +1530,6 @@ export default function NoteDetailScreen() {
               contentContainerStyle={styles.toolbarRow}
             >
               <ToolbarButton
-                onPress={handleUndo}
-                label="Undo"
-                disabled={!IS_NATIVE_EDITOR && !editorState.canUndo}
-              >
-                <ArrowCounterClockwiseIcon
-                  size={18}
-                  color={!IS_NATIVE_EDITOR && !editorState.canUndo ? colors.textHint : colors.textMuted}
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <ToolbarButton
-                onPress={handleRedo}
-                label="Redo"
-                disabled={!IS_NATIVE_EDITOR && !editorState.canRedo}
-              >
-                <ArrowClockwiseIcon
-                  size={18}
-                  color={!IS_NATIVE_EDITOR && !editorState.canRedo ? colors.textHint : colors.textMuted}
-                  weight="light"
-                />
-              </ToolbarButton>
-
-              <View style={[styles.toolbarSep, { backgroundColor: colors.border }]} />
-
-              <ToolbarButton
                 onPress={handleBold}
                 active={IS_NATIVE_EDITOR ? selectionState.bold : editorState.isBoldActive}
                 label="Bold"
@@ -1746,7 +1756,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
   },
   headerButton: {
-    width: 40,
+    width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
