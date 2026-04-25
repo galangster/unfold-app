@@ -176,6 +176,8 @@ open class ListTextProcessor: TextProcessing {
             }
 
         case .backspace:
+            guard exitEmptyListItemOnBackspace(editor: editor, editedRange: editedRange) == false else { return }
+
             let attributedText = editor.attributedText
             guard editedRange.location > 0,
                   attributedText.substring(from: editedRange) == ListTextProcessor.blankLineFiller,
@@ -200,6 +202,32 @@ open class ListTextProcessor: TextProcessing {
         else { return }
 
         terminateList(editor: editor, editedRange: currentContentLineRange)
+    }
+
+    private func exitEmptyListItemOnBackspace(editor: EditorView, editedRange: NSRange) -> Bool {
+        guard editor.contentLength > 0,
+              let currentLine = editor.contentLinesInRange(editedRange).first,
+              currentLine.text.string == ListTextProcessor.blankLineFiller,
+              currentLine.text.attribute(.listItem, at: 0, effectiveRange: nil) != nil
+        else { return false }
+
+        editor.typingAttributes[.listItem] = nil
+        editor.typingAttributes[.paragraphStyle] = editor.paragraphStyle
+
+        if currentLine.range.length > 0 {
+            editor.removeAttribute(.listItem, at: currentLine.range)
+            editor.addAttribute(.paragraphStyle, value: editor.paragraphStyle, at: currentLine.range)
+        }
+
+        let fillerRange = NSRange(location: currentLine.range.location, length: min(currentLine.range.length, ListTextProcessor.blankLineFiller.utf16.count))
+        if fillerRange.length > 0, fillerRange.endLocation <= editor.contentLength {
+            editor.replaceCharacters(in: fillerRange, with: "")
+        }
+
+        editor.selectedRange = NSRange(location: min(currentLine.range.location, editor.contentLength), length: 0)
+        editor.typingAttributes[.listItem] = nil
+        editor.typingAttributes[.paragraphStyle] = editor.paragraphStyle
+        return true
     }
 
     private func terminateList(editor: EditorView, editedRange: NSRange) {

@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
 import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import Animated, {
   useSharedValue,
@@ -40,6 +40,7 @@ import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
+import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -143,6 +144,7 @@ export default function ReadingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string }>();
   const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
 
   // Clear reveal transition flag AFTER reading screen has painted to prevent
@@ -241,6 +243,7 @@ export default function ReadingScreen() {
   const [celebrationType, setCelebrationType] = useState<'day' | 'series'>('day');
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
   const [autoRetryTick, setAutoRetryTick] = useState(0);
@@ -260,6 +263,7 @@ export default function ReadingScreen() {
   const autoBackgroundKickoffRef = useRef<Record<string, number>>({});
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
@@ -1081,6 +1085,68 @@ export default function ReadingScreen() {
     })();
   }, [user, devoId, devoTotalDays, devoDaysCount, isPremium, isGeneratingMore, generateRemainingDays, autoRetryTick, isOnline]);
 
+  const recoverSyncedDay = useCallback(async (source: 'auto' | 'manual' = 'manual'): Promise<boolean> => {
+    if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return false;
+
+    const attemptKey = `${currentDevotional.id}:${viewingDay}`;
+    if (source === 'auto' && syncRecoveryAttemptRef.current[attemptKey]) return false;
+    if (source === 'auto') {
+      syncRecoveryAttemptRef.current[attemptKey] = true;
+    }
+
+    setIsCheckingForSyncedDay(true);
+    if (source === 'manual') {
+      setRetryError(null);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+
+    try {
+      const pulled = await pullDevotionalContent(currentDevotional.id);
+      if (pulled.days.length > 0) {
+        updateDevotionalDays(currentDevotional.id, pulled.days, pulled.devotional?.title);
+      }
+
+      const targetDay = pulled.days.find((day) => day.dayNumber === viewingDay);
+      if (targetDay) {
+        void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-sync-pull', {
+          devotionalId: currentDevotional.id,
+          viewingDay,
+          pulledDays: pulled.days.length,
+          source,
+        });
+        if (source === 'manual') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        return true;
+      }
+
+      if (source === 'manual') {
+        setRetryError('No finished day found yet. Try again in a moment, or generate the remaining days below.');
+      }
+      return false;
+    } catch (err) {
+      void logBugError('reading-sync-recovery', err, {
+        devotionalId: currentDevotional.id,
+        viewingDay,
+        source,
+      });
+      if (source === 'manual') {
+        setRetryError('Could not check for the latest day. Please try again.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      return false;
+    } finally {
+      setIsCheckingForSyncedDay(false);
+    }
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
+
+  useEffect(() => {
+    if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return;
+    void recoverSyncedDay('auto');
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, recoverSyncedDay]);
+
+  const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
+
   // Early returns after all hooks
   console.log('[Reading] early-return check', {
     hasCurrentDevotional: !!currentDevotional,
@@ -1103,7 +1169,7 @@ export default function ReadingScreen() {
     const daysReady = currentDevotional.days.length;
 
     const handleRetryGeneration = async () => {
-      if (!user || isRetrying) return;
+      if (!user || isRetrying || isCheckingForSyncedDay) return;
       if (!isOnline) {
         void logBugEvent('reading-generation', 'manual-retry-blocked-offline', {
           viewingDay,
@@ -1112,6 +1178,9 @@ export default function ReadingScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return;
       }
+
+      const synced = await recoverSyncedDay('manual');
+      if (synced) return;
 
       void logBugEvent('reading-generation', 'manual-retry-started', {
         viewingDay,
@@ -1236,7 +1305,7 @@ export default function ReadingScreen() {
           </View>
 
           {/* Center content */}
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 36 }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 36, paddingBottom: fallbackBottomPadding * 0.35 }}>
             <Text
               style={{
                 fontFamily: FontFamily.display,
@@ -1246,7 +1315,7 @@ export default function ReadingScreen() {
                 marginBottom: 14,
               }}
             >
-              {isRetrying ? 'Writing...' : 'Still being written'}
+              {isRetrying ? 'Writing...' : isCheckingForSyncedDay ? 'Checking for Day ' + viewingDay + '...' : 'Still being written'}
             </Text>
 
             <Text
@@ -1314,16 +1383,53 @@ export default function ReadingScreen() {
             )}
           </View>
 
-          {/* Bottom buttons - always visible, fixed at bottom */}
+          {/* Bottom buttons - reserve space above the absolute tab bar */}
           {!isRetrying && (
-            <View style={{ paddingHorizontal: Spacing['7'], paddingBottom: Spacing['5'], gap: Spacing['3'] }}>
-              {/* Generate button - primary CTA, hardcoded colors */}
+            <View style={{ paddingHorizontal: Spacing['7'], paddingBottom: fallbackBottomPadding, gap: Spacing['3'] }}>
+              <TouchableOpacity activeOpacity={0.7}
+                onPress={() => void recoverSyncedDay('manual')}
+                disabled={isCheckingForSyncedDay}
+                accessibilityRole="button"
+                accessibilityLabel={`Check for day ${viewingDay}`}
+                accessibilityHint="Fetch the latest devotional day from your account"
+                accessibilityState={{ disabled: isCheckingForSyncedDay }}
+                style={{
+                  backgroundColor: colors.backgroundElevated,
+                  paddingVertical: Spacing['4'],
+                  borderRadius: Radius.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  opacity: isCheckingForSyncedDay ? 0.65 : 1,
+                }}
+              >
+                {isCheckingForSyncedDay ? (
+                  <ActivityIndicator color={colors.text} size="small" />
+                ) : (
+                  <ArrowsClockwiseIcon size={16} color={colors.text} weight="light" />
+                )}
+                <Text
+                  style={{
+                    fontFamily: FontFamily.uiSemiBold,
+                    fontSize: 15,
+                    color: colors.text,
+                  }}
+                >
+                  {isCheckingForSyncedDay ? 'Checking...' : `Check for Day ${viewingDay}`}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Generate button - secondary recovery if sync has nothing yet */}
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleRetryGeneration}
+                disabled={isCheckingForSyncedDay}
                 accessibilityRole="button"
                 accessibilityLabel="Generate remaining days"
                 accessibilityHint={`Generate the remaining ${expectedDays - daysReady} days of your devotional`}
-                accessibilityState={{ disabled: isRetrying }}
+                accessibilityState={{ disabled: isCheckingForSyncedDay }}
                 style={{
                   backgroundColor: retryCtaButtonBg,
                   paddingVertical: 18,
@@ -1334,7 +1440,7 @@ export default function ReadingScreen() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 10,
-                  opacity: 1,
+                  opacity: isCheckingForSyncedDay ? 0.65 : 1,
                 }}
               >
                 <ArrowsClockwiseIcon size={16} color={btnText} weight="light" />
