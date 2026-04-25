@@ -39,6 +39,7 @@ import type { FontSize as FontSizePreference, Highlight } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
+import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -786,6 +787,19 @@ export default function ReadingScreen() {
 
     if (currentDevotionalId) {
       markDayAsRead(currentDevotionalId, viewingDay);
+      if (currentDevotional && currentDayData) {
+        void syncDevotionalDayRead({
+          devotional: currentDevotional,
+          day: currentDayData,
+        }).catch((err) => {
+          logger.warn('[reading] Failed to sync read state:', err instanceof Error ? err.message : err);
+          void logBugError('reading', err, {
+            phase: 'sync-read-state',
+            devotionalId: currentDevotionalId,
+            dayNumber: viewingDay,
+          });
+        });
+      }
 
       // Clear resume context since user just completed this day
       clearResumeContext();
@@ -851,7 +865,7 @@ export default function ReadingScreen() {
         }
       }
     }
-  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, markDayAsRead, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
