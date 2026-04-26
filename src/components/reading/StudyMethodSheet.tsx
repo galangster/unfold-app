@@ -403,7 +403,7 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
                 </View>
 
                 {/* Description */}
-                <Text style={[smStyles.description, { color: colors.textMuted }]}>
+                <Text style={[smStyles.description, { color: isDark ? colors.text : colors.textMuted }]}>
                   {method.description}
                 </Text>
 
@@ -445,7 +445,7 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
                     </Text>
 
                     {guide.summary ? (
-                      <Text style={[smStyles.guideSummary, { color: colors.textMuted }]}>
+                      <Text style={[smStyles.guideSummary, { color: isDark ? colors.text : colors.textMuted }]}>
                         {guide.summary}
                       </Text>
                     ) : null}

@@ -7,11 +7,16 @@ import * as Haptics from 'expo-haptics';
  * Maps `from` param to the correct tab route so back always returns
  * to the source tab, not the (you) tab's index.
  */
-const FROM_TO_ROUTE: Record<string, string> = {
+export const FROM_TO_ROUTE: Record<string, string> = {
   home: '/(tabs)/(today)',
   journal: '/(tabs)/(journal)',
   bible: '/(tabs)/(bible)',
 };
+
+/** Keep native swipe gestures enabled; beforeRemove still redirects cross-tab backs. */
+export function getCrossTabGestureOptions(isCrossTab: boolean) {
+  return isCrossTab ? { gestureEnabled: true } : undefined;
+}
 
 export function useCrossTabBack() {
   const router = useRouter();
@@ -21,10 +26,12 @@ export function useCrossTabBack() {
   const isCrossTab = !!from && from in FROM_TO_ROUTE;
   const returnRoute = from ? FROM_TO_ROUTE[from] : undefined;
 
-  // Disable native swipe gesture for cross-tab navigations
+  // Keep native swipe gestures enabled for cross-tab screens. The beforeRemove
+  // listener below still redirects the pop back to the source tab.
   useLayoutEffect(() => {
-    if (isCrossTab) {
-      navigation.setOptions({ gestureEnabled: false });
+    const options = getCrossTabGestureOptions(isCrossTab);
+    if (options) {
+      navigation.setOptions(options);
     }
   }, [isCrossTab, navigation]);
 

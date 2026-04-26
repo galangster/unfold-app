@@ -251,6 +251,11 @@ export function DevotionalWebView({
         });
 
         if (!best) return;
+        best.classList.add('target-highlight-flash');
+        setTimeout(function() {
+          best.classList.remove('target-highlight-flash');
+        }, 1800);
+
         const rect = best.getBoundingClientRect();
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'TARGET_HIGHLIGHT_LOCATED',
@@ -827,7 +832,7 @@ export function DevotionalWebView({
 
     const webFont = getWebFontName(readingFont.body);
     const bodyColor = isDark ? '#E8E4DC' : '#1A1A1A';
-    const mutedColor = isDark ? '#9A958D' : '#5A534E';  // 6.83:1 on card bg — AAA
+    const mutedColor = isDark ? '#E8E4DC' : '#5A534E';
     const accentColor = colors.accent;
     const inputBg = isDark ? '#1F1F1F' : '#EDE8E0';     // warmer, visible surface separation
 
@@ -1036,6 +1041,17 @@ export function DevotionalWebView({
     mark.highlight-blue { background: ${HIGHLIGHT_COLORS.blue[isDark ? 'dark' : 'light']}; }
     mark.highlight-purple { background: ${HIGHLIGHT_COLORS.purple[isDark ? 'dark' : 'light']}; }
     mark.highlight-red { background: ${HIGHLIGHT_COLORS.red[isDark ? 'dark' : 'light']}; }
+
+    mark.target-highlight-flash {
+      animation: targetHighlightFlash 1.8s ease-out;
+      box-shadow: 0 0 0 3px ${accentColor}66;
+    }
+
+    @keyframes targetHighlightFlash {
+      0% { box-shadow: 0 0 0 4px ${accentColor}99; }
+      55% { box-shadow: 0 0 0 8px ${accentColor}33; }
+      100% { box-shadow: 0 0 0 0 ${accentColor}00; }
+    }
     
     /* Body text -- generous paragraph spacing */
     p {

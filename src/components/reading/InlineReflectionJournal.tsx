@@ -16,7 +16,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
-import { useReadingFont } from '@/lib/useReadingFont';
+
 import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
@@ -44,7 +44,6 @@ export function InlineReflectionJournal({
 }: InlineReflectionJournalProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
-  const readingFont = useReadingFont();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
   const premiumPolicy = usePremiumAccessPolicy();
   const editable = premiumPolicy === 'granted';
@@ -290,7 +289,6 @@ export function InlineReflectionJournal({
             onResponseChange={handleResponseChange}
             inputRefs={inputRefs}
             colors={colors}
-            readingFont={readingFont}
             fontSizes={fontSizes}
             scrollViewRef={scrollViewRef}
             editable={editable}
@@ -352,7 +350,6 @@ function ReflectionQuestionCard({
   onResponseChange,
   inputRefs,
   colors,
-  readingFont,
   fontSizes,
   scrollViewRef,
   editable = true,
@@ -367,7 +364,6 @@ function ReflectionQuestionCard({
   onResponseChange: (index: number, question: string, text: string) => void;
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
-  readingFont: any;
   fontSizes: { body: number; scripture: number; title: number };
   scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
   editable?: boolean;
@@ -402,7 +398,7 @@ function ReflectionQuestionCard({
           <Text
             style={{
               flex: 1,
-              fontFamily: readingFont.bodyItalic,
+              fontFamily: FontFamily.body,
               fontSize: Math.round(fontSizes.body * 1.1),
               color: colors.text,
               lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,

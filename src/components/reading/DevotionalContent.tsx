@@ -193,16 +193,22 @@ export function DevotionalContent({
       {/* Study method row — tappable to open method info sheet */}
       {day.studyMethod && BIBLE_STUDY_METHODS[day.studyMethod] && (
         <TouchableOpacity
-          style={[dcStyles.methodRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }]}
+          style={[
+            dcStyles.methodRow,
+            {
+              backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.045)',
+              borderColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.08)',
+            },
+          ]}
           onPress={() => onStudyMethodPress?.(day.studyMethod!)}
           activeOpacity={0.6}
           accessibilityRole="button"
           accessibilityLabel={`Study method: ${BIBLE_STUDY_METHODS[day.studyMethod].name}. Tap for details.`}
         >
-          <Text style={[dcStyles.methodName, { color: colors.textSubtle }]}>
+          <Text style={[dcStyles.methodName, { color: isDark ? colors.text : colors.textSubtle }]}>
             {BIBLE_STUDY_METHODS[day.studyMethod].name}
           </Text>
-          <CaretRightIcon size={14} color={colors.textMuted} weight="light" />
+          <CaretRightIcon size={14} color={isDark ? colors.text : colors.textMuted} weight="light" />
         </TouchableOpacity>
       )}
 
@@ -255,7 +261,7 @@ export function DevotionalContent({
           style={{
             fontFamily: readingFont.bodyItalic,
             fontSize: fontSizes.scripture,
-            color: colors.textMuted,
+            color: isDark ? colors.text : colors.textMuted,
             lineHeight: fontSizes.scripture * 1.75,
             textAlign: 'left',
             minHeight: displayScripture ? 'auto' : 60,
@@ -311,7 +317,7 @@ export function DevotionalContent({
                 style={{
                   fontFamily: readingFont.bodyItalic,
                   fontSize: Math.round(fontSizes.body * 1.15),
-                  color: colors.textMuted,
+                  color: isDark ? colors.text : colors.textMuted,
                   lineHeight: Math.round(fontSizes.body * 1.15) * 1.7,
                 }}
               >
@@ -355,10 +361,10 @@ export function DevotionalContent({
                     </Text>
                     <Text
                       style={{
-                        fontFamily: readingFont.bodyItalic,
-                        fontSize: Math.round(fontSizes.body * 1.1),
+                        fontFamily: FontFamily.body,
+                        fontSize: 18,
+                        lineHeight: 28,
                         color: colors.text,
-                        lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,
                         flex: 1,
                       }}
                     >

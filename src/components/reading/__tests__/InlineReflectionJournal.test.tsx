@@ -1,5 +1,6 @@
 import React from 'react';
-import { TextInput } from 'react-native';
+import { StyleSheet, Text, TextInput } from 'react-native';
+import { FontFamily } from '@/constants/fonts';
 
 // react-test-renderer types are not installed in this app; keep this test aligned
 // with the existing test pattern under src/components/__tests__.
@@ -158,6 +159,28 @@ describe('InlineReflectionJournal', () => {
     });
 
     expect(tree!.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  it('renders reflection questions in Inter instead of the selected reading font', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    const questionText = tree!.root
+      .findAllByType(Text)
+      .find((node: any) => String(node.props.children).replace(/\u00A0/g, ' ') === 'What stood out?');
+
+    expect(questionText).toBeTruthy();
+    expect(StyleSheet.flatten(questionText.props.style).fontFamily).toBe(FontFamily.body);
   });
 
   it('saves a response to the currently rendered day after a day change', () => {
