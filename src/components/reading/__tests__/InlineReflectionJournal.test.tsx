@@ -1,0 +1,205 @@
+import React from 'react';
+import { TextInput } from 'react-native';
+
+// react-test-renderer types are not installed in this app; keep this test aligned
+// with the existing test pattern under src/components/__tests__.
+const renderer = require('react-test-renderer');
+const { act } = renderer;
+
+import { InlineReflectionJournal } from '../InlineReflectionJournal';
+
+const mockEntries: Array<{
+  id: string;
+  devotionalId: string;
+  dayNumber: number;
+  content: string;
+  questionResponses?: Array<{ question: string; response: string }>;
+}> = [];
+
+const mockAddJournalEntry = jest.fn(({ devotionalId, dayNumber, content }) => {
+  mockEntries.push({
+    id: `entry-${devotionalId}-${dayNumber}`,
+    devotionalId,
+    dayNumber,
+    content,
+    questionResponses: [],
+  });
+});
+
+const mockUpdateQuestionResponse = jest.fn((entryId: string, question: string, response: string) => {
+  const entry = mockEntries.find((candidate) => candidate.id === entryId);
+  if (!entry) return;
+  const responses = entry.questionResponses ?? [];
+  const existing = responses.find((candidate) => candidate.question === question);
+  if (existing) {
+    existing.response = response;
+  } else {
+    responses.push({ question, response });
+  }
+  entry.questionResponses = responses;
+});
+
+const mockGetJournalEntry = jest.fn((devotionalId: string, dayNumber: number) =>
+  mockEntries.find((entry) => entry.devotionalId === devotionalId && entry.dayNumber === dayNumber)
+);
+
+jest.mock('@/lib/store', () => ({
+  FONT_SIZE_VALUES: {
+    medium: { body: 18, bodyLineHeight: 28 },
+  },
+  useUnfoldStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      getJournalEntry: mockGetJournalEntry,
+      addJournalEntry: mockAddJournalEntry,
+      updateQuestionResponse: mockUpdateQuestionResponse,
+    }),
+}));
+
+jest.mock('@/components/ui', () => ({
+  alpha: (color: string) => color,
+}));
+
+jest.mock('@/lib/theme', () => ({
+  useTheme: () => ({
+    colors: {
+      accent: '#D4AF37',
+      background: '#000000',
+      text: '#FFFFFF',
+      textMuted: '#999999',
+      textSubtle: '#777777',
+      inputBackground: '#111111',
+      border: '#333333',
+    },
+  }),
+}));
+
+jest.mock('@/lib/useReadingFont', () => ({
+  useReadingFont: () => 'System',
+}));
+
+jest.mock('@/hooks/usePremiumAccessPolicy', () => ({
+  usePremiumAccessPolicy: () => 'granted',
+}));
+
+jest.mock('expo-haptics', () => ({
+  ImpactFeedbackStyle: { Light: 'light' },
+  impactAsync: jest.fn(),
+}));
+
+jest.mock('phosphor-react-native', () => ({
+  ArrowRightIcon: 'ArrowRightIcon',
+  NotePencilIcon: 'NotePencilIcon',
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: {
+      View,
+    },
+    FadeIn: { duration: () => ({ easing: () => ({ delay: () => ({}) }) }) },
+    FadeInDown: { duration: () => ({ delay: () => ({ easing: () => ({}) }) }) },
+    Easing: {
+      cubic: 'cubic',
+      out: () => 'out',
+      in: () => 'in',
+      inOut: () => 'inOut',
+    },
+    useReducedMotion: () => true,
+  };
+});
+
+describe('InlineReflectionJournal', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockEntries.splice(0, mockEntries.length);
+    mockEntries.push({
+      id: 'entry-devotional-1',
+      devotionalId: 'devotional',
+      dayNumber: 1,
+      content: '',
+      questionResponses: [{ question: 'What stood out?', response: 'Day 1 answer' }],
+    });
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
+  it('clears inline responses when rerendered from an answered day to an unanswered day', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    expect(tree!.root.findByType(TextInput).props.value).toBe('Day 1 answer');
+
+    act(() => {
+      tree!.update(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    expect(tree!.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  it('saves a response to the currently rendered day after a day change', () => {
+    let tree: any;
+
+    act(() => {
+      tree = renderer.create(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={1}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.update(
+        <InlineReflectionJournal
+          questions={['What stood out?']}
+          devotionalId="devotional"
+          dayNumber={2}
+          onOpenFullJournal={jest.fn()}
+        />
+      );
+    });
+
+    act(() => {
+      tree!.root.findByType(TextInput).props.onChangeText('Day 2 answer');
+      jest.advanceTimersByTime(800);
+    });
+
+    expect(mockUpdateQuestionResponse).toHaveBeenLastCalledWith(
+      'entry-devotional-2',
+      'What stood out?',
+      'Day 2 answer'
+    );
+    expect(mockEntries.find((entry) => entry.dayNumber === 1)?.questionResponses).toEqual([
+      { question: 'What stood out?', response: 'Day 1 answer' },
+    ]);
+    expect(mockEntries.find((entry) => entry.dayNumber === 2)?.questionResponses).toEqual([
+      { question: 'What stood out?', response: 'Day 2 answer' },
+    ]);
+  });
+});

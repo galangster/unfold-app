@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
@@ -666,9 +666,16 @@ export default function ReadingScreen() {
     transform: [{ translateY: chevronBounce.value }],
   }));
 
+  const dismissKeyboardForSwipe = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
   const panGesture = useMemo(() =>
     Gesture.Pan()
       .activeOffsetX([-20, 20])
+      .onStart(() => {
+        runOnJS(dismissKeyboardForSwipe)();
+      })
       .onUpdate((event) => {
         translateX.value = event.translationX * 0.3;
       })
@@ -686,7 +693,7 @@ export default function ReadingScreen() {
         }
         translateX.value = withTiming(0, { duration: Duration.normal });
       }),
-    [viewingDay, availableDays, handlePrevious, handleNext]
+    [viewingDay, availableDays, handlePrevious, handleNext, dismissKeyboardForSwipe]
   );
 
   const handleShare = useCallback(() => {

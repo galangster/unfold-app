@@ -55,7 +55,11 @@ export function InlineReflectionJournal({
   const updateQuestionResponse = useUnfoldStore((s) => s.updateQuestionResponse);
 
   const existingEntry = getJournalEntry(devotionalId, dayNumber);
-  const savedEntryIdRef = useRef<string | null>(existingEntry?.id ?? null);
+  const savedEntryRef = useRef<{
+    devotionalId: string;
+    dayNumber: number;
+    entryId: string | null;
+  }>({ devotionalId, dayNumber, entryId: existingEntry?.id ?? null });
 
   // Track which question is expanded
   // Auto-open the first question so users discover the inline journal
@@ -70,30 +74,56 @@ export function InlineReflectionJournal({
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
-  // Load existing responses from store
+  const questionsKey = useMemo(() => questions.join('\u001f'), [questions]);
+
+  // Load day-scoped responses from store. This must also clear stale local state when
+  // swiping from an answered day to an unanswered day, because the component instance
+  // is reused across devotional days.
   useEffect(() => {
+    if (focusTimerRef.current) {
+      clearTimeout(focusTimerRef.current);
+      focusTimerRef.current = null;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    hasPendingSaveRef.current = false;
+
+    const initial = new Map<number, string>();
     if (existingEntry?.questionResponses) {
-      const initial = new Map<number, string>();
       for (const qr of existingEntry.questionResponses) {
         const idx = questions.findIndex((q) => q === qr.question);
         if (idx >= 0) {
           initial.set(idx, qr.response);
         }
       }
-      if (initial.size > 0) {
-        setLocalResponses(initial);
-      }
     }
-  }, [existingEntry?.id]);
+
+    savedEntryRef.current = {
+      devotionalId,
+      dayNumber,
+      entryId: existingEntry?.id ?? null,
+    };
+    localResponsesRef.current = initial;
+    setLocalResponses(initial);
+  }, [devotionalId, dayNumber, existingEntry?.id, questionsKey, questions]);
 
   // Ensure a journal entry exists to attach responses to
   const ensureEntry = useCallback((): string | null => {
-    if (savedEntryIdRef.current) return savedEntryIdRef.current;
+    const saved = savedEntryRef.current;
+    if (
+      saved.devotionalId === devotionalId &&
+      saved.dayNumber === dayNumber &&
+      saved.entryId
+    ) {
+      return saved.entryId;
+    }
 
     addJournalEntry({ devotionalId, dayNumber, content: '' });
     const entry = getJournalEntry(devotionalId, dayNumber);
     if (entry) {
-      savedEntryIdRef.current = entry.id;
+      savedEntryRef.current = { devotionalId, dayNumber, entryId: entry.id };
       return entry.id;
     }
     return null;
