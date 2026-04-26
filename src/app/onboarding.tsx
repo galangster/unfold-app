@@ -72,7 +72,7 @@ import {
   getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
-  isFullScreenOnboardingStepType,
+  getOnboardingStepLayoutMode,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
 } from '@/lib/onboarding-step-helpers';
@@ -745,6 +745,11 @@ export default function OnboardingScreen() {
     return STEPS.findIndex((s) => s.id === currentStepId);
   }, [STEPS, currentStepId]);
   const isLastStep = currentStepIndex === STEPS.length - 1;
+  const stepLayoutMode = getOnboardingStepLayoutMode({
+    baseStepType: baseStep?.type,
+    themeSelectionMode,
+    stepType: step?.type,
+  });
 
   useEffect(() => {
     if (step || STEPS.length === 0) return;
@@ -2956,11 +2961,11 @@ export default function OnboardingScreen() {
             style={{ flex: 1 }}
           >
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {isFullScreenOnboardingStepType(step?.type) ? (
+            {stepLayoutMode === 'fullScreen' ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
-            ) : (baseStep?.type === 'themeType' && themeSelectionMode !== 'none') || baseStep?.type === 'studySubject' ? (
+            ) : stepLayoutMode === 'selectionScroll' ? (
               <KeyboardAwareScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={60}>
                 <View style={{ flex: 1, paddingHorizontal: Spacing['6'], paddingTop: Spacing['10'] }}>
                   <View>

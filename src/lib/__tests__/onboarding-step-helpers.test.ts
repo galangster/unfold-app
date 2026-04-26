@@ -7,6 +7,7 @@ import {
   getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
+  getOnboardingStepLayoutMode,
   isFullScreenOnboardingStepType,
   shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
@@ -149,6 +150,19 @@ describe('onboarding step helpers', () => {
     expect(isFullScreenOnboardingStepType('threeStepPaywall')).toBe(true);
     expect(isFullScreenOnboardingStepType('multiline')).toBe(false);
     expect(isFullScreenOnboardingStepType(undefined)).toBe(false);
+  });
+
+  it('selects onboarding step layout modes', () => {
+    expect(getOnboardingStepLayoutMode({ stepType: 'threeStepPaywall' })).toBe('fullScreen');
+    expect(
+      getOnboardingStepLayoutMode({
+        baseStepType: 'themeType',
+        themeSelectionMode: 'theme',
+        stepType: 'themeType',
+      }),
+    ).toBe('selectionScroll');
+    expect(getOnboardingStepLayoutMode({ baseStepType: 'studySubject', stepType: 'studySubject' })).toBe('selectionScroll');
+    expect(getOnboardingStepLayoutMode({ stepType: 'multiline' })).toBe('standardScroll');
   });
 
   describe('onboarding sample generation', () => {

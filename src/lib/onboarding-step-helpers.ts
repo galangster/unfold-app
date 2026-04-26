@@ -144,6 +144,26 @@ export function isFullScreenOnboardingStepType(stepType?: string): boolean {
   return FULL_SCREEN_STEP_TYPES.has(stepType ?? '');
 }
 
+export type OnboardingStepLayoutMode = 'fullScreen' | 'selectionScroll' | 'standardScroll';
+
+export function getOnboardingStepLayoutMode({
+  baseStepType,
+  themeSelectionMode = 'none',
+  stepType,
+}: {
+  baseStepType?: string;
+  themeSelectionMode?: 'none' | 'theme' | 'type';
+  stepType?: string;
+}): OnboardingStepLayoutMode {
+  if (isFullScreenOnboardingStepType(stepType)) return 'fullScreen';
+
+  if ((baseStepType === 'themeType' && themeSelectionMode !== 'none') || baseStepType === 'studySubject') {
+    return 'selectionScroll';
+  }
+
+  return 'standardScroll';
+}
+
 export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(
   allSteps: readonly T[],
   existingUser: ExistingUserLike,
