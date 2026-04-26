@@ -1,0 +1,520 @@
+import { logger } from './logger';
+import { compositeId } from './sync-ids';
+
+type PersistedUnfoldState = Record<string, any>;
+
+export function migrateUnfoldStore(persistedState: unknown, version: number): PersistedUnfoldState {
+const state = persistedState as PersistedUnfoldState;
+
+// Migration from version 1 to 2: Add review prompt fields
+if (version < 2) {
+  try {
+    (state as any).reviewPromptLastDate = (state as any).reviewPromptLastDate ?? null;
+    (state as any).reviewPromptCount = (state as any).reviewPromptCount ?? 0;
+    (state as any).hasReviewed = (state as any).hasReviewed ?? false;
+    (state as any).reviewPromptDaysAtLast = (state as any).reviewPromptDaysAtLast ?? 0;
+    (state as any).streakLastReadDate = (state as any).streakLastReadDate ?? null;
+    (state as any).streakCurrent = (state as any).streakCurrent ?? 0;
+    (state as any).streakLongest = (state as any).streakLongest ?? 0;
+    (state as any).streakGraceDaysUsedThisWeek = (state as any).streakGraceDaysUsedThisWeek ?? 0;
+    (state as any).streakWeekStart = (state as any).streakWeekStart ?? null;
+  } catch (err) {
+    console.error('[store] Migration v1→2 failed:', err);
+  }
+}
+
+// Migration from version 2 to 3: Add streak tracking fields
+if (version < 3) {
+  try {
+    (state as any).streakLastReadDate = (state as any).streakLastReadDate ?? null;
+    (state as any).streakCurrent = (state as any).streakCurrent ?? 0;
+    (state as any).streakLongest = (state as any).streakLongest ?? 0;
+    (state as any).streakGraceDaysUsedThisWeek = (state as any).streakGraceDaysUsedThisWeek ?? 0;
+    (state as any).streakWeekStart = (state as any).streakWeekStart ?? null;
+  } catch (err) {
+    console.error('[store] Migration v2→3 failed:', err);
+  }
+}
+
+// Migration from version 3 to 4: Add streak freeze and weekend amnesty
+if (version < 4) {
+  try {
+    (state as any).streakWeekendAmnesty = (state as any).streakWeekendAmnesty ?? true;
+    (state as any).streakFreezes = (state as any).streakFreezes ?? 0;
+  } catch (err) {
+    console.error('[store] Migration v3→4 failed:', err);
+  }
+}
+
+// Migration from version 4 to 5: Add preferredVoice default to user
+if (version < 5) {
+  try {
+    if (state.user && typeof state.user === 'object' && !state.user.preferredVoice) {
+      state.user.preferredVoice = 'arman';
+    }
+  } catch (err) {
+    console.error('[store] Migration v4→5 failed:', err);
+  }
+}
+
+// Migration from version 5 to 6: Add seriesPersonaHistory
+if (version < 6) {
+  try {
+    (state as any).seriesPersonaHistory = (state as any).seriesPersonaHistory ?? [];
+  } catch (err) {
+    console.error('[store] Migration v5→6 failed:', err);
+  }
+}
+
+// Migration from version 6 to 7: Add hasSeenHomeTooltips
+if (version < 7) {
+  try {
+    (state as any).hasSeenHomeTooltips = (state as any).hasSeenHomeTooltips ?? false;
+  } catch (err) {
+    console.error('[store] Migration v6→7 failed:', err);
+  }
+}
+
+// Migration from version 7 to 8: Add hasSeenFeatureOnboarding
+if (version < 8) {
+  try {
+    (state as any).hasSeenFeatureOnboarding = (state as any).hasSeenFeatureOnboarding ?? false;
+  } catch (err) {
+    console.error('[store] Migration v7→8 failed:', err);
+  }
+}
+
+// Migration from version 8 to 9: Add checkIns array
+if (version < 9) {
+  try {
+    (state as any).checkIns = (state as any).checkIns ?? [];
+  } catch (err) {
+    console.error('[store] Migration v8→9 failed:', err);
+  }
+}
+
+if (version < 10) {
+  try {
+    (state as any).hasSeenDay1Review = (state as any).hasSeenDay1Review ?? false;
+  } catch (err) {
+    console.error('[store] Migration v9→10 failed:', err);
+  }
+}
+
+// Migration from version 11 to 12: Add companion orb state
+if (version < 12) {
+  try {
+    (state as any).hasSeenCompanionIntro = (state as any).hasSeenCompanionIntro ?? false;
+    (state as any).lastCompanionCheckInDate = (state as any).lastCompanionCheckInDate ?? null;
+  } catch (err) {
+    console.error('[store] Migration v10→12 failed:', err);
+  }
+}
+
+if (version < 13) {
+  try {
+    (state as any).dismissedMiddayCardDate = (state as any).dismissedMiddayCardDate ?? null;
+    (state as any).dismissedEveningCardDate = (state as any).dismissedEveningCardDate ?? null;
+  } catch (err) {
+    console.error('[store] Migration v12→13 failed:', err);
+  }
+}
+
+// Migration from version 13 to 14: Add premium nudge system
+if (version < 14) {
+  try {
+    (state as any).nudgeImpressions = (state as any).nudgeImpressions ?? [];
+    (state as any).nudgeShownThisSession = (state as any).nudgeShownThisSession ?? false;
+    (state as any).nudgeDismissals = (state as any).nudgeDismissals ?? [];
+    (state as any).streakJustReset = (state as any).streakJustReset ?? false;
+    (state as any).justCompletedSeriesTitle = (state as any).justCompletedSeriesTitle ?? null;
+    (state as any).hasUsedAudio = (state as any).hasUsedAudio ?? false;
+  } catch (err) {
+    console.error('[store] Migration v13→14 failed:', err);
+  }
+}
+
+// Migration from version 14 to 15: Add companion name and recent check-ins
+if (version < 15) {
+  try {
+    (state as any).companionName = (state as any).companionName ?? null;
+    (state as any).recentCompanionCheckIns = (state as any).recentCompanionCheckIns ?? [];
+  } catch (err) {
+    console.error('[store] Migration v14→15 failed:', err);
+  }
+}
+
+// Migration from version 15 to 16: Add progressive generation
+if (version < 16) {
+  try {
+    const devos = (state as any).devotionals ?? [];
+    for (const d of devos) {
+      if (!d) continue; // Skip null/undefined entries
+      if (!d.generationMode) d.generationMode = 'batch';
+      if (!Array.isArray(d.days)) d.days = [];
+    }
+    (state as any).devotionals = devos;
+    (state as any).progressiveGeneration = (state as any).progressiveGeneration ?? {
+      devotionalId: null,
+      currentDayGeneration: null,
+      isArcGenerated: false,
+    };
+  } catch (err) {
+    console.error('[store] Migration v15→16 failed:', err);
+  }
+}
+
+// Migration from version 16 to 17: Add Bible Reader state
+if (version < 17) {
+  try {
+    (state as any).bibleHighlights = (state as any).bibleHighlights ?? [];
+    (state as any).bibleReadingHistory = (state as any).bibleReadingHistory ?? [];
+    (state as any).bibleReaderSettings = (state as any).bibleReaderSettings ?? {
+      fontSize: 20,
+      lineHeightMultiplier: 1.8,
+      showVerseNumbers: true,
+      paragraphMode: false,
+      translation: 'BSB',
+    };
+  } catch (err) {
+    console.error('[store] Migration v16→17 failed:', err);
+  }
+}
+
+// Migration from version 17 to 18: Improve Bible Reader defaults
+if (version < 18) {
+  try {
+    const settings = (state as any).bibleReaderSettings ?? {};
+    (state as any).bibleReaderSettings = {
+      ...settings,
+      fontSize: 20,
+      lineHeightMultiplier: 1.8,
+    };
+  } catch (err) {
+    console.error('[store] Migration v17→18 failed:', err);
+  }
+}
+
+// Migration from version 18 to 19: Add AI data consent flag
+if (version < 19) {
+  try {
+    (state as any).hasConsentedToAI = (state as any).hasConsentedToAI ?? false;
+  } catch (err) {
+    console.error('[store] Migration v18→19 failed:', err);
+  }
+}
+
+// Migration from version 19 to 20: Add notebook notes
+if (version < 20) {
+  try {
+    (state as any).notes = (state as any).notes ?? [];
+  } catch (err) {
+    console.error('[store] Migration v19→20 failed:', err);
+  }
+}
+
+// Migration from version 20 to 21: Add notebook folders
+if (version < 21) {
+  try {
+    (state as any).folders = (state as any).folders ?? [];
+  } catch (err) {
+    console.error('[store] Migration v20→21 failed:', err);
+  }
+}
+
+// Migration from version 21 to 22: Add parentId to folders (subfolder support)
+if (version < 22) {
+  try {
+    // Existing folders get parentId: undefined (top-level) — no data change needed
+  } catch (err) {
+    console.error('[store] Migration v21→22 failed:', err);
+  }
+}
+
+// Migration from version 22 to 23: Add check-in notification toggles
+if (version < 23) {
+  try {
+    (state as any).middayCheckInEnabled = (state as any).middayCheckInEnabled ?? true;
+    (state as any).eveningWindDownEnabled = (state as any).eveningWindDownEnabled ?? true;
+  } catch (err) {
+    console.error('[store] Migration v22→23 failed:', err);
+  }
+}
+
+if (version < 24) {
+  // Clear legacy anonymous/guest auth providers — sign-in is now required
+  try {
+    const user = (state as any).user;
+    if (user?.authProvider === 'anonymous' || user?.authProvider === 'guest') {
+      user.authProvider = null;
+    }
+  } catch (err) {
+    console.error('[store] Migration v23→24 failed:', err);
+  }
+}
+
+// Migration from version 24 to 25: Map Cartesia voice UUIDs to Smallest.ai voice IDs
+if (version < 25) {
+  try {
+    const voiceMap: Record<string, string> = {
+      '694f9389-aac1-45b6-b726-9d9369183238': 'arman',   // Katie → Arman
+      '03496517-369a-4db1-8236-3d3ae459ddf7': 'jasmine', // Elena → Jasmine
+      '1463a4e1-56a1-4b41-b257-728d56e93605': 'arman',   // Marcus → Arman
+      '3246e36c-ac8c-418d-83cd-4eaad5a3b887': 'arman',   // David → Arman
+      '15a9cd88-84b0-4a8b-95f2-5d583b54c72e': 'jasmine', // Grace → Jasmine
+      'emily': 'arman',
+      'george': 'arman',
+      'jasper': 'arman',
+      'ariana': 'jasmine',
+      'james': 'arman',
+    };
+    if (state.user && typeof state.user === 'object') {
+      const oldVoice = state.user.preferredVoice;
+      if (oldVoice && voiceMap[oldVoice]) {
+        state.user.preferredVoice = voiceMap[oldVoice];
+      } else if (!oldVoice || !['arman', 'jasmine'].includes(oldVoice)) {
+        state.user.preferredVoice = 'arman';
+      }
+      // Flag for cache cleanup — picked up by tts-service on first use
+      (state as any)._needsTtsCacheCleanup = true;
+    }
+  } catch (err) {
+    console.error('[store] Migration v24→25 failed:', err);
+  }
+}
+
+// Migration from version 25 to 26: Add custom check-in times
+if (version < 26) {
+  try {
+    (state as any).middayCheckInTime = (state as any).middayCheckInTime ?? '12:30';
+    (state as any).eveningWindDownTime = (state as any).eveningWindDownTime ?? '20:30';
+    (state as any).middayCheckInByDay = (state as any).middayCheckInByDay ?? null;
+    (state as any).eveningWindDownByDay = (state as any).eveningWindDownByDay ?? null;
+  } catch (err) {
+    console.error('[store] Migration v25→26 failed:', err);
+  }
+}
+
+// Migration from version 26 to 27: Add deferred generation fields
+if (version < 27) {
+  try {
+    (state as any).lastGenerationCutoffDate = (state as any).lastGenerationCutoffDate ?? '';
+  } catch (err) {
+    console.error('[store] Migration v26→27 failed:', err);
+  }
+}
+
+// Migration from version 27 to 28: Add evening generation tracking
+if (version < 28) {
+  try {
+    (state as any).lastEveningGenerationDate = (state as any).lastEveningGenerationDate ?? '';
+  } catch (err) {
+    console.error('[store] Migration v27→28 failed:', err);
+  }
+}
+
+// Migration from version 28 to 29: Add updatedAt + id for cloud sync
+if (version < 29) {
+  try {
+    const now = new Date().toISOString();
+
+    // Backfill devotionals
+    const devos = (state as any).devotionals ?? [];
+    for (const d of devos) {
+      if (!d) continue;
+      if (!d.updatedAt) d.updatedAt = d.createdAt || now;
+      // Backfill days
+      if (Array.isArray(d.days)) {
+        for (const day of d.days) {
+          if (!day) continue;
+          day.devotionalId = day.devotionalId || d.id;
+          if (!day.id) day.id = compositeId(d.id, day.dayNumber);
+          if (!day.updatedAt) day.updatedAt = day.readAt || day.generatedAt || d.createdAt || now;
+        }
+      }
+    }
+
+    // Backfill bookmarks
+    const bookmarks = (state as any).bookmarks ?? [];
+    for (const b of bookmarks) {
+      if (!b) continue;
+      if (!b.updatedAt) b.updatedAt = b.savedAt || now;
+    }
+
+    // Backfill highlights
+    const highlights = (state as any).highlights ?? [];
+    for (const h of highlights) {
+      if (!h) continue;
+      if (!h.updatedAt) h.updatedAt = h.createdAt || now;
+    }
+
+    // Backfill bible highlights
+    const bibleHighlights = (state as any).bibleHighlights ?? [];
+    for (const bh of bibleHighlights) {
+      if (!bh) continue;
+      if (!bh.updatedAt) bh.updatedAt = bh.createdAt || now;
+    }
+
+    // Backfill bible reading positions
+    const bibleReadingHistory = (state as any).bibleReadingHistory ?? [];
+    for (const pos of bibleReadingHistory) {
+      if (!pos) continue;
+      if (!pos.id) pos.id = compositeId(pos.bookId, pos.translation || 'BSB');
+      if (!pos.updatedAt) pos.updatedAt = pos.lastReadAt || now;
+    }
+
+    // Backfill check-ins — convert `checkin_${Date.now()}` IDs to proper UUIDs
+    // (backend uses uuid('id').primaryKey() so non-UUID IDs will fail on INSERT)
+    const checkIns = (state as any).checkIns ?? [];
+    for (const ci of checkIns) {
+      if (!ci) continue;
+      if (!ci.id || !ci.id.match(/^[0-9a-f]{8}-/)) {
+        // Generate deterministic UUID from composite key
+        ci.id = compositeId(ci.devotionalId || 'unknown', ci.dayNumber ?? 0, ci.timeOfDay || 'morning');
+      }
+      if (!ci.updatedAt) ci.updatedAt = ci.createdAt || now;
+    }
+
+    // Backfill used scriptures
+    const usedScriptures = (state as any).usedScriptures ?? [];
+    for (const us of usedScriptures) {
+      if (!us) continue;
+      if (!us.id) us.id = compositeId(us.reference, us.devotionalId);
+      if (!us.updatedAt) us.updatedAt = us.usedAt || now;
+    }
+
+    // Backfill series persona history
+    const personaHistory = (state as any).seriesPersonaHistory ?? [];
+    for (const sp of personaHistory) {
+      if (!sp) continue;
+      if (!sp.id) sp.id = compositeId('persona', sp.devotionalId);
+      if (!sp.updatedAt) sp.updatedAt = sp.createdAt || now;
+    }
+
+    // Backfill method usage history
+    const methodHistory = (state as any).methodUsageHistory ?? [];
+    for (const mu of methodHistory) {
+      if (!mu) continue;
+      if (!mu.id) mu.id = compositeId(mu.methodId, mu.devotionalId, mu.dayNumber);
+      if (!mu.updatedAt) mu.updatedAt = mu.usedAt || now;
+    }
+
+    // Notes and folders already have updatedAt — no backfill needed
+    // Journal entries already have updatedAt — no backfill needed
+
+    // Add userUpdatedAt for user profile sync
+    (state as any).userUpdatedAt = now;
+
+    logger.log('[store] Migration v28→29: Backfilled updatedAt + id for sync');
+  } catch (err) {
+    console.error('[store] Migration v28→29 failed:', err);
+  }
+}
+
+// Migration from version 29 to 30: Remove client-side generation state,
+// add server-side job tracking fields
+if (version < 30) {
+  try {
+    // Strip removed client-side generation fields
+    delete (state as any).progressiveGeneration;
+    delete (state as any).lastGenerationCutoffDate;
+    delete (state as any).lastEveningGenerationDate;
+
+    // Add new server-side tracking fields
+    (state as any).pendingJobId = (state as any).pendingJobId ?? null;
+
+    logger.log('[store] Migration v29→30: Removed client-side generation state');
+  } catch (err) {
+    console.error('[store] Migration v29→30 failed:', err);
+  }
+}
+
+// Migration from version 30 to 31: Migrate WEB bible translation to BSB
+if (version < 31) {
+  try {
+    const user = (state as any).user;
+    if (user && user.bibleTranslation === 'WEB') {
+      user.bibleTranslation = 'BSB';
+    }
+    logger.log('[store] Migration v30→31: Migrated WEB bible translation to BSB');
+  } catch (err) {
+    console.error('[store] Migration v30→31 failed:', err);
+  }
+}
+
+// Migration from version 31 to 32: Add isRevealed to DevotionalDay, remove lastRevealShownDate
+if (version < 32) {
+  try {
+    for (const d of (state as any).devotionals ?? []) {
+      for (const day of d.days ?? []) {
+        if (day.isRead || day.dayNumber === 1) {
+          day.isRevealed = true;
+        }
+      }
+    }
+    delete (state as any).lastRevealShownDate;
+    logger.log('[store] Migration v31→32: Added isRevealed, removed lastRevealShownDate');
+  } catch (err) {
+    console.error('[store] Migration v31→32 failed:', err);
+  }
+}
+
+// Migration from version 32 to 33: Backfill sync IDs on usedScriptures + bibleReadingHistory
+if (version < 33) {
+  try {
+    for (const us of (state as any).usedScriptures ?? []) {
+      if (!us.id) {
+        us.id = `us_${us.devotionalId}_${us.reference}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      }
+    }
+    for (const brp of (state as any).bibleReadingHistory ?? []) {
+      if (!brp.id) {
+        brp.id = `brp_${brp.bookId}_${brp.chapter}_${brp.translation}`;
+      }
+    }
+    logger.log('[store] Migration v32→33: Backfilled sync IDs on usedScriptures + bibleReadingHistory');
+  } catch (err) {
+    console.error('[store] Migration v32→33 failed:', err);
+  }
+}
+
+// Migration from version 33 to 34: Add faithImpact field
+if (version < 34) {
+  try {
+    const user = (state as any).user;
+    if (user && user.faithImpact === undefined) {
+      user.faithImpact = '';
+    }
+    logger.log('[store] Migration v33→34: Added faithImpact field');
+  } catch (err) {
+    console.error('[store] Migration v33→34 failed:', err);
+  }
+}
+
+// Migration from version 34 to 35: Add hasEverCreatedDevotional flag
+if (version < 35) {
+  try {
+    const devos = (state as any).devotionals ?? [];
+    (state as any).hasEverCreatedDevotional = devos.length > 0;
+    logger.log('[store] Migration v34→35: Added hasEverCreatedDevotional flag');
+  } catch (err) {
+    console.error('[store] Migration v34→35 failed:', err);
+  }
+}
+
+// Migration from version 35 to 36: Add check-in completion date tracking.
+// Defaults to null — the owner hook will re-fingerprint on first mount
+// and schedule the correct trigger regardless of whether the user
+// already completed today's check-in before the update.
+if (version < 36) {
+  try {
+    (state as any).lastMiddayCompletedDate = (state as any).lastMiddayCompletedDate ?? null;
+    (state as any).lastEveningCompletedDate = (state as any).lastEveningCompletedDate ?? null;
+    logger.log('[store] Migration v35→36: Added check-in completion date fields');
+  } catch (err) {
+    console.error('[store] Migration v35→36 failed:', err);
+  }
+}
+
+return state;
+}

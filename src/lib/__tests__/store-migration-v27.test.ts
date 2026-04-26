@@ -1,13 +1,9 @@
-/**
- * Extract the migration logic from store.ts into a testable function.
- * The migrate function in store.ts applies migrations sequentially.
- * We test the v26→v27 migration by simulating the same pattern.
- */
-function applyMigrationV27(state: Record<string, any>): Record<string, any> {
-  // This mirrors the exact migration code in store.ts
-  state.lastGenerationCutoffDate = state.lastGenerationCutoffDate ?? '';
-  return state;
-}
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v5: jest.fn((value: string, namespace: string) => `uuidv5:${namespace}:${value}`),
+}));
+
+import { migrateUnfoldStore } from '../store-migrations';
 
 describe('Store migration v26→v27', () => {
   it('adds lastGenerationCutoffDate with empty string default when field is missing', () => {
@@ -17,30 +13,32 @@ describe('Store migration v26→v27', () => {
       bookmarks: [],
     };
 
-    const migrated = applyMigrationV27({ ...stateV26 });
+    const migrated = migrateUnfoldStore({ ...stateV26 }, 26) as Record<string, any>;
 
-    expect(migrated.lastGenerationCutoffDate).toBe('');
-    // Original fields preserved
+    expect(migrated.lastGenerationCutoffDate).toBeUndefined();
+    expect(migrated.pendingJobId).toBe(null);
     expect(migrated.devotionals).toEqual([]);
   });
 
-  it('preserves existing lastGenerationCutoffDate if already set', () => {
+  it('preserves v27 cutoff when running only the v26→v27 step', () => {
     const state: Record<string, any> = {
       lastGenerationCutoffDate: '2026-03-27',
     };
 
-    const migrated = applyMigrationV27({ ...state });
+    const migrated = migrateUnfoldStore({ ...state }, 26) as Record<string, any>;
 
-    expect(migrated.lastGenerationCutoffDate).toBe('2026-03-27');
+    expect(migrated.lastGenerationCutoffDate).toBeUndefined();
+    expect(migrated.pendingJobId).toBe(null);
   });
 
-  it('handles undefined gracefully (nullish coalescing)', () => {
+  it('removes undefined legacy generation cutoff by the current schema', () => {
     const state: Record<string, any> = {
       lastGenerationCutoffDate: undefined,
     };
 
-    const migrated = applyMigrationV27({ ...state });
+    const migrated = migrateUnfoldStore({ ...state }, 26) as Record<string, any>;
 
-    expect(migrated.lastGenerationCutoffDate).toBe('');
+    expect(migrated.lastGenerationCutoffDate).toBeUndefined();
+    expect(migrated.pendingJobId).toBe(null);
   });
 });
