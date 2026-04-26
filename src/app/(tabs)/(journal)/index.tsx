@@ -57,6 +57,7 @@ import { UndoToast } from '@/components/UndoToast';
 import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
+import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 type Segment = 'reflections' | 'notebook';
@@ -893,29 +894,23 @@ export default function JournalHubScreen() {
           onPress: () => {
             if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
 
-            // Snapshot for undo: the folder + which notes belong to it
-            const affectedNoteIds = notes
-              .filter((n) => n.folderId === folder.id)
-              .map((n) => n.id);
+            const plan = prepareJournalFolderDelete({
+              folder,
+              notes,
+              descendantFolderIds: getDescendantFolderIds(folder.id),
+              activeFolderId,
+              currentParentId,
+            });
 
-            setUndoAction({ type: 'folder', folder, affectedNoteIds });
-
-            // Collect all descendant IDs before deletion (store method needs data to still exist)
-            const descendantIds = new Set(getDescendantFolderIds(folder.id));
-            descendantIds.add(folder.id);
-
-            // Delete folder (notes → Unfiled) — cascades to subfolders
+            setUndoAction(plan.undoAction);
             storeDeleteFolder(folder.id, false);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            // Reset navigation if viewing the deleted folder or any of its descendants
-            if (activeFolderId !== null && descendantIds.has(activeFolderId)) {
-              // Navigate to the deleted folder's parent (or root)
-              setActiveFolderId(folder.parentId ?? null);
-              setCurrentParentId(folder.parentId ?? null);
-            } else if (currentParentId !== null && descendantIds.has(currentParentId)) {
-              // Viewing subfolder level that was deleted — go to deleted folder's parent
-              setCurrentParentId(folder.parentId ?? null);
+            if (plan.navigation.activeFolderId !== activeFolderId) {
+              setActiveFolderId(plan.navigation.activeFolderId);
+            }
+            if (plan.navigation.currentParentId !== currentParentId) {
+              setCurrentParentId(plan.navigation.currentParentId);
             }
 
             // Auto-dismiss undo after 4s
@@ -1707,23 +1702,22 @@ export default function JournalHubScreen() {
             const folder = folders.find((f) => f.id === folderId);
             if (!folder) return;
 
-            const affectedNoteIds = notes
-              .filter((n) => n.folderId === folderId)
-              .map((n) => n.id);
+            const plan = prepareJournalFolderDelete({
+              folder,
+              notes,
+              descendantFolderIds: getDescendantFolderIds(folderId),
+              activeFolderId,
+              currentParentId,
+            });
 
-            // Collect descendants before deletion
-            const descendantIds = new Set(getDescendantFolderIds(folderId));
-            descendantIds.add(folderId);
-
-            setUndoAction({ type: 'folder', folder, affectedNoteIds });
+            setUndoAction(plan.undoAction);
             storeDeleteFolder(folderId, false);
 
-            // Reset navigation if viewing the deleted folder or a descendant
-            if (activeFolderId !== null && descendantIds.has(activeFolderId)) {
-              setActiveFolderId(folder.parentId ?? null);
-              setCurrentParentId(folder.parentId ?? null);
-            } else if (currentParentId !== null && descendantIds.has(currentParentId)) {
-              setCurrentParentId(folder.parentId ?? null);
+            if (plan.navigation.activeFolderId !== activeFolderId) {
+              setActiveFolderId(plan.navigation.activeFolderId);
+            }
+            if (plan.navigation.currentParentId !== currentParentId) {
+              setCurrentParentId(plan.navigation.currentParentId);
             }
 
             deleteTimerRef.current = setTimeout(() => {
