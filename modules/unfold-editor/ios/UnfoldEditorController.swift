@@ -1108,8 +1108,6 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       }
       self.editor.typingAttributes = normalizedAttrs
 
-      guard isEmptyListLine || listValue == nil else { return }
-
       self.editor.removeAttribute(.unfoldBlockType, at: lineRange)
       self.editor.addAttribute(.font, value: UnfoldFonts.body(), at: lineRange)
       self.editor.addAttribute(.foregroundColor, value: UnfoldColors.text, at: lineRange)
