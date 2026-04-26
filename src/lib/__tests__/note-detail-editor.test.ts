@@ -5,7 +5,27 @@ import {
   getTitleDividerPresentation,
   hasMeaningfulNoteContent,
   normalizeNativeInitialHtml,
-} from '../note-detail-editor';
+  persistNoteSnapshot,
+  type NotePersistenceInput,
+} from '@/lib/note-detail-editor';
+import type { Note, NoteCategory, ScriptureRef } from '@/lib/store';
+
+const category: NoteCategory = 'study';
+const scriptureRefs: ScriptureRef[] = [
+  { reference: '1 Samuel 17:45-47', bookId: 9, chapter: 17, verse: 45, verseEnd: 47 },
+];
+
+const linkedInput: NotePersistenceInput = {
+  title: 'Fight for the Future',
+  html: '<p>David ran toward the battle.</p>',
+  category,
+  scriptureRefs,
+  devotionalId: 'devotional-1',
+  dayNumber: '2',
+  bookId: '9',
+  chapter: '17',
+  folderId: 'folder-1',
+};
 
 describe('note-detail editor helpers', () => {
   it('treats blank title plus empty html paragraph as not meaningful', () => {
@@ -79,5 +99,101 @@ describe('note-detail editor helpers', () => {
       height: 2,
       marginHorizontal: 24,
     });
+  });
+});
+
+describe('note detail editor persistence', () => {
+  it('skips empty new snapshots unless empty persistence is allowed', () => {
+    const addNote = jest.fn();
+    const updateNote = jest.fn();
+
+    const id = persistNoteSnapshot({
+      input: {
+        title: '   ',
+        html: '<p></p>',
+        category,
+        scriptureRefs: [],
+      },
+      addNote,
+      updateNote,
+    });
+
+    expect(id).toBeUndefined();
+    expect(addNote).not.toHaveBeenCalled();
+    expect(updateNote).not.toHaveBeenCalled();
+  });
+
+  it('updates an existing note with the editable snapshot fields', () => {
+    const addNote = jest.fn();
+    const updateNote = jest.fn();
+
+    const id = persistNoteSnapshot({
+      noteId: 'note-1',
+      input: linkedInput,
+      addNote,
+      updateNote,
+    });
+
+    expect(id).toBe('note-1');
+    expect(addNote).not.toHaveBeenCalled();
+    expect(updateNote).toHaveBeenCalledWith('note-1', {
+      title: 'Fight for the Future',
+      content: '<p>David ran toward the battle.</p>',
+      category,
+      scriptureRefs,
+    });
+  });
+
+  it('creates a linked note payload and returns the generated id', () => {
+    const addNote = jest.fn((note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+      expect(note).toEqual({
+        title: 'Fight for the Future',
+        content: '<p>David ran toward the battle.</p>',
+        category,
+        tags: [],
+        isFavorite: false,
+        scriptureRefs,
+        devotionalId: 'devotional-1',
+        dayNumber: 2,
+        bibleBookId: 9,
+        bibleChapter: 17,
+        folderId: 'folder-1',
+      });
+      return 'new-note-1';
+    });
+    const updateNote = jest.fn();
+
+    const id = persistNoteSnapshot({
+      input: linkedInput,
+      addNote,
+      updateNote,
+    });
+
+    expect(id).toBe('new-note-1');
+    expect(addNote).toHaveBeenCalledTimes(1);
+    expect(updateNote).not.toHaveBeenCalled();
+  });
+
+  it('can create an intentionally empty note using the existing blank HTML fallback', () => {
+    const addNote = jest.fn((note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+      expect(note.content).toBe('<p></p>');
+      return 'empty-note-1';
+    });
+    const updateNote = jest.fn();
+
+    const id = persistNoteSnapshot({
+      input: {
+        title: '',
+        html: '',
+        category: 'general',
+        scriptureRefs: [],
+      },
+      allowEmpty: true,
+      addNote,
+      updateNote,
+    });
+
+    expect(id).toBe('empty-note-1');
+    expect(updateNote).not.toHaveBeenCalled();
   });
 });

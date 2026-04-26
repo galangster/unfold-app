@@ -79,12 +79,12 @@ import {
   shouldReuseSelectionFormattingState,
 } from '@/lib/notebook-editor-layout';
 import {
-  buildNotePersistencePayload,
   getNativeBlockTypeCommand,
   getNativeListCommand,
   getTitleDividerPresentation,
   hasMeaningfulNoteContent,
   normalizeNativeInitialHtml,
+  persistNoteSnapshot,
 } from '@/lib/note-detail-editor';
 import { buildNoteDraftDockPreview, useNoteDraftDock } from '@/lib/note-draft-dock';
 
@@ -574,27 +574,24 @@ export default function NoteDetailScreen() {
 
       setSaveState('saving');
 
-      if (noteId) {
-        updateNote(noteId, {
+      const id = persistNoteSnapshot({
+        noteId,
+        input: {
           title: titleVal,
-          content: html,
+          html,
           category,
           scriptureRefs,
-        });
-      } else {
-        const id = addNote(
-          buildNotePersistencePayload({
-            title: titleVal,
-            html,
-            category,
-            scriptureRefs,
-            devotionalId: params.devotionalId,
-            dayNumber: params.dayNumber,
-            bookId: params.bookId,
-            chapter: params.chapter,
-            folderId: initialFolderIdRef.current,
-          }),
-        );
+          devotionalId: params.devotionalId,
+          dayNumber: params.dayNumber,
+          bookId: params.bookId,
+          chapter: params.chapter,
+          folderId: initialFolderIdRef.current,
+        },
+        addNote,
+        updateNote,
+      });
+
+      if (id && !noteId) {
         setNoteId(id);
         logger.log('[NoteDetail] Auto-saved new note:', id);
       }
@@ -628,20 +625,11 @@ export default function NoteDetailScreen() {
       return undefined;
     }
 
-    if (noteId) {
-      updateNote(noteId, {
+    const id = persistNoteSnapshot({
+      noteId,
+      input: {
         title,
-        content: html,
-        category,
-        scriptureRefs,
-      });
-      return noteId;
-    }
-
-    const id = addNote(
-      buildNotePersistencePayload({
-        title,
-        html: allowEmpty ? (html || '<p></p>') : html,
+        html,
         category,
         scriptureRefs,
         devotionalId: params.devotionalId,
@@ -649,12 +637,19 @@ export default function NoteDetailScreen() {
         bookId: params.bookId,
         chapter: params.chapter,
         folderId: initialFolderIdRef.current,
-      }),
-    );
-    setNoteId(id);
-    if (newNoteLog) {
-      logger.log(newNoteLog, id);
+      },
+      allowEmpty,
+      addNote,
+      updateNote,
+    });
+
+    if (id && !noteId) {
+      setNoteId(id);
+      if (newNoteLog) {
+        logger.log(newNoteLog, id);
+      }
     }
+
     return id;
   }, [noteId, updateNote, category, scriptureRefs, addNote, params]);
 

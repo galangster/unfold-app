@@ -51,6 +51,46 @@ export function buildNotePersistencePayload({
   };
 }
 
+export type PersistNoteSnapshotOptions = {
+  noteId?: string;
+  input: NotePersistenceInput;
+  allowEmpty?: boolean;
+  addNote: (note: ReturnType<typeof buildNotePersistencePayload>) => string;
+  updateNote: (
+    noteId: string,
+    updates: Pick<ReturnType<typeof buildNotePersistencePayload>, 'title' | 'content' | 'category' | 'scriptureRefs'>,
+  ) => void;
+};
+
+export function persistNoteSnapshot({
+  noteId,
+  input,
+  allowEmpty = false,
+  addNote,
+  updateNote,
+}: PersistNoteSnapshotOptions): string | undefined {
+  const html = allowEmpty ? (input.html || '<p></p>') : input.html;
+
+  if (!allowEmpty && !hasMeaningfulNoteContent({ title: input.title, html })) {
+    return undefined;
+  }
+
+  if (noteId) {
+    updateNote(noteId, {
+      title: input.title,
+      content: html,
+      category: input.category,
+      scriptureRefs: input.scriptureRefs,
+    });
+    return noteId;
+  }
+
+  return addNote(buildNotePersistencePayload({
+    ...input,
+    html,
+  }));
+}
+
 export function getNativeListCommand(
   activeListType: NativeListType,
   requestedType: RequestedNativeListType,
