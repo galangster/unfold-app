@@ -39,6 +39,11 @@ import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import {
+  getCurrentDevotional,
+  hasReadDevotionalToday,
+  shouldPrepareCurrentDevotionalDay,
+} from '@/lib/home-devotional-state';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -274,13 +279,9 @@ export default function HomeScreen() {
   );
 
   // Check if today's reading has been completed — drives ember visibility
-  const hasReadToday = useMemo(() => {
-    if (!currentDevotionalId) return false;
-    const dev = devotionals.find((d) => d.id === currentDevotionalId);
-    if (!dev) return false;
-    const today = new Date().toDateString();
-    return dev.days.some((day) => day.isRead && day.readAt && new Date(day.readAt).toDateString() === today);
-  }, [currentDevotionalId, devotionals]);
+  const hasReadToday = useMemo(() => (
+    hasReadDevotionalToday({ devotionals, currentDevotionalId })
+  ), [currentDevotionalId, devotionals]);
 
   // Streak celebration: show once when hasReadToday flips from false->true
   const [showCelebration, setShowCelebration] = useState(false);
@@ -291,29 +292,17 @@ export default function HomeScreen() {
     }
   }, [hasReadToday, prevHasReadToday]);
 
-  const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
+  const currentDevotional = useMemo(() => (
+    getCurrentDevotional(devotionals, currentDevotionalId)
+  ), [currentDevotionalId, devotionals]);
 
   // Server-side generation handles content creation. The client only tracks
   // whether the current day's content hasn't arrived yet (shows a loading card).
   // Never show "preparing" for days beyond today's calendar position — those are
   // tomorrow's content and shouldn't trigger auto-generation.
-  const isPreparingCurrentDay = useMemo(() => {
-    if (!currentDevotional || currentDevotional.generationMode !== 'progressive') return false;
-    const dayExists = (currentDevotional.days ?? []).some(d => d.dayNumber === currentDevotional.currentDay);
-    if (dayExists) return false;
-
-    // Calendar gate: don't prepare days beyond today's position
-    if (currentDevotional.seriesStartDate) {
-      const startDate = new Date(currentDevotional.seriesStartDate);
-      const now = new Date();
-      const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const calendarDay = Math.floor((today.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-      if (currentDevotional.currentDay > calendarDay) return false;
-    }
-
-    return true;
-  }, [currentDevotional]);
+  const isPreparingCurrentDay = useMemo(() => (
+    shouldPrepareCurrentDevotionalDay(currentDevotional)
+  ), [currentDevotional]);
 
   // Content discovery flow: check for server-generated content before submitting a new job.
   // 1. Check if a completed job already exists on the server (e.g., from midnight cron)
