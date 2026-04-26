@@ -1,5 +1,6 @@
 import {
   getThreeStepPaywallPrimaryAction,
+  resolvePaywallCompletionNavigation,
   resolvePurchaseOutcome,
   resolveRestoreOutcome,
 } from '../paywall-guardrails';
@@ -16,6 +17,48 @@ describe('paywall guardrails', () => {
 
     it('treats the final page CTA as purchase', () => {
       expect(getThreeStepPaywallPrimaryAction(2, 3, true)).toBe('purchase');
+    });
+  });
+
+  describe('completion navigation', () => {
+    it('goes back for early onboarding paywalls', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: true,
+          isFromOnboarding: true,
+          currentDevotionalId: 'devotional-1',
+        }),
+      ).toEqual({ action: 'back' });
+    });
+
+    it('routes onboarding users with an existing devotional to Today', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: true,
+          currentDevotionalId: 'devotional-1',
+        }),
+      ).toEqual({ action: 'replace', href: '/(tabs)/(today)' });
+    });
+
+    it('routes onboarding users without an existing devotional to generating', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: true,
+          currentDevotionalId: null,
+        }),
+      ).toEqual({ action: 'replace', href: '/generating' });
+    });
+
+    it('goes back for non-onboarding paywalls', () => {
+      expect(
+        resolvePaywallCompletionNavigation({
+          isEarlyOnboarding: false,
+          isFromOnboarding: false,
+          currentDevotionalId: 'devotional-1',
+        }),
+      ).toEqual({ action: 'back' });
     });
   });
 

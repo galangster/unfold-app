@@ -16,7 +16,11 @@ import { Duration, Ease } from '@/constants/animations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOfferings, purchasePackage, restorePurchases, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
-import { resolvePurchaseOutcome, resolveRestoreOutcome } from '@/lib/paywall-guardrails';
+import {
+  resolvePaywallCompletionNavigation,
+  resolvePurchaseOutcome,
+  resolveRestoreOutcome,
+} from '@/lib/paywall-guardrails';
 import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
@@ -55,6 +59,21 @@ export default function PaywallScreen() {
   const [showExclusiveOffer, setShowExclusiveOffer] = useState(false);
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
+
+  const completePaywallFlow = () => {
+    const navigation = resolvePaywallCompletionNavigation({
+      isEarlyOnboarding,
+      isFromOnboarding,
+      currentDevotionalId,
+    });
+
+    if (navigation.action === 'back') {
+      router.back();
+      return;
+    }
+
+    router.replace(navigation.href);
+  };
 
   // Pull user's onboarding data for personalization
   const userName = useUnfoldStore((s) => s.user?.name);
@@ -141,19 +160,7 @@ export default function PaywallScreen() {
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        if (isEarlyOnboarding) {
-          router.back();
-        } else if (isFromOnboarding) {
-          // If the user already has a generated devotional, go straight to home
-          // instead of looping back to the generating screen
-          if (currentDevotionalId) {
-            router.replace('/(tabs)/(today)');
-          } else {
-            router.replace('/generating');
-          }
-        } else {
-          router.back();
-        }
+        completePaywallFlow();
       } else if (result.reason === 'user_cancelled') {
         const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
         if (!hasSeenOnboardingOffer) {
@@ -189,17 +196,7 @@ export default function PaywallScreen() {
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
-        if (isEarlyOnboarding) {
-          router.back();
-        } else if (isFromOnboarding) {
-          if (currentDevotionalId) {
-            router.replace('/(tabs)/(today)');
-          } else {
-            router.replace('/generating');
-          }
-        } else {
-          router.back();
-        }
+        completePaywallFlow();
         return;
       }
 
@@ -227,18 +224,7 @@ export default function PaywallScreen() {
     if (isPurchasing) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isEarlyOnboarding) {
-      router.back();
-    } else if (isFromOnboarding) {
-      // If the user already has a generated devotional, go straight to home
-      if (currentDevotionalId) {
-        router.replace('/(tabs)/(today)');
-      } else {
-        router.replace('/generating');
-      }
-    } else {
-      router.back();
-    }
+    completePaywallFlow();
   };
 
   const [subscribeError, setSubscribeError] = useState('');

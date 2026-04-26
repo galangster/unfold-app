@@ -8,6 +8,10 @@ export type PaywallOutcome =
   | { kind: 'success' }
   | { kind: 'error'; message: string };
 
+export type PaywallCompletionNavigation =
+  | { action: 'back' }
+  | { action: 'replace'; href: '/(tabs)/(today)' | '/generating' };
+
 const UNFOLD_PREMIUM_ENTITLEMENT = 'Unfold Premium';
 
 export function hasUnfoldPremiumEntitlement(result: {
@@ -23,6 +27,28 @@ export function getThreeStepPaywallPrimaryAction(
 ): ThreeStepPaywallPrimaryAction {
   const isFinalPage = currentPage >= totalPages - 1;
   return isFinalPage ? 'purchase' : 'next';
+}
+
+export function resolvePaywallCompletionNavigation({
+  isEarlyOnboarding,
+  isFromOnboarding,
+  currentDevotionalId,
+}: {
+  isEarlyOnboarding: boolean;
+  isFromOnboarding: boolean;
+  currentDevotionalId: string | null | undefined;
+}): PaywallCompletionNavigation {
+  if (isEarlyOnboarding) {
+    return { action: 'back' };
+  }
+
+  if (!isFromOnboarding) {
+    return { action: 'back' };
+  }
+
+  return currentDevotionalId
+    ? { action: 'replace', href: '/(tabs)/(today)' }
+    : { action: 'replace', href: '/generating' };
 }
 
 export function resolvePurchaseOutcome(
