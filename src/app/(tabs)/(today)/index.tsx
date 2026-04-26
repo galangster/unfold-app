@@ -38,7 +38,7 @@ import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
-import { buildDevotionalSyncMetadataPatch } from '@/lib/devotional-sync-metadata';
+import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -254,21 +254,16 @@ export default function HomeScreen() {
           const pulled = await pullDevotionalContent(devotionalId);
           if (cancelled) return;
 
-          if (pulled.days.length > 0) {
-            updateDevotionalDays(devotionalId, pulled.days, pulled.devotional?.title);
-          }
-
-          if (pulled.devotional) {
-            useUnfoldStore.setState((state) => ({
-              devotionals: state.devotionals.map((devotional) => {
-                if (devotional.id !== devotionalId) return devotional;
-                const patch = buildDevotionalSyncMetadataPatch(devotional, pulled.devotional);
-                return Object.keys(patch).length > 0
-                  ? { ...devotional, ...patch }
-                  : devotional;
-              }),
-            }));
-          }
+          applyPulledDevotionalContent({
+            devotionalId,
+            pulled,
+            updateDevotionalDays,
+            updateDevotionals: (updater) => {
+              useUnfoldStore.setState((state) => ({
+                devotionals: updater(state.devotionals),
+              }));
+            },
+          });
         } catch (err) {
           console.warn('[home] Devotional sync refresh failed:', err instanceof Error ? err.message : err);
         }
