@@ -42,6 +42,7 @@ import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from 
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { isCanonicalProgressiveDevotional, shouldUseLegacyDirectContinuation } from '@/lib/reading-generation-policy';
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -881,6 +882,20 @@ export default function ReadingScreen() {
       return { ok: false, retriable: true };
     }
 
+    // Progressive/canonical devotionals must never use the legacy direct
+    // /api/generate/devotional continuation path. Missing days are recovered
+    // by sync pull or queued through /api/jobs/generate-day instead.
+    if (!shouldUseLegacyDirectContinuation(currentDevotional)) {
+      void logBugEvent('reading-generation', 'legacy-continuation-skipped-canonical', {
+        devotionalId: currentDevotional.id,
+        generationMode: currentDevotional.generationMode,
+        hasSeriesArc: Boolean(currentDevotional.seriesArc),
+        hasProgressiveMemory: Boolean(currentDevotional.progressiveMemory),
+        hasSeriesStartDate: Boolean(currentDevotional.seriesStartDate),
+      });
+      return { ok: false, retriable: false };
+    }
+
     setIsGeneratingMore(true);
 
     if (withHaptics) {
@@ -1108,6 +1123,66 @@ export default function ReadingScreen() {
         return true;
       }
 
+      if (isCanonicalProgressiveDevotional(currentDevotional)) {
+        const recovered = await recoverCompletedGenerationResult({
+          devotionalId: currentDevotional.id,
+          dayNumber: viewingDay,
+        }).catch(() => null);
+
+        if (recovered?.devotionalDay) {
+          addGeneratedDay(currentDevotional.id, recovered.devotionalDay);
+          void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-completed-job', {
+            devotionalId: currentDevotional.id,
+            viewingDay,
+            source,
+          });
+          if (source === 'manual') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          return true;
+        }
+
+        try {
+          await submitGenerationJob({
+            devotionalId: currentDevotional.id,
+            dayNumber: viewingDay,
+            jobType: 'day',
+          });
+          void logBugEvent('reading-sync-recovery', 'queued-missing-day-canonical-job', {
+            devotionalId: currentDevotional.id,
+            viewingDay,
+            source,
+          });
+          if (source === 'manual') {
+            setRetryError('We started writing this day. Check back in a moment.');
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          return true;
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            const recoveredFromExisting = await recoverCompletedGenerationResult({
+              devotionalId: currentDevotional.id,
+              dayNumber: viewingDay,
+              existingJobId: err.existingJobId,
+            }).catch(() => null);
+
+            if (recoveredFromExisting?.devotionalDay) {
+              addGeneratedDay(currentDevotional.id, recoveredFromExisting.devotionalDay);
+              void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-existing-job', {
+                devotionalId: currentDevotional.id,
+                viewingDay,
+                source,
+              });
+              if (source === 'manual') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              }
+              return true;
+            }
+          }
+          throw err;
+        }
+      }
+
       if (source === 'manual') {
         setRetryError('No finished day found yet. Try again in a moment, or generate the remaining days below.');
       }
@@ -1126,7 +1201,7 @@ export default function ReadingScreen() {
     } finally {
       setIsCheckingForSyncedDay(false);
     }
-  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, addGeneratedDay, updateDevotionalDays, viewingDay]);
 
   useEffect(() => {
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return;
@@ -1180,8 +1255,8 @@ export default function ReadingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       try {
-        // Progressive mode: reconcile any completed server-side day before submitting another job
-        if (currentDevotional.generationMode === 'progressive') {
+        // Progressive/canonical mode: reconcile any completed server-side day before submitting another job
+        if (isCanonicalProgressiveDevotional(currentDevotional)) {
           const recovered = await recoverCompletedGenerationResult({
             devotionalId: currentDevotionalId!,
             dayNumber: viewingDay,
@@ -1237,7 +1312,7 @@ export default function ReadingScreen() {
         // After generation, the store update triggers re-render automatically
       } catch (err) {
         if (
-          currentDevotional.generationMode === 'progressive' &&
+          isCanonicalProgressiveDevotional(currentDevotional) &&
           err instanceof ApiError &&
           err.status === 409
         ) {

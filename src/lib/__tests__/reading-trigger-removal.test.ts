@@ -31,7 +31,14 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).not.toContain('evaluateSeriesExtension(');
   });
 
-  it('uses submitGenerationJob for progressive mode retry', () => {
-    expect(readingSource).toContain('submitGenerationJob');
+  it('guards legacy direct continuation away from canonical/progressive devotionals', () => {
+    expect(readingSource).toContain('shouldUseLegacyDirectContinuation(currentDevotional)');
+    expect(readingSource).toContain('legacy-continuation-skipped-canonical');
+  });
+
+  it('routes missing canonical/progressive days through job recovery instead of direct generation', () => {
+    expect(readingSource).toContain('isCanonicalProgressiveDevotional(currentDevotional)');
+    expect(readingSource).toContain('recovered-missing-day-from-completed-job');
+    expect(readingSource).toContain('queued-missing-day-canonical-job');
   });
 });
