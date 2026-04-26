@@ -47,6 +47,7 @@ import {
   NOTEBOOK_TOOLBAR_ROW_HEIGHT,
   NOTEBOOK_TOOLBAR_TOTAL_HEIGHT,
 } from '@/lib/notebook-editor-layout';
+import { buildTenTapScriptureInsertJS } from '@/lib/tentap-scripture-insert';
 
 import { Note } from '@/lib/store';
 
@@ -219,51 +220,10 @@ export function NoteEditor({
     if (!pendingScriptureInsert || !editorState.isReady) return;
     const { reference, text } = pendingScriptureInsert;
 
-    // Escape single quotes and newlines for safe JS string injection
-    const escapedRef = reference.replace(/'/g, "\\'");
-    const escapedText = text.replace(/'/g, "\\'").replace(/\n/g, ' ');
-
     // Restore the saved cursor position before inserting so the blockquote
     // lands where the user's cursor was, not at the top of the document.
     // Falls back to the end of the document if no position was saved.
-    editor.injectJS(`
-      (function() {
-        var pos = typeof window.__savedSelection === 'number'
-          ? window.__savedSelection
-          : window.editor.state.doc.content.size - 1;
-        // Clamp to valid range
-        var maxPos = window.editor.state.doc.content.size - 1;
-        if (pos > maxPos) pos = maxPos;
-        if (pos < 0) pos = 0;
-        window.editor
-          .chain()
-          .focus()
-          .setTextSelection(pos)
-          .insertContent({
-            type: 'blockquote',
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  { type: 'text', text: '${escapedText}' },
-                ],
-              },
-              {
-                type: 'paragraph',
-                content: [
-                  {
-                    type: 'text',
-                    marks: [{ type: 'italic' }],
-                    text: '\\u2014 ${escapedRef}',
-                  },
-                ],
-              },
-            ],
-          })
-          .run();
-        delete window.__savedSelection;
-      })();
-    `);
+    editor.injectJS(buildTenTapScriptureInsertJS({ reference, text }));
 
     onScriptureInserted?.();
     scheduleAutoSave();
