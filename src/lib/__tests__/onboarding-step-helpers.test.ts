@@ -4,6 +4,7 @@ jest.mock('@/lib/mmkv-storage', () => ({
 
 import {
   buildOnboardingSampleGenerationRequest,
+  getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
   shouldStartOnboardingSampleGeneration,
@@ -97,6 +98,42 @@ describe('onboarding step helpers', () => {
     expect(
       getFilteredOnboardingSteps(allSteps, null, { selectedMainOption: 'type', selectedType: 'book_study' }).map((step) => step.id),
     ).toContain('studySubject');
+  });
+
+  it('returns contextual chips for theme, type, and guided onboarding paths', () => {
+    expect(
+      getContextualSituationChips({
+        selectedMainOption: 'theme',
+        selectedThemes: ['rest'],
+      }).slice(0, 3),
+    ).toEqual(['Burned out', "Can't stop", 'Guilty resting']);
+
+    expect(
+      getContextualSituationChips({
+        selectedMainOption: 'type',
+        selectedType: 'book_study',
+      }).slice(0, 3),
+    ).toEqual(['Curious', 'Intimidated', 'Excited']);
+
+    expect(
+      getContextualSituationChips({ selectedMainOption: 'guided' }).slice(0, 3),
+    ).toEqual(['A relationship', 'My future', 'Work stress']);
+  });
+
+  it('falls back to generic chips when a contextual selection has no match', () => {
+    expect(
+      getContextualSituationChips({
+        selectedMainOption: 'theme',
+        selectedThemes: ['unknown-theme'],
+      }).slice(0, 3),
+    ).toEqual(['A relationship', 'My future', 'Work stress']);
+
+    expect(
+      getContextualSituationChips({
+        selectedMainOption: 'type',
+        selectedType: 'unknown-type',
+      }).slice(0, 3),
+    ).toEqual(['A relationship', 'My future', 'Work stress']);
   });
 
   describe('onboarding sample generation', () => {

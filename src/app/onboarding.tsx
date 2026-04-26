@@ -69,6 +69,7 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { submitGenerationJob } from '@/lib/generation-api';
 import {
   buildOnboardingSampleGenerationRequest,
+  getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
   shouldStartOnboardingSampleGeneration,
@@ -357,12 +358,7 @@ type StepId = 'hook' | 'solution' | 'unfoldIntro' | 'name' | 'aboutMe' | 'styleP
 // Each chip is a feeling/situation that seeds context without requiring typing
 // Default discovery chips — used as fallback when AI chips aren't available
 const DISCOVERY_CHIPS: Record<string, string[]> = {
-  currentSituation: [
-    'A relationship', 'My future', 'Work stress', 'A loss',
-    'Big changes', 'Starting over', 'Feeling stuck', 'Health',
-    'Loneliness', 'Family', 'A decision', 'Letting go',
-    'Faith doubts', 'Finding purpose', 'Need rest', 'Forgiveness',
-  ],
+  currentSituation: getContextualSituationChips({ selectedMainOption: 'guided' }),
   spiritualSeeking: [
     'Consistent rhythm', 'Peace in uncertainty', 'Hearing God clearly',
     'Deeper relationships', 'Freedom from guilt', 'Bible feels alive',
@@ -373,62 +369,6 @@ const DISCOVERY_CHIPS: Record<string, string[]> = {
     'Trusting more', 'Less anxiety', 'Stronger prayer life', 'Knowing my purpose',
   ],
 };
-
-/**
- * Contextual situation chips — maps each theme and type to relevant Q1 pills.
- * These replace the generic "Anxious, Grateful, Searching..." pills with options
- * that match what the user chose to explore, providing zero-latency contextual answers.
- */
-const CONTEXTUAL_SITUATION_CHIPS: Record<string, string[]> = {
-  // Theme pills
-  trust: ['Letting go', 'Control', 'Betrayed', 'Guarded', 'Vulnerable', 'Uncertain', 'Rebuilding', 'Suspicious'],
-  identity: ['Lost', 'Comparing', 'Performing', 'Unseen', 'Shifting', 'Questioning', 'Torn', 'Rebuilding'],
-  rest: ['Burned out', "Can't stop", 'Guilty resting', 'Running on empty', 'Wired', 'Depleted', 'Striving', 'Overcommitted'],
-  presence: ['Distracted', 'Distant from God', 'Going through motions', 'Longing', 'Numb', 'Disconnected', 'Seeking', 'Dry season'],
-  healing: ['Wounded', 'Processing', 'Stuck in pain', 'Ready', 'Afraid to hope', 'Scarred', 'Tired of hurting', 'Slowly mending'],
-  joy: ['Joyless', 'Faking it', 'Grateful but heavy', 'Searching for lightness', 'Nostalgic', 'Flat', 'Wanting to celebrate', 'Suppressing'],
-  gratitude: ['Taking things for granted', 'Overwhelmed by blessings', 'Hard to be thankful', 'Rediscovering', 'Guilt about complaining', 'Noticing more', 'Humbled', 'Adjusting perspective'],
-  lament: ['Crying out', 'Angry at God', 'Why me', 'Sitting in ashes', 'Raw', 'Unanswered prayers', 'Shaking fist', 'Abandoned'],
-  hope: ['Barely holding on', 'Waiting', 'Discouraged', 'Flickering', 'Skeptical', 'Wanting to believe', 'Weary', 'Cynical'],
-  purpose: ['Directionless', 'Stuck', 'Restless', 'Called but unclear', 'Underused', 'Pivoting', 'Searching', 'Torn between paths'],
-  courage: ['Paralyzed', 'Playing it safe', 'Avoiding', 'Shrinking back', 'Afraid to step out', 'People-pleasing', 'Hiding', 'Holding back'],
-  conviction: ['Compromising', 'Wavering', 'Standing alone', 'Pressured', 'Doubting beliefs', 'Torn', 'Tested', 'Conflicted'],
-  surrender: ['White-knuckling', 'Controlling', 'Resisting', 'Exhausted from fighting', 'Afraid to let go', 'Bargaining', 'Stubborn', 'Clinging'],
-  discipline: ['Inconsistent', 'Starting over again', 'Distracted', 'No routine', 'Falling short', 'Wanting structure', 'Undisciplined', 'Scattered'],
-  justice: ['Outraged', 'Helpless', 'Burdened for others', 'Systemic weight', 'Wanting to act', 'Complicit', 'Fatigued', 'Fired up'],
-  wonder: ['Dulled', 'Routine', 'Lost childlike faith', 'Craving awe', 'Overlooking beauty', 'Jaded', 'Curious again', 'Closed off'],
-  grief: ['Numb', 'Missing someone', 'Angry', 'Empty', 'Guilty', 'In denial', 'Exhausted', 'Waves of sadness'],
-  // Type pills
-  book_study: ['Curious', 'Intimidated', 'Excited', 'Returning to it', 'Fresh eyes', 'Looking deeper', 'Committed', 'Exploring'],
-  character_study: ['Curious', 'Identifying with someone', 'Inspired', 'Challenged', 'Seeking examples', 'Learning from failure', 'Drawn to a story', 'Wanting mentorship'],
-  psalm_study: ['Heavy-hearted', 'Praising', 'Lamenting', 'Grateful', 'Crying out', 'Worshiping', 'Wrestling', 'Remembering'],
-  topical_study: ['Questioning', 'Seeking answers', 'Building foundation', 'Deconstructing', 'Hungry to learn', 'Confused', 'Wanting depth', 'Revisiting basics'],
-  lectio_divina: ['Seeking stillness', 'Restless mind', 'Wanting to listen', 'Spiritually dry', 'Open', 'Contemplative', 'Distracted', 'Hungry for encounter'],
-  soap_journal: ['Wanting structure', 'Journaling curious', 'Need accountability', 'Fresh start', 'Building habit', 'Reflective', 'Seeking consistency', 'Ready to commit'],
-  verse_mapping: ['Detail-oriented', 'Wanting context', 'Digging deeper', 'Scholarly', 'Curious about original meaning', 'Seeking precision', 'Analytical', 'Thorough'],
-  parables: ['Confused by parables', 'Wanting fresh perspective', 'Familiar but shallow', 'Ready for depth', 'Seeking hidden meaning', 'Storyteller', 'Practical learner', 'Curious'],
-};
-
-/**
- * Get contextual situation chips for Q1 based on the user's theme or type selection.
- * Falls back to static DISCOVERY_CHIPS.currentSituation for guided mode or no match.
- */
-function getContextualSituationChips(
-  selectedMainOption: 'theme' | 'type' | 'guided' | undefined,
-  selectedThemes: ThemeCategory[],
-  selectedType: DevotionalType | undefined,
-): string[] {
-  if (selectedMainOption === 'theme' && selectedThemes.length > 0) {
-    const themeChips = CONTEXTUAL_SITUATION_CHIPS[selectedThemes[0]];
-    if (themeChips) return themeChips;
-  }
-  if (selectedMainOption === 'type' && selectedType) {
-    const typeChips = CONTEXTUAL_SITUATION_CHIPS[selectedType];
-    if (typeChips) return typeChips;
-  }
-  // Guided mode or no match — fall back to generic chips
-  return DISCOVERY_CHIPS.currentSituation;
-}
 
 interface OnboardingData {
   name: string;
@@ -1212,11 +1152,11 @@ export default function OnboardingScreen() {
         : '';
 
       // Get contextual pills from the lookup table
-      const contextualChips = getContextualSituationChips(
-        selectionType === 'theme' ? 'theme' : selectionType === 'type' ? 'type' : 'guided',
-        data.selectedThemes,
-        data.selectedType,
-      );
+      const contextualChips = getContextualSituationChips({
+        selectedMainOption: selectionType === 'theme' ? 'theme' : selectionType === 'type' ? 'type' : 'guided',
+        selectedThemes: data.selectedThemes,
+        selectedType: data.selectedType,
+      });
 
       const firstQuestion: { question: string; subtext: string; chips?: string[] } = selectionType === 'theme' ? {
         question: `When you think about ${themeName.toLowerCase()}, where do you find\u00A0yourself?`,
