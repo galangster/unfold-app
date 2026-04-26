@@ -25,6 +25,7 @@ import { Duration } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, type Devotional, type DevotionalDay } from '@/lib/store';
 import { submitGenerationJob, pollJobStatus, retryJob, recoverCompletedGenerationResult, normalizeGenerationResult, ApiError } from '@/lib/generation-api';
+import { toFriendlyOnboardingGenerationError } from '@/lib/generation-errors';
 
 import {
   requestNotificationPermissions,
@@ -71,30 +72,6 @@ function requireCanonicalDevotionalId(devotionalId?: string | null): string {
   }
 
   return devotionalId;
-}
-
-function toFriendlyGenerationError(errorMessage: string): string {
-  const normalized = errorMessage.toLowerCase();
-
-  if (
-    normalized.includes('unable to connect') ||
-    normalized.includes('network') ||
-    normalized.includes('internet') ||
-    normalized.includes('timeout') ||
-    normalized.includes('timed out')
-  ) {
-    return "We couldn\u2019t reach the writing service. Check your connection and\u00A0try\u00A0again.";
-  }
-
-  if (normalized.includes('content filter')) {
-    return 'We hit a temporary writing limit. Try again with the\u00A0same\u00A0answers.';
-  }
-
-  if (normalized.includes('output_truncated') || normalized.includes('truncated')) {
-    return 'The devotional was too long to generate in one go. Tap retry\u00A0\u2014\u00A0we\u2019ll break it into\u00A0smaller\u00A0pieces.';
-  }
-
-  return 'We couldn\u2019t finish creating this devotional right now. Please\u00A0try\u00A0again.';
 }
 
 // Ripple animation
@@ -747,7 +724,7 @@ export default function GeneratingScreen() {
   // ========== RENDER: ERROR STATE ==========
 
   if (error) {
-    const displayError = toFriendlyGenerationError(error);
+    const displayError = toFriendlyOnboardingGenerationError(error);
     const isConnectionError = displayError.toLowerCase().includes('connection');
     return (
       <View style={genStyles.transparentFlex}>

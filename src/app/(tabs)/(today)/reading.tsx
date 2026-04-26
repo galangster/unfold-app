@@ -42,6 +42,7 @@ import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from 
 import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
+import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -66,34 +67,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AUTO_RETRY_MAX_ATTEMPTS = 3;
 const AUTO_RETRY_BASE_DELAY_MS = 15000;
-
-function isTransientGenerationError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  // Rate limit (429) is NOT transient — retrying just burns more quota
-  if (normalized.includes('rate limit') || normalized.includes('429')) return false;
-  return [
-    'network',
-    'timeout',
-    'timed out',
-    'temporarily unavailable',
-    'unable to connect',
-    'fetch',
-    'econn',
-    'aborted',
-    '503',
-    '502',
-  ].some((token) => normalized.includes(token));
-}
-
-function toFriendlyGenerationError(message: string): string {
-  if (isTransientGenerationError(message)) {
-    return 'Connection was interrupted while writing. Please try again in a moment.';
-  }
-  if (message.toLowerCase().includes('content filter')) {
-    return 'We hit a temporary writing limitation. Please try generating again.';
-  }
-  return 'Could not finish writing the remaining days right now. Please try again.';
-}
 
 function parsePositiveInteger(value?: string | string[]): number | null {
   if (!value) return null;
@@ -1283,7 +1256,7 @@ export default function ReadingScreen() {
           viewingDay,
           phase: 'manual-retry',
         });
-        setRetryError(toFriendlyGenerationError(msg));
+        setRetryError(toFriendlyRemainingDaysGenerationError(msg));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } finally {
         setIsRetrying(false);
