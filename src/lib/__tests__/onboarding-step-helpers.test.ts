@@ -7,6 +7,8 @@ import {
   getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
+  isFullScreenOnboardingStepType,
+  shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
 } from '../onboarding-step-helpers';
 
@@ -134,6 +136,19 @@ describe('onboarding step helpers', () => {
         selectedType: 'unknown-type',
       }).slice(0, 3),
     ).toEqual(['A relationship', 'My future', 'Work stress']);
+  });
+
+  it('classifies onboarding chrome and full-screen step types', () => {
+    expect(shouldShowOnboardingTopContinue({ canProceed: true, stepType: 'multiline' })).toBe(true);
+    expect(shouldShowOnboardingTopContinue({ canProceed: false, stepType: 'multiline' })).toBe(false);
+    expect(shouldShowOnboardingTopContinue({ canProceed: true, stepType: 'choice' })).toBe(false);
+    expect(shouldShowOnboardingTopContinue({ canProceed: true, stepType: 'threeStepPaywall' })).toBe(false);
+
+    expect(isFullScreenOnboardingStepType('hook')).toBe(true);
+    expect(isFullScreenOnboardingStepType('featureSummary')).toBe(true);
+    expect(isFullScreenOnboardingStepType('threeStepPaywall')).toBe(true);
+    expect(isFullScreenOnboardingStepType('multiline')).toBe(false);
+    expect(isFullScreenOnboardingStepType(undefined)).toBe(false);
   });
 
   describe('onboarding sample generation', () => {

@@ -56,6 +56,44 @@ const CONTEXTUAL_SITUATION_CHIPS: Record<string, string[]> = {
   parables: ['Confused by parables', 'Wanting fresh perspective', 'Familiar but shallow', 'Ready for depth', 'Seeking hidden meaning', 'Storyteller', 'Practical learner', 'Curious'],
 };
 
+const TOP_CONTINUE_HIDDEN_STEP_TYPES = new Set([
+  'hook',
+  'solution',
+  'unfoldIntro',
+  'purchaseConfirmation',
+  'shockStat',
+  'growthGraph',
+  'choice',
+  'timeChoice',
+  'mirrorBack',
+  'featureSummary',
+  'devotionalSegue',
+  'readDevotional',
+  'threeStepPaywall',
+  'founderNote',
+  'vulnerabilityValidation',
+  'celebration',
+  'commitment1',
+  'commitment2',
+]);
+
+const FULL_SCREEN_STEP_TYPES = new Set([
+  'hook',
+  'solution',
+  'unfoldIntro',
+  'purchaseConfirmation',
+  'shockStat',
+  'growthGraph',
+  'vulnerabilityValidation',
+  'featureSummary',
+  'devotionalSegue',
+  'readDevotional',
+  'celebration',
+  'commitment1',
+  'commitment2',
+  'threeStepPaywall',
+]);
+
 const RETURNING_USER_ONLY_SKIPS = new Set([
   'hook',
   'solution',
@@ -90,6 +128,20 @@ export function getContextualSituationChips({
   }
 
   return DEFAULT_DISCOVERY_CHIPS;
+}
+
+export function shouldShowOnboardingTopContinue({
+  canProceed,
+  stepType,
+}: {
+  canProceed: boolean;
+  stepType?: string;
+}): boolean {
+  return canProceed && !TOP_CONTINUE_HIDDEN_STEP_TYPES.has(stepType ?? '');
+}
+
+export function isFullScreenOnboardingStepType(stepType?: string): boolean {
+  return FULL_SCREEN_STEP_TYPES.has(stepType ?? '');
 }
 
 export function getFilteredOnboardingSteps<T extends OnboardingStepLike>(

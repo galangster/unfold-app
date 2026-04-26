@@ -72,6 +72,8 @@ import {
   getContextualSituationChips,
   getFilteredOnboardingSteps,
   getInitialOnboardingStepId,
+  isFullScreenOnboardingStepType,
+  shouldShowOnboardingTopContinue,
   shouldStartOnboardingSampleGeneration,
 } from '@/lib/onboarding-step-helpers';
 import { ShockStat } from '@/components/onboarding/ShockStat';
@@ -2921,7 +2923,7 @@ export default function OnboardingScreen() {
             )}
             
             {/* Continue button - hide for self-navigating steps */}
-            {canProceed() && step.type !== 'hook' && step.type !== 'solution' && step.type !== 'unfoldIntro' && step.type !== 'purchaseConfirmation' && step.type !== 'shockStat' && step.type !== 'growthGraph' && step.type !== 'choice' && step.type !== 'timeChoice' && step.type !== 'mirrorBack' && step.type !== 'featureSummary' && step.type !== 'devotionalSegue' && step.type !== 'readDevotional' && step.type !== 'threeStepPaywall' && step.type !== 'founderNote' && step.type !== 'vulnerabilityValidation' && step.type !== 'celebration' && step.type !== 'commitment1' && step.type !== 'commitment2' ? (
+            {shouldShowOnboardingTopContinue({ canProceed: canProceed(), stepType: step.type }) ? (
               <TouchableOpacity activeOpacity={0.7}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -2954,7 +2956,7 @@ export default function OnboardingScreen() {
             style={{ flex: 1 }}
           >
             {/* Full-screen steps that bypass the TypewriterText + showInput layout */}
-            {step?.type === 'hook' || step?.type === 'solution' || step?.type === 'unfoldIntro' || step?.type === 'purchaseConfirmation' || step?.type === 'shockStat' || step?.type === 'growthGraph' || step?.type === 'vulnerabilityValidation' || step?.type === 'featureSummary' || step?.type === 'devotionalSegue' || step?.type === 'readDevotional' || step?.type === 'celebration' || step?.type === 'commitment1' || step?.type === 'commitment2' || step?.type === 'threeStepPaywall' ? (
+            {isFullScreenOnboardingStepType(step?.type) ? (
               <View style={{ flex: 1 }}>
                 {renderInput()}
               </View>
