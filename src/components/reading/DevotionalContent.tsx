@@ -23,6 +23,7 @@ import { preventOrphan } from '@/lib/cn';
 import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
 import { InlineReflectionJournal } from './InlineReflectionJournal';
+import { getReflectionTypography } from '@/lib/reflection-typography';
 
 interface DevotionalContentProps {
   day: DevotionalDay;
@@ -95,6 +96,7 @@ export function DevotionalContent({
 }: DevotionalContentProps) {
   const { colors, isDark } = useTheme();
   const fontSizes = FONT_SIZE_VALUES[fontSize];
+  const reflectionTypography = getReflectionTypography(fontSize);
   const readingFont = useReadingFont();
 
   // Fetch scripture with verse numbers from local DB, fallback to remote API
@@ -362,8 +364,8 @@ export function DevotionalContent({
                     <Text
                       style={{
                         fontFamily: FontFamily.body,
-                        fontSize: 18,
-                        lineHeight: 28,
+                        fontSize: reflectionTypography.questionFontSize,
+                        lineHeight: reflectionTypography.questionLineHeight,
                         color: colors.text,
                         flex: 1,
                       }}

@@ -15,7 +15,8 @@ import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { Duration, Ease } from '@/constants/animations';
-import { useUnfoldStore, FONT_SIZE_VALUES, FontSize } from '@/lib/store';
+import { useUnfoldStore, FontSize } from '@/lib/store';
+import { getReflectionTypography, type ReflectionTypography } from '@/lib/reflection-typography';
 
 import { preventOrphan } from '@/lib/cn';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -44,7 +45,7 @@ export function InlineReflectionJournal({
 }: InlineReflectionJournalProps) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
-  const fontSizes = FONT_SIZE_VALUES[fontSize];
+  const typography = getReflectionTypography(fontSize);
   const premiumPolicy = usePremiumAccessPolicy();
   const editable = premiumPolicy === 'granted';
 
@@ -289,7 +290,7 @@ export function InlineReflectionJournal({
             onResponseChange={handleResponseChange}
             inputRefs={inputRefs}
             colors={colors}
-            fontSizes={fontSizes}
+            typography={typography}
             scrollViewRef={scrollViewRef}
             editable={editable}
             reducedMotion={reducedMotion ?? false}
@@ -350,7 +351,7 @@ function ReflectionQuestionCard({
   onResponseChange,
   inputRefs,
   colors,
-  fontSizes,
+  typography,
   scrollViewRef,
   editable = true,
   reducedMotion = false,
@@ -364,7 +365,7 @@ function ReflectionQuestionCard({
   onResponseChange: (index: number, question: string, text: string) => void;
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
-  fontSizes: { body: number; scripture: number; title: number };
+  typography: ReflectionTypography;
   scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
   editable?: boolean;
   reducedMotion?: boolean;
@@ -399,9 +400,9 @@ function ReflectionQuestionCard({
             style={{
               flex: 1,
               fontFamily: FontFamily.body,
-              fontSize: Math.round(fontSizes.body * 1.1),
+              fontSize: typography.questionFontSize,
               color: colors.text,
-              lineHeight: Math.round(fontSizes.body * 1.1) * 1.7,
+              lineHeight: typography.questionLineHeight,
             }}
           >
             {preventOrphan(question)}
@@ -445,9 +446,9 @@ function ReflectionQuestionCard({
               style={{
                 minHeight: 80,
                 fontFamily: FontFamily.body,
-                fontSize: fontSizes.body,
+                fontSize: typography.responseFontSize,
                 color: colors.text,
-                lineHeight: fontSizes.body * 1.6,
+                lineHeight: typography.responseLineHeight,
                 padding: 0,
               }}
             />
@@ -490,9 +491,9 @@ function ReflectionQuestionCard({
             <Text
               style={{
                 fontFamily: FontFamily.body,
-                fontSize: fontSizes.body - 2,
+                fontSize: typography.previewFontSize,
                 color: colors.textMuted,
-                lineHeight: (fontSizes.body - 2) * 1.5,
+                lineHeight: typography.previewLineHeight,
               }}
               numberOfLines={2}
             >
