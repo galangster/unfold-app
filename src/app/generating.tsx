@@ -66,9 +66,9 @@ const WAITING_MESSAGES = [
 // Polling interval for server job status (ms)
 const POLL_INTERVAL_MS = 3000;
 
-function requireCanonicalDevotionalId(devotionalId?: string | null): string {
+function requireCanonicalDevotionalId(devotionalId?: string | null, context = 'generation completion'): string {
   if (!devotionalId) {
-    throw new Error('Generation completed without a canonical devotionalId');
+    throw new Error(`${context} did not return a canonical devotionalId`);
   }
 
   return devotionalId;
@@ -510,15 +510,10 @@ export default function GeneratingScreen() {
     }
 
     const submitJob = async () => {
-      const devotionalId = `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-      void logBugEvent('generation', 'server-generation-start', { devotionalId });
-
-      startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
-
       try {
-        const { jobId } = await submitGenerationJob({
-          devotionalId,
+        void logBugEvent('generation', 'server-generation-start', { jobType: 'initial_arc' });
+
+        const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
           dayNumber: 1,
           jobType: 'initial_arc',
           userContext: {
@@ -538,6 +533,9 @@ export default function GeneratingScreen() {
           },
         });
 
+        const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'initial devotional job submission');
+        startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
+
         logger.log('[generating] Job submitted:', jobId);
         setPendingJobId(jobId);
         setIsReconnecting(false);
@@ -554,24 +552,11 @@ export default function GeneratingScreen() {
         pollStartTime.current = Date.now();
         startPolling(jobId);
       } catch (err) {
-        if (err instanceof ApiError && err.status === 409) {
-          const recovered = await recoverCompletedGenerationResult({
-            devotionalId,
-            dayNumber: 1,
-            existingJobId: err.existingJobId,
-          }).catch(() => null);
-
-          if (recovered?.devotionalDay) {
-            handleGenerationComplete(recovered);
-            return;
-          }
-        }
-
         const errorMessage = err instanceof Error ? err.message : String(err);
         logger.error('[generating] Job submission failed:', errorMessage);
         mmkvStorage.removeItem(INFLIGHT_KEY);
         failGenerationSession(errorMessage);
-        void logBugError('generation', err, { devotionalId, phase: 'server-job-submission' });
+        void logBugError('generation', err, { jobType: 'initial_arc', phase: 'server-job-submission' });
         setIsGenerating(false);
         setIsReconnecting(false);
         setError(errorMessage);
@@ -645,11 +630,7 @@ export default function GeneratingScreen() {
         setIsGenerating(true);
         // Re-trigger submission
         if (user) {
-          const devotionalId = `devotional-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
-
-          const { jobId } = await submitGenerationJob({
-            devotionalId,
+          const { jobId, devotionalId: submittedDevotionalId } = await submitGenerationJob({
             dayNumber: 1,
             jobType: 'initial_arc',
             userContext: {
@@ -668,6 +649,9 @@ export default function GeneratingScreen() {
               writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
             },
           });
+
+          const devotionalId = requireCanonicalDevotionalId(submittedDevotionalId, 'retry initial devotional job submission');
+          startGenerationSession({ devotionalId, totalDays: user.devotionalLength });
 
           logger.log('[generating] Re-submitted job:', jobId);
           setPendingJobId(jobId);

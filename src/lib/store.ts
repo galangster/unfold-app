@@ -7,7 +7,8 @@ import { logger } from './logger';
 import { mmkvStorage } from './mmkv-storage';
 import { migrateUnfoldStore } from './store-migrations';
 import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity, normalizeGeneratedDaysIdentity } from './generation-reconciliation';
-import { compositeId, newId } from './sync-ids';
+import { canonicalGeneratedDayId } from './devotional-canonical-days';
+import { newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { reconcileStreakState } from './streak-helpers';
@@ -882,7 +883,7 @@ export const useUnfoldStore = create<UnfoldState>()(
 
                 mergedByDay.set(dayNumber, {
                   ...incomingDay,
-                  id: incomingDay.id ?? existingDay.id ?? compositeId(devotionalId, dayNumber),
+                  id: incomingDay.id ?? existingDay.id ?? canonicalGeneratedDayId(devotionalId, dayNumber),
                   devotionalId,
                   isRead: existingDay.isRead || incomingDay.isRead,
                   readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
@@ -894,7 +895,7 @@ export const useUnfoldStore = create<UnfoldState>()(
                 if (!mergedByDay.has(dayNumber)) {
                   mergedByDay.set(dayNumber, {
                     ...incomingDay,
-                    id: incomingDay.id ?? compositeId(devotionalId, dayNumber),
+                    id: incomingDay.id ?? canonicalGeneratedDayId(devotionalId, dayNumber),
                     devotionalId,
                     updatedAt: now,
                   });

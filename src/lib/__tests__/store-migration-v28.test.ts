@@ -6,6 +6,28 @@ jest.mock('uuid', () => ({
 import { migrateUnfoldStore } from '../store-migrations';
 
 describe('Store migration v27→v28', () => {
+  it('backfills missing devotional day ids with canonical generated day ids', () => {
+    const stateV28: Record<string, any> = {
+      devotionals: [
+        {
+          id: 'devotional-1',
+          createdAt: '2026-04-27T00:00:00.000Z',
+          days: [
+            {
+              devotionalId: 'devotional-1',
+              dayNumber: 2,
+              title: 'Canonical future day',
+            },
+          ],
+        },
+      ],
+    };
+
+    const migrated = migrateUnfoldStore({ ...stateV28 }, 28) as Record<string, any>;
+
+    expect(migrated.devotionals[0].days[0].id).toBe('day-devotional-1-2');
+  });
+
   it('adds then removes legacy evening generation date when migrating to current schema', () => {
     const stateV27: Record<string, any> = {
       devotionals: [],

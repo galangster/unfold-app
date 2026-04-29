@@ -1,7 +1,3 @@
-jest.mock('@/lib/mmkv-storage', () => ({
-  getDeviceId: jest.fn(() => 'device-123'),
-}));
-
 import {
   buildOnboardingSampleGenerationRequest,
   getContextualSituationChips,
@@ -176,17 +172,17 @@ describe('onboarding step helpers', () => {
       obstacles: ['anxiety'],
     };
 
-    it('uses a backend-scoped anonymous sample devotional identity and onboarding job type', () => {
+    it('lets the backend own onboarding sample devotional identity and uses onboarding job type', () => {
       const request = buildOnboardingSampleGenerationRequest({
         answers,
         existingUser: { name: 'Nicholas', aboutMe: 'Fallback', bibleTranslation: 'ESV' },
       });
 
       expect(request).toMatchObject({
-        devotionalId: 'onboarding-sample-anon_device-123',
         dayNumber: 1,
         jobType: 'onboarding',
       });
+      expect(request).not.toHaveProperty('devotionalId');
       expect(request.jobType).not.toBe('initial_arc');
       expect(request.jobType).not.toBe('day');
       expect(request.userContext).toMatchObject({

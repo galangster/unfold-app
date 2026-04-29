@@ -41,4 +41,28 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('recovered-missing-day-from-completed-job');
     expect(readingSource).toContain('queued-missing-day-canonical-job');
   });
+
+  it('routes visible reader content through the canonical render selector', () => {
+    expect(readingSource).toContain('selectRenderableDevotionalDay(currentDevotional, viewingDay)');
+    expect(readingSource).not.toContain('const currentDayData = currentDevotional?.days.find((d) => d.dayNumber === viewingDay)');
+  });
+
+  it('routes reader navigation and tomorrow preview through canonical day helpers', () => {
+    expect(readingSource).toContain('getHighestContiguousRenderableDayNumber(currentDevotional)');
+    expect(readingSource).toContain('selectNextRenderableDevotionalDay(currentDevotional, viewingDay)');
+    expect(readingSource).not.toContain('const availableDays = currentDevotional?.days.length ?? 0');
+    expect(readingSource).not.toContain('currentDevotional.days.find((d) => d.dayNumber === viewingDay + 1)');
+  });
+
+  it('advances local currentDay when the reader completes the current day', () => {
+    expect(readingSource).toContain('const advanceDay = useUnfoldStore((s) => s.advanceDay);');
+    expect(readingSource).toContain('currentDevotional?.currentDay === viewingDay');
+    expect(readingSource).toContain('advanceDay(currentDevotionalId);');
+  });
+
+  it('replaces local-only days with recovered canonical job results', () => {
+    expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title)");
+    expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title)");
+    expect(readingSource).not.toContain('addGeneratedDay(currentDevotional.id, recovered.devotionalDay)');
+  });
 });

@@ -4,7 +4,7 @@ jest.mock('uuid', () => ({
 }));
 
 import { buildDevotionalSeed } from '../dev-seed';
-import { compositeId } from '../sync-ids';
+import { canonicalGeneratedDayId } from '../devotional-canonical-days';
 
 describe('buildDevotionalSeed', () => {
   it('creates a real devotional object with a seeded current day ready for reveal and reading QA', () => {
@@ -22,7 +22,7 @@ describe('buildDevotionalSeed', () => {
     expect(seeded.days[0]).toMatchObject({
       devotionalId: 'seeded-devotional',
       dayNumber: 1,
-      id: compositeId('seeded-devotional', 1),
+      id: canonicalGeneratedDayId('seeded-devotional', 1),
       title: 'When the Path Is Quiet',
       isRead: false,
       isRevealed: false,
@@ -35,12 +35,12 @@ describe('buildDevotionalSeed', () => {
     expect(seeded.days[1]).toMatchObject({
       devotionalId: 'seeded-devotional',
       dayNumber: 2,
-      id: compositeId('seeded-devotional', 2),
+      id: canonicalGeneratedDayId('seeded-devotional', 2),
     });
     expect(seeded.days[2]).toMatchObject({
       devotionalId: 'seeded-devotional',
       dayNumber: 3,
-      id: compositeId('seeded-devotional', 3),
+      id: canonicalGeneratedDayId('seeded-devotional', 3),
     });
   });
 });

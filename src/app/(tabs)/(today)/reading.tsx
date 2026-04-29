@@ -43,6 +43,11 @@ import { syncDevotionalDayRead } from '@/lib/devotional-read-sync';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import { isCanonicalProgressiveDevotional, shouldUseLegacyDirectContinuation } from '@/lib/reading-generation-policy';
+import {
+  getHighestContiguousRenderableDayNumber,
+  selectNextRenderableDevotionalDay,
+  selectRenderableDevotionalDay,
+} from '@/lib/devotional-canonical-days';
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -143,8 +148,8 @@ export default function ReadingScreen() {
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
+  const advanceDay = useUnfoldStore((s) => s.advanceDay);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
-  const addGeneratedDay = useUnfoldStore((s) => s.addGeneratedDay);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const clearResumeContext = useUnfoldStore((s) => s.clearResumeContext);
   const user = useUnfoldStore((s) => s.user);
@@ -258,8 +263,15 @@ export default function ReadingScreen() {
   const fontSize = user?.fontSize ?? 'medium';
 
   const totalDays = currentDevotional?.totalDays ?? 1;
-  const availableDays = currentDevotional?.days.length ?? 0;
-  const currentDayData = currentDevotional?.days.find((d) => d.dayNumber === viewingDay);
+  const availableDays = useMemo(
+    () => getHighestContiguousRenderableDayNumber(currentDevotional),
+    [currentDevotional],
+  );
+  const renderableDay = useMemo(
+    () => selectRenderableDevotionalDay(currentDevotional, viewingDay),
+    [currentDevotional, viewingDay],
+  );
+  const currentDayData = renderableDay.status === 'ready' ? renderableDay.day : undefined;
 
   // Reactive bookmark check - fixes the bookmark icon not updating
   const isCurrentDayBookmarked = useMemo(() => {
@@ -309,12 +321,11 @@ export default function ReadingScreen() {
   const isLastDay = viewingDay === totalDays;
   const isDayCompleted = currentDayData?.isRead ?? false;
 
-  // Tomorrow preview data — next day in the series (0-indexed lookup)
-  const tomorrowDayData = useMemo(() => {
-    if (!currentDevotional) return null;
-    // viewingDay is 1-indexed, so currentDevotional.days[viewingDay] is the next day
-    return currentDevotional.days.find((d) => d.dayNumber === viewingDay + 1) ?? null;
-  }, [currentDevotional, viewingDay]);
+  // Tomorrow preview data — next renderable day in the series.
+  const tomorrowDayData = useMemo(
+    () => selectNextRenderableDevotionalDay(currentDevotional, viewingDay) ?? null,
+    [currentDevotional, viewingDay],
+  );
 
   const tomorrowTeaser = useMemo(() => {
     if (!tomorrowDayData?.bodyText) return null;
@@ -793,6 +804,9 @@ export default function ReadingScreen() {
       // Use the user's intended devotional length to determine if this is truly the last day
       const expectedTotal = Math.max(totalDays, user?.devotionalLength ?? totalDays);
       const completingLastDay = viewingDay >= expectedTotal;
+      if (currentDevotional?.currentDay === viewingDay && viewingDay < expectedTotal) {
+        advanceDay(currentDevotionalId);
+      }
       setCelebrationType(completingLastDay ? 'series' : 'day');
       setShowCelebration(true);
 
@@ -851,7 +865,7 @@ export default function ReadingScreen() {
         }
       }
     }
-  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
+  }, [currentDevotionalId, viewingDay, totalDays, user?.devotionalLength, currentDevotional, currentDayData, markDayAsRead, advanceDay, clearResumeContext, recordStreakRead, syncWidgets, journalEntries.length, reviewPromptLastDate, reviewPromptCount, hasReviewed, reviewPromptDaysAtLast, recordReviewPrompt]);
 
   const generateRemainingDays = useCallback(async (
     options?: { navigateToNextDay?: boolean; withHaptics?: boolean }
@@ -1130,7 +1144,7 @@ export default function ReadingScreen() {
         }).catch(() => null);
 
         if (recovered?.devotionalDay) {
-          addGeneratedDay(currentDevotional.id, recovered.devotionalDay);
+          updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
           void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-completed-job', {
             devotionalId: currentDevotional.id,
             viewingDay,
@@ -1167,7 +1181,7 @@ export default function ReadingScreen() {
             }).catch(() => null);
 
             if (recoveredFromExisting?.devotionalDay) {
-              addGeneratedDay(currentDevotional.id, recoveredFromExisting.devotionalDay);
+              updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title);
               void logBugEvent('reading-sync-recovery', 'recovered-missing-day-from-existing-job', {
                 devotionalId: currentDevotional.id,
                 viewingDay,
@@ -1201,7 +1215,7 @@ export default function ReadingScreen() {
     } finally {
       setIsCheckingForSyncedDay(false);
     }
-  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, addGeneratedDay, updateDevotionalDays, viewingDay]);
+  }, [currentDevotional, currentDayData, isCheckingForSyncedDay, updateDevotionalDays, viewingDay]);
 
   useEffect(() => {
     if (!currentDevotional || currentDayData || isCheckingForSyncedDay) return;
@@ -1263,7 +1277,7 @@ export default function ReadingScreen() {
           }).catch(() => null);
 
           if (recovered?.devotionalDay) {
-            addGeneratedDay(currentDevotionalId!, recovered.devotionalDay);
+            updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
             void logBugEvent('reading-generation', 'manual-retry-progressive-recovered', {
               viewingDay,
             });
@@ -1323,7 +1337,7 @@ export default function ReadingScreen() {
           }).catch(() => null);
 
           if (recovered?.devotionalDay) {
-            addGeneratedDay(currentDevotionalId!, recovered.devotionalDay);
+            updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title);
             void logBugEvent('reading-generation', 'manual-retry-progressive-recovered-409', {
               viewingDay,
             });

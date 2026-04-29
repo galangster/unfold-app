@@ -61,5 +61,61 @@ describe('buildDevotionalReadSyncChanges', () => {
         generationMode: 'progressive',
       },
     });
+    expect(changes[0].data).not.toHaveProperty('bodyText');
+    expect(changes[0].data).not.toHaveProperty('scriptureText');
+    expect(changes[0].data).not.toHaveProperty('content');
+  });
+
+  it('uses the canonical sync id for progressive read state even when the local day id is not canonical', () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const localOnlyDay: DevotionalDay = {
+      ...day,
+      id: '4a77bc7a-51b3-5106-9243-3a1af346d6f7',
+      title: 'Local-only impostor day',
+      bodyText: 'This should never be laundered through read sync.',
+    };
+
+    const changes = buildDevotionalReadSyncChanges({
+      devotional,
+      day: localOnlyDay,
+      readAt,
+    });
+
+    expect(changes[0]).toMatchObject({
+      table: 'devotional_days',
+      id: 'day-devotional-1-1',
+      data: {
+        devotionalId: 'devotional-1',
+        dayNumber: 1,
+        isRead: true,
+        readAt,
+      },
+    });
+    expect(changes[0].data).not.toHaveProperty('title');
+    expect(changes[0].data).not.toHaveProperty('bodyText');
+    expect(changes[0].data).not.toHaveProperty('content');
+  });
+
+  it('keeps full day content only for non-canonical legacy devotionals', () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const legacyDevotional: Devotional = {
+      ...devotional,
+      generationMode: 'batch',
+      seriesStartDate: undefined,
+      seriesArc: undefined,
+      progressiveMemory: undefined,
+    };
+
+    const changes = buildDevotionalReadSyncChanges({
+      devotional: legacyDevotional,
+      day,
+      readAt,
+    });
+
+    expect(changes[0].data).toMatchObject({
+      bodyText: 'Body',
+      scriptureText: 'I have called you by name.',
+      content: day,
+    });
   });
 });

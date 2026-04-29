@@ -1,5 +1,5 @@
 import type { Devotional } from './store';
-import { compositeId } from './sync-ids';
+import { canonicalGeneratedDayId } from './devotional-canonical-days';
 
 export function buildDevotionalSeed({
   devotionalId = 'seeded-qa-devotional',
@@ -25,7 +25,7 @@ export function buildDevotionalSeed({
     days: [
       {
         devotionalId,
-        id: compositeId(devotionalId, 1),
+        id: canonicalGeneratedDayId(devotionalId, 1),
         dayNumber: 1,
         title: 'When the Path Is Quiet',
         scriptureReference: 'Psalm 46:10',
@@ -40,7 +40,7 @@ export function buildDevotionalSeed({
       },
       {
         devotionalId,
-        id: compositeId(devotionalId, 2),
+        id: canonicalGeneratedDayId(devotionalId, 2),
         dayNumber: 2,
         title: 'Strength for the Middle',
         scriptureReference: 'Isaiah 40:31',
@@ -55,7 +55,7 @@ export function buildDevotionalSeed({
       },
       {
         devotionalId,
-        id: compositeId(devotionalId, 3),
+        id: canonicalGeneratedDayId(devotionalId, 3),
         dayNumber: 3,
         title: 'A Faithful Next Step',
         scriptureReference: 'Proverbs 3:5-6',

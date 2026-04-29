@@ -22,8 +22,7 @@ import {
   normalizeGeneratedDayIdentity,
   reconcileGenerationResultIdentity,
 } from '../generation-reconciliation';
-import { normalizeGenerationResult, recoverCompletedGenerationResult } from '../generation-api';
-import { compositeId } from '../sync-ids';
+import { normalizeGenerationResult, recoverCompletedGenerationResult, submitGenerationJob } from '../generation-api';
 
 describe('generation reconciliation', () => {
   beforeEach(() => {
@@ -43,7 +42,25 @@ describe('generation reconciliation', () => {
 
     expect(normalized.devotionalId).toBe('devo-123');
     expect(normalized.dayNumber).toBe(2);
-    expect(normalized.id).toBe(compositeId('devo-123', 2));
+    expect(normalized.id).toBe('day-devo-123-2');
+  });
+
+  it('overwrites noncanonical generated day IDs before local insertion', () => {
+    const normalized = normalizeGeneratedDayIdentity('devo-uuid-repair', {
+      id: '7f3d2c0e-4c61-4c95-baf0-5c2d8a018c19',
+      devotionalId: 'stale-devotional-id',
+      dayNumber: 5,
+      title: 'Recovered',
+      scriptureReference: 'Psalm 5:1',
+      scriptureText: 'Give ear to my words',
+      bodyText: 'Body',
+      quotableLine: 'Quote',
+      isRead: false,
+    });
+
+    expect(normalized.devotionalId).toBe('devo-uuid-repair');
+    expect(normalized.dayNumber).toBe(5);
+    expect(normalized.id).toBe('day-devo-uuid-repair-5');
   });
 
   it('normalizes devotional days defensively before local insertion', () => {
@@ -84,7 +101,7 @@ describe('generation reconciliation', () => {
 
     expect(devotional.days).toHaveLength(2);
     expect(devotional.days[0].devotionalId).toBe('devo-456');
-    expect(devotional.days[1].id).toBe(compositeId('devo-456', 2));
+    expect(devotional.days[1].id).toBe('day-devo-456-2');
   });
 
   it('reconciles a job result onto the expected devotional/day identity', () => {
@@ -107,7 +124,7 @@ describe('generation reconciliation', () => {
     expect(reconciled.devotionalId).toBe('devo-789');
     expect(reconciled.devotionalDay.dayNumber).toBe(3);
     expect(reconciled.devotionalDay.devotionalId).toBe('devo-789');
-    expect(reconciled.devotionalDay.id).toBe(compositeId('devo-789', 3));
+    expect(reconciled.devotionalDay.id).toBe('day-devo-789-3');
   });
 
   it('recovers completed jobs through discovery and returns normalized output', async () => {
@@ -171,8 +188,30 @@ describe('generation reconciliation', () => {
 
     expect(recovered?.devotionalId).toBe('server-devo');
     expect(recovered?.devotionalDay.devotionalId).toBe('server-devo');
-    expect(recovered?.devotionalDay.id).toBe(compositeId('server-devo', 7));
+    expect(recovered?.devotionalDay.id).toBe('day-server-devo-7');
     expect(mockFetch.mock.calls[0][0]).toContain('/api/jobs/job-409');
+  });
+
+  it('exposes backend-owned devotional ids from generation job submission responses', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        jobId: 'job-initial',
+        status: 'pending',
+        devotionalId: 'server-owned-devo',
+      }),
+    });
+
+    const response = await submitGenerationJob({
+      dayNumber: 1,
+      jobType: 'initial_arc',
+    });
+    expect(response.devotionalId).toBeDefined();
+    const submittedDevotionalId = response.devotionalId!;
+
+    expect(submittedDevotionalId).toBe('server-owned-devo');
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).not.toHaveProperty('devotionalId');
   });
 
   it('throws when neither backend nor local context can provide a canonical devotional id', () => {

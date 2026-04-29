@@ -11,9 +11,9 @@ Suggested reviewer path:
 
 Important notes for review:
 - No reviewer login/account is required to access the core app flow.
-- The current release candidate is iOS build 1.0.0 (137).
+- Latest valid uploaded iOS build in App Store Connect is 1.0.0 (146). The intended processed build should be selected/attached in App Store Connect before final submission; current local hardening changes require a newer build if included.
 - The app includes a premium subscription paywall. Restore Purchases is available in the paywall flow.
-- Monthly and yearly subscription products use a 3-day free trial in App Store Connect.
+- Monthly and yearly subscription products are in App Store Connect review with a 3-day free trial; the yearly win-back subscription remains ready to submit separately.
 - Terms: https://unfoldapp.co/terms
 - Privacy: https://unfoldapp.co/privacy
 - The Companion/chat feature is intended for spiritual reflection/support and is not presented as professional counseling, therapy, crisis support, or emergency response.

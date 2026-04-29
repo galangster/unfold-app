@@ -41,6 +41,7 @@ function fetchWithTimeout(
 export interface GenerationJobResponse {
   jobId: string;
   status: "pending" | "processing" | "complete" | "failed";
+  devotionalId?: string;
   result?: GenerationResultPayload;
   error?: string;
   retryCount?: number;
@@ -88,7 +89,7 @@ export async function submitGenerationJob(params: {
     growthGoals?: string[];
     obstacles?: string[];
   };
-}): Promise<{ jobId: string; status: string }> {
+}): Promise<Pick<GenerationJobResponse, 'jobId' | 'status' | 'devotionalId'>> {
   // Read cached dynamic prompt example (if any) for self-improving generation quality
   let dynamicExample: { rule: string; badText: string; goodText: string } | undefined;
   try {

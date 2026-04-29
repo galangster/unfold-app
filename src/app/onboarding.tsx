@@ -2448,9 +2448,9 @@ export default function OnboardingScreen() {
           } : undefined}
           onDevotionalReady={(result) => {
             onboardingDevotionalResultRef.current = result;
-            if (result?.devotionalDay) {
+            if (result?.devotionalDay && result.devotionalId) {
               setOnboardingDevotionalDay(result.devotionalDay);
-              setOnboardingDevotionalId(result.devotionalId || `onboarding-${Date.now()}`);
+              setOnboardingDevotionalId(result.devotionalId);
             }
           }}
           onContinue={advanceToNextStep}

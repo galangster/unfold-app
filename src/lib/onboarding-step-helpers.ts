@@ -1,4 +1,3 @@
-import { getDeviceId } from '@/lib/mmkv-storage';
 
 type OnboardingStepLike = {
   id: string;
@@ -222,7 +221,6 @@ type OnboardingSampleAnswers = {
 };
 
 export type OnboardingSampleGenerationRequest = {
-  devotionalId: string;
   dayNumber: 1;
   jobType: 'onboarding';
   userContext: {
@@ -246,9 +244,6 @@ function sampleValue(value: string | null | undefined): string {
   return typeof value === 'string' ? value : '';
 }
 
-function buildOnboardingSampleDevotionalId(): string {
-  return `onboarding-sample-anon_${getDeviceId()}`;
-}
 
 export function buildOnboardingSampleGenerationRequest({
   answers,
@@ -258,7 +253,6 @@ export function buildOnboardingSampleGenerationRequest({
   existingUser: ExistingUserLike;
 }): OnboardingSampleGenerationRequest {
   return {
-    devotionalId: buildOnboardingSampleDevotionalId(),
     dayNumber: 1,
     jobType: 'onboarding',
     userContext: {

@@ -40,7 +40,8 @@ export interface SyncPushResult {
   table: SyncTable;
   id: string;
   serverUpdatedAt: string;
-  status: 'accepted' | 'conflict';
+  status: 'accepted' | 'conflict' | 'rejected';
+  reason?: string;
   serverData?: Record<string, unknown>;
 }
 

@@ -20,6 +20,7 @@ export default function DebugSeedNotificationTapScreen() {
     const run = async () => {
       const seeded = buildDevotionalSeed();
       const store = useUnfoldStore.getState();
+      store.removeDevotional(seeded.id);
       store.addDevotional(seeded);
       store.setCurrentDevotional(seeded.id);
 

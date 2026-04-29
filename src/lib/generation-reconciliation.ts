@@ -1,5 +1,5 @@
 import type { Devotional, DevotionalDay, SeriesArc } from './store';
-import { compositeId } from './sync-ids';
+import { canonicalGeneratedDayId } from './devotional-canonical-days';
 
 export interface GenerationResultPayload {
   devotionalDay: DevotionalDay;
@@ -33,7 +33,7 @@ export function normalizeGeneratedDayIdentity(
     ...day,
     devotionalId,
     dayNumber: resolvedDayNumber,
-    id: day.id ?? compositeId(devotionalId, resolvedDayNumber),
+    id: canonicalGeneratedDayId(devotionalId, resolvedDayNumber),
   };
 }
 

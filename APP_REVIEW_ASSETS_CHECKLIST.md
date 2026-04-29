@@ -4,7 +4,8 @@
 Capture assets that make the app legible to App Review and App Store visitors.
 
 Use the current release candidate state:
-- iOS build: **1.0.0 (137)**
+- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (146)**
+- If current local backend/mobile authority hardening is included, capture assets from the next processed build produced from this source, not from an older uploaded build.
 - backend: Railway production URL configured in the production EAS profile
 - no QA/debug UI should be visible in production-profile captures
 
@@ -102,7 +103,7 @@ Capture:
 - clean typography and spacing
 
 Important current check:
-- Bible DB download should be verified on build 137 because build 136 still used the custom API domain for this asset.
+- Bible DB download should be verified on the intended submission build because build 136 still used the custom API domain for this asset.
 
 ### 8) Companion
 **Why:** shows the supportive conversational side of the app.
@@ -131,7 +132,7 @@ That order tells the product story clearly.
 
 ## Screenshot capture rules
 For every screenshot:
-- [ ] Use build 137 or later, not build 136
+- [ ] Use the intended App Store submission build (at least build 146; newer if current local hardening changes are included), not build 136/137-era captures
 - [ ] No debug/dev controls visible
 - [ ] No system alerts covering the UI
 - [ ] No keyboard unless intentionally part of the story
@@ -209,7 +210,7 @@ Those are the screens most likely to help Apple quickly understand what Unfold a
 ## Internal practical capture plan
 Recommended capture session order:
 1. clear simulator/device state
-2. install/launch build 137 or later
+2. install/launch the intended App Store submission build
 3. capture onboarding shot
 4. capture paywall shot
 5. capture generating shot

@@ -1,4 +1,6 @@
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
+import { buildReadOnlyCanonicalDayData, canonicalGeneratedDayId } from './devotional-canonical-days';
+import { isCanonicalProgressiveDevotional } from './reading-generation-policy';
 import type { Devotional, DevotionalDay } from './store';
 
 export type SyncPushChange = {
@@ -22,12 +24,10 @@ export function buildDevotionalReadSyncChanges({
     devotional.totalDays + 1,
   );
 
-  return [
-    {
-      table: 'devotional_days',
-      id: day.id ?? `day-${devotional.id}-${day.dayNumber}`,
-      clientUpdatedAt: readAt,
-      data: {
+  const isCanonicalProgressive = isCanonicalProgressiveDevotional(devotional);
+  const dayData = isCanonicalProgressive
+    ? buildReadOnlyCanonicalDayData(devotional.id, day, readAt)
+    : {
         devotionalId: devotional.id,
         dayNumber: day.dayNumber,
         title: day.title,
@@ -38,7 +38,17 @@ export function buildDevotionalReadSyncChanges({
         isRead: true,
         readAt,
         content: day,
-      },
+      };
+  const daySyncId = isCanonicalProgressive
+    ? canonicalGeneratedDayId(devotional.id, day.dayNumber)
+    : day.id ?? canonicalGeneratedDayId(devotional.id, day.dayNumber);
+
+  return [
+    {
+      table: 'devotional_days',
+      id: daySyncId,
+      clientUpdatedAt: readAt,
+      data: dayData,
     },
     {
       table: 'devotionals',

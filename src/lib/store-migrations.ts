@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import { compositeId } from './sync-ids';
 
 type PersistedUnfoldState = Record<string, any>;
@@ -328,7 +329,7 @@ if (version < 29) {
         for (const day of d.days) {
           if (!day) continue;
           day.devotionalId = day.devotionalId || d.id;
-          if (!day.id) day.id = compositeId(d.id, day.dayNumber);
+          if (!day.id) day.id = canonicalGeneratedDayId(d.id, day.dayNumber);
           if (!day.updatedAt) day.updatedAt = day.readAt || day.generatedAt || d.createdAt || now;
         }
       }

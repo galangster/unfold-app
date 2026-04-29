@@ -16,6 +16,7 @@ export default function DebugSeedRevealScreen() {
 
     const seeded = buildDevotionalSeed();
     const store = useUnfoldStore.getState();
+    store.removeDevotional(seeded.id);
     store.addDevotional(seeded);
     store.setCurrentDevotional(seeded.id);
 
