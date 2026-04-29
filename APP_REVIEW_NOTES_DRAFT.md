@@ -17,8 +17,8 @@ The app’s primary tabs are:
 - **Journal** — notebook notes and reflections
 
 ## Current release candidate
-- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (146)**
-- Current local release-candidate source includes additional backend/mobile authority hardening after build 146. If those changes are included in the App Store submission, upload/attach the next processed build produced from this source before submitting.
+- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (148)**
+- App Store version `1.0` was still attached to build 144 during the 2026-04-29 readiness check. Before any final submission, explicitly attach/select build 148, then rerun App Store Connect preflight.
 - Bundle id: `com.unfoldapp.ios`
 - App Store Connect app id: `6760814444`
 - Backend used by the production build: Railway production URL configured through `EXPO_PUBLIC_BACKEND_URL`
@@ -82,7 +82,7 @@ Before final submission, confirm:
 - [ ] Subscription metadata in App Store Connect is accurate and attached to the app version
 - [ ] Paywall pricing, billing cadence, restore flow, terms, and privacy are all current
 - [ ] Screenshots reflect the current onboarding -> paywall -> discovery -> generating -> reading flow
-- [ ] The intended processed build is selected/attached in App Store Connect before submission. As of the 2026-04-29 check, version `1.0` still had build 144 attached while latest valid uploaded build was 146.
+- [ ] The intended processed build is selected/attached in App Store Connect before submission. As of the 2026-04-29 readiness check, version `1.0` still had build 144 attached while latest valid uploaded build was 148.
 - [ ] Review notes mention personalized devotional generation and the premium flow
 - [ ] Real-device notification tap routing and onboarding generation have been smoke-tested
 - [ ] If desired, attach an app preview video to reduce reviewer confusion (recommended, not required)
@@ -93,7 +93,7 @@ Before final submission, confirm:
 - Premium purchase/restore code checks for the active `Unfold Premium` entitlement before granting local premium state.
 - Devotional generation ownership, onboarding sample identity, and prompt-example authority were hardened across backend/mobile.
 - Production backend health check returns DB connected.
-- App Store Connect reports build 1.0.0 (146) as valid, but App Store version `1.0` still needs its intended build attachment verified/switched before final submission.
+- App Store Connect reports build 1.0.0 (148) as valid, but App Store version `1.0` still needs its intended build attachment verified/switched before final submission.
 - App Store Connect subscription readback shows monthly/yearly subscriptions in `WAITING_FOR_REVIEW` with 3-day free trials; yearly win-back is `READY_TO_SUBMIT`.
 
 ### Remaining confidence gaps

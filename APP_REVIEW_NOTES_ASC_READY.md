@@ -11,7 +11,7 @@ Suggested reviewer path:
 
 Important notes for review:
 - No reviewer login/account is required to access the core app flow.
-- Latest valid uploaded iOS build in App Store Connect is 1.0.0 (146). The intended processed build should be selected/attached in App Store Connect before final submission; current local hardening changes require a newer build if included.
+- Latest valid uploaded iOS build in App Store Connect is 1.0.0 (148). App Store version `1.0` was still attached to build 144 during the 2026-04-29 readiness check, so build 148 still needs to be explicitly selected/attached and preflighted before final submission.
 - The app includes a premium subscription paywall. Restore Purchases is available in the paywall flow.
 - Monthly and yearly subscription products are in App Store Connect review with a 3-day free trial; the yearly win-back subscription remains ready to submit separately.
 - Terms: https://unfoldapp.co/terms

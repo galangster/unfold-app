@@ -4,8 +4,8 @@
 Capture assets that make the app legible to App Review and App Store visitors.
 
 Use the current release candidate state:
-- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (146)**
-- If current local backend/mobile authority hardening is included, capture assets from the next processed build produced from this source, not from an older uploaded build.
+- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (148)**
+- App Store version `1.0` was still attached to build 144 during the 2026-04-29 readiness check. Capture final assets from the intended submission build after build 148 is attached/selected or after any newer approved replacement build is processed.
 - backend: Railway production URL configured in the production EAS profile
 - no QA/debug UI should be visible in production-profile captures
 
@@ -132,7 +132,7 @@ That order tells the product story clearly.
 
 ## Screenshot capture rules
 For every screenshot:
-- [ ] Use the intended App Store submission build (at least build 146; newer if current local hardening changes are included), not build 136/137-era captures
+- [ ] Use the intended App Store submission build (currently expected to be build 148 after explicit ASC attachment/selection, or a newer approved replacement build), not build 136/137-era captures
 - [ ] No debug/dev controls visible
 - [ ] No system alerts covering the UI
 - [ ] No keyboard unless intentionally part of the story
