@@ -21,9 +21,12 @@
 
 import { Platform } from "react-native";
 import { logger } from '@/lib/logger';
+import { getDeviceId } from '@/lib/mmkv-storage';
+import { buildRevenueCatAppUserId } from '@/lib/revenuecat-user-id';
 import Purchases, {
   type PurchasesOfferings,
   type CustomerInfo,
+  type CustomerInfoUpdateListener,
   type PurchasesPackage,
 } from "react-native-purchases";
 
@@ -52,8 +55,12 @@ const getApiKey = (): string | undefined => {
 
 const apiKey = getApiKey();
 
-// Track if RevenueCat is enabled
-const isEnabled = !!apiKey && !isWeb;
+// Track whether RevenueCat has API keys available. The SDK is only usable after
+// the synchronous configure call below succeeds.
+const hasRevenueCatApiKey = !!apiKey && !isWeb;
+let revenueCatConfigured = false;
+let revenueCatIdentityReadyPromise: Promise<void> | null = null;
+let revenueCatIdentityError: unknown = null;
 
 const LOG_PREFIX = "[RevenueCat]";
 
@@ -118,12 +125,18 @@ const guardRevenueCatUsage = async <T>(
     return { ok: false, reason: "web_not_supported" };
   }
 
-  if (!isEnabled) {
+  if (!revenueCatConfigured) {
     logger.log(`${LOG_PREFIX} ${action} skipped: RevenueCat not configured`);
     return { ok: false, reason: "not_configured" };
   }
 
   try {
+    if (revenueCatIdentityReadyPromise) {
+      await revenueCatIdentityReadyPromise;
+    }
+    if (revenueCatIdentityError) {
+      throw revenueCatIdentityError;
+    }
     const data = await operation();
     return { ok: true, data };
   } catch (error) {
@@ -143,8 +156,24 @@ const guardRevenueCatUsage = async <T>(
   }
 };
 
+const synchronizeRevenueCatAppUserID = async (appUserID: string): Promise<void> => {
+  const currentAppUserID = await Purchases.getAppUserID();
+  if (currentAppUserID === appUserID) {
+    logger.log(`${LOG_PREFIX} App user ID already synchronized`);
+    return;
+  }
+
+  const wasAnonymous = currentAppUserID.startsWith('$RCAnonymousID:');
+  const result = await Purchases.logIn(appUserID);
+  logger.log(
+    `${LOG_PREFIX} App user ID synchronized (${wasAnonymous ? 'anonymous migrated' : 'custom switched'}, ${
+      result.created ? 'created' : 'existing'
+    } customer)`,
+  );
+};
+
 // Initialize RevenueCat if key exists
-if (isEnabled) {
+if (hasRevenueCatApiKey) {
   try {
     // Set up custom log handler to suppress Test Store and expected errors
     // These are non-errors thrown as errors by the SDK, and will be confusing to the user.
@@ -156,7 +185,16 @@ if (isEnabled) {
       }
     });
 
+    const appUserID = buildRevenueCatAppUserId(getDeviceId());
+    // Configure without appUserID first so update installs keep the SDK's
+    // cached anonymous customer, then logIn to alias/migrate that customer to
+    // our deterministic device-scoped ID before any guarded SDK operation runs.
     Purchases.configure({ apiKey: apiKey! });
+    revenueCatConfigured = true;
+    revenueCatIdentityReadyPromise = synchronizeRevenueCatAppUserID(appUserID).catch((error) => {
+      revenueCatIdentityError = error;
+      logger.error(`${LOG_PREFIX} App user ID synchronization failed:`, error);
+    });
     const keyType = __DEV__
       ? (testKey ? 'test' : (Platform.OS === 'ios' ? 'apple (dev fallback)' : 'google (dev fallback)'))
       : (Platform.OS === 'ios' ? 'apple' : 'google');
@@ -183,7 +221,11 @@ if (isEnabled) {
  * }
  */
 export const isRevenueCatEnabled = (): boolean => {
-  return isEnabled;
+  return revenueCatConfigured;
+};
+
+export const hasRevenueCatConfigurationAttemptFailed = (): boolean => {
+  return hasRevenueCatApiKey && !revenueCatConfigured;
 };
 
 /**
@@ -269,6 +311,15 @@ export const restorePurchases = (): Promise<
       "restorePurchases",
     ),
   );
+};
+
+export const addCustomerInfoUpdateListener = (
+  listener: CustomerInfoUpdateListener,
+): Promise<RevenueCatResult<() => boolean>> => {
+  return guardRevenueCatUsage("addCustomerInfoUpdateListener", async () => {
+    Purchases.addCustomerInfoUpdateListener(listener);
+    return () => Purchases.removeCustomerInfoUpdateListener(listener);
+  });
 };
 
 /**
@@ -396,16 +447,17 @@ export const getPackage = async (
 export const isTrialEligibleForProduct = async (
   productIdentifier: string,
 ): Promise<boolean> => {
-  if (!isEnabled || Platform.OS !== "ios") return false;
-  try {
+  if (Platform.OS !== "ios") return false;
+
+  const eligibilityResult = await guardRevenueCatUsage("trialEligibility", async () => {
     const result = await Purchases.checkTrialOrIntroductoryPriceEligibility([
       productIdentifier,
     ]);
     const entry = result[productIdentifier];
     // INTRO_ELIGIBILITY_STATUS_ELIGIBLE = 2 (see @revenuecat/purchases-typescript-internal/offerings.d.ts)
     return entry?.status === 2;
-  } catch (error) {
-    logger.warn(`${LOG_PREFIX} trial eligibility check failed`, error);
-    return false;
-  }
+  });
+
+  if (!eligibilityResult.ok) return false;
+  return eligibilityResult.data;
 };

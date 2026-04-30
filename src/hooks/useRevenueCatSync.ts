@@ -9,11 +9,17 @@
  */
 
 import { useEffect } from 'react';
-import Purchases from 'react-native-purchases';
+import type { CustomerInfo } from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnfoldStore } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
-import { isRevenueCatEnabled, getOfferings } from '@/lib/revenuecatClient';
+import {
+  addCustomerInfoUpdateListener,
+  getCustomerInfo,
+  getOfferings,
+  hasRevenueCatConfigurationAttemptFailed,
+  isRevenueCatEnabled,
+} from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
 
@@ -24,6 +30,10 @@ export function useRevenueCatSync() {
   useEffect(() => {
     // Only sync if RevenueCat is configured
     if (!isRevenueCatEnabled()) {
+      if (hasRevenueCatConfigurationAttemptFailed()) {
+        logger.log('[RevenueCat] Configuration failed; leaving premium policy unresolved');
+        return;
+      }
       // No external source to wait for — mark as resolved so downstream
       // tri-state gates (usePremiumAccessPolicy) don't stay in `unknown`
       // forever. In this state, premium falls back to persisted user.isPremium
@@ -32,19 +42,31 @@ export function useRevenueCatSync() {
       return;
     }
 
-    // Fetch current subscription status on launch
-    // This catches lapses that occurred between app sessions
-    Purchases.getCustomerInfo()
-      .then((customerInfo) => {
-        const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
-        updateUser({ isPremium: hasSubscription });
-        // Mark RevenueCat as resolved for this session. Downstream gates
-        // (useCheckInNotifications, scheduleMidday/Evening*) fail closed
-        // until this flips — even a "no subscription" answer counts.
-        useUIState.getState().setRevenueCatResolved();
-        // Re-validate the trial-ending local notification against the latest
-        // customer info. Fire-and-forget — failures are logged internally.
-        void syncTrialEndingNotification();
+    let didCancel = false;
+    let removeCustomerInfoListener: (() => boolean) | undefined;
+
+    const applyCustomerInfo = (customerInfo: CustomerInfo) => {
+      if (didCancel) return;
+      const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
+      updateUser({ isPremium: hasSubscription });
+      // Any first-hand answer from RevenueCat counts as resolved for this
+      // session — even a "no subscription" answer.
+      useUIState.getState().setRevenueCatResolved();
+      // Re-sync the trial-ending local notification whenever entitlements
+      // change (purchase, restore, lapse). Fire-and-forget.
+      void syncTrialEndingNotification();
+    };
+
+    // Fetch current subscription status on launch. This waits for the
+    // RevenueCat anonymous→deterministic ID migration before reading customer
+    // info, so update installs do not briefly demote active anonymous-ID users.
+    getCustomerInfo()
+      .then((result) => {
+        if (result.ok) {
+          applyCustomerInfo(result.data);
+          return;
+        }
+        logger.log('[RevenueCat] Initial customer info sync returned non-ok result:', result.reason);
       })
       .catch(() => {
         // Silently fail — stale store value is acceptable as a fallback.
@@ -72,20 +94,23 @@ export function useRevenueCatSync() {
       }
     });
 
-    // Set up real-time listener for subscription changes
-    // This is triggered on purchases, restores, and when entitlements change
-    const unsubscribe = Purchases.addCustomerInfoUpdateListener((customerInfo) => {
-      const hasSubscription = Boolean(customerInfo.entitlements.active?.['Unfold Premium']);
-      updateUser({ isPremium: hasSubscription });
-      // Any callback here is a first-hand answer from RevenueCat, so mark
-      // resolved even if the initial getCustomerInfo() call failed earlier.
-      useUIState.getState().setRevenueCatResolved();
-      // Re-sync the trial-ending notification whenever entitlements change
-      // (purchase, restore, lapse). Fire-and-forget.
-      void syncTrialEndingNotification();
+    // Set up real-time listener for subscription changes. Registration also
+    // waits for the deterministic RevenueCat identity to be ready.
+    addCustomerInfoUpdateListener(applyCustomerInfo).then((result) => {
+      if (!result.ok) {
+        logger.log('[RevenueCat] Customer info listener not registered:', result.reason);
+        return;
+      }
+      if (didCancel) {
+        result.data();
+        return;
+      }
+      removeCustomerInfoListener = result.data;
     });
 
-    // Cleanup listener on unmount
-    return unsubscribe;
+    return () => {
+      didCancel = true;
+      removeCustomerInfoListener?.();
+    };
   }, [updateUser, queryClient]);
 }

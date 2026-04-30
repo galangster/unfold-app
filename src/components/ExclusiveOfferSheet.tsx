@@ -4,6 +4,7 @@
  * Two contexts:
  * - 'onboarding': 50% OFF badge, purchases $rc_annual from default offering ($59.99/yr).
  * - 'churned': 25% OFF badge, fetches 'winback' offering and purchases its first package ($44.99/yr).
+ *   This churned path is disabled by default for v1 via EXPO_PUBLIC_ENABLE_CHURNED_WINBACK_OFFER.
  *
  * Shown once per trigger. User will not see this offer again.
  */
