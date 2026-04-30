@@ -23,7 +23,7 @@
     "qa-testflight": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://unfold-backend-production.up.railway.app",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.unfoldapp.co",
         "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
         "EXPO_PUBLIC_ENABLE_QA_TOOLS": "1",
@@ -36,7 +36,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_BACKEND_URL": "https://unfold-backend-production.up.railway.app",
+        "EXPO_PUBLIC_BACKEND_URL": "https://api.unfoldapp.co",
         "EXPO_PUBLIC_REVENUECAT_APPLE_KEY": "appl_oQNnQifEgzWidhmeJGtsJSjjwJx",
         "EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY": "goog_DtIZxBBvJukFOxkUPJNEjZXZUAs",
         "EAS_USE_CACHE": "1"

@@ -174,9 +174,15 @@ async function downloadAudio(text: string, voiceId: string, key: string): Promis
     const DOWNLOAD_TIMEOUT = 30_000;
     const downloadUrl = audioUrl
       ?? (audioHash ? `${PRIMARY_BACKEND_URL}/api/audio/${audioHash}` : `${PRIMARY_BACKEND_URL}/api/tts-download/${downloadId}`);
+    const downloadHeaders = { ...headers };
+    delete downloadHeaders['Content-Type'];
+    const downloadOptions = downloadUrl.startsWith(PRIMARY_BACKEND_URL)
+      ? { headers: downloadHeaders }
+      : undefined;
     const downloadPromise = FileSystem.downloadAsync(
       downloadUrl,
       cachedFile.uri,
+      downloadOptions,
     );
     const downloadResult = await Promise.race([
       downloadPromise,

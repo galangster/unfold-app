@@ -25,7 +25,7 @@ import {
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { MMKV } from 'react-native-mmkv';
 import { logger } from '@/lib/logger';
-import { PRIMARY_BACKEND_URL } from '@/lib/api-config';
+import { getAuthHeaders, PRIMARY_BACKEND_URL } from '@/lib/api-config';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -190,11 +190,15 @@ export async function downloadBibleDb(
       await deleteAsync(DB_FILE_PATH, { idempotent: true });
     }
 
-    // Download with progress tracking via legacy API
+    // Download with progress tracking via legacy API. Include the same app headers
+    // used by fetch() calls so Cloudflare allows api.unfoldapp.co binary downloads.
+    const downloadHeaders = await getAuthHeaders();
+    delete downloadHeaders['Content-Type'];
+
     const downloadResumable = createDownloadResumable(
       DB_DOWNLOAD_URL,
       DB_FILE_PATH,
-      {},
+      { headers: downloadHeaders },
       (downloadProgress) => {
         const progress =
           downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
