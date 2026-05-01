@@ -6,9 +6,10 @@ Capture assets that make the app legible to App Review and App Store visitors.
 Use the current submission intent:
 - App Store version: `1.0`
 - App Store Connect app id: `6760814444`
-- Current attached App Store build before this lane: `148`
+- Previous attached App Store build before this lane: `148`
+- Current attached App Store build after resubmission: `154`
 - Build `153` is a QA/TestFlight diagnostics build and should not be used as the final App Review binary.
-- Final assets should align with the clean production-profile App Review build created after build `153`.
+- Final assets align with the clean production-profile App Review build `154` submitted on 2026-05-01.
 - Backend: Railway production via `https://api.unfoldapp.co`
 - No QA/debug UI should be visible in production-profile captures.
 

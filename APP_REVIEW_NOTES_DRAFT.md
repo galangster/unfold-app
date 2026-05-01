@@ -22,10 +22,13 @@ The app’s primary tabs are:
 - App Store Connect app id: `6760814444`
 - App Store version: `1.0`
 - App Store version id: `215fd90c-9f3a-407a-934d-27a687c12222`
-- Current App Store version state before this resubmission lane: `DEVELOPER_REJECTED`
-- Current attached App Store build before this lane: build `148`
-- Latest valid uploaded build before this lane: build `153`, but build `153` was a QA/TestFlight diagnostics build with `EXPO_PUBLIC_ENABLE_QA_TOOLS=1`; it should not be treated as the final App Review binary.
-- Intended next step: create and attach a clean production-profile App Review build with QA tools disabled, then rerun preflight and submit after the intended build is attached.
+- Clean production App Review build: `1.0.0 (154)`
+- Build `154` id: `ddce7087-8bd2-4522-8304-0fc5a375b54c`
+- Build `154` processing state: `VALID`
+- App Store version state after submission: `WAITING_FOR_REVIEW`
+- Review submission id: `60938826-e0bb-4dc1-9271-b85b792b49d8`
+- Review submission state after submission: `WAITING_FOR_REVIEW`
+- Previous diagnostic build `153` was a QA/TestFlight diagnostics build with `EXPO_PUBLIC_ENABLE_QA_TOOLS=1`; it was not attached as the final App Review binary.
 - Backend used by the production build: `https://api.unfoldapp.co` via `EXPO_PUBLIC_BACKEND_URL`.
 - The Bible database download uses the configured backend URL, so it does not depend on a generic custom API root-domain request succeeding.
 
@@ -91,11 +94,11 @@ Before final submission, confirm:
 - [ ] Subscription metadata in App Store Connect is accurate and attached to the app version
 - [ ] Paywall pricing, billing cadence, restore flow, terms, and privacy are all current
 - [x] Screenshots reflect the current onboarding -> paywall -> discovery -> generating -> reading flow enough for App Review; live ASC assets were dimension-checked and visually reviewed on 2026-05-01. Future marketing optimization can add a clearer premium/paywall screenshot, but the current set has no visible debug/error states.
-- [ ] A clean production-profile build is uploaded, processed, and explicitly attached to App Store version `1.0`
-- [ ] App Store Connect preflight passes after the intended build is attached
-- [ ] Review notes mention personalized devotional generation and the premium flow
+- [x] A clean production-profile build is uploaded, processed, and explicitly attached to App Store version `1.0` (`1.0.0 (154)`)
+- [x] App Store Connect preflight passes after build `154` is attached
+- [x] Review notes mention personalized devotional generation and the premium flow; the live ASC review notes were updated/read back on 2026-05-01
 - [ ] Real-device notification tap routing and onboarding generation have been smoke-tested as far as practical before release
-- [ ] If desired, attach an app preview video to reduce reviewer confusion (recommended, not required)
+- [x] App Review resubmission created: review submission `60938826-e0bb-4dc1-9271-b85b792b49d8` is `WAITING_FOR_REVIEW`
 
 ## Internal QA notes (not for App Store Connect copy, but useful for submission confidence)
 ### Verified in recent hardening pass
