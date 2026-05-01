@@ -4,16 +4,15 @@ Suggested reviewer path:
 1. Open the app.
 2. Complete onboarding.
 3. Continue through the premium/paywall step.
-4. Complete devotional setup questions.
+4. Complete the devotional setup/discovery questions.
 5. Wait on the generating screen for devotional creation to finish.
-6. Review the generated devotional in Today / reading flow.
+6. Review the generated devotional in the Today / reading flow.
 7. Optionally inspect Journal, Bible, and Companion.
 
 Important notes for review:
 - No reviewer login/account is required to access the core app flow.
-- Latest valid uploaded iOS build in App Store Connect is 1.0.0 (148). App Store version `1.0` was still attached to build 144 during the 2026-04-29 readiness check, so build 148 still needs to be explicitly selected/attached and preflighted before final submission.
 - The app includes a premium subscription paywall. Restore Purchases is available in the paywall flow.
-- Monthly and yearly subscription products are in App Store Connect review with a 3-day free trial; the yearly win-back subscription remains ready to submit separately.
+- The intended review subscriptions are Unfold Premium Monthly (`unfold_premium_monthly_v2`) and Unfold Premium Yearly (`unfold_premium_yearly`). Both are in the same subscription group and include the configured 3-day introductory trial where eligible.
 - Terms: https://unfoldapp.co/terms
 - Privacy: https://unfoldapp.co/privacy
 - The Companion/chat feature is intended for spiritual reflection/support and is not presented as professional counseling, therapy, crisis support, or emergency response.

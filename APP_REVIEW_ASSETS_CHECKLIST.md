@@ -3,25 +3,47 @@
 ## Goal
 Capture assets that make the app legible to App Review and App Store visitors.
 
-Use the current release candidate state:
-- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (148)**
-- App Store version `1.0` was still attached to build 144 during the 2026-04-29 readiness check. Capture final assets from the intended submission build after build 148 is attached/selected or after any newer approved replacement build is processed.
-- backend: Railway production URL configured in the production EAS profile
-- no QA/debug UI should be visible in production-profile captures
+Use the current submission intent:
+- App Store version: `1.0`
+- App Store Connect app id: `6760814444`
+- Current attached App Store build before this lane: `148`
+- Build `153` is a QA/TestFlight diagnostics build and should not be used as the final App Review binary.
+- Final assets should align with the clean production-profile App Review build created after build `153`.
+- Backend: Railway production via `https://api.unfoldapp.co`
+- No QA/debug UI should be visible in production-profile captures.
 
 Prioritize the real habit loop:
 1. onboarding
 2. personalized setup
-3. generating
-4. today/reading
-5. journal
-6. Bible
-7. companion
+3. paywall / premium
+4. generating
+5. today / reading
+6. journal
+7. Bible
+8. companion
+
+---
+
+## Current screenshot state
+- App Store Connect currently has complete en-US screenshot assets in 2 device sets.
+- Live ASC screenshot dimensions verified on 2026-05-01:
+  - `APP_IPHONE_65`: 4 images at 1284x2778
+  - `APP_IPAD_PRO_3GEN_129`: 4 images at 2048x2732
+- Live screenshot review found no visible debug UI, test banners, loading/error states, or obvious broken surfaces. The set is acceptable for this resubmission lane, though future marketing optimization could add a clearer premium/paywall shot.
+- Local source assets include proper 1206x2622 screenshots under `screenshots/`.
+- Older `docs/screenshots/` assets are 460x1000 and are useful as documentation, not final App Store upload assets.
+- `.artifacts/app-store-shots/` assets are 440x956 QA scratch captures and should not be uploaded blindly.
+
+Before mutating screenshots in App Store Connect:
+- [ ] Download/list current ASC screenshot sets by version localization id.
+- [ ] Verify each replacement image dimension is App Store-valid.
+- [ ] Prefer curated/framed 1206x2622 assets over raw simulator scratch captures.
+- [ ] Do not delete live ASC screenshot sets unless replacement upload is ready and approved.
 
 ---
 
 ## Screenshot set recommendation
-Aim for **5–8 strong screenshots** for the App Store listing.
+Aim for **5-8 strong screenshots** for the App Store listing.
 
 ### 1) Personalized onboarding / setup
 **Why:** shows that the app is tailored, not generic.
@@ -51,10 +73,10 @@ Capture a paywall screen that clearly shows:
 - pricing/billing cadence
 - visual polish
 - Restore Purchases / legal area if visible and not cluttered
-- current 3-day trial copy if the user is eligible and the UI displays it
+- current 3-day trial copy only if the user is eligible and the UI displays it honestly
 
 Best candidate:
-- strongest final `ThreeStepPaywall` screen
+- strongest final paywall screen from the clean production build
 
 ### 3) Generating screen
 **Why:** explains the app’s personalized devotional generation flow.
@@ -102,9 +124,6 @@ Capture:
 - navigation/header visible enough to read as Bible context
 - clean typography and spacing
 
-Important current check:
-- Bible DB download should be verified on the intended submission build because build 136 still used the custom API domain for this asset.
-
 ### 8) Companion
 **Why:** shows the supportive conversational side of the app.
 
@@ -132,8 +151,8 @@ That order tells the product story clearly.
 
 ## Screenshot capture rules
 For every screenshot:
-- [ ] Use the intended App Store submission build (currently expected to be build 148 after explicit ASC attachment/selection, or a newer approved replacement build), not build 136/137-era captures
-- [ ] No debug/dev controls visible
+- [ ] Use the intended clean production App Review build, not the QA diagnostics build `153` and not older build 136/137-era captures
+- [ ] No debug/dev/QA controls visible
 - [ ] No system alerts covering the UI
 - [ ] No keyboard unless intentionally part of the story
 - [ ] No partially typed messy text
@@ -149,30 +168,30 @@ For every screenshot:
 ## App preview / screen recording recommendation
 A short app preview is **recommended**, even if not strictly required.
 
-### Best preview structure (20–30 seconds)
+### Best preview structure (20-30 seconds)
 Use a simple narrative:
 
-#### Segment 1 — onboarding (3–5s)
+#### Segment 1 — onboarding (3-5s)
 Show:
 - one beautiful onboarding/discovery screen
 - one moment of personalization
 
-#### Segment 2 — paywall / premium (3–4s)
+#### Segment 2 — paywall / premium (3-4s)
 Show:
 - premium step briefly
 - enough to make the subscription model understandable
 
-#### Segment 3 — generating (3–4s)
+#### Segment 3 — generating (3-4s)
 Show:
 - devotional generation in progress
 
-#### Segment 4 — reading (5–7s)
+#### Segment 4 — reading (5-7s)
 Show:
 - reveal/today/reading surface
 - devotional content on screen
 - ideally a gentle scroll
 
-#### Segment 5 — journal + Bible + companion (6–10s)
+#### Segment 5 — journal + Bible + companion (6-10s)
 Quickly show:
 - journal/notebook
 - Bible reader
@@ -209,16 +228,15 @@ Those are the screens most likely to help Apple quickly understand what Unfold a
 
 ## Internal practical capture plan
 Recommended capture session order:
-1. clear simulator/device state
-2. install/launch the intended App Store submission build
-3. capture onboarding shot
-4. capture paywall shot
-5. capture generating shot
-6. capture Today shot
-7. capture Reading shot
-8. capture Journal shot
-9. capture Bible shot, including successful Bible DB/content load
-10. capture Companion shot
-11. if making preview video, record in the same order
+1. install/launch the intended clean App Store submission build
+2. capture onboarding shot
+3. capture paywall shot
+4. capture generating shot
+5. capture Today shot
+6. capture Reading shot
+7. capture Journal shot
+8. capture Bible shot, including successful Bible DB/content load
+9. capture Companion shot
+10. if making preview video, record in the same order
 
 This minimizes reset thrash and keeps the story coherent.

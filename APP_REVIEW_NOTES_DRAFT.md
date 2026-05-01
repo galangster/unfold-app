@@ -6,9 +6,10 @@ Unfold is a Christian devotional, Bible reading, and journaling app.
 The main first-run experience is:
 1. onboarding questions
 2. premium/paywall step
-3. devotional setup/discovery questions
-4. devotional generation
-5. reading, journaling, Bible, and companion features
+3. short subscription confirmation when purchase succeeds
+4. devotional setup/discovery questions
+5. devotional generation
+6. reading, journaling, Bible, and companion features
 
 The app’s primary tabs are:
 - **Today** — current devotional and daily progress
@@ -16,13 +17,17 @@ The app’s primary tabs are:
 - **Companion** — guided spiritual support / reflection chat
 - **Journal** — notebook notes and reflections
 
-## Current release candidate
-- Latest valid uploaded iOS build in App Store Connect: **1.0.0 (148)**
-- App Store version `1.0` was still attached to build 144 during the 2026-04-29 readiness check. Before any final submission, explicitly attach/select build 148, then rerun App Store Connect preflight.
+## Current release / submission state as of 2026-05-01
 - Bundle id: `com.unfoldapp.ios`
 - App Store Connect app id: `6760814444`
-- Backend used by the production build: Railway production URL configured through `EXPO_PUBLIC_BACKEND_URL`
-- The Bible database download now uses the configured backend URL as well, so it does not depend on the custom API root domain.
+- App Store version: `1.0`
+- App Store version id: `215fd90c-9f3a-407a-934d-27a687c12222`
+- Current App Store version state before this resubmission lane: `DEVELOPER_REJECTED`
+- Current attached App Store build before this lane: build `148`
+- Latest valid uploaded build before this lane: build `153`, but build `153` was a QA/TestFlight diagnostics build with `EXPO_PUBLIC_ENABLE_QA_TOOLS=1`; it should not be treated as the final App Review binary.
+- Intended next step: create and attach a clean production-profile App Review build with QA tools disabled, then rerun preflight and submit after the intended build is attached.
+- Backend used by the production build: `https://api.unfoldapp.co` via `EXPO_PUBLIC_BACKEND_URL`.
+- The Bible database download uses the configured backend URL, so it does not depend on a generic custom API root-domain request succeeding.
 
 ## Reviewer access / account requirements
 - **No reviewer login is required** to access the core app flow.
@@ -44,8 +49,12 @@ For the clearest first review pass, please follow this path:
 - The app includes a subscription paywall for premium access.
 - **Restore Purchases** is available in the paywall flow.
 - Terms and Privacy links are available in the paywall/legal surfaces.
-- App Store Connect currently shows the Unfold Premium monthly and yearly products as `WAITING_FOR_REVIEW`; the yearly win-back subscription remains `READY_TO_SUBMIT`.
-- App Store Connect introductory-offer readback shows a **3-day free trial** for the monthly and yearly products.
+- App-side premium access remains fail-closed: premium is granted only when RevenueCat reports an active `Unfold Premium` entitlement.
+- The intended review subscriptions are:
+  - Unfold Premium Monthly — `unfold_premium_monthly_v2` — currently `WAITING_FOR_REVIEW`
+  - Unfold Premium Yearly — `unfold_premium_yearly` — currently `WAITING_FOR_REVIEW`
+- App Store Connect introductory-offer readback shows a **3-day free trial** for monthly/yearly where the customer is eligible.
+- The yearly win-back subscription (`unfold_yearly_winback`) remains `READY_TO_SUBMIT` separately and is not the core first-review purchase path.
 - Legal links used by the app:
   - https://unfoldapp.co/terms
   - https://unfoldapp.co/privacy
@@ -81,22 +90,24 @@ Before final submission, confirm:
 - [ ] App Privacy / nutrition labels match actual SDK + backend data handling
 - [ ] Subscription metadata in App Store Connect is accurate and attached to the app version
 - [ ] Paywall pricing, billing cadence, restore flow, terms, and privacy are all current
-- [ ] Screenshots reflect the current onboarding -> paywall -> discovery -> generating -> reading flow
-- [ ] The intended processed build is selected/attached in App Store Connect before submission. As of the 2026-04-29 readiness check, version `1.0` still had build 144 attached while latest valid uploaded build was 148.
+- [x] Screenshots reflect the current onboarding -> paywall -> discovery -> generating -> reading flow enough for App Review; live ASC assets were dimension-checked and visually reviewed on 2026-05-01. Future marketing optimization can add a clearer premium/paywall screenshot, but the current set has no visible debug/error states.
+- [ ] A clean production-profile build is uploaded, processed, and explicitly attached to App Store version `1.0`
+- [ ] App Store Connect preflight passes after the intended build is attached
 - [ ] Review notes mention personalized devotional generation and the premium flow
-- [ ] Real-device notification tap routing and onboarding generation have been smoke-tested
+- [ ] Real-device notification tap routing and onboarding generation have been smoke-tested as far as practical before release
 - [ ] If desired, attach an app preview video to reduce reviewer confusion (recommended, not required)
 
 ## Internal QA notes (not for App Store Connect copy, but useful for submission confidence)
 ### Verified in recent hardening pass
 - Release-facing dev/debug surfaces are gated away from the production profile.
+- QA paywall diagnostics are gated by `EXPO_PUBLIC_ENABLE_QA_TOOLS=1`; the production profile does not set that flag.
 - Premium purchase/restore code checks for the active `Unfold Premium` entitlement before granting local premium state.
-- Devotional generation ownership, onboarding sample identity, and prompt-example authority were hardened across backend/mobile.
-- Production backend health check returns DB connected.
-- App Store Connect reports build 1.0.0 (148) as valid, but App Store version `1.0` still needs its intended build attachment verified/switched before final submission.
-- App Store Connect subscription readback shows monthly/yearly subscriptions in `WAITING_FOR_REVIEW` with 3-day free trials; yearly win-back is `READY_TO_SUBMIT`.
+- Build 153 TestFlight diagnostics verified the app selected the correct monthly product (`unfold_premium_monthly_v2`) and correctly refused premium unlock when RevenueCat/StoreKit did not produce an active entitlement.
+- Build 153 device receipt inspection showed no fresh active transaction after the failing sandbox tap/restore, so the next lane is App Store/subscription lifecycle review rather than local fake premium unlocks.
+- Production backend health and custom domain behavior have been previously checked; generic `api.unfoldapp.co` curl may 403 without an app/browser User-Agent.
+- App Store Connect reports monthly/yearly subscriptions in `WAITING_FOR_REVIEW`; this submission lane is intended to move the app version/subscriptions through review together.
 
 ### Remaining confidence gaps
-- RevenueCat dashboard offering/package/entitlement wiring could not be rechecked from Mina yet because the RevenueCat MCP server is not currently visible in this profile and browser-harness needs Chrome CDP approval.
-- The project `verify:release` script passed, but its device-flow step skipped because no installed Unfold bundle was discovered.
-- Real-device notification tap-through and full purchase/restore sandbox QA still need hands-on confirmation before public launch.
+- Build 153 was diagnostic-only; the final App Review build must be a clean production-profile build.
+- The currently attached App Store build was stale (`148`) before this lane; the intended processed production build must be explicitly attached before submission.
+- A clean purchase-to-`Unfold Premium` verification may need to wait until App Store/subscription review moves the products out of `WAITING_FOR_REVIEW` / `action_in_progress`.
