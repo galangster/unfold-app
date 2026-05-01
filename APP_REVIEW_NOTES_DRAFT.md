@@ -28,6 +28,7 @@ The app’s primary tabs are:
 - App Store version state after submission: `WAITING_FOR_REVIEW`
 - Review submission id: `60938826-e0bb-4dc1-9271-b85b792b49d8`
 - Review submission state after submission: `WAITING_FOR_REVIEW`
+- Release type was set to `MANUAL` after submission so approval should not automatically release publicly without a later manual release action.
 - Previous diagnostic build `153` was a QA/TestFlight diagnostics build with `EXPO_PUBLIC_ENABLE_QA_TOOLS=1`; it was not attached as the final App Review binary.
 - Backend used by the production build: `https://api.unfoldapp.co` via `EXPO_PUBLIC_BACKEND_URL`.
 - The Bible database download uses the configured backend URL, so it does not depend on a generic custom API root-domain request succeeding.
@@ -98,7 +99,7 @@ Before final submission, confirm:
 - [x] App Store Connect preflight passes after build `154` is attached
 - [x] Review notes mention personalized devotional generation and the premium flow; the live ASC review notes were updated/read back on 2026-05-01
 - [ ] Real-device notification tap routing and onboarding generation have been smoke-tested as far as practical before release
-- [x] App Review resubmission created: review submission `60938826-e0bb-4dc1-9271-b85b792b49d8` is `WAITING_FOR_REVIEW`
+- [x] App Review submission created: review submission `60938826-e0bb-4dc1-9271-b85b792b49d8` is `WAITING_FOR_REVIEW`; release type was set to `MANUAL` after submission
 
 ## Internal QA notes (not for App Store Connect copy, but useful for submission confidence)
 ### Verified in recent hardening pass
