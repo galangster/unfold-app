@@ -22,6 +22,16 @@
 import { Platform } from "react-native";
 import { logger } from '@/lib/logger';
 import { getDeviceId } from '@/lib/mmkv-storage';
+import {
+  isPaywallDiagnosticsEnabled,
+  recordPaywallDiagnosticLazy,
+  summarizeCustomerInfo,
+  summarizeDiagnosticIdentifier,
+  summarizeOfferings,
+  summarizePackage,
+  summarizeRevenueCatError,
+  sanitizeDiagnosticText,
+} from '@/lib/paywall-diagnostics';
 import { buildRevenueCatAppUserId } from '@/lib/revenuecat-user-id';
 import Purchases, {
   type PurchasesOfferings,
@@ -118,19 +128,30 @@ const guardRevenueCatUsage = async <T>(
   action: string,
   operation: () => Promise<T>,
 ): Promise<RevenueCatResult<T>> => {
+  const startedAt = Date.now();
   if (isWeb) {
     logger.log(
       `${LOG_PREFIX} ${action} skipped: payments are not supported on web.`,
     );
+    void recordPaywallDiagnosticLazy('revenuecat.operation.skipped', () => ({
+      action,
+      reason: 'web_not_supported',
+    }), 'warn');
     return { ok: false, reason: "web_not_supported" };
   }
 
   if (!revenueCatConfigured) {
     logger.log(`${LOG_PREFIX} ${action} skipped: RevenueCat not configured`);
+    void recordPaywallDiagnosticLazy('revenuecat.operation.skipped', () => ({
+      action,
+      reason: 'not_configured',
+      hasRevenueCatApiKey,
+    }), 'warn');
     return { ok: false, reason: "not_configured" };
   }
 
   try {
+    void recordPaywallDiagnosticLazy('revenuecat.operation.start', () => ({ action }));
     if (revenueCatIdentityReadyPromise) {
       await revenueCatIdentityReadyPromise;
     }
@@ -138,28 +159,54 @@ const guardRevenueCatUsage = async <T>(
       throw revenueCatIdentityError;
     }
     const data = await operation();
+    void recordPaywallDiagnosticLazy('revenuecat.operation.success', () => ({
+      action,
+      elapsedMs: Date.now() - startedAt,
+    }));
     return { ok: true, data };
   } catch (error) {
     // Our own timeout sentinel — distinguish from SDK errors so the UI can
     // show "took too long, try again" instead of "something went wrong".
     if (error instanceof RevenueCatTimeoutError) {
       logger.log(`${LOG_PREFIX} ${action}: timed out`);
+      void recordPaywallDiagnosticLazy('revenuecat.operation.timeout', () => ({
+        action,
+        elapsedMs: Date.now() - startedAt,
+        error: summarizeRevenueCatError(error),
+      }), 'error');
       return { ok: false, reason: "timeout", error };
     }
     // RevenueCat sets userCancelled on the error when the user dismisses the payment sheet
     if (error && typeof error === "object" && "userCancelled" in error && (error as { userCancelled: boolean }).userCancelled) {
       logger.log(`${LOG_PREFIX} ${action}: user cancelled`);
+      void recordPaywallDiagnosticLazy('revenuecat.operation.cancelled', () => ({
+        action,
+        elapsedMs: Date.now() - startedAt,
+        error: summarizeRevenueCatError(error),
+      }), 'warn');
       return { ok: false, reason: "user_cancelled" };
     }
     logger.log(`${LOG_PREFIX} ${action} failed:`, error);
+    void recordPaywallDiagnosticLazy('revenuecat.operation.error', () => ({
+      action,
+      elapsedMs: Date.now() - startedAt,
+      error: summarizeRevenueCatError(error),
+    }), 'error');
     return { ok: false, reason: "sdk_error", error };
   }
 };
 
 const synchronizeRevenueCatAppUserID = async (appUserID: string): Promise<void> => {
+  void recordPaywallDiagnosticLazy('revenuecat.identity.sync_start', () => ({
+    targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+  }));
+
   const currentAppUserID = await Purchases.getAppUserID();
   if (currentAppUserID === appUserID) {
     logger.log(`${LOG_PREFIX} App user ID already synchronized`);
+    void recordPaywallDiagnosticLazy('revenuecat.identity.already_synchronized', () => ({
+      appUserID: summarizeDiagnosticIdentifier(appUserID),
+    }));
     return;
   }
 
@@ -170,14 +217,39 @@ const synchronizeRevenueCatAppUserID = async (appUserID: string): Promise<void> 
       result.created ? 'created' : 'existing'
     } customer)`,
   );
+  void recordPaywallDiagnosticLazy('revenuecat.identity.synchronized', () => ({
+    previousAppUserID: summarizeDiagnosticIdentifier(currentAppUserID),
+    targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+    wasAnonymous,
+    created: result.created,
+    customerInfo: summarizeCustomerInfo(result.customerInfo),
+  }));
 };
 
 // Initialize RevenueCat if key exists
 if (hasRevenueCatApiKey) {
   try {
+    const keyType = __DEV__
+      ? (testKey ? 'test' : (Platform.OS === 'ios' ? 'apple (dev fallback)' : 'google (dev fallback)'))
+      : (Platform.OS === 'ios' ? 'apple' : 'google');
+
+    if (isPaywallDiagnosticsEnabled()) {
+      void Purchases.setLogLevel(Purchases.LOG_LEVEL.INFO).catch((error) => {
+        void recordPaywallDiagnosticLazy('revenuecat.sdk_log_level_error', () => ({
+          error: summarizeRevenueCatError(error),
+        }), 'warn');
+      });
+    }
+
     // Set up custom log handler to suppress Test Store and expected errors
     // These are non-errors thrown as errors by the SDK, and will be confusing to the user.
     Purchases.setLogHandler((logLevel, message) => {
+      if (isPaywallDiagnosticsEnabled()) {
+        void recordPaywallDiagnosticLazy('revenuecat.sdk_log', () => ({
+          logLevel,
+          message: sanitizeDiagnosticText(message),
+        }), logLevel === Purchases.LOG_LEVEL.ERROR ? 'error' : logLevel === Purchases.LOG_LEVEL.WARN ? 'warn' : 'info');
+      }
 
       // Log ERROR messages normally
       if (logLevel === Purchases.LOG_LEVEL.ERROR) {
@@ -186,6 +258,13 @@ if (hasRevenueCatApiKey) {
     });
 
     const appUserID = buildRevenueCatAppUserId(getDeviceId());
+    void recordPaywallDiagnosticLazy('revenuecat.configure.attempt', () => ({
+      keyType,
+      platform: Platform.OS,
+      isDev: __DEV__,
+      targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+    }));
+
     // Configure without appUserID first so update installs keep the SDK's
     // cached anonymous customer, then logIn to alias/migrate that customer to
     // our deterministic device-scoped ID before any guarded SDK operation runs.
@@ -194,18 +273,35 @@ if (hasRevenueCatApiKey) {
     revenueCatIdentityReadyPromise = synchronizeRevenueCatAppUserID(appUserID).catch((error) => {
       revenueCatIdentityError = error;
       logger.error(`${LOG_PREFIX} App user ID synchronization failed:`, error);
+      void recordPaywallDiagnosticLazy('revenuecat.identity.sync_error', () => ({
+        targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+        error: summarizeRevenueCatError(error),
+      }), 'error');
     });
-    const keyType = __DEV__
-      ? (testKey ? 'test' : (Platform.OS === 'ios' ? 'apple (dev fallback)' : 'google (dev fallback)'))
-      : (Platform.OS === 'ios' ? 'apple' : 'google');
     logger.log(`${LOG_PREFIX} SDK initialized successfully (${keyType} key, ${Platform.OS})`);
+    void recordPaywallDiagnosticLazy('revenuecat.configure.success', () => ({
+      keyType,
+      platform: Platform.OS,
+      targetAppUserID: summarizeDiagnosticIdentifier(appUserID),
+    }));
   } catch (error) {
     logger.error(`${LOG_PREFIX} Failed to initialize:`, error);
+    void recordPaywallDiagnosticLazy('revenuecat.configure.error', () => ({
+      platform: Platform.OS,
+      error: summarizeRevenueCatError(error),
+    }), 'error');
   }
 } else {
   logger.log(
     `${LOG_PREFIX} SDK NOT initialized — isWeb: ${isWeb}, testKey: ${!!testKey}, appleKey: ${!!appleKey}, googleKey: ${!!googleKey}, __DEV__: ${__DEV__}`,
   );
+  void recordPaywallDiagnosticLazy('revenuecat.configure.skipped', () => ({
+    isWeb,
+    hasTestKey: Boolean(testKey),
+    hasAppleKey: Boolean(appleKey),
+    hasGoogleKey: Boolean(googleKey),
+    isDev: __DEV__,
+  }), 'warn');
 }
 
 /**
@@ -242,7 +338,13 @@ export const hasRevenueCatConfigurationAttemptFailed = (): boolean => {
 export const getOfferings = (): Promise<
   RevenueCatResult<PurchasesOfferings>
 > => {
-  return guardRevenueCatUsage("getOfferings", () => Purchases.getOfferings());
+  return guardRevenueCatUsage("getOfferings", async () => {
+    const offerings = await Purchases.getOfferings();
+    void recordPaywallDiagnosticLazy('revenuecat.offerings.result', () => ({
+      offerings: summarizeOfferings(offerings),
+    }));
+    return offerings;
+  });
 };
 
 /**
@@ -261,12 +363,31 @@ export const purchasePackage = (
   packageToPurchase: PurchasesPackage,
 ): Promise<RevenueCatResult<CustomerInfo>> => {
   return guardRevenueCatUsage("purchasePackage", async () => {
-    const { customerInfo } = await withTimeout(
+    const purchaseStartedAt = Date.now();
+    void recordPaywallDiagnosticLazy('revenuecat.purchase.native_call_start', () => ({
+      package: summarizePackage(packageToPurchase),
+    }));
+
+    const purchaseResult = await withTimeout(
       Purchases.purchasePackage(packageToPurchase),
       PURCHASE_TIMEOUT_MS,
       "purchasePackage",
     );
-    return customerInfo;
+
+    void recordPaywallDiagnosticLazy('revenuecat.purchase.native_resolved', () => ({
+      elapsedMs: Date.now() - purchaseStartedAt,
+      productIdentifier: purchaseResult.productIdentifier,
+      transaction: purchaseResult.transaction
+        ? {
+            transactionIdentifier: summarizeDiagnosticIdentifier(purchaseResult.transaction.transactionIdentifier),
+            productIdentifier: purchaseResult.transaction.productIdentifier,
+            purchaseDate: purchaseResult.transaction.purchaseDate,
+          }
+        : null,
+      customerInfo: summarizeCustomerInfo(purchaseResult.customerInfo),
+    }));
+
+    return purchaseResult.customerInfo;
   });
 };
 
@@ -285,9 +406,13 @@ export const purchasePackage = (
  * }
  */
 export const getCustomerInfo = (): Promise<RevenueCatResult<CustomerInfo>> => {
-  return guardRevenueCatUsage("getCustomerInfo", () =>
-    Purchases.getCustomerInfo(),
-  );
+  return guardRevenueCatUsage("getCustomerInfo", async () => {
+    const customerInfo = await Purchases.getCustomerInfo();
+    void recordPaywallDiagnosticLazy('revenuecat.customer_info.result', () => ({
+      customerInfo: summarizeCustomerInfo(customerInfo),
+    }));
+    return customerInfo;
+  });
 };
 
 /**
@@ -304,21 +429,39 @@ export const getCustomerInfo = (): Promise<RevenueCatResult<CustomerInfo>> => {
 export const restorePurchases = (): Promise<
   RevenueCatResult<CustomerInfo>
 > => {
-  return guardRevenueCatUsage("restorePurchases", () =>
-    withTimeout(
+  return guardRevenueCatUsage("restorePurchases", async () => {
+    const restoreStartedAt = Date.now();
+    const customerInfo = await withTimeout(
       Purchases.restorePurchases(),
       RESTORE_TIMEOUT_MS,
       "restorePurchases",
-    ),
-  );
+    );
+    void recordPaywallDiagnosticLazy('revenuecat.restore.result', () => ({
+      elapsedMs: Date.now() - restoreStartedAt,
+      customerInfo: summarizeCustomerInfo(customerInfo),
+    }));
+    return customerInfo;
+  });
 };
 
 export const addCustomerInfoUpdateListener = (
   listener: CustomerInfoUpdateListener,
 ): Promise<RevenueCatResult<() => boolean>> => {
   return guardRevenueCatUsage("addCustomerInfoUpdateListener", async () => {
-    Purchases.addCustomerInfoUpdateListener(listener);
-    return () => Purchases.removeCustomerInfoUpdateListener(listener);
+    if (!isPaywallDiagnosticsEnabled()) {
+      Purchases.addCustomerInfoUpdateListener(listener);
+      return () => Purchases.removeCustomerInfoUpdateListener(listener);
+    }
+
+    const diagnosticListener: CustomerInfoUpdateListener = (customerInfo) => {
+      void recordPaywallDiagnosticLazy('revenuecat.customer_info.listener_update', () => ({
+        customerInfo: summarizeCustomerInfo(customerInfo),
+      }));
+      listener(customerInfo);
+    };
+
+    Purchases.addCustomerInfoUpdateListener(diagnosticListener);
+    return () => Purchases.removeCustomerInfoUpdateListener(diagnosticListener);
   });
 };
 

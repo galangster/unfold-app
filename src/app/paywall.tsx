@@ -1,11 +1,13 @@
-import { useState, useMemo } from 'react';
-import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet } from 'react-native';
+import { useEffect, useState, useMemo } from 'react';
+import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet, Platform } from 'react-native';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { GoldEmberField } from '@/components/home/GoldEmberField';
@@ -25,6 +27,15 @@ import type { PurchasesPackage } from 'react-native-purchases';
 import Purchases from 'react-native-purchases';
 import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
+import {
+  isPaywallDiagnosticsEnabled,
+  recordPaywallDiagnosticLazy,
+  summarizeCustomerInfo,
+  summarizeDiagnosticIdentifier,
+  summarizeOfferings,
+  summarizePackage,
+  summarizeRevenueCatError,
+} from '@/lib/paywall-diagnostics';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 
@@ -95,6 +106,103 @@ export default function PaywallScreen() {
   const yearlyPackage = offerings?.current?.availablePackages.find(
     (pkg) => pkg.identifier === '$rc_annual'
   );
+  const offeringsResultOk = offeringsResult?.ok ?? null;
+  const offeringsResultReason = offeringsResult && !offeringsResult.ok ? offeringsResult.reason : null;
+  const currentOfferingIdentifier = offerings?.current?.identifier ?? null;
+  const monthlyPackageIdentifier = monthlyPackage?.identifier ?? null;
+  const monthlyProductIdentifier = monthlyPackage?.product.identifier ?? null;
+  const yearlyPackageIdentifier = yearlyPackage?.identifier ?? null;
+  const yearlyProductIdentifier = yearlyPackage?.product.identifier ?? null;
+  const diagnosticOfferingsSummary = useMemo(
+    () => (isPaywallDiagnosticsEnabled() ? summarizeOfferings(offerings) : null),
+    [offerings],
+  );
+  const diagnosticMonthlyPackageSummary = useMemo(
+    () => (isPaywallDiagnosticsEnabled() ? summarizePackage(monthlyPackage) : null),
+    [monthlyPackage],
+  );
+  const diagnosticYearlyPackageSummary = useMemo(
+    () => (isPaywallDiagnosticsEnabled() ? summarizePackage(yearlyPackage) : null),
+    [yearlyPackage],
+  );
+
+  useEffect(() => {
+    if (!isPaywallDiagnosticsEnabled()) return;
+
+    void (async () => {
+      let currentAppUserID: string | null = null;
+      let storefrontCountryCode: string | null = null;
+      let canMakePayments: boolean | null = null;
+      let capabilityError: unknown = null;
+
+      try {
+        if (isRevenueCatEnabled()) {
+          currentAppUserID = await Purchases.getAppUserID();
+          canMakePayments = await Purchases.canMakePayments();
+          if (Platform.OS === 'ios') {
+            const storefront = await Purchases.getStorefront();
+            storefrontCountryCode = storefront?.countryCode ?? null;
+          }
+        }
+      } catch (error) {
+        capabilityError = summarizeRevenueCatError(error);
+      }
+
+      void recordPaywallDiagnosticLazy('paywall.environment_snapshot', () => ({
+        source,
+        isFromOnboarding,
+        isEarlyOnboarding,
+        revenueCatEnabled: isRevenueCatEnabled(),
+        currentAppUserID: summarizeDiagnosticIdentifier(currentAppUserID),
+        canMakePayments,
+        storefrontCountryCode,
+        capabilityError,
+        app: {
+          nativeApplicationVersion: Application.nativeApplicationVersion,
+          nativeBuildVersion: Application.nativeBuildVersion,
+          appOwnership: Constants.appOwnership,
+        },
+        platform: {
+          os: Platform.OS,
+          version: String(Platform.Version),
+        },
+      }));
+    })();
+  }, [source, isFromOnboarding, isEarlyOnboarding]);
+
+  useEffect(() => {
+    if (!isPaywallDiagnosticsEnabled()) return;
+
+    void recordPaywallDiagnosticLazy('paywall.offerings_state', () => ({
+      source,
+      selectedPlan,
+      isFromOnboarding,
+      isEarlyOnboarding,
+      revenueCatEnabled: isRevenueCatEnabled(),
+      isLoadingOfferings,
+      offeringsResultOk,
+      offeringsResultReason,
+      offerings: diagnosticOfferingsSummary,
+      monthlyPackage: diagnosticMonthlyPackageSummary,
+      yearlyPackage: diagnosticYearlyPackageSummary,
+    }));
+  }, [
+    source,
+    selectedPlan,
+    isFromOnboarding,
+    isEarlyOnboarding,
+    isLoadingOfferings,
+    offeringsResultOk,
+    offeringsResultReason,
+    currentOfferingIdentifier,
+    monthlyPackageIdentifier,
+    monthlyProductIdentifier,
+    yearlyPackageIdentifier,
+    yearlyProductIdentifier,
+    diagnosticOfferingsSummary,
+    diagnosticMonthlyPackageSummary,
+    diagnosticYearlyPackageSummary,
+  ]);
 
   const isRevenueCatDisabled = !isRevenueCatEnabled();
 
@@ -136,6 +244,17 @@ export default function PaywallScreen() {
   const purchaseMutation = useMutation({
     mutationFn: (pkg: PurchasesPackage) => purchasePackage(pkg),
     onSuccess: async (result) => {
+      void recordPaywallDiagnosticLazy('paywall.purchase.mutation_success', () => (result.ok
+        ? {
+            ok: true,
+            customerInfo: summarizeCustomerInfo(result.data),
+          }
+        : {
+            ok: false,
+            reason: result.reason,
+            error: summarizeRevenueCatError(result.error),
+          }));
+
       if (result.ok) {
         const activeEntitlements = result.data.entitlements.active;
         const hasPremium = Boolean(activeEntitlements?.['Unfold Premium']);
@@ -149,6 +268,10 @@ export default function PaywallScreen() {
         const outcome = resolvePurchaseOutcome(result);
         if (outcome.kind !== 'success') {
           logger.log('[Paywall] WARNING: Purchase ok but no Unfold Premium entitlement. Check RevenueCat dashboard.');
+          void recordPaywallDiagnosticLazy('paywall.purchase.no_premium_entitlement', () => ({
+            outcomeMessage: outcome.message,
+            customerInfo: summarizeCustomerInfo(result.data),
+          }), 'warn');
           setSubscribeError(outcome.message);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           return;
@@ -159,9 +282,13 @@ export default function PaywallScreen() {
         await syncTrialEndingNotification();
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void recordPaywallDiagnosticLazy('paywall.purchase.entitlement_active', () => ({
+          customerInfo: summarizeCustomerInfo(result.data),
+        }));
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
         completePaywallFlow();
       } else if (result.reason === 'user_cancelled') {
+        void recordPaywallDiagnosticLazy('paywall.purchase.user_cancelled', () => ({}), 'warn');
         const hasSeenOnboardingOffer = mmkvStorage.getItem('@unfold_onboarding_offer_seen') === 'true';
         if (!hasSeenOnboardingOffer) {
           setShowExclusiveOffer(true);
@@ -169,17 +296,27 @@ export default function PaywallScreen() {
         return;
       } else if (result.reason === 'timeout') {
         logger.log('[Paywall] Purchase timed out');
+        void recordPaywallDiagnosticLazy('paywall.purchase.timeout', () => ({
+          error: summarizeRevenueCatError(result.error),
+        }), 'error');
         setSubscribeError('Purchase took too long. Please check your connection and try again.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } else {
         // Actual SDK error
         logger.log('[Paywall] Purchase did not complete:', JSON.stringify(result));
+        void recordPaywallDiagnosticLazy('paywall.purchase.sdk_error', () => ({
+          reason: result.reason,
+          error: summarizeRevenueCatError(result.error),
+        }), 'error');
         setSubscribeError('Something went wrong. Please try again.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     },
     onError: (error) => {
       logger.log('[Paywall] Purchase error:', error);
+      void recordPaywallDiagnosticLazy('paywall.purchase.mutation_error', () => ({
+        error: summarizeRevenueCatError(error),
+      }), 'error');
       setSubscribeError('Something went wrong. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
@@ -188,6 +325,17 @@ export default function PaywallScreen() {
   const restoreMutation = useMutation({
     mutationFn: restorePurchases,
     onSuccess: async (result) => {
+      void recordPaywallDiagnosticLazy('paywall.restore.mutation_success', () => (result.ok
+        ? {
+            ok: true,
+            customerInfo: summarizeCustomerInfo(result.data),
+          }
+        : {
+            ok: false,
+            reason: result.reason,
+            error: summarizeRevenueCatError(result.error),
+          }));
+
       const outcome = resolveRestoreOutcome(result);
       if (outcome.kind === 'success' && result.ok) {
         updateUser({ isPremium: true });
@@ -195,6 +343,9 @@ export default function PaywallScreen() {
         await syncTrialEndingNotification();
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void recordPaywallDiagnosticLazy('paywall.restore.entitlement_active', () => ({
+          customerInfo: summarizeCustomerInfo(result.data),
+        }));
         queryClient.invalidateQueries({ queryKey: ['revenuecat'] });
         completePaywallFlow();
         return;
@@ -206,6 +357,12 @@ export default function PaywallScreen() {
       const restoreErrorMessage = outcome.kind === 'error'
         ? outcome.message
         : 'Could not restore purchases. Please try again.';
+      void recordPaywallDiagnosticLazy('paywall.restore.not_active', () => ({
+        restoreErrorMessage,
+        result: result.ok
+          ? { ok: true, customerInfo: summarizeCustomerInfo(result.data) }
+          : { ok: false, reason: result.reason, error: summarizeRevenueCatError(result.error) },
+      }), result.ok ? 'warn' : 'error');
       setSubscribeError(restoreErrorMessage);
       Haptics.notificationAsync(
         result.ok
@@ -215,6 +372,9 @@ export default function PaywallScreen() {
     },
     onError: (error) => {
       logger.log('[Paywall] Restore error:', error);
+      void recordPaywallDiagnosticLazy('paywall.restore.mutation_error', () => ({
+        error: summarizeRevenueCatError(error),
+      }), 'error');
       setSubscribeError('Could not restore purchases. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     },
@@ -232,10 +392,22 @@ export default function PaywallScreen() {
   const [isRetryingOfferings, setIsRetryingOfferings] = useState(false);
 
   const handleSubscribe = async () => {
-    if (isPurchasing) return;
+    if (isPurchasing) {
+      void recordPaywallDiagnosticLazy('paywall.subscribe_tap_ignored', () => ({
+        selectedPlan,
+        reason: 'already_purchasing',
+      }), 'warn');
+      return;
+    }
     setSubscribeError('');
 
     let pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
+    void recordPaywallDiagnosticLazy('paywall.subscribe_tap', () => ({
+      selectedPlan,
+      source,
+      initialPackage: summarizePackage(pkg),
+      revenueCatEnabled: isRevenueCatEnabled(),
+    }));
 
     // If packages aren't available yet, attempt one more fetch before giving up
     if (!pkg) {
@@ -247,8 +419,19 @@ export default function PaywallScreen() {
         pkg = selectedPlan === 'yearly'
           ? freshOfferings?.current?.availablePackages.find((p) => p.identifier === '$rc_annual')
           : freshOfferings?.current?.availablePackages.find((p) => p.identifier === '$rc_monthly');
+        void recordPaywallDiagnosticLazy('paywall.subscribe_refetch_result', () => ({
+          selectedPlan,
+          resultOk: freshResult.data?.ok ?? null,
+          resultReason: freshResult.data && !freshResult.data.ok ? freshResult.data.reason : null,
+          offerings: summarizeOfferings(freshOfferings),
+          selectedPackageAfterRefetch: summarizePackage(pkg),
+        }));
       } catch (e) {
         logger.log('[Paywall] Refetch failed:', e);
+        void recordPaywallDiagnosticLazy('paywall.subscribe_refetch_error', () => ({
+          selectedPlan,
+          error: summarizeRevenueCatError(e),
+        }), 'error');
       } finally {
         setIsRetryingOfferings(false);
       }
@@ -263,6 +446,13 @@ export default function PaywallScreen() {
         'result ok:', offeringsResult?.ok,
         'result reason:', offeringsResult && !offeringsResult.ok ? offeringsResult.reason : 'n/a',
       );
+      void recordPaywallDiagnosticLazy('paywall.subscribe_no_package', () => ({
+        selectedPlan,
+        revenueCatEnabled: isRevenueCatEnabled(),
+        offeringsResultOk: offeringsResult?.ok ?? null,
+        offeringsResultReason: offeringsResult && !offeringsResult.ok ? offeringsResult.reason : null,
+        offerings: summarizeOfferings(offerings),
+      }), 'error');
 
       if (isRevenueCatDisabled) {
         setSubscribeError('Subscriptions are being set up. Please try again later.');
@@ -277,11 +467,20 @@ export default function PaywallScreen() {
     }
 
     logger.log('[Paywall] Initiating purchase:', pkg.identifier, pkg.product.identifier, pkg.product.priceString);
+    void recordPaywallDiagnosticLazy('paywall.purchase_mutate_start', () => ({
+      selectedPlan,
+      package: summarizePackage(pkg),
+    }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     purchaseMutation.mutate(pkg);
   };
 
   const handleRestore = () => {
+    void recordPaywallDiagnosticLazy('paywall.restore_tap', () => ({
+      source,
+      selectedPlan,
+      revenueCatEnabled: isRevenueCatEnabled(),
+    }));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     restoreMutation.mutate();
   };
