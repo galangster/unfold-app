@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { HighlighterIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, HighlighterIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -24,9 +24,14 @@ const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> 
   red: { light: '#FF6464', dark: '#D4828F' },
 };
 
+const DISPLAY_TEXT_MAX_SCALE = 1.18;
+const BODY_TEXT_MAX_SCALE = 1.28;
+const LABEL_TEXT_MAX_SCALE = 1.14;
+
 export function RememberThisCard() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
   const getRandomHighlight = useUnfoldStore((s) => s.getRandomHighlight);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -48,8 +53,9 @@ export function RememberThisCard() {
   if (!highlight) return null;
 
   const highlightColorHex = HIGHLIGHT_COLORS[highlight.color || 'yellow'][isDark ? 'dark' : 'light'];
-
   const devotional = devotionals.find((d) => d.id === highlight.devotionalId);
+  const sourceTitle = devotional?.title || highlight.devotionalTitle || 'Untitled Series';
+  const useCompactFooter = width < 400 || fontScale >= 1.18;
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -67,61 +73,74 @@ export function RememberThisCard() {
   return (
     <Animated.View style={[styles.wrapper, animatedStyle]}>
       <TouchableOpacity
-        activeOpacity={0.7}
+        activeOpacity={0.72}
         onPress={handlePress}
         accessibilityRole="button"
-        accessibilityLabel={`Remember this highlight from Day ${highlight.dayNumber}`}
+        accessibilityLabel={`Saved highlight from Day ${highlight.dayNumber}: ${highlight.highlightedText}`}
+        accessibilityHint="Opens the reading at this highlighted passage"
+        style={[
+          styles.card,
+          {
+            backgroundColor: alpha(colors.backgroundElevated, 0.5),
+            borderColor: alpha(colors.text, 0.08),
+            shadowColor: colors.accent,
+          },
+        ]}
       >
+        <View pointerEvents="none" style={styles.decorativeLayer}>
+          <View
+            style={[
+              styles.memoryHalo,
+              {
+                borderColor: alpha(highlightColorHex, isDark ? 0.16 : 0.2),
+                backgroundColor: alpha(highlightColorHex, isDark ? 0.045 : 0.06),
+              },
+            ]}
+          />
+          <View style={[styles.memoryDot, { backgroundColor: highlightColorHex }]} />
+        </View>
+
+        <View style={styles.headerRow}>
+          <View style={[styles.iconShell, { backgroundColor: alpha(highlightColorHex, isDark ? 0.13 : 0.16) }]}>
+            <HighlighterIcon size={15} color={highlightColorHex} weight="light" />
+          </View>
+          <View style={styles.headerTextGroup}>
+            <Text style={[styles.kicker, { color: highlightColorHex }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
+            <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>A line worth carrying</Text>
+          </View>
+        </View>
+
         <View
           style={[
-            styles.card,
+            styles.quoteBlock,
             {
-              backgroundColor: colors.inputBackground,
-              borderColor: alpha(colors.accent, 0.25),
+              backgroundColor: alpha(highlightColorHex, isDark ? 0.07 : 0.1),
+              borderColor: alpha(highlightColorHex, isDark ? 0.14 : 0.18),
             },
           ]}
         >
-          {/* Label */}
-          <View style={styles.labelRow}>
-            <HighlighterIcon size={12} color={colors.accent} weight="light" />
-            <Text
-              style={[
-                styles.label,
-                { color: colors.accent },
-              ]}
-            >
-              REMEMBER THIS?
-            </Text>
-          </View>
-
-          {/* Highlighted text with colored left border */}
-          <View
-            style={[
-              styles.quoteBlock,
-              { borderLeftColor: highlightColorHex },
-            ]}
-          >
-            <Text
-              style={[
-                styles.quoteText,
-                { color: colors.text },
-              ]}
-              numberOfLines={3}
-            >
-              {highlight.highlightedText}
-            </Text>
-          </View>
-
-          {/* Source */}
+          <Text style={[styles.quoteMark, { color: highlightColorHex }]}>“</Text>
           <Text
-            style={[
-              styles.source,
-              { color: colors.textMuted },
-            ]}
-            numberOfLines={1}
+            style={[styles.quoteText, { color: colors.text }]}
+            numberOfLines={3}
+            maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
           >
-            From Day {highlight.dayNumber} · {devotional?.title || highlight.devotionalTitle || 'Untitled Series'}
+            {highlight.highlightedText}
           </Text>
+        </View>
+
+        <View style={[styles.footerRow, useCompactFooter && styles.footerRowCompact]}>
+          <Text
+            style={[styles.source, useCompactFooter && styles.sourceCompact, { color: colors.textMuted }]}
+            numberOfLines={useCompactFooter ? 2 : 1}
+            maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+          >
+            Day {highlight.dayNumber} · {sourceTitle}
+          </Text>
+          <View style={styles.ctaRow}>
+            <Text style={[styles.ctaText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Open highlight</Text>
+            <ArrowRightIcon size={12} color={colors.accent} weight="bold" />
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -134,35 +153,113 @@ const styles = StyleSheet.create({
     marginTop: Spacing['4'],
   },
   card: {
-    borderRadius: Radius.card,
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: Spacing['4'],
+    padding: Spacing['5'],
+    overflow: 'hidden',
+    position: 'relative',
     ...Shadow.sm,
   },
-  labelRow: {
+  decorativeLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  memoryHalo: {
+    position: 'absolute',
+    top: -48,
+    right: -36,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 1,
+  },
+  memoryDot: {
+    position: 'absolute',
+    top: 35,
+    right: 40,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    opacity: 0.72,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+    gap: Spacing['3'],
+    marginBottom: Spacing['3'],
+    zIndex: 2,
   },
-  label: {
+  iconShell: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTextGroup: {
+    flex: 1,
+  },
+  kicker: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 10,
-    letterSpacing: 1.2,
+    lineHeight: 14,
+    letterSpacing: 1.35,
     textTransform: 'uppercase',
   },
+  title: {
+    fontFamily: FontFamily.display,
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.2,
+    marginTop: Spacing['0.5'],
+  },
   quoteBlock: {
-    borderLeftWidth: 3,
-    paddingLeft: Spacing['3'],
-    marginBottom: 10,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['3'],
+    marginBottom: Spacing['3'],
+    zIndex: 2,
+  },
+  quoteMark: {
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    lineHeight: 26,
+    marginBottom: -4,
   },
   quoteText: {
     fontFamily: FontFamily.bodyItalic,
     fontSize: FontSize.base,
     lineHeight: 24,
   },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    zIndex: 2,
+  },
+  footerRowCompact: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+    gap: Spacing['2'],
+  },
   source: {
+    flex: 1,
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
+    lineHeight: 17,
+  },
+  sourceCompact: {
+    flex: 0,
+    width: '100%',
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['1'],
+  },
+  ctaText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.xs,
+    lineHeight: 17,
   },
 });

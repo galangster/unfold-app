@@ -5,11 +5,11 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { FontFamily, FontSize } from '@/constants/fonts';
+import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
@@ -47,9 +47,17 @@ import {
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
+const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
+const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
+const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';
+const DISPLAY_TEXT_MAX_SCALE = 1.18;
+const BODY_TEXT_MAX_SCALE = 1.28;
+const LABEL_TEXT_MAX_SCALE = 1.14;
+
+type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bridge' | 'bridge-loading'>;
 
 // Zone components
-import { getContextSlotType } from '@/lib/context-slot-priority';
+import { getContextSlotType, type ContextSlotType } from '@/lib/context-slot-priority';
 import { computeDevotionalState } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { ContextSlot } from '@/components/home/ContextSlot';
@@ -369,8 +377,21 @@ export default function HomeScreen() {
     return () => { cancelled = true; };
   }, [isPreparingCurrentDay, currentDevotional]);
 
+  const qaContextSlot = useMemo<QaContextSlotPreview | null>(() => {
+    if (!isQaToolsEnabled()) return null;
+    if (user?.aboutMe !== QA_TODAY_PROFILE_MARKER) return null;
+
+    const match = user.currentSituation.match(new RegExp(`${QA_TODAY_CONTEXT_SLOT_PREFIX} ([a-z-]+)`));
+    const slot = match?.[1];
+    if (slot === 'midday' || slot === 'evening' || slot === 'bridge' || slot === 'bridge-loading') {
+      return slot;
+    }
+    return null;
+  }, [user?.aboutMe, user?.currentSituation]);
+
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
+    if (qaContextSlot === 'bridge' || qaContextSlot === 'bridge-loading') return null;
     if (!currentDevotional || !user?.name) return null;
     if (currentDevotional.currentDay <= 1) return null; // No bridge for Day 1
 
@@ -402,7 +423,7 @@ export default function HomeScreen() {
       devotionalId: currentDevotional.id,
       dayNumber: currentDevotional.currentDay,
     };
-  }, [currentDevotional, user?.name, user?.currentSituation, checkIns]);
+  }, [currentDevotional, user?.name, user?.currentSituation, checkIns, qaContextSlot]);
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
     queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, bridgeInput?.input],
@@ -590,7 +611,7 @@ export default function HomeScreen() {
         if (isAvailable) {
           await StoreReview.requestReview();
         }
-      } catch (e) {
+      } catch {
         // Silently fail — review prompt is non-critical
       }
     }
@@ -642,7 +663,7 @@ export default function HomeScreen() {
 
   const getCtaText = () => {
     if (isFirstDay && streakCurrent === 0) return 'Begin Your Journey';
-    if (isFirstDay) return 'Build Your Rhythm';
+    if (isFirstDay) return "Start Today's Reading";
     if (isLastDay && !isJourneyComplete) return 'Finish Your Series';
     if (streakCurrent >= 7) return 'Deepen Your Practice';
     if (streakCurrent >= 3) return 'Stay Rooted';
@@ -665,9 +686,11 @@ export default function HomeScreen() {
     });
   }, [currentDevotional, currentDayData, router]);
 
-  // Compute context slot type
-  const validBridgeText = bridgeText && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) ? bridgeText : undefined;
-  const slotType = getContextSlotType({
+  const effectiveBridgeText = qaContextSlot === 'bridge' ? QA_BRIDGE_TEXT : bridgeText;
+  const validBridgeText = effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
+    ? effectiveBridgeText
+    : undefined;
+  const computedSlotType = getContextSlotType({
     hasResumeContext: shouldShowResumeCard,
     currentHour,
     currentMinute,
@@ -680,6 +703,7 @@ export default function HomeScreen() {
     hasBridgeInput: !!bridgeInput,
     isPremium,
   });
+  const slotType = qaContextSlot ?? computedSlotType;
 
   // Compute resume props for context slot
   const resumeProps = shouldShowResumeCard && resumeContext && resumeDevotional ? {
@@ -720,7 +744,7 @@ export default function HomeScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: '#0A0A0A',
+          backgroundColor: colors.background,
           alignItems: 'center',
           justifyContent: 'center',
         }}
@@ -752,8 +776,19 @@ export default function HomeScreen() {
             onAvatarPress={() => router.push('/(tabs)/(you)')}
           />
 
-          {/* Zone 2: Context Slot */}
-          <Animated.View entering={entering(FadeIn.duration(280).delay(80).easing(Ease.out))}>
+          {/* Zone 2: Hero Devotional — Today's primary act, before optional nudges */}
+          <View collapsable={false} onLayout={handleReadingLayout}>
+            <Animated.View entering={entering(FadeIn.duration(280).delay(80).easing(Ease.out))}>
+              <DevotionalCard
+                state={devotionalState}
+                scrollY={scrollY}
+                isReturningUser={isReturningUser}
+              />
+            </Animated.View>
+          </View>
+
+          {/* Zone 3: Context Slot — resume / Companion / check-in support */}
+          <Animated.View entering={entering(FadeIn.duration(280).delay(150).easing(Ease.out))}>
             <ContextSlot
               slotType={slotType}
               colors={colors}
@@ -769,17 +804,6 @@ export default function HomeScreen() {
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
 
-          {/* Zone 3: Hero Devotional — single card */}
-          <View collapsable={false} onLayout={handleReadingLayout}>
-            <Animated.View entering={entering(FadeIn.duration(280).delay(160).easing(Ease.out))}>
-              <DevotionalCard
-                state={devotionalState}
-                scrollY={scrollY}
-                isReturningUser={isReturningUser}
-              />
-            </Animated.View>
-          </View>
-
           {/* Zone 5: Series Carousel — removed per user request */}
 
           {/* Day 1 Review Prompt */}
@@ -792,53 +816,83 @@ export default function HomeScreen() {
                 style={[
                   styles.day1ReviewCard,
                   {
-                    backgroundColor: colors.inputBackground,
-                    borderColor: colors.border,
-                    ...Shadow.sm,
+                    backgroundColor: alpha(colors.backgroundElevated, 0.68),
+                    borderColor: alpha(colors.accent, 0.14),
+                    shadowColor: colors.accent,
                   },
                 ]}
               >
-                <Text
-                  style={[styles.day1ReviewTitle, { color: colors.text }]}
-                >
-                  How's this feeling so far?
-                </Text>
-                <Text
-                  style={[styles.day1ReviewSubtitle, { color: colors.textSubtle }]}
-                >
-                  Your honest take helps us get better.
-                </Text>
+                <View pointerEvents="none" style={styles.day1ReviewArt}>
+                  <View style={[styles.day1ReviewHalo, { borderColor: alpha(colors.accent, 0.14) }]} />
+                  <View style={[styles.day1ReviewThread, { backgroundColor: alpha(colors.accent, 0.22) }]} />
+                  <View style={[styles.day1ReviewEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
+                </View>
 
-                <View style={styles.day1ReviewOptions}>
-                  <TouchableOpacity activeOpacity={0.7}
+                <View style={styles.day1ReviewContent}>
+                  <View style={styles.day1ReviewKickerRow}>
+                    <View style={[styles.day1ReviewRule, { backgroundColor: colors.accent }]} />
+                    <Text style={[styles.day1ReviewKicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Day 1 reflection</Text>
+                  </View>
+
+                  <Text style={[styles.day1ReviewTitle, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>Did today’s reading feel personal?</Text>
+                  <Text style={[styles.day1ReviewSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>One quiet response helps Unfold shape the next few days. No pressure — just a pulse check after your first reading.</Text>
+
+                  <TouchableOpacity
+                    activeOpacity={0.72}
                     onPress={() => handleDay1ReviewOption('love')}
-                    style={[styles.day1ReviewOption, { backgroundColor: colors.buttonBackground }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="This reading helped me"
+                    accessibilityHint="Records a positive response and may open the App Store review prompt if available"
+                    style={[
+                      styles.day1ReviewPrimaryOption,
+                      {
+                        backgroundColor: alpha(colors.accent, 0.1),
+                        borderColor: alpha(colors.accent, 0.28),
+                      },
+                    ]}
                   >
-                    <HeartIcon size={16} color={colors.accent} weight="light" />
-                    <Text style={[styles.day1ReviewOptionText, { color: colors.text }]}>
-                      Love it
-                    </Text>
+                    <HeartIcon size={17} color={colors.accent} weight="light" />
+                    <Text style={[styles.day1ReviewPrimaryText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>This helped me</Text>
+                    <Text style={[styles.day1ReviewOptionArrow, { color: colors.accent }]}>→</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity activeOpacity={0.7}
-                    onPress={() => handleDay1ReviewOption('okay')}
-                    style={[styles.day1ReviewOption, { backgroundColor: colors.buttonBackground }]}
-                  >
-                    <HandIcon size={16} color={colors.textMuted} weight="light" />
-                    <Text style={[styles.day1ReviewOptionText, { color: colors.text }]}>
-                      It's okay
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.day1ReviewSecondaryRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.72}
+                      onPress={() => handleDay1ReviewOption('okay')}
+                      accessibilityRole="button"
+                      accessibilityLabel="This reading was still settling"
+                      accessibilityHint="Records neutral feedback and dismisses this prompt"
+                      style={[
+                        styles.day1ReviewSecondaryOption,
+                        {
+                          backgroundColor: alpha(colors.text, 0.045),
+                          borderColor: alpha(colors.text, 0.08),
+                        },
+                      ]}
+                    >
+                      <HandIcon size={15} color={colors.textMuted} weight="light" />
+                      <Text style={[styles.day1ReviewSecondaryText, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Still settling</Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity activeOpacity={0.7}
-                    onPress={() => handleDay1ReviewOption('not-for-me')}
-                    style={[styles.day1ReviewOption, { backgroundColor: colors.buttonBackground }]}
-                  >
-                    <XIcon size={16} color={colors.textMuted} weight="light" />
-                    <Text style={[styles.day1ReviewOptionText, { color: colors.text }]}>
-                      Not for me
-                    </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.72}
+                      onPress={() => handleDay1ReviewOption('not-for-me')}
+                      accessibilityRole="button"
+                      accessibilityLabel="This reading was not for me"
+                      accessibilityHint="Records that this devotional did not fit and dismisses this prompt"
+                      style={[
+                        styles.day1ReviewSecondaryOption,
+                        {
+                          backgroundColor: alpha(colors.text, 0.035),
+                          borderColor: alpha(colors.text, 0.07),
+                        },
+                      ]}
+                    >
+                      <XIcon size={15} color={colors.textMuted} weight="light" />
+                      <Text style={[styles.day1ReviewSecondaryText, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Not for me</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </Animated.View>
@@ -852,6 +906,7 @@ export default function HomeScreen() {
             >
               <StreakBox
                 streakCount={streakCurrent}
+                hasReadToday={hasReadToday}
                 onPress={() => router.push('/streak-settings')}
               />
             </Animated.View>
@@ -860,8 +915,8 @@ export default function HomeScreen() {
           {/* Zone 7: Bento Grid */}
           <BentoGrid />
 
-          {/* QA: Preview reveal screen (QA builds, works without active devotional) */}
-          {isQaToolsEnabled() && (
+          {/* QA: Preview reveal screen (QA builds, only when Today has no active devotional) */}
+          {isQaToolsEnabled() && !currentDevotional && (
             <TouchableOpacity
               onPress={() => {
                 // Use real devotional if available, otherwise fake params
@@ -962,37 +1017,133 @@ const styles = StyleSheet.create({
     marginTop: Spacing['5'],
   },
   day1ReviewCard: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: Spacing['5'],
+    padding: Spacing['6'],
+    overflow: 'hidden',
+    position: 'relative',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 22,
+    elevation: 5,
   },
-  day1ReviewTitle: {
-    fontFamily: FontFamily.display,
-    fontSize: FontSize.lg,
-    marginBottom: Spacing['1'],
+  day1ReviewArt: {
+    position: 'absolute',
+    top: -44,
+    right: -52,
+    width: 176,
+    height: 196,
+    opacity: 0.82,
   },
-  day1ReviewSubtitle: {
-    fontFamily: FontFamily.body,
-    fontSize: 13,
+  day1ReviewHalo: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 158,
+    height: 158,
+    borderRadius: 79,
+    borderWidth: 1,
+  },
+  day1ReviewThread: {
+    position: 'absolute',
+    top: 28,
+    right: 88,
+    width: 1.5,
+    height: 138,
+    borderRadius: 1,
+    transform: [{ rotate: '12deg' }],
+  },
+  day1ReviewEmber: {
+    position: 'absolute',
+    top: 75,
+    right: 75,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.44,
+    shadowRadius: 16,
+  },
+  day1ReviewContent: {
+    zIndex: 2,
+  },
+  day1ReviewKickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
     marginBottom: Spacing['4'],
   },
-  day1ReviewOptions: {
+  day1ReviewRule: {
+    width: 32,
+    height: 1.5,
+    borderRadius: 1,
+  },
+  day1ReviewKicker: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  day1ReviewTitle: {
+    width: '82%',
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.35,
+    marginBottom: Spacing['3'],
+  },
+  day1ReviewSubtitle: {
+    width: '86%',
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: Spacing['5'],
+  },
+  day1ReviewPrimaryOption: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['4'],
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    marginBottom: Spacing['3'],
+  },
+  day1ReviewPrimaryText: {
+    flex: 1,
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: 0.2,
+  },
+  day1ReviewOptionArrow: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 17,
+    lineHeight: 20,
+    marginTop: -1,
+  },
+  day1ReviewSecondaryRow: {
     flexDirection: 'row',
     gap: Spacing['2'],
   },
-  day1ReviewOption: {
+  day1ReviewSecondaryOption: {
     flex: 1,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: 10,
-    borderRadius: Radius.md,
+    gap: Spacing['1.5'],
+    paddingVertical: Spacing['2.5'],
+    paddingHorizontal: Spacing['3'],
+    borderRadius: Radius.full,
+    borderWidth: 1,
   },
-  day1ReviewOptionText: {
+  day1ReviewSecondaryText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 13,
+    lineHeight: 18,
   },
   streakWrapper: {
     paddingHorizontal: Spacing['6'],
@@ -1000,6 +1151,6 @@ const styles = StyleSheet.create({
   },
   premiumNudgeWrapper: {
     paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['4'],
+    marginTop: Spacing['6'],
   },
 });

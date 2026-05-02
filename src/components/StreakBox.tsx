@@ -1,68 +1,54 @@
-import { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { SunIcon, SnowflakeIcon } from 'phosphor-react-native';
-import Animated, {
-  FadeInDown,
-  FadeIn,
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  Easing,
-  useReducedMotion,
-} from 'react-native-reanimated';
+import { SunIcon } from 'phosphor-react-native';
+import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
-
-/** Returns motivational micro-copy based on streak length */
-function getStreakMotivation(streak: number): string {
-  if (streak === 0) return 'Start today';
-  if (streak <= 2) return "You're building momentum!";
-  if (streak <= 6) return 'Keep going \u2014 a freeze awaits at day 7!';
-  if (streak <= 13) return 'A full week. Keep the light shining';
-  if (streak <= 29) return `Two weeks strong! ${streak} days and counting`;
-  return `${streak} days and counting. That's serious`;
-}
+import { alpha } from '@/components/ui';
 
 interface DayData {
-  day: string; // 'S', 'M', 'T', 'W', 'T', 'F', 'S'
+  day: string;
   completed: boolean;
   isToday: boolean;
 }
 
 interface StreakBoxProps {
   streakCount: number;
+  hasReadToday?: boolean;
   onPress?: () => void;
 }
 
-// Generate days data based on streak count
-// Shows last N days filled based on streak, with today on the right
-function generateDaysData(streakCount: number): DayData[] {
-  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']; // Mon-Sun
-  const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
-  // Convert to 0-6 index where 0 = Monday, 6 = Sunday
+const DISPLAY_TEXT_MAX_SCALE = 1.16;
+const BODY_TEXT_MAX_SCALE = 1.24;
+const LABEL_TEXT_MAX_SCALE = 1.14;
+
+function getRhythmCopy(streak: number): string {
+  if (streak === 0) return 'Begin with today’s reading.';
+  if (streak === 1) return 'One faithful day at a time.';
+  if (streak < 7) return 'Your rhythm is taking root.';
+  if (streak < 30) return 'A steady devotional rhythm.';
+  return 'A long obedience, one morning at a time.';
+}
+
+function generateDaysData(streakCount: number, hasReadToday: boolean): DayData[] {
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const today = new Date().getDay();
   const todayIndex = today === 0 ? 6 : today - 1;
-  
-  // Reorder days so today is at the end
   const reorderedDays = [
     ...days.slice(todayIndex + 1),
     ...days.slice(0, todayIndex + 1),
   ];
-  
-  // Generate day data - fill the last N days based on streak
+
   return reorderedDays.map((day, index) => {
-    const isToday = index === 6; // Last position is today
-    // Fill the last `streakCount` days (excluding today if streak doesn't include today yet)
-    // If streak is 0, nothing is filled
-    // If streak is 2, the 2 days before today are filled
-    const daysFromEnd = 6 - index;
-    const completed = streakCount > 0 && daysFromEnd > 0 && daysFromEnd <= streakCount;
-    
+    const isToday = index === 6;
+    const daysFromToday = 6 - index;
+    const completed = hasReadToday
+      ? streakCount > 0 && daysFromToday < streakCount
+      : streakCount > 0 && daysFromToday > 0 && daysFromToday <= streakCount;
     return {
       day,
       completed,
@@ -71,154 +57,86 @@ function generateDaysData(streakCount: number): DayData[] {
   });
 }
 
-export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
+export function StreakBox({ streakCount, hasReadToday = false, onPress }: StreakBoxProps) {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
-
-  // Breathing pulse for active flame
-  const flamePulse = useSharedValue(1);
-  useEffect(() => {
-    if (streakCount > 0) {
-      flamePulse.value = withRepeat(
-        withTiming(1.12, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-    }
-  }, [streakCount, flamePulse]);
-
-  const flamePulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: flamePulse.value }],
-  }));
-
-  const daysData = generateDaysData(streakCount);
+  const daysData = useMemo(() => generateDaysData(streakCount, hasReadToday), [streakCount, hasReadToday]);
+  const rhythmCopy = useMemo(() => getRhythmCopy(streakCount), [streakCount]);
   const streakLabel = streakCount === 1 ? 'day' : 'days';
-  const motivation = useMemo(() => getStreakMotivation(streakCount), [streakCount]);
-
-  // Freeze progress: how many days into the current 7-day cycle
-  const freezeProgress = streakCount > 0 ? streakCount % 7 : 0;
-  // If freezeProgress is 0 and streak > 0, they just earned a freeze (show full)
-  const freezeDots = streakCount > 0 && freezeProgress === 0 ? 7 : freezeProgress;
-
-  const weekDays = daysData.map((day, index) => {
-    const isCompleted = day.completed;
-    const isToday = day.isToday;
-
-    return (
-      <View key={`${day.day}-${index}`} style={styles.dayColumn}>
-        <View
-          style={[
-            styles.dayCircle,
-            {
-              backgroundColor: isCompleted ? colors.accent : 'transparent',
-              borderWidth: isCompleted ? 0 : 1.5,
-              borderColor: isToday ? colors.accent : colors.border,
-            },
-          ]}
-        >
-          {isCompleted && (
-            <Text style={[styles.dayCircleText, { color: colors.background }]}>
-              {day.day}
-            </Text>
-          )}
-          {!isCompleted && isToday && (
-            <View style={[styles.todayDot, { backgroundColor: colors.accent }]} />
-          )}
-        </View>
-        <Text
-          style={[styles.dayLabel, { color: isToday ? colors.text : colors.textMuted }]}
-        >
-          {day.day}
-        </Text>
-      </View>
-    );
-  });
 
   return (
-    <Animated.View entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(400).easing(Ease.out)}>
-      <TouchableOpacity activeOpacity={0.7} onPress={onPress}>
+    <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(260).easing(Ease.out)}>
+      <TouchableOpacity
+        activeOpacity={0.74}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${streakCount} ${streakLabel} devotional rhythm. ${hasReadToday ? 'Today is complete.' : 'Today is not complete yet.'} Open streak settings`}
+      >
         <View
           style={[
             styles.card,
             {
-              backgroundColor: 'transparent',
-              borderColor: colors.border,
-              overflow: 'hidden',
+              backgroundColor: Platform.OS === 'ios'
+                ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+                : alpha(colors.backgroundElevated, 0.9),
+              borderColor: streakCount > 0 ? alpha(colors.accent, 0.14) : colors.border,
             },
           ]}
         >
-          <BlurView
-            intensity={isDark ? 40 : 30}
-            tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-          />
-          {/* Header row - Current Streak label on left, streak count on right */}
+          {Platform.OS === 'ios' && (
+            <BlurView
+              intensity={isDark ? 28 : 18}
+              tint={isDark ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+          )}
+
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
-              <Animated.View style={flamePulseStyle}>
+              <View style={[styles.iconShell, { backgroundColor: alpha(colors.accent, streakCount > 0 ? 0.16 : 0.08) }]}>
                 <SunIcon
-                  size={32}
-                  color={colors.accent}
-                  weight={streakCount >= 7 ? "fill" : "light"}
+                  size={18}
+                  color={streakCount > 0 ? colors.accent : colors.textMuted}
+                  weight={streakCount >= 7 ? 'fill' : 'light'}
                 />
-              </Animated.View>
-              <Text style={[styles.streakLabel, { color: colors.textMuted }]}>
-                Current Streak
-              </Text>
+              </View>
+              <View style={styles.copyColumn}>
+                <Text style={[styles.kicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Daily rhythm</Text>
+                <Text style={[styles.motivationText, { color: colors.textMuted }]} numberOfLines={2} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                  {rhythmCopy}
+                </Text>
+              </View>
             </View>
 
-            {/* Streak count - number and label horizontally aligned with consistent font */}
             <View style={styles.streakCountRow}>
-              <Text
-                style={[
-                  styles.streakNumber,
-                  { color: streakCount > 0 ? colors.accent : colors.text },
-                ]}
-              >
+              <Text style={[styles.streakNumber, { color: streakCount > 0 ? colors.accent : colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>
                 {streakCount}
               </Text>
-              <Text style={[styles.streakUnit, { color: colors.textMuted }]}>
-                {streakLabel}
-              </Text>
+              <Text style={[styles.streakUnit, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{streakLabel}</Text>
             </View>
           </View>
 
-          {/* 7-day mini calendar strip */}
-          <View style={[styles.calendarStrip, { borderTopColor: colors.border }]}>
-            {weekDays}
-          </View>
-
-          {/* Motivational micro-copy */}
-          <Animated.Text
-            entering={reducedMotion ? undefined : FadeIn.delay(600).duration(Duration.normal).easing(Ease.out)}
-            style={[styles.motivationText, { color: colors.textMuted }]}
-          >
-            {motivation}
-          </Animated.Text>
-
-          {/* Freeze progress dots */}
-          {streakCount > 0 && (
-            <Animated.View
-              entering={reducedMotion ? undefined : FadeIn.delay(700).duration(Duration.normal).easing(Ease.out)}
-              style={styles.freezeRow}
-            >
-              <SnowflakeIcon size={12} color={colors.textSubtle} weight="light" />
-              <View style={styles.freezeDotsRow}>
-                {Array.from({ length: 7 }).map((_, i) => (
+          <View style={styles.calendarStrip}>
+            {daysData.map((day, index) => {
+              const filled = day.completed;
+              return (
+                <View key={`${day.day}-${index}`} style={styles.dayColumn}>
                   <View
-                    key={i}
                     style={[
-                      styles.freezeDot,
-                      { backgroundColor: i < freezeDots ? colors.accent : colors.border },
+                      styles.dayDot,
+                      {
+                        backgroundColor: filled ? colors.accent : alpha(colors.text, 0.08),
+                        borderColor: day.isToday ? alpha(colors.accent, 0.55) : 'transparent',
+                      },
                     ]}
                   />
-                ))}
-              </View>
-              <Text style={[styles.freezeLabel, { color: colors.textSubtle }]}>
-                {freezeDots === 7 ? 'Freeze earned!' : `${freezeDots}/7`}
-              </Text>
-            </Animated.View>
-          )}
+                  <Text style={[styles.dayLabel, { color: day.isToday ? colors.text : colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                    {day.day}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -226,95 +144,80 @@ export function StreakBox({ streakCount, onPress }: StreakBoxProps) {
 }
 
 const styles = StyleSheet.create({
-  dayColumn: {
-    alignItems: 'center',
-  },
-  dayCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dayCircleText: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 10,
-  },
-  todayDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  dayLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 10,
-    marginTop: 4,
-  },
   card: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    padding: Spacing['5'],
+    paddingVertical: Spacing['4'],
+    paddingHorizontal: Spacing['4'],
+    overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: Spacing['4'],
+    gap: Spacing['4'],
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['3'],
   },
-  streakLabel: {
+  iconShell: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copyColumn: {
+    flex: 1,
+  },
+  kicker: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.sm,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  motivationText: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 18,
   },
   streakCountRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
+    gap: 4,
   },
   streakNumber: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: 32,
-    letterSpacing: -1,
+    fontFamily: FontFamily.display,
+    fontSize: 34,
+    lineHeight: 38,
   },
   streakUnit: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: FontSize.sm,
-    marginLeft: 4,
+    fontFamily: FontFamily.ui,
+    fontSize: FontSize.xs,
   },
   calendarStrip: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: Spacing['2'],
-    borderTopWidth: 1,
-  },
-  motivationText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 14,
-  },
-  freezeRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    gap: 6,
+    justifyContent: 'space-between',
+    marginTop: Spacing['4'],
+    paddingTop: Spacing['3'],
   },
-  freezeDotsRow: {
-    flexDirection: 'row',
-    gap: 4,
+  dayColumn: {
+    alignItems: 'center',
+    gap: 5,
   },
-  freezeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  dayDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
   },
-  freezeLabel: {
+  dayLabel: {
     fontFamily: FontFamily.ui,
     fontSize: 10,
-    marginLeft: 2,
   },
 });

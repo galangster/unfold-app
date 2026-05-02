@@ -137,7 +137,7 @@ describe('push notification helpers', () => {
         devotionalId: 'seeded-qa-devotional',
         dayNumber: 1,
         dayTitle: 'When the Path Is Quiet',
-        seriesTitle: 'Seeded QA Series',
+        seriesTitle: 'Quiet Path Series',
         totalDays: 3,
       });
     });

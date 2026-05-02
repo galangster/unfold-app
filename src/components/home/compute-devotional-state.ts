@@ -23,7 +23,7 @@ export type DevotionalCardState =
       progress: number;
       daysCompleted: number;
       totalDays: number;
-      onContinue: () => void;
+      onContinue: (dayNumber?: number) => void;
       onCreateNew: () => void;
       ctaText: string;
     }
@@ -35,7 +35,7 @@ export type DevotionalCardState =
       progress: number;
       daysCompleted: number;
       totalDays: number;
-      onContinue: () => void;
+      onContinue: (dayNumber?: number) => void;
       onCreateNew: () => void;
     }
   | {
@@ -47,7 +47,7 @@ export type DevotionalCardState =
       daysCompleted: number;
       totalDays: number;
       tomorrowTeaser: string | null;
-      onContinue: () => void;
+      onContinue: (dayNumber?: number) => void;
       onCreateNew: () => void;
     }
   | {
@@ -74,7 +74,7 @@ export interface ComputeInput {
   totalDays: number;
   progress: number;
   tomorrowTeaser: string | null;
-  onContinue: () => void;
+  onContinue: (dayNumber?: number) => void;
   onCreateNew: () => void;
   onReveal: () => void;
   ctaText: string;

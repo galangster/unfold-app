@@ -1,30 +1,23 @@
 /**
- * PremiumNudgeCard — Inline contextual premium nudge card
+ * PremiumNudgeCard — Inline contextual premium invitation
  *
- * A subtle, dismissable card that surfaces premium feature value at
- * the right moment. Feels like a helpful tip, not an advertisement.
- *
- * Usage:
- *   <PremiumNudgeCard
- *     type="streak_freeze"
- *     message="Your streak ended. Premium members get streak freezes."
- *     cta="Learn more"
- *     premiumFeature="streak"
- *     onAction={() => {}}
- *     onDismiss={() => {}}
- *   />
+ * A quiet, dismissable card that surfaces premium value at the right
+ * devotional moment. The card is not pressable as a whole; the CTA and
+ * dismiss control are separate actions for clearer touch and accessibility.
  */
 
-import { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useCallback, useState } from 'react';
+import type { ComponentType } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import Animated, { FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
-  XIcon,
+  ArrowRightIcon,
+  BookOpenTextIcon,
   FireIcon,
   SpeakerHighIcon,
-  BookOpenTextIcon,
   SparkleIcon,
+  XIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -32,13 +25,20 @@ import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { alpha } from '@/components/ui/utils/alpha';
 import type { NudgeType } from '@/lib/nudges';
 
+type IconWeight = 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
+
+const DISPLAY_TEXT_MAX_SCALE = 1.18;
+const BODY_TEXT_MAX_SCALE = 1.28;
+const LABEL_TEXT_MAX_SCALE = 1.14;
+
 // ---------------------------------------------------------------------------
-// Icon mapping per nudge type
+// Tone mapping per nudge type
 // ---------------------------------------------------------------------------
 
-function getNudgeIcon(type: NudgeType): React.ComponentType<{ size: number; color: string; weight: 'light' }> {
+function getNudgeIcon(type: NudgeType): ComponentType<{ size: number; color: string; weight: IconWeight }> {
   switch (type) {
     case 'streak_freeze':
       return FireIcon;
@@ -48,6 +48,29 @@ function getNudgeIcon(type: NudgeType): React.ComponentType<{ size: number; colo
       return BookOpenTextIcon;
     default:
       return SparkleIcon;
+  }
+}
+
+function getNudgeTone(type: NudgeType): { kicker: string; title: string; footnote: string } {
+  switch (type) {
+    case 'streak_freeze':
+      return {
+        kicker: 'Rhythm support',
+        title: 'Grace for missed days',
+        footnote: 'No pressure — just a softer return.',
+      };
+    case 'audio_teaser':
+      return {
+        kicker: 'Quiet option',
+        title: 'Let today be read aloud',
+        footnote: 'For walks, chores, or tired eyes.',
+      };
+    case 'journey_completion':
+      return {
+        kicker: 'Next invitation',
+        title: 'Keep unfolding after this series',
+        footnote: 'No pressure — your free rhythm stays intact.',
+      };
   }
 }
 
@@ -62,7 +85,7 @@ interface PremiumNudgeCardProps {
   premiumFeature: string;
   onAction: () => void;
   onDismiss: () => void;
-  /** Variant: 'card' for home screen, 'banner' for reading screen */
+  /** Variant: 'card' for Today/home screen, 'banner' for denser reading placements */
   variant?: 'card' | 'banner';
 }
 
@@ -76,11 +99,15 @@ export function PremiumNudgeCard({
   variant = 'card',
 }: PremiumNudgeCardProps) {
   const { colors } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [dismissed, setDismissed] = useState(false);
   const [showSheet, setShowSheet] = useState(false);
 
   const IconComponent = getNudgeIcon(type);
+  const tone = getNudgeTone(type);
+  const isBanner = variant === 'banner';
+  const useCompactLayout = !isBanner && (width < 400 || fontScale >= 1.18);
 
   const handleDismiss = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -90,108 +117,95 @@ export function PremiumNudgeCard({
 
   const handleAction = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    onAction();
     setShowSheet(true);
-  }, [onAction]);
+  }, []);
 
   const handleSheetClose = useCallback(() => {
     setShowSheet(false);
     setDismissed(true);
-  }, []);
+    onAction();
+  }, [onAction]);
 
   if (dismissed) return null;
-
-  const isBanner = variant === 'banner';
 
   return (
     <>
       <Animated.View
         entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).delay(300).easing(Ease.out)}
         exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-        accessibilityRole="alert"
-        accessibilityLabel={`Premium feature suggestion: ${message}`}
+        style={[
+          styles.container,
+          isBanner && styles.bannerContainer,
+          useCompactLayout && styles.containerCompact,
+          {
+            backgroundColor: alpha(colors.backgroundElevated, isBanner ? 0.5 : 0.66),
+            borderColor: alpha(colors.accent, isBanner ? 0.1 : 0.14),
+            shadowColor: colors.accent,
+          },
+        ]}
       >
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleAction}
-          accessibilityRole="button"
-          accessibilityLabel={`${message}. ${cta}`}
-          accessibilityHint="Opens premium feature details"
-          style={[
-            styles.container,
-            {
-              backgroundColor: `${colors.accent}0A`,
-              borderColor: `${colors.accent}18`,
-              ...(isBanner
-                ? {
-                    borderRadius: 0,
-                    borderLeftWidth: 0,
-                    borderRightWidth: 0,
-                    borderTopWidth: 1,
-                    borderBottomWidth: 1,
-                    marginHorizontal: 0,
-                  }
-                : {
-                    borderRadius: Radius.card,
-                    borderWidth: 1,
-                  }),
-            },
-          ]}
-        >
-          {/* Icon + Message row */}
-          <View style={styles.contentRow}>
-            <View
-              style={[
-                styles.iconContainer,
-                { backgroundColor: `${colors.accent}14` },
-              ]}
-            >
-              <IconComponent size={18} color={colors.accent} weight="light" />
-            </View>
+        <View pointerEvents="none" style={styles.artLayer}>
+          <View style={[styles.haloOuter, { borderColor: alpha(colors.accent, 0.12) }]} />
+          <View style={[styles.haloInner, { borderColor: alpha(colors.accent, 0.22) }]} />
+          <View style={[styles.thread, { backgroundColor: alpha(colors.accent, 0.24) }]} />
+          <View style={[styles.ember, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
+        </View>
 
-            <View style={styles.textContainer}>
-              <Text
-                style={[
-                  styles.message,
-                  { color: colors.textMuted, fontFamily: FontFamily.body },
-                ]}
-                numberOfLines={2}
-              >
-                {message}
-              </Text>
-
-              <Text
-                style={[
-                  styles.ctaText,
-                  {
-                    color: colors.accent,
-                    fontFamily: FontFamily.uiSemiBold,
-                  },
-                ]}
-              >
-                {cta}
-              </Text>
-            </View>
-
-            {/* Dismiss button — stops propagation so card tap doesn't fire */}
-            <TouchableOpacity activeOpacity={0.7}
-              onPress={handleDismiss}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss suggestion"
-              style={styles.dismissButton}
-            >
-                <XIcon
-                  size={16}
-                  color={colors.textSubtle}
-                  weight="light"
-                />
-            </TouchableOpacity>
+        <View style={styles.headerRow}>
+          <View style={[styles.iconContainer, { backgroundColor: alpha(colors.accent, 0.11), borderColor: alpha(colors.accent, 0.18) }]}>
+            <IconComponent size={18} color={colors.accent} weight="light" />
           </View>
-        </TouchableOpacity>
+
+          <View style={styles.headingGroup}>
+            <Text style={[styles.kicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{tone.kicker}</Text>
+            <Text style={[styles.title, { color: colors.text }]} numberOfLines={useCompactLayout ? 3 : 2} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>
+              {tone.title}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.72}
+            onPress={handleDismiss}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss premium invitation"
+            accessibilityHint="Hides this premium suggestion"
+            style={[styles.dismissButton, { backgroundColor: alpha(colors.text, 0.04) }]}
+          >
+            <XIcon size={15} color={colors.textSubtle} weight="light" />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={[styles.message, useCompactLayout && styles.messageCompact, { color: colors.textMuted }]} numberOfLines={useCompactLayout ? 4 : 3} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+          {message}
+        </Text>
+
+        <View style={[styles.footerRow, useCompactLayout && styles.footerRowCompact]}>
+          <Text style={[styles.footnote, useCompactLayout && styles.footnoteCompact, { color: colors.textSubtle }]} numberOfLines={useCompactLayout ? 3 : 2} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {tone.footnote}
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.76}
+            onPress={handleAction}
+            accessibilityRole="button"
+            accessibilityLabel={`${cta}. Opens Premium details`}
+            accessibilityHint="Shows details about this Premium feature"
+            style={[
+              styles.ctaButton,
+              useCompactLayout && styles.ctaButtonCompact,
+              {
+                backgroundColor: alpha(colors.accent, 0.12),
+                borderColor: alpha(colors.accent, 0.28),
+              },
+            ]}
+          >
+            <Text style={[styles.ctaText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{cta}</Text>
+            <ArrowRightIcon size={13} color={colors.accent} weight="bold" />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
-      {/* Premium Feature Sheet — opens on CTA tap */}
       <PremiumFeatureSheet
         visible={showSheet}
         onClose={handleSheetClose}
@@ -207,35 +221,162 @@ export function PremiumNudgeCard({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 14,
-    paddingHorizontal: Spacing['4'],
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing['5'],
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 22,
+    elevation: 4,
   },
-  contentRow: {
+  bannerContainer: {
+    borderRadius: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    paddingHorizontal: Spacing['5'],
+    paddingVertical: Spacing['4'],
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  containerCompact: {
+    padding: Spacing['4'],
+  },
+  artLayer: {
+    position: 'absolute',
+    top: -36,
+    right: -42,
+    width: 164,
+    height: 164,
+  },
+  haloOuter: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 1,
+  },
+  haloInner: {
+    position: 'absolute',
+    top: 34,
+    right: 34,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 1,
+  },
+  thread: {
+    position: 'absolute',
+    top: 22,
+    right: 74,
+    width: 1,
+    height: 118,
+    transform: [{ rotate: '28deg' }],
+  },
+  ember: {
+    position: 'absolute',
+    top: 74,
+    right: 72,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.42,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing['3'],
   },
   iconContainer: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
   },
-  textContainer: {
+  headingGroup: {
     flex: 1,
-    gap: 6,
+    paddingRight: Spacing['2'],
   },
-  message: {
-    fontSize: 13,
-    lineHeight: 19,
+  kicker: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 3,
   },
-  ctaText: {
-    fontSize: 13,
+  title: {
+    fontFamily: FontFamily.display,
+    fontSize: 22,
+    lineHeight: 27,
+    letterSpacing: -0.25,
   },
   dismissButton: {
-    padding: 4,
-    marginTop: 1,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  message: {
+    width: '88%',
+    fontFamily: FontFamily.body,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: Spacing['4'],
+  },
+  messageCompact: {
+    width: '100%',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing['3'],
+    marginTop: Spacing['5'],
+  },
+  footerRowCompact: {
+    alignItems: 'flex-start',
+    flexDirection: 'column',
+    gap: Spacing['2.5'],
+  },
+  footnote: {
+    flex: 1,
+    fontFamily: FontFamily.body,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  footnoteCompact: {
+    flex: 0,
+    width: '100%',
+  },
+  ctaButton: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing['1.5'],
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['2.5'],
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  ctaButtonCompact: {
+    alignSelf: 'flex-start',
+  },
+  ctaText: {
+    fontFamily: FontFamily.uiSemiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.15,
   },
 });

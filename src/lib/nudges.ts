@@ -203,23 +203,23 @@ function buildNudgePayload(type: NudgeType, ctx: NudgeContext): EligibleNudge {
     case 'streak_freeze':
       return {
         type: 'streak_freeze',
-        message: 'Your streak ended. Premium members get streak freezes to protect their progress.',
-        cta: 'Learn more',
+        message: 'When a day gets away from you, Premium can quietly protect your devotional rhythm.',
+        cta: 'See how',
         premiumFeature: 'streak',
       };
     case 'audio_teaser':
       return {
         type: 'audio_teaser',
-        message: 'Try listening to today\'s devotional. Premium includes AI narration.',
-        cta: 'Preview',
+        message: 'Premium can read today\'s devotional aloud when you need scripture to meet you hands-free.',
+        cta: 'Preview audio',
         premiumFeature: 'audio',
       };
     case 'journey_completion': {
       const seriesName = ctx.seriesJustCompleted ?? 'your series';
       return {
         type: 'journey_completion',
-        message: `You finished ${seriesName}! Premium members can create unlimited series.`,
-        cta: 'Explore',
+        message: `You finished ${seriesName}. Premium can open another personal series whenever you are ready.`,
+        cta: 'Explore paths',
         premiumFeature: 'series',
       };
     }

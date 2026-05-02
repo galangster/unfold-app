@@ -4,22 +4,21 @@
  * theme, reason text, and quick-start CTA.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { View, Text, TouchableOpacity, Platform, StyleSheet, ActivityIndicator } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { alpha } from '@/components/ui';
-import { AccentGlow } from '@/components/AccentGlow';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 
 interface Recommendation {
   theme: string;
@@ -34,21 +33,58 @@ interface RecommendedSeriesCardProps {
   /** "completion" renders inside journey-complete, "empty" renders standalone */
   variant: 'completion' | 'empty';
   onChooseOther: () => void;
+  completedSeriesTitle?: string;
   /** Optional fallback rendered when the recommendation fetch fails */
   renderFallback?: () => ReactNode;
 }
 
-export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }: RecommendedSeriesCardProps) {
-  const { colors, isDark } = useTheme();
+function formatRecommendationType(type: string) {
+  return type
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
+
+const QA_TODAY_RECOMMENDATION: Recommendation = {
+  theme: 'discernment',
+  themeName: 'A Quiet Strength',
+  type: 'theme',
+  reason:
+    'Because this season is asking for patience without passivity — a study on waiting, courage, and hearing God clearly.',
+  suggestedLength: 7,
+};
+
+export function RecommendedSeriesCard({
+  variant,
+  onChooseOther,
+  completedSeriesTitle,
+  renderFallback,
+}: RecommendedSeriesCardProps) {
+  const { colors } = useTheme();
   const { entering } = useAccessibleAnimation();
   const router = useRouter();
+  const user = useUnfoldStore((s) => s.user);
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qaRecommendation = useMemo(() => (
+    isQaToolsEnabled() && user?.aboutMe === QA_TODAY_PROFILE_MARKER
+      ? QA_TODAY_RECOMMENDATION
+      : null
+  ), [user?.aboutMe]);
+
+  const [recommendation, setRecommendation] = useState<Recommendation | null>(qaRecommendation);
+  const [loading, setLoading] = useState(!qaRecommendation);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (qaRecommendation) {
+      setRecommendation(qaRecommendation);
+      setLoading(false);
+      setError(false);
+      return;
+    }
+
     let cancelled = false;
 
     async function fetchRecommendation() {
@@ -71,7 +107,7 @@ export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }
 
     fetchRecommendation();
     return () => { cancelled = true; };
-  }, []);
+  }, [qaRecommendation]);
 
   const handleStartStudy = () => {
     if (!recommendation) return;
@@ -85,93 +121,144 @@ export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }
     router.push('/generating');
   };
 
-  // Error or no recommendation → render fallback if provided, otherwise don't render
   if (error || (!loading && !recommendation)) {
     return renderFallback ? <>{renderFallback()}</> : null;
   }
 
-  // Loading state — subtle shimmer
+  const isCompletion = variant === 'completion';
+  const eyebrow = isCompletion ? 'Up next' : 'Recommended for you';
+  const introCopy = isCompletion
+    ? `${completedSeriesTitle ?? 'This series'} is complete. Here’s a next thread for the season you’re carrying now.`
+    : 'A quiet next thread shaped around the season you named.';
+
   if (loading) {
     return (
       <Animated.View entering={entering(FadeIn.duration(200).easing(Ease.out))}>
-        <View style={[styles.card, {
-          backgroundColor: Platform.OS === 'ios'
-            ? alpha(colors.backgroundElevated, 0.6)
-            : alpha(colors.backgroundElevated, 0.85),
-          borderColor: alpha(colors.accent, 0.09),
-          overflow: 'hidden',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 120,
-        }]}>
-          {Platform.OS === 'ios' && (
-            <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-          )}
-          <ActivityIndicator color={colors.textMuted} size="small" />
+        <View
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Finding a recommended devotional series"
+          style={[
+            styles.card,
+            styles.loadingCard,
+            {
+              backgroundColor: alpha(colors.backgroundElevated, 0.7),
+              borderColor: alpha(colors.accent, 0.12),
+              shadowColor: colors.accent,
+            },
+          ]}
+        >
+          <View pointerEvents="none" style={styles.artRail}>
+            <View style={[styles.artCircleOuter, { borderColor: alpha(colors.accent, 0.14) }]} />
+            <View style={[styles.artCircleInner, { borderColor: alpha(colors.accent, 0.28) }]} />
+            <View style={[styles.artEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
+          </View>
+
+          <View style={styles.kickerRow}>
+            <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>Discerning what’s next</Text>
+          </View>
+
+          <Text style={[styles.loadingTitle, { color: colors.text }]}>Finding your next thread.</Text>
+          <Text style={[styles.loadingCopy, { color: colors.textMuted }]}>Unfold is matching a devotional to your story and rhythm.</Text>
+
+          <View style={styles.loadingMetaRow}>
+            {[0, 1].map((index) => (
+              <View
+                key={index}
+                style={[
+                  styles.loadingPill,
+                  {
+                    backgroundColor: alpha(colors.accent, index === 0 ? 0.12 : 0.075),
+                    borderColor: alpha(colors.accent, index === 0 ? 0.2 : 0.12),
+                  },
+                ]}
+              />
+            ))}
+          </View>
+
+          <ActivityIndicator color={colors.accent} size="small" style={styles.loadingSpinner} />
         </View>
       </Animated.View>
     );
   }
 
+  const typeLabel = formatRecommendationType(recommendation!.type);
+  const actionLabel = isCompletion ? 'Begin the Next Study' : 'Start This Study';
+
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
-      <View style={[styles.card, {
-        backgroundColor: Platform.OS === 'ios'
-          ? alpha(colors.backgroundElevated, 0.6)
-          : alpha(colors.backgroundElevated, 0.85),
-        borderColor: alpha(colors.accent, 0.09),
-        overflow: 'hidden',
-      }]}>
-        {Platform.OS === 'ios' && (
-          <BlurView intensity={80} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-        )}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: alpha(colors.backgroundElevated, 0.72),
+            borderColor: alpha(colors.accent, 0.14),
+            shadowColor: colors.accent,
+          },
+        ]}
+      >
+        <View pointerEvents="none" style={styles.artRail}>
+          <View style={[styles.artCircleOuter, { borderColor: alpha(colors.accent, 0.14) }]} />
+          <View style={[styles.artCircleInner, { borderColor: alpha(colors.accent, 0.34) }]} />
+          <View style={[styles.artLine, { backgroundColor: alpha(colors.accent, 0.24) }]} />
+          <View style={[styles.artEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
+        </View>
 
-        {variant === 'empty' && (
-          <Text style={[styles.eyebrow, { color: colors.textHint }]}>
-            Recommended for you
-          </Text>
-        )}
-
-        {variant === 'completion' && (
-          <View style={[styles.divider, { borderColor: alpha(colors.textMuted, 0.2) }]}>
-            <Text style={[styles.dividerText, { color: colors.textMuted }]}>Up Next</Text>
+        <View style={styles.contentColumn}>
+          <View style={styles.kickerRow}>
+            <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>{eyebrow}</Text>
           </View>
-        )}
 
-        <Text style={[styles.themeName, { color: colors.text }]}>
-          {recommendation!.themeName}
-        </Text>
+          <Text style={[styles.introCopy, { color: colors.textMuted }]}>{introCopy}</Text>
 
-        <Text style={[styles.reason, { color: colors.textMuted }]}>
-          {recommendation!.reason}
-        </Text>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleStartStudy}
-          accessibilityRole="button"
-          accessibilityLabel="Start this study"
-        >
-          <AccentGlow color={colors.accent} intensity="medium" active style={{ borderRadius: Radius.md }}>
-            <View style={[styles.cta, { backgroundColor: colors.accent }]}>
-              <Text style={[styles.ctaText, { color: colors.background }]}>
-                Start This Study
-              </Text>
-            </View>
-          </AccentGlow>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={onChooseOther}
-          accessibilityRole="button"
-          accessibilityLabel="Choose something else"
-          style={styles.secondaryAction}
-        >
-          <Text style={[styles.secondaryText, { color: colors.textMuted }]}>
-            or choose something else
+          <Text style={[styles.themeName, { color: colors.text }]}>
+            {recommendation!.themeName}
           </Text>
-        </TouchableOpacity>
+
+          <Text style={[styles.reason, { color: colors.textMuted }]}>
+            {recommendation!.reason}
+          </Text>
+
+          <View style={styles.metaRow}>
+            <View style={[styles.metaPill, { backgroundColor: alpha(colors.accent, 0.1), borderColor: alpha(colors.accent, 0.18) }]}>
+              <Text style={[styles.metaText, { color: colors.accent }]}>{recommendation!.suggestedLength} days</Text>
+            </View>
+            <View style={[styles.metaPill, { backgroundColor: alpha(colors.text, 0.045), borderColor: alpha(colors.text, 0.08) }]}>
+              <Text style={[styles.metaText, { color: colors.textMuted }]}>{typeLabel}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.72}
+            onPress={handleStartStudy}
+            accessibilityRole="button"
+            accessibilityLabel={`${actionLabel}: ${recommendation!.themeName}`}
+            accessibilityHint="Starts generation for this recommended devotional series"
+            style={[
+              styles.primaryAction,
+              {
+                backgroundColor: alpha(colors.accent, 0.1),
+                borderColor: alpha(colors.accent, 0.3),
+              },
+            ]}
+          >
+            <Text style={[styles.primaryText, { color: colors.text }]}>{actionLabel}</Text>
+            <Text style={[styles.primaryArrow, { color: colors.accent }]}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.72}
+            onPress={onChooseOther}
+            accessibilityRole="button"
+            accessibilityLabel="Choose a different devotional direction"
+            accessibilityHint="Opens the new series setup instead of this recommendation"
+            style={styles.secondaryAction}
+          >
+            <Text style={[styles.secondaryText, { color: colors.textMuted }]}>Choose another direction</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </Animated.View>
   );
@@ -179,57 +266,191 @@ export function RecommendedSeriesCard({ variant, onChooseOther, renderFallback }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.card,
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: Spacing['5'],
+    padding: Spacing['6'],
+    overflow: 'hidden',
+    position: 'relative',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.11,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  loadingCard: {
+    minHeight: 214,
+  },
+  artRail: {
+    position: 'absolute',
+    top: -34,
+    right: -52,
+    width: 186,
+    height: 224,
+    opacity: 0.84,
+  },
+  artCircleOuter: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 172,
+    height: 172,
+    borderRadius: 86,
+    borderWidth: 1,
+  },
+  artCircleInner: {
+    position: 'absolute',
+    right: 40,
+    top: 40,
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+    borderWidth: 1,
+  },
+  artLine: {
+    position: 'absolute',
+    right: 96,
+    top: 30,
+    width: 1.5,
+    height: 156,
+    borderRadius: 1,
+    transform: [{ rotate: '14deg' }],
+  },
+  artEmber: {
+    position: 'absolute',
+    right: 82,
+    top: 82,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.42,
+    shadowRadius: 16,
+  },
+  contentColumn: {
+    zIndex: 2,
+    paddingRight: 52,
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['3'],
+    marginBottom: Spacing['4'],
+  },
+  kickerRule: {
+    width: 34,
+    height: 1.5,
+    borderRadius: 1,
   },
   eyebrow: {
-    fontFamily: FontFamily.ui,
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase' as const,
-    marginBottom: Spacing['3'],
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    lineHeight: 16,
+    textTransform: 'uppercase',
   },
-  divider: {
-    borderTopWidth: 1,
-    paddingTop: Spacing['3'],
-    marginBottom: Spacing['3'],
-  },
-  dividerText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 12,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase' as const,
-  },
-  themeName: {
+  introCopy: {
+    width: '86%',
     fontFamily: FontFamily.body,
-    fontSize: 20,
-    fontWeight: '600' as const,
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: Spacing['4'],
+  },
+  loadingTitle: {
+    width: '74%',
+    fontFamily: FontFamily.display,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.4,
     marginBottom: Spacing['2'],
   },
-  reason: {
+  loadingCopy: {
+    width: '76%',
     fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
     marginBottom: Spacing['5'],
   },
-  cta: {
-    paddingVertical: Spacing['3.5'],
-    paddingHorizontal: Spacing['4'],
-    borderRadius: Radius.md,
-    alignItems: 'center' as const,
+  loadingMetaRow: {
+    flexDirection: 'row',
+    gap: Spacing['2'],
   },
-  ctaText: {
-    fontFamily: FontFamily.ui,
+  loadingPill: {
+    width: 74,
+    height: 28,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  loadingSpinner: {
+    position: 'absolute',
+    right: Spacing['6'],
+    bottom: Spacing['6'],
+  },
+  themeName: {
+    width: '88%',
+    fontFamily: FontFamily.display,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.5,
+    marginBottom: Spacing['3'],
+  },
+  reason: {
+    width: '88%',
+    fontFamily: FontFamily.body,
     fontSize: 15,
-    fontWeight: '600' as const,
+    lineHeight: 23,
+    marginBottom: Spacing['5'],
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing['2'],
+    marginBottom: Spacing['6'],
+  },
+  metaPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: Spacing['1.5'],
+    paddingHorizontal: Spacing['3'],
+  },
+  metaText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    lineHeight: 15,
+    letterSpacing: 0.4,
+  },
+  primaryAction: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing['2'],
+    minHeight: 48,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['5'],
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  primaryText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: 0.2,
+  },
+  primaryArrow: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 17,
+    lineHeight: 20,
+    marginTop: -1,
   },
   secondaryAction: {
-    alignItems: 'center' as const,
-    paddingTop: Spacing['3'],
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    marginTop: Spacing['1'],
+    paddingHorizontal: Spacing['1'],
   },
   secondaryText: {
-    fontFamily: FontFamily.ui,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 13,
+    lineHeight: 18,
   },
 });

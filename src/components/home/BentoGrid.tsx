@@ -1,20 +1,22 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { BookOpenIcon, BookmarksSimpleIcon } from 'phosphor-react-native';
+import { BookOpenIcon, BookmarksSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
+import { alpha } from '@/components/ui';
 
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 
+const LABEL_TEXT_MAX_SCALE = 1.16;
+
 export function BentoGrid() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
   const { entering } = useAccessibleAnimation();
 
@@ -45,27 +47,28 @@ export function BentoGrid() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               router.push({ pathname: item.pathname as any, params: { from: 'home' } });
             }}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.label}`}
+            accessibilityHint="Opens this section from the Today tab"
             style={[
               styles.box,
               {
-                backgroundColor: 'transparent',
-                borderColor: colors.border,
-                overflow: 'hidden',
+                backgroundColor: alpha(colors.backgroundElevated, 0.54),
+                borderColor: alpha(colors.text, 0.08),
               },
             ]}
           >
-            <BlurView
-              intensity={isDark ? 40 : 30}
-              tint={isDark ? 'dark' : 'light'}
-              style={StyleSheet.absoluteFill}
-            />
-            <item.icon size={20} color={colors.textMuted} weight="light" />
+            <View style={[styles.iconShell, { backgroundColor: alpha(colors.accent, 0.08) }]}>
+              <item.icon size={17} color={colors.textMuted} weight="light" />
+            </View>
             <Text
               style={[styles.label, { color: colors.text }]}
-              numberOfLines={1}
+              numberOfLines={2}
+              maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
               {item.label}
             </Text>
+            <CaretRightIcon size={13} color={colors.textSubtle} weight="light" />
           </TouchableOpacity>
         ))}
       </View>
@@ -76,7 +79,7 @@ export function BentoGrid() {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['5'],
+    marginTop: Spacing['3'],
   },
   row: {
     flexDirection: 'row',
@@ -84,15 +87,27 @@ const styles = StyleSheet.create({
   },
   box: {
     flex: 1,
-    paddingVertical: Spacing['4'],
-    borderRadius: Radius.card,
+    minHeight: 58,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['3'],
+    borderRadius: Radius.lg,
     borderWidth: 1,
     overflow: 'hidden',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing['2'],
   },
+  iconShell: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   label: {
+    flexShrink: 1,
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.xs,
   },

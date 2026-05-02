@@ -10,7 +10,7 @@ export function buildDevotionalSeed({
 } = {}): Devotional {
   return {
     id: devotionalId,
-    title: 'Seeded QA Series',
+    title: 'Quiet Path Series',
     totalDays: 3,
     currentDay: 1,
     createdAt: nowIso,
@@ -31,7 +31,7 @@ export function buildDevotionalSeed({
         scriptureReference: 'Psalm 46:10',
         scriptureText: 'Be still, and know that I am God.',
         bodyText:
-          'God often meets us in stillness before He moves us into action. This seeded day exists so reveal and reading QA can use a real devotional object instead of debug-only placeholders.',
+          'God often meets us in stillness before He moves us into action. The quiet path is not empty; it is the place where attention returns, hurry loosens its grip, and the soul learns to recognize His presence again.',
         quotableLine: 'Stillness is not absence; it is attention.',
         isRead: false,
         isRevealed: false,

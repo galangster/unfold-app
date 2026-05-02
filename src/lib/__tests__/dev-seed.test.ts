@@ -14,7 +14,7 @@ describe('buildDevotionalSeed', () => {
     });
 
     expect(seeded.id).toBe('seeded-devotional');
-    expect(seeded.title).toBe('Seeded QA Series');
+    expect(seeded.title).toBe('Quiet Path Series');
     expect(seeded.totalDays).toBe(3);
     expect(seeded.currentDay).toBe(1);
     expect(seeded.generationMode).toBe('progressive');
