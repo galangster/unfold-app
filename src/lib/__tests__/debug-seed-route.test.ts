@@ -33,6 +33,9 @@ describe('debug seed routes', () => {
   it('keeps the Today seed route QA-gated and refreshes the active Today devotional', () => {
     expect(seedTodaySource).toContain('isQaToolsEnabled()');
     expect(seedTodaySource).toContain('<Redirect href="/(tabs)/(you)" />');
+    expect(seedTodaySource).toContain("| 'overdue'");
+    expect(seedTodaySource).toContain("| 'complete-today'");
+    expect(seedTodaySource).toContain("| 'tomorrow-locked'");
     expect(seedTodaySource).toContain("| 'resume-reading'");
     expect(seedTodaySource).toContain("| 'resume-journal'");
     expect(seedTodaySource).toContain("| 'midday'");
@@ -44,6 +47,9 @@ describe('debug seed routes', () => {
     expect(seedTodaySource).toContain("'journey-complete'");
     expect(seedTodaySource).toContain("'empty'");
     expect(seedTodaySource).toContain("'day1-review'");
+    expect(seedTodaySource).toContain("if (state === 'overdue')");
+    expect(seedTodaySource).toContain("if (state === 'complete-today')");
+    expect(seedTodaySource).toContain("if (state === 'tomorrow-locked')");
     expect(seedTodaySource).toContain("if (state === 'journey-complete' || state === 'premium-nudge')");
     expect(seedTodaySource).toContain("if (state === 'empty')");
     expect(seedTodaySource).toContain("if (state === 'day1-review')");

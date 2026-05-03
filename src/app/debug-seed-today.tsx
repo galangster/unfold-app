@@ -57,8 +57,11 @@ type DevMenuPreferencesModule = {
 
 type TodayPreviewState =
   | 'unread'
+  | 'overdue'
   | 'reveal-ready'
   | 'preparing'
+  | 'complete-today'
+  | 'tomorrow-locked'
   | 'journey-complete'
   | 'empty'
   | 'day1-review'
@@ -73,8 +76,11 @@ type TodayPreviewState =
 
 const todayPreviewStates = [
   'unread',
+  'overdue',
   'reveal-ready',
   'preparing',
+  'complete-today',
+  'tomorrow-locked',
   'journey-complete',
   'empty',
   'day1-review',
@@ -166,6 +172,41 @@ function buildTodayPreviewSeed(state: TodayPreviewState): Devotional | null {
 
   if (state === 'empty') {
     return null;
+  }
+
+  if (state === 'overdue') {
+    const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    return {
+      ...seeded,
+      currentDay: 1,
+      days: seeded.days.map((day) => {
+        if (day.dayNumber === 1) return markDayUnread(day, yesterdayIso);
+        return day;
+      }),
+    };
+  }
+
+  if (state === 'complete-today') {
+    return {
+      ...seeded,
+      currentDay: 1,
+      days: seeded.days.map((day) => {
+        if (day.dayNumber === 1) return markDayRead(day, nowIso);
+        return day;
+      }),
+    };
+  }
+
+  if (state === 'tomorrow-locked') {
+    return {
+      ...seeded,
+      currentDay: 2,
+      days: seeded.days.map((day) => {
+        if (day.dayNumber === 1) return markDayRead(day, nowIso);
+        if (day.dayNumber === 2) return markDayUnread(day, nowIso);
+        return day;
+      }),
+    };
   }
 
   if (state === 'resume-reading') {
