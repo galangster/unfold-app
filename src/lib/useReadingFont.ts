@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useUnfoldStore, READING_FONTS, ReadingFontId } from '@/lib/store';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { FontFamily } from '@/constants/fonts';
 
 /**
@@ -8,7 +9,8 @@ import { FontFamily } from '@/constants/fonts';
  */
 export function useReadingFont() {
   const readingFontId = useUnfoldStore((s) => s.user?.readingFont ?? 'source-serif');
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
 
   return useMemo(() => {
     // Non-premium users always get the default font

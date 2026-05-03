@@ -58,6 +58,7 @@ import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
 import { useCreationGate } from '@/hooks/useCreationGate';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 const SOAP_SECTIONS: { key: keyof SoapResponses; letter: string; label: string; placeholder: string; icon: 'BookOpen' | 'Eye' | 'PencilSimple' | 'HandsPraying' }[] = [
@@ -167,7 +168,8 @@ export default function JournalScreen() {
   const setDeeperQuestions = useUnfoldStore((s) => s.setDeeperQuestions);
   const setResumeContext = useUnfoldStore((s) => s.setResumeContext);
   const devotionals = useUnfoldStore((s) => s.devotionals);
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
   // Subscribe to journalEntries for reactive updates (prayer toggles, etc.)
   const journalEntries = useUnfoldStore((s) => s.journalEntries);

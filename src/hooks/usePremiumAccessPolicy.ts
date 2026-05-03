@@ -22,16 +22,23 @@
 
 import { useUnfoldStore, useHasHydrated } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
-import type { PremiumAccessPolicy } from '@/lib/premium-state';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { resolvePremiumAccessPolicy, type PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
 export function usePremiumAccessPolicy(): PremiumAccessPolicy {
   const hydrated = useHasHydrated();
-  const resolved = useUIState((s) => s.revenueCatResolved);
-  const debug = useUIState((s) => s.debugForceTrialExpired);
+  const revenueCatResolved = useUIState((s) => s.revenueCatResolved);
+  const debugForceTrialExpired = useUIState((s) => s.debugForceTrialExpired);
+  const qaPremiumOverride = useUIState((s) => s.qaPremiumOverride);
   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
 
-  if (!hydrated || !resolved) return 'unknown';
-  if (debug) return 'denied';
-  if (__DEV__) return 'granted';
-  return isPremium ? 'granted' : 'denied';
+  return resolvePremiumAccessPolicy({
+    hydrated,
+    revenueCatResolved,
+    debugForceTrialExpired,
+    isDev: __DEV__,
+    isPremium,
+    qaToolsEnabled: isQaToolsEnabled(),
+    qaPremiumOverride,
+  });
 }

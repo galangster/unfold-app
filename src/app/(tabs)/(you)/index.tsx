@@ -52,8 +52,6 @@ import { debugFireTrialEndingNotification } from '@/lib/trial-notification';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { useUIState } from '@/lib/ui-state';
 import { StreakDisplay } from '@/components/StreakDisplay';
-import { useQuery } from '@tanstack/react-query';
-import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { ProfileAvatar } from '@/components/ProfileAvatar';
 import { alpha } from '@/components/ui';
@@ -179,17 +177,9 @@ export default function YouScreen() {
   // The row renders a neutral "Premium" affordance for both states.
   const checkInPolicy = usePremiumAccessPolicy();
   const checkInGranted = checkInPolicy === 'granted';
+  const isPremium = checkInGranted;
   const middayCheckInTime = useUnfoldStore((s) => s.middayCheckInTime);
   const eveningWindDownTime = useUnfoldStore((s) => s.eveningWindDownTime);
-
-  const { data: premiumResult } = useQuery({
-    queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('Unfold Premium'),
-    enabled: isRevenueCatEnabled(),
-    staleTime: 1000 * 60,
-  });
-
-  const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
 
   // --- State ---
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
@@ -885,7 +875,7 @@ export default function YouScreen() {
               <View style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}>
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => {
-                    if (!user?.isPremium) {
+                    if (!isPremium) {
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                       setPremiumFeature('theme');
                       return;
@@ -911,7 +901,7 @@ export default function YouScreen() {
                     >
                       Accent Colors
                     </Text>
-                    {!user?.isPremium && (
+                    {!isPremium && (
                       <LockIcon size={12} color={colors.textSubtle} weight="light" />
                     )}
                   </View>
@@ -931,7 +921,7 @@ export default function YouScreen() {
                       {ACCENT_THEMES.map((theme) => {
                         const isSelected = (user?.accentTheme ?? 'gold') === theme.id;
                         const swatchColor = isDark ? theme.dark : theme.light;
-                        const isLocked = !user?.isPremium && theme.id !== 'gold';
+                        const isLocked = !isPremium && theme.id !== 'gold';
                         return (
                           <TouchableOpacity activeOpacity={0.7}
                             key={theme.id}
@@ -1040,7 +1030,7 @@ export default function YouScreen() {
                         <TouchableOpacity activeOpacity={0.7}
                           key={font.id}
                           onPress={() => {
-                            if (!user?.isPremium) {
+                            if (!isPremium) {
                               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                               setPremiumFeature('font');
                               return;
@@ -1173,7 +1163,7 @@ export default function YouScreen() {
                   justifyContent: 'space-between',
                   paddingVertical: 13,
                   paddingHorizontal: Spacing['4'],
-                  borderBottomWidth: notificationsEnabled && user?.isPremium ? 1 : 0,
+                  borderBottomWidth: notificationsEnabled && isPremium ? 1 : 0,
                   borderBottomColor: colors.border,
                 }}
               >
@@ -1190,14 +1180,14 @@ export default function YouScreen() {
                   style={{
                     fontFamily: FontFamily.uiMedium,
                     fontSize: FontSize.sm,
-                    color: (user?.isPremium ? notificationsEnabled : false) ? colors.text : colors.textMuted,
+                    color: (isPremium ? notificationsEnabled : false) ? colors.text : colors.textMuted,
                   }}
                 >
-                  {(user?.isPremium ? notificationsEnabled : false) ? 'On' : 'Off'}
+                  {(isPremium ? notificationsEnabled : false) ? 'On' : 'Off'}
                 </Text>
               </TouchableOpacity>
 
-              {notificationsEnabled && user?.isPremium && (
+              {notificationsEnabled && isPremium && (
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => setShowTimeSelector(!showTimeSelector)}
                   accessibilityRole="button"
@@ -1816,7 +1806,7 @@ export default function YouScreen() {
                 marginBottom: Spacing['6'],
               }}
             >
-              {user?.isPremium && (
+              {isPremium && (
                 <TouchableOpacity activeOpacity={0.7}
                   onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
                   accessibilityRole="link"

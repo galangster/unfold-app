@@ -49,7 +49,7 @@ import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { alpha } from '@/components/ui';
 import { Spacing } from '@/constants/spacing';
-import { useUnfoldStore } from '@/lib/store';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import {
   canSendCompanionMessage,
@@ -132,7 +132,8 @@ export default function CompanionScreen() {
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
 
   // Premium gating
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const [dailyRemaining, setDailyRemaining] = useState(() => getCompanionDailyUsage().remaining);
 

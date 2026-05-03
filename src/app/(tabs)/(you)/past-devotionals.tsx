@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, TextInput, StyleSheet, LayoutChangeEvent, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCrossTabBack } from '@/hooks/useCrossTabBack';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -467,7 +468,7 @@ export default function PastDevotionalsScreen() {
   const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
   const removeDevotional = useUnfoldStore((s) => s.removeDevotional);
-  const user = useUnfoldStore((s) => s.user);
+  const premiumPolicy = usePremiumAccessPolicy();
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
   const checkIns = useUnfoldStore((s) => s.checkIns);
 
@@ -542,7 +543,7 @@ export default function PastDevotionalsScreen() {
   const handleExportPDF = useCallback(async (devotional: Devotional) => {
     if (exportingId) return;
 
-    if (!user?.isPremium) {
+    if (premiumPolicy !== 'granted') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       router.push('/paywall');
       return;
@@ -585,7 +586,7 @@ export default function PastDevotionalsScreen() {
     } finally {
       setExportingId(null);
     }
-  }, [exportingId, user?.isPremium, router, journalEntries, checkIns, colors.accent]);
+  }, [exportingId, premiumPolicy, router, journalEntries, checkIns, colors.accent]);
 
   const handleDeleteDevotional = useCallback((devotional: Devotional) => {
     Alert.alert(

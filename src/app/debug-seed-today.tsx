@@ -14,6 +14,7 @@ import {
   type UserProfile,
 } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
+import { useUIState } from '@/lib/ui-state';
 
 const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
@@ -138,7 +139,6 @@ function buildQaTodayUser(
 
   return {
     ...qaTodayUser,
-    isPremium: isPremiumContextPreviewState(state),
     themeMode,
     accentTheme,
     currentSituation: `${qaTodayUser.currentSituation} ${QA_TODAY_CONTEXT_SLOT_PREFIX} ${state}.`,
@@ -415,6 +415,11 @@ export default function DebugSeedTodayScreen() {
     const seeded = buildTodayPreviewSeed(previewState);
     const store = useUnfoldStore.getState();
     const returningMarker = buildDevotionalSeed();
+    const ui = useUIState.getState();
+
+    ui.setDebugForceTrialExpired(false);
+    ui.setQaPremiumOverride(isPremiumContextPreviewState(previewState));
+    ui.setRevenueCatResolved();
 
     store.setUser(buildQaTodayUser(previewState, previewThemeMode, previewAccentTheme));
     store.removeDevotional(returningMarker.id);

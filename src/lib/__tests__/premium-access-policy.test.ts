@@ -13,6 +13,7 @@
  */
 
 import { canUsePremiumFeature } from '../premium-access-helpers';
+import { resolvePremiumAccessPolicy } from '../premium-access-policy';
 
 type Policy = 'granted' | 'denied' | 'unknown';
 
@@ -22,13 +23,12 @@ interface Inputs {
   debugForceTrialExpired: boolean;
   isDev: boolean;
   isPremium: boolean;
+  qaToolsEnabled?: boolean;
+  qaPremiumOverride?: boolean;
 }
 
 function decide(inputs: Inputs): Policy {
-  if (!inputs.hydrated || !inputs.revenueCatResolved) return 'unknown';
-  if (inputs.debugForceTrialExpired) return 'denied';
-  if (inputs.isDev) return 'granted';
-  return inputs.isPremium ? 'granted' : 'denied';
+  return resolvePremiumAccessPolicy(inputs);
 }
 
 describe('Premium access policy — tri-state decision logic', () => {
@@ -86,6 +86,19 @@ describe('Premium access policy — tri-state decision logic', () => {
         }),
       ).toBe('unknown');
     });
+    it('returns unknown even when QA premium override is on before RevenueCat resolves', () => {
+      expect(
+        decide({
+          hydrated: true,
+          revenueCatResolved: false,
+          debugForceTrialExpired: false,
+          isDev: false,
+          isPremium: false,
+          qaToolsEnabled: true,
+          qaPremiumOverride: true,
+        }),
+      ).toBe('unknown');
+    });
   });
 
   describe('denied — debug override', () => {
@@ -114,7 +127,7 @@ describe('Premium access policy — tri-state decision logic', () => {
     });
   });
 
-  describe('granted — DEV fallback', () => {
+  describe('granted — DEV and QA fallbacks', () => {
     it('returns granted in DEV when gates pass and debug is off', () => {
       expect(
         decide({
@@ -125,6 +138,48 @@ describe('Premium access policy — tri-state decision logic', () => {
           isPremium: false,
         }),
       ).toBe('granted');
+    });
+
+    it('returns granted for an explicit QA premium override when QA tools are enabled', () => {
+      expect(
+        decide({
+          hydrated: true,
+          revenueCatResolved: true,
+          debugForceTrialExpired: false,
+          isDev: false,
+          isPremium: false,
+          qaToolsEnabled: true,
+          qaPremiumOverride: true,
+        }),
+      ).toBe('granted');
+    });
+
+    it('does not honor a QA premium override when QA tools are disabled', () => {
+      expect(
+        decide({
+          hydrated: true,
+          revenueCatResolved: true,
+          debugForceTrialExpired: false,
+          isDev: false,
+          isPremium: false,
+          qaToolsEnabled: false,
+          qaPremiumOverride: true,
+        }),
+      ).toBe('denied');
+    });
+
+    it('keeps the churn/debug denial stronger than the QA premium override', () => {
+      expect(
+        decide({
+          hydrated: true,
+          revenueCatResolved: true,
+          debugForceTrialExpired: true,
+          isDev: false,
+          isPremium: true,
+          qaToolsEnabled: true,
+          qaPremiumOverride: true,
+        }),
+      ).toBe('denied');
     });
   });
 

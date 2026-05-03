@@ -67,6 +67,7 @@ import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widge
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { alpha } from '@/components/ui';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -169,7 +170,8 @@ export default function ReadingScreen() {
   const recordReviewPrompt = useUnfoldStore((s) => s.recordReviewPrompt);
   const recordStreakRead = useUnfoldStore((s) => s.recordStreakRead);
 
-  const isPremium = user?.isPremium ?? false;
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const { startAudio, stopAudio } = useGlobalAudioPlayer();
 
   // Premium nudge system (audio teaser on reading screen)
@@ -2286,7 +2288,8 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
   const reducedMotion = useReducedMotion();
   const currentFontSize = useUnfoldStore((s) => s.user?.fontSize ?? 'medium');
   const currentReadingFont = useUnfoldStore((s) => s.user?.readingFont ?? 'source-serif');
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const updateUser = useUnfoldStore((s) => s.updateUser);
 
   const controlBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';

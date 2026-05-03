@@ -19,6 +19,18 @@ describe('debug seed routes', () => {
     path.join(__dirname, '../../app/debug-seed-today.tsx'),
     'utf-8',
   );
+  const debugPremiumSource = fs.readFileSync(
+    path.join(__dirname, '../../app/debug-premium.tsx'),
+    'utf-8',
+  );
+  const revenueCatSyncSource = fs.readFileSync(
+    path.join(__dirname, '../../hooks/useRevenueCatSync.ts'),
+    'utf-8',
+  );
+  const pastDevotionalsSource = fs.readFileSync(
+    path.join(__dirname, '../../app/(tabs)/(you)/past-devotionals.tsx'),
+    'utf-8',
+  );
 
   it('replaces any previous seeded reveal devotional before adding a fresh one', () => {
     expect(seedRevealSource).toContain('store.removeDevotional(seeded.id);');
@@ -68,6 +80,9 @@ describe('debug seed routes', () => {
     expect(seedTodaySource).toContain('getTodayPreviewThemeMode(theme ?? themeMode)');
     expect(seedTodaySource).toContain('getTodayPreviewAccentTheme(accent ?? accentTheme)');
     expect(seedTodaySource).toContain('buildQaTodayUser(previewState, previewThemeMode, previewAccentTheme)');
+    expect(seedTodaySource).toContain('ui.setQaPremiumOverride(isPremiumContextPreviewState(previewState));');
+    expect(seedTodaySource).toContain('ui.setRevenueCatResolved();');
+    expect(seedTodaySource).not.toContain('isPremium: isPremiumContextPreviewState(state)');
     expect(seedTodaySource).toContain('store.clearResumeContext();');
     expect(seedTodaySource).toContain("if (state === 'preparing')");
     expect(seedTodaySource).toContain('currentDay: seeded.totalDays');
@@ -89,5 +104,28 @@ describe('debug seed routes', () => {
     expect(seedTodaySource).toContain('store.setHasSeenFeatureOnboarding(true);');
     expect(seedTodaySource).toContain('store.setHasSeenDay1Review();');
     expect(seedTodaySource).toContain("router.replace('/(tabs)/(today)');");
+  });
+
+  it('keeps the QA premium override route gated, reversible, and non-persistent', () => {
+    expect(debugPremiumSource).toContain('isQaToolsEnabled()');
+    expect(debugPremiumSource).toContain('<Redirect href="/(tabs)/(you)" />');
+    expect(debugPremiumSource).toContain('setQaPremiumOverride(shouldGrant);');
+    expect(debugPremiumSource).toContain('setDebugForceTrialExpired(false);');
+    expect(debugPremiumSource).toContain('setRevenueCatResolved();');
+    expect(debugPremiumSource).not.toContain('updateUser({ isPremium');
+    expect(debugPremiumSource).toContain("router.replace('/(tabs)/(you)');");
+  });
+
+  it('keeps RevenueCat sync as the persisted premium mirror source of truth', () => {
+    expect(revenueCatSyncSource).toContain('updateUser({ isPremium: hasSubscription });');
+    expect(revenueCatSyncSource).not.toContain('hasQaPremiumOverride');
+    expect(revenueCatSyncSource).not.toContain('hasSubscription ||');
+  });
+
+  it('routes premium UI actions through the access policy instead of persisted user mirror', () => {
+    expect(pastDevotionalsSource).toContain("import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';");
+    expect(pastDevotionalsSource).toContain('const premiumPolicy = usePremiumAccessPolicy();');
+    expect(pastDevotionalsSource).toContain("if (premiumPolicy !== 'granted')");
+    expect(pastDevotionalsSource).not.toContain('user?.isPremium');
   });
 });

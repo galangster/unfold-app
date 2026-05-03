@@ -15,7 +15,6 @@ import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
-import { hasEntitlement, isRevenueCatEnabled } from '@/lib/revenuecatClient';
 import { StreakBox } from '@/components/StreakBox';
 import { HomeOnboardingTooltips } from '@/components/HomeOnboardingTooltips';
 import { RippleLoader } from '@/components/RippleLoader';
@@ -30,6 +29,7 @@ import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
@@ -229,15 +229,10 @@ export default function HomeScreen() {
     }
   }, [router]);
 
-  // Check premium status from RevenueCat
-  const { data: premiumResult } = useQuery({
-    queryKey: ['revenuecat', 'premium'],
-    queryFn: () => hasEntitlement('Unfold Premium'),
-    enabled: isRevenueCatEnabled(),
-    staleTime: 1000 * 60,
-  });
-
-  const isPremium = premiumResult?.ok ? premiumResult.data : user?.isPremium ?? false;
+  // Check premium status through the tri-state policy so QA premium override can
+  // unlock UI without mutating RevenueCat's persisted mirror.
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
 
   // Premium sync handled globally by useRevenueCatSync in _layout.tsx
 

@@ -7,6 +7,7 @@
 
 import { useMemo, useCallback } from 'react';
 import { useUnfoldStore } from '@/lib/store';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import {
   evaluateNudges,
   type NudgeContext,
@@ -82,7 +83,8 @@ function detectStreakLoss(
 
 export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNudgeResult {
   // Store selectors — all primitives or stable references
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const streakWeekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);

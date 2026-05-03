@@ -24,8 +24,10 @@
 
 import { useUnfoldStore } from '@/lib/store';
 import { useUIState } from '@/lib/ui-state';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { resolvePremiumAccessPolicy, type PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
-export type PremiumAccessPolicy = 'granted' | 'denied' | 'unknown';
+export type { PremiumAccessPolicy };
 
 /**
  * Non-React getter for the current premium access policy.
@@ -54,20 +56,24 @@ export type PremiumAccessPolicy = 'granted' | 'denied' | 'unknown';
  *      gates, so even DEV builds wait briefly at cold start until the signals
  *      settle — this is intentional and preserves correctness.
  *
- *   5. Fall back to persisted `user.isPremium`. Guaranteed to be fresh at
+ *   5. `EXPO_PUBLIC_ENABLE_QA_TOOLS=1` + session QA premium override →
+ *      force `granted`. Internal TestFlight/UI QA only; this is not a
+ *      RevenueCat entitlement and is ignored in production/App Review builds
+ *      where QA tools are off.
+ *
+ *   6. Fall back to persisted `user.isPremium`. Guaranteed to be fresh at
  *      this point because steps 1 + 2 passed.
  */
 export function getEffectivePremiumAccessPolicy(): PremiumAccessPolicy {
-  const hydrated = useUnfoldStore.persist.hasHydrated();
-  const resolved = useUIState.getState().revenueCatResolved;
-  if (!hydrated || !resolved) return 'unknown';
-
-  const debug = useUIState.getState().debugForceTrialExpired;
-  if (debug) return 'denied';
-  if (__DEV__) return 'granted';
-
-  const isPremium = useUnfoldStore.getState().user?.isPremium ?? false;
-  return isPremium ? 'granted' : 'denied';
+  return resolvePremiumAccessPolicy({
+    hydrated: useUnfoldStore.persist.hasHydrated(),
+    revenueCatResolved: useUIState.getState().revenueCatResolved,
+    debugForceTrialExpired: useUIState.getState().debugForceTrialExpired,
+    isDev: __DEV__,
+    isPremium: useUnfoldStore.getState().user?.isPremium ?? false,
+    qaToolsEnabled: isQaToolsEnabled(),
+    qaPremiumOverride: useUIState.getState().qaPremiumOverride,
+  });
 }
 
 /**

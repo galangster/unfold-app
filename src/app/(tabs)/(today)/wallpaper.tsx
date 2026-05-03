@@ -23,7 +23,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { logger } from '@/lib/logger';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
-import { useUnfoldStore } from '@/lib/store';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const WALLPAPER_ASPECT = 19.5 / 9;
@@ -128,7 +128,8 @@ export default function WallpaperScreen() {
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const params = useLocalSearchParams<{ quote: string; dayNumber: string; dayTitle: string }>();
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
 
   const quote = params.quote ?? '';
   const dayNumber = params.dayNumber ?? '1';

@@ -20,6 +20,7 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 
 // --- Streak Society Tiers ---
 
@@ -132,7 +133,8 @@ export default function StreakSettingsScreen() {
   const streak = useUnfoldStore((s) => s.streakCurrent);
   const longestStreak = useUnfoldStore((s) => s.streakLongest);
   const freezes = useUnfoldStore((s) => s.streakFreezes);
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const weekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);
   const lastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const toggleWeekendAmnesty = useUnfoldStore((s) => s.toggleWeekendAmnesty);

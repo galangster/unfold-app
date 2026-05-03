@@ -16,6 +16,7 @@ import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
 import { useReadingFont } from '@/lib/useReadingFont';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
 import { useBibleDb } from '@/hooks/useBibleDb';
 import { BIBLE_BOOKS, getNextChapter, getPreviousChapter } from '@/lib/bible-constants';
@@ -325,7 +326,8 @@ export default function BibleReaderScreen() {
   const [noteSheetHighlight, setNoteSheetHighlight] = useState<import('@/lib/store').BibleHighlight | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // Premium gating for highlight colors
-  const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
+  const premiumPolicy = usePremiumAccessPolicy();
+  const isPremium = premiumPolicy === 'granted';
   const [showHighlightPremiumSheet, setShowHighlightPremiumSheet] = useState(false);
   // shareModalData removed — share navigates to /share-card route
   const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);

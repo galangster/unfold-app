@@ -15,6 +15,11 @@ export const useUIState = create<{
       Not persisted — resets on app launch. */
   debugForceTrialExpired: boolean;
   setDebugForceTrialExpired: (value: boolean) => void;
+  /** Session-local QA-only premium override for internal TestFlight/UI checks.
+      This is not a RevenueCat entitlement and is ignored unless QA tools are
+      enabled by `isQaToolsEnabled()`. Not persisted — resets on app launch. */
+  qaPremiumOverride: boolean;
+  setQaPremiumOverride: (value: boolean) => void;
   /** True once RevenueCat has returned a customer info payload this session
       (even a "no entitlement" answer counts). Initial value `false`; flips to
       `true` on the first successful `getCustomerInfo()` resolution OR the first
@@ -33,6 +38,8 @@ export const useUIState = create<{
   setRevealTransitioning: (value) => set({ revealTransitioning: value }),
   debugForceTrialExpired: false,
   setDebugForceTrialExpired: (value) => set({ debugForceTrialExpired: value }),
+  qaPremiumOverride: false,
+  setQaPremiumOverride: (value) => set({ qaPremiumOverride: value }),
   revenueCatResolved: false,
   setRevenueCatResolved: () => set({ revenueCatResolved: true }),
 }));
