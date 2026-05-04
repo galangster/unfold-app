@@ -643,6 +643,7 @@ export default function OnboardingScreen() {
   const inputOpacity = useSharedValue(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const onboardingJobIdRef = useRef<string | null>(null);
+  const onboardingSubmittedDevotionalIdRef = useRef<string | null>(null);
   const onboardingDevotionalResultRef = useRef<any>(null);
   const [commitmentLevel, setCommitmentLevel] = useState<string>('');
   const [onboardingDevotionalDay, setOnboardingDevotionalDay] = useState<any>(null);
@@ -1045,8 +1046,9 @@ export default function OnboardingScreen() {
       submitGenerationJob(buildOnboardingSampleGenerationRequest({
         answers: data,
         existingUser,
-      })).then(({ jobId }) => {
+      })).then(({ jobId, devotionalId }) => {
         onboardingJobIdRef.current = jobId;
+        onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
         console.log('[Onboarding] Sample generation triggered, jobId:', jobId);
       }).catch((err) => {
         console.warn('[Onboarding] Background sample generation failed:', err);
@@ -2438,17 +2440,20 @@ export default function OnboardingScreen() {
           name={data.name}
           colors={colors}
           jobId={onboardingJobIdRef.current}
-          submitFallback={!onboardingJobIdRef.current ? async () => {
-            const { jobId } = await submitGenerationJob(buildOnboardingSampleGenerationRequest({
+          devotionalId={onboardingSubmittedDevotionalIdRef.current}
+          submitFallback={async () => {
+            const { jobId, devotionalId } = await submitGenerationJob(buildOnboardingSampleGenerationRequest({
               answers: data,
               existingUser,
             }));
             onboardingJobIdRef.current = jobId;
-            return jobId;
-          } : undefined}
+            onboardingSubmittedDevotionalIdRef.current = devotionalId ?? null;
+            return { jobId, devotionalId };
+          }}
           onDevotionalReady={(result) => {
             onboardingDevotionalResultRef.current = result;
             if (result?.devotionalDay && result.devotionalId) {
+              onboardingSubmittedDevotionalIdRef.current = result.devotionalId;
               setOnboardingDevotionalDay(result.devotionalDay);
               setOnboardingDevotionalId(result.devotionalId);
             }
@@ -2466,6 +2471,9 @@ export default function OnboardingScreen() {
           devotionalId={onboardingDevotionalId}
           colors={colors}
           onComplete={advanceToNextStep}
+          onRetry={() => {
+            setCurrentStepId('devotionalSegue');
+          }}
         />
       );
     }

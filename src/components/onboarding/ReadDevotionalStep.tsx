@@ -6,7 +6,7 @@
  * the Devotional shell in the Zustand store so it persists after onboarding.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // LinearGradient removed — button is now inline, not fixed with gradient
@@ -24,12 +24,22 @@ interface Props {
   devotionalId: string;
   colors: ColorTheme;
   onComplete: () => void;
+  onRetry?: () => void;
 }
 
-export function ReadDevotionalStep({ devotionalDay, devotionalId, colors, onComplete }: Props) {
+const READINESS_RECOVERY_DELAY_MS = 12_000;
+
+export function ReadDevotionalStep({
+  devotionalDay,
+  devotionalId,
+  colors,
+  onComplete,
+  onRetry,
+}: Props) {
   const insets = useSafeAreaInsets();
   const addDevotional = useUnfoldStore((s) => s.addDevotional);
   const markDayAsRead = useUnfoldStore((s) => s.markDayAsRead);
+  const [showRecovery, setShowRecovery] = useState(false);
 
   // On mount, add the devotional to the store if not already present
   useEffect(() => {
@@ -45,6 +55,16 @@ export function ReadDevotionalStep({ devotionalDay, devotionalId, colors, onComp
     } as Devotional);
   }, [devotionalDay, devotionalId]);
 
+  useEffect(() => {
+    if (devotionalDay) {
+      setShowRecovery(false);
+      return;
+    }
+
+    const timer = setTimeout(() => setShowRecovery(true), READINESS_RECOVERY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [devotionalDay]);
+
   const handleComplete = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     markDayAsRead(devotionalId, 1);
@@ -53,6 +73,32 @@ export function ReadDevotionalStep({ devotionalDay, devotionalId, colors, onComp
 
   // Loading state while devotional is being generated
   if (!devotionalDay) {
+    if (showRecovery) {
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.recoveryTitle, { color: colors.text }]}>
+            Still preparing your reading.
+          </Text>
+          <Text style={[styles.recoveryText, { color: colors.textMuted }]}>
+            This should only take a moment. Try again so we can reconnect the
+            devotional instead of leaving you on a spinner.
+          </Text>
+          {onRetry && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                onRetry();
+              }}
+              style={[styles.button, styles.retryButton, { backgroundColor: colors.accent }]}
+            >
+              <Text style={[styles.buttonText, { color: colors.background }]}>Try again</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.accent} />
@@ -109,6 +155,24 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.body,
     fontSize: FontSize.base,
     marginTop: Spacing['3'],
+  },
+  recoveryTitle: {
+    fontFamily: FontFamily.display,
+    fontSize: 30,
+    lineHeight: 38,
+    textAlign: 'center',
+  },
+  recoveryText: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.base,
+    lineHeight: 24,
+    maxWidth: 320,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: Spacing['4'],
+    minWidth: 180,
+    paddingHorizontal: Spacing['6'],
   },
   scrollContent: {
     flexGrow: 1,

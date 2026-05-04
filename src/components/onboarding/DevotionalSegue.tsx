@@ -20,7 +20,13 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
-import { pollJobStatus } from '@/lib/generation-api';
+import { pollJobStatus, retryJob } from '@/lib/generation-api';
+import {
+  normalizeOnboardingGenerationJobResult,
+  normalizeOnboardingSubmitResult,
+  type OnboardingGenerationResult,
+  type OnboardingSubmitResult,
+} from '@/lib/onboarding-generation-result';
 import type { ColorTheme } from '@/constants/colors';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -29,11 +35,23 @@ interface Props {
   name: string;
   colors: ColorTheme;
   jobId: string | null;
-  /** If no jobId was provided, call this to submit the generation job and get one */
-  submitFallback?: () => Promise<string>;
-  onDevotionalReady: (result: any) => void;
+  /** Backend-owned devotional id returned when the onboarding job was submitted. */
+  devotionalId?: string | null;
+  /** If no jobId was provided, call this to submit the generation job and get one. */
+  submitFallback?: () => Promise<OnboardingSubmitResult>;
+  onDevotionalReady: (result: OnboardingGenerationResult) => void;
   onContinue: () => void;
 }
+
+type GenerationIssueKind = 'submit' | 'poll' | 'failed' | 'timeout' | 'invalid';
+
+type GenerationIssue = {
+  kind: GenerationIssueKind;
+  title: string;
+  message: string;
+  actionLabel: string;
+  canRetry: boolean;
+};
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
@@ -74,6 +92,8 @@ const DOT_SIZE = 5;
 const ORBIT_PERIOD_MS = 3000;
 
 const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 90_000;
+const MAX_CONSECUTIVE_POLL_ERRORS = 4;
 
 /* ── Orbital Dot ───────────────────────────────────────────────────── */
 
@@ -311,6 +331,7 @@ export function DevotionalSegue({
   name,
   colors,
   jobId,
+  devotionalId,
   submitFallback,
   onDevotionalReady,
   onContinue,
@@ -323,44 +344,184 @@ export function DevotionalSegue({
   const [theatricalDone, setTheatricalDone] = useState(false);
   const [showReadyReveal, setShowReadyReveal] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(jobId);
+  const [activeDevotionalId, setActiveDevotionalId] = useState<string | null>(devotionalId ?? null);
+  const [generationIssue, setGenerationIssue] = useState<GenerationIssue | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [pollCycle, setPollCycle] = useState(0);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const readyCalledRef = useRef(false);
   const fallbackAttemptedRef = useRef(false);
+  const pollStartedAtRef = useRef<number | null>(null);
+  const consecutivePollErrorsRef = useRef(0);
+  const pollInFlightRef = useRef(false);
+  const lastSeenPropJobIdRef = useRef<string | null>(jobId);
+  const lastSeenPropDevotionalIdRef = useRef<string | null>(devotionalId ?? null);
+
+  const clearPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    pollInFlightRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    const propJobChanged = jobId !== lastSeenPropJobIdRef.current;
+    const nextPropDevotionalId = devotionalId ?? null;
+    const propDevotionalChanged = nextPropDevotionalId !== lastSeenPropDevotionalIdRef.current;
+
+    lastSeenPropJobIdRef.current = jobId;
+    lastSeenPropDevotionalIdRef.current = nextPropDevotionalId;
+
+    if (jobId && propJobChanged) {
+      setActiveJobId(jobId);
+      setActiveDevotionalId(nextPropDevotionalId);
+      setGenerationIssue(null);
+      setIsReady(false);
+      setShowReadyReveal(false);
+      readyCalledRef.current = false;
+      consecutivePollErrorsRef.current = 0;
+      setPollCycle((value) => value + 1);
+      return;
+    }
+
+    if (jobId && propDevotionalChanged) {
+      setActiveDevotionalId(nextPropDevotionalId);
+    }
+  }, [devotionalId, jobId]);
+
+  const startFallbackSubmission = useCallback(async () => {
+    if (!submitFallback) {
+      setGenerationIssue({
+        kind: 'submit',
+        title: 'We couldn’t start your devotional yet.',
+        message: 'Check your connection and try again. We won’t leave you stuck here.',
+        actionLabel: 'Try again',
+        canRetry: false,
+      });
+      return;
+    }
+
+    const result = normalizeOnboardingSubmitResult(await submitFallback());
+    setActiveJobId(result.jobId);
+    setActiveDevotionalId(result.devotionalId);
+    setGenerationIssue(null);
+    consecutivePollErrorsRef.current = 0;
+    setPollCycle((value) => value + 1);
+  }, [submitFallback]);
 
   /* ── Fallback: submit job if none provided ── */
   useEffect(() => {
     if (activeJobId || fallbackAttemptedRef.current || !submitFallback) return;
     fallbackAttemptedRef.current = true;
-    submitFallback()
-      .then((newJobId) => setActiveJobId(newJobId))
-      .catch(() => setIsReady(true)); // If fallback fails, let user through anyway
-  }, [activeJobId, submitFallback]);
+    startFallbackSubmission().catch(() => {
+      setGenerationIssue({
+        kind: 'submit',
+        title: 'We couldn’t start your devotional yet.',
+        message: 'Check your connection and try again. We won’t leave you stuck here.',
+        actionLabel: 'Try again',
+        canRetry: true,
+      });
+    });
+  }, [activeJobId, startFallbackSubmission, submitFallback]);
 
   /* ── Polling ── */
   useEffect(() => {
     if (!activeJobId) {
-      // No job yet — waiting for fallback or treating as ready
-      if (!submitFallback) setIsReady(true);
+      if (!submitFallback && !fallbackAttemptedRef.current) {
+        setGenerationIssue({
+          kind: 'submit',
+          title: 'We couldn’t start your devotional yet.',
+          message: 'Check your connection and try again. We won’t leave you stuck here.',
+          actionLabel: 'Try again',
+          canRetry: false,
+        });
+      }
       return;
     }
 
+    let cancelled = false;
+    pollStartedAtRef.current = Date.now();
+    consecutivePollErrorsRef.current = 0;
+    pollInFlightRef.current = false;
+    setGenerationIssue(null);
+
+    const stopWithIssue = (issue: GenerationIssue) => {
+      if (cancelled) return;
+      setGenerationIssue(issue);
+      clearPolling();
+    };
+
     const poll = async () => {
+      if (pollInFlightRef.current || readyCalledRef.current) return;
+      const startedAt = pollStartedAtRef.current ?? Date.now();
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        stopWithIssue({
+          kind: 'timeout',
+          title: 'This is taking longer than expected.',
+          message: 'Your devotional may still be finishing. Tap below and we’ll keep checking instead of leaving you on a spinner.',
+          actionLabel: 'Keep checking',
+          canRetry: true,
+        });
+        return;
+      }
+
+      pollInFlightRef.current = true;
       try {
-        const response = await pollJobStatus(activeJobId!);
-        if (response.status === 'complete' && response.result?.devotionalDay) {
+        const response = await pollJobStatus(activeJobId);
+        if (cancelled) return;
+        consecutivePollErrorsRef.current = 0;
+
+        if (response.status === 'complete') {
+          const normalizedResult = normalizeOnboardingGenerationJobResult(
+            response,
+            activeDevotionalId,
+          );
+
+          if (!normalizedResult) {
+            stopWithIssue({
+              kind: 'invalid',
+              title: 'Your devotional finished, but we couldn’t open it.',
+              message: 'Try again so we can reconnect the finished reading before you continue.',
+              actionLabel: 'Try again',
+              canRetry: true,
+            });
+            return;
+          }
+
           if (!readyCalledRef.current) {
             readyCalledRef.current = true;
-            onDevotionalReady(response.result);
+            onDevotionalReady(normalizedResult);
             setIsReady(true);
           }
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
+          clearPolling();
+          return;
+        }
+
+        if (response.status === 'failed') {
+          stopWithIssue({
+            kind: 'failed',
+            title: 'We couldn’t finish that reading.',
+            message: 'Something interrupted generation. Try again and we’ll restart it safely.',
+            actionLabel: 'Try again',
+            canRetry: response.canRetry !== false || Boolean(submitFallback),
+          });
         }
       } catch {
-        // Silent — keep polling
+        if (cancelled) return;
+        consecutivePollErrorsRef.current += 1;
+        if (consecutivePollErrorsRef.current >= MAX_CONSECUTIVE_POLL_ERRORS) {
+          stopWithIssue({
+            kind: 'poll',
+            title: 'We lost the connection for a moment.',
+            message: 'Try again and we’ll keep checking your devotional.',
+            actionLabel: 'Try again',
+            canRetry: true,
+          });
+        }
+      } finally {
+        pollInFlightRef.current = false;
       }
     };
 
@@ -369,12 +530,58 @@ export function DevotionalSegue({
     pollingRef.current = setInterval(poll, POLL_INTERVAL_MS);
 
     return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
+      cancelled = true;
+      clearPolling();
     };
-  }, [activeJobId, onDevotionalReady]);
+  }, [activeDevotionalId, activeJobId, clearPolling, onDevotionalReady, pollCycle, submitFallback]);
+
+  const handleRetry = useCallback(async () => {
+    if (isRetrying) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsRetrying(true);
+    setGenerationIssue(null);
+    setIsReady(false);
+    setShowReadyReveal(false);
+    readyCalledRef.current = false;
+    consecutivePollErrorsRef.current = 0;
+
+    try {
+      if (generationIssue?.kind === 'failed' && activeJobId) {
+        try {
+          const retryResponse = await retryJob(activeJobId);
+          setActiveJobId(retryResponse.jobId ?? activeJobId);
+          setPollCycle((value) => value + 1);
+          return;
+        } catch {
+          if (!submitFallback) throw new Error('Failed to retry onboarding generation job');
+        }
+      }
+
+      if (generationIssue?.kind === 'timeout' && activeJobId) {
+        setPollCycle((value) => value + 1);
+        return;
+      }
+
+      if (submitFallback) {
+        fallbackAttemptedRef.current = true;
+        await startFallbackSubmission();
+        return;
+      }
+
+      setPollCycle((value) => value + 1);
+    } catch {
+      setGenerationIssue({
+        kind: 'submit',
+        title: 'We couldn’t restart your devotional yet.',
+        message: 'Check your connection and try again in a moment.',
+        actionLabel: 'Try again',
+        canRetry: true,
+      });
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [activeJobId, generationIssue, isRetrying, startFallbackSubmission, submitFallback]);
 
   /* ── Theatrical completion ── */
   const handleTheatricalComplete = useCallback(() => {
@@ -396,6 +603,11 @@ export function DevotionalSegue({
         duration: 300,
         easing: Easing.out(Easing.cubic),
       });
+    } else {
+      phase1Opacity.value = withTiming(1, {
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+      });
     }
   }, [showReadyReveal, phase1Opacity]);
 
@@ -409,7 +621,34 @@ export function DevotionalSegue({
       <View style={{ flex: 0.6 }} />
 
       {/* Phase 1: Theatrical reveal — heading above orbital */}
-      {!showReadyReveal && (
+      {generationIssue && (
+        <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}>
+          <Text
+            style={{
+              fontFamily: FontFamily.display,
+              fontSize: 32,
+              color: colors.text,
+              lineHeight: 42,
+            }}
+          >
+            {generationIssue.title}
+          </Text>
+
+          <Text
+            style={{
+              fontFamily: FontFamily.body,
+              fontSize: 16,
+              color: colors.textMuted,
+              lineHeight: 24,
+              marginTop: Spacing['4'],
+            }}
+          >
+            {generationIssue.message}
+          </Text>
+        </Animated.View>
+      )}
+
+      {!generationIssue && !showReadyReveal && (
         <Animated.View style={phase1Style}>
           <TypewriterText text={OPENING_LINE} colors={colors} />
 
@@ -426,7 +665,7 @@ export function DevotionalSegue({
       )}
 
       {/* Phase 2: Ready reveal — larger heading, upper-middle */}
-      {showReadyReveal && (
+      {showReadyReveal && !generationIssue && (
         <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}>
           <Text
             style={{
@@ -457,8 +696,40 @@ export function DevotionalSegue({
       {/* Bottom spacer — larger to push content upward */}
       <View style={styles.flex1} />
 
+      {/* Recovery Button — only if preparation failed or timed out */}
+      {generationIssue && generationIssue.canRetry && (
+        <Animated.View
+          entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(200).easing(Ease.out)}
+          style={{ paddingBottom: Math.max(insets.bottom, Spacing['4']) }}
+        >
+          <TouchableOpacity
+            activeOpacity={0.7}
+            disabled={isRetrying}
+            onPress={handleRetry}
+            style={{
+              backgroundColor: colors.accent,
+              paddingVertical: Spacing['4'],
+              borderRadius: Radius.md,
+              alignItems: 'center',
+              opacity: isRetrying ? 0.65 : 1,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: FontFamily.uiMedium,
+                fontSize: FontSize.base,
+                color: colors.background,
+                letterSpacing: 0.3,
+              }}
+            >
+              {isRetrying ? 'Trying again…' : generationIssue.actionLabel}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       {/* CTA Button — only in Phase 2 */}
-      {showReadyReveal && (
+      {showReadyReveal && !generationIssue && (
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).delay(500).easing(Ease.out)}
           style={{ paddingBottom: Math.max(insets.bottom, Spacing['4']) }}
