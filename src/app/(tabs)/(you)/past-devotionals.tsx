@@ -51,13 +51,31 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
 
   // Update animation when tab changes — fast ease-out, no bounce
   const prevIndex = useRef(activeIndex);
-  if (prevIndex.current !== activeIndex && segmentWidth > 0) {
-    indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-    });
-    prevIndex.current = activeIndex;
-  }
+  const containerWidthRef = useRef(0);
+
+  useEffect(() => {
+    if (segmentWidth <= 0) return;
+
+    const widthChanged = containerWidthRef.current !== containerWidth;
+    const tabChanged = prevIndex.current !== activeIndex;
+    const targetX = activeIndex * segmentWidth;
+
+    // When containerWidth changes and we know the index, set position without animation.
+    if (widthChanged) {
+      containerWidthRef.current = containerWidth;
+      indicatorTranslateX.value = targetX;
+      prevIndex.current = activeIndex;
+      return;
+    }
+
+    if (tabChanged) {
+      indicatorTranslateX.value = withTiming(activeIndex * segmentWidth, {
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+      });
+      prevIndex.current = activeIndex;
+    }
+  }, [activeIndex, containerWidth, indicatorTranslateX, segmentWidth]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorTranslateX.value }],
@@ -68,13 +86,6 @@ function SegmentedControl({ activeTab, onTabChange }: SegmentedControlProps) {
     const width = e.nativeEvent.layout.width;
     setContainerWidth(width);
   }, []);
-
-  // When containerWidth changes and we know the index, set position without animation
-  const containerWidthRef = useRef(0);
-  if (containerWidth > 0 && containerWidthRef.current !== containerWidth) {
-    containerWidthRef.current = containerWidth;
-    indicatorTranslateX.value = activeIndex * ((containerWidth - 4) / 2);
-  }
 
   const handlePress = useCallback(
     (tab: PastSeriesTab) => {

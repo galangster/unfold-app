@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeInRight,
+  cancelAnimation,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -42,16 +43,31 @@ const VALID_TABS: Tab[] = ['journal', 'highlights', 'bookmarks'];
 const VALID_TYPES: HighlightTypeFilter[] = ['all', 'notes', 'highlights'];
 const VALID_SOURCES: HighlightSourceFilter[] = ['all', 'devotional', 'bible'];
 
+function getInitialTab(tab?: string): Tab {
+  return tab && (VALID_TABS as string[]).includes(tab) ? (tab as Tab) : 'journal';
+}
+
 export default function MyContentScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const reducedMotion = useReducedMotion();
   const { handleBack } = useCrossTabBack();
   const params = useLocalSearchParams<{ tab?: string; source?: string; type?: string; from?: string }>();
+  const isHomeEntry = params.from === 'home';
 
-  const [activeTab, setActiveTab] = useState<Tab>('journal');
+  const [activeTab, setActiveTab] = useState<Tab>(() => getInitialTab(params.tab));
   const [highlightTypeFilter, setHighlightTypeFilter] = useState<HighlightTypeFilter>('all');
   const [highlightSourceFilter, setHighlightSourceFilter] = useState<HighlightSourceFilter>('all');
+  const [suppressInitialContentMotion, setSuppressInitialContentMotion] = useState(isHomeEntry);
+
+  useEffect(() => {
+    if (!isHomeEntry) return;
+    setSuppressInitialContentMotion(false);
+  }, [isHomeEntry]);
+
+  const libraryContentEntering = suppressInitialContentMotion || reducedMotion
+    ? undefined
+    : FadeInRight.duration(Duration.normal).easing(Ease.out);
 
   // Re-sync param-driven state on every focus so repeat pushes with different
   // ?tab=… or ?source=… values actually take effect (useState initializer
@@ -336,7 +352,7 @@ export default function MyContentScreen() {
       {/* Tab Content */}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing['5'] }}>
         {activeTab === 'journal' && (
-          <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(Duration.slow).easing(Ease.out)}>
+          <Animated.View entering={libraryContentEntering}>
             {filteredJournal.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 60, paddingHorizontal: Spacing['10'] }}>
                 <View
@@ -462,7 +478,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'highlights' && (
-          <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(Duration.slow).easing(Ease.out)}>
+          <Animated.View entering={libraryContentEntering}>
             {/* Source filter chips */}
             <View
               style={{
@@ -644,7 +660,7 @@ export default function MyContentScreen() {
         )}
 
         {activeTab === 'bookmarks' && (
-          <Animated.View entering={reducedMotion ? undefined : FadeInRight.duration(Duration.slow).easing(Ease.out)}>
+          <Animated.View entering={libraryContentEntering}>
             {filteredBookmarks.length === 0 ? (
               <EmptyState
                 icon={BookmarkSimpleIcon}
@@ -732,12 +748,18 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: typeof PencilLineIc
   // Gentle breathing pulse on the icon
   const iconPulse = useSharedValue(1);
   useEffect(() => {
+    if (reducedMotion) {
+      iconPulse.value = 1;
+      return () => cancelAnimation(iconPulse);
+    }
+
     iconPulse.value = withRepeat(
       withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
       -1,
       true
     );
-  }, [iconPulse]);
+    return () => cancelAnimation(iconPulse);
+  }, [iconPulse, reducedMotion]);
 
   const iconPulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: iconPulse.value }],

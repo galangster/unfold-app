@@ -35,7 +35,7 @@ export function BentoGrid() {
 
   return (
     <Animated.View
-      entering={entering(FadeIn.duration(Duration.normal).delay(150).easing(Ease.out))}
+      entering={entering(FadeIn.duration(Duration.normal).delay(260).easing(Ease.out))}
       style={styles.container}
     >
       <View style={styles.row}>

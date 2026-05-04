@@ -56,10 +56,20 @@ const LABEL_TEXT_MAX_SCALE = 1.14;
 
 const RevealChar = React.memo(function RevealChar({ char, animDelay }: { char: string; animDelay: number }) {
   const { colors } = useTheme();
+  const { reducedMotion } = useAccessibleAnimation();
   const opacity = useSharedValue(0);
   const colorProgress = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      colorProgress.value = 1;
+      return () => {
+        cancelAnimation(opacity);
+        cancelAnimation(colorProgress);
+      };
+    }
+
     opacity.value = withDelay(animDelay, withTiming(1, { duration: 600, easing: REVEAL_EASE }));
     colorProgress.value = withDelay(
       animDelay,
@@ -69,7 +79,7 @@ const RevealChar = React.memo(function RevealChar({ char, animDelay }: { char: s
       cancelAnimation(opacity);
       cancelAnimation(colorProgress);
     };
-  }, [animDelay, opacity, colorProgress]);
+  }, [animDelay, opacity, colorProgress, reducedMotion]);
 
   const containerStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
