@@ -1962,21 +1962,21 @@ export default function YouScreen() {
                 {/* --- QA Tools --- Internal QA affordances for notification/reveal verification builds. */}
                 <SectionHeader label={__DEV__ ? "Dev Tools" : "QA Tools"} />
 
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => router.push('/onboarding')}
-              style={{
-                padding: Spacing['4'],
-                borderRadius: Radius.md,
-                backgroundColor: 'rgba(200, 165, 92, 0.1)',
-                alignItems: 'center',
-                marginBottom: Spacing['3'],
-              }}
-            >
-              <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
-                Replay Onboarding (Dev)
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => router.push('/debug-reset-beginning')}
+                  style={{
+                    padding: Spacing['4'],
+                    borderRadius: Radius.md,
+                    backgroundColor: 'rgba(200, 165, 92, 0.1)',
+                    alignItems: 'center',
+                    marginBottom: Spacing['3'],
+                  }}
+                >
+                  <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 14, color: colors.accent }}>
+                    Reset to Beginning (QA)
+                  </Text>
+                </TouchableOpacity>
 
             <TouchableOpacity
               activeOpacity={0.7}

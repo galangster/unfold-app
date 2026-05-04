@@ -23,12 +23,20 @@ describe('debug seed routes', () => {
     path.join(__dirname, '../../app/debug-premium.tsx'),
     'utf-8',
   );
+  const debugResetBeginningPath = path.join(__dirname, '../../app/debug-reset-beginning.tsx');
+  const debugResetBeginningSource = fs.existsSync(debugResetBeginningPath)
+    ? fs.readFileSync(debugResetBeginningPath, 'utf-8')
+    : '';
   const revenueCatSyncSource = fs.readFileSync(
     path.join(__dirname, '../../hooks/useRevenueCatSync.ts'),
     'utf-8',
   );
   const pastDevotionalsSource = fs.readFileSync(
     path.join(__dirname, '../../app/(tabs)/(you)/past-devotionals.tsx'),
+    'utf-8',
+  );
+  const youTabSource = fs.readFileSync(
+    path.join(__dirname, '../../app/(tabs)/(you)/index.tsx'),
     'utf-8',
   );
 
@@ -114,6 +122,35 @@ describe('debug seed routes', () => {
     expect(debugPremiumSource).toContain('setRevenueCatResolved();');
     expect(debugPremiumSource).not.toContain('updateUser({ isPremium');
     expect(debugPremiumSource).toContain("router.replace('/(tabs)/(you)');");
+  });
+
+  it('keeps the beginning reset route QA-gated and wipes only first-run QA state', () => {
+    expect(fs.existsSync(debugResetBeginningPath)).toBe(true);
+    expect(debugResetBeginningSource).toContain('isQaToolsEnabled()');
+    expect(debugResetBeginningSource).toContain('<Redirect href="/(tabs)/(you)" />');
+    expect(debugResetBeginningSource).toContain('await cancelAllReminders();');
+    expect(debugResetBeginningSource).toContain('useUnfoldStore.getState().reset();');
+    expect(debugResetBeginningSource).toContain('useCompanionChatStore.getState().clearAllConversations();');
+    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('unfold-storage');");
+    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('unfold-companion-chat');");
+    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('@unfold_companion_daily');");
+    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('@unfold_exclusive_offer_seen');");
+    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('@unfold_onboarding_offer_seen');");
+    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('inflight-generation-job');");
+    expect(debugResetBeginningSource).toContain('ui.setQaPremiumOverride(false);');
+    expect(debugResetBeginningSource).toContain('ui.setDebugForceTrialExpired(false);');
+    expect(debugResetBeginningSource).toContain('useUIState.setState({ revenueCatResolved: false });');
+    expect(debugResetBeginningSource).toContain('router.dismissAll();');
+    expect(debugResetBeginningSource).toContain("router.replace('/');");
+    expect(debugResetBeginningSource).not.toContain('updateUser({ isPremium');
+    expect(debugResetBeginningSource).not.toContain('clearAll();');
+    expect(debugResetBeginningSource).not.toContain("mmkvStorage.removeItem('unfold-device-id');");
+  });
+
+  it('routes the QA tools replay button through the true beginning reset route', () => {
+    expect(youTabSource).toContain('Reset to Beginning (QA)');
+    expect(youTabSource).toContain("router.push('/debug-reset-beginning')");
+    expect(youTabSource).not.toContain("onPress={() => router.push('/onboarding')}");
   });
 
   it('keeps RevenueCat sync as the persisted premium mirror source of truth', () => {
