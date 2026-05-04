@@ -1,9 +1,14 @@
 import {
+  buildOnboardingSampleDevotionalId,
   normalizeOnboardingGenerationJobResult,
   normalizeOnboardingSubmitResult,
 } from '../onboarding-generation-result';
 
 describe('onboarding generation result helpers', () => {
+  it('builds the backend-owned onboarding sample devotional id from the device id', () => {
+    expect(buildOnboardingSampleDevotionalId('device-123')).toBe('onboarding-sample-anon_device-123');
+  });
+
   it('keeps legacy string submit fallback results working', () => {
     expect(normalizeOnboardingSubmitResult('job-123')).toEqual({
       jobId: 'job-123',

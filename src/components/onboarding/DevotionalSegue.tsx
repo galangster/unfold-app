@@ -20,8 +20,10 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
-import { pollJobStatus, retryJob } from '@/lib/generation-api';
+import { ApiError, findCompletedJob, pollJobStatus, retryJob } from '@/lib/generation-api';
+import { getDeviceId } from '@/lib/mmkv-storage';
 import {
+  buildOnboardingSampleDevotionalId,
   normalizeOnboardingGenerationJobResult,
   normalizeOnboardingSubmitResult,
   type OnboardingGenerationResult,
@@ -94,6 +96,14 @@ const ORBIT_PERIOD_MS = 3000;
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 90_000;
 const MAX_CONSECUTIVE_POLL_ERRORS = 4;
+
+function isExistingOnboardingSampleError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.code === 'DEVOTIONAL_ALREADY_EXISTS'
+  );
+}
 
 /* ── Orbital Dot ───────────────────────────────────────────────────── */
 
@@ -391,6 +401,32 @@ export function DevotionalSegue({
     }
   }, [devotionalId, jobId]);
 
+  const recoverCompletedOnboardingSample = useCallback(async (): Promise<boolean> => {
+    const recoveryDevotionalId =
+      activeDevotionalId ?? buildOnboardingSampleDevotionalId(getDeviceId());
+    const completedJob = await findCompletedJob(recoveryDevotionalId, 1);
+    const normalizedResult = completedJob
+      ? normalizeOnboardingGenerationJobResult(completedJob, recoveryDevotionalId)
+      : null;
+
+    if (!completedJob || !normalizedResult) {
+      return false;
+    }
+
+    clearPolling();
+    setActiveJobId(completedJob.jobId);
+    setActiveDevotionalId(normalizedResult.devotionalId);
+    setGenerationIssue(null);
+
+    if (!readyCalledRef.current) {
+      readyCalledRef.current = true;
+      onDevotionalReady(normalizedResult);
+      setIsReady(true);
+    }
+
+    return true;
+  }, [activeDevotionalId, clearPolling, onDevotionalReady]);
+
   const startFallbackSubmission = useCallback(async () => {
     if (!submitFallback) {
       setGenerationIssue({
@@ -403,13 +439,24 @@ export function DevotionalSegue({
       return;
     }
 
-    const result = normalizeOnboardingSubmitResult(await submitFallback());
-    setActiveJobId(result.jobId);
-    setActiveDevotionalId(result.devotionalId);
-    setGenerationIssue(null);
-    consecutivePollErrorsRef.current = 0;
-    setPollCycle((value) => value + 1);
-  }, [submitFallback]);
+    try {
+      const result = normalizeOnboardingSubmitResult(await submitFallback());
+      setActiveJobId(result.jobId);
+      setActiveDevotionalId(result.devotionalId);
+      setGenerationIssue(null);
+      consecutivePollErrorsRef.current = 0;
+      setPollCycle((value) => value + 1);
+    } catch (error) {
+      if (
+        isExistingOnboardingSampleError(error) &&
+        (await recoverCompletedOnboardingSample())
+      ) {
+        return;
+      }
+
+      throw error;
+    }
+  }, [recoverCompletedOnboardingSample, submitFallback]);
 
   /* ── Fallback: submit job if none provided ── */
   useEffect(() => {
@@ -438,6 +485,10 @@ export function DevotionalSegue({
           canRetry: false,
         });
       }
+      return;
+    }
+
+    if (readyCalledRef.current) {
       return;
     }
 

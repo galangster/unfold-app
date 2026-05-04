@@ -23,6 +23,10 @@ export type OnboardingGenerationJobLike = {
   result?: GenerationResultPayload | null;
 };
 
+export function buildOnboardingSampleDevotionalId(deviceId: string): string {
+  return `onboarding-sample-anon_${deviceId}`;
+}
+
 export function normalizeOnboardingSubmitResult(
   result: OnboardingSubmitResult,
 ): { jobId: string; devotionalId: string | null } {
