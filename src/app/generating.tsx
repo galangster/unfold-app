@@ -530,6 +530,9 @@ export default function GeneratingScreen() {
             devotionalLength: user.devotionalLength,
             bibleTranslation: user.bibleTranslation ?? 'BSB',
             writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
+            relationshipWithGod: user.relationshipWithGod,
+            growthGoals: user.growthGoals,
+            obstacles: user.obstacles,
           },
         });
 
@@ -647,6 +650,9 @@ export default function GeneratingScreen() {
               devotionalLength: user.devotionalLength,
               bibleTranslation: user.bibleTranslation ?? 'BSB',
               writingStyle: user.writingStyle as unknown as Record<string, string> | undefined,
+              relationshipWithGod: user.relationshipWithGod,
+              growthGoals: user.growthGoals,
+              obstacles: user.obstacles,
             },
           });
 

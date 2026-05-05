@@ -815,7 +815,7 @@ export const useUnfoldStore = create<UnfoldState>()(
       ...initialState,
 
       // User actions
-      setUser: (user) => set({ user }),
+      setUser: (user) => set({ user, userUpdatedAt: new Date().toISOString() }),
       updateUser: (updates) => {
         const current = get().user;
         if (!current) return;

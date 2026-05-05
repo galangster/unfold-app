@@ -167,6 +167,10 @@ describe('onboarding step helpers', () => {
       aboutMe: 'Building Unfold',
       currentSituation: 'I need peace in a launch week',
       aspiration: 'I want to trust God with the outcome',
+      tone: 'poetic' as const,
+      depth: 'theological' as const,
+      faithBackground: 'mature' as const,
+      lifeStage: 'building' as const,
       relationshipWithGod: 'ups-and-downs',
       growthGoals: ['pray more honestly'],
       obstacles: ['anxiety'],
@@ -191,6 +195,44 @@ describe('onboarding step helpers', () => {
         situation: 'I need peace in a launch week',
         seeking: 'I want to trust God with the outcome',
         bibleTranslation: 'ESV',
+        writingStyle: {
+          tone: 'poetic',
+          depth: 'theological',
+          faithBackground: 'mature',
+          lifeStage: 'building',
+        },
+      });
+    });
+
+    it('falls back to existing user writing style if returning flow skips style screens', () => {
+      const request = buildOnboardingSampleGenerationRequest({
+        answers: {
+          name: 'Nick',
+          aboutMe: 'Building Unfold',
+          currentSituation: 'I need peace in a launch week',
+          aspiration: 'I want to trust God with the outcome',
+          relationshipWithGod: 'ups-and-downs',
+          growthGoals: ['pray more honestly'],
+          obstacles: ['anxiety'],
+        },
+        existingUser: {
+          name: 'Nicholas',
+          aboutMe: 'Fallback',
+          bibleTranslation: 'BSB',
+          writingStyle: {
+            tone: 'direct',
+            depth: 'simple',
+            faithBackground: 'new',
+            lifeStage: 'student',
+          },
+        },
+      });
+
+      expect(request.userContext.writingStyle).toEqual({
+        tone: 'direct',
+        depth: 'simple',
+        faithBackground: 'new',
+        lifeStage: 'student',
       });
     });
 

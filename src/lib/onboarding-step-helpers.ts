@@ -4,6 +4,13 @@ type OnboardingStepLike = {
   skipIfHasValue?: boolean;
 };
 
+type WritingStyleLike = {
+  tone?: string | null;
+  depth?: string | null;
+  faithBackground?: string | null;
+  lifeStage?: string | null;
+};
+
 type ExistingUserLike = {
   id?: string | null;
   hasCompletedOnboarding?: boolean;
@@ -11,6 +18,7 @@ type ExistingUserLike = {
   aboutMe?: string | null;
   reminderTime?: string | null;
   bibleTranslation?: string | null;
+  writingStyle?: WritingStyleLike | null;
 } | null | undefined;
 
 type OnboardingSelectionContext = {
@@ -215,6 +223,10 @@ type OnboardingSampleAnswers = {
   currentSituation?: string | null;
   spiritualSeeking?: string | null;
   aspiration?: string | null;
+  tone?: string | null;
+  depth?: string | null;
+  faithBackground?: string | null;
+  lifeStage?: string | null;
   relationshipWithGod?: string | null;
   growthGoals?: string[] | null;
   obstacles?: string[] | null;
@@ -234,6 +246,12 @@ export type OnboardingSampleGenerationRequest = {
     devotionalType: string;
     readingDuration: number;
     bibleTranslation: string;
+    writingStyle: {
+      tone: string;
+      depth: string;
+      faithBackground: string;
+      lifeStage: string;
+    };
     relationshipWithGod: string;
     growthGoals: string[];
     obstacles: string[];
@@ -242,6 +260,22 @@ export type OnboardingSampleGenerationRequest = {
 
 function sampleValue(value: string | null | undefined): string {
   return typeof value === 'string' ? value : '';
+}
+
+function sampleWritingStyle(
+  answers: OnboardingSampleAnswers,
+  existingUser: ExistingUserLike,
+): OnboardingSampleGenerationRequest['userContext']['writingStyle'] {
+  const existing = existingUser?.writingStyle;
+  return {
+    tone: sampleValue(answers.tone).trim() || sampleValue(existing?.tone).trim() || 'warm',
+    depth: sampleValue(answers.depth).trim() || sampleValue(existing?.depth).trim() || 'balanced',
+    faithBackground:
+      sampleValue(answers.faithBackground).trim()
+      || sampleValue(existing?.faithBackground).trim()
+      || 'growing',
+    lifeStage: sampleValue(answers.lifeStage).trim() || sampleValue(existing?.lifeStage).trim() || 'building',
+  };
 }
 
 
@@ -266,6 +300,7 @@ export function buildOnboardingSampleGenerationRequest({
       devotionalType: '',
       readingDuration: 5,
       bibleTranslation: sampleValue(existingUser?.bibleTranslation).trim() || 'BSB',
+      writingStyle: sampleWritingStyle(answers, existingUser),
       relationshipWithGod: sampleValue(answers.relationshipWithGod).trim() || 'ups-and-downs',
       growthGoals: answers.growthGoals ?? [],
       obstacles: answers.obstacles ?? [],
