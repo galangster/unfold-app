@@ -71,7 +71,7 @@ export function CommitmentStep({ step, commitmentLevel, onSelect, onContinue, co
           {COMMITMENT_OPTIONS.map((option) => (
             <TouchableOpacity
               key={option.value}
-              activeOpacity={0.7}
+              activeOpacity={1}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 onSelect(option.value);

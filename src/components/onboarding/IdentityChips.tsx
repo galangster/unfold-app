@@ -84,11 +84,11 @@ export function IdentityChips({
                   paddingVertical: Spacing['2'],
                   borderRadius: Radius.xl,
                   backgroundColor: isSelected
-                    ? alpha(colors.accent, 0.13)
+                    ? alpha(colors.accent, 0.18)
                     : colors.inputBackground,
                   borderWidth: 1,
                   borderColor: isSelected
-                    ? alpha(colors.accent, 0.4)
+                    ? colors.accent
                     : colors.border,
                 }}
               >
@@ -96,7 +96,7 @@ export function IdentityChips({
                   style={{
                     fontFamily: isSelected ? FontFamily.uiMedium : FontFamily.ui,
                     fontSize: FontSize.sm,
-                    color: isSelected ? colors.text : colors.textMuted,
+                    color: isSelected ? colors.accent : colors.textMuted,
                   }}
                 >
                   {chip}

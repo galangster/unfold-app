@@ -163,6 +163,7 @@ const DEFAULT_SCRIPTURES = [
   { text: 'I am with you always, to the end of the age.', ref: 'Matthew 28:20' },
 ];
 const pickRandom = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+const selectedAccentSurface = (accent: string, opacity = 0.16) => alpha(accent, opacity);
 
 // MirrorBackContent type imported from devotional-service
 
@@ -180,11 +181,8 @@ interface ThemePillProps {
   onPress: () => void;
   selectionOrder?: number;
   colors: {
-    buttonBackgroundPressed: string;
     inputBackground: string;
-    borderFocused: string;
     border: string;
-    text: string;
     textMuted: string;
     accent: string;
     background: string;
@@ -195,7 +193,7 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
   const [isPressed, setIsPressed] = useState(false);
 
   return (
-    <TouchableOpacity activeOpacity={0.7}
+    <TouchableOpacity activeOpacity={1}
       onPress={onPress}
       onPressIn={() => setIsPressed(true)}
       onPressOut={() => setIsPressed(false)}
@@ -204,13 +202,17 @@ function ThemePill({ theme, isSelected, onPress, selectionOrder, colors }: Theme
         style={[
           obStyles.themePillContainer,
           {
-            backgroundColor: isSelected ? colors.buttonBackgroundPressed : isPressed ? colors.buttonBackgroundPressed : colors.inputBackground,
-            borderColor: isSelected ? colors.borderFocused : isPressed ? colors.borderFocused : colors.border,
+            backgroundColor: isSelected
+              ? selectedAccentSurface(colors.accent)
+              : isPressed
+                ? selectedAccentSurface(colors.accent, 0.10)
+                : colors.inputBackground,
+            borderColor: isSelected ? colors.accent : isPressed ? alpha(colors.accent, 0.65) : colors.border,
           },
         ]}
       >
         {theme.icon}
-        <Text style={[obStyles.themePillText, { color: isSelected ? colors.text : colors.textMuted }]}>
+        <Text style={[obStyles.themePillText, { color: isSelected ? colors.accent : colors.textMuted }]}>
           {theme.name}
         </Text>
         {selectionOrder !== undefined && (
@@ -1594,7 +1596,7 @@ export default function OnboardingScreen() {
         return (
           <View style={{ gap: Spacing['0'] }}>
             {/* Theme/Topic option */}
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={1}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({
@@ -1634,7 +1636,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
 
             {/* Study Type option */}
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={1}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({
@@ -1674,7 +1676,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
 
             {/* Just guide me option */}
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={1}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({
@@ -1854,7 +1856,7 @@ export default function OnboardingScreen() {
                   const needsSubject = TYPES_WITH_SUBJECT_SELECTION.includes(type.id);
                   
                   return (
-                    <TouchableOpacity activeOpacity={0.7}
+                    <TouchableOpacity activeOpacity={1}
                       key={type.id}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1867,12 +1869,12 @@ export default function OnboardingScreen() {
                       }}
                     >
                           <View style={{
-                            backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                            backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                             paddingHorizontal: 18,
                             paddingVertical: Spacing['4'],
                             borderRadius: Radius.md,
                             borderWidth: 1,
-                            borderColor: isSelected ? colors.borderFocused : colors.border,
+                            borderColor: isSelected ? colors.accent : colors.border,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: Spacing['3'],
@@ -1926,7 +1928,7 @@ export default function OnboardingScreen() {
             {characters.map((char) => {
               const isSelected = data.selectedStudySubject === char.name;
               return (
-                <TouchableOpacity activeOpacity={0.7}
+                <TouchableOpacity activeOpacity={1}
                   key={char.name}
                   style={{ width: '48%' }}
                   onPress={() => {
@@ -1938,12 +1940,12 @@ export default function OnboardingScreen() {
                   }}
                 >
                   <View style={{
-                    backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                    backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                     paddingHorizontal: 14,
                     paddingVertical: 12,
                     borderRadius: Radius.md,
                     borderWidth: 1,
-                    borderColor: isSelected ? colors.borderFocused : colors.border,
+                    borderColor: isSelected ? colors.accent : colors.border,
                     minHeight: 72,
                   }}>
                     <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.sm, color: colors.text }} numberOfLines={1}>{char.name}</Text>
@@ -1984,7 +1986,7 @@ export default function OnboardingScreen() {
               {subjects.map((subject) => {
                 const isSelected = data.selectedStudySubject === subject.id;
                 return (
-                  <TouchableOpacity activeOpacity={0.7}
+                  <TouchableOpacity activeOpacity={1}
                     key={subject.id}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1995,12 +1997,12 @@ export default function OnboardingScreen() {
                     }}
                   >
                         <View style={{
-                          backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                          backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                           paddingHorizontal: 18,
                           paddingVertical: Spacing['3.5'],
                           borderRadius: Radius.md,
                           borderWidth: 1,
-                          borderColor: isSelected ? colors.borderFocused : colors.border,
+                          borderColor: isSelected ? colors.accent : colors.border,
                         }}>
                           <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.base, color: colors.text }}>{subject.name}</Text>
                           <Text style={{ fontFamily: FontFamily.body, fontSize: 13, color: colors.textMuted, marginTop: 3, lineHeight: 18 }}>{subject.description}</Text>
@@ -2083,15 +2085,15 @@ export default function OnboardingScreen() {
                       paddingHorizontal: Spacing['3.5'],
                       paddingVertical: Spacing['2'],
                       borderRadius: Radius.xl,
-                      backgroundColor: isChipSelected ? alpha(colors.accent, 0.13) : colors.inputBackground,
+                      backgroundColor: isChipSelected ? selectedAccentSurface(colors.accent, 0.18) : colors.inputBackground,
                       borderWidth: 1,
-                      borderColor: isChipSelected ? alpha(colors.accent, 0.40) : colors.border,
+                      borderColor: isChipSelected ? colors.accent : colors.border,
                     }}
                   >
                     <Text style={{
                       fontFamily: isChipSelected ? FontFamily.uiMedium : FontFamily.ui,
                       fontSize: FontSize.sm,
-                      color: isChipSelected ? colors.text : colors.textMuted,
+                      color: isChipSelected ? colors.accent : colors.textMuted,
                     }}>
                       {chip}
                     </Text>
@@ -2202,7 +2204,7 @@ export default function OnboardingScreen() {
             const isLockedOption = false;
 
             return (
-              <TouchableOpacity activeOpacity={0.7}
+              <TouchableOpacity activeOpacity={1}
                 key={option.value}
                 onPress={() => {
                   if (isLockedOption) {
@@ -2223,12 +2225,12 @@ export default function OnboardingScreen() {
                 accessibilityLabel={isLockedOption ? `${option.label}, premium only` : option.label}
               >
                     <View style={{
-                      backgroundColor: colors.inputBackground,
+                      backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                       paddingHorizontal: Spacing['5'],
                       paddingVertical: 18,
                       borderRadius: Radius.lg,
-                      borderWidth: 1,
-                      borderColor: isLockedOption ? `${colors.border}80` : colors.border,
+                      borderWidth: isSelected ? 1.5 : 1,
+                      borderColor: isSelected ? colors.accent : isLockedOption ? `${colors.border}80` : colors.border,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'space-between',
@@ -2346,7 +2348,7 @@ export default function OnboardingScreen() {
 
           {/* CTA buttons */}
           <Animated.View entering={FadeIn.duration(600).delay(1600)} style={{ marginTop: Spacing['4'], gap: Spacing['3'] }}>
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={1}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setData((prev) => ({ ...prev, mirrorBackCommitted: true }));
@@ -2377,7 +2379,7 @@ export default function OnboardingScreen() {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={1}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 handleBack();
@@ -2603,7 +2605,7 @@ export default function OnboardingScreen() {
           {/* Bottom Continue button */}
           <Animated.View entering={FadeIn.delay(1800).duration(600)} style={{ paddingTop: Spacing['6'], paddingBottom: Spacing['4'] }}>
             <TouchableOpacity
-              activeOpacity={0.7}
+              activeOpacity={1}
               onPress={handleNext}
               style={{
                 backgroundColor: colors.accent,
@@ -2645,7 +2647,7 @@ export default function OnboardingScreen() {
               {faithOptions.map((opt) => {
                 const isSelected = data.faithBackground === opt.value;
                 return (
-                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                  <TouchableOpacity key={opt.value} activeOpacity={1}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, faithBackground: opt.value }));
@@ -2653,7 +2655,7 @@ export default function OnboardingScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                       paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
-                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
                   >
@@ -2683,7 +2685,7 @@ export default function OnboardingScreen() {
               {lifeOptions.map((opt) => {
                 const isSelected = data.lifeStage === opt.value;
                 return (
-                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                  <TouchableOpacity key={opt.value} activeOpacity={1}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, lifeStage: opt.value }));
@@ -2691,7 +2693,7 @@ export default function OnboardingScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                       paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
-                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
                   >
@@ -2739,14 +2741,14 @@ export default function OnboardingScreen() {
               {toneOptions.map((opt) => {
                 const isSelected = data.tone === opt.value;
                 return (
-                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                  <TouchableOpacity key={opt.value} activeOpacity={1}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, tone: opt.value }));
                     }}
                     style={{
                       paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
-                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
                   >
@@ -2779,7 +2781,7 @@ export default function OnboardingScreen() {
               {depthOptions.map((opt) => {
                 const isSelected = data.depth === opt.value;
                 return (
-                  <TouchableOpacity key={opt.value} activeOpacity={0.7}
+                  <TouchableOpacity key={opt.value} activeOpacity={1}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                       setData((prev) => ({ ...prev, depth: opt.value }));
@@ -2787,7 +2789,7 @@ export default function OnboardingScreen() {
                     style={{
                       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                       paddingVertical: Spacing['4'], paddingHorizontal: 18, borderRadius: Radius.card,
-                      backgroundColor: isSelected ? colors.buttonBackgroundPressed : colors.inputBackground,
+                      backgroundColor: isSelected ? selectedAccentSurface(colors.accent) : colors.inputBackground,
                       borderWidth: 1.5, borderColor: isSelected ? colors.accent : colors.border,
                     }}
                   >
@@ -2912,7 +2914,7 @@ export default function OnboardingScreen() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 }}>
             {currentStepIndex > 0 ? (
-              <TouchableOpacity activeOpacity={0.7}
+              <TouchableOpacity activeOpacity={1}
                 onPress={handleBack}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
@@ -2922,7 +2924,7 @@ export default function OnboardingScreen() {
                 <CaretLeftIcon size={24} color={colors.textMuted} weight="light" />
               </TouchableOpacity>
             ) : existingUser?.hasCompletedOnboarding ? (
-              <TouchableOpacity activeOpacity={0.7}
+              <TouchableOpacity activeOpacity={1}
                 onPress={() => router.back()}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }}
@@ -2937,7 +2939,7 @@ export default function OnboardingScreen() {
             
             {/* Continue button - hide for self-navigating steps */}
             {shouldShowOnboardingTopContinue({ canProceed: canProceed(), stepType: step.type }) ? (
-              <TouchableOpacity activeOpacity={0.7}
+              <TouchableOpacity activeOpacity={1}
                 onPress={handleNext}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={{ height: 40, justifyContent: 'center', paddingHorizontal: 8 }}

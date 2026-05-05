@@ -32,6 +32,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { CheckIcon, StarIcon } from 'phosphor-react-native';
+import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -43,6 +44,7 @@ import type { ColorTheme } from '@/constants/colors';
 import { EmberParticles } from '@/components/EmberParticles';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
 import {
   getThreeStepPaywallPrimaryAction,
   resolvePurchaseOutcome,
@@ -719,24 +721,26 @@ function ScreenPricing({
       <View style={styles.pricingRow}>
         {/* Monthly */}
         <TouchableOpacity
-          activeOpacity={0.7}
+          activeOpacity={1}
           onPress={() => onSelectPlan('monthly')}
           style={[
             styles.pricingCard,
             {
               width: PRICING_BOX_WIDTH,
-              backgroundColor: colors.inputBackground,
+              backgroundColor: selectedPlan === 'monthly'
+                ? alpha(colors.accent, 0.16)
+                : colors.inputBackground,
               borderColor:
                 selectedPlan === 'monthly' ? colors.accent : colors.border,
-              borderWidth: selectedPlan === 'monthly' ? 1.5 : 1,
+              borderWidth: selectedPlan === 'monthly' ? 2 : 1,
             },
           ]}
         >
           <Text
             style={{
-              fontFamily: FontFamily.uiMedium,
+              fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.uiMedium,
               fontSize: 11,
-              color: colors.textSubtle,
+              color: selectedPlan === 'monthly' ? colors.accent : colors.textSubtle,
               textTransform: 'uppercase',
               letterSpacing: 1.2,
             }}
@@ -781,23 +785,25 @@ function ScreenPricing({
             </View>
           )}
           <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => onSelectPlan('yearly')}
             style={[
               styles.pricingCard,
               {
-                backgroundColor: colors.inputBackground,
+                backgroundColor: selectedPlan === 'yearly'
+                  ? alpha(colors.accent, 0.16)
+                  : colors.inputBackground,
                 borderColor:
                   selectedPlan === 'yearly' ? colors.accent : colors.border,
-                borderWidth: selectedPlan === 'yearly' ? 1.5 : 1,
+                borderWidth: selectedPlan === 'yearly' ? 2 : 1,
               },
             ]}
           >
             <Text
               style={{
-                fontFamily: FontFamily.uiMedium,
+                fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.uiMedium,
                 fontSize: 11,
-                color: colors.textSubtle,
+                color: selectedPlan === 'yearly' ? colors.accent : colors.textSubtle,
                 textTransform: 'uppercase',
                 letterSpacing: 1.2,
               }}
@@ -1273,6 +1279,21 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
           purchaseError={purchaseError}
           onPress={handleCTAPress}
         />
+        {isQaToolsEnabled() && currentPage === totalPages - 1 && (
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              onSkip();
+            }}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Continue without premium for QA"
+            style={styles.qaSkipButton}
+          >
+            <Text style={[styles.qaSkipText, { color: colors.accent }]}>Continue for QA</Text>
+          </TouchableOpacity>
+        )}
         <View
           style={{
             alignSelf: 'center',
@@ -1585,5 +1606,16 @@ const styles = StyleSheet.create({
     // shadowOpacity is animated by GlowingCTA — this is the max/fallback.
     shadowOpacity: Platform.OS === 'ios' ? 1 : 0,
     elevation: 18,
+  },
+  qaSkipButton: {
+    alignSelf: 'center',
+    marginTop: Spacing['2.5'],
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['1.5'],
+  },
+  qaSkipText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.xs,
+    letterSpacing: 0.2,
   },
 });

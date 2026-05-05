@@ -11,6 +11,7 @@ import Constants from 'expo-constants';
 import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
 import { GoldEmberField } from '@/components/home/GoldEmberField';
+import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -750,7 +751,7 @@ export default function PaywallScreen() {
         {/* Plan selection — stacked full-width cards */}
         <View style={{ gap: Spacing['2'], marginBottom: 14 }}>
           <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSelectedPlan('yearly');
@@ -765,8 +766,8 @@ export default function PaywallScreen() {
               paddingVertical: 14,
               paddingHorizontal: 18,
               borderRadius: Radius.md,
-              backgroundColor: selectedPlan === 'yearly' ? `${colors.accent}18` : 'transparent',
-              borderWidth: 1.5,
+              backgroundColor: selectedPlan === 'yearly' ? alpha(colors.accent, 0.16) : 'transparent',
+              borderWidth: selectedPlan === 'yearly' ? 2 : 1.5,
               borderColor: selectedPlan === 'yearly' ? colors.accent : colors.border,
             }}
           >
@@ -775,7 +776,7 @@ export default function PaywallScreen() {
                 style={{
                   fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
                   fontSize: 15,
-                  color: selectedPlan === 'yearly' ? colors.text : colors.textMuted,
+                  color: selectedPlan === 'yearly' ? colors.accent : colors.textMuted,
                 }}
               >
                 Yearly
@@ -792,7 +793,7 @@ export default function PaywallScreen() {
               style={{
                 fontFamily: selectedPlan === 'yearly' ? FontFamily.uiSemiBold : FontFamily.ui,
                 fontSize: 15,
-                color: selectedPlan === 'yearly' ? colors.text : colors.textMuted,
+                color: selectedPlan === 'yearly' ? colors.accent : colors.textMuted,
               }}
             >
               {perMonthFromYearly}/mo
@@ -800,7 +801,7 @@ export default function PaywallScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            activeOpacity={0.7}
+            activeOpacity={1}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSelectedPlan('monthly');
@@ -815,8 +816,8 @@ export default function PaywallScreen() {
               paddingVertical: 14,
               paddingHorizontal: 18,
               borderRadius: Radius.md,
-              backgroundColor: selectedPlan === 'monthly' ? `${colors.accent}18` : 'transparent',
-              borderWidth: 1.5,
+              backgroundColor: selectedPlan === 'monthly' ? alpha(colors.accent, 0.16) : 'transparent',
+              borderWidth: selectedPlan === 'monthly' ? 2 : 1.5,
               borderColor: selectedPlan === 'monthly' ? colors.accent : colors.border,
             }}
           >
@@ -824,7 +825,7 @@ export default function PaywallScreen() {
               style={{
                 fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.ui,
                 fontSize: 15,
-                color: selectedPlan === 'monthly' ? colors.text : colors.textMuted,
+                color: selectedPlan === 'monthly' ? colors.accent : colors.textMuted,
               }}
             >
               Monthly
@@ -833,7 +834,7 @@ export default function PaywallScreen() {
               style={{
                 fontFamily: selectedPlan === 'monthly' ? FontFamily.uiSemiBold : FontFamily.ui,
                 fontSize: 15,
-                color: selectedPlan === 'monthly' ? colors.text : colors.textMuted,
+                color: selectedPlan === 'monthly' ? colors.accent : colors.textMuted,
               }}
             >
               {monthlyPrice}/mo

@@ -4,6 +4,7 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import type { ColorTheme } from '@/constants/colors';
+import { alpha } from '@/components/ui';
 
 interface PillOption {
   value: string;
@@ -41,9 +42,7 @@ function Pill({ option, isSelected, onPress, disabled, colors, isDark }: {
         borderRadius: Radius['2xl'],
         borderWidth: 1.5,
         borderColor: isSelected ? colors.accent : colors.border,
-        backgroundColor: isSelected
-          ? (isDark ? 'rgba(200, 165, 92, 0.15)' : 'rgba(154, 123, 60, 0.1)')
-          : 'transparent',
+        backgroundColor: isSelected ? alpha(colors.accent, 0.18) : 'transparent',
         opacity: disabled && !isSelected ? 0.4 : 1,
       }}
     >
