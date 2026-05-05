@@ -226,6 +226,7 @@ export default function ReadingScreen() {
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isCheckingForSyncedDay, setIsCheckingForSyncedDay] = useState(false);
+  const [isHydratingMissingDevotional, setIsHydratingMissingDevotional] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
   const [autoRetryTick, setAutoRetryTick] = useState(0);
@@ -246,6 +247,7 @@ export default function ReadingScreen() {
   const autoRetryAttemptsRef = useRef<Record<string, number>>({});
   const autoRetryTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const syncRecoveryAttemptRef = useRef<Record<string, boolean>>({});
+  const missingDevotionalHydrationAttemptRef = useRef<Record<string, boolean>>({});
 
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
@@ -1224,6 +1226,54 @@ export default function ReadingScreen() {
     void recoverSyncedDay('auto');
   }, [currentDevotional, currentDayData, isCheckingForSyncedDay, recoverSyncedDay]);
 
+  useEffect(() => {
+    const devotionalId = effectiveDevotionalId;
+    if (!devotionalId || currentDevotional || isHydratingMissingDevotional) return;
+    if (missingDevotionalHydrationAttemptRef.current[devotionalId]) return;
+
+    missingDevotionalHydrationAttemptRef.current[devotionalId] = true;
+    let cancelled = false;
+    setIsHydratingMissingDevotional(true);
+
+    void (async () => {
+      try {
+        const pulled = await pullDevotionalContent(devotionalId);
+        if (cancelled) return;
+
+        applyPulledDevotionalContent({
+          devotionalId,
+          pulled,
+          updateDevotionalDays,
+          updateDevotionals: (updater) => {
+            useUnfoldStore.setState((state) => ({
+              devotionals: updater(state.devotionals),
+            }));
+          },
+        });
+        setCurrentDevotional(devotionalId);
+
+        void logBugEvent('reading-sync-recovery', 'hydrated-missing-devotional-from-sync-pull', {
+          devotionalId,
+          pulledDays: pulled.days.length,
+          hasDevotionalMetadata: Boolean(pulled.devotional),
+        });
+      } catch (err) {
+        void logBugError('reading-sync-recovery', err, {
+          phase: 'missing-devotional-hydration',
+          devotionalId,
+        });
+      } finally {
+        if (!cancelled) {
+          setIsHydratingMissingDevotional(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveDevotionalId, currentDevotional, isHydratingMissingDevotional, setCurrentDevotional, updateDevotionalDays]);
+
   const fallbackBottomPadding = Math.max(insets.bottom + 96, 112);
 
   // Early returns after all hooks
@@ -1234,10 +1284,21 @@ export default function ReadingScreen() {
     viewingDay,
   });
   if (!currentDevotional) {
-    console.log('[Reading] RETURNING "No series found" — currentDevotional is null');
+    const shouldShowMissingSeriesRecovery = Boolean(
+      effectiveDevotionalId &&
+        (isHydratingMissingDevotional || !missingDevotionalHydrationAttemptRef.current[effectiveDevotionalId]),
+    );
+    console.log('[Reading] RETURNING missing-series state', {
+      effectiveDevotionalId,
+      shouldShowMissingSeriesRecovery,
+      isHydratingMissingDevotional,
+    });
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>No series found</Text>
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', gap: Spacing['3'] }}>
+        {shouldShowMissingSeriesRecovery && <ActivityIndicator color={colors.accent} />}
+        <Text style={{ fontFamily: FontFamily.body, color: colors.textMuted }}>
+          {shouldShowMissingSeriesRecovery ? 'Loading series…' : 'No series found'}
+        </Text>
       </View>
     );
   }

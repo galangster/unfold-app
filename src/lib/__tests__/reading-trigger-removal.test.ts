@@ -65,4 +65,11 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title)");
     expect(readingSource).not.toContain('addGeneratedDay(currentDevotional.id, recovered.devotionalDay)');
   });
+
+  it('hydrates a missing server-created series before showing the no-series fallback', () => {
+    expect(readingSource).toContain('missingDevotionalHydrationAttemptRef');
+    expect(readingSource).toContain('pullDevotionalContent(devotionalId)');
+    expect(readingSource).toContain('hydrated-missing-devotional-from-sync-pull');
+    expect(readingSource).toContain('Loading series…');
+  });
 });

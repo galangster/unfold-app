@@ -1,5 +1,6 @@
 import {
   applyPulledDevotionalContent,
+  applyPulledDevotionalContentToDevotionals,
   applyPulledDevotionalMetadataToDevotionals,
 } from '@/lib/devotional-pulled-content';
 import type { PulledDevotionalContent } from '@/lib/devotional-sync-pull';
@@ -93,6 +94,25 @@ describe('pulled devotional content application', () => {
 
     expect(updateDevotionalDays).not.toHaveBeenCalled();
     expect(updateDevotionals).not.toHaveBeenCalled();
+  });
+
+  it('creates a local series shell when pull returns server-generated content for a missing devotional', () => {
+    const result = applyPulledDevotionalContentToDevotionals(
+      [],
+      'devotional-1',
+      pulledContent(),
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'devotional-1',
+        title: 'The Names That Hold You',
+        totalDays: 14,
+        currentDay: 2,
+        generationMode: 'progressive',
+        days: [dayTwo],
+      }),
+    ]);
   });
 
   it('returns the original devotional array when metadata does not change anything', () => {
