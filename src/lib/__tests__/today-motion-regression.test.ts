@@ -5,6 +5,11 @@ const sourceRoot = path.join(__dirname, '../..');
 const readSource = (relativePath: string) => fs.readFileSync(path.join(sourceRoot, relativePath), 'utf-8');
 
 describe('Today tab motion guardrails', () => {
+  const todayLayoutSource = readSource('app/(tabs)/(today)/_layout.tsx');
+  const todayMyContentSource = readSource('app/(tabs)/(today)/my-content.tsx');
+  const todayPastDevotionalsSource = readSource('app/(tabs)/(today)/past-devotionals.tsx');
+  const todaySeriesDetailSource = readSource('app/(tabs)/(today)/series-detail.tsx');
+  const todayReadingSource = readSource('app/(tabs)/(today)/reading.tsx');
   const myContentSource = readSource('app/(tabs)/(you)/my-content.tsx');
   const pastDevotionalsSource = readSource('app/(tabs)/(you)/past-devotionals.tsx');
   const bentoGridSource = readSource('components/home/BentoGrid.tsx');
@@ -41,6 +46,27 @@ describe('Today tab motion guardrails', () => {
 
   it('orders Today section entrances from hero to context to streak to bento', () => {
     expect(bentoGridSource).toContain('FadeIn.duration(Duration.normal).delay(260).easing(Ease.out)');
+  });
+
+  it('opens Today bento library screens inside the Today stack so iOS back-swipe previews Today, not the hidden You stack', () => {
+    expect(todayLayoutSource).toContain('<Stack.Screen name="my-content"');
+    expect(todayLayoutSource).toContain('<Stack.Screen name="past-devotionals"');
+    expect(todayLayoutSource).toContain('<Stack.Screen name="series-detail"');
+    expect(todayMyContentSource).toContain("export { default } from '../(you)/my-content';");
+    expect(todayPastDevotionalsSource).toContain("export { default } from '../(you)/past-devotionals';");
+    expect(todaySeriesDetailSource).toContain("export { default } from '../(you)/series-detail';");
+    expect(bentoGridSource).toContain("pathname: '/(tabs)/(today)/past-devotionals'");
+    expect(bentoGridSource).toContain("pathname: '/(tabs)/(today)/my-content'");
+    expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
+    expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
+    expect(todayReadingSource).toContain("pathname: '/(tabs)/(today)/my-content'");
+    expect(todayReadingSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
+  });
+
+  it('keeps devotional detail navigation in the Today stack when My Devotionals was opened from Today', () => {
+    expect(pastDevotionalsSource).toContain('const { handleBack, isFromHome } = useCrossTabBack();');
+    expect(pastDevotionalsSource).toContain("pathname: isFromHome ? '/(tabs)/(today)/series-detail' : '/(tabs)/(you)/series-detail'");
+    expect(pastDevotionalsSource).toContain('params: { id }');
   });
 
   it('respects reduced motion for the first-time Today title character reveal', () => {

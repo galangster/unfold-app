@@ -474,7 +474,7 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
 
 export default function PastDevotionalsScreen() {
   const router = useRouter();
-  const { handleBack } = useCrossTabBack();
+  const { handleBack, isFromHome } = useCrossTabBack();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const devotionals = useUnfoldStore((s) => s.devotionals);
@@ -548,8 +548,11 @@ export default function PastDevotionalsScreen() {
 
   const handleSelectDevotional = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/(tabs)/(you)/series-detail', params: { id } });
-  }, [router]);
+    router.push({
+      pathname: isFromHome ? '/(tabs)/(today)/series-detail' : '/(tabs)/(you)/series-detail',
+      params: { id },
+    });
+  }, [isFromHome, router]);
 
   const handleExportPDF = useCallback(async (devotional: Devotional) => {
     if (exportingId) return;

@@ -7,6 +7,7 @@ import { scheduleDevotionalReadyTapTestNotification } from '@/lib/notifications'
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
+import { useUIState } from '@/lib/ui-state';
 
 export default function DebugSeedNotificationTapScreen() {
   const { colors } = useTheme();
@@ -20,9 +21,13 @@ export default function DebugSeedNotificationTapScreen() {
     const run = async () => {
       const seeded = buildDevotionalSeed();
       const store = useUnfoldStore.getState();
+      const ui = useUIState.getState();
       store.removeDevotional(seeded.id);
       store.addDevotional(seeded);
       store.setCurrentDevotional(seeded.id);
+      ui.setQaPremiumOverride(true);
+      ui.setDebugForceTrialExpired(false);
+      ui.setRevenueCatResolved();
 
       const scheduled = await scheduleDevotionalReadyTapTestNotification(seeded, {
         dayNumber: seeded.currentDay,
@@ -32,8 +37,8 @@ export default function DebugSeedNotificationTapScreen() {
       if (cancelled) return;
       setStatus(
         scheduled
-          ? 'Notification scheduled. Tap the devotional-ready banner when it appears to verify tap-through routing.'
-          : 'Notification was not scheduled. Check notification permission on this simulator/device and try again.',
+          ? 'Notification scheduled and QA Premium granted for this session. Tap the devotional-ready banner when it appears to verify tap-through routing and notebook access.'
+          : 'QA Premium was granted for this session, but notification was not scheduled. Check notification permission on this simulator/device and try again.',
       );
     };
 

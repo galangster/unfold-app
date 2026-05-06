@@ -24,12 +24,12 @@ export function BentoGrid() {
     {
       label: 'My Devotionals',
       icon: BookOpenIcon,
-      pathname: '/(tabs)/(you)/past-devotionals',
+      pathname: '/(tabs)/(today)/past-devotionals',
     },
     {
       label: 'My Library',
       icon: BookmarksSimpleIcon,
-      pathname: '/(tabs)/(you)/my-content',
+      pathname: '/(tabs)/(today)/my-content',
     },
   ];
 

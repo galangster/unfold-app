@@ -2304,7 +2304,7 @@ export default function ReadingScreen() {
           onPress={() => {
             setBookmarkToast(false);
             router.push({
-              pathname: '/(tabs)/(you)/my-content',
+              pathname: '/(tabs)/(today)/my-content',
               params: { tab: 'bookmarks', from: 'home' },
             });
           }}

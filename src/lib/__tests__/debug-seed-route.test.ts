@@ -50,6 +50,14 @@ describe('debug seed routes', () => {
     expect(seedNotificationSource).toContain('store.addDevotional(seeded);');
   });
 
+  it('grants session-local QA premium while setting up notification tap QA without persisting premium', () => {
+    expect(seedNotificationSource).toContain('const ui = useUIState.getState();');
+    expect(seedNotificationSource).toContain('ui.setQaPremiumOverride(true);');
+    expect(seedNotificationSource).toContain('ui.setDebugForceTrialExpired(false);');
+    expect(seedNotificationSource).toContain('ui.setRevenueCatResolved();');
+    expect(seedNotificationSource).not.toContain('updateUser({ isPremium');
+  });
+
   it('keeps the Today seed route QA-gated and refreshes the active Today devotional', () => {
     expect(seedTodaySource).toContain('isQaToolsEnabled()');
     expect(seedTodaySource).toContain('<Redirect href="/(tabs)/(you)" />');
