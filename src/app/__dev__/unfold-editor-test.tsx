@@ -1,7 +1,19 @@
 import { Asset } from 'expo-asset';
-import { Stack } from 'expo-router';
+import { Redirect, Stack, useLocalSearchParams } from 'expo-router';
 import * as React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import {
+  buildNotebookRuntimeFuzzCases,
+  evaluateNotebookRuntimeFuzzCase,
+  summarizeNotebookRuntimeFuzzResults,
+  type NotebookRuntimeFuzzCase,
+  type NotebookRuntimeFuzzCommand,
+  type NotebookRuntimeFuzzResult,
+  type NotebookRuntimeFuzzSummary,
+} from '@/lib/notebook-runtime-fuzz';
+import { isQaToolsEnabled } from '@/lib/qa-tools';
+
 import {
   UnfoldEditor,
   type UnfoldEditorBlockType,
@@ -19,6 +31,7 @@ import {
  * bridge. Tap any command → tap `getHtml` to see the updated HTML.
  *
  * Route: /__dev__/unfold-editor-test  (deep: unfold://__dev__/unfold-editor-test)
+ * Runtime fuzz: /__dev__/unfold-editor-test?autoFuzz=1&limit=20
  */
 const SEED_HTML = `
   <h1>John 3:16</h1>
@@ -46,16 +59,67 @@ const SEED_HTML = `
   <p>See also Romans 8:28 and 1 Corinthians 13:4-7.</p>
 `;
 
+const MANUAL_EDITOR_CASE: NotebookRuntimeFuzzCase = {
+  id: 'manual-seed',
+  label: 'manual command seed',
+  category: 'rich-blocks',
+  initialHtml: SEED_HTML,
+  commands: [{ type: 'get-html' }],
+  expectedNeedles: ['John 3:16'],
+};
+
+const NOTEBOOK_RUNTIME_FUZZ_CASE_PREFIX = 'NOTEBOOK_RUNTIME_FUZZ_CASE';
+const NOTEBOOK_RUNTIME_FUZZ_SUMMARY = 'NOTEBOOK_RUNTIME_FUZZ_SUMMARY';
+const FUZZ_CASE_REMOUNT_DELAY_MS = 160;
+const FUZZ_COMMAND_DELAY_MS = 50;
+
 type ButtonSpec = {
   label: string;
   onPress: () => void;
 };
 
+type FuzzStatus = {
+  state: 'idle' | 'running' | 'passed' | 'failed';
+  index: number;
+  total: number;
+  activeId?: string;
+  summary?: NotebookRuntimeFuzzSummary;
+  lastResult?: NotebookRuntimeFuzzResult;
+  error?: string;
+};
+
+type EditorRefObject = React.RefObject<UnfoldEditorRef | null>;
+
 export default function UnfoldEditorTestScreen() {
+  const params = useLocalSearchParams<{
+    autoFuzz?: string | string[];
+    caseId?: string | string[];
+    limit?: string | string[];
+  }>();
+  const qaToolsEnabled = isQaToolsEnabled();
+  const autoFuzzEnabled = isTruthyParam(firstParam(params.autoFuzz));
+  const requestedCaseId = firstParam(params.caseId);
+  const requestedLimit = parsePositiveInt(firstParam(params.limit));
+
   const editorRef = React.useRef<UnfoldEditorRef>(null);
   const [selectionState, setSelectionState] =
     React.useState<UnfoldEditorSelectionState | null>(null);
   const [htmlChangeCount, setHtmlChangeCount] = React.useState(0);
+  const [activeFuzzCase, setActiveFuzzCase] =
+    React.useState<NotebookRuntimeFuzzCase>(MANUAL_EDITOR_CASE);
+  const [fuzzStatus, setFuzzStatus] = React.useState<FuzzStatus>({
+    state: 'idle',
+    index: 0,
+    total: 0,
+  });
+  const fuzzRunningRef = React.useRef(false);
+  const autoFuzzStartedRef = React.useRef(false);
+
+  const allFuzzCases = React.useMemo(() => buildNotebookRuntimeFuzzCases(), []);
+  const selectedFuzzCases = React.useMemo(
+    () => selectFuzzCases(allFuzzCases, requestedCaseId, requestedLimit),
+    [allFuzzCases, requestedCaseId, requestedLimit],
+  );
 
   const handleSelectionChange = React.useCallback(
     (event: UnfoldEditorSelectionChangeEvent) => {
@@ -75,6 +139,110 @@ export default function UnfoldEditorTestScreen() {
     const html = await editorRef.current?.getHtml();
     Alert.alert('getHtml()', html ?? '(empty)');
   }, []);
+
+  const runFuzzMatrix = React.useCallback(async () => {
+    if (fuzzRunningRef.current) {
+      return;
+    }
+
+    fuzzRunningRef.current = true;
+    const results: NotebookRuntimeFuzzResult[] = [];
+
+    try {
+      if (selectedFuzzCases.length === 0) {
+        const failure = requestedCaseId
+          ? `no fuzz cases selected for caseId=${requestedCaseId}`
+          : 'no fuzz cases selected';
+        const emptySelectionResult: NotebookRuntimeFuzzResult = {
+          id: 'no-fuzz-cases-selected',
+          label: 'no fuzz cases selected',
+          category: 'plain-writing',
+          passed: false,
+          failures: [failure],
+          finalHtmlLength: 0,
+        };
+        const summary = summarizeNotebookRuntimeFuzzResults([emptySelectionResult]);
+        console.error(
+          NOTEBOOK_RUNTIME_FUZZ_SUMMARY,
+          JSON.stringify({
+            summary,
+            failedResults: [emptySelectionResult],
+          }),
+        );
+        setFuzzStatus({
+          state: 'failed',
+          index: 0,
+          total: 0,
+          summary,
+          lastResult: emptySelectionResult,
+          error: failure,
+        });
+        return;
+      }
+
+      setFuzzStatus({
+        state: 'running',
+        index: 0,
+        total: selectedFuzzCases.length,
+      });
+
+      for (let index = 0; index < selectedFuzzCases.length; index += 1) {
+        const testCase = selectedFuzzCases[index];
+        setActiveFuzzCase(testCase);
+        setFuzzStatus({
+          state: 'running',
+          index: index + 1,
+          total: selectedFuzzCases.length,
+          activeId: testCase.id,
+          lastResult: results[results.length - 1],
+        });
+
+        await delay(FUZZ_CASE_REMOUNT_DELAY_MS);
+        const result = await runNotebookRuntimeFuzzCase(testCase, editorRef);
+        results.push(result);
+        console.log(NOTEBOOK_RUNTIME_FUZZ_CASE_PREFIX, JSON.stringify(result));
+      }
+
+      const summary = summarizeNotebookRuntimeFuzzResults(results);
+      const failedResults = results.filter((result) => !result.passed);
+      console.log(
+        NOTEBOOK_RUNTIME_FUZZ_SUMMARY,
+        JSON.stringify({
+          summary,
+          failedResults,
+        }),
+      );
+      setFuzzStatus({
+        state: summary.failed > 0 ? 'failed' : 'passed',
+        index: selectedFuzzCases.length,
+        total: selectedFuzzCases.length,
+        activeId: selectedFuzzCases[selectedFuzzCases.length - 1]?.id,
+        summary,
+        lastResult: results[results.length - 1],
+      });
+    } catch (err) {
+      const message = stringifyError(err);
+      console.error(NOTEBOOK_RUNTIME_FUZZ_SUMMARY, JSON.stringify({ error: message }));
+      setFuzzStatus({
+        state: 'failed',
+        index: results.length,
+        total: selectedFuzzCases.length,
+        error: message,
+        lastResult: results[results.length - 1],
+      });
+    } finally {
+      fuzzRunningRef.current = false;
+    }
+  }, [requestedCaseId, selectedFuzzCases]);
+
+  React.useEffect(() => {
+    if (!qaToolsEnabled || !autoFuzzEnabled || autoFuzzStartedRef.current) {
+      return;
+    }
+
+    autoFuzzStartedRef.current = true;
+    void runFuzzMatrix();
+  }, [autoFuzzEnabled, qaToolsEnabled, runFuzzMatrix]);
 
   const call = React.useCallback(
     (label: string, fn: () => Promise<unknown> | undefined) => {
@@ -116,6 +284,14 @@ export default function UnfoldEditorTestScreen() {
     }
   }, []);
 
+  const handleInsertLink = React.useMemo(
+    () =>
+      call('insertLink', () =>
+        editorRef.current?.insertLink('https://unfold.app/john-3-16')
+      ),
+    [call]
+  );
+
   const bridgeButtons: ButtonSpec[] = [
     { label: 'getHtml', onPress: handleGetHtml },
     { label: 'focus', onPress: call('focus', () => editorRef.current?.focus()) },
@@ -129,12 +305,14 @@ export default function UnfoldEditorTestScreen() {
     },
   ];
 
-  const handleInsertLink = React.useCallback(
-    call('insertLink', () =>
-      editorRef.current?.insertLink('https://unfold.app/john-3-16')
-    ),
-    [call]
-  );
+  const fuzzButtons: ButtonSpec[] = [
+    {
+      label: 'run fuzz',
+      onPress: () => {
+        void runFuzzMatrix();
+      },
+    },
+  ];
 
   const formatButtons: ButtonSpec[] = [
     {
@@ -199,13 +377,18 @@ export default function UnfoldEditorTestScreen() {
     { label: 'image', onPress: handleInsertImage },
   ];
 
+  if (!qaToolsEnabled) {
+    return <Redirect href="/(tabs)/(you)" />;
+  }
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'UnfoldEditor Day 8' }} />
       <UnfoldEditor
+        key={activeFuzzCase.id}
         ref={editorRef}
         style={styles.editor}
-        initialHtml={SEED_HTML}
+        initialHtml={activeFuzzCase.initialHtml}
         placeholder="Write a reflection…"
         editable
         keyboardAppearance="dark"
@@ -217,6 +400,25 @@ export default function UnfoldEditorTestScreen() {
         <Text style={styles.stateLabel}>
           html changes: {htmlChangeCount}
         </Text>
+        <Text style={styles.stateLabel}>
+          runtime fuzz: {fuzzStatus.state} {fuzzStatus.index}/{fuzzStatus.total}
+          {fuzzStatus.activeId ? ` · ${fuzzStatus.activeId}` : ''}
+        </Text>
+        {fuzzStatus.summary && (
+          <Text style={styles.stateLabel}>
+            passed {fuzzStatus.summary.passed}/{fuzzStatus.summary.total} · failed{' '}
+            {fuzzStatus.summary.failed}
+          </Text>
+        )}
+        {fuzzStatus.error && (
+          <Text style={styles.stateLabel}>error: {fuzzStatus.error}</Text>
+        )}
+        {fuzzStatus.lastResult && !fuzzStatus.lastResult.passed && (
+          <Text style={styles.stateLabel}>
+            last failure: {fuzzStatus.lastResult.id} ·{' '}
+            {fuzzStatus.lastResult.failures.slice(0, 2).join('; ')}
+          </Text>
+        )}
         {selectionState && (
           <View style={styles.stateRow}>
             {selectionState.bold && (
@@ -252,6 +454,7 @@ export default function UnfoldEditorTestScreen() {
         contentContainerStyle={styles.toolbarContent}
         showsVerticalScrollIndicator={false}
       >
+        <ButtonRow label="fuzz" buttons={fuzzButtons} />
         <ButtonRow label="bridge" buttons={bridgeButtons} />
         <ButtonRow label="format" buttons={formatButtons} />
         <ButtonRow label="block" buttons={blockButtons} />
@@ -286,6 +489,138 @@ function ButtonRow({
       </View>
     </View>
   );
+}
+
+async function runNotebookRuntimeFuzzCase(
+  testCase: NotebookRuntimeFuzzCase,
+  editorRef: EditorRefObject,
+): Promise<NotebookRuntimeFuzzResult> {
+  let finalHtml = '';
+  let error: string | null = null;
+
+  try {
+    const editor = await waitForEditorRef(editorRef);
+    for (const command of testCase.commands) {
+      await runFuzzCommand(editor, command);
+      await delay(FUZZ_COMMAND_DELAY_MS);
+    }
+    finalHtml = await editor.getHtml();
+  } catch (err) {
+    error = stringifyError(err);
+    finalHtml = (await editorRef.current?.getHtml().catch(() => '')) ?? '';
+  }
+
+  return evaluateNotebookRuntimeFuzzCase(testCase, { finalHtml, error });
+}
+
+async function runFuzzCommand(
+  editor: UnfoldEditorRef,
+  command: NotebookRuntimeFuzzCommand,
+): Promise<void> {
+  switch (command.type) {
+    case 'get-html':
+      await editor.getHtml();
+      return;
+    case 'focus':
+      await editor.focus();
+      return;
+    case 'blur':
+      await editor.blur();
+      return;
+    case 'toggle-bold':
+      await editor.toggleBold();
+      return;
+    case 'toggle-italic':
+      await editor.toggleItalic();
+      return;
+    case 'toggle-underline':
+      await editor.toggleUnderline();
+      return;
+    case 'toggle-strikethrough':
+      await editor.toggleStrikethrough();
+      return;
+    case 'set-block':
+      await editor.setBlockType(command.blockType);
+      return;
+    case 'set-list':
+      await editor.setList(command.listType);
+      return;
+    case 'clear-list':
+      await editor.clearList();
+      return;
+    case 'toggle-checklist':
+      await editor.toggleChecklist();
+      return;
+    case 'indent-list':
+      await editor.indentList();
+      return;
+    case 'outdent-list':
+      await editor.outdentList();
+      return;
+    case 'undo':
+      await editor.undo();
+      return;
+    case 'redo':
+      await editor.redo();
+      return;
+    case 'insert-link':
+      await editor.insertLink(command.url);
+      return;
+    case 'insert-scripture':
+      await editor.insertScripture(command.reference, command.text);
+      return;
+  }
+}
+
+async function waitForEditorRef(editorRef: EditorRefObject): Promise<UnfoldEditorRef> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (editorRef.current) {
+      return editorRef.current;
+    }
+    await delay(50);
+  }
+  throw new Error('native editor ref did not become ready');
+}
+
+function selectFuzzCases(
+  cases: readonly NotebookRuntimeFuzzCase[],
+  requestedCaseId: string | undefined,
+  requestedLimit: number | null,
+): NotebookRuntimeFuzzCase[] {
+  const filteredCases = requestedCaseId
+    ? cases.filter((testCase) => testCase.id === requestedCaseId)
+    : [...cases];
+
+  if (requestedLimit === null) {
+    return filteredCases;
+  }
+
+  return filteredCases.slice(0, requestedLimit);
+}
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function isTruthyParam(value: string | undefined): boolean {
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
+function parsePositiveInt(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function stringifyError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const styles = StyleSheet.create({

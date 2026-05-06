@@ -27,6 +27,20 @@ const linkedInput: NotePersistenceInput = {
   folderId: 'folder-1',
 };
 
+const visuallyEmptyEditorHtml = [
+  '<p><br></p>',
+  '<p> </p>',
+  '<p>&nbsp;</p>',
+  `<p>${'\u00a0'}</p>`,
+  `<p>${'\u200b'}</p>`,
+  `<p>${'\u2060'}</p>`,
+  '<p>&#8288;</p>',
+  '<p>&#x2060;</p>',
+  '<h1><br></h1>',
+  '<blockquote><p>&nbsp;</p></blockquote>',
+  '<ul><li><p></p></li></ul>',
+];
+
 describe('note-detail editor helpers', () => {
   it('treats blank title plus empty html paragraph as not meaningful', () => {
     expect(hasMeaningfulNoteContent({ title: '   ', html: '<p></p>' })).toBe(false);
@@ -38,6 +52,27 @@ describe('note-detail editor helpers', () => {
 
   it('treats non-empty html as meaningful even if title is blank', () => {
     expect(hasMeaningfulNoteContent({ title: '   ', html: '<p>Hello</p>' })).toBe(true);
+  });
+
+  it.each(visuallyEmptyEditorHtml)(
+    'treats visually empty editor html as not meaningful: %s',
+    (html) => {
+      expect(hasMeaningfulNoteContent({ title: '   ', html })).toBe(false);
+    },
+  );
+
+  it.each(visuallyEmptyEditorHtml)(
+    'normalizes visually empty native html to empty initial content: %s',
+    (html) => {
+      expect(normalizeNativeInitialHtml(html)).toBe('');
+    },
+  );
+
+  it('treats image-only editor html as meaningful content', () => {
+    const html = '<p><img src="file:///note-image.jpg" width="320" height="180" /></p>';
+
+    expect(hasMeaningfulNoteContent({ title: '   ', html })).toBe(true);
+    expect(normalizeNativeInitialHtml(html)).toBe(html);
   });
 
   it('builds a normalized persistence payload from note-detail inputs', () => {

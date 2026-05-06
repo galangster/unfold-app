@@ -22,7 +22,22 @@ export function hasMeaningfulNoteContent({
   title: string;
   html: string;
 }): boolean {
-  return Boolean(title.trim()) || Boolean(html && html !== '<p></p>');
+  return Boolean(title.trim()) || hasVisibleHtmlContent(html);
+}
+
+function hasVisibleHtmlContent(html: string): boolean {
+  if (/<(img|video|audio)\b[^>]*>/i.test(html)) {
+    return true;
+  }
+
+  const visibleText = html
+    .replace(/<br\s*\/?\s*>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(nbsp|#160|#x0*a0|zwnj|zwj|#8203|#x200b|#8204|#x200c|#8205|#x200d|#8288|#x0*2060);/gi, '')
+    .replace(/[\u00a0\u200b-\u200d\u2060\ufeff]/g, '')
+    .trim();
+
+  return visibleText.length > 0;
 }
 
 export function buildNotePersistencePayload({
@@ -110,8 +125,7 @@ export function getNativeBlockTypeCommand(
 }
 
 export function normalizeNativeInitialHtml(html: string): string {
-  const normalized = html.trim().toLowerCase();
-  if (normalized === '<p></p>' || normalized === '<p><br></p>') {
+  if (!hasVisibleHtmlContent(html)) {
     return '';
   }
 

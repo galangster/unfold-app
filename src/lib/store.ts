@@ -1758,13 +1758,10 @@ export const useUnfoldStore = create<UnfoldState>()(
 
       reorderFolders: (orderedIds) => {
         set((state) => ({
-          folders: orderedIds
-            .map((id, index) => {
-              const folder = state.folders.find((f) => f.id === id);
-              if (!folder) return null;
-              return { ...folder, sortOrder: index };
-            })
-            .filter(Boolean) as NoteFolder[],
+          folders: state.folders.map((folder) => {
+            const sortOrder = orderedIds.indexOf(folder.id);
+            return sortOrder === -1 ? folder : { ...folder, sortOrder };
+          }),
         }));
       },
 

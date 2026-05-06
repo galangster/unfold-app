@@ -515,7 +515,13 @@ export default function JournalHubScreen() {
   // Generalized undo state — supports both note and folder deletion
   type UndoAction =
     | { type: 'note'; note: Note }
-    | { type: 'folder'; folder: NoteFolder; affectedNoteIds: string[] };
+    | {
+        type: 'folder';
+        folder: NoteFolder;
+        folders: NoteFolder[];
+        affectedNoteIds: string[];
+        noteFolderIds: Record<string, string | undefined>;
+      };
   const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -896,6 +902,7 @@ export default function JournalHubScreen() {
 
             const plan = prepareJournalFolderDelete({
               folder,
+              folders,
               notes,
               descendantFolderIds: getDescendantFolderIds(folder.id),
               activeFolderId,
@@ -922,7 +929,7 @@ export default function JournalHubScreen() {
         { text: 'Cancel', style: 'cancel' },
       ]);
     },
-    [updateFolder, storeDeleteFolder, activeFolderId, notes, gate],
+    [updateFolder, storeDeleteFolder, activeFolderId, currentParentId, folders, notes, gate, getDescendantFolderIds],
   );
 
   const handleNoteDelete = useCallback(
@@ -950,12 +957,17 @@ export default function JournalHubScreen() {
         notes: [undoAction.note, ...state.notes],
       }));
     } else if (undoAction.type === 'folder') {
-      // Restore folder + reassign notes to it
+      // Restore deleted folder tree + each note's original folder placement
       useUnfoldStore.setState((state) => ({
-        folders: [...state.folders, undoAction.folder],
+        folders: [
+          ...state.folders.filter(
+            (folder) => !undoAction.folders.some((restoredFolder) => restoredFolder.id === folder.id),
+          ),
+          ...undoAction.folders,
+        ],
         notes: state.notes.map((n) =>
           undoAction.affectedNoteIds.includes(n.id)
-            ? { ...n, folderId: undoAction.folder.id }
+            ? { ...n, folderId: undoAction.noteFolderIds[n.id] }
             : n,
         ),
       }));
@@ -1704,6 +1716,7 @@ export default function JournalHubScreen() {
 
             const plan = prepareJournalFolderDelete({
               folder,
+              folders,
               notes,
               descendantFolderIds: getDescendantFolderIds(folderId),
               activeFolderId,

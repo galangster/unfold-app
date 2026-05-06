@@ -31,21 +31,36 @@ function note(overrides: Partial<Note> = {}): Note {
 }
 
 describe('journal folder delete helper', () => {
-  it('builds undo state from notes directly inside the deleted folder', () => {
+  it('builds undo state from every note and folder that would be removed', () => {
+    const root = folder({ id: 'folder-1' });
+    const child = folder({ id: 'child-1', name: 'Child', parentId: 'folder-1', sortOrder: 0 });
+    const grandchild = folder({ id: 'grandchild-1', name: 'Grandchild', parentId: 'child-1', sortOrder: 0 });
     const plan = prepareJournalFolderDelete({
-      folder: folder({ id: 'folder-1' }),
-      notes: [note({ id: 'a', folderId: 'folder-1' }), note({ id: 'b', folderId: 'other' })],
-      descendantFolderIds: ['child-1'],
+      folder: root,
+      folders: [root, child, grandchild],
+      notes: [
+        note({ id: 'a', folderId: 'folder-1' }),
+        note({ id: 'b', folderId: 'child-1' }),
+        note({ id: 'c', folderId: 'grandchild-1' }),
+        note({ id: 'd', folderId: 'other' }),
+      ],
+      descendantFolderIds: ['child-1', 'grandchild-1'],
       activeFolderId: 'other',
       currentParentId: null,
-    });
+    } as Parameters<typeof prepareJournalFolderDelete>[0] & { folders: NoteFolder[] });
 
     expect(plan.undoAction).toEqual({
       type: 'folder',
-      folder: folder({ id: 'folder-1' }),
-      affectedNoteIds: ['a'],
+      folder: root,
+      folders: [root, child, grandchild],
+      affectedNoteIds: ['a', 'b', 'c'],
+      noteFolderIds: {
+        a: 'folder-1',
+        b: 'child-1',
+        c: 'grandchild-1',
+      },
     });
-    expect(plan.deletedFolderIds).toEqual(new Set(['folder-1', 'child-1']));
+    expect(plan.deletedFolderIds).toEqual(new Set(['folder-1', 'child-1', 'grandchild-1']));
   });
 
   it('resets navigation when the active folder or current parent is deleted', () => {

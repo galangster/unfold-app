@@ -3,7 +3,9 @@ import type { Note, NoteFolder } from '@/lib/store';
 export type JournalFolderUndoAction = {
   type: 'folder';
   folder: NoteFolder;
+  folders: NoteFolder[];
   affectedNoteIds: string[];
+  noteFolderIds: Record<string, string | undefined>;
 };
 
 export type JournalFolderDeleteNavigation = {
@@ -19,23 +21,34 @@ export type JournalFolderDeletePlan = {
 
 export function prepareJournalFolderDelete({
   folder,
+  folders = [folder],
   notes,
   descendantFolderIds,
   activeFolderId,
   currentParentId,
 }: {
   folder: NoteFolder;
+  folders?: readonly NoteFolder[];
   notes: readonly Note[];
   descendantFolderIds: readonly string[];
   activeFolderId: string | null;
   currentParentId: string | null;
 }): JournalFolderDeletePlan {
-  const affectedNoteIds = notes
-    .filter((note) => note.folderId === folder.id)
-    .map((note) => note.id);
-
   const deletedFolderIds = new Set(descendantFolderIds);
   deletedFolderIds.add(folder.id);
+
+  const deletedFolders = folders.filter((candidate) => deletedFolderIds.has(candidate.id));
+  if (!deletedFolders.some((candidate) => candidate.id === folder.id)) {
+    deletedFolders.unshift(folder);
+  }
+
+  const affectedNotes = notes.filter((note) =>
+    note.folderId ? deletedFolderIds.has(note.folderId) : false,
+  );
+  const affectedNoteIds = affectedNotes.map((note) => note.id);
+  const noteFolderIds = Object.fromEntries(
+    affectedNotes.map((note) => [note.id, note.folderId]),
+  );
 
   const parentId = folder.parentId ?? null;
   const navigation = getNavigationAfterFolderDelete({
@@ -47,7 +60,7 @@ export function prepareJournalFolderDelete({
 
   return {
     deletedFolderIds,
-    undoAction: { type: 'folder', folder, affectedNoteIds },
+    undoAction: { type: 'folder', folder, folders: deletedFolders, affectedNoteIds, noteFolderIds },
     navigation,
   };
 }
