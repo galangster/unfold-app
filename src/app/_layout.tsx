@@ -15,6 +15,7 @@ import { useRevenueCatSync } from '@/hooks/useRevenueCatSync';
 import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
 import { useStreakReconcile } from '@/hooks/useStreakReconcile';
+import { useUserProfileSync } from '@/hooks/useUserProfileSync';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
 import { registerPushToken, setNotificationNavigationReady, setupNotificationListeners, syncNotificationPreferences } from '@/lib/push-notifications';
@@ -65,6 +66,10 @@ function RootLayoutNav() {
   // Reconcile streak state on hydration + foreground so stale persisted values
   // don't survive missed days until the next reading completion.
   useStreakReconcile();
+
+  // Keep backend sync_users profile/preferences current so Day 2+ generation
+  // uses Settings edits such as writing style and faith background.
+  useUserProfileSync();
 
   // Register push token with backend (anonymous, keyed by X-Device-ID)
   useEffect(() => {
