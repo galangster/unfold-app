@@ -146,7 +146,7 @@ export function SeriesCarousel() {
 
   const handleSeeAll = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/(tabs)/(you)/past-devotionals' as any, params: { from: 'home' } });
+    router.push({ pathname: '/(tabs)/(today)/past-devotionals' as any, params: { from: 'home' } });
   }, [router]);
 
   const keyExtractor = useCallback((item: Devotional) => item.id, []);

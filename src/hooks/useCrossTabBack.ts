@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react';
-import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
+import { useRouter, useNavigation, useLocalSearchParams, useSegments } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 /**
@@ -13,6 +13,28 @@ export const FROM_TO_ROUTE: Record<string, string> = {
   bible: '/(tabs)/(bible)',
 };
 
+export const FROM_TO_TAB: Record<string, string> = {
+  home: '(today)',
+  journal: '(journal)',
+  bible: '(bible)',
+};
+
+export function getCurrentTabFromSegments(segments: readonly string[]): string | undefined {
+  const knownTabs = new Set([...Object.values(FROM_TO_TAB), '(you)']);
+  return segments.find((segment) => knownTabs.has(segment));
+}
+
+export function isCrossTabBackNavigation(from: string | undefined, segments: readonly string[]) {
+  if (!from || !(from in FROM_TO_ROUTE)) return false;
+  const sourceTab = FROM_TO_TAB[from];
+  const currentTab = getCurrentTabFromSegments(segments);
+
+  // Today-stack alias screens may still carry from=home to suppress entry
+  // motion or choose Today detail routes. They are same-tab navigations, not
+  // cross-tab pushes, so native pop/swipe-back must stay natural.
+  return currentTab !== sourceTab;
+}
+
 /** Keep native swipe gestures enabled; beforeRemove still redirects cross-tab backs. */
 export function getCrossTabGestureOptions(isCrossTab: boolean) {
   return isCrossTab ? { gestureEnabled: true } : undefined;
@@ -22,8 +44,9 @@ export function useCrossTabBack() {
   const router = useRouter();
   const navigation = useNavigation();
   const { from } = useLocalSearchParams<{ from?: string }>();
+  const segments = useSegments();
 
-  const isCrossTab = !!from && from in FROM_TO_ROUTE;
+  const isCrossTab = isCrossTabBackNavigation(from, segments);
   const returnRoute = from ? FROM_TO_ROUTE[from] : undefined;
 
   // Keep native swipe gestures enabled for cross-tab screens. The beforeRemove

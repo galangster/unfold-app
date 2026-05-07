@@ -101,7 +101,7 @@ export function YourSeriesSection() {
 
   const handleSeeAll = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/(tabs)/(you)/past-devotionals' as any, params: { from: 'home' } });
+    router.push({ pathname: '/(tabs)/(today)/past-devotionals' as any, params: { from: 'home' } });
   };
 
   return (

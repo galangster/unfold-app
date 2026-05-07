@@ -19,6 +19,9 @@ describe('Today tab motion guardrails', () => {
   const notificationCardSource = readSource('components/home/NotificationCard.tsx');
   const rememberThisCardSource = readSource('components/home/RememberThisCard.tsx');
   const todayIndexSource = readSource('app/(tabs)/(today)/index.tsx');
+  const crossTabBackSource = readSource('hooks/useCrossTabBack.ts');
+  const seriesCarouselSource = readSource('components/home/SeriesCarousel.tsx');
+  const yourSeriesSectionSource = readSource('components/home/YourSeriesSection.tsx');
 
   it('suppresses the My Library initial cross-tab content slide without disabling later tab transitions', () => {
     expect(myContentSource).toContain("const isHomeEntry = params.from === 'home';");
@@ -64,8 +67,13 @@ describe('Today tab motion guardrails', () => {
     expect(bentoGridSource).toContain("pathname: '/(tabs)/(today)/my-content'");
     expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
     expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
+    expect(seriesCarouselSource).toContain("pathname: '/(tabs)/(today)/past-devotionals'");
+    expect(seriesCarouselSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
+    expect(yourSeriesSectionSource).toContain("pathname: '/(tabs)/(today)/past-devotionals'");
+    expect(yourSeriesSectionSource).not.toContain("pathname: '/(tabs)/(you)/past-devotionals'");
     expect(todayReadingSource).toContain("pathname: '/(tabs)/(today)/my-content'");
     expect(todayReadingSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
+    expect(crossTabBackSource).toContain("return currentTab !== sourceTab;");
   });
 
   it('keeps Today cards copy-first by omitting static decorative line-art layers', () => {
