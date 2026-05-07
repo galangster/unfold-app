@@ -4,7 +4,7 @@ import UIKit
 /// Mirrors `~/clawd/work/unfold/app/mobile/src/constants/fonts.ts`.
 ///
 /// Inter = body + UI (sans).
-/// Instrument Serif = display + headings (serif).
+/// Gupter = display serif.
 ///
 /// Fonts ship as resources in Resources/Fonts/ and are registered via
 /// UIAppFonts in Info.plist (auto-loaded at app start).
@@ -46,12 +46,11 @@ enum UnfoldFonts {
     return dynamic ? UIFontMetrics(forTextStyle: .body).scaledFont(for: base) : base
   }
 
-  // MARK: - Instrument Serif (kept for future display-only contexts; NOT used for headings)
+  // MARK: - Gupter display serif
   //
-  // Per Nick's grill-me decision: headings use Inter, not Instrument Serif.
-  // This function stays for any future display-only one-off (cover titles, etc.)
+  // Nick prefers serif display type without italic styling.
   static func displaySerif(_ size: CGFloat) -> UIFont {
-    UIFont(name: "InstrumentSerif-Regular", size: size)
+    UIFont(name: "Gupter-Regular", size: size)
       ?? UIFont.systemFont(ofSize: size, weight: .semibold)
   }
 
@@ -84,7 +83,7 @@ enum UnfoldFonts {
   /// Logs all available fonts. Useful for verifying PostScript names of bundled fonts.
   static func printAvailableFonts() {
     let interesting = UIFont.familyNames
-      .filter { $0.lowercased().contains("inter") || $0.lowercased().contains("instrument") }
+      .filter { $0.lowercased().contains("inter") || $0.lowercased().contains("gupter") }
     for family in interesting {
       print("[Fonts] family: \(family)")
       for name in UIFont.fontNames(forFamilyName: family) {

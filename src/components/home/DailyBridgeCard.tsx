@@ -1,7 +1,6 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { SparkleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -41,12 +40,6 @@ export function DailyBridgeCard({ text, colors }: Props) {
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.artLayer}>
-          <View style={[styles.halo, { borderColor: alpha(colors.accent, 0.12) }]} />
-          <View style={[styles.thread, { backgroundColor: alpha(colors.accent, 0.24) }]} />
-          <View style={[styles.spark, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-        </View>
-
         <View style={styles.orbColumn}>
           <CompanionOrb accentColor={colors.accent} size={28} />
           <View style={[styles.orbStem, { backgroundColor: alpha(colors.accent, 0.24) }]} />
@@ -56,7 +49,6 @@ export function DailyBridgeCard({ text, colors }: Props) {
           <View style={styles.kickerRow}>
             <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
             <Text style={[styles.kicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Companion bridge</Text>
-            <SparkleIcon size={12} color={colors.accent} weight="light" />
           </View>
 
           <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>{text}</Text>
@@ -83,37 +75,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
     ...Shadow.md,
-  },
-  artLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  halo: {
-    position: 'absolute',
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    borderWidth: 1,
-    right: -50,
-    top: -56,
-  },
-  thread: {
-    position: 'absolute',
-    width: 1,
-    height: 100,
-    right: 44,
-    top: -8,
-    transform: [{ rotate: '26deg' }],
-  },
-  spark: {
-    position: 'absolute',
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    right: 32,
-    top: 34,
-    shadowOpacity: 0.42,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 0 },
   },
   orbColumn: {
     alignItems: 'center',

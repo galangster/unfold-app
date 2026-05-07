@@ -4,9 +4,10 @@
  */
 
 export const FontFamily = {
-  // Primary serif (Instrument Serif) kept as the main display/headings font
-  display: 'InstrumentSerif_400Regular',
-  displayItalic: 'InstrumentSerif_400Regular_Italic',
+  // Primary serif (Gupter) for display/headings. Nick prefers no serif italics,
+  // so displayItalic intentionally aliases the regular face.
+  display: 'Gupter_400Regular',
+  displayItalic: 'Gupter_400Regular',
 
   // Secondary sans (Inter) for body + UI. Variety comes from weights/italics, not more families.
   body: 'Inter_400Regular',

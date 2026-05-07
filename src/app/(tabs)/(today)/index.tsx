@@ -3,7 +3,7 @@ import { usePrevious } from '@/hooks/usePrevious';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -817,12 +817,6 @@ export default function HomeScreen() {
                   },
                 ]}
               >
-                <View pointerEvents="none" style={styles.day1ReviewArt}>
-                  <View style={[styles.day1ReviewHalo, { borderColor: alpha(colors.accent, 0.14) }]} />
-                  <View style={[styles.day1ReviewThread, { backgroundColor: alpha(colors.accent, 0.22) }]} />
-                  <View style={[styles.day1ReviewEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-                </View>
-
                 <View style={styles.day1ReviewContent}>
                   <View style={styles.day1ReviewKickerRow}>
                     <View style={[styles.day1ReviewRule, { backgroundColor: colors.accent }]} />
@@ -1022,43 +1016,6 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 5,
   },
-  day1ReviewArt: {
-    position: 'absolute',
-    top: -44,
-    right: -52,
-    width: 176,
-    height: 196,
-    opacity: 0.82,
-  },
-  day1ReviewHalo: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 158,
-    height: 158,
-    borderRadius: 79,
-    borderWidth: 1,
-  },
-  day1ReviewThread: {
-    position: 'absolute',
-    top: 28,
-    right: 88,
-    width: 1.5,
-    height: 138,
-    borderRadius: 1,
-    transform: [{ rotate: '12deg' }],
-  },
-  day1ReviewEmber: {
-    position: 'absolute',
-    top: 75,
-    right: 75,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.44,
-    shadowRadius: 16,
-  },
   day1ReviewContent: {
     zIndex: 2,
   },
@@ -1081,7 +1038,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   day1ReviewTitle: {
-    width: '82%',
+    width: '100%',
     fontFamily: FontFamily.display,
     fontSize: 28,
     lineHeight: 34,
@@ -1089,7 +1046,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   day1ReviewSubtitle: {
-    width: '86%',
+    width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 14,
     lineHeight: 21,

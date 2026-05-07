@@ -10,7 +10,6 @@
         "@codeherence/react-native-header": "^1.0.0",
         "@expo-google-fonts/crimson-text": "^0.4.0",
         "@expo-google-fonts/eb-garamond": "^0.4.2",
-        "@expo-google-fonts/instrument-serif": "^0.4.1",
         "@expo-google-fonts/inter": "^0.4.2",
         "@expo-google-fonts/jetbrains-mono": "^0.4.1",
         "@expo-google-fonts/lora": "^0.4.2",
@@ -404,8 +403,6 @@
     "@expo-google-fonts/crimson-text": ["@expo-google-fonts/crimson-text@0.4.0", "", {}, "sha512-KTurGCs3QubCY33dE5WqCGFAawqPCEsA/sqdkiuQ0536pNxf7nlGwg/0rxDXK39LH0hheBEuvqnPZLWPotbITg=="],
 
     "@expo-google-fonts/eb-garamond": ["@expo-google-fonts/eb-garamond@0.4.2", "", {}, "sha512-tkw/RNj3sLpOfasAYF1wrh8XnKspHXmoNf6StJ4LDvFlRpDCXXtG8sxkyjab1ncnlgK8iRUC8FugmYMr55YCHw=="],
-
-    "@expo-google-fonts/instrument-serif": ["@expo-google-fonts/instrument-serif@0.4.1", "", {}, "sha512-1CgCrLbTSgE7RV8ZrTT7i06UAyNQDBrhxQuxkReNnfq5yvUhTmvpOK17grlEsXG5p04lJ1ZXGiIjPeHo6X0sXg=="],
 
     "@expo-google-fonts/inter": ["@expo-google-fonts/inter@0.4.2", "", {}, "sha512-syfiImMaDmq7cFi0of+waE2M4uSCyd16zgyWxdPOY7fN2VBmSLKEzkfbZgeOjJq61kSqPBNNtXjggiQiSD6gMQ=="],
 

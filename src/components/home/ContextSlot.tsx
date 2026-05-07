@@ -85,12 +85,6 @@ function ResumeCard({
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.resumeArt}>
-          <View style={[styles.resumeHalo, { borderColor: alpha(colors.accent, 0.12) }]} />
-          <View style={[styles.resumeThread, { backgroundColor: alpha(colors.accent, 0.28) }]} />
-          <View style={[styles.resumeEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-        </View>
-
         <View style={styles.resumeContent}>
           <View style={styles.resumeKickerRow}>
             <View style={[styles.resumeKickerRule, { backgroundColor: colors.accent }]} />
@@ -224,37 +218,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
     ...Shadow.md,
-  },
-  resumeArt: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  resumeHalo: {
-    position: 'absolute',
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    borderWidth: 1,
-    right: -42,
-    top: -54,
-  },
-  resumeThread: {
-    position: 'absolute',
-    width: 1,
-    height: 92,
-    right: 44,
-    top: -6,
-    transform: [{ rotate: '24deg' }],
-  },
-  resumeEmber: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    right: 32,
-    top: 35,
-    shadowOpacity: 0.42,
-    shadowRadius: 9,
-    shadowOffset: { width: 0, height: 0 },
   },
   resumeContent: {
     gap: Spacing['3'],

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { BookOpenIcon, BookmarksSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
+import { CaretRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
@@ -23,12 +23,10 @@ export function BentoGrid() {
   const items = [
     {
       label: 'My Devotionals',
-      icon: BookOpenIcon,
       pathname: '/(tabs)/(today)/past-devotionals',
     },
     {
       label: 'My Library',
-      icon: BookmarksSimpleIcon,
       pathname: '/(tabs)/(today)/my-content',
     },
   ];
@@ -58,9 +56,6 @@ export function BentoGrid() {
               },
             ]}
           >
-            <View style={[styles.iconShell, { backgroundColor: alpha(colors.accent, 0.08) }]}>
-              <item.icon size={17} color={colors.textMuted} weight="light" />
-            </View>
             <Text
               style={[styles.label, { color: colors.text }]}
               numberOfLines={2}
@@ -97,14 +92,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing['2'],
-  },
-  iconShell: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
   },
   label: {
     flexShrink: 1,

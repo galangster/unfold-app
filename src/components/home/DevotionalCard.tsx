@@ -229,26 +229,7 @@ function EmptyState({ onCreateNew, isReturningUser }: { onCreateNew: () => void;
 
 function ReturningEmptyStateFallback({ onCreateNew }: { onCreateNew: () => void }) {
   const { colors } = useTheme();
-  const { entering, reducedMotion } = useAccessibleAnimation();
-  const pulse = useSharedValue(0.4);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      pulse.value = 0.58;
-      return;
-    }
-    pulse.value = withRepeat(
-      withTiming(0.82, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-    return () => cancelAnimation(pulse);
-  }, [pulse, reducedMotion]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-    transform: [{ scaleY: interpolate(pulse.value, [0.4, 0.82], [0.86, 1.08]) }],
-  }));
+  const { entering } = useAccessibleAnimation();
 
   return (
     <Animated.View
@@ -262,11 +243,6 @@ function ReturningEmptyStateFallback({ onCreateNew }: { onCreateNew: () => void 
         },
       ]}
     >
-      <View pointerEvents="none" style={styles.editorialStateArt}>
-        <Animated.View style={[styles.editorialStateLine, { backgroundColor: alpha(colors.accent, 0.38) }, pulseStyle]} />
-        <View style={[styles.editorialStateDot, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-      </View>
-
       <View style={styles.returningContent}>
         <Text style={[styles.returningKicker, { color: colors.accent }]}>New study</Text>
         <Text style={[styles.returningTitle, { color: colors.text }]}>Begin the next quiet chapter.</Text>
@@ -320,12 +296,6 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.revealSealArt}>
-          <View style={[styles.revealSealOuter, { borderColor: alpha(colors.accent, 0.2) }]} />
-          <View style={[styles.revealSealInner, { borderColor: alpha(colors.accent, 0.42) }]} />
-          <View style={[styles.revealSealEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-        </View>
-
         <View style={[styles.revealHeaderRow, isCompactHero && styles.revealHeaderRowCompact]}>
           <View style={[styles.revealRule, { backgroundColor: alpha(colors.accent, 0.64) }]} />
           <Text style={[styles.revealStatusPill, { color: colors.accent, borderColor: alpha(colors.accent, 0.22) }]}>
@@ -410,12 +380,10 @@ function PreparingState({ progress }: { progress: number }) {
   const { reducedMotion } = useAccessibleAnimation();
 
   const shimmerOpacity = useSharedValue(0.45);
-  const threadDrift = useSharedValue(0);
 
   useEffect(() => {
     if (reducedMotion) {
       shimmerOpacity.value = 0.72;
-      threadDrift.value = 0.35;
       return;
     }
     shimmerOpacity.value = withRepeat(
@@ -423,22 +391,10 @@ function PreparingState({ progress }: { progress: number }) {
       -1,
       true,
     );
-    threadDrift.value = withRepeat(
-      withTiming(1, { duration: 5200, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-    return () => {
-      cancelAnimation(shimmerOpacity);
-      cancelAnimation(threadDrift);
-    };
-  }, [shimmerOpacity, threadDrift, reducedMotion]);
+    return () => cancelAnimation(shimmerOpacity);
+  }, [shimmerOpacity, reducedMotion]);
 
   const shimmerStyle = useAnimatedStyle(() => ({ opacity: shimmerOpacity.value }));
-  const threadStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(threadDrift.value, [0, 1], [0.28, 0.58]),
-    transform: [{ translateX: interpolate(threadDrift.value, [0, 1], [-8, 10]) }],
-  }));
 
   return (
     <View
@@ -455,17 +411,6 @@ function PreparingState({ progress }: { progress: number }) {
         },
       ]}
     >
-      <View pointerEvents="none" style={styles.preparingOrbitalArt}>
-        <View style={[styles.preparingOrbitOuter, { borderColor: alpha(colors.accent, 0.18) }]} />
-        <View style={[styles.preparingOrbitInner, { borderColor: alpha(colors.accent, 0.32) }]} />
-        <Animated.View style={[styles.preparingOrbitEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }, shimmerStyle]} />
-      </View>
-
-      <View pointerEvents="none" style={styles.preparingThreads}>
-        <Animated.View style={[styles.preparingThread, { backgroundColor: alpha(colors.accent, 0.24) }, threadStyle]} />
-        <Animated.View style={[styles.preparingThreadSmall, { backgroundColor: alpha(colors.accent, 0.16) }, threadStyle]} />
-      </View>
-
       <View style={styles.preparingContent}>
         <View style={styles.preparingKickerRow}>
           <View style={[styles.preparingAccentBar, { backgroundColor: colors.accent }]} />
@@ -525,12 +470,6 @@ function JourneyCompleteStateFallback({
         },
       ]}
     >
-      <View pointerEvents="none" style={styles.journeyCompleteArt}>
-        <View style={[styles.journeyCompleteHalo, { borderColor: alpha(colors.accent, 0.16) }]} />
-        <View style={[styles.journeyCompleteThread, { backgroundColor: alpha(colors.accent, 0.28) }]} />
-        <View style={[styles.journeyCompleteEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-      </View>
-
       <View style={styles.journeyCompleteContent}>
         <View style={[styles.journeyCompleteAccent, { backgroundColor: colors.accent }]} />
         <Text style={[styles.journeyCompleteKicker, { color: colors.accent }]}>Series complete</Text>
@@ -571,139 +510,6 @@ function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: strin
 
 interface MainCardProps {
   state: Extract<DevotionalCardState, { type: 'unread' | 'complete-today' | 'tomorrow-locked' }>;
-}
-
-const HERO_THREAD_OFFSETS = [-42, -26, -11, 6, 23, 40];
-const HERO_SPARKS = [
-  { top: 24, right: 48, size: 4, opacity: 0.95 },
-  { top: 72, right: 88, size: 2, opacity: 0.55 },
-  { top: 112, right: 38, size: 3, opacity: 0.7 },
-  { top: 158, right: 76, size: 2, opacity: 0.48 },
-  { top: 214, right: 28, size: 3, opacity: 0.62 },
-];
-
-function HeroMotionGlyph({ emberActive }: { emberActive: boolean }) {
-  const { colors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
-  const { reducedMotion } = useAccessibleAnimation();
-  const isCompactGlyph = width < 400 || fontScale >= 1.2;
-  const drift = useSharedValue(0);
-  const pulse = useSharedValue(emberActive ? 0.72 : 0.48);
-
-  useEffect(() => {
-    if (reducedMotion) {
-      drift.value = 0.45;
-      pulse.value = emberActive ? 0.78 : 0.55;
-      return;
-    }
-
-    drift.value = withRepeat(
-      withTiming(1, { duration: 9600, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-    pulse.value = withRepeat(
-      withTiming(emberActive ? 0.95 : 0.68, { duration: 4200, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-
-    return () => {
-      cancelAnimation(drift);
-      cancelAnimation(pulse);
-    };
-  }, [drift, emberActive, pulse, reducedMotion]);
-
-  const ribbonStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(drift.value, [0, 1], [0.42, 0.76]),
-    transform: [
-      { translateY: interpolate(drift.value, [0, 1], [12, -10]) },
-      { rotate: `${interpolate(drift.value, [0, 1], [-19, -8])}deg` },
-    ],
-  }));
-
-  const arcStyle = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-    transform: [
-      { scale: interpolate(pulse.value, [0.45, 0.95], [0.96, 1.03]) },
-      { rotate: `${interpolate(drift.value, [0, 1], [5, -4])}deg` },
-    ],
-  }));
-
-  const emberStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0.45, 0.95], [0.46, 0.9]),
-    transform: [{ scale: interpolate(pulse.value, [0.45, 0.95], [0.9, 1.14]) }],
-  }));
-
-  return (
-    <View pointerEvents="none" style={[styles.heroMotionGlyph, isCompactGlyph && styles.heroMotionGlyphCompact]}>
-      <Animated.View
-        style={[
-          styles.heroRibbon,
-          {
-            borderColor: alpha(colors.accent, emberActive ? 0.58 : 0.36),
-            shadowColor: colors.accent,
-          },
-          ribbonStyle,
-        ]}
-      />
-
-      {HERO_THREAD_OFFSETS.map((offset, index) => (
-        <View
-          key={`thread-${offset}`}
-          style={[
-            styles.heroThread,
-            {
-              right: 74 + offset,
-              backgroundColor: alpha(colors.accent, 0.1 + index * 0.028),
-              transform: [{ rotate: `${-34 + index * 7}deg` }],
-            },
-          ]}
-        />
-      ))}
-
-      <Animated.View
-        style={[
-          styles.heroOrbit,
-          {
-            borderColor: alpha(colors.accent, emberActive ? 0.68 : 0.44),
-            shadowColor: colors.accent,
-          },
-          arcStyle,
-        ]}
-      >
-        <Animated.View
-          style={[
-            styles.heroOrbitEmber,
-            {
-              backgroundColor: colors.accent,
-              shadowColor: colors.accent,
-            },
-            emberStyle,
-          ]}
-        />
-      </Animated.View>
-
-      {HERO_SPARKS.map((spark, index) => (
-        <View
-          key={`spark-${index}`}
-          style={[
-            styles.heroSpark,
-            {
-              top: spark.top,
-              right: spark.right,
-              width: spark.size,
-              height: spark.size,
-              borderRadius: spark.size / 2,
-              opacity: spark.opacity,
-              backgroundColor: colors.accent,
-              shadowColor: colors.accent,
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
 }
 
 function MainCard({ state }: MainCardProps) {
@@ -765,8 +571,6 @@ function MainCard({ state }: MainCardProps) {
     <Animated.View style={scaleStyle}>
       <View style={styles.heroTouchable}>
         <View style={[styles.openHero, isCompactHero && styles.openHeroCompact, isVeryCompactHero && styles.openHeroVeryCompact]}>
-          <HeroMotionGlyph emberActive={usesEmberState} />
-
           <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
             <Text
               style={[styles.heroSeriesEyebrow, { color: colors.textSubtle }]}
@@ -942,17 +746,17 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['5'],
   },
   openHeroContent: {
-    width: '70%',
-    maxWidth: 292,
+    width: '100%',
+    maxWidth: 356,
     zIndex: 2,
   },
   openHeroContentCompact: {
-    width: '82%',
-    maxWidth: 282,
+    width: '100%',
+    maxWidth: 340,
   },
   openHeroContentVeryCompact: {
-    width: '88%',
-    maxWidth: 292,
+    width: '100%',
+    maxWidth: 320,
   },
   heroSeriesEyebrow: {
     fontFamily: FontFamily.uiMedium,
@@ -1093,69 +897,6 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
   },
-  heroMotionGlyph: {
-    position: 'absolute',
-    top: 24,
-    right: -58,
-    width: 184,
-    height: 324,
-    zIndex: 1,
-  },
-  heroMotionGlyphCompact: {
-    right: -86,
-    width: 152,
-    opacity: 0.66,
-  },
-  heroRibbon: {
-    position: 'absolute',
-    top: 60,
-    right: -24,
-    width: 138,
-    height: 252,
-    borderRightWidth: 1.2,
-    borderRadius: 148,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 18,
-  },
-  heroThread: {
-    position: 'absolute',
-    top: 76,
-    width: 1,
-    height: 248,
-    borderRadius: 1,
-    opacity: 0.72,
-  },
-  heroOrbit: {
-    position: 'absolute',
-    top: 18,
-    right: 42,
-    width: 74,
-    height: 74,
-    borderRadius: 37,
-    borderWidth: 1,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 16,
-  },
-  heroOrbitEmber: {
-    position: 'absolute',
-    top: -3,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.85,
-    shadowRadius: 12,
-  },
-  heroSpark: {
-    position: 'absolute',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-  },
-
   // Progress bar
   progressTrack: {
     height: 3,
@@ -1222,7 +963,6 @@ const styles = StyleSheet.create({
   },
   returningContent: {
     padding: Spacing['7'],
-    paddingRight: 92,
   },
   returningKicker: {
     fontFamily: FontFamily.uiMedium,
@@ -1231,30 +971,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     textTransform: 'uppercase',
     marginBottom: Spacing['3'],
-  },
-  editorialStateArt: {
-    position: 'absolute',
-    right: 22,
-    top: 22,
-    bottom: 22,
-    width: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editorialStateLine: {
-    width: 1.5,
-    height: '74%',
-    borderRadius: 1,
-  },
-  editorialStateDot: {
-    position: 'absolute',
-    top: '42%',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.82,
-    shadowRadius: 10,
   },
   returningTitle: {
     fontFamily: FontFamily.display,
@@ -1315,43 +1031,6 @@ const styles = StyleSheet.create({
     paddingTop: Spacing['5'],
     paddingBottom: Spacing['5'],
   },
-  revealSealArt: {
-    position: 'absolute',
-    right: -42,
-    top: 18,
-    width: 188,
-    height: 188,
-    opacity: 0.78,
-  },
-  revealSealOuter: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 178,
-    height: 178,
-    borderRadius: 89,
-    borderWidth: 1,
-  },
-  revealSealInner: {
-    position: 'absolute',
-    right: 34,
-    top: 34,
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    borderWidth: 1,
-  },
-  revealSealEmber: {
-    position: 'absolute',
-    right: 82,
-    top: 82,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 0 },
-  },
   revealHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1380,7 +1059,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   revealSeriesInfo: {
-    width: '76%',
+    width: '100%',
     fontFamily: FontFamily.uiMedium,
     fontSize: 12,
     lineHeight: 17,
@@ -1390,7 +1069,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   revealDayTitle: {
-    width: '74%',
+    width: '100%',
     fontFamily: FontFamily.display,
     fontSize: 34,
     lineHeight: 40,
@@ -1399,12 +1078,12 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   revealDayTitleCompact: {
-    width: '78%',
+    width: '100%',
     fontSize: 30,
     lineHeight: 36,
   },
   revealScriptureRow: {
-    width: '70%',
+    width: '100%',
     marginBottom: Spacing['5'],
     zIndex: 2,
   },
@@ -1415,7 +1094,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   revealMessage: {
-    width: '72%',
+    width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,
@@ -1423,7 +1102,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   revealMessageCompact: {
-    width: '78%',
+    width: '100%',
     fontSize: 14,
     lineHeight: 21,
     marginBottom: Spacing['5'],
@@ -1472,69 +1151,6 @@ const styles = StyleSheet.create({
     padding: Spacing['7'],
     alignItems: 'center',
     zIndex: 2,
-  },
-  preparingOrbitalArt: {
-    position: 'absolute',
-    right: -52,
-    top: -30,
-    width: 190,
-    height: 190,
-    opacity: 0.72,
-  },
-  preparingOrbitOuter: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 1,
-  },
-  preparingOrbitInner: {
-    position: 'absolute',
-    right: 42,
-    top: 42,
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 1,
-  },
-  preparingOrbitEmber: {
-    position: 'absolute',
-    right: 86,
-    top: 86,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  preparingThreads: {
-    position: 'absolute',
-    top: -20,
-    right: -18,
-    width: 142,
-    height: 190,
-    opacity: 0.85,
-  },
-  preparingThread: {
-    position: 'absolute',
-    top: 8,
-    right: 46,
-    width: 1,
-    height: 172,
-    borderRadius: 1,
-    transform: [{ rotate: '-24deg' }],
-  },
-  preparingThreadSmall: {
-    position: 'absolute',
-    top: 30,
-    right: 82,
-    width: 1,
-    height: 126,
-    borderRadius: 1,
-    transform: [{ rotate: '-24deg' }],
   },
   preparingAccentBar: {
     width: 28,
@@ -1622,43 +1238,6 @@ const styles = StyleSheet.create({
   journeyCompleteContent: {
     alignItems: 'center',
     zIndex: 2,
-  },
-  journeyCompleteArt: {
-    position: 'absolute',
-    right: -48,
-    top: -42,
-    width: 176,
-    height: 204,
-    opacity: 0.76,
-  },
-  journeyCompleteHalo: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 162,
-    height: 162,
-    borderRadius: 81,
-    borderWidth: 1,
-  },
-  journeyCompleteThread: {
-    position: 'absolute',
-    right: 92,
-    top: 28,
-    width: 1.5,
-    height: 150,
-    borderRadius: 1,
-    transform: [{ rotate: '13deg' }],
-  },
-  journeyCompleteEmber: {
-    position: 'absolute',
-    right: 78,
-    top: 78,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
   },
   journeyCompleteAccent: {
     width: 32,

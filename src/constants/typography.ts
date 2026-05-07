@@ -7,7 +7,7 @@
 import { FontFamily, FontSize, LineHeight } from './fonts';
 
 export const Typography = {
-  // Display — InstrumentSerif for headings
+  // Display — Gupter for headings
   displayLg: {
     fontFamily: FontFamily.display,
     fontSize: FontSize['4xl'], // 36

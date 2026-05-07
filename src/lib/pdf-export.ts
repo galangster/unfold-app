@@ -367,7 +367,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${escapeHTML(devotional.title)} - Unfold</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Gupter:wght@400;500;700&display=swap');
 
         @page {
           margin: 0.75in;
@@ -432,7 +432,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .cover h1 {
-          font-family: 'Instrument Serif', Georgia, serif;
+          font-family: 'Gupter', Georgia, serif;
           font-size: 34pt;
           font-weight: normal;
           color: ${HEADING_COLOR};
@@ -472,7 +472,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .cover .prepared-name {
-          font-family: 'Instrument Serif', Georgia, serif;
+          font-family: 'Gupter', Georgia, serif;
           font-size: 15pt;
           color: ${BODY_COLOR};
           font-weight: normal;
@@ -520,7 +520,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .day-title {
-          font-family: 'Instrument Serif', Georgia, serif;
+          font-family: 'Gupter', Georgia, serif;
           font-size: 24pt;
           font-weight: normal;
           line-height: 1.25;
@@ -598,8 +598,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .quotable p {
-          font-family: 'Instrument Serif', Georgia, serif;
-          font-style: italic;
+          font-family: 'Gupter', Georgia, serif;
           font-size: 14pt;
           line-height: 1.5;
           color: ${accent};
@@ -909,7 +908,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .stat-value {
-          font-family: 'Instrument Serif', Georgia, serif;
+          font-family: 'Gupter', Georgia, serif;
           font-size: 36pt;
           font-weight: normal;
           color: ${accent};
@@ -978,8 +977,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .final-reflection .reflection-prompt {
-          font-family: 'Instrument Serif', Georgia, serif;
-          font-style: italic;
+          font-family: 'Gupter', Georgia, serif;
           font-size: 11pt;
           color: #555;
           margin-bottom: 0.2in;

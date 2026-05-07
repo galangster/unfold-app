@@ -939,7 +939,7 @@ export function DevotionalWebView({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gupter:wght@400;500;700&family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
   <!-- Rangy for robust text highlighting — load from CDN. Inlined fallback was overwriting the CDN-loaded global every run, breaking deserialize. -->
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-core.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-classapplier.min.js"></script>

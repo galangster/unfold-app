@@ -136,7 +136,7 @@ modules/unfold-editor/
 ├── package.json
 ├── ios/
 │   ├── UnfoldEditor.podspec
-│   ├── Resources/Fonts/          # Inter + InstrumentSerif TTFs
+│   ├── Resources/Fonts/          # Inter + Gupter TTFs
 │   ├── UnfoldEditorModule.swift  # Expo module + AsyncFunction commands
 │   ├── UnfoldEditorView.swift    # ExpoView subclass, prop/event bridge
 │   ├── UnfoldEditorController.swift  # Proton EditorView host + commands

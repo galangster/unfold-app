@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowRightIcon, HighlighterIcon } from 'phosphor-react-native';
+import { ArrowRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
@@ -87,23 +87,7 @@ export function RememberThisCard() {
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.decorativeLayer}>
-          <View
-            style={[
-              styles.memoryHalo,
-              {
-                borderColor: alpha(highlightColorHex, isDark ? 0.16 : 0.2),
-                backgroundColor: alpha(highlightColorHex, isDark ? 0.045 : 0.06),
-              },
-            ]}
-          />
-          <View style={[styles.memoryDot, { backgroundColor: highlightColorHex }]} />
-        </View>
-
         <View style={styles.headerRow}>
-          <View style={[styles.iconShell, { backgroundColor: alpha(highlightColorHex, isDark ? 0.13 : 0.16) }]}>
-            <HighlighterIcon size={15} color={highlightColorHex} weight="light" />
-          </View>
           <View style={styles.headerTextGroup}>
             <Text style={[styles.kicker, { color: highlightColorHex }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
             <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>A line worth carrying</Text>
@@ -160,40 +144,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     ...Shadow.sm,
   },
-  decorativeLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  memoryHalo: {
-    position: 'absolute',
-    top: -48,
-    right: -36,
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    borderWidth: 1,
-  },
-  memoryDot: {
-    position: 'absolute',
-    top: 35,
-    right: 40,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    opacity: 0.72,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing['3'],
     marginBottom: Spacing['3'],
     zIndex: 2,
-  },
-  iconShell: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTextGroup: {
     flex: 1,

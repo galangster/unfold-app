@@ -39,7 +39,7 @@ final class UnfoldEditorView: ExpoView {
   required init(appContext: AppContext? = nil) {
     // Register fonts before the Proton EditorView is instantiated so
     // `UnfoldFonts.body()` and friends resolve against bundled Inter +
-    // InstrumentSerif TTFs instead of system fallbacks.
+    // Gupter TTFs instead of system fallbacks.
     UnfoldEditorFontLoader.registerIfNeeded()
 
     self.controller = UnfoldEditorController()

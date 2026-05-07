@@ -152,7 +152,7 @@ export default function ShareCardScreen() {
 
   // Load fonts for Skia paragraph rendering
   const skiaFonts = useSkiaFonts({
-    'InstrumentSerif': [require('../../assets/fonts/InstrumentSerif_400Regular.ttf')],
+    'Gupter': [require('../../assets/fonts/Gupter_400Regular.ttf')],
     'Inter': [
       require('../../assets/fonts/Inter_400Regular.ttf'),
       require('../../assets/fonts/Inter_500Medium.ttf'),
@@ -192,7 +192,7 @@ export default function ShareCardScreen() {
         textAlign: TextAlign.Left,
         textStyle: {
           color: mainColor,
-          fontFamilies: ['InstrumentSerif'],
+          fontFamilies: ['Gupter'],
           fontSize: outFontSize,
           heightMultiplier: 1.55,
         },

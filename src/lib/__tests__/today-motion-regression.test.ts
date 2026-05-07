@@ -14,6 +14,11 @@ describe('Today tab motion guardrails', () => {
   const pastDevotionalsSource = readSource('app/(tabs)/(you)/past-devotionals.tsx');
   const bentoGridSource = readSource('components/home/BentoGrid.tsx');
   const devotionalCardSource = readSource('components/home/DevotionalCard.tsx');
+  const contextSlotSource = readSource('components/home/ContextSlot.tsx');
+  const dailyBridgeCardSource = readSource('components/home/DailyBridgeCard.tsx');
+  const notificationCardSource = readSource('components/home/NotificationCard.tsx');
+  const rememberThisCardSource = readSource('components/home/RememberThisCard.tsx');
+  const todayIndexSource = readSource('app/(tabs)/(today)/index.tsx');
 
   it('suppresses the My Library initial cross-tab content slide without disabling later tab transitions', () => {
     expect(myContentSource).toContain("const isHomeEntry = params.from === 'home';");
@@ -61,6 +66,20 @@ describe('Today tab motion guardrails', () => {
     expect(bentoGridSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
     expect(todayReadingSource).toContain("pathname: '/(tabs)/(today)/my-content'");
     expect(todayReadingSource).not.toContain("pathname: '/(tabs)/(you)/my-content'");
+  });
+
+  it('keeps Today cards copy-first by omitting static decorative line-art layers', () => {
+    expect(devotionalCardSource).not.toContain('HeroMotionGlyph');
+    expect(devotionalCardSource).not.toContain('heroMotionGlyph');
+    expect(devotionalCardSource).not.toContain('editorialStateArt');
+    expect(devotionalCardSource).not.toContain('revealSealArt');
+    expect(devotionalCardSource).not.toContain('preparingOrbitalArt');
+    expect(devotionalCardSource).not.toContain('journeyCompleteArt');
+    expect(contextSlotSource).not.toContain('resumeArt');
+    expect(notificationCardSource).not.toContain('artLayer');
+    expect(dailyBridgeCardSource).not.toContain('artLayer');
+    expect(rememberThisCardSource).not.toContain('decorativeLayer');
+    expect(todayIndexSource).not.toContain('day1ReviewArt');
   });
 
   it('keeps devotional detail navigation in the Today stack when My Devotionals was opened from Today', () => {

@@ -62,11 +62,6 @@ export function NotificationCard({
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.artLayer}>
-          <View style={[styles.orbit, { borderColor: alpha(accentColor, 0.12) }]} />
-          <View style={[styles.thread, { backgroundColor: alpha(accentColor, 0.24) }]} />
-        </View>
-
         <View style={styles.orbWrap}>
           {icon ?? <CompanionOrb accentColor={accentColor} size={30} />}
         </View>
@@ -107,26 +102,6 @@ const styles = StyleSheet.create({
   containerCompact: {
     alignItems: 'flex-start',
     flexWrap: 'wrap',
-  },
-  artLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  orbit: {
-    position: 'absolute',
-    width: 118,
-    height: 118,
-    borderRadius: 59,
-    borderWidth: 1,
-    right: -42,
-    top: -48,
-  },
-  thread: {
-    position: 'absolute',
-    width: 1,
-    height: 82,
-    right: 50,
-    bottom: -24,
-    transform: [{ rotate: '-28deg' }],
   },
   orbWrap: {
     marginRight: Spacing['3'],

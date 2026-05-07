@@ -180,8 +180,9 @@ function RootLayoutNav() {
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    'InstrumentSerif_400Regular': require('../../assets/fonts/InstrumentSerif_400Regular.ttf'),
-    'InstrumentSerif_400Regular_Italic': require('../../assets/fonts/InstrumentSerif_400Regular_Italic.ttf'),
+    'Gupter_400Regular': require('../../assets/fonts/Gupter_400Regular.ttf'),
+    'Gupter_500Medium': require('../../assets/fonts/Gupter_500Medium.ttf'),
+    'Gupter_700Bold': require('../../assets/fonts/Gupter_700Bold.ttf'),
     'SourceSerifPro_400Regular': require('../../assets/fonts/SourceSerifPro_400Regular.ttf'),
     'SourceSerifPro_400Regular_Italic': require('../../assets/fonts/SourceSerifPro_400Regular_Italic.ttf'),
     'SourceSerifPro_600SemiBold': require('../../assets/fonts/SourceSerifPro_600SemiBold.ttf'),
