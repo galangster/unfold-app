@@ -90,6 +90,19 @@ describe('Today tab motion guardrails', () => {
     expect(todayIndexSource).not.toContain('day1ReviewArt');
   });
 
+  it('keeps the open Today hero focused on title and pull quote without repeating the scripture reference', () => {
+    const mainCardStart = devotionalCardSource.indexOf('function MainCard');
+    const mainCardEnd = devotionalCardSource.indexOf('// ─── DevotionalCard (root)', mainCardStart);
+    const mainCardSource = devotionalCardSource.slice(mainCardStart, mainCardEnd);
+
+    expect(mainCardStart).toBeGreaterThan(-1);
+    expect(mainCardEnd).toBeGreaterThan(mainCardStart);
+    expect(mainCardSource).not.toContain('dayData.scriptureReference');
+    expect(mainCardSource).not.toContain('heroScriptureRow');
+    expect(mainCardSource).not.toContain('heroScriptureRule');
+    expect(mainCardSource).not.toContain('heroScripture');
+  });
+
   it('keeps devotional detail navigation in the Today stack when My Devotionals was opened from Today', () => {
     expect(pastDevotionalsSource).toContain('const { handleBack, isFromHome } = useCrossTabBack();');
     expect(pastDevotionalsSource).toContain("pathname: isFromHome ? '/(tabs)/(today)/series-detail' : '/(tabs)/(you)/series-detail'");

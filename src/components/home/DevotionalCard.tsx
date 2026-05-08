@@ -592,13 +592,6 @@ function MainCard({ state }: MainCardProps) {
               {dayData.title}
             </Text>
 
-            <View style={styles.heroScriptureRow}>
-              <View style={[styles.heroScriptureRule, { backgroundColor: colors.accent }]} />
-              <Text style={[styles.heroScripture, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                {dayData.scriptureReference || 'Today’s reading'}
-              </Text>
-            </View>
-
             <View style={styles.heroQuoteBlock}>
               <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
               <Text
@@ -790,24 +783,6 @@ const styles = StyleSheet.create({
   heroDayTitleVeryCompact: {
     fontSize: 32,
     lineHeight: 38,
-  },
-  heroScriptureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['3'],
-    marginBottom: Spacing['5'],
-  },
-  heroScriptureRule: {
-    width: 36,
-    height: 1.5,
-    borderRadius: 1,
-  },
-  heroScripture: {
-    flex: 1,
-    fontFamily: FontFamily.ui,
-    fontSize: 14,
-    lineHeight: 20,
-    letterSpacing: 0.3,
   },
   heroQuoteBlock: {
     position: 'relative',
