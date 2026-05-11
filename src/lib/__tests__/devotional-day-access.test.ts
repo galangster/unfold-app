@@ -70,6 +70,29 @@ describe('devotional day access', () => {
     expect(resolveInitialReadingDayNumber(series, 6, now)).toBe(5);
   });
 
+  it('keeps Day 6 selectable and Day 7 locked after Day 6 is completed today', () => {
+    const series = devotional({
+      currentDay: 7,
+      days: [
+        day({ dayNumber: 1, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 2, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 3, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 4, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 5, isRead: true, readAt: yesterdayIso }),
+        day({ dayNumber: 6, isRead: true, readAt: todayIso }),
+        day({ dayNumber: 7, isRead: false }),
+      ],
+    });
+
+    expect(getLockedTodayDayNumber(series, now)).toBe(6);
+    expect(getTodayReaderDayNumber(series, now)).toBe(6);
+    expect(getSelectableDayLimit(series, now)).toBe(6);
+    expect(isDevotionalDaySelectable(series, 5, now)).toBe(true);
+    expect(isDevotionalDaySelectable(series, 6, now)).toBe(true);
+    expect(isDevotionalDaySelectable(series, 7, now)).toBe(false);
+    expect(resolveInitialReadingDayNumber(series, 7, now)).toBe(6);
+  });
+
   it('keeps an unread current day selectable when nothing has been read today', () => {
     const series = devotional({
       currentDay: 6,

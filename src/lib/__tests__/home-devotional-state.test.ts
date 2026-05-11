@@ -1,5 +1,6 @@
 import {
   getCurrentDevotional,
+  getHomeDevotionalDayData,
   hasReadDevotionalToday,
   shouldPrepareCurrentDevotionalDay,
 } from '../home-devotional-state';
@@ -59,6 +60,32 @@ describe('home devotional state helpers', () => {
 
     expect(hasReadDevotionalToday({ devotionals: [current], currentDevotionalId: 'dev-1', now: today })).toBe(true);
     expect(hasReadDevotionalToday({ devotionals: [current], currentDevotionalId: 'missing', now: today })).toBe(false);
+  });
+
+  it('keeps the Today hero focused on the completed day when the next generated day is tomorrow-locked', () => {
+    const day6ReadToday = day({
+      id: 'day-6',
+      dayNumber: 6,
+      title: "Today's Completed Reading",
+      isRead: true,
+      readAt: new Date(2026, 3, 25, 9, 0, 0).toISOString(),
+    });
+    const day7Generated = day({
+      id: 'day-7',
+      dayNumber: 7,
+      title: "Tomorrow's Locked Reading",
+      isRead: false,
+    });
+
+    const current = devotional({
+      currentDay: 7,
+      days: [day6ReadToday, day7Generated],
+    });
+
+    const homeDayData = getHomeDevotionalDayData(current, today);
+
+    expect(homeDayData).toBe(day6ReadToday);
+    expect(homeDayData?.dayNumber).toBe(6);
   });
 
   it('prepares a progressive current day only when missing and calendar-eligible', () => {

@@ -41,6 +41,7 @@ import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
 import {
   getCurrentDevotional,
+  getHomeDevotionalDayData,
   hasReadDevotionalToday,
   shouldPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
@@ -614,12 +615,7 @@ export default function HomeScreen() {
 
   const daysCompleted = currentDevotional ? (currentDevotional.days ?? []).filter(d => d.isRead).length : 0;
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
-  const currentDayData = (currentDevotional?.days ?? []).find(d => d.dayNumber === currentDevotional?.currentDay)
-    // When today's reading is done but next day isn't generated yet (progressive mode),
-    // fall back to last completed day to avoid showing "Preparing today's reading..."
-    ?? (hasReadToday && currentDevotional
-      ? (currentDevotional.days ?? []).filter(d => d.isRead).sort((a, b) => b.dayNumber - a.dayNumber)[0] ?? null
-      : null);
+  const currentDayData = getHomeDevotionalDayData(currentDevotional);
 
   // Content-aware check-in messages — reference today's devotional when available
   const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {

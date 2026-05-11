@@ -215,6 +215,7 @@ export default function ReadingScreen() {
     const d = devs.find((x) => x.id === effectiveDevotionalId);
     return resolveInitialReadingDayNumber(d, requestedDayNumber);
   });
+  const lastResolvedRouteKeyRef = useRef<string | null>(null);
   // shareModalOpen removed — share now navigates to /share-card route
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
   const [showReadingSettings, setShowReadingSettings] = useState(false);
@@ -494,16 +495,19 @@ export default function ReadingScreen() {
 
   // Respect deep-linked day number (used by Resume card), but never let a
   // stale route reopen tomorrow after today's reading has already completed.
+  // Apply each route dayNumber once; after that, manual swipes own viewingDay.
   useEffect(() => {
-    if (!currentDevotional) return;
+    if (!currentDevotional || !requestedDayNumber) return;
+    const routeKey = `${effectiveDevotionalId ?? currentDevotional.id}:${requestedDayNumber}`;
+    if (lastResolvedRouteKeyRef.current === routeKey) return;
+    lastResolvedRouteKeyRef.current = routeKey;
+
     const resolvedDay = resolveInitialReadingDayNumber(
       currentDevotional,
       requestedDayNumber,
     );
-    if (requestedDayNumber && resolvedDay !== viewingDay) {
-      setViewingDay(resolvedDay);
-    }
-  }, [currentDevotional, requestedDayNumber, viewingDay]);
+    setViewingDay((current) => (current === resolvedDay ? current : resolvedDay));
+  }, [currentDevotional, effectiveDevotionalId, requestedDayNumber]);
 
   // If currentDay advances to tomorrow while this screen is mounted, keep the
   // reader anchored to today's completed reading instead of exposing tomorrow.
@@ -539,11 +543,14 @@ export default function ReadingScreen() {
   const goToDay = useCallback((day: number) => {
     if (day >= 1 && day <= availableDays) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // Quick fade out → change day → fade in
-      contentOpacity.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) }, () => {
+      // Quick fade out → change day → fade in. Start fade-in only after the
+      // fade-out callback runs; assigning a second animation immediately can
+      // cancel the callback before setViewingDay fires.
+      contentOpacity.value = withTiming(0, { duration: 120, easing: Easing.out(Easing.ease) }, (finished) => {
+        if (!finished) return;
         runOnJS(setViewingDay)(day);
+        contentOpacity.value = withTiming(1, { duration: Duration.normal, easing: Easing.in(Easing.ease) });
       });
-      contentOpacity.value = withDelay(140, withTiming(1, { duration: Duration.normal, easing: Easing.in(Easing.ease) }));
     }
   }, [availableDays, contentOpacity]);
 

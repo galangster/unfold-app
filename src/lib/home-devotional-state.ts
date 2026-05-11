@@ -1,4 +1,5 @@
-import type { Devotional } from '@/lib/store';
+import type { Devotional, DevotionalDay } from '@/lib/store';
+import { getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -8,6 +9,28 @@ export function getCurrentDevotional(
 ): Devotional | undefined {
   if (!currentDevotionalId) return undefined;
   return devotionals.find((devotional) => devotional.id === currentDevotionalId);
+}
+
+export function getHomeDevotionalDayData(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): DevotionalDay | null {
+  if (!devotional) return null;
+
+  const lockedTodayDayNumber = getLockedTodayDayNumber(devotional, now);
+  if (lockedTodayDayNumber != null) {
+    return devotional.days.find((day) => day.dayNumber === lockedTodayDayNumber) ?? null;
+  }
+
+  const currentDayData = devotional.days.find((day) => day.dayNumber === devotional.currentDay);
+  if (currentDayData) return currentDayData;
+
+  const latestReadToday = getLatestReadDayNumberToday(devotional, now);
+  if (latestReadToday != null) {
+    return devotional.days.find((day) => day.dayNumber === latestReadToday) ?? null;
+  }
+
+  return null;
 }
 
 export function hasReadDevotionalToday({
