@@ -59,7 +59,7 @@ type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bri
 
 // Zone components
 import { getContextSlotType, type ContextSlotType } from '@/lib/context-slot-priority';
-import { computeDevotionalState } from '@/components/home/compute-devotional-state';
+import { computeDevotionalState, type ReflectionStatus } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
 import { ContextSlot } from '@/components/home/ContextSlot';
 import { GreetingRow } from '@/components/home/GreetingRow';
@@ -116,6 +116,7 @@ export default function HomeScreen() {
   const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
+  const journalEntries = useUnfoldStore((s) => s.journalEntries);
 
   // Auto-navigate to reading when coming from the reveal screen.
   // The reveal sets resumeContext with a fresh touchedAt timestamp,
@@ -617,6 +618,42 @@ export default function HomeScreen() {
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
   const currentDayData = getHomeDevotionalDayData(currentDevotional);
 
+  const handleReflect = useCallback((dayNumber?: number) => {
+    if (!currentDevotional) return;
+    const targetDayNumber = dayNumber ?? currentDayData?.dayNumber ?? currentDevotional.currentDay;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push({
+      pathname: '/(tabs)/(today)/journal',
+      params: {
+        devotionalId: currentDevotional.id,
+        dayNumber: String(targetDayNumber),
+      },
+    });
+  }, [currentDevotional, currentDayData?.dayNumber, router]);
+
+  const currentDayReflectionStatus = useMemo<ReflectionStatus>(() => {
+    if (!currentDevotional || !currentDayData) return 'empty';
+
+    const entry = journalEntries.find(
+      (journalEntry) => journalEntry.devotionalId === currentDevotional.id && journalEntry.dayNumber === currentDayData.dayNumber,
+    );
+    if (!entry) return 'empty';
+
+    const hasFreeWrite = entry.content.trim().length > 0;
+    const hasSoap = Object.values(entry.soapResponses ?? {}).some((value) => value.trim().length > 0);
+    const answeredReflectionCount = (entry.questionResponses ?? []).filter((response) => response.response.trim().length > 0).length;
+    const hasPrayer = (entry.prayerRequests ?? []).some((prayer) => prayer.text.trim().length > 0);
+    const hasAnyReflection = hasFreeWrite || hasSoap || answeredReflectionCount > 0 || hasPrayer;
+    if (!hasAnyReflection) return 'empty';
+
+    const totalReflectionQuestions = currentDayData.reflectionQuestions?.length ?? 0;
+    if (totalReflectionQuestions > 0 && answeredReflectionCount >= totalReflectionQuestions) {
+      return 'complete';
+    }
+
+    return 'started';
+  }, [currentDevotional, currentDayData, journalEntries]);
+
   // Content-aware check-in messages — reference today's devotional when available
   const middayMessage = useMemo(() => getContentAwareMiddayMessage(currentDayData ? {
     title: currentDayData.title,
@@ -721,9 +758,11 @@ export default function HomeScreen() {
     progress: progressPercent,
     tomorrowTeaser: homeTomorrowTeaser,
     onContinue: handleContinueReading,
+    onReflect: handleReflect,
     onCreateNew: handleCreateNew,
     onReveal: handleReveal,
     ctaText: getCtaText(),
+    reflectionStatus: currentDayReflectionStatus,
   });
 
   // During reveal → reading transition, render a centered ripple loader to

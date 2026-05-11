@@ -11,6 +11,7 @@ import type { DevotionalDay, Devotional } from '@/lib/store';
 // ─── State discriminated union ──────────────────────────────────
 
 export type DayLabel = 'Overdue' | 'Today' | 'Tomorrow';
+export type ReflectionStatus = 'empty' | 'started' | 'complete';
 
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
@@ -36,7 +37,9 @@ export type DevotionalCardState =
       daysCompleted: number;
       totalDays: number;
       onContinue: (dayNumber?: number) => void;
+      onReflect: (dayNumber?: number) => void;
       onCreateNew: () => void;
+      reflectionStatus: ReflectionStatus;
     }
   | {
       type: 'tomorrow-locked';
@@ -75,9 +78,11 @@ export interface ComputeInput {
   progress: number;
   tomorrowTeaser: string | null;
   onContinue: (dayNumber?: number) => void;
+  onReflect?: (dayNumber?: number) => void;
   onCreateNew: () => void;
   onReveal: () => void;
   ctaText: string;
+  reflectionStatus?: ReflectionStatus;
 }
 
 // ─── State machine ──────────────────────────────────────────────
@@ -108,9 +113,11 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     progress,
     tomorrowTeaser,
     onContinue,
+    onReflect = onContinue,
     onCreateNew,
     onReveal,
     ctaText,
+    reflectionStatus = 'empty',
   } = input;
 
   // 1. No devotional at all
@@ -164,7 +171,9 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
       daysCompleted,
       totalDays,
       onContinue,
+      onReflect,
       onCreateNew,
+      reflectionStatus,
     };
   }
 

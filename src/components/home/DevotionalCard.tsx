@@ -23,7 +23,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
-import { PlusIcon } from 'phosphor-react-native';
+import { CheckIcon, PencilLineIcon, PlusIcon } from 'phosphor-react-native';
 
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -508,6 +508,30 @@ function JourneyCompleteState({ seriesTitle, onCreateNew }: { seriesTitle: strin
 
 // ─── Main card (shared by unread / complete-today / tomorrow-locked) ──
 
+function getCompletedReflectionCopy(status: Extract<DevotionalCardState, { type: 'complete-today' }>['reflectionStatus']) {
+  switch (status) {
+    case 'complete':
+      return {
+        title: 'Reflection captured',
+        body: 'Revisit what stood out and carry it with you.',
+        cta: 'Review Reflection',
+      };
+    case 'started':
+      return {
+        title: 'Keep the thread open',
+        body: 'Finish shaping what today’s reading surfaced.',
+        cta: 'Continue Reflection',
+      };
+    case 'empty':
+    default:
+      return {
+        title: 'Let today settle',
+        body: 'Take two quiet minutes to capture what stood out.',
+        cta: 'Write a Reflection',
+      };
+  }
+}
+
 interface MainCardProps {
   state: Extract<DevotionalCardState, { type: 'unread' | 'complete-today' | 'tomorrow-locked' }>;
 }
@@ -537,6 +561,7 @@ function MainCard({ state }: MainCardProps) {
   const totalDays = state.totalDays;
   const seriesTitle = state.seriesTitle;
   const statusLabel = hasCompletedToday ? 'Completed' : isTomorrowLocked ? 'Tomorrow' : isYesterday ? 'Overdue' : dayLabel;
+  const completedReflectionCopy = hasCompletedToday ? getCompletedReflectionCopy(state.reflectionStatus) : null;
   const studyMethodName = dayData.studyMethod && BIBLE_STUDY_METHODS[dayData.studyMethod]
     ? BIBLE_STUDY_METHODS[dayData.studyMethod].name
     : null;
@@ -549,7 +574,7 @@ function MainCard({ state }: MainCardProps) {
     : (dayData.quotableLine || (scripturePreview ? `${scripturePreview}…` : 'A personalized reading is ready for this part of your story.'));
 
   const ctaText = hasCompletedToday
-    ? 'Return to Reading'
+    ? 'Read Again'
     : isTomorrowLocked
       ? "Return to Today's Reading"
       : isYesterday
@@ -560,9 +585,10 @@ function MainCard({ state }: MainCardProps) {
   const continueDayNumber = isTomorrowLocked ? Math.max(1, daysCompleted) : dayData.dayNumber;
   const onPress = 'onContinue' in state ? () => state.onContinue(continueDayNumber) : undefined;
   const onCreateNew = 'onCreateNew' in state ? state.onCreateNew : undefined;
+  const onReflect = hasCompletedToday ? state.onReflect : undefined;
 
   const accessibilityLabel = hasCompletedToday
-    ? `Return to ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`
+    ? `Read ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays} again`
     : isTomorrowLocked
       ? `Tomorrow's reading is locked. Return to ${seriesTitle}, day ${continueDayNumber} of ${totalDays}`
       : `Continue ${seriesTitle}, day ${dayData.dayNumber} of ${totalDays}`;
@@ -580,9 +606,35 @@ function MainCard({ state }: MainCardProps) {
               {seriesTitle}
             </Text>
 
-            <Text style={[styles.heroDayMeta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-              {statusLabel} · Day {dayData.dayNumber} of {totalDays}
-            </Text>
+            {hasCompletedToday ? (
+              <View
+                style={styles.heroDayMetaRow}
+                accessible
+                accessibilityLabel={`Completed. Day ${dayData.dayNumber} of ${totalDays}`}
+              >
+                <View
+                  style={[
+                    styles.completedStatusPill,
+                    {
+                      backgroundColor: alpha(colors.accent, 0.16),
+                      borderColor: alpha(colors.accent, 0.34),
+                    },
+                  ]}
+                >
+                  <CheckIcon size={12} color={colors.accent} weight="bold" />
+                  <Text style={[styles.completedStatusText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                    Completed
+                  </Text>
+                </View>
+                <Text style={[styles.heroDayMetaDayText, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                  Day {dayData.dayNumber} of {totalDays}
+                </Text>
+              </View>
+            ) : (
+              <Text style={[styles.heroDayMeta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                {statusLabel} · Day {dayData.dayNumber} of {totalDays}
+              </Text>
+            )}
 
             <Text
               style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text }]}
@@ -630,6 +682,38 @@ function MainCard({ state }: MainCardProps) {
               </View>
             )}
 
+            {completedReflectionCopy ? (
+              <TouchableOpacity
+                activeOpacity={0.74}
+                onPress={() => onReflect?.(dayData.dayNumber)}
+                accessibilityRole="button"
+                accessibilityLabel={`${completedReflectionCopy.cta} for ${seriesTitle}, day ${dayData.dayNumber}`}
+                accessibilityHint="Opens the journal reflection for this completed reading"
+                style={[
+                  styles.completedNextStepCard,
+                  {
+                    backgroundColor: alpha(colors.accent, 0.08),
+                    borderColor: alpha(colors.accent, 0.2),
+                  },
+                ]}
+              >
+                <View style={[styles.completedNextStepIcon, { backgroundColor: alpha(colors.accent, 0.14) }]}>
+                  <PencilLineIcon size={16} color={colors.accent} weight="light" />
+                </View>
+                <View style={styles.completedNextStepCopy}>
+                  <Text style={[styles.completedNextStepTitle, { color: colors.text }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                    {completedReflectionCopy.title}
+                  </Text>
+                  <Text style={[styles.completedNextStepBody, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                    {completedReflectionCopy.body}
+                  </Text>
+                  <Text style={[styles.completedNextStepCta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                    {completedReflectionCopy.cta} →
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ) : null}
+
             <TouchableOpacity
               activeOpacity={0.74}
               onPress={onPress}
@@ -641,12 +725,13 @@ function MainCard({ state }: MainCardProps) {
               }}
               accessibilityRole="button"
               accessibilityLabel={accessibilityLabel}
-              accessibilityHint={isTomorrowLocked ? "Opens today's completed reading instead of the locked tomorrow reading" : undefined}
+              accessibilityHint={hasCompletedToday ? "Opens the completed reading again" : isTomorrowLocked ? "Opens today's completed reading instead of the locked tomorrow reading" : undefined}
               style={[
                 styles.heroActions,
+                hasCompletedToday && styles.heroActionsSecondary,
                 {
-                  borderColor: alpha(colors.accent, 0.24),
-                  backgroundColor: alpha(colors.accent, 0.075),
+                  borderColor: alpha(colors.accent, hasCompletedToday ? 0.16 : 0.24),
+                  backgroundColor: alpha(colors.accent, hasCompletedToday ? 0.035 : 0.075),
                 },
               ]}
             >
@@ -767,6 +852,37 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: Spacing['3'],
   },
+  heroDayMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexWrap: 'wrap',
+    gap: Spacing['2'],
+    marginBottom: Spacing['3'],
+  },
+  completedStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['1.5'],
+    paddingHorizontal: Spacing['2.5'],
+    paddingVertical: Spacing['1'],
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  completedStatusText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    lineHeight: 15,
+    textTransform: 'uppercase',
+  },
+  heroDayMetaDayText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 1.35,
+    lineHeight: 16,
+    textTransform: 'uppercase',
+  },
   heroDayTitle: {
     fontFamily: FontFamily.display,
     fontSize: 42,
@@ -847,6 +963,52 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: Spacing['1'],
     gap: Spacing['2'],
+  },
+  heroActionsSecondary: {
+    minHeight: 42,
+    paddingVertical: Spacing['2.5'],
+    paddingHorizontal: Spacing['4'],
+  },
+  completedNextStepCard: {
+    width: '100%',
+    maxWidth: 344,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing['3'],
+    padding: Spacing['4'],
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    marginBottom: Spacing['4'],
+  },
+  completedNextStepIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  completedNextStepCopy: {
+    flex: 1,
+    gap: Spacing['1'],
+  },
+  completedNextStepTitle: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 14,
+    lineHeight: 19,
+    letterSpacing: 0.15,
+  },
+  completedNextStepBody: {
+    fontFamily: FontFamily.body,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  completedNextStepCta: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 12,
+    lineHeight: 17,
+    letterSpacing: 0.35,
+    marginTop: Spacing['1'],
   },
   heroActionArrow: {
     fontFamily: FontFamily.uiMedium,

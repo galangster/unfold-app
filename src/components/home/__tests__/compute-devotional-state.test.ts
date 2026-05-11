@@ -45,9 +45,11 @@ const baseInput: ComputeInput = {
   progress: 0,
   tomorrowTeaser: null,
   onContinue: noop,
+  onReflect: noop,
   onCreateNew: noop,
   onReveal: noop,
   ctaText: 'Begin Your Journey',
+  reflectionStatus: 'empty',
 };
 
 // ─── Tests ──────────────────────────────────────────────────────
@@ -122,7 +124,9 @@ describe('computeDevotionalState', () => {
     if (state.type === 'complete-today') {
       expect(state.seriesTitle).toBe('Faith Foundations');
       expect(typeof state.onContinue).toBe('function');
+      expect(typeof state.onReflect).toBe('function');
       expect(typeof state.onCreateNew).toBe('function');
+      expect(state.reflectionStatus).toBe('empty');
     }
   });
 
