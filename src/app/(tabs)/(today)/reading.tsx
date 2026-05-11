@@ -48,6 +48,12 @@ import {
   selectNextRenderableDevotionalDay,
   selectRenderableDevotionalDay,
 } from '@/lib/devotional-canonical-days';
+import {
+  getLockedTodayDayNumber,
+  getSelectableDayLimit,
+  getTodayReaderDayNumber,
+  resolveInitialReadingDayNumber,
+} from '@/lib/devotional-day-access';
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -203,15 +209,11 @@ export default function ReadingScreen() {
   const requestedDayNumber = parsePositiveInteger(params.dayNumber);
 
   const [viewingDay, setViewingDay] = useState(() => {
-    if (requestedDayNumber) return requestedDayNumber;
     // Read fresh state from the store to ensure the param devotional is used
     // even before the effect-based store sync has flushed.
     const devs = useUnfoldStore.getState().devotionals;
     const d = devs.find((x) => x.id === effectiveDevotionalId);
-    if (!d) return 1;
-    const target = d.currentDay;
-    if (d.days.some((day) => day.dayNumber === target)) return target;
-    return d.days.length > 0 ? d.days.length : 1;
+    return resolveInitialReadingDayNumber(d, requestedDayNumber);
   });
   // shareModalOpen removed — share now navigates to /share-card route
   const [audioToast, setAudioToast] = useState<{ visible: boolean; message: string } | null>(null);
@@ -267,10 +269,23 @@ export default function ReadingScreen() {
   const fontSize = user?.fontSize ?? 'medium';
 
   const totalDays = currentDevotional?.totalDays ?? 1;
-  const availableDays = useMemo(
+  const renderableDays = useMemo(
     () => getHighestContiguousRenderableDayNumber(currentDevotional),
     [currentDevotional],
   );
+  const selectableDayLimit = useMemo(
+    () => getSelectableDayLimit(currentDevotional),
+    [currentDevotional],
+  );
+  const todayReaderDayNumber = useMemo(
+    () => getTodayReaderDayNumber(currentDevotional),
+    [currentDevotional],
+  );
+  const lockedTodayDayNumber = useMemo(
+    () => getLockedTodayDayNumber(currentDevotional),
+    [currentDevotional],
+  );
+  const availableDays = selectableDayLimit > 0 ? selectableDayLimit : renderableDays;
   const renderableDay = useMemo(
     () => selectRenderableDevotionalDay(currentDevotional, viewingDay),
     [currentDevotional, viewingDay],
@@ -314,7 +329,7 @@ export default function ReadingScreen() {
   // Only show retry banner if this specific series has ungenerated days
   // Compare against totalDays (the series plan), not expectedDays (user preference)
   // Progressive mode generates days one at a time — don't show batch retry banner
-  const showIncompleteJourneyRetry = availableDays < totalDays && currentDevotional?.generationMode !== 'progressive';
+  const showIncompleteJourneyRetry = renderableDays < totalDays && currentDevotional?.generationMode !== 'progressive';
   const retryCtaButtonBg = colors.accent;
   const retryCtaButtonText = colors.background;
   const btnText = retryCtaButtonText;
@@ -477,12 +492,26 @@ export default function ReadingScreen() {
     }
   }, [viewingDay, stopAudio]);
 
-  // Respect deep-linked day number (used by Resume card)
+  // Respect deep-linked day number (used by Resume card), but never let a
+  // stale route reopen tomorrow after today's reading has already completed.
   useEffect(() => {
-    if (requestedDayNumber && requestedDayNumber !== viewingDay) {
-      setViewingDay(requestedDayNumber);
+    if (!currentDevotional) return;
+    const resolvedDay = resolveInitialReadingDayNumber(
+      currentDevotional,
+      requestedDayNumber,
+    );
+    if (requestedDayNumber && resolvedDay !== viewingDay) {
+      setViewingDay(resolvedDay);
     }
-  }, [requestedDayNumber, viewingDay]);
+  }, [currentDevotional, requestedDayNumber, viewingDay]);
+
+  // If currentDay advances to tomorrow while this screen is mounted, keep the
+  // reader anchored to today's completed reading instead of exposing tomorrow.
+  useEffect(() => {
+    if (lockedTodayDayNumber != null && viewingDay > lockedTodayDayNumber) {
+      setViewingDay(lockedTodayDayNumber);
+    }
+  }, [lockedTodayDayNumber, viewingDay]);
 
   // Persist latest reading context so Home can offer one-tap resume.
   useEffect(() => {
@@ -1691,7 +1720,7 @@ export default function ReadingScreen() {
                 >
                   Day {viewingDay} of {currentDevotional.totalDays}
                 </Text>
-                {viewingDay === currentDevotional.currentDay && (
+                {viewingDay === todayReaderDayNumber && (
                   <View
                     style={{
                       backgroundColor: alpha(colors.accent, 0.13),

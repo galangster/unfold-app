@@ -11,6 +11,10 @@ import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import {
+  isDevotionalDaySelectable,
+  resolveInitialReadingDayNumber,
+} from '@/lib/devotional-day-access';
 
 export default function DayMenuScreen() {
   const router = useRouter();
@@ -36,15 +40,20 @@ export default function DayMenuScreen() {
     );
   }
 
+  const activeViewingDay = resolveInitialReadingDayNumber(devotional, currentViewingDay);
+
   const handleSelectDay = (dayNumber: number) => {
-    if (dayNumber > devotional.currentDay) {
+    if (!isDevotionalDaySelectable(devotional, dayNumber)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace({
       pathname: '/(tabs)/(today)/reading',
-      params: { dayNumber: dayNumber.toString() },
+      params: {
+        devotionalId: devotional.id,
+        dayNumber: dayNumber.toString(),
+      },
     });
   };
 
@@ -90,9 +99,10 @@ export default function DayMenuScreen() {
         {Array.from({ length: Math.max(devotional.totalDays ?? 0, (devotional.days ?? []).length) }, (_, i) => {
           const dayNumber = i + 1;
           const day = (devotional.days ?? []).find((d) => d.dayNumber === dayNumber);
-          const isActive = dayNumber === currentViewingDay;
+          const isActive = dayNumber === activeViewingDay;
           const isDayRead = day?.isRead ?? false;
-          const isLocked = !day || dayNumber > devotional.currentDay;
+          const isLocked = !isDevotionalDaySelectable(devotional, dayNumber);
+          const dayTitle = isLocked ? 'Being prepared…' : day?.title ?? 'Being prepared…';
 
           return (
             <Animated.View
@@ -170,7 +180,7 @@ export default function DayMenuScreen() {
                   }}
                   numberOfLines={1}
                 >
-                  {day?.title ?? 'Generating...'}
+                  {dayTitle}
                 </Text>
               </View>
 
