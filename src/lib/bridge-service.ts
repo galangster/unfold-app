@@ -6,8 +6,9 @@
  * Results are cached in MMKV so generation happens at most once per day
  * per devotional day.
  *
- * Calls the Railway backend which uses Grok for
- * cost-effective generation (~$0.0005/bridge).
+ * Calls the Railway backend through the standard AI gateway. The current
+ * mobile request asks for Claude Haiku; keep Companion prose on the approved
+ * Claude-family path unless Nick explicitly approves a fallback.
  */
 
 import { MMKV } from 'react-native-mmkv';
