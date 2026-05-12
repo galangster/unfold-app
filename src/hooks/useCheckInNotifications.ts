@@ -4,29 +4,29 @@
  *
  * Why this exists:
  *
- * Check-in notifications are premium-only. A churned user must NEVER get
- * reminded to use a feature they can no longer access — that's harassment,
- * not engagement. Previously the gate was a boolean from `useUnfoldStore`:
+ * Check-in notifications are premium-only. We must not schedule new premium
+ * reminders from a stale persisted mirror of RevenueCat state. Previously the
+ * gate was a boolean from `useUnfoldStore`:
  *
  *   const isPremium = useUnfoldStore((s) => s.user?.isPremium ?? false);
  *
  * But that boolean is a persisted MIRROR of RevenueCat state. On cold start,
- * it still holds the *last known* answer from before the user churned —
- * RevenueCat hasn't reported in for this session yet. During that brief
- * window, the old `useEffect` would fire, read `isPremium === true`, and
- * happily schedule tomorrow's notifications against a user who cancelled
- * their subscription yesterday.
+ * it can still hold the *last known* answer from before a user churned —
+ * RevenueCat has not reported in for this session yet. During that brief
+ * window, a naive `useEffect` could read `isPremium === true` and schedule
+ * notifications against a user who cancelled their subscription yesterday.
  *
- * Then — because `scheduleMiddayCheckIn` / `scheduleEveningWindDown` use
- * expo-notifications' DAILY recurring trigger — the schedule persists in
- * the OS forever. Even after RevenueCat eventually reports "denied" and we
- * cancel by identifier, the churned user has already been harassed once.
- * And if the cancel races with a foreground reconcile, the harassment
- * continues indefinitely.
+ * The opposite edge matters too: actively cancelling an existing DAILY/WEEKLY
+ * OS schedule while policy is still `unknown` can make a legitimate premium
+ * user miss today's reminder if RevenueCat is slow, offline, or still
+ * migrating identity. So `unknown` means "defer without touching the OS
+ * queue". Once RevenueCat definitively resolves, this owner either schedules
+ * fresh reminders (`granted`) or cancels both (`denied`).
  *
  * Strategy (ported from `useDailyReminderSync`, sharpened for premium gating):
  *   1. Tri-state premium policy (`usePremiumAccessPolicy`) — `unknown` means
- *      "RevenueCat has NOT reported in this session, fail closed."
+ *      "do not schedule new premium reminders yet; preserve existing OS
+ *      schedules until the source resolves."
  *   2. Single reactive owner — one hook mounted once at the root layout.
  *      Every write to the OS queue flows through `runSync`. No imperative
  *      "just reschedule tomorrow" helpers at call sites (those have been
@@ -60,6 +60,7 @@ import {
   areNotificationsEnabled,
 } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
+import { getCheckInNotificationGatePlan } from '@/lib/check-in-notification-sync-policy';
 
 const DEBOUNCE_MS = 500;
 
@@ -157,68 +158,40 @@ export function useCheckInNotifications() {
       const middayEnabled = state.middayCheckInEnabled;
       const eveningEnabled = state.eveningWindDownEnabled;
 
-      // If the user hasn't finished onboarding, nothing should be scheduled.
-      // Hard kill — the user isn't ready for check-in reminders.
-      if (!hasCompletedOnboarding) {
-        await cancelMiddayCheckIn();
-        await cancelEveningWindDown();
-        lastAppliedRef.current = target;
-        lastAppliedDayRef.current = todayStr;
-        logger.log(`[useCheckInNotifications] Onboarding incomplete; cancelled both (reason=${reason})`);
-        return;
-      }
-
       // Tri-state premium gate. Re-read via the non-React getter so we get
       // the freshest values at execution time (not whatever was captured in
       // the hook closure when the fingerprint was built).
       const policy = getEffectivePremiumAccessPolicy();
+      const gatePlan = getCheckInNotificationGatePlan({
+        hasCompletedOnboarding,
+        policy,
+      });
 
-      if (policy === 'unknown') {
-        // RevenueCat has NOT reported in this session yet — we don't know
-        // if this user is premium or churned. FAIL CLOSED: actively cancel
-        // both notifications.
-        //
-        // Why we cancel instead of "leaving them alone":
-        //
-        //   The OS queue PERSISTS across sessions. A user who was premium
-        //   yesterday, churned last night, and opens the app today on bad
-        //   network (or airplane mode, or with RC rate-limited) still has
-        //   yesterday's DAILY triggers sitting in the OS queue. If we do
-        //   nothing on `unknown`, those stale recurring triggers keep
-        //   firing indefinitely — exactly the bug we're trying to fix.
-        //
-        //   The fingerprint includes the tri-state policy, so when RC
-        //   eventually resolves (next foreground, network recovery, RC
-        //   listener fires), the fingerprint changes and runSync re-runs
-        //   with the real policy. Legit premium users will re-schedule on
-        //   that run; churned users stay cancelled.
-        //
-        //   Cost for legit premium users on bad network: one missed
-        //   reminder until RC resolves. Cost for churned users if we
-        //   DIDN'T cancel: unbounded harassment. Not a hard trade.
-        //
-        // Safe to mark applied here because the fingerprint WILL change on
-        // policy resolution (policy is in the fingerprint). If for any
-        // reason that assumption breaks, foreground reconcile will still
-        // pick it up.
+      if (gatePlan.kind === 'cancel-both') {
+        // Onboarding incomplete means the user is not ready for check-in
+        // reminders at all. Premium denied means RevenueCat has definitively
+        // told us to remove premium-only reminders. Both are hard cancels.
         await cancelMiddayCheckIn();
         await cancelEveningWindDown();
         lastAppliedRef.current = target;
         lastAppliedDayRef.current = todayStr;
-        logger.log(`[useCheckInNotifications] Policy unknown; cancelled both (fail closed) (reason=${reason})`);
+        logger.log(
+          `[useCheckInNotifications] ${gatePlan.reason}; cancelled both (reason=${reason})`,
+        );
         return;
       }
 
-      if (policy === 'denied') {
-        // Churned user (or debug-forced-churned). Cancel both unconditionally.
-        // Does NOT touch the toggle state — when the user restores premium,
-        // their prior preferences re-apply on the next run without needing
-        // the user to re-enable them.
-        await cancelMiddayCheckIn();
-        await cancelEveningWindDown();
-        lastAppliedRef.current = target;
-        lastAppliedDayRef.current = todayStr;
-        logger.log(`[useCheckInNotifications] Policy denied; cancelled both (reason=${reason})`);
+      if (gatePlan.kind === 'defer') {
+        // RevenueCat has not reported in this session yet. Do not schedule new
+        // premium reminders from a potentially stale persisted mirror — but
+        // also do not delete existing DAILY/WEEKLY OS schedules. Deleting on
+        // every cold start/foreground can make active premium users miss the
+        // same-day midday/evening reminder if RC is slow, offline, or still
+        // migrating identity. When RC resolves, the policy fingerprint changes
+        // and this owner will either schedule fresh reminders (granted) or
+        // cancel both (denied). Deliberately do NOT mark this fingerprint as
+        // applied, so foreground reconciles keep checking while unresolved.
+        logger.log(`[useCheckInNotifications] Policy unknown; deferred without touching OS queue (reason=${reason})`);
         return;
       }
 
