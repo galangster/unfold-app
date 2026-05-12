@@ -84,7 +84,10 @@ function detectStreakLoss(
 export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNudgeResult {
   // Store selectors — all primitives or stable references
   const premiumPolicy = usePremiumAccessPolicy();
-  const isPremium = premiumPolicy === 'granted';
+  // Premium nudges are upsells. Suppress them not only for granted access,
+  // but also while entitlement resolution is still unknown so paid users don't
+  // see a brief churn/upgrade card during RevenueCat cold-start windows.
+  const shouldSuppressPremiumNudges = premiumPolicy !== 'denied';
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
   const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const streakWeekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);
@@ -120,7 +123,7 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
   const nudge = useMemo(() => {
     const ctx: NudgeContext = {
       screen,
-      isPremium,
+      isPremium: shouldSuppressPremiumNudges,
       streakCurrent,
       streakJustReset,
       totalReadingsCompleted,
@@ -137,7 +140,7 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
     return evaluateNudges(ctx, state);
   }, [
     screen,
-    isPremium,
+    shouldSuppressPremiumNudges,
     streakCurrent,
     streakJustReset,
     totalReadingsCompleted,

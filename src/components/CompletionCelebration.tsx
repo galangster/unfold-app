@@ -17,6 +17,7 @@ import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { GoldEmberField } from '@/components/home/GoldEmberField';
+import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CENTER_X = SCREEN_WIDTH / 2;
@@ -274,6 +275,7 @@ export function CompletionCelebration({
   if (!visible) return null;
 
   const title = type === 'series' ? 'Series Complete' : 'Day Complete';
+  const seriesSummaryExcerpt = formatSeriesCompletionSummary(seriesReflectionSummary);
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
@@ -339,19 +341,19 @@ export function CompletionCelebration({
             </Animated.View>
 
             {/* Series reflection summary */}
-            {type === 'series' && seriesReflectionSummary && (
-              <Animated.View style={[{ marginTop: 12 }, subtitleStyle]}>
+            {type === 'series' && seriesSummaryExcerpt && (
+              <Animated.View style={[{ marginTop: Spacing['4'], maxWidth: SCREEN_WIDTH - Spacing['8'] * 2 }, subtitleStyle]}>
                 <Text
+                  numberOfLines={4}
                   style={{
-                    fontFamily: FontFamily.bodyItalic,
-                    fontSize: 14,
-                    lineHeight: 20,
-                    color: colors.textSubtle,
+                    fontFamily: FontFamily.body,
+                    fontSize: 16,
+                    lineHeight: 24,
+                    color: colors.textMuted,
                     textAlign: 'left',
-                    paddingHorizontal: 8,
                   }}
                 >
-                  {seriesReflectionSummary}
+                  {seriesSummaryExcerpt}
                 </Text>
               </Animated.View>
             )}

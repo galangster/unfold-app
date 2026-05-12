@@ -67,8 +67,8 @@ function getNudgeTone(type: NudgeType): { kicker: string; title: string; footnot
       };
     case 'journey_completion':
       return {
-        kicker: 'Next invitation',
-        title: 'Keep unfolding after this series',
+        kicker: 'Premium series',
+        title: 'Open another personal series',
         footnote: 'No pressure — your free rhythm stays intact.',
       };
   }
@@ -144,13 +144,6 @@ export function PremiumNudgeCard({
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.artLayer}>
-          <View style={[styles.haloOuter, { borderColor: alpha(colors.accent, 0.12) }]} />
-          <View style={[styles.haloInner, { borderColor: alpha(colors.accent, 0.22) }]} />
-          <View style={[styles.thread, { backgroundColor: alpha(colors.accent, 0.24) }]} />
-          <View style={[styles.ember, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-        </View>
-
         <View style={styles.headerRow}>
           <View style={[styles.iconContainer, { backgroundColor: alpha(colors.accent, 0.11), borderColor: alpha(colors.accent, 0.18) }]}>
             <IconComponent size={18} color={colors.accent} weight="light" />
@@ -243,51 +236,6 @@ const styles = StyleSheet.create({
   containerCompact: {
     padding: Spacing['4'],
   },
-  artLayer: {
-    position: 'absolute',
-    top: -36,
-    right: -42,
-    width: 164,
-    height: 164,
-  },
-  haloOuter: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 1,
-  },
-  haloInner: {
-    position: 'absolute',
-    top: 34,
-    right: 34,
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    borderWidth: 1,
-  },
-  thread: {
-    position: 'absolute',
-    top: 22,
-    right: 74,
-    width: 1,
-    height: 118,
-    transform: [{ rotate: '28deg' }],
-  },
-  ember: {
-    position: 'absolute',
-    top: 74,
-    right: 72,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 10,
-    elevation: 3,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -328,7 +276,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   message: {
-    width: '88%',
+    width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 14,
     lineHeight: 21,

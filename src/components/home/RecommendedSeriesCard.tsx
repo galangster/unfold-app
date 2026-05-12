@@ -148,12 +148,6 @@ export function RecommendedSeriesCard({
             },
           ]}
         >
-          <View pointerEvents="none" style={styles.artRail}>
-            <View style={[styles.artCircleOuter, { borderColor: alpha(colors.accent, 0.14) }]} />
-            <View style={[styles.artCircleInner, { borderColor: alpha(colors.accent, 0.28) }]} />
-            <View style={[styles.artEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-          </View>
-
           <View style={styles.kickerRow}>
             <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
             <Text style={[styles.eyebrow, { color: colors.accent }]}>Discerning what’s next</Text>
@@ -198,13 +192,6 @@ export function RecommendedSeriesCard({
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.artRail}>
-          <View style={[styles.artCircleOuter, { borderColor: alpha(colors.accent, 0.14) }]} />
-          <View style={[styles.artCircleInner, { borderColor: alpha(colors.accent, 0.34) }]} />
-          <View style={[styles.artLine, { backgroundColor: alpha(colors.accent, 0.24) }]} />
-          <View style={[styles.artEmber, { backgroundColor: colors.accent, shadowColor: colors.accent }]} />
-        </View>
-
         <View style={styles.contentColumn}>
           <View style={styles.kickerRow}>
             <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
@@ -279,55 +266,8 @@ const styles = StyleSheet.create({
   loadingCard: {
     minHeight: 214,
   },
-  artRail: {
-    position: 'absolute',
-    top: -34,
-    right: -52,
-    width: 186,
-    height: 224,
-    opacity: 0.84,
-  },
-  artCircleOuter: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 172,
-    height: 172,
-    borderRadius: 86,
-    borderWidth: 1,
-  },
-  artCircleInner: {
-    position: 'absolute',
-    right: 40,
-    top: 40,
-    width: 94,
-    height: 94,
-    borderRadius: 47,
-    borderWidth: 1,
-  },
-  artLine: {
-    position: 'absolute',
-    right: 96,
-    top: 30,
-    width: 1.5,
-    height: 156,
-    borderRadius: 1,
-    transform: [{ rotate: '14deg' }],
-  },
-  artEmber: {
-    position: 'absolute',
-    right: 82,
-    top: 82,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 16,
-  },
   contentColumn: {
     zIndex: 2,
-    paddingRight: 52,
   },
   kickerRow: {
     flexDirection: 'row',
@@ -348,14 +288,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   introCopy: {
-    width: '86%',
+    width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 14,
     lineHeight: 21,
     marginBottom: Spacing['4'],
   },
   loadingTitle: {
-    width: '74%',
+    width: '100%',
     fontFamily: FontFamily.display,
     fontSize: 28,
     lineHeight: 34,
@@ -363,7 +303,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['2'],
   },
   loadingCopy: {
-    width: '76%',
+    width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 14,
     lineHeight: 21,
@@ -385,7 +325,7 @@ const styles = StyleSheet.create({
     bottom: Spacing['6'],
   },
   themeName: {
-    width: '88%',
+    width: '100%',
     fontFamily: FontFamily.display,
     fontSize: 32,
     lineHeight: 38,
@@ -393,7 +333,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['3'],
   },
   reason: {
-    width: '88%',
+    width: '100%',
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,

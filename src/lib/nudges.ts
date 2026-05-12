@@ -219,7 +219,7 @@ function buildNudgePayload(type: NudgeType, ctx: NudgeContext): EligibleNudge {
       return {
         type: 'journey_completion',
         message: `You finished ${seriesName}. Premium can open another personal series whenever you are ready.`,
-        cta: 'Explore paths',
+        cta: 'See Premium paths',
         premiumFeature: 'series',
       };
     }
