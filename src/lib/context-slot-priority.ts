@@ -59,11 +59,13 @@ export function getContextSlotType(input: ContextSlotInput): ContextSlotType {
       return 'midday';
     }
 
-    // Priority 4: Daily bridge
-    if (input.hasBridgeInput && input.hasBridgeText) return 'bridge';
+    // Priority 4: Daily bridge — only before today's reading is complete.
+    // Once the user has read today, the store may have advanced currentDay to
+    // a locked tomorrow candidate; do not surface that as today's Companion.
+    if (!input.hasReadToday && input.hasBridgeInput && input.hasBridgeText) return 'bridge';
 
-    // Priority 5: Bridge loading shimmer
-    if (input.hasBridgeInput && input.isBridgeLoading) return 'bridge-loading';
+    // Priority 5: Bridge loading shimmer — also only before reading complete.
+    if (!input.hasReadToday && input.hasBridgeInput && input.isBridgeLoading) return 'bridge-loading';
   }
 
   return 'none';

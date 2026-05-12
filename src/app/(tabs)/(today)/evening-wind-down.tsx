@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -29,8 +29,16 @@ import { EVENING_CELEBRATION_MESSAGES } from '@/constants/check-in-messages';
 import { EveningCelebration } from '@/components/EveningCelebration';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
+import { getEveningWindDownDayNumber } from '@/lib/today-companion-state';
 
 // Single unified flow: prayer + scripture together (no pill toggle)
+
+function parsePositiveInteger(value?: string | string[]): number | null {
+  if (!value) return null;
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
 
 // Concentric ripple rings behind the moon icon
 function MoonRipples({ color }: { color: string }) {
@@ -130,6 +138,7 @@ function MovementCard({
 
 export default function EveningWindDownScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ devotionalId?: string; dayNumber?: string }>();
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
   const user = useUnfoldStore((s) => s.user);
@@ -144,12 +153,10 @@ export default function EveningWindDownScreen() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
 
-  const currentDevotional = devotionals.find((d) => d.id === currentDevotionalId);
-  // Evening wind-down is for the day just completed, which may be currentDay - 1
-  // if the reading screen already advanced the day counter
-  const eveningDayNumber = (currentDevotional?.currentDay ?? 1) > 1
-    ? (currentDevotional?.currentDay ?? 1) - 1
-    : (currentDevotional?.currentDay ?? 1);
+  const requestedDayNumber = parsePositiveInteger(params.dayNumber);
+  const effectiveDevotionalId = params.devotionalId ?? currentDevotionalId;
+  const currentDevotional = devotionals.find((d) => d.id === effectiveDevotionalId);
+  const eveningDayNumber = requestedDayNumber ?? getEveningWindDownDayNumber(currentDevotional) ?? 1;
   const currentDay = currentDevotional?.days.find(
     (d) => d.dayNumber === eveningDayNumber
   );

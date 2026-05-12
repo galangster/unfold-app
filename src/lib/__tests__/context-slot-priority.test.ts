@@ -65,6 +65,18 @@ describe('getContextSlotType', () => {
     })).toBe('bridge-loading');
   });
 
+  it('does not show bridge after reading is complete today', () => {
+    expect(getContextSlotType({
+      ...base, hasReadToday: true, hasBridgeInput: true, hasBridgeText: true,
+    })).toBe('none');
+  });
+
+  it('does not show bridge loading after reading is complete today', () => {
+    expect(getContextSlotType({
+      ...base, hasReadToday: true, hasBridgeInput: true, isBridgeLoading: true,
+    })).toBe('none');
+  });
+
   it('returns none when nothing applies', () => {
     expect(getContextSlotType(base)).toBe('none');
   });

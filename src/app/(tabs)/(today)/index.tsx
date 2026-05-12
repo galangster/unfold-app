@@ -45,6 +45,11 @@ import {
   hasReadDevotionalToday,
   shouldPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
+import {
+  getBridgeDayNumber,
+  getEveningWindDownDayNumber,
+  getMiddayCheckInDayNumber,
+} from '@/lib/today-companion-state';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -390,14 +395,16 @@ export default function HomeScreen() {
   const bridgeInput = useMemo(() => {
     if (qaContextSlot === 'bridge' || qaContextSlot === 'bridge-loading') return null;
     if (!currentDevotional || !user?.name) return null;
-    if (currentDevotional.currentDay <= 1) return null; // No bridge for Day 1
 
-    const todayDay = (currentDevotional.days ?? []).find((d) => d.dayNumber === currentDevotional.currentDay);
+    const bridgeDayNumber = getBridgeDayNumber(currentDevotional, hasReadToday);
+    if (!bridgeDayNumber) return null;
+
+    const todayDay = (currentDevotional.days ?? []).find((d) => d.dayNumber === bridgeDayNumber);
     if (!todayDay) return null;
 
-    // Find yesterday's check-in
+    // Find yesterday's check-in for the same allowed day the bridge introduces.
     const yesterdayCheckIn = checkIns.find(
-      (c) => c.devotionalId === currentDevotional.id && c.dayNumber === currentDevotional.currentDay - 1
+      (c) => c.devotionalId === currentDevotional.id && c.dayNumber === bridgeDayNumber - 1
     );
 
     const bridgeCheckIn: BridgeCheckIn | undefined = yesterdayCheckIn
@@ -418,9 +425,9 @@ export default function HomeScreen() {
         currentSituation: user.currentSituation || '',
       },
       devotionalId: currentDevotional.id,
-      dayNumber: currentDevotional.currentDay,
+      dayNumber: bridgeDayNumber,
     };
-  }, [currentDevotional, user?.name, user?.currentSituation, checkIns, qaContextSlot]);
+  }, [currentDevotional, user?.name, user?.currentSituation, checkIns, qaContextSlot, hasReadToday]);
 
   const { data: bridgeText, isLoading: bridgeLoading } = useQuery({
     queryKey: ['bridge', bridgeInput?.devotionalId, bridgeInput?.dayNumber, bridgeInput?.input],
@@ -544,9 +551,10 @@ export default function HomeScreen() {
     freeText?: string;
   }) => {
     if (!currentDevotional) return;
+    const targetDayNumber = getMiddayCheckInDayNumber(currentDevotional) ?? currentDevotional.currentDay;
     addCheckIn({
       devotionalId: currentDevotional.id,
-      dayNumber: currentDevotional.currentDay,
+      dayNumber: targetDayNumber,
       mood: data.mood,
       moodLabel: data.moodLabel,
       chipAnswer: data.chipAnswer,
@@ -566,21 +574,29 @@ export default function HomeScreen() {
   const handleEveningWindDown = () => {
     if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const targetDayNumber = getEveningWindDownDayNumber(currentDevotional);
+    if (currentDevotional && targetDayNumber) {
+      router.push({
+        pathname: '/(tabs)/(today)/evening-wind-down',
+        params: {
+          devotionalId: currentDevotional.id,
+          dayNumber: String(targetDayNumber),
+        },
+      });
+      return;
+    }
     router.push('/(tabs)/(today)/evening-wind-down');
   };
 
-  // Check if midday/evening check-ins already completed today
-  // Evening check-in belongs to the day just completed, which may be currentDay - 1
-  // if the reading was finished and the day already advanced
-  const eveningCheckInDay = currentDevotional
-    ? (currentDevotional.currentDay > 1
-      ? currentDevotional.currentDay - 1
-      : currentDevotional.currentDay)
-    : 1;
-  const todayCheckIn = currentDevotional
-    ? getCheckIn(currentDevotional.id, currentDevotional.currentDay, 'midday')
+  // Check if midday/evening check-ins already completed for their target day.
+  // Midday follows the currently readable day. Evening follows the day actually
+  // completed today, including the final day where currentDay does not advance.
+  const middayCheckInDay = getMiddayCheckInDayNumber(currentDevotional);
+  const eveningCheckInDay = getEveningWindDownDayNumber(currentDevotional);
+  const todayCheckIn = currentDevotional && middayCheckInDay != null
+    ? getCheckIn(currentDevotional.id, middayCheckInDay, 'midday')
     : undefined;
-  const todayEveningCheckIn = currentDevotional
+  const todayEveningCheckIn = currentDevotional && eveningCheckInDay != null
     ? getCheckIn(currentDevotional.id, eveningCheckInDay, 'evening')
     : undefined;
 
@@ -999,7 +1015,7 @@ export default function HomeScreen() {
           question={currentDayData?.checkInQuestion}
           chips={currentDayData?.checkInChips}
           devotionalId={currentDevotional.id}
-          dayNumber={currentDevotional.currentDay}
+          dayNumber={middayCheckInDay ?? currentDevotional.currentDay}
         />
       )}
 
