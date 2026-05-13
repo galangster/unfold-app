@@ -16,6 +16,7 @@ describe('Today tab motion guardrails', () => {
   const devotionalCardSource = readSource('components/home/DevotionalCard.tsx');
   const contextSlotSource = readSource('components/home/ContextSlot.tsx');
   const dailyBridgeCardSource = readSource('components/home/DailyBridgeCard.tsx');
+  const bridgeShimmerSource = readSource('components/home/BridgeShimmer.tsx');
   const notificationCardSource = readSource('components/home/NotificationCard.tsx');
   const rememberThisCardSource = readSource('components/home/RememberThisCard.tsx');
   const todayIndexSource = readSource('app/(tabs)/(today)/index.tsx');
@@ -88,6 +89,34 @@ describe('Today tab motion guardrails', () => {
     expect(dailyBridgeCardSource).not.toContain('artLayer');
     expect(rememberThisCardSource).not.toContain('decorativeLayer');
     expect(todayIndexSource).not.toContain('day1ReviewArt');
+  });
+
+  it('keeps the companion bridge above the hero as speech, not a dashboard module', () => {
+    const contextZoneIndex = todayIndexSource.indexOf('/* Zone 2: Context Slot');
+    const rememberThisIndex = todayIndexSource.indexOf('/* Remember This');
+    const heroZoneIndex = todayIndexSource.indexOf('/* Zone 3: Hero Devotional');
+    const revealStart = devotionalCardSource.indexOf('function RevealReadyState');
+    const revealEnd = devotionalCardSource.indexOf('// ─── Preparing progress bar', revealStart);
+    const revealSource = devotionalCardSource.slice(revealStart, revealEnd);
+
+    expect(contextZoneIndex).toBeGreaterThan(-1);
+    expect(rememberThisIndex).toBeGreaterThan(contextZoneIndex);
+    expect(heroZoneIndex).toBeGreaterThan(rememberThisIndex);
+
+    expect(dailyBridgeCardSource).toContain('CompanionOrb');
+    expect(dailyBridgeCardSource).toContain('styles.bubble');
+    expect(dailyBridgeCardSource).toContain('Companion says:');
+    expect(dailyBridgeCardSource).not.toContain('Companion bridge');
+    expect(dailyBridgeCardSource).not.toContain('A small thread from yesterday into today');
+    expect(dailyBridgeCardSource).not.toContain('Shadow');
+
+    expect(bridgeShimmerSource).toContain('styles.bubble');
+    expect(bridgeShimmerSource).not.toContain('Companion bridge');
+    expect(bridgeShimmerSource).not.toContain('Shadow');
+
+    expect(revealSource).toContain('styles.revealOpenHero');
+    expect(revealSource).not.toContain('styles.revealCard');
+    expect(devotionalCardSource).not.toContain('revealCard:');
   });
 
   it('keeps the open Today hero focused on title and pull quote without repeating the scripture reference', () => {

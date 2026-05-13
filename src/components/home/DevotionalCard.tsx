@@ -277,65 +277,76 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
 
 function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { type: 'reveal-ready' }> }) {
   const { colors } = useTheme();
-  const { width } = useWindowDimensions();
+  const { width, fontScale } = useWindowDimensions();
   const { entering } = useAccessibleAnimation();
   const isYesterday = state.dayLabel === 'Overdue';
-  const isCompactHero = width < 400;
+  const isLargeTextHero = fontScale >= 1.18;
+  const isCompactHero = width < 400 || isLargeTextHero;
+  const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const scriptureReference = state.dayData.scriptureReference || 'Today’s reading';
+  const statusLabel = isYesterday ? 'Still waiting' : 'Ready to reveal';
+  const revealMessage = isYesterday
+    ? 'This thread is still sealed for you. Open it gently before moving on.'
+    : 'A new thread is ready, but the words stay quiet until you choose to open them.';
 
   return (
     <Animated.View entering={entering(FadeIn.duration(Duration.normal).easing(Ease.out))}>
-      <View
-        style={[
-          styles.revealCard,
-          isCompactHero && styles.revealCardCompact,
-          {
-            backgroundColor: alpha(colors.backgroundElevated, 0.74),
-            borderColor: alpha(colors.accent, 0.16),
-            shadowColor: colors.accent,
-          },
-        ]}
-      >
-        <View style={[styles.revealHeaderRow, isCompactHero && styles.revealHeaderRowCompact]}>
-          <View style={[styles.revealRule, { backgroundColor: alpha(colors.accent, 0.64) }]} />
-          <Text style={[styles.revealStatusPill, { color: colors.accent, borderColor: alpha(colors.accent, 0.22) }]}>
-            {isYesterday ? 'Still waiting' : 'Ready to reveal'}
+      <View style={[styles.revealOpenHero, isCompactHero && styles.revealOpenHeroCompact, isVeryCompactHero && styles.revealOpenHeroVeryCompact]}>
+        <View style={[styles.openHeroContent, isCompactHero && styles.openHeroContentCompact, isVeryCompactHero && styles.openHeroContentVeryCompact]}>
+          <Text
+            style={[styles.heroSeriesEyebrow, { color: colors.textSubtle }]}
+            numberOfLines={1}
+            maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+          >
+            {state.seriesTitle}
           </Text>
+
+          <Text style={[styles.heroDayMeta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {statusLabel} · Day {state.dayNumber} of {state.totalDays}
+          </Text>
+
+          <Text
+            style={[styles.heroDayTitle, isCompactHero && styles.heroDayTitleCompact, isVeryCompactHero && styles.heroDayTitleVeryCompact, { color: colors.text }]}
+            numberOfLines={3}
+            maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
+          >
+            {state.dayData.title}
+          </Text>
+
+          <View style={styles.heroQuoteBlock}>
+            <Text style={[styles.heroQuoteMark, { color: colors.accent }]}>“</Text>
+            <Text
+              style={[styles.heroQuoteText, isCompactHero && styles.heroQuoteTextCompact, isVeryCompactHero && styles.heroQuoteTextVeryCompact, { color: colors.text }]}
+              numberOfLines={4}
+              maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}
+            >
+              {revealMessage}
+            </Text>
+            <Text style={[styles.revealOpenScripture, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+              {scriptureReference}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.74}
+            onPress={state.onReveal}
+            accessibilityRole="button"
+            accessibilityLabel={isYesterday ? `Catch up on ${state.seriesTitle}, day ${state.dayNumber}` : `Reveal ${state.seriesTitle}, day ${state.dayNumber}`}
+            accessibilityHint="Opens the reveal screen for this devotional reading"
+            style={[
+              styles.heroActions,
+              {
+                borderColor: alpha(colors.accent, 0.24),
+                backgroundColor: alpha(colors.accent, 0.075),
+              },
+            ]}
+          >
+            <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+              {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
+            </Text>
+            <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
+          </TouchableOpacity>
         </View>
-
-        <Text style={[styles.revealSeriesInfo, { color: colors.textMuted }]} numberOfLines={1}>
-          {state.seriesTitle} · Day {state.dayNumber} of {state.totalDays}
-        </Text>
-
-        <Text style={[styles.revealDayTitle, isCompactHero && styles.revealDayTitleCompact, { color: colors.text }]}>
-          {state.dayData.title}
-        </Text>
-
-        <View style={styles.revealScriptureRow}>
-          <Text style={[styles.revealScripture, { color: colors.textMuted }]} numberOfLines={1}>
-            {scriptureReference}
-          </Text>
-        </View>
-
-        <Text style={[styles.revealMessage, isCompactHero && styles.revealMessageCompact, { color: colors.text }]}>
-          {isYesterday
-            ? 'This thread is still sealed for you. Open it gently before moving on.'
-            : 'A new thread is ready, but the words stay quiet until you choose to open them.'}
-        </Text>
-
-        <TouchableOpacity
-          activeOpacity={0.72}
-          onPress={state.onReveal}
-          accessibilityRole="button"
-          accessibilityLabel={isYesterday ? `Catch up on ${state.seriesTitle}, day ${state.dayNumber}` : `Reveal ${state.seriesTitle}, day ${state.dayNumber}`}
-          accessibilityHint="Opens the reveal screen for this devotional reading"
-          style={[styles.revealCta, { borderColor: alpha(colors.accent, 0.3), backgroundColor: alpha(colors.accent, 0.085) }]}
-        >
-          <Text style={[styles.revealCtaText, { color: colors.text }]}>
-            {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
-          </Text>
-          <Text style={[styles.revealCtaArrow, { color: colors.accent }]}>→</Text>
-        </TouchableOpacity>
       </View>
     </Animated.View>
   );
@@ -1049,126 +1060,27 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
 
-  // Reveal-ready hero card
-  revealCard: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    minHeight: 318,
-    paddingTop: Spacing['6'],
+  // Reveal-ready open hero
+  revealOpenHero: {
+    minHeight: 352,
+    paddingTop: Spacing['3'],
     paddingBottom: Spacing['6'],
-    paddingHorizontal: Spacing['5'],
-    overflow: 'hidden',
+    overflow: 'visible',
     position: 'relative',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 5,
   },
-  revealCardCompact: {
-    minHeight: 292,
-    paddingTop: Spacing['5'],
+  revealOpenHeroCompact: {
+    minHeight: 326,
     paddingBottom: Spacing['5'],
   },
-  revealHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['3'],
-    marginBottom: Spacing['5'],
-    zIndex: 2,
+  revealOpenHeroVeryCompact: {
+    minHeight: 304,
+    paddingBottom: Spacing['4'],
   },
-  revealHeaderRowCompact: {
-    marginBottom: Spacing['4'],
-  },
-  revealRule: {
-    width: 34,
-    height: 1.5,
-    borderRadius: 1,
-  },
-  revealStatusPill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: Spacing['3'],
-    paddingVertical: Spacing['1.5'],
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    lineHeight: 14,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    overflow: 'hidden',
-  },
-  revealSeriesInfo: {
-    width: '100%',
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 12,
-    lineHeight: 17,
-    letterSpacing: 1.7,
-    textTransform: 'uppercase',
-    marginBottom: Spacing['3'],
-    zIndex: 2,
-  },
-  revealDayTitle: {
-    width: '100%',
-    fontFamily: FontFamily.display,
-    fontSize: 34,
-    lineHeight: 40,
-    letterSpacing: -0.6,
-    marginBottom: Spacing['4'],
-    zIndex: 2,
-  },
-  revealDayTitleCompact: {
-    width: '100%',
-    fontSize: 30,
-    lineHeight: 36,
-  },
-  revealScriptureRow: {
-    width: '100%',
-    marginBottom: Spacing['5'],
-    zIndex: 2,
-  },
-  revealScripture: {
-    fontFamily: FontFamily.bodyItalic,
-    fontSize: 15,
-    lineHeight: 22,
-    letterSpacing: 0.1,
-  },
-  revealMessage: {
-    width: '100%',
+  revealOpenScripture: {
     fontFamily: FontFamily.body,
-    fontSize: 15,
-    lineHeight: 23,
-    marginBottom: Spacing['6'],
-    zIndex: 2,
-  },
-  revealMessageCompact: {
-    width: '100%',
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: Spacing['5'],
-  },
-  revealCta: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: Spacing['2'],
-    minHeight: 48,
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: Spacing['5'],
-    borderRadius: 999,
-    borderWidth: 1,
-    zIndex: 2,
-  },
-  revealCtaText: {
-    fontFamily: FontFamily.ui,
-    fontSize: 15,
+    fontSize: 13,
     lineHeight: 20,
-    fontWeight: '600' as const,
-  },
-  revealCtaArrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 17,
-    lineHeight: 20,
-    marginTop: -1,
+    marginTop: Spacing['3'],
   },
 
   // Preparing state

@@ -44,16 +44,16 @@ export interface OnboardingLayoutRects {
 
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
+    title: 'Companion check-in',
+    message: 'When Companion speaks up, this little note helps you carry yesterday into today before you open the reading.',
+    targetKey: 'context',
+    placement: 'auto',
+  },
+  {
     title: 'Today’s thread',
     message: 'Your next reading lives here. If a day slips by, Today gently brings you back to the right place.',
     targetKey: 'reading',
     placement: 'below',
-  },
-  {
-    title: 'Companion check-in',
-    message: 'When a prompt appears, use it to reflect on the reading without leaving Today.',
-    targetKey: 'context',
-    placement: 'auto',
   },
   {
     title: 'Daily Rhythm',

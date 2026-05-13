@@ -12,7 +12,6 @@ import Animated, {
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
 import { CompanionOrb } from '@/components/CompanionOrb';
@@ -26,6 +25,8 @@ interface Props {
 export function BridgeShimmer({ colors }: Props) {
   const { reducedMotion, entering } = useAccessibleAnimation();
   const shimmer = useSharedValue(0);
+  const bubbleColor = alpha(colors.accent, 0.06);
+  const bubbleBorder = alpha(colors.accent, 0.13);
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -45,34 +46,40 @@ export function BridgeShimmer({ colors }: Props) {
       entering={entering(FadeIn.duration(Duration.slow).easing(Ease.out))}
       style={styles.wrapper}
       accessibilityRole="progressbar"
-      accessibilityLabel="Companion bridge is being prepared"
-      accessibilityValue={{ text: 'Gathering a bridge from yesterday into today' }}
+      accessibilityLabel="Companion is gathering a thought for today"
+      accessibilityValue={{ text: 'Preparing' }}
     >
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: alpha(colors.backgroundElevated, 0.56),
-            borderColor: alpha(colors.accent, 0.12),
-            shadowColor: colors.accent,
-          },
-        ]}
-      >
+      <View style={styles.row}>
         <View style={styles.orbWrap}>
-          <CompanionOrb accentColor={colors.accent} size={28} />
+          <CompanionOrb accentColor={colors.accent} size={24} />
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.kickerRow}>
-            <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.kicker, { color: colors.accent }]}>Companion bridge</Text>
+        <View style={styles.bubbleWrap}>
+          <View
+            style={[
+              styles.bubble,
+              {
+                backgroundColor: bubbleColor,
+                borderColor: bubbleBorder,
+              },
+            ]}
+          >
+            <View
+              pointerEvents="none"
+              style={[
+                styles.bubbleTail,
+                {
+                  backgroundColor: bubbleColor,
+                  borderColor: bubbleBorder,
+                },
+              ]}
+            />
+            <Text style={[styles.title, { color: colors.text }]}>Companion is gathering a thread for today…</Text>
+            <Animated.View style={[styles.skeletonGroup, shimmerStyle]}>
+              <View style={[styles.skeletonLine, styles.skeletonLong, { backgroundColor: alpha(colors.text, 0.1) }]} />
+              <View style={[styles.skeletonLine, styles.skeletonShort, { backgroundColor: alpha(colors.text, 0.075) }]} />
+            </Animated.View>
           </View>
-
-          <Text style={[styles.title, { color: colors.text }]}>Connecting yesterday and today…</Text>
-          <Animated.View style={[styles.skeletonGroup, shimmerStyle]}>
-            <View style={[styles.skeletonLine, styles.skeletonLong, { backgroundColor: alpha(colors.text, 0.1) }]} />
-            <View style={[styles.skeletonLine, styles.skeletonShort, { backgroundColor: alpha(colors.text, 0.075) }]} />
-          </Animated.View>
         </View>
       </View>
     </Animated.View>
@@ -84,38 +91,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['3'],
   },
-  card: {
+  row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing['3'],
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    paddingVertical: Spacing['4'],
-    paddingHorizontal: Spacing['4'],
-    ...Shadow.md,
+    gap: Spacing['2.5'],
   },
   orbWrap: {
-    paddingTop: Spacing['1'],
+    marginTop: Spacing['2'],
   },
-  content: {
+  bubbleWrap: {
     flex: 1,
     minWidth: 0,
+    alignItems: 'flex-start',
   },
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    marginBottom: Spacing['2'],
+  bubble: {
+    position: 'relative',
+    overflow: 'visible',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    borderRadius: Radius.lg,
+    borderTopLeftRadius: Radius.sm,
+    borderWidth: 1,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['3.5'],
   },
-  kickerRule: {
-    width: 18,
-    height: 1,
-  },
-  kicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+  bubbleTail: {
+    position: 'absolute',
+    left: -5,
+    top: 15,
+    width: 10,
+    height: 10,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    transform: [{ rotate: '45deg' }],
   },
   title: {
     fontFamily: FontFamily.body,

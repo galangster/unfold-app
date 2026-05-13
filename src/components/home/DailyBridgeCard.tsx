@@ -4,7 +4,6 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
-import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { alpha } from '@/components/ui';
@@ -17,10 +16,11 @@ interface Props {
 }
 
 const BODY_TEXT_MAX_SCALE = 1.28;
-const LABEL_TEXT_MAX_SCALE = 1.14;
 
 export function DailyBridgeCard({ text, colors }: Props) {
   const { entering } = useAccessibleAnimation();
+  const bubbleColor = alpha(colors.accent, 0.06);
+  const bubbleBorder = alpha(colors.accent, 0.13);
 
   return (
     <Animated.View
@@ -28,31 +28,37 @@ export function DailyBridgeCard({ text, colors }: Props) {
       style={styles.wrapper}
       accessible
       accessibilityRole="text"
-      accessibilityLabel={`Companion bridge. ${text}`}
+      accessibilityLabel={`Companion says: ${text}`}
     >
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: alpha(colors.backgroundElevated, 0.62),
-            borderColor: alpha(colors.accent, 0.13),
-            shadowColor: colors.accent,
-          },
-        ]}
-      >
-        <View style={styles.orbColumn}>
-          <CompanionOrb accentColor={colors.accent} size={28} />
-          <View style={[styles.orbStem, { backgroundColor: alpha(colors.accent, 0.24) }]} />
+      <View style={styles.row}>
+        <View style={styles.orbWrap}>
+          <CompanionOrb accentColor={colors.accent} size={24} />
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.kickerRow}>
-            <View style={[styles.kickerRule, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.kicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Companion bridge</Text>
+        <View style={styles.bubbleWrap}>
+          <View
+            style={[
+              styles.bubble,
+              {
+                backgroundColor: bubbleColor,
+                borderColor: bubbleBorder,
+              },
+            ]}
+          >
+            <View
+              pointerEvents="none"
+              style={[
+                styles.bubbleTail,
+                {
+                  backgroundColor: bubbleColor,
+                  borderColor: bubbleBorder,
+                },
+              ]}
+            />
+            <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+              {text}
+            </Text>
           </View>
-
-          <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>{text}</Text>
-          <Text style={[styles.helper, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>A small thread from yesterday into today.</Text>
         </View>
       </View>
     </Animated.View>
@@ -64,56 +70,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['3'],
   },
-  card: {
-    position: 'relative',
-    overflow: 'hidden',
+  row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: Spacing['3'],
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    paddingVertical: Spacing['4'],
-    paddingHorizontal: Spacing['4'],
-    ...Shadow.md,
+    gap: Spacing['2.5'],
   },
-  orbColumn: {
-    alignItems: 'center',
-    paddingTop: Spacing['1'],
-  },
-  orbStem: {
-    width: 1,
-    height: 30,
+  orbWrap: {
     marginTop: Spacing['2'],
   },
-  content: {
+  bubbleWrap: {
     flex: 1,
     minWidth: 0,
+    alignItems: 'flex-start',
   },
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    marginBottom: Spacing['2'],
+  bubble: {
+    position: 'relative',
+    overflow: 'visible',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    borderRadius: Radius.lg,
+    borderTopLeftRadius: Radius.sm,
+    borderWidth: 1,
+    paddingVertical: Spacing['3'],
+    paddingHorizontal: Spacing['3.5'],
   },
-  kickerRule: {
-    width: 18,
-    height: 1,
-  },
-  kicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+  bubbleTail: {
+    position: 'absolute',
+    left: -5,
+    top: 15,
+    width: 10,
+    height: 10,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    transform: [{ rotate: '45deg' }],
   },
   text: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.sm,
     lineHeight: 22,
-  },
-  helper: {
-    fontFamily: FontFamily.ui,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: Spacing['2'],
   },
 });

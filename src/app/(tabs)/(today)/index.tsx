@@ -849,20 +849,9 @@ export default function HomeScreen() {
             onAvatarPress={() => router.push('/(tabs)/(you)')}
           />
 
-          {/* Zone 2: Hero Devotional — Today's primary act, before optional nudges */}
-          <View collapsable={false} onLayout={handleReadingLayout}>
-            <Animated.View entering={entering(FadeIn.duration(280).delay(80).easing(Ease.out))}>
-              <DevotionalCard
-                state={devotionalState}
-                scrollY={scrollY}
-                isReturningUser={isReturningUser}
-              />
-            </Animated.View>
-          </View>
-
-          {/* Zone 3: Context Slot — resume / Companion / check-in support */}
+          {/* Zone 2: Context Slot — Companion / resume / check-in support, before the hero */}
           <View collapsable={false} onLayout={handleContextLayout}>
-            <Animated.View entering={entering(FadeIn.duration(280).delay(150).easing(Ease.out))}>
+            <Animated.View entering={entering(FadeIn.duration(280).delay(80).easing(Ease.out))}>
               <ContextSlot
                 slotType={slotType}
                 colors={colors}
@@ -878,6 +867,17 @@ export default function HomeScreen() {
 
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
+
+          {/* Zone 3: Hero Devotional — Today's primary act */}
+          <View collapsable={false} onLayout={handleReadingLayout}>
+            <Animated.View entering={entering(FadeIn.duration(280).delay(160).easing(Ease.out))}>
+              <DevotionalCard
+                state={devotionalState}
+                scrollY={scrollY}
+                isReturningUser={isReturningUser}
+              />
+            </Animated.View>
+          </View>
 
           {/* Zone 5: Series Carousel — removed per user request */}
 
