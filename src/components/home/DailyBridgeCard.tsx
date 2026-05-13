@@ -9,6 +9,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { buildBubblePath } from '@/lib/bubble-path';
 import type { ColorTheme } from '@/constants/colors';
 
 interface Props {
@@ -17,46 +18,18 @@ interface Props {
 }
 
 const BODY_TEXT_MAX_SCALE = 1.28;
-const BUBBLE_TAIL_WIDTH = 11;
+const BUBBLE_TAIL_WIDTH = 6;
 const BUBBLE_TAIL_HEIGHT = 14;
-const BUBBLE_TAIL_CENTER_Y = 22;
-const BUBBLE_STROKE_INSET = 0.75;
-
-function buildSpeechBubblePath(width: number, height: number) {
-  const left = BUBBLE_TAIL_WIDTH + BUBBLE_STROKE_INSET;
-  const top = BUBBLE_STROKE_INSET;
-  const right = BUBBLE_TAIL_WIDTH + width - BUBBLE_STROKE_INSET;
-  const bottom = height - BUBBLE_STROKE_INSET;
-  const availableWidth = Math.max(0, right - left);
-  const availableHeight = Math.max(0, bottom - top);
-  const topLeftRadius = Math.min(Radius.sm, availableWidth / 2, availableHeight / 2);
-  const topRightRadius = Math.min(Radius.lg, availableWidth / 2, availableHeight / 2);
-  const bottomRightRadius = Math.min(Radius.lg, availableWidth / 2, availableHeight / 2);
-  const bottomLeftRadius = Math.min(Radius.lg, availableWidth / 2, availableHeight / 2);
-  const tailHalfHeight = BUBBLE_TAIL_HEIGHT / 2;
-  const minTailCenter = top + topLeftRadius + tailHalfHeight + 1;
-  const maxTailCenter = bottom - bottomLeftRadius - tailHalfHeight - 1;
-  const tailCenter = Math.max(minTailCenter, Math.min(BUBBLE_TAIL_CENTER_Y, maxTailCenter));
-  const tailTop = tailCenter - tailHalfHeight;
-  const tailBottom = tailCenter + tailHalfHeight;
-  const tailTipX = BUBBLE_STROKE_INSET;
-
-  return [
-    `M ${left + topLeftRadius} ${top}`,
-    `H ${right - topRightRadius}`,
-    `Q ${right} ${top} ${right} ${top + topRightRadius}`,
-    `V ${bottom - bottomRightRadius}`,
-    `Q ${right} ${bottom} ${right - bottomRightRadius} ${bottom}`,
-    `H ${left + bottomLeftRadius}`,
-    `Q ${left} ${bottom} ${left} ${bottom - bottomLeftRadius}`,
-    `V ${tailBottom}`,
-    `L ${tailTipX} ${tailCenter}`,
-    `L ${left} ${tailTop}`,
-    `V ${top + topLeftRadius}`,
-    `Q ${left} ${top} ${left + topLeftRadius} ${top}`,
-    'Z',
-  ].join(' ');
-}
+// The left tail needs room to sit on the orb centerline. A smaller top-left
+// radius keeps the shared path from clamping the tail back down.
+const BUBBLE_TAIL_CENTER_Y = 18;
+const BUBBLE_STROKE_WIDTH = 1;
+const BRIDGE_BUBBLE_RADIUS = {
+  topLeft: Radius.sm,
+  topRight: Radius.lg,
+  bottomRight: Radius.lg,
+  bottomLeft: Radius.lg,
+};
 
 export function DailyBridgeCard({ text, colors }: Props) {
   const { entering } = useAccessibleAnimation();
@@ -64,7 +37,21 @@ export function DailyBridgeCard({ text, colors }: Props) {
   const bubbleBorder = alpha(colors.accent, 0.13);
   const [bubbleSize, setBubbleSize] = React.useState({ width: 0, height: 0 });
   const bubblePath = React.useMemo(
-    () => (bubbleSize.width > 0 && bubbleSize.height > 0 ? buildSpeechBubblePath(bubbleSize.width, bubbleSize.height) : null),
+    () =>
+      bubbleSize.width > 0 && bubbleSize.height > 0
+        ? buildBubblePath({
+            width: bubbleSize.width,
+            height: bubbleSize.height,
+            radius: BRIDGE_BUBBLE_RADIUS,
+            tail: {
+              edge: 'left',
+              centerY: BUBBLE_TAIL_CENTER_Y,
+              width: BUBBLE_TAIL_WIDTH,
+              height: BUBBLE_TAIL_HEIGHT,
+            },
+            strokeWidth: BUBBLE_STROKE_WIDTH,
+          })
+        : null,
     [bubbleSize.height, bubbleSize.width],
   );
   const handleBubbleLayout = React.useCallback((event: LayoutChangeEvent) => {

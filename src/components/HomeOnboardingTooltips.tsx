@@ -3,11 +3,12 @@ import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
-import Svg, { Defs, Rect, Mask, Polygon } from 'react-native-svg';
+import Svg, { Defs, Rect, Mask, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { buildBubblePath } from '@/lib/bubble-path';
 import { Radius } from '@/constants/radius';
 import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
@@ -106,45 +107,12 @@ const STEP_VISUAL_TUNING: Record<TargetKey, StepVisualTuning> = {
 };
 
 // ---------------------------------------------------------------------------
-// Arrow triangle component
+// Bubble shape tuning
 // ---------------------------------------------------------------------------
 
-const ARROW_SIZE = 14;
-const ARROW_STROKE_INSET = 1;
-const ARROW_TIP_OFFSET = ARROW_SIZE + ARROW_STROKE_INSET;
-
-function Arrow({
-  direction,
-  color,
-  strokeColor,
-}: {
-  direction: 'up' | 'down';
-  color: string;
-  strokeColor: string;
-}) {
-  const width = ARROW_SIZE * 2;
-  const viewWidth = width + ARROW_STROKE_INSET * 2;
-  const viewHeight = ARROW_SIZE + ARROW_STROKE_INSET * 2;
-  const leftX = ARROW_STROKE_INSET;
-  const rightX = width + ARROW_STROKE_INSET;
-  const topY = ARROW_STROKE_INSET;
-  const bottomY = ARROW_SIZE + ARROW_STROKE_INSET;
-  const points = direction === 'up'
-    ? `${ARROW_TIP_OFFSET},${topY} ${leftX},${bottomY} ${rightX},${bottomY}`
-    : `${leftX},${topY} ${rightX},${topY} ${ARROW_TIP_OFFSET},${bottomY}`;
-
-  return (
-    <Svg width={viewWidth} height={viewHeight} viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
-      <Polygon
-        points={points}
-        fill={color}
-        stroke={strokeColor}
-        strokeWidth={1}
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
+const TOOLTIP_ARROW_HEIGHT = 12;
+const TOOLTIP_ARROW_WIDTH = 28;
+const TOOLTIP_STROKE_WIDTH = 1;
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -257,13 +225,26 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   tooltipTop = Math.max(minTooltipTop, Math.min(tooltipTop, maxTooltipTop));
 
   const tooltipWidth = screenW - TOOLTIP_MARGIN_H * 2;
-  const arrowLeft = Math.max(
-    18,
+  const arrowCenterX = Math.max(
+    Radius.card + TOOLTIP_ARROW_WIDTH / 2 + 2,
     Math.min(
-      targetRect.x + targetRect.width / 2 - ARROW_TIP_OFFSET - TOOLTIP_MARGIN_H,
-      tooltipWidth - ARROW_TIP_OFFSET * 2 - 18,
+      targetRect.x + targetRect.width / 2 - TOOLTIP_MARGIN_H,
+      tooltipWidth - Radius.card - TOOLTIP_ARROW_WIDTH / 2 - 2,
     ),
   );
+  const tooltipBubblePath = buildBubblePath({
+    width: tooltipWidth,
+    height: activeHeight,
+    radius: Radius.card,
+    tail: {
+      edge: arrowDirection === 'up' ? 'top' : 'bottom',
+      centerX: arrowCenterX,
+      width: TOOLTIP_ARROW_WIDTH,
+      height: TOOLTIP_ARROW_HEIGHT,
+    },
+    strokeWidth: TOOLTIP_STROKE_WIDTH,
+  });
+  const tooltipSvgHeight = activeHeight + TOOLTIP_ARROW_HEIGHT + TOOLTIP_STROKE_WIDTH;
 
   // Build rectangular spotlight
   const spotX = targetRect.x - stepTuning.spotlightPadding;
@@ -370,25 +351,32 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
             top: tooltipTop,
             left: TOOLTIP_MARGIN_H,
             right: TOOLTIP_MARGIN_H,
-            backgroundColor: tooltipBg,
-            borderColor: tooltipBorder,
           },
         ]}
         pointerEvents="box-none"
       >
-        {/* Arrow — inside card so it renders above the SVG backdrop */}
-        <View
+        {/* Single-path card + arrow outline. The notch is not a separate shape. */}
+        <Svg
+          width={tooltipWidth}
+          height={tooltipSvgHeight}
+          viewBox={`0 0 ${tooltipWidth} ${tooltipSvgHeight}`}
           style={{
             position: 'absolute',
-            ...(arrowDirection === 'up'
-              ? { top: -(ARROW_SIZE - 1) }
-              : { bottom: -(ARROW_SIZE - 1) }),
-            left: arrowLeft,
+            left: 0,
+            top: arrowDirection === 'up' ? -TOOLTIP_ARROW_HEIGHT : 0,
+            overflow: 'visible',
           }}
           pointerEvents="none"
         >
-          <Arrow direction={arrowDirection} color={tooltipBg} strokeColor={spotlightStroke} />
-        </View>
+          <Path
+            d={tooltipBubblePath}
+            fill={tooltipBg}
+            stroke={tooltipBorder}
+            strokeWidth={TOOLTIP_STROKE_WIDTH}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        </Svg>
         <Text
           style={{
             fontFamily: FontFamily.uiSemiBold,
@@ -489,8 +477,6 @@ const styles = StyleSheet.create({
   tooltipCard: {
     position: 'absolute',
     overflow: 'visible',
-    borderRadius: Radius.card,
-    borderWidth: 1,
     paddingHorizontal: 18,
     paddingTop: Spacing['4'],
     paddingBottom: 14,
