@@ -7,7 +7,7 @@ Focus areas:
 
 What to test internally:
 1. Open the internal/dev QA path: Profile > Dev Tools > Replay Home Tooltips (Dev).
-2. Confirm step 1 points cleanly at Today’s reading/thread card.
+2. Confirm step 1 points cleanly at Today's reading/thread card.
 3. Confirm step 2 points cleanly at the in-feed Companion Check-in card, not the bottom Companion tab.
 4. Confirm step 3 points cleanly at Daily Rhythm.
 5. Confirm step 4 spotlights Bible, Companion, and Journal together and excludes Today.
