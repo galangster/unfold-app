@@ -33,4 +33,13 @@ describe('home onboarding tooltips', () => {
     expect(todaySource).toContain('context: rect');
     expect(todaySource).toContain('rhythm: rect');
   });
+
+  it('keeps each coachmark visually tuned for clean spotlight and arrow alignment', () => {
+    expect(tooltipSource).toContain('const STEP_VISUAL_TUNING');
+    expect(tooltipSource).toContain('tooltipGap: 16');
+    expect(tooltipSource).toContain('tooltipGap: 12');
+    expect(tooltipSource).toContain('const ARROW_SIZE = 14');
+    expect(tooltipSource).toContain('strokeWidth={1.5}');
+    expect(tooltipSource).toContain('strokeColor={spotlightStroke}');
+  });
 });

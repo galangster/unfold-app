@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, useWindowDimensions, StyleSheet } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
-import Svg, { Defs, Rect, Mask } from 'react-native-svg';
+import Svg, { Defs, Rect, Mask, Polygon } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -73,47 +73,76 @@ const TOOLTIP_STEPS: TooltipStep[] = [
 // SVG spotlight mask — full screen dark + feathered rounded-rect hole
 // ---------------------------------------------------------------------------
 
-const SPOTLIGHT_PADDING = 10;
-const BACKDROP_OPACITY = 0.65;
+const BACKDROP_OPACITY = 0.70;
 const FEATHER_SIZE = 14;
-const SPOT_CORNER_RADIUS = 14;
+
+interface StepVisualTuning {
+  spotlightPadding: number;
+  tooltipGap: number;
+  cornerRadius: number;
+}
+
+const STEP_VISUAL_TUNING: Record<TargetKey, StepVisualTuning> = {
+  reading: {
+    spotlightPadding: 8,
+    tooltipGap: 16,
+    cornerRadius: 18,
+  },
+  context: {
+    spotlightPadding: 8,
+    tooltipGap: 16,
+    cornerRadius: 16,
+  },
+  rhythm: {
+    spotlightPadding: 8,
+    tooltipGap: 16,
+    cornerRadius: 18,
+  },
+  tabs: {
+    spotlightPadding: 6,
+    tooltipGap: 12,
+    cornerRadius: 20,
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Arrow triangle component
 // ---------------------------------------------------------------------------
 
-const ARROW_SIZE = 10;
+const ARROW_SIZE = 14;
+const ARROW_STROKE_INSET = 1;
+const ARROW_TIP_OFFSET = ARROW_SIZE + ARROW_STROKE_INSET;
 
-function Arrow({ direction, color }: { direction: 'up' | 'down'; color: string }) {
-  if (direction === 'down') {
-    return (
-      <View
-        style={{
-          width: 0,
-          height: 0,
-          borderLeftWidth: ARROW_SIZE,
-          borderRightWidth: ARROW_SIZE,
-          borderTopWidth: ARROW_SIZE,
-          borderLeftColor: 'transparent',
-          borderRightColor: 'transparent',
-          borderTopColor: color,
-        }}
-      />
-    );
-  }
+function Arrow({
+  direction,
+  color,
+  strokeColor,
+}: {
+  direction: 'up' | 'down';
+  color: string;
+  strokeColor: string;
+}) {
+  const width = ARROW_SIZE * 2;
+  const viewWidth = width + ARROW_STROKE_INSET * 2;
+  const viewHeight = ARROW_SIZE + ARROW_STROKE_INSET * 2;
+  const leftX = ARROW_STROKE_INSET;
+  const rightX = width + ARROW_STROKE_INSET;
+  const topY = ARROW_STROKE_INSET;
+  const bottomY = ARROW_SIZE + ARROW_STROKE_INSET;
+  const points = direction === 'up'
+    ? `${ARROW_TIP_OFFSET},${topY} ${leftX},${bottomY} ${rightX},${bottomY}`
+    : `${leftX},${topY} ${rightX},${topY} ${ARROW_TIP_OFFSET},${bottomY}`;
+
   return (
-    <View
-      style={{
-        width: 0,
-        height: 0,
-        borderLeftWidth: ARROW_SIZE,
-        borderRightWidth: ARROW_SIZE,
-        borderBottomWidth: ARROW_SIZE,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderBottomColor: color,
-      }}
-    />
+    <Svg width={viewWidth} height={viewHeight} viewBox={`0 0 ${viewWidth} ${viewHeight}`}>
+      <Polygon
+        points={points}
+        fill={color}
+        stroke={strokeColor}
+        strokeWidth={1}
+        strokeLinejoin="round"
+      />
+    </Svg>
   );
 }
 
@@ -196,11 +225,14 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
 
   const isLastStep = stepIndex === availableSteps.length - 1;
   const tooltipBg = colors.backgroundElevated;
-  const tooltipBorder = isDark ? 'rgba(245, 240, 235, 0.12)' : 'rgba(28, 23, 16, 0.08)';
-  const spotlightStroke = isDark ? 'rgba(200, 165, 92, 0.42)' : 'rgba(139, 99, 32, 0.28)';
+  const tooltipBodyColor = isDark ? 'rgba(245, 240, 235, 0.74)' : colors.textMuted;
+  const tooltipBorder = isDark ? 'rgba(245, 240, 235, 0.14)' : 'rgba(28, 23, 16, 0.08)';
+  const spotlightStroke = isDark ? 'rgba(220, 180, 96, 0.62)' : 'rgba(139, 99, 32, 0.34)';
+  const spotlightHalo = isDark ? 'rgba(220, 180, 96, 0.14)' : 'rgba(139, 99, 32, 0.10)';
+  const stepTuning = STEP_VISUAL_TUNING[step.targetKey];
 
   // Calculate tooltip position
-  const GAP = 14;
+  const GAP = stepTuning.tooltipGap;
   const TOOLTIP_MARGIN_H = 24;
 
   let tooltipTop: number;
@@ -208,15 +240,15 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const activeHeight = tooltipHeight > 0 ? tooltipHeight : TOOLTIP_ESTIMATED_HEIGHT;
 
   const bottomGuard = screenH - insets.bottom - TAB_BAR_HEIGHT - 16;
-  const belowFits = targetRect.y + targetRect.height + SPOTLIGHT_PADDING + GAP + activeHeight <= bottomGuard;
+  const belowFits = targetRect.y + targetRect.height + stepTuning.spotlightPadding + GAP + activeHeight <= bottomGuard;
   const shouldPlaceBelow = step.placement === 'below' || (step.placement === 'auto' && belowFits);
 
   if (shouldPlaceBelow) {
-    const spotlightBottom = targetRect.y + targetRect.height + SPOTLIGHT_PADDING;
+    const spotlightBottom = targetRect.y + targetRect.height + stepTuning.spotlightPadding;
     tooltipTop = spotlightBottom + GAP;
     arrowDirection = 'up';
   } else {
-    tooltipTop = targetRect.y - SPOTLIGHT_PADDING - GAP - activeHeight;
+    tooltipTop = targetRect.y - stepTuning.spotlightPadding - GAP - activeHeight;
     arrowDirection = 'down';
   }
 
@@ -228,16 +260,16 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const arrowLeft = Math.max(
     18,
     Math.min(
-      targetRect.x + targetRect.width / 2 - ARROW_SIZE - TOOLTIP_MARGIN_H,
-      tooltipWidth - ARROW_SIZE * 2 - 18,
+      targetRect.x + targetRect.width / 2 - ARROW_TIP_OFFSET - TOOLTIP_MARGIN_H,
+      tooltipWidth - ARROW_TIP_OFFSET * 2 - 18,
     ),
   );
 
   // Build rectangular spotlight
-  const spotX = targetRect.x - SPOTLIGHT_PADDING;
-  const spotY = targetRect.y - SPOTLIGHT_PADDING;
-  const spotW = targetRect.width + SPOTLIGHT_PADDING * 2;
-  const spotH = targetRect.height + SPOTLIGHT_PADDING * 2;
+  const spotX = targetRect.x - stepTuning.spotlightPadding;
+  const spotY = targetRect.y - stepTuning.spotlightPadding;
+  const spotW = targetRect.width + stepTuning.spotlightPadding * 2;
+  const spotH = targetRect.height + stepTuning.spotlightPadding * 2;
 
   return (
     <Animated.View
@@ -259,7 +291,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
                 y={spotY - FEATHER_SIZE}
                 width={spotW + FEATHER_SIZE * 2}
                 height={spotH + FEATHER_SIZE * 2}
-                rx={SPOT_CORNER_RADIUS + FEATHER_SIZE * 0.6}
+                rx={stepTuning.cornerRadius + FEATHER_SIZE * 0.6}
                 fill="black"
                 opacity="0.2"
               />
@@ -268,7 +300,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
                 y={spotY - FEATHER_SIZE * 0.6}
                 width={spotW + FEATHER_SIZE * 1.2}
                 height={spotH + FEATHER_SIZE * 1.2}
-                rx={SPOT_CORNER_RADIUS + FEATHER_SIZE * 0.3}
+                rx={stepTuning.cornerRadius + FEATHER_SIZE * 0.3}
                 fill="black"
                 opacity="0.3"
               />
@@ -277,7 +309,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
                 y={spotY - FEATHER_SIZE * 0.3}
                 width={spotW + FEATHER_SIZE * 0.6}
                 height={spotH + FEATHER_SIZE * 0.6}
-                rx={SPOT_CORNER_RADIUS + FEATHER_SIZE * 0.15}
+                rx={stepTuning.cornerRadius + FEATHER_SIZE * 0.15}
                 fill="black"
                 opacity="0.4"
               />
@@ -287,7 +319,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
                 y={spotY}
                 width={spotW}
                 height={spotH}
-                rx={SPOT_CORNER_RADIUS}
+                rx={stepTuning.cornerRadius}
                 fill="black"
               />
             </Mask>
@@ -301,14 +333,24 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
             mask="url(#spotlightMask)"
           />
           <Rect
+            x={spotX - 2}
+            y={spotY - 2}
+            width={spotW + 4}
+            height={spotH + 4}
+            rx={stepTuning.cornerRadius + 2}
+            fill="none"
+            stroke={spotlightHalo}
+            strokeWidth={6}
+          />
+          <Rect
             x={spotX}
             y={spotY}
             width={spotW}
             height={spotH}
-            rx={SPOT_CORNER_RADIUS}
+            rx={stepTuning.cornerRadius}
             fill="none"
             stroke={spotlightStroke}
-            strokeWidth={1}
+            strokeWidth={1.5}
           />
         </Svg>
       </View>
@@ -345,7 +387,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
           }}
           pointerEvents="none"
         >
-          <Arrow direction={arrowDirection} color={tooltipBg} />
+          <Arrow direction={arrowDirection} color={tooltipBg} strokeColor={spotlightStroke} />
         </View>
         <Text
           style={{
@@ -362,7 +404,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
           style={{
             fontFamily: FontFamily.ui,
             fontSize: 13,
-            color: colors.textMuted,
+            color: tooltipBodyColor,
             lineHeight: 18,
             marginBottom: 14,
           }}
