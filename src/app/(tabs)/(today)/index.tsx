@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { usePrevious } from '@/hooks/usePrevious';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
@@ -152,28 +152,55 @@ export default function HomeScreen() {
 
   const [tooltipLayoutRects, setTooltipLayoutRects] = useState<{
     reading: { x: number; y: number; width: number; height: number } | null;
-    streak: { x: number; y: number; width: number; height: number } | null;
-  }>({ reading: null, streak: null });
+    context: { x: number; y: number; width: number; height: number } | null;
+    rhythm: { x: number; y: number; width: number; height: number } | null;
+  }>({ reading: null, context: null, rhythm: null });
 
-  const handleReadingLayout = useCallback((event: any) => {
+  const getInsetSurfaceRect = useCallback((event: LayoutChangeEvent) => {
     const { x, y, width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      setTooltipLayoutRects((prev) => ({
-        ...prev,
-        reading: { x, y: y + insets.top, width, height },
-      }));
-    }
+    const horizontalInset = Spacing['6'];
+    return {
+      x: x + horizontalInset,
+      y: y + insets.top,
+      width: Math.max(width - horizontalInset * 2, 0),
+      height,
+    };
   }, [insets.top]);
 
-  const handleStreakLayout = useCallback((event: any) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0) {
+  const handleReadingLayout = useCallback((event: LayoutChangeEvent) => {
+    const rect = getInsetSurfaceRect(event);
+    const topInset = Spacing['5'];
+    if (rect.width > 0 && rect.height > topInset) {
       setTooltipLayoutRects((prev) => ({
         ...prev,
-        streak: { x, y: y + insets.top, width, height },
+        reading: {
+          ...rect,
+          y: rect.y + topInset,
+          height: Math.max(rect.height - topInset, 0),
+        },
       }));
     }
-  }, [insets.top]);
+  }, [getInsetSurfaceRect]);
+
+  const handleContextLayout = useCallback((event: LayoutChangeEvent) => {
+    const rect = getInsetSurfaceRect(event);
+    if (rect.width > 0 && rect.height > 0) {
+      setTooltipLayoutRects((prev) => ({
+        ...prev,
+        context: rect,
+      }));
+    }
+  }, [getInsetSurfaceRect]);
+
+  const handleRhythmLayout = useCallback((event: LayoutChangeEvent) => {
+    const rect = getInsetSurfaceRect(event);
+    if (rect.width > 0 && rect.height > 0) {
+      setTooltipLayoutRects((prev) => ({
+        ...prev,
+        rhythm: rect,
+      }));
+    }
+  }, [getInsetSurfaceRect]);
 
   // Scroll tracking for AmbientArtCanvas fade
   const scrollY = useSharedValue(0);
@@ -834,18 +861,20 @@ export default function HomeScreen() {
           </View>
 
           {/* Zone 3: Context Slot — resume / Companion / check-in support */}
-          <Animated.View entering={entering(FadeIn.duration(280).delay(150).easing(Ease.out))}>
-            <ContextSlot
-              slotType={slotType}
-              colors={colors}
-              onMiddayPress={handleCheckIn}
-              middayMessage={middayMessage}
-              onEveningPress={handleEveningWindDown}
-              eveningMessage={eveningMessage}
-              bridgeText={validBridgeText}
-              resumeProps={resumeProps}
-            />
-          </Animated.View>
+          <View collapsable={false} onLayout={handleContextLayout}>
+            <Animated.View entering={entering(FadeIn.duration(280).delay(150).easing(Ease.out))}>
+              <ContextSlot
+                slotType={slotType}
+                colors={colors}
+                onMiddayPress={handleCheckIn}
+                middayMessage={middayMessage}
+                onEveningPress={handleEveningWindDown}
+                eveningMessage={eveningMessage}
+                bridgeText={validBridgeText}
+                resumeProps={resumeProps}
+              />
+            </Animated.View>
+          </View>
 
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
@@ -938,8 +967,8 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {/* Zone 6: Streak */}
-          <View collapsable={false} onLayout={handleStreakLayout}>
+          {/* Zone 6: Daily Rhythm */}
+          <View collapsable={false} onLayout={handleRhythmLayout}>
             <Animated.View
               entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
               style={styles.streakWrapper}

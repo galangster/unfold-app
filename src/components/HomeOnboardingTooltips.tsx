@@ -23,18 +23,19 @@ export interface TargetRect {
   height: number;
 }
 
-type TargetKey = 'reading' | 'companion' | 'bible' | 'journal' | 'streak';
+type TargetKey = 'reading' | 'context' | 'rhythm' | 'tabs';
 
 interface TooltipStep {
   title: string;
   message: string;
   targetKey: TargetKey;
-  placement: 'below' | 'above';
+  placement: 'below' | 'above' | 'auto';
 }
 
 export interface OnboardingLayoutRects {
   reading: TargetRect | null;
-  streak: TargetRect | null;
+  context: TargetRect | null;
+  rhythm: TargetRect | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,33 +44,27 @@ export interface OnboardingLayoutRects {
 
 const TOOLTIP_STEPS: TooltipStep[] = [
   {
-    title: 'Your Daily Reading',
-    message: 'Made for you, based on what you shared. Tap here to start today\u2019s devotional.',
+    title: 'Today’s thread',
+    message: 'Your next reading lives here. If a day slips by, Today gently brings you back to the right place.',
     targetKey: 'reading',
     placement: 'below',
   },
   {
-    title: 'Your Companion',
-    message: 'Ask questions, go deeper, or just talk about what you\u2019re reading.',
-    targetKey: 'companion',
+    title: 'Companion check-in',
+    message: 'When a prompt appears, use it to reflect on the reading without leaving Today.',
+    targetKey: 'context',
+    placement: 'auto',
+  },
+  {
+    title: 'Daily Rhythm',
+    message: 'A quiet signal of consistency — not a scoreboard. One faithful day at a time.',
+    targetKey: 'rhythm',
     placement: 'above',
   },
   {
-    title: 'Your Bible',
-    message: 'The full Bible is here. Highlight verses, take notes, and pick up where you left off.',
-    targetKey: 'bible',
-    placement: 'above',
-  },
-  {
-    title: 'Your Journal',
-    message: 'Reflect on what you\u2019re reading. Entries are linked to each day.',
-    targetKey: 'journal',
-    placement: 'above',
-  },
-  {
-    title: 'Your Streak',
-    message: 'Read each day to build momentum. Small steps add up.',
-    targetKey: 'streak',
+    title: 'Read, Ask & Write',
+    message: 'Bible, Companion, and Journal are always one tap away whenever you want to read, ask, or write.',
+    targetKey: 'tabs',
     placement: 'above',
   },
 ];
@@ -130,27 +125,17 @@ const TAB_BAR_HEIGHT = 49;
 const TAB_BAR_PADDING_H = Spacing['6']; // matches _layout.tsx paddingHorizontal
 const TOOLTIP_ESTIMATED_HEIGHT = 130;
 
-/** Compute tab bar item rects from screen dimensions — tabs are fixed at bottom */
-function computeTabRects(screenW: number, screenH: number, bottomInset: number): Record<string, TargetRect> {
-  // 4 visible tabs: Today(0), Bible(1), Companion(2), Journal(3)
-  // Tab bar has paddingHorizontal: Spacing['6'] = 24
-  const tabCount = 4;
+/** Compute the Bible / Companion / Journal rect from the fixed bottom navigation. */
+function computeTabBarRect(screenW: number, screenH: number, bottomInset: number): TargetRect {
   const usableWidth = screenW - TAB_BAR_PADDING_H * 2;
-  const tabWidth = usableWidth / tabCount;
+  const tabWidth = usableWidth / 4;
   const tabBarTop = screenH - TAB_BAR_HEIGHT - bottomInset;
-  const iconSize = 28;
-
-  const makeTabRect = (index: number): TargetRect => ({
-    x: TAB_BAR_PADDING_H + tabWidth * index + (tabWidth - iconSize) / 2,
-    y: tabBarTop + 6,
-    width: iconSize,
-    height: iconSize,
-  });
 
   return {
-    bible: makeTabRect(1),
-    companion: makeTabRect(2),
-    journal: makeTabRect(3),
+    x: TAB_BAR_PADDING_H + tabWidth,
+    y: tabBarTop + 4,
+    width: tabWidth * 3,
+    height: TAB_BAR_HEIGHT - 4,
   };
 }
 
@@ -173,14 +158,19 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const measuredRects = useMemo<Record<string, TargetRect>>(() => {
     if (hasSeenHomeTooltips) return {};
     const rects: Record<string, TargetRect> = {};
-    const tabRects = computeTabRects(screenW, screenH, insets.bottom);
-    Object.assign(rects, tabRects);
+    rects.tabs = computeTabBarRect(screenW, screenH, insets.bottom);
     if (layoutRects?.reading) rects.reading = layoutRects.reading;
-    if (layoutRects?.streak) rects.streak = layoutRects.streak;
+    if (layoutRects?.context) rects.context = layoutRects.context;
+    if (layoutRects?.rhythm) rects.rhythm = layoutRects.rhythm;
     return rects;
   }, [hasSeenHomeTooltips, layoutRects, screenW, screenH, insets.bottom]);
 
-  const step = TOOLTIP_STEPS[currentStep];
+  const availableSteps = useMemo(
+    () => TOOLTIP_STEPS.filter((tooltipStep) => measuredRects[tooltipStep.targetKey]),
+    [measuredRects],
+  );
+  const stepIndex = Math.min(currentStep, Math.max(availableSteps.length - 1, 0));
+  const step = availableSteps[stepIndex];
 
   const dismiss = useCallback(() => {
     setIsVisible(false);
@@ -189,13 +179,13 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
 
   const handleNext = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (currentStep < TOOLTIP_STEPS.length - 1) {
+    if (currentStep < availableSteps.length - 1) {
       setTooltipHeight(TOOLTIP_ESTIMATED_HEIGHT);
       setCurrentStep((prev) => prev + 1);
     } else {
       dismiss();
     }
-  }, [currentStep, dismiss]);
+  }, [availableSteps.length, currentStep, dismiss]);
 
   // Don't render if already seen or dismissed
   if (hasSeenHomeTooltips || !isVisible || !step) return null;
@@ -204,9 +194,10 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   const targetRect = measuredRects[step.targetKey] ?? null;
   if (!targetRect) return null;
 
-  const isLastStep = currentStep === TOOLTIP_STEPS.length - 1;
+  const isLastStep = stepIndex === availableSteps.length - 1;
   const tooltipBg = colors.backgroundElevated;
   const tooltipBorder = isDark ? 'rgba(245, 240, 235, 0.12)' : 'rgba(28, 23, 16, 0.08)';
+  const spotlightStroke = isDark ? 'rgba(200, 165, 92, 0.42)' : 'rgba(139, 99, 32, 0.28)';
 
   // Calculate tooltip position
   const GAP = 14;
@@ -216,18 +207,31 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
   let arrowDirection: 'up' | 'down';
   const activeHeight = tooltipHeight > 0 ? tooltipHeight : TOOLTIP_ESTIMATED_HEIGHT;
 
-  if (step.placement === 'below') {
-    // For "below" placement (reading card), position below the spotlight
+  const bottomGuard = screenH - insets.bottom - TAB_BAR_HEIGHT - 16;
+  const belowFits = targetRect.y + targetRect.height + SPOTLIGHT_PADDING + GAP + activeHeight <= bottomGuard;
+  const shouldPlaceBelow = step.placement === 'below' || (step.placement === 'auto' && belowFits);
+
+  if (shouldPlaceBelow) {
     const spotlightBottom = targetRect.y + targetRect.height + SPOTLIGHT_PADDING;
     tooltipTop = spotlightBottom + GAP;
     arrowDirection = 'up';
   } else {
-    // For "above" placement (tab items, streak), position above the target
     tooltipTop = targetRect.y - SPOTLIGHT_PADDING - GAP - activeHeight;
     arrowDirection = 'down';
   }
 
-  const arrowLeft = targetRect.x + targetRect.width / 2 - ARROW_SIZE;
+  const minTooltipTop = insets.top + 12;
+  const maxTooltipTop = Math.max(minTooltipTop, bottomGuard - activeHeight);
+  tooltipTop = Math.max(minTooltipTop, Math.min(tooltipTop, maxTooltipTop));
+
+  const tooltipWidth = screenW - TOOLTIP_MARGIN_H * 2;
+  const arrowLeft = Math.max(
+    18,
+    Math.min(
+      targetRect.x + targetRect.width / 2 - ARROW_SIZE - TOOLTIP_MARGIN_H,
+      tooltipWidth - ARROW_SIZE * 2 - 18,
+    ),
+  );
 
   // Build rectangular spotlight
   const spotX = targetRect.x - SPOTLIGHT_PADDING;
@@ -296,6 +300,16 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
             fill={`rgba(0, 0, 0, ${BACKDROP_OPACITY})`}
             mask="url(#spotlightMask)"
           />
+          <Rect
+            x={spotX}
+            y={spotY}
+            width={spotW}
+            height={spotH}
+            rx={SPOT_CORNER_RADIUS}
+            fill="none"
+            stroke={spotlightStroke}
+            strokeWidth={1}
+          />
         </Svg>
       </View>
 
@@ -327,7 +341,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
             ...(arrowDirection === 'up'
               ? { top: -(ARROW_SIZE - 1) }
               : { bottom: -(ARROW_SIZE - 1) }),
-            left: arrowLeft - TOOLTIP_MARGIN_H,
+            left: arrowLeft,
           }}
           pointerEvents="none"
         >
@@ -358,19 +372,19 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
 
         <View style={styles.bottomRow}>
           <View style={styles.dotsRow}>
-            {TOOLTIP_STEPS.map((_, index) => (
+            {availableSteps.map((_, index) => (
               <View
                 key={index}
                 style={[
                   styles.dot,
                   {
                     backgroundColor:
-                      index === currentStep
+                      index === stepIndex
                         ? colors.accent
                         : isDark
                           ? 'rgba(245, 240, 235, 0.15)'
                           : 'rgba(28, 23, 16, 0.10)',
-                    width: index === currentStep ? 14 : 5,
+                    width: index === stepIndex ? 14 : 5,
                   },
                 ]}
               />
