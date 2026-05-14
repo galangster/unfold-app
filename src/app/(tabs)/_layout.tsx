@@ -310,7 +310,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
           };
 
           return (
-            <TouchableOpacity activeOpacity={0.7}
+            <TouchableOpacity activeOpacity={1}
               key={route.key}
               onPress={onPress}
               onLongPress={onLongPress}
