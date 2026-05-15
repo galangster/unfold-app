@@ -36,6 +36,8 @@ import {
   NOTIFICATION_IDS,
 } from '@/lib/notifications';
 import { logger } from '@/lib/logger';
+import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
+import { buildDailyReminderFingerprint } from '@/lib/daily-reminder-content';
 
 const DEBOUNCE_MS = 750;
 
@@ -47,36 +49,24 @@ const DEBOUNCE_MS = 750;
  * in src/lib/notifications.ts. If you add a branch in that function, add the
  * dependent fields here.
  */
-function useReminderFingerprint(): string {
+function useReminderFingerprint(premiumPolicy: ReturnType<typeof usePremiumAccessPolicy>): string {
   return useUnfoldStore((state) => {
     const reminderTime = state.user?.reminderTime ?? '';
-    const devotional =
-      state.devotionals.find((d) => d.id === state.currentDevotionalId) ?? null;
-    const day =
-      devotional?.days.find((d) => d.dayNumber === devotional.currentDay) ?? null;
+    const currentDevotional =
+      state.devotionals.find((devotional) => devotional.id === state.currentDevotionalId) ?? null;
 
-    // JSON.stringify prevents collisions from content containing `|`.
-    // dayNumber is included because getNotificationContent uses it in the
-    // overdue copy branch.
-    return JSON.stringify([
+    return buildDailyReminderFingerprint({
       reminderTime,
-      devotional?.id ?? '',
-      devotional?.title ?? '',
-      devotional?.currentDay ?? '',
-      day?.dayNumber ?? '',
-      day ? 'day' : devotional ? 'pending' : 'empty',
-      day?.title ?? '',
-      day?.quotableLine ?? '',
-      day?.scriptureReference ?? '',
-      day?.isRead ? '1' : '0',
-      day?.generatedAt ?? '',
-    ]);
+      currentDevotional,
+      premiumPolicy,
+    });
   });
 }
 
 export function useDailyReminderSync() {
   const hasHydrated = useHasHydrated();
-  const fingerprint = useReminderFingerprint();
+  const premiumPolicy = usePremiumAccessPolicy();
+  const fingerprint = useReminderFingerprint(premiumPolicy);
 
   // Refs coordinate async work so rapid fingerprint changes coalesce into
   // at most one in-flight schedule + one pending rerun.
@@ -90,13 +80,20 @@ export function useDailyReminderSync() {
   const inFlightRef = useRef(false);
   const pendingRef = useRef(false);
   const latestFingerprintRef = useRef<string>(fingerprint);
+  const latestPremiumPolicyRef = useRef(premiumPolicy);
 
-  // Keep the latest fingerprint in a ref so `runSync` always reads the freshest
-  // value when a queued run finally executes (not the value at enqueue time).
+  // Keep the latest fingerprint/policy in refs so `runSync` always reads the
+  // freshest value when a queued or foreground run finally executes.
   latestFingerprintRef.current = fingerprint;
+  latestPremiumPolicyRef.current = premiumPolicy;
 
   async function runSync(reason: 'hydration' | 'fingerprint' | 'foreground'): Promise<void> {
     if (!hasHydrated) return;
+    const targetPremiumPolicy = latestPremiumPolicyRef.current;
+    if (targetPremiumPolicy === 'unknown') {
+      logger.log(`[useDailyReminderSync] Premium policy unknown; deferring daily reminder sync (reason=${reason})`);
+      return;
+    }
 
     const target = latestFingerprintRef.current;
     const todayStr = new Date().toDateString();

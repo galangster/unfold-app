@@ -5,6 +5,7 @@ import { getEffectivePremiumAccessPolicy } from './premium-state';
 import { logger } from '@/lib/logger';
 import { getMessageForToday, MIDDAY_MESSAGES, EVENING_MESSAGES } from '@/constants/check-in-messages';
 import { buildDevotionalReadyNotificationData } from '@/lib/push-notification-helpers';
+import { getDailyReminderContent } from '@/lib/daily-reminder-content';
 
 // Notification identifiers for targeted cancel/reschedule.
 //
@@ -189,58 +190,10 @@ function parseTimeString(timeString: string): { hours: number; minutes: number }
 export function getNotificationContent(): { title: string; body: string } {
   const state = useUnfoldStore.getState();
   const currentDevotional = state.devotionals.find((d) => d.id === state.currentDevotionalId);
-
-  // No active devotional
-  if (!currentDevotional) {
-    return {
-      title: 'Ready for something new?',
-      body: 'Start your next study when you\'re ready.',
-    };
-  }
-
-  const currentDay = currentDevotional.days.find(
-    (d) => d.dayNumber === currentDevotional.currentDay,
-  );
-
-  // Content not generated yet
-  if (!currentDay) {
-    return {
-      title: 'Your reading is being prepared',
-      body: 'Check back soon — it\'ll be ready.',
-    };
-  }
-
-  // Check if content is overdue (generated before today)
-  const todayStr = new Date().toDateString();
-  const isOverdue =
-    !currentDay.isRead &&
-    currentDay.generatedAt &&
-    new Date(currentDay.generatedAt).toDateString() !== todayStr;
-
-  if (isOverdue) {
-    return {
-      title: 'Pick up where you left off',
-      body: `Day ${currentDay.dayNumber} of ${currentDevotional.title} is waiting for you.`,
-    };
-  }
-
-  // On schedule — use content-driven notification
-  if (currentDay.quotableLine) {
-    const body =
-      currentDay.quotableLine.length > 100
-        ? currentDay.quotableLine.substring(0, 97) + '...'
-        : currentDay.quotableLine;
-    return { title: currentDay.title, body };
-  }
-
-  if (currentDay.scriptureReference) {
-    return {
-      title: currentDay.title,
-      body: `Today's reading: ${currentDay.scriptureReference}`,
-    };
-  }
-
-  return { title: currentDay.title, body: 'Your next reading is waiting.' };
+  return getDailyReminderContent({
+    currentDevotional,
+    premiumPolicy: getEffectivePremiumAccessPolicy(),
+  });
 }
 
 function getCurrentDevotionalNotificationData(): ReturnType<typeof buildDevotionalReadyNotificationData> {

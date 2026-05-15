@@ -1,4 +1,5 @@
 import type { Devotional, DevotionalDay } from '@/lib/store';
+import type { PremiumAccessPolicy } from './premium-access-policy';
 import { getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -71,4 +72,13 @@ export function shouldPrepareCurrentDevotionalDay(
   }
 
   return true;
+}
+
+export function shouldAutoPrepareCurrentDevotionalDay(
+  devotional: Devotional | undefined,
+  premiumPolicy: PremiumAccessPolicy,
+  now = new Date(),
+): boolean {
+  if (premiumPolicy !== 'granted') return false;
+  return shouldPrepareCurrentDevotionalDay(devotional, now);
 }

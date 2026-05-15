@@ -43,7 +43,7 @@ import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
   hasReadDevotionalToday,
-  shouldPrepareCurrentDevotionalDay,
+  shouldAutoPrepareCurrentDevotionalDay,
 } from '@/lib/home-devotional-state';
 import {
   getBridgeDayNumber,
@@ -338,8 +338,8 @@ export default function HomeScreen() {
   // Never show "preparing" for days beyond today's calendar position — those are
   // tomorrow's content and shouldn't trigger auto-generation.
   const isPreparingCurrentDay = useMemo(() => (
-    shouldPrepareCurrentDevotionalDay(currentDevotional)
-  ), [currentDevotional]);
+    shouldAutoPrepareCurrentDevotionalDay(currentDevotional, premiumPolicy)
+  ), [currentDevotional, premiumPolicy]);
 
   // Content discovery flow: check for server-generated content before submitting a new job.
   // 1. Check if a completed job already exists on the server (e.g., from midnight cron)
@@ -516,6 +516,16 @@ export default function HomeScreen() {
       router.push('/(tabs)/(today)/reading');
     }
   };
+
+  const handleOpenBible = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/(tabs)/(bible)');
+  }, [router]);
+
+  const handleRenewPremium = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowPremiumSheet(true);
+  }, []);
 
   const handleResume = () => {
     if (!resumeContext || !resumeDevotional) return;
@@ -795,7 +805,8 @@ export default function HomeScreen() {
     hasReadToday,
     dayLabel: getReadingDayLabel(),
     isJourneyComplete,
-    isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional)),
+    isPreparing: !hasReadToday && (isPreparingCurrentDay || (!currentDayData && !!currentDevotional && premiumPolicy !== 'denied')),
+    premiumPolicy,
     daysCompleted,
     totalDays: currentDevotional?.totalDays ?? 0,
     progress: progressPercent,
@@ -803,6 +814,8 @@ export default function HomeScreen() {
     onContinue: handleContinueReading,
     onReflect: handleReflect,
     onCreateNew: handleCreateNew,
+    onOpenBible: handleOpenBible,
+    onRenewPremium: handleRenewPremium,
     onReveal: handleReveal,
     ctaText: getCtaText(),
     reflectionStatus: currentDayReflectionStatus,

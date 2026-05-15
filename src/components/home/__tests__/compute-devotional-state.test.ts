@@ -40,6 +40,7 @@ const baseInput: ComputeInput = {
   dayLabel: 'Today',
   isJourneyComplete: false,
   isPreparing: false,
+  premiumPolicy: 'granted',
   daysCompleted: 0,
   totalDays: 7,
   progress: 0,
@@ -47,6 +48,8 @@ const baseInput: ComputeInput = {
   onContinue: noop,
   onReflect: noop,
   onCreateNew: noop,
+  onOpenBible: noop,
+  onRenewPremium: noop,
   onReveal: noop,
   ctaText: 'Begin Your Journey',
   reflectionStatus: 'empty',
@@ -79,6 +82,41 @@ describe('computeDevotionalState', () => {
       ...baseInput,
       currentDayData: null,
     });
+    expect(state.type).toBe('preparing');
+  });
+
+  it('returns premium-paused instead of preparing when premium is denied and the next day is missing', () => {
+    const onOpenBible = jest.fn();
+    const onRenewPremium = jest.fn();
+
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'denied',
+      daysCompleted: 6,
+      progress: 86,
+      onOpenBible,
+      onRenewPremium,
+    });
+
+    expect(state.type).toBe('premium-paused');
+    if (state.type === 'premium-paused') {
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.daysCompleted).toBe(6);
+      expect(state.onOpenBible).toBe(onOpenBible);
+      expect(state.onRenewPremium).toBe(onRenewPremium);
+    }
+  });
+
+  it('does not show the churned upsell while premium policy is still unknown', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'unknown',
+    });
+
     expect(state.type).toBe('preparing');
   });
 

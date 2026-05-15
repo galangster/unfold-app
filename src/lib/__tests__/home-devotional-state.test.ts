@@ -2,6 +2,7 @@ import {
   getCurrentDevotional,
   getHomeDevotionalDayData,
   hasReadDevotionalToday,
+  shouldAutoPrepareCurrentDevotionalDay,
   shouldPrepareCurrentDevotionalDay,
 } from '../home-devotional-state';
 import type { Devotional, DevotionalDay } from '../store';
@@ -111,5 +112,16 @@ describe('home devotional state helpers', () => {
     ).toBe(false);
 
     expect(shouldPrepareCurrentDevotionalDay(devotional({ generationMode: 'batch' }), today)).toBe(false);
+  });
+
+  it('only auto-prepares missing progressive days after premium is confirmed granted', () => {
+    const missingEligibleDay = devotional({
+      currentDay: 2,
+      seriesStartDate: new Date(2026, 3, 24, 8, 0, 0).toISOString(),
+    });
+
+    expect(shouldAutoPrepareCurrentDevotionalDay(missingEligibleDay, 'granted', today)).toBe(true);
+    expect(shouldAutoPrepareCurrentDevotionalDay(missingEligibleDay, 'denied', today)).toBe(false);
+    expect(shouldAutoPrepareCurrentDevotionalDay(missingEligibleDay, 'unknown', today)).toBe(false);
   });
 });

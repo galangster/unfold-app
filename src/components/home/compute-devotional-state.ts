@@ -7,6 +7,7 @@
  */
 
 import type { DevotionalDay, Devotional } from '@/lib/store';
+import type { PremiumAccessPolicy } from '@/lib/premium-access-policy';
 
 // ─── State discriminated union ──────────────────────────────────
 
@@ -16,6 +17,14 @@ export type ReflectionStatus = 'empty' | 'started' | 'complete';
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
   | { type: 'preparing'; progress: number }
+  | {
+      type: 'premium-paused';
+      seriesTitle: string;
+      daysCompleted: number;
+      totalDays: number;
+      onOpenBible: () => void;
+      onRenewPremium: () => void;
+    }
   | {
       type: 'unread';
       dayData: DevotionalDay;
@@ -73,6 +82,7 @@ export interface ComputeInput {
   dayLabel: DayLabel;
   isJourneyComplete: boolean;
   isPreparing: boolean;
+  premiumPolicy: PremiumAccessPolicy;
   daysCompleted: number;
   totalDays: number;
   progress: number;
@@ -80,6 +90,8 @@ export interface ComputeInput {
   onContinue: (dayNumber?: number) => void;
   onReflect?: (dayNumber?: number) => void;
   onCreateNew: () => void;
+  onOpenBible: () => void;
+  onRenewPremium: () => void;
   onReveal: () => void;
   ctaText: string;
   reflectionStatus?: ReflectionStatus;
@@ -108,6 +120,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     dayLabel,
     isJourneyComplete,
     isPreparing,
+    premiumPolicy,
     daysCompleted,
     totalDays,
     progress,
@@ -115,6 +128,8 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     onContinue,
     onReflect = onContinue,
     onCreateNew,
+    onOpenBible,
+    onRenewPremium,
     onReveal,
     ctaText,
     reflectionStatus = 'empty',
@@ -127,7 +142,20 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
 
   const seriesTitle = currentDevotional.title;
 
-  // 2. Content is still being generated or no day data available.
+  // 2. Confirmed churned users should not see generation-progress copy for a
+  // missing next day. The series is paused, not being prepared.
+  if (!hasReadToday && !currentDayData && premiumPolicy === 'denied') {
+    return {
+      type: 'premium-paused',
+      seriesTitle,
+      daysCompleted,
+      totalDays,
+      onOpenBible,
+      onRenewPremium,
+    };
+  }
+
+  // 3. Content is still being generated or no day data available.
   // Never show "preparing" if the user has already read today — the completed
   // day should remain visible while the next day generates in the background.
   if (!hasReadToday && (isPreparing || !currentDayData)) {

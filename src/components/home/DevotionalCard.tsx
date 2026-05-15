@@ -1,8 +1,8 @@
 /**
- * DevotionalCard — 6-state hero card for the home screen.
+ * DevotionalCard — 8-state hero card for the home screen.
  *
  * Renders based on a DevotionalCardState discriminated union:
- *   empty | preparing | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
+ *   empty | preparing | premium-paused | reveal-ready | unread | complete-today | tomorrow-locked | journey-complete
  *
  * Extracted from (tabs)/(today)/index.tsx for single-responsibility and testability.
  */
@@ -459,6 +459,63 @@ function PreparingState({ progress }: { progress: number }) {
   );
 }
 
+// ─── Premium paused state ───────────────────────────────────────
+
+function PremiumPausedState({ state }: { state: Extract<DevotionalCardState, { type: 'premium-paused' }> }) {
+  const { colors } = useTheme();
+  const { entering } = useAccessibleAnimation();
+  const progressLabel = state.totalDays > 0
+    ? `${state.daysCompleted} of ${state.totalDays} days complete`
+    : 'Your series is saved';
+
+  return (
+    <Animated.View
+      entering={entering(FadeIn.duration(Duration.normal).delay(80).easing(Ease.out))}
+      accessible
+      accessibilityRole="summary"
+      accessibilityLabel="Premium paused. Your personal series is saved."
+      style={[
+        styles.returningCard,
+        {
+          backgroundColor: alpha(colors.backgroundElevated, 0.72),
+          borderColor: alpha(colors.accent, 0.14),
+          shadowColor: colors.accent,
+        },
+      ]}
+    >
+      <View style={styles.returningContent}>
+        <Text style={[styles.returningKicker, { color: colors.accent }]}>Premium paused</Text>
+        <Text style={[styles.returningTitle, { color: colors.text }]}>Your series is waiting.</Text>
+        <Text style={[styles.returningSubtitle, { color: colors.textMuted }]}>New personal readings pause while Premium is inactive. You can still read scripture today, or renew Premium when you’re ready.</Text>
+        <Text style={[styles.premiumPausedProgress, { color: colors.textSubtle }]}>{progressLabel}</Text>
+
+        <View style={styles.premiumPausedActions}>
+          <TouchableOpacity
+            activeOpacity={0.74}
+            onPress={state.onOpenBible}
+            accessibilityRole="button"
+            accessibilityLabel="Open the Bible tab"
+            style={[styles.returningCta, styles.premiumPausedPrimaryCta, { borderColor: alpha(colors.accent, 0.28), backgroundColor: alpha(colors.accent, 0.12) }]}
+          >
+            <Text style={[styles.returningCtaText, { color: colors.text }]}>Open Bible</Text>
+            <Text style={[styles.returningCtaArrow, { color: colors.accent }]}>→</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.74}
+            onPress={state.onRenewPremium}
+            accessibilityRole="button"
+            accessibilityLabel="Renew Premium"
+            style={[styles.returningCta, styles.premiumPausedSecondaryCta, { borderColor: alpha(colors.accent, 0.18), backgroundColor: alpha(colors.accent, 0.045) }]}
+          >
+            <Text style={[styles.returningCtaText, { color: colors.accent }]}>Renew Premium</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
 // ─── Journey complete state ─────────────────────────────────────
 
 function JourneyCompleteStateFallback({
@@ -734,6 +791,7 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
     >
       {state.type === 'empty' && <EmptyState onCreateNew={state.onCreateNew} isReturningUser={isReturningUser} />}
       {state.type === 'preparing' && <PreparingState progress={state.progress} />}
+      {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
       {state.type === 'journey-complete' && (
         <JourneyCompleteState seriesTitle={state.seriesTitle} onCreateNew={state.onCreateNew} />
       )}
@@ -1058,6 +1116,28 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 20,
     marginTop: -1,
+  },
+  premiumPausedProgress: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 12,
+    lineHeight: 18,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    marginTop: -Spacing['4'],
+    marginBottom: Spacing['5'],
+  },
+  premiumPausedActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing['3'],
+  },
+  premiumPausedPrimaryCta: {
+    alignSelf: 'auto',
+  },
+  premiumPausedSecondaryCta: {
+    alignSelf: 'auto',
+    paddingHorizontal: 20,
   },
 
   // Reveal-ready open hero
