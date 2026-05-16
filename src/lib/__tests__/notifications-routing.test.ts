@@ -54,6 +54,9 @@ const mockState = {
 jest.mock('../store', () => ({
   useUnfoldStore: {
     getState: () => mockState,
+    persist: {
+      hasHydrated: () => true,
+    },
   },
 }));
 
