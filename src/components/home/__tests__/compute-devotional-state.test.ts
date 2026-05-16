@@ -70,19 +70,29 @@ describe('computeDevotionalState', () => {
   });
 
   it('returns preparing when isPreparing is true', () => {
+    const onCreateNew = jest.fn();
     const state = computeDevotionalState({
       ...baseInput,
       isPreparing: true,
+      onCreateNew,
     });
     expect(state.type).toBe('preparing');
+    if (state.type === 'preparing') {
+      expect(state.onCreateNew).toBe(onCreateNew);
+    }
   });
 
   it('returns preparing when currentDayData is null', () => {
+    const onCreateNew = jest.fn();
     const state = computeDevotionalState({
       ...baseInput,
       currentDayData: null,
+      onCreateNew,
     });
     expect(state.type).toBe('preparing');
+    if (state.type === 'preparing') {
+      expect(state.onCreateNew).toBe(onCreateNew);
+    }
   });
 
   it('returns premium-paused instead of preparing when premium is denied and the next day is missing', () => {
