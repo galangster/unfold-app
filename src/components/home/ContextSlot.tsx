@@ -155,7 +155,7 @@ export function ContextSlot({
             icon={null}
             accentColor={colors.accent}
             delay={0}
-            label="Evening companion"
+            label="Evening check-in"
             actionLabel="Wind down"
           />
         );

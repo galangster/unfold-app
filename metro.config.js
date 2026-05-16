@@ -40,9 +40,11 @@ config.transformer = {
 };
 
 // Configure resolver with SVG support, shared folder resolution, and web platform mocking
+const riveAssetExts = assetExts.includes("riv") ? assetExts : [...assetExts, "riv"];
+
 config.resolver = {
   ...config.resolver,
-  assetExts: assetExts.filter((ext) => ext !== "svg"),
+  assetExts: riveAssetExts.filter((ext) => ext !== "svg"),
   sourceExts: [...sourceExts, "svg"],
   useWatchman: false,
   // Only add shared folder resolution if it exists

@@ -17,7 +17,7 @@
       "backgroundColor": "#0A0A0A",
       "supportsTablet": true,
       "bundleIdentifier": "com.unfoldapp.ios",
-      "buildNumber": "1",
+      "buildNumber": "183",
       "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false

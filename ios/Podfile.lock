@@ -398,6 +398,29 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - NitroModules (0.35.6):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-callinvoker
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - Proton (1.0.0):
     - ProtonCore
   - ProtonCore (1.0.0)
@@ -2575,6 +2598,7 @@ PODS:
   - RevenueCat (5.50.0)
   - RevenueCatUI (5.50.0):
     - RevenueCat (= 5.50.0)
+  - RiveRuntime (6.18.2)
   - RNCAsyncStorage (2.2.0):
     - hermes-engine
     - RCTRequired
@@ -2786,6 +2810,30 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - RNWorklets
+    - Yoga
+  - RNRive (0.4.6):
+    - hermes-engine
+    - NitroModules
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - RiveRuntime (= 6.18.2)
     - Yoga
   - RNScreens (4.23.0):
     - hermes-engine
@@ -3061,6 +3109,7 @@ DEPENDENCIES:
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - ImageColors (from `../node_modules/react-native-image-colors/ios`)
   - lottie-react-native (from `../node_modules/lottie-react-native`)
+  - NitroModules (from `../node_modules/react-native-nitro-modules`)
   - Proton (from `../modules/unfold-editor/ios/vendor/Proton`)
   - ProtonCore (from `../modules/unfold-editor/ios/vendor/Proton`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
@@ -3157,6 +3206,7 @@ DEPENDENCIES:
   - RNPaywalls (from `../node_modules/react-native-purchases-ui`)
   - RNPurchases (from `../node_modules/react-native-purchases`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
+  - "RNRive (from `../node_modules/@rive-app/react-native`)"
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNWorklets (from `../node_modules/react-native-worklets`)
@@ -3175,6 +3225,7 @@ SPEC REPOS:
     - PurchasesHybridCommonUI
     - RevenueCat
     - RevenueCatUI
+    - RiveRuntime
     - SDWebImage
     - SDWebImageAVIFCoder
     - SDWebImageSVGCoder
@@ -3321,6 +3372,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-image-colors/ios"
   lottie-react-native:
     :path: "../node_modules/lottie-react-native"
+  NitroModules:
+    :path: "../node_modules/react-native-nitro-modules"
   Proton:
     :path: "../modules/unfold-editor/ios/vendor/Proton"
   ProtonCore:
@@ -3511,6 +3564,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-purchases"
   RNReanimated:
     :path: "../node_modules/react-native-reanimated"
+  RNRive:
+    :path: "../node_modules/@rive-app/react-native"
   RNScreens:
     :path: "../node_modules/react-native-screens"
   RNSVG:
@@ -3599,6 +3654,7 @@ SPEC CHECKSUMS:
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   lottie-ios: a881093fab623c467d3bce374367755c272bdd59
   lottie-react-native: 8e5dd0e51847600666057d2c9b95815ac9fdb165
+  NitroModules: 5a0f735f3f834ac1d998c28fc65be992849c30f3
   Proton: 8225ea078c1b0de53d42d357ca5d195bd5961c05
   ProtonCore: fa362a705c71ae52a464e88f5060aa31cd8d864b
   PurchasesHybridCommon: e95a0b9bb01f6e9101d44f411343fb91030e26ae
@@ -3689,6 +3745,7 @@ SPEC CHECKSUMS:
   ReactNativeEnriched: 335700c48d72b91ddb307a5b64c30c62e83821f0
   RevenueCat: a5fcd0a12b5ec9bbddc0cf0dd20c14b7e6213df6
   RevenueCatUI: d470454494ecc734ca9b416fea0704613c4cd7a2
+  RiveRuntime: 55c7a7badd9a8389d20fc8a75b7c6accc851b69a
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
   RNCClipboard: 88d7eeb555d1183915f0885bdbc5c97eb6f7f3ba
   RNCMaskedView: d2578d41c59b936db122b2798ba37e4722d21035
@@ -3698,6 +3755,7 @@ SPEC CHECKSUMS:
   RNPaywalls: 638800e62194330656c53c34257f3b7fabb17e2e
   RNPurchases: 393312c7ac9cfb3852e3f14a91520d305fa05be6
   RNReanimated: 86e5991396f1aa514db90d6c79d4c3e37a37bb10
+  RNRive: 63a86a91bbe0b665c9c798ac6bf86fffb7daf192
   RNScreens: 02e62f995ceb94ea465864b3bf4d4767b87f0362
   RNSVG: 0bd149b873018bc6e0e3321e2f6435bdba294460
   RNWorklets: 0e736f568c3c61cb3326cdcda767c4daee56a8a9

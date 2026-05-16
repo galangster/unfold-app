@@ -13,3 +13,8 @@ declare module '*.wav' {
   const value: number;
   export default value;
 }
+
+declare module '*.riv' {
+  const value: number;
+  export default value;
+}

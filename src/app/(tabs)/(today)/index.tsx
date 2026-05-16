@@ -209,6 +209,14 @@ export default function HomeScreen() {
       scrollY.value = event.contentOffset.y;
     },
   });
+  const [isTodayFocused, setIsTodayFocused] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsTodayFocused(true);
+      return () => setIsTodayFocused(false);
+    }, [])
+  );
 
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
@@ -842,10 +850,13 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Layer 0: Ambient art — Skia shaders + ember particles */}
+      {/* Layer 0: Ambient art — single Today ambient slot (Rive light rays or embers) */}
       <AmbientArtCanvas
         streakLevel={streakCurrent}
         hasReadToday={hasReadToday}
+        stateType={devotionalState.type}
+        accentColor={colors.accent}
+        screenFocused={isTodayFocused}
         scrollY={scrollY}
       />
 

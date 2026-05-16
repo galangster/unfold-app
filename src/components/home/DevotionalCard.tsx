@@ -8,7 +8,8 @@
  */
 
 import React, { useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
   useSharedValue,
@@ -276,7 +277,7 @@ function ReturningEmptyState({ onCreateNew }: { onCreateNew: () => void }) {
 // ─── Reveal-ready teaser card ──────────────────────────────────
 
 function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { type: 'reveal-ready' }> }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const { entering } = useAccessibleAnimation();
   const isYesterday = state.dayLabel === 'Overdue';
@@ -337,14 +338,25 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
               styles.heroActions,
               {
                 borderColor: alpha(colors.accent, 0.24),
-                backgroundColor: alpha(colors.accent, 0.075),
+                backgroundColor: Platform.OS === 'ios'
+                  ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+                  : alpha(colors.backgroundElevated, 0.9),
               },
             ]}
           >
-            <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-              {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
-            </Text>
-            <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
+            {Platform.OS === 'ios' && (
+              <BlurView
+                intensity={isDark ? 28 : 18}
+                tint={isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            <View style={styles.heroActionContent}>
+              <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                {isYesterday ? 'Catch Up on Yesterday’s Reading' : 'Reveal Today’s Devotional'}
+              </Text>
+              <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -581,7 +593,7 @@ interface MainCardProps {
 }
 
 function MainCard({ state }: MainCardProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const isLargeTextHero = fontScale >= 1.18;
   const isCompactHero = width < 400 || isLargeTextHero;
@@ -741,14 +753,25 @@ function MainCard({ state }: MainCardProps) {
                 hasCompletedToday && styles.heroActionsSecondary,
                 {
                   borderColor: alpha(colors.accent, hasCompletedToday ? 0.16 : 0.24),
-                  backgroundColor: alpha(colors.accent, hasCompletedToday ? 0.035 : 0.075),
+                  backgroundColor: Platform.OS === 'ios'
+                    ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+                    : alpha(colors.backgroundElevated, 0.9),
                 },
               ]}
             >
-              <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                {ctaText}
-              </Text>
-              <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
+              {Platform.OS === 'ios' && (
+                <BlurView
+                  intensity={isDark ? 28 : 18}
+                  tint={isDark ? 'dark' : 'light'}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <View style={styles.heroActionContent}>
+                <Text style={[styles.heroActionText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                  {ctaText}
+                </Text>
+                <Text style={[styles.heroActionArrow, { color: colors.accent }]}>→</Text>
+              </View>
             </TouchableOpacity>
 
             {onCreateNew && (
@@ -964,8 +987,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['2'],
   },
   heroActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
     alignSelf: 'flex-start',
     minHeight: 48,
     paddingVertical: Spacing['3'],
@@ -973,12 +994,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     marginTop: Spacing['1'],
-    gap: Spacing['2'],
+    overflow: 'hidden',
   },
   heroActionsSecondary: {
     minHeight: 42,
     paddingVertical: Spacing['2.5'],
     paddingHorizontal: Spacing['4'],
+  },
+  heroActionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing['2'],
   },
   heroActionArrow: {
     fontFamily: FontFamily.uiMedium,
