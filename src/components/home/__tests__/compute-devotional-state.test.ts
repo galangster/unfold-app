@@ -130,6 +130,25 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('preparing');
   });
 
+  it('keeps a premium-upgraded returning user on the new-series-ready preparing path when the next day is missing', () => {
+    const onCreateNew = jest.fn();
+
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDayData: null,
+      isPreparing: true,
+      premiumPolicy: 'granted',
+      daysCompleted: 6,
+      progress: 86,
+      onCreateNew,
+    });
+
+    expect(state.type).toBe('preparing');
+    if (state.type === 'preparing') {
+      expect(state.onCreateNew).toBe(onCreateNew);
+    }
+  });
+
   it('returns journey-complete when isJourneyComplete is true', () => {
     const state = computeDevotionalState({
       ...baseInput,

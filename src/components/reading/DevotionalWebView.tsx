@@ -307,33 +307,27 @@ export function DevotionalWebView({
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
 
-        // Strategy: place the toolbar on the OPPOSITE vertical side from where
-        // iOS will put its native Copy/Look Up callout menu. iOS puts its menu
-        // BELOW the selection when the selection is near the top of the viewport,
-        // and ABOVE when the selection sits lower. We invert that so the two
-        // never collide. This matters especially for first-paragraph selections
-        // where the drop-cap inflates rect.bottom into iOS's "below" zone.
+        // Strategy: keep the toolbar in the opposite safe band from where iOS
+        // puts its native Copy/Look Up/Translate callout. Anchoring near the
+        // selection was still close enough for the native menu to cover our
+        // controls on tall first-paragraph selections, so use viewport bands.
         var vh = window.innerHeight;
+        var toolbarHeight = 52;
+        var safeInset = 14;
         var nativeCalloutBelow = rect.top < vh * 0.35;
 
         var top;
         if (nativeCalloutBelow) {
-          // Native menu goes below the selection — put ours above
-          top = rect.top - 60;
-          if (top < 10) {
-            // Not enough room above; push far below both the selection and
-            // the native menu (~70px tall)
-            top = rect.bottom + 90;
-          }
+          // Native menu goes below the selection — park ours in the lower band.
+          top = vh - toolbarHeight - safeInset;
         } else {
-          // Native menu goes above the selection — put ours below
-          top = rect.bottom + 20;
-          if (top > vh - 60) top = rect.top - 60;
+          // Native menu goes above the selection — park ours in the upper band.
+          top = safeInset;
         }
 
         // Final clamp so the toolbar never leaves the viewport
-        if (top < 10) top = 10;
-        if (top > vh - 60) top = vh - 60;
+        if (top < safeInset) top = safeInset;
+        if (top > vh - toolbarHeight - safeInset) top = vh - toolbarHeight - safeInset;
 
         toolbar.style.top = top + 'px';
         // Left centering handled by CSS (left:50% + margin-left)

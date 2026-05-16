@@ -560,6 +560,13 @@ export default function HomeScreen() {
     });
   };
 
+  const openNewSeriesDiscovery = () => {
+    router.push({
+      pathname: '/onboarding',
+      params: { startAt: 'themeType', flow: 'newSeries' },
+    });
+  };
+
   const handleCreateNew = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!gate()) return;
@@ -573,13 +580,13 @@ export default function HomeScreen() {
             text: 'Continue',
             onPress: () => {
               archiveCurrentDevotional();
-              router.push('/onboarding');
+              openNewSeriesDiscovery();
             },
           },
         ],
       );
     } else {
-      router.push('/onboarding');
+      openNewSeriesDiscovery();
     }
   };
 

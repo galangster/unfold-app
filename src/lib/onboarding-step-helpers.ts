@@ -213,8 +213,13 @@ export function getInitialOnboardingStepId<T extends OnboardingStepLike>(
   allSteps: readonly T[],
   existingUser: ExistingUserLike,
   selectionContext?: OnboardingSelectionContext,
+  requestedStepId?: string | null,
 ): string {
-  return getFilteredOnboardingSteps(allSteps, existingUser, selectionContext)[0]?.id ?? 'hook';
+  const filteredSteps = getFilteredOnboardingSteps(allSteps, existingUser, selectionContext);
+  if (requestedStepId && filteredSteps.some((step) => step.id === requestedStepId)) {
+    return requestedStepId;
+  }
+  return filteredSteps[0]?.id ?? 'hook';
 }
 
 type OnboardingSampleAnswers = {

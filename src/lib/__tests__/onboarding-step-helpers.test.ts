@@ -24,6 +24,7 @@ describe('onboarding step helpers', () => {
     { id: 'featureSummary' },
     { id: 'threeStepPaywall' },
     { id: 'purchaseConfirmation' },
+    { id: 'themeType' },
     { id: 'studySubject' },
     { id: 'currentSituation' },
   ];
@@ -42,9 +43,30 @@ describe('onboarding step helpers', () => {
     expect(filtered.map((step) => step.id)).toEqual([
       'relationshipWithGod',
       'bibleFrequency',
+      'themeType',
       'currentSituation',
     ]);
     expect(getInitialOnboardingStepId(allSteps, existingUser)).toBe('relationshipWithGod');
+  });
+
+  it('can deep-start returning users at the new-series discovery selection screen', () => {
+    const existingUser = {
+      hasCompletedOnboarding: true,
+      name: 'Nick',
+      aboutMe: 'Builder',
+    };
+
+    expect(getInitialOnboardingStepId(allSteps, existingUser, undefined, 'themeType')).toBe('themeType');
+  });
+
+  it('ignores a requested start step when that step is filtered out', () => {
+    const existingUser = {
+      hasCompletedOnboarding: true,
+      name: 'Nick',
+      aboutMe: 'Builder',
+    };
+
+    expect(getInitialOnboardingStepId(allSteps, existingUser, undefined, 'threeStepPaywall')).toBe('relationshipWithGod');
   });
 
   it('keeps required profile fields for returning users when they are still missing', () => {
@@ -63,6 +85,7 @@ describe('onboarding step helpers', () => {
       'aboutMe',
       'relationshipWithGod',
       'bibleFrequency',
+      'themeType',
       'currentSituation',
     ]);
     expect(getInitialOnboardingStepId(allSteps, existingUser)).toBe('name');

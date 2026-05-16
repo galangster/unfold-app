@@ -15,7 +15,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
@@ -410,6 +410,8 @@ function ProgressIndicator({ currentStepIndex, totalSteps, colors }: { currentSt
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { startAt } = useLocalSearchParams<{ startAt?: string | string[] }>();
+  const requestedStartStepId = Array.isArray(startAt) ? startAt[0] : startAt;
   const { colors: _themeColors, isDark: _themeIsDark } = useTheme();
   const accentThemeId = useUnfoldStore((s) => s.user?.accentTheme ?? 'gold');
 
@@ -549,7 +551,7 @@ export default function OnboardingScreen() {
 
   // Track which step we're on (from filtered list)
   const [currentStepId, setCurrentStepId] = useState<StepId>(() =>
-    getInitialOnboardingStepId(ALL_STEPS, existingUser) as StepId,
+    getInitialOnboardingStepId(ALL_STEPS, existingUser, undefined, requestedStartStepId) as StepId,
   );
 
   // Dev: step picker visibility + show-all toggle

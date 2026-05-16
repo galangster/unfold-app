@@ -6,9 +6,9 @@ import {
 } from '../today-ambient-rive';
 
 describe('today ambient Rive mapping', () => {
-  it('uses quiet wind for unread and light rays for reveal-ready states', () => {
-    expect(getTodayAmbientMode({ stateType: 'unread', hasReadToday: false })).toBe('wind-particles');
-    expect(getTodayAmbientMode({ stateType: 'reveal-ready', hasReadToday: false })).toBe('light-rays');
+  it('keeps Today ambient quiet until the day is complete', () => {
+    expect(getTodayAmbientMode({ stateType: 'unread', hasReadToday: false })).toBe('none');
+    expect(getTodayAmbientMode({ stateType: 'reveal-ready', hasReadToday: false })).toBe('none');
   });
 
   it('uses rain particles for completed/tomorrow rest states', () => {
@@ -44,10 +44,10 @@ describe('today ambient Rive mapping', () => {
     });
   });
 
-  it('plays wind and rain as asset-authored loops without light-ray-only inputs', () => {
+  it('plays rain as an asset-authored loop without light-ray-only inputs', () => {
     expect(getTodayAmbientRiveInputs({
-      mode: 'wind-particles',
-      stateType: 'unread',
+      mode: 'rain-particles',
+      stateType: 'complete-today',
       accent: '#d6a84f',
       width: 390,
       height: 844,

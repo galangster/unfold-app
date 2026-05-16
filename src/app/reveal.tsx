@@ -178,13 +178,15 @@ export default function RevealScreen() {
         setRevealTransitioning(false);
       }
     }, 2000);
-    // Use a single POP_TO action so native stack dismissal and nested route
-    // activation happen atomically under Expo Router / React Navigation.
-    console.log('[Reveal] dismissTo → /(tabs)/(today)/reading', {
+    // Replace the top-level reveal screen with the nested Today reading route.
+    // `dismissTo` can briefly pop through the tab index on this root-stack →
+    // nested-tab handoff, which is exactly the blank/stranded path the reveal
+    // transition guard is trying to avoid.
+    console.log('[Reveal] replace → /(tabs)/(today)/reading', {
       devotionalId,
       dayNumber: String(dayNumber ?? '1'),
     });
-    router.dismissTo(
+    router.replace(
       buildReadingRouteFromRevealParams({
         devotionalId,
         dayNumber,

@@ -39,14 +39,6 @@ export function getTodayAmbientMode({
   stateType,
   hasReadToday,
 }: TodayAmbientModeInput): TodayAmbientMode {
-  if (stateType === 'reveal-ready') {
-    return 'light-rays';
-  }
-
-  if (stateType === 'unread') {
-    return 'wind-particles';
-  }
-
   if (hasReadToday && (stateType === 'complete-today' || stateType === 'tomorrow-locked')) {
     return 'rain-particles';
   }

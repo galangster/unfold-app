@@ -39,6 +39,10 @@ describe('debug seed routes', () => {
     path.join(__dirname, '../../app/(tabs)/(you)/index.tsx'),
     'utf-8',
   );
+  const todayTabSource = fs.readFileSync(
+    path.join(__dirname, '../../app/(tabs)/(today)/index.tsx'),
+    'utf-8',
+  );
 
   it('replaces any previous seeded reveal devotional before adding a fresh one', () => {
     expect(seedRevealSource).toContain('store.removeDevotional(seeded.id);');
@@ -159,6 +163,13 @@ describe('debug seed routes', () => {
     expect(youTabSource).toContain('Reset to Beginning (QA)');
     expect(youTabSource).toContain("router.push('/debug-reset-beginning')");
     expect(youTabSource).not.toContain("onPress={() => router.push('/onboarding')}");
+  });
+
+  it('routes Today new-series CTAs to discovery selection instead of first-run onboarding', () => {
+    expect(todayTabSource).toContain('openNewSeriesDiscovery');
+    expect(todayTabSource).toContain("pathname: '/onboarding'");
+    expect(todayTabSource).toContain("startAt: 'themeType'");
+    expect(todayTabSource).toContain("flow: 'newSeries'");
   });
 
   it('keeps RevenueCat sync as the persisted premium mirror source of truth', () => {
