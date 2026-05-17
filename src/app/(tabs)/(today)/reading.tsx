@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, Text, Dimensions, DimensionValue, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard } from 'react-native';
+import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
@@ -11,7 +11,6 @@ import Animated, {
   withRepeat,
   withSequence,
   withSpring,
-  withDelay,
   runOnJS,
   Easing,
   FadeIn,
@@ -57,8 +56,6 @@ import {
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { TodayCompanionBubble } from '@/components/home/TodayCompanionBubble';
-import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
 import { DevotionalContent } from '@/components/reading/DevotionalContent';
@@ -98,31 +95,6 @@ function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<n
     <View style={{ height: 2, backgroundColor: 'transparent' }}>
       <Animated.View style={[{ height: 2, borderRadius: 1, backgroundColor: accentColor }, barStyle]} />
     </View>
-  );
-}
-
-// ── Animated shimmer bar for skeleton loaders ──────────────────
-function ShimmerBar({ bg, width, delay }: { bg: string; width: DimensionValue; delay: number }) {
-  const opacity = useSharedValue(0.35);
-
-  useEffect(() => {
-    opacity.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(0.85, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.35, { duration: 700, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-    return () => { opacity.value = 0.35; };
-  }, [delay]);
-
-  const barStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return (
-    <Animated.View style={[barStyle, { height: 12, borderRadius: 6, backgroundColor: bg, width }]} />
   );
 }
 
@@ -239,8 +211,6 @@ export default function ReadingScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [isWaitingForConnection, setIsWaitingForConnection] = useState(false);
   const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
-  const [bridgeText, setBridgeText] = useState<string | null>(null);
-  const [isBridgeLoading, setIsBridgeLoading] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
   const mountedRef = useRef(true);
@@ -255,7 +225,6 @@ export default function ReadingScreen() {
   const translateX = useSharedValue(0);
   const chevronBounce = useSharedValue(0);
   const contentOpacity = useSharedValue(1);
-  const bridgeOpacity = useSharedValue(0);
   const scrollProgress = useSharedValue(0);
 
   // Bookmark toast auto-dismiss after 2.5s
@@ -366,52 +335,6 @@ export default function ReadingScreen() {
       if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current);
     };
   }, []);
-
-  // Bridge text — personalized transition passage for Day 2+ (premium only)
-  useEffect(() => {
-    if (!isPremium || viewingDay < 2 || !currentDevotional || !currentDayData || !user) {
-      setBridgeText(null);
-      setIsBridgeLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsBridgeLoading(true);
-    bridgeOpacity.value = 0;
-
-    // Find yesterday's check-in if available
-    const checkIns = useUnfoldStore.getState().checkIns;
-    const yesterdayCheckIn = checkIns.find(
-      (c) => c.devotionalId === currentDevotional.id && c.dayNumber === viewingDay - 1
-    );
-
-    void generateBridge(
-      {
-        userName: user.name,
-        yesterdayCheckIn: yesterdayCheckIn
-          ? { mood: yesterdayCheckIn.mood, moodLabel: yesterdayCheckIn.moodLabel, chipAnswer: yesterdayCheckIn.chipAnswer, freeText: yesterdayCheckIn.freeText }
-          : undefined,
-        todayTheme: currentDayData.title,
-        todayScripture: `${currentDayData.scriptureReference}: ${currentDayData.scriptureText}`,
-        currentSituation: user.currentSituation ?? '',
-      },
-      currentDevotional.id,
-      viewingDay
-    ).then((text) => {
-      if (cancelled) return;
-      setBridgeText(text);
-      setIsBridgeLoading(false);
-      if (text) {
-        bridgeOpacity.value = withTiming(1, { duration: 400 });
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [viewingDay, currentDevotional?.id, currentDayData?.title, user?.name]);
-
-  const bridgeAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: bridgeOpacity.value,
-  }));
 
   // Audio narration disabled — TTS pipeline not yet production-ready
   // useEffect(() => {
@@ -1820,41 +1743,6 @@ export default function ReadingScreen() {
               bottomOffset={20}
               extraKeyboardSpace={60}
             >
-              {/* Bridge text — personalized transition for Day 2+ */}
-              {viewingDay >= 2 && isBridgeLoading && (
-                <Animated.View
-                  entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-                  style={{
-                    marginBottom: Spacing['6'],
-                    padding: Spacing['4'],
-                    borderRadius: Radius.md,
-                    backgroundColor: colors.inputBackground,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  {/* Shimmer skeleton lines */}
-                  <View style={{ gap: Spacing['2'] }}>
-                    <ShimmerBar bg={colors.buttonBackground} width="90%" delay={0} />
-                    <ShimmerBar bg={colors.buttonBackground} width="75%" delay={120} />
-                    <ShimmerBar bg={colors.buttonBackground} width="60%" delay={240} />
-                  </View>
-                </Animated.View>
-              )}
-              {viewingDay >= 2 && bridgeText && !isBridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
-                <Animated.View style={bridgeAnimatedStyle}>
-                  <TodayCompanionBubble
-                    colors={colors}
-                    text={bridgeText}
-                    wrapperStyle={{
-                      paddingHorizontal: 0,
-                      marginTop: 0,
-                      marginBottom: Spacing['6'],
-                    }}
-                  />
-                </Animated.View>
-              )}
-
               <DevotionalContent
                 day={currentDayData}
                 fontSize={fontSize}
