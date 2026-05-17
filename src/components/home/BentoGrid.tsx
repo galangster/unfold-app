@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -16,7 +17,7 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 const LABEL_TEXT_MAX_SCALE = 1.16;
 
 export function BentoGrid() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const { entering } = useAccessibleAnimation();
 
@@ -51,11 +52,20 @@ export function BentoGrid() {
             style={[
               styles.box,
               {
-                backgroundColor: alpha(colors.backgroundElevated, 0.54),
-                borderColor: alpha(colors.text, 0.08),
+                backgroundColor: Platform.OS === 'ios'
+                  ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+                  : alpha(colors.backgroundElevated, 0.9),
+                borderColor: alpha(colors.accent, 0.14),
               },
             ]}
           >
+            {Platform.OS === 'ios' && (
+              <BlurView
+                intensity={isDark ? 28 : 18}
+                tint={isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
             <Text
               style={[styles.label, { color: colors.text }]}
               numberOfLines={2}

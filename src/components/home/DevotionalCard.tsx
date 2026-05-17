@@ -708,11 +708,20 @@ function MainCard({ state }: MainCardProps) {
                   style={[
                     styles.completedStatusPill,
                     {
-                      backgroundColor: alpha(colors.accent, 0.16),
-                      borderColor: alpha(colors.accent, 0.34),
+                      backgroundColor: Platform.OS === 'ios'
+                        ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+                        : alpha(colors.backgroundElevated, 0.9),
+                      borderColor: alpha(colors.accent, 0.14),
                     },
                   ]}
                 >
+                  {Platform.OS === 'ios' && (
+                    <BlurView
+                      intensity={isDark ? 28 : 18}
+                      tint={isDark ? 'dark' : 'light'}
+                      style={StyleSheet.absoluteFill}
+                    />
+                  )}
                   <CheckIcon size={12} color={colors.accent} weight="bold" />
                   <Text style={[styles.completedStatusText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
                     Completed
@@ -946,6 +955,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['1'],
     borderRadius: Radius.full,
     borderWidth: 1,
+    overflow: 'hidden',
   },
   completedStatusText: {
     fontFamily: FontFamily.uiMedium,
