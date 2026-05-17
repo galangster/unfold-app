@@ -57,7 +57,7 @@ import {
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
-import { CompanionOrb } from '@/components/CompanionOrb';
+import { TodayCompanionBubble } from '@/components/home/TodayCompanionBubble';
 import { generateBridge } from '@/lib/bridge-service';
 import { CompletionCelebration } from '@/components/CompletionCelebration';
 // ShareDevotionalModal removed — pull quote share now uses /share-card route
@@ -1842,42 +1842,16 @@ export default function ReadingScreen() {
                 </Animated.View>
               )}
               {viewingDay >= 2 && bridgeText && !isBridgeLoading && bridgeText.length > 20 && /[.!?…"']$/.test(bridgeText.trim()) && (
-                <Animated.View
-                  style={[
-                    {
+                <Animated.View style={bridgeAnimatedStyle}>
+                  <TodayCompanionBubble
+                    colors={colors}
+                    text={bridgeText}
+                    wrapperStyle={{
+                      paddingHorizontal: 0,
+                      marginTop: 0,
                       marginBottom: Spacing['6'],
-                      flexDirection: 'row',
-                      alignItems: 'flex-start',
-                      gap: 10,
-                    },
-                    bridgeAnimatedStyle,
-                  ]}
-                >
-                  <View style={{ marginTop: 10 }}>
-                    <CompanionOrb accentColor={colors.accent} size={24} />
-                  </View>
-                  <View
-                    style={{
-                      flex: 1,
-                      paddingVertical: Spacing['3'],
-                      paddingHorizontal: 14,
-                      borderRadius: Radius.lg,
-                      backgroundColor: alpha(colors.accent, 0.06),
-                      borderWidth: 1,
-                      borderColor: alpha(colors.accent, 0.13),
                     }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: FontFamily.body,
-                        fontSize: FontSize.sm,
-                        lineHeight: 22,
-                        color: colors.text,
-                      }}
-                    >
-                      {bridgeText}
-                    </Text>
-                  </View>
+                  />
                 </Animated.View>
               )}
 
