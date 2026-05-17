@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { BlurView } from 'expo-blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -81,12 +82,21 @@ export function RememberThisCard() {
         style={[
           styles.card,
           {
-            backgroundColor: alpha(colors.backgroundElevated, 0.5),
-            borderColor: alpha(colors.text, 0.08),
+            backgroundColor: Platform.OS === 'ios'
+              ? alpha(colors.backgroundElevated, isDark ? 0.82 : 0.9)
+              : alpha(colors.backgroundElevated, 0.94),
+            borderColor: alpha(colors.accent, isDark ? 0.34 : 0.28),
             shadowColor: colors.accent,
           },
         ]}
       >
+        {Platform.OS === 'ios' && (
+          <BlurView
+            intensity={isDark ? 82 : 64}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
         <View style={styles.headerRow}>
           <View style={styles.headerTextGroup}>
             <Text style={[styles.kicker, { color: highlightColorHex }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
@@ -98,8 +108,8 @@ export function RememberThisCard() {
           style={[
             styles.quoteBlock,
             {
-              backgroundColor: alpha(highlightColorHex, isDark ? 0.07 : 0.1),
-              borderColor: alpha(highlightColorHex, isDark ? 0.14 : 0.18),
+              backgroundColor: alpha(highlightColorHex, isDark ? 0.12 : 0.14),
+              borderColor: alpha(highlightColorHex, isDark ? 0.28 : 0.26),
             },
           ]}
         >
@@ -135,14 +145,19 @@ const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['4'],
+    zIndex: 3,
+    elevation: 3,
   },
   card: {
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: 1.5,
     padding: Spacing['5'],
     overflow: 'hidden',
     position: 'relative',
-    ...Shadow.sm,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 6,
   },
   headerRow: {
     flexDirection: 'row',
@@ -170,7 +185,7 @@ const styles = StyleSheet.create({
   },
   quoteBlock: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: 1.25,
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['3'],
     marginBottom: Spacing['3'],

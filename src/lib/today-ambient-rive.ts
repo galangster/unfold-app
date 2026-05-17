@@ -92,21 +92,32 @@ export function getTodayAmbientRiveInputs({
   if (mode === 'light-rays') {
     return {
       ...base,
-      lineThickness: 1.3,
-      opacity: 0.27,
-      particleCount: 34,
+      lineThickness: 1.05,
+      opacity: 0.18,
+      particleCount: 22,
       // Rive contract from asset handoff: higher value = slower spawning.
-      // Keep this low enough that the ambient loop is visible in a short glance.
-      spawnRate: 0.5,
-      centerMaskRadius: 0.12,
-      centerMaskSoftness: 0.2,
+      // Keep this quiet enough to feel ambient, not like a foreground effect.
+      spawnRate: 0.9,
+      centerMaskRadius: 0.2,
+      centerMaskSoftness: 0.32,
     };
   }
 
-  // Wind/rain assets are self-contained ambient loops and do not currently
-  // expose the light-ray tuning inputs. Returning an empty object keeps the
-  // Rive surface active without logging noisy "input not found" warnings.
-  return {};
+  if (mode === 'rain-particles') {
+    const isTomorrowLocked = stateType === 'tomorrow-locked';
+
+    return {
+      ...base,
+      lineThickness: isTomorrowLocked ? 0.55 : 0.65,
+      opacity: isTomorrowLocked ? 0.065 : 0.085,
+      particleCount: isTomorrowLocked ? 8 : 10,
+      // Higher value = slower spawning. Keep fewer elements on-screen so the
+      // native text and frosted cards read as the foreground.
+      spawnRate: isTomorrowLocked ? 2.05 : 1.85,
+    };
+  }
+
+  return base;
 }
 
 export function getTodayLightRayInputs({

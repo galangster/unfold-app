@@ -39,11 +39,11 @@ function applyNumberInputs(view: RiveViewRef, inputs: TodayAmbientRiveInputs, lo
 }
 
 function getMotionStyle(mode: Exclude<TodayAmbientMode, 'none'>, loopProgress: Animated.Value) {
-  const horizontalDrift = mode === 'rain-particles' ? 8 : 18;
-  const verticalStart = mode === 'rain-particles' ? -10 : 14;
-  const verticalPeak = mode === 'rain-particles' ? 16 : -18;
-  const peakScale = mode === 'light-rays' ? 1.05 : 1.035;
-  const minOpacity = mode === 'rain-particles' ? 0.68 : 0.74;
+  const horizontalDrift = mode === 'rain-particles' ? 4 : 10;
+  const verticalStart = mode === 'rain-particles' ? -6 : 8;
+  const verticalPeak = mode === 'rain-particles' ? 8 : -10;
+  const peakScale = mode === 'light-rays' ? 1.025 : 1.015;
+  const minOpacity = mode === 'rain-particles' ? 0.76 : 0.82;
 
   return {
     opacity: loopProgress.interpolate({
@@ -95,6 +95,10 @@ export function TodayAmbientRive({
         .join('|')
       : 'none'
   ), [inputs]);
+  // Cover preserves the artboard ratio while guaranteeing the ambient layer
+  // fills every device size; width/height inputs let configurable Rive files
+  // respond to the actual screen dimensions.
+  const surfaceFit = Fit.Cover;
 
   useEffect(() => {
     if (riveFileError) {
@@ -188,7 +192,7 @@ export function TodayAmbientRive({
           artboardName={artboardName}
           stateMachineName={stateMachineName}
           autoPlay={active}
-          fit={Fit.Cover}
+          fit={surfaceFit}
           alignment={Alignment.Center}
           hybridRef={setHybridRef}
           onError={(error) => {

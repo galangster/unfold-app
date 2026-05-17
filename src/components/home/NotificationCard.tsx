@@ -59,17 +59,17 @@ export function NotificationCard({
           styles.container,
           useCompactLayout && styles.containerCompact,
           {
-            borderColor: alpha(accentColor, 0.13),
+            borderColor: alpha(accentColor, isDark ? 0.3 : 0.24),
             backgroundColor: Platform.OS === 'ios'
-              ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-              : alpha(colors.backgroundElevated, 0.9),
+              ? alpha(colors.backgroundElevated, isDark ? 0.8 : 0.9)
+              : alpha(colors.backgroundElevated, 0.94),
             shadowColor: accentColor,
           },
         ]}
       >
         {Platform.OS === 'ios' && (
           <BlurView
-            intensity={isDark ? 28 : 18}
+            intensity={isDark ? 78 : 60}
             tint={isDark ? 'dark' : 'light'}
             style={StyleSheet.absoluteFill}
           />
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
-    borderWidth: 1,
+    borderWidth: 1.5,
     ...Shadow.md,
   },
   containerCompact: {

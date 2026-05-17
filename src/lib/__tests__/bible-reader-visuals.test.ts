@@ -6,30 +6,33 @@ import {
 
 describe('Bible reader visual polish helpers', () => {
   it('keeps scripture highlight rectangles thick enough to read without filling the full line box', () => {
-    expect(BIBLE_TEXT_OVERLAY_METRICS).toEqual({
-      horizontalInset: 2,
-      height: 11,
-      bottomInset: 7,
-      radius: 4,
+    expect(BIBLE_TEXT_OVERLAY_METRICS).toMatchObject({
+      horizontalInset: 3,
+      height: 18,
+      bottomInset: 4,
+      radius: 6,
+      savedHeightRatio: 0.82,
+      savedRadius: 2,
     });
 
-    expect(getBibleTextOverlayStyle({ x: 12, y: 20, width: 180, height: 28 })).toMatchObject({
+    const savedStyle = getBibleTextOverlayStyle({ x: 12, y: 20, width: 180, height: 28 });
+    expect(savedStyle).toMatchObject({
       left: 10,
-      top: 30,
       width: 184,
-      height: 11,
-      borderRadius: 4,
+      borderRadius: 2,
     });
+    expect(savedStyle.top).toBeCloseTo(22.24);
+    expect(savedStyle.height).toBeCloseTo(22.96);
   });
 
   it('uses brighter selected-verse overlays in dark and light mode', () => {
     expect(getBibleTextOverlayStyle({ x: 0, y: 0, width: 100, height: 24 }, 'selectedDark')).toMatchObject({
-      backgroundColor: 'rgba(255, 246, 224, 0.48)',
-      height: 11,
+      backgroundColor: 'rgba(255, 246, 224, 0.72)',
+      height: 18,
     });
     expect(getBibleTextOverlayStyle({ x: 0, y: 0, width: 100, height: 24 }, 'selectedLight')).toMatchObject({
-      backgroundColor: 'rgba(78, 68, 54, 0.24)',
-      height: 11,
+      backgroundColor: 'rgba(78, 68, 54, 0.30)',
+      height: 18,
     });
   });
 

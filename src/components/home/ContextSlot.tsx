@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -12,6 +13,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { useTheme } from '@/lib/theme';
 import { NotificationCard } from '@/components/home/NotificationCard';
 import { BridgeShimmer } from '@/components/home/BridgeShimmer';
 import { DailyBridgeCard } from '@/components/home/DailyBridgeCard';
@@ -65,6 +67,7 @@ function ResumeCard({
 }) {
   const isJournalResume = resumeProps.label.toLowerCase().includes('reflection') || resumeProps.label.toLowerCase().includes('add to day');
   const actionLabel = isJournalResume ? 'Open reflection' : 'Continue reading';
+  const { isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const useCompactFooter = width < 400 || fontScale >= 1.18;
 
@@ -79,12 +82,21 @@ function ResumeCard({
         style={[
           styles.resumeContainer,
           {
-            backgroundColor: alpha(colors.backgroundElevated, 0.66),
-            borderColor: alpha(colors.accent, 0.14),
+            backgroundColor: Platform.OS === 'ios'
+              ? alpha(colors.backgroundElevated, isDark ? 0.8 : 0.9)
+              : alpha(colors.backgroundElevated, 0.94),
+            borderColor: alpha(colors.accent, isDark ? 0.3 : 0.24),
             shadowColor: colors.accent,
           },
         ]}
       >
+        {Platform.OS === 'ios' && (
+          <BlurView
+            intensity={isDark ? 78 : 60}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
         <View style={styles.resumeContent}>
           <View style={styles.resumeKickerRow}>
             <View style={[styles.resumeKickerRule, { backgroundColor: colors.accent }]} />
@@ -214,7 +226,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: 1.5,
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
     ...Shadow.md,

@@ -42,11 +42,19 @@ import { isHighlightColorFree } from '@/lib/premium-gating';
 // ─── Highlight colors ───────────────────────────────────────────────────────
 
 const HIGHLIGHT_BG: Record<BibleHighlightColor, { light: string; dark: string }> = {
-  yellow: { light: 'rgba(240, 200, 80, 0.35)', dark: 'rgba(240, 200, 80, 0.28)' },
-  green: { light: 'rgba(107, 191, 123, 0.30)', dark: 'rgba(107, 191, 123, 0.25)' },
-  blue: { light: 'rgba(107, 163, 214, 0.30)', dark: 'rgba(107, 163, 214, 0.25)' },
-  purple: { light: 'rgba(168, 116, 192, 0.30)', dark: 'rgba(168, 116, 192, 0.25)' },
-  red: { light: 'rgba(232, 112, 112, 0.30)', dark: 'rgba(232, 112, 112, 0.25)' },
+  yellow: { light: 'rgba(255, 245, 112, 0.58)', dark: 'transparent' },
+  green: { light: 'rgba(190, 244, 128, 0.5)', dark: 'transparent' },
+  blue: { light: 'rgba(170, 220, 255, 0.46)', dark: 'transparent' },
+  purple: { light: 'rgba(214, 188, 255, 0.44)', dark: 'transparent' },
+  red: { light: 'rgba(255, 190, 190, 0.46)', dark: 'transparent' },
+};
+
+const HIGHLIGHT_TEXT_DARK: Record<BibleHighlightColor, string> = {
+  yellow: '#FFE86A',
+  green: '#5CFF63',
+  blue: '#77B7FF',
+  purple: '#D7A8FF',
+  red: '#FF7A7A',
 };
 
 const HIGHLIGHT_COLORS: { key: BibleHighlightColor; color: string }[] = [
@@ -188,7 +196,7 @@ const VerseItem = React.memo(function VerseItem({
     [onPress, pressOpacity],
   );
 
-  const hasOverlay = isSelected || !!highlightColor;
+  const hasOverlay = isSelected || (!!highlightColor && !isDark);
 
   // Selection: subtle text-line mark, not a chunky inverted block.
   const selectionBg = isDark ? BIBLE_SELECTED_OVERLAY_BG.dark : BIBLE_SELECTED_OVERLAY_BG.light;
@@ -203,7 +211,9 @@ const VerseItem = React.memo(function VerseItem({
 
   // Red-letter: bright warm red for Jesus's words
   const redLetterColor = isDark ? '#F56B5E' : '#C0392B';
-  const displayText = isRedLetter ? redLetterColor : textColor;
+  const selectedTextColor = isSelected ? (isDark ? '#221B12' : '#FFFDF8') : undefined;
+  const savedHighlightTextColor = highlightColor && isDark ? HIGHLIGHT_TEXT_DARK[highlightColor] : undefined;
+  const displayText = selectedTextColor ?? savedHighlightTextColor ?? (isRedLetter ? redLetterColor : textColor);
   const overlayBg = isSelected ? selectionBg : hlBg;
 
   const handleTextLayout = useCallback((e: any) => {

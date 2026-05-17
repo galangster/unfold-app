@@ -44,22 +44,37 @@ describe('today ambient Rive mapping', () => {
     });
   });
 
-  it('plays rain as an asset-authored loop without light-ray-only inputs', () => {
+  it('tunes rain particles quietly for completed and locked rest states', () => {
     expect(getTodayAmbientRiveInputs({
       mode: 'rain-particles',
       stateType: 'complete-today',
       accent: '#d6a84f',
       width: 390,
       height: 844,
-    })).toEqual({});
+    })).toMatchObject({
+      width: 390,
+      height: 844,
+      accentR: 214 / 255,
+      accentG: 168 / 255,
+      accentB: 79 / 255,
+      lineThickness: 0.65,
+      opacity: 0.085,
+      particleCount: 10,
+      spawnRate: 1.85,
+    });
 
     expect(getTodayAmbientRiveInputs({
       mode: 'rain-particles',
-      stateType: 'complete-today',
+      stateType: 'tomorrow-locked',
       accent: '#d6a84f',
       width: 390,
       height: 844,
-    })).toEqual({});
+    })).toMatchObject({
+      lineThickness: 0.55,
+      opacity: 0.065,
+      particleCount: 8,
+      spawnRate: 2.05,
+    });
   });
 
   it('keeps light rays subtle and center-masked for reveal-ready', () => {
@@ -72,12 +87,12 @@ describe('today ambient Rive mapping', () => {
     });
 
     expect(lightRays).toMatchObject({
-      particleCount: 34,
-      spawnRate: 0.5,
-      lineThickness: 1.3,
-      opacity: 0.27,
-      centerMaskRadius: 0.12,
-      centerMaskSoftness: 0.2,
+      particleCount: 22,
+      spawnRate: 0.9,
+      lineThickness: 1.05,
+      opacity: 0.18,
+      centerMaskRadius: 0.2,
+      centerMaskSoftness: 0.32,
     });
   });
 
