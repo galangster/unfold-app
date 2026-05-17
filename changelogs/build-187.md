@@ -1,0 +1,4 @@
+- Today companion-authored text now appears as a chat bubble anywhere it appears on Today: bridge text, bridge loading, afternoon check-in, and evening wind-down.
+- Preserves the companion orb + bubble shape across Today surfaces so the companion voice feels conversational instead of boxed.
+- Includes focused simulator visual QA for midday, evening, bridge, and bridge-loading preview states.
+- Production profile build; QA tools are not enabled by the production profile.
