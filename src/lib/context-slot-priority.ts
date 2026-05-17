@@ -53,9 +53,12 @@ export function getContextSlotType(input: ContextSlotInput): ContextSlotType {
       return 'evening';
     }
 
-    // Priority 3: Midday check-in (12pm-5pm, reading incomplete, no midday check-in)
+    // Priority 3: Midday check-in (12pm-5pm, no midday check-in).
+    // The OS reminder fires daily regardless of reading completion, so the
+    // Today tab should still provide the matching companion prompt if the user
+    // has already read today.
     const isMiddayWindow = input.currentHour >= 12 && input.currentHour < 17;
-    if (isMiddayWindow && !input.hasReadToday && !input.hasMiddayCheckIn) {
+    if (isMiddayWindow && !input.hasMiddayCheckIn) {
       return 'midday';
     }
 

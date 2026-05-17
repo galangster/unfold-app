@@ -47,6 +47,12 @@ describe('getContextSlotType', () => {
     })).toBe('midday');
   });
 
+  it('returns midday during midday window after reading when no check-in', () => {
+    expect(getContextSlotType({
+      ...base, currentHour: 14, hasReadToday: true, hasMiddayCheckIn: false,
+    })).toBe('midday');
+  });
+
   it('returns none during midday if already checked in', () => {
     expect(getContextSlotType({
       ...base, currentHour: 14, hasReadToday: false, hasMiddayCheckIn: true,
