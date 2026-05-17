@@ -250,6 +250,9 @@ export function DevotionalWebView({
           }
         });
 
+        if (!best) {
+          best = locateTargetTextFallback(targetText);
+        }
         if (!best) return;
         best.classList.add('target-highlight-flash');
         setTimeout(function() {
@@ -262,6 +265,28 @@ export function DevotionalWebView({
           highlightId: targetHighlight.id,
           y: rect.top + window.scrollY,
         }));
+      }
+
+      function locateTargetTextFallback(targetText) {
+        try {
+          const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+            {
+              acceptNode: function(node) {
+                const text = normalizeText(node.nodeValue);
+                return text && text.indexOf(targetText) >= 0
+                  ? NodeFilter.FILTER_ACCEPT
+                  : NodeFilter.FILTER_REJECT;
+              }
+            }
+          );
+
+          const node = walker.nextNode();
+          return node && node.parentElement ? node.parentElement : null;
+        } catch (_) {
+          return null;
+        }
       }
       
       // Initialize on load
@@ -288,12 +313,6 @@ export function DevotionalWebView({
       setTimeout(reportHeight, 500);
       setTimeout(reportHeight, 1000);
       
-      // Suppress iOS native context menu (Copy/Look Up/Share)
-      document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        return false;
-      });
-
       // Selection handling
       let selectedText = '';
       let selectionRange = null;
@@ -804,7 +823,7 @@ export function DevotionalWebView({
 
       true;
     `;
-  }, [existingHighlights, isDark]);
+  }, [existingHighlights, isDark, targetHighlight]);
 
   // Generate HTML with exact typography matching
   const htmlContent = useMemo(() => {
@@ -945,7 +964,6 @@ export function DevotionalWebView({
       padding: 0;
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none !important;
     }
 
     body {
@@ -958,7 +976,6 @@ export function DevotionalWebView({
       max-width: 100%;
       -webkit-user-select: text;
       user-select: text;
-      -webkit-touch-callout: none !important;
     }
     
     /* Staggered dissolve for body content. Long, soft fade — 750ms with a
@@ -1011,16 +1028,17 @@ export function DevotionalWebView({
     .context-box   { animation-delay: 690ms; }
     .word-study-box { animation-delay: 690ms; }
     
-    /* Selection styling - hide native menu */
+    /* Selection styling. Keep iOS text callout available so WKWebView still
+       creates a real text selection; the custom highlight picker is positioned
+       away from the native menu instead of disabling selection globally. */
     ::selection {
       background: ${accentColor}40;
     }
     
-    /* Prevent native context menu on long press */
+    /* Selectable devotional text */
     p, span, div, mark {
       -webkit-user-select: text;
       user-select: text;
-      -webkit-touch-callout: none !important;
     }
     
     /* Highlight colors */
@@ -1036,7 +1054,7 @@ export function DevotionalWebView({
     mark.highlight-purple { background: ${HIGHLIGHT_COLORS.purple[isDark ? 'dark' : 'light']}; }
     mark.highlight-red { background: ${HIGHLIGHT_COLORS.red[isDark ? 'dark' : 'light']}; }
 
-    mark.target-highlight-flash {
+    .target-highlight-flash {
       animation: targetHighlightFlash 1.8s ease-out;
       box-shadow: 0 0 0 3px ${accentColor}66;
     }
@@ -1305,7 +1323,7 @@ export function DevotionalWebView({
 </body>
 </html>
     `;
-  }, [day, fontSize, colors, isDark, readingFont, existingHighlights, targetHighlight]);
+  }, [day, fontSize, colors, isDark, readingFont]);
 
   const handleMessage = (event: any) => {
     try {
