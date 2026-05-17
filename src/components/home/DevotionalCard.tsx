@@ -711,7 +711,7 @@ function MainCard({ state }: MainCardProps) {
                       backgroundColor: Platform.OS === 'ios'
                         ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
                         : alpha(colors.backgroundElevated, 0.9),
-                      borderColor: alpha(colors.accent, 0.14),
+                      borderColor: alpha(colors.accent, 0.25),
                     },
                   ]}
                 >
@@ -799,7 +799,7 @@ function MainCard({ state }: MainCardProps) {
                 styles.heroActions,
                 hasCompletedToday && styles.heroActionsSecondary,
                 {
-                  borderColor: alpha(colors.accent, hasCompletedToday ? 0.16 : 0.24),
+                  borderColor: alpha(colors.accent, hasCompletedToday ? 0.25 : 0.24),
                   backgroundColor: Platform.OS === 'ios'
                     ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
                     : alpha(colors.backgroundElevated, 0.9),

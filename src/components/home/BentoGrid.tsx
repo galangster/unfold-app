@@ -55,7 +55,7 @@ export function BentoGrid() {
                 backgroundColor: Platform.OS === 'ios'
                   ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
                   : alpha(colors.backgroundElevated, 0.9),
-                borderColor: alpha(colors.accent, 0.14),
+                borderColor: alpha(colors.accent, 0.25),
               },
             ]}
           >
