@@ -1,6 +1,7 @@
 import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -17,6 +18,8 @@ import { useTheme } from '@/lib/theme';
 import { NotificationCard } from '@/components/home/NotificationCard';
 import { BridgeShimmer } from '@/components/home/BridgeShimmer';
 import { DailyBridgeCard } from '@/components/home/DailyBridgeCard';
+import { DismissCircleButton } from '@/components/home/DismissCircleButton';
+import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import type { ContextSlotType } from '@/lib/context-slot-priority';
 import type { ColorTheme } from '@/constants/colors';
 
@@ -43,6 +46,10 @@ interface Props {
   eveningMessage?: string;
   bridgeText?: string;
   resumeProps?: ResumeProps;
+  onDismissResume?: () => void;
+  onDismissMidday?: () => void;
+  onDismissEvening?: () => void;
+  onDismissBridge?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,9 +68,11 @@ const LABEL_TEXT_MAX_SCALE = 1.14;
 function ResumeCard({
   colors,
   resumeProps,
+  onDismiss,
 }: {
   colors: ColorTheme;
   resumeProps: ResumeProps;
+  onDismiss?: () => void;
 }) {
   const isJournalResume = resumeProps.label.toLowerCase().includes('reflection') || resumeProps.label.toLowerCase().includes('add to day');
   const actionLabel = isJournalResume ? 'Open reflection' : 'Continue reading';
@@ -71,14 +80,15 @@ function ResumeCard({
   const { width, fontScale } = useWindowDimensions();
   const useCompactFooter = width < 400 || fontScale >= 1.18;
 
+  const handleDismiss = React.useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    onDismiss?.();
+  }, [onDismiss]);
+
   return (
     <View style={styles.cardPadding}>
-      <TouchableOpacity
-        activeOpacity={0.72}
-        onPress={resumeProps.onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${resumeProps.label}. ${resumeProps.title}. ${resumeProps.timeAgo}.`}
-        accessibilityHint={isJournalResume ? 'Opens the saved journal reflection' : 'Returns to the saved devotional reading'}
+      <View
         style={[
           styles.resumeContainer,
           {
@@ -94,40 +104,57 @@ function ResumeCard({
           <BlurView
             intensity={isDark ? 78 : 60}
             tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, styles.resumeBlur]}
           />
         )}
-        <View style={styles.resumeContent}>
-          <View style={styles.resumeKickerRow}>
-            <View style={[styles.resumeKickerRule, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.resumeLabel, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.label}</Text>
-          </View>
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={resumeProps.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${resumeProps.label}. ${resumeProps.title}. ${resumeProps.timeAgo}.`}
+          accessibilityHint={isJournalResume ? 'Opens the saved journal reflection' : 'Returns to the saved devotional reading'}
+        >
+          <View style={[styles.resumeContent, onDismiss && styles.resumeContentDismissible]}>
+            <View style={styles.resumeKickerRow}>
+              <View style={[styles.resumeKickerRule, { backgroundColor: colors.accent }]} />
+              <Text style={[styles.resumeLabel, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.label}</Text>
+            </View>
 
-          <View style={styles.resumeTitleRow}>
-            <View style={[styles.resumeIcon, { borderColor: alpha(colors.accent, 0.16), backgroundColor: alpha(colors.accent, 0.075) }]}>
-              {isJournalResume ? (
-                <FeatherIcon size={17} color={colors.accent} weight="light" />
-              ) : (
-                <BookOpenTextIcon size={17} color={colors.accent} weight="light" />
-              )}
+            <View style={styles.resumeTitleRow}>
+              <View style={[styles.resumeIcon, { borderColor: alpha(colors.accent, 0.16), backgroundColor: alpha(colors.accent, 0.075) }]}>
+                {isJournalResume ? (
+                  <FeatherIcon size={17} color={colors.accent} weight="light" />
+                ) : (
+                  <BookOpenTextIcon size={17} color={colors.accent} weight="light" />
+                )}
+              </View>
+              <View style={styles.resumeTextColumn}>
+                <Text numberOfLines={2} style={[styles.resumeTitle, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+                  {resumeProps.title}
+                </Text>
+                <Text style={[styles.resumeTimeAgo, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.timeAgo}</Text>
+              </View>
             </View>
-            <View style={styles.resumeTextColumn}>
-              <Text numberOfLines={2} style={[styles.resumeTitle, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-                {resumeProps.title}
-              </Text>
-              <Text style={[styles.resumeTimeAgo, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{resumeProps.timeAgo}</Text>
-            </View>
-          </View>
 
-          <View style={[styles.resumeFooterRow, useCompactFooter && styles.resumeFooterRowCompact]}>
-            <Text style={[styles.resumeHelper, useCompactFooter && styles.resumeHelperCompact, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Your place is saved quietly.</Text>
-            <View style={[styles.resumeCta, useCompactFooter && styles.resumeCtaCompact, { borderColor: alpha(colors.accent, 0.22), backgroundColor: alpha(colors.accent, 0.08) }]}>
-              <Text style={[styles.resumeCtaText, { color: colors.text }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{actionLabel}</Text>
-              <ArrowRightIcon size={13} color={colors.accent} weight="light" />
+            <View style={[styles.resumeFooterRow, useCompactFooter && styles.resumeFooterRowCompact]}>
+              <Text style={[styles.resumeHelper, useCompactFooter && styles.resumeHelperCompact, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Your place is saved quietly.</Text>
+              <View style={[styles.resumeCta, useCompactFooter && styles.resumeCtaCompact, { borderColor: alpha(colors.accent, 0.22), backgroundColor: alpha(colors.accent, 0.08) }]}>
+                <Text style={[styles.resumeCtaText, { color: colors.text }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>{actionLabel}</Text>
+                <ArrowRightIcon size={13} color={colors.accent} weight="light" />
+              </View>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+        {onDismiss ? (
+          <DismissCircleButton
+            colors={colors}
+            onPress={handleDismiss}
+            accessibilityLabel="Dismiss resume card"
+            accessibilityHint="Clears this saved resume prompt"
+            style={styles.resumeDismissButton}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -145,6 +172,10 @@ export function ContextSlot({
   eveningMessage,
   bridgeText,
   resumeProps,
+  onDismissResume,
+  onDismissMidday,
+  onDismissEvening,
+  onDismissBridge,
 }: Props) {
   const { entering, exiting } = useAccessibleAnimation();
 
@@ -155,7 +186,7 @@ export function ContextSlot({
     switch (slotType) {
       case 'resume':
         if (!resumeProps) return null;
-        return <ResumeCard colors={colors} resumeProps={resumeProps} />;
+        return <ResumeCard colors={colors} resumeProps={resumeProps} onDismiss={onDismissResume} />;
 
       case 'evening':
         if (!onEveningPress || !eveningMessage) return null;
@@ -169,6 +200,7 @@ export function ContextSlot({
             delay={0}
             label="Evening check-in"
             actionLabel="Wind down"
+            onDismiss={onDismissEvening}
           />
         );
 
@@ -184,12 +216,13 @@ export function ContextSlot({
             delay={0}
             label="Companion check-in"
             actionLabel="Reflect"
+            onDismiss={onDismissMidday}
           />
         );
 
       case 'bridge':
         if (!bridgeText) return null;
-        return <DailyBridgeCard text={bridgeText} colors={colors} />;
+        return <DailyBridgeCard text={bridgeText} colors={colors} onDismiss={onDismissBridge} />;
 
       case 'bridge-loading':
         return <BridgeShimmer colors={colors} />;
@@ -224,15 +257,28 @@ const styles = StyleSheet.create({
   },
   resumeContainer: {
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
     borderRadius: Radius.xl,
     borderWidth: 1.5,
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
     ...Shadow.md,
   },
+  resumeBlur: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+  },
   resumeContent: {
     gap: Spacing['3'],
+  },
+  resumeContentDismissible: {
+    paddingRight: Spacing['10'],
+  },
+  resumeDismissButton: {
+    position: 'absolute',
+    top: -9,
+    right: -9,
+    zIndex: 4,
   },
   resumeKickerRow: {
     flexDirection: 'row',

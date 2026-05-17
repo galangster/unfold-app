@@ -14,6 +14,7 @@ interface Props {
   delay?: number;
   label?: string;
   actionLabel?: string;
+  onDismiss?: () => void;
 }
 
 export function NotificationCard({
@@ -25,6 +26,7 @@ export function NotificationCard({
   delay = 150,
   label = 'Companion',
   actionLabel = 'Reflect',
+  onDismiss,
 }: Props) {
   const { entering, exiting } = useAccessibleAnimation();
 
@@ -43,6 +45,9 @@ export function NotificationCard({
         accentColor={accentColor}
         accessibilityLabel={`${label}: ${message}`}
         accessibilityHint={`Opens ${actionLabel.toLowerCase()} with the Companion`}
+        onDismiss={onDismiss}
+        dismissAccessibilityLabel={`Dismiss ${label.toLowerCase()} card`}
+        dismissAccessibilityHint="Hides this optional check-in card for today"
       />
     </Animated.View>
   );

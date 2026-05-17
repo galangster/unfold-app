@@ -614,8 +614,12 @@ interface UnfoldState {
   // Card dismiss tracking (date strings — reset daily)
   dismissedMiddayCardDate: string | null;
   dismissedEveningCardDate: string | null;
+  dismissedBridgeCardDate: string | null;
+  dismissedRememberThisCardDate: string | null;
   setDismissedMiddayCardDate: (date: string) => void;
   setDismissedEveningCardDate: (date: string) => void;
+  setDismissedBridgeCardDate: (date: string) => void;
+  setDismissedRememberThisCardDate: (date: string) => void;
 
   // Premium nudge system
   nudgeImpressions: NudgeImpression[];
@@ -776,6 +780,8 @@ const initialState = {
   hasSeenFeatureOnboarding: false,
   dismissedMiddayCardDate: null as string | null,
   dismissedEveningCardDate: null as string | null,
+  dismissedBridgeCardDate: null as string | null,
+  dismissedRememberThisCardDate: null as string | null,
   // Server-side generation tracking
   pendingJobId: null as string | null,
   // Premium nudge system
@@ -1447,6 +1453,8 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Card dismiss tracking
       setDismissedMiddayCardDate: (date) => set({ dismissedMiddayCardDate: date }),
       setDismissedEveningCardDate: (date) => set({ dismissedEveningCardDate: date }),
+      setDismissedBridgeCardDate: (date) => set({ dismissedBridgeCardDate: date }),
+      setDismissedRememberThisCardDate: (date) => set({ dismissedRememberThisCardDate: date }),
 
       // Premium nudge system
       recordNudgeImpression: (type) =>
@@ -1809,7 +1817,7 @@ export const useUnfoldStore = create<UnfoldState>()(
     {
       name: 'unfold-storage',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 36, // v36: Add lastMidday/EveningCompletedDate for completion tracking (future skip-today; not currently read by scheduling)
+      version: 37, // v37: Add dismiss dates for optional Today bridge and saved-echo cards
       // Validate and migrate persisted state
       migrate: migrateUnfoldStore,
 

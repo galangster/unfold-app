@@ -72,16 +72,6 @@ import { BentoGrid } from '@/components/home/BentoGrid';
 import { SeriesCarousel } from '@/components/home/SeriesCarousel';
 import { CompactStreakRow } from '@/components/home/CompactStreakRow';
 
-type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night';
-
-function getTimeOfDay(): TimeOfDay {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 22) return 'evening';
-  return 'night';
-}
-
 function formatResumeRelativeTime(iso?: string): string {
   if (!iso) return 'Saved just now';
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -119,6 +109,12 @@ export default function HomeScreen() {
   const archiveCurrentDevotional = useUnfoldStore((s) => s.archiveCurrentDevotional);
   const markDayAsRevealed = useUnfoldStore((s) => s.markDayAsRevealed);
   const isReturningUser = useUnfoldStore((s) => s.isReturningUser());
+  const dismissedMiddayCardDate = useUnfoldStore((s) => s.dismissedMiddayCardDate);
+  const dismissedEveningCardDate = useUnfoldStore((s) => s.dismissedEveningCardDate);
+  const dismissedBridgeCardDate = useUnfoldStore((s) => s.dismissedBridgeCardDate);
+  const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
+  const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
+  const setDismissedBridgeCardDate = useUnfoldStore((s) => s.setDismissedBridgeCardDate);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
@@ -218,15 +214,15 @@ export default function HomeScreen() {
     }, [])
   );
 
-  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>(getTimeOfDay());
+  const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
-  // Update time of day every minute
+  // Update clock-driven Today card visibility every minute.
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimeOfDay(getTimeOfDay());
+      setClockNow(new Date());
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -654,18 +650,12 @@ export default function HomeScreen() {
 
   // Time-aware card visibility — cards appear during their window and expire naturally
   // Midday: 12pm-5pm (afternoon)  |  Evening: 5pm-11:30pm
-  const currentHour = new Date().getHours();
-  const currentMinute = new Date().getMinutes();
-  const showCheckInCard =
-    timeOfDay === 'afternoon' &&
-    !!currentDevotional &&
-    !todayCheckIn;
-  const showEveningCard =
-    (timeOfDay === 'evening' || timeOfDay === 'night') &&
-    !(currentHour === 23 && currentMinute >= 30) && // Expires at 11:30pm
-    !!currentDevotional &&
-    hasReadToday &&
-    !todayEveningCheckIn;
+  const currentHour = clockNow.getHours();
+  const currentMinute = clockNow.getMinutes();
+  const todayDate = clockNow.toLocaleDateString('en-CA');
+  const hasDismissedMiddayCardToday = dismissedMiddayCardDate === todayDate;
+  const hasDismissedEveningCardToday = dismissedEveningCardDate === todayDate;
+  const hasDismissedBridgeCardToday = !qaContextSlot && dismissedBridgeCardDate === todayDate;
 
   const handleDay1ReviewOption = async (option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -783,7 +773,7 @@ export default function HomeScreen() {
   }, [currentDevotional, currentDayData, router]);
 
   const effectiveBridgeText = qaContextSlot === 'bridge' ? QA_BRIDGE_TEXT : bridgeText;
-  const validBridgeText = effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
+  const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
     ? effectiveBridgeText
     : undefined;
   const computedSlotType = getContextSlotType({
@@ -792,14 +782,30 @@ export default function HomeScreen() {
     currentMinute,
     hasDevotional: !!currentDevotional,
     hasReadToday,
-    hasMiddayCheckIn: !!todayCheckIn,
-    hasEveningCheckIn: !!todayEveningCheckIn,
+    hasMiddayCheckIn: !!todayCheckIn || hasDismissedMiddayCardToday,
+    hasEveningCheckIn: !!todayEveningCheckIn || hasDismissedEveningCardToday,
     hasBridgeText: !!validBridgeText,
-    isBridgeLoading: bridgeLoading && !!bridgeInput,
+    isBridgeLoading: !hasDismissedBridgeCardToday && bridgeLoading && !!bridgeInput,
     hasBridgeInput: !!bridgeInput,
     isPremium,
   });
   const slotType = qaContextSlot ?? computedSlotType;
+
+  const handleDismissResumeCard = useCallback(() => {
+    clearResumeContext();
+  }, [clearResumeContext]);
+
+  const handleDismissMiddayCard = useCallback(() => {
+    setDismissedMiddayCardDate(todayDate);
+  }, [setDismissedMiddayCardDate, todayDate]);
+
+  const handleDismissEveningCard = useCallback(() => {
+    setDismissedEveningCardDate(todayDate);
+  }, [setDismissedEveningCardDate, todayDate]);
+
+  const handleDismissBridgeCard = useCallback(() => {
+    setDismissedBridgeCardDate(todayDate);
+  }, [setDismissedBridgeCardDate, todayDate]);
 
   // Compute resume props for context slot
   const resumeProps = shouldShowResumeCard && resumeContext && resumeDevotional ? {
@@ -892,6 +898,10 @@ export default function HomeScreen() {
                 eveningMessage={eveningMessage}
                 bridgeText={validBridgeText}
                 resumeProps={resumeProps}
+                onDismissResume={handleDismissResumeCard}
+                onDismissMidday={handleDismissMiddayCard}
+                onDismissEvening={handleDismissEveningCard}
+                onDismissBridge={handleDismissBridgeCard}
               />
             </Animated.View>
           </View>

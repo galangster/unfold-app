@@ -10,12 +10,15 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { ArrowRightIcon } from 'phosphor-react-native';
+import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { alpha } from '@/components/ui';
 import { buildBubblePath } from '@/lib/bubble-path';
+import { DismissCircleButton } from '@/components/home/DismissCircleButton';
+import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import type { ColorTheme } from '@/constants/colors';
 
 interface Props {
@@ -30,6 +33,9 @@ interface Props {
   wrapperStyle?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  onDismiss?: () => void;
+  dismissAccessibilityLabel?: string;
+  dismissAccessibilityHint?: string;
 }
 
 const BODY_TEXT_MAX_SCALE = 1.28;
@@ -57,6 +63,9 @@ export function TodayCompanionBubble({
   wrapperStyle,
   accessibilityLabel,
   accessibilityHint,
+  onDismiss,
+  dismissAccessibilityLabel,
+  dismissAccessibilityHint,
 }: Props) {
   const [bubbleSize, setBubbleSize] = React.useState({ width: 0, height: 0 });
   const bubbleColor = alpha(accentColor, 0.06);
@@ -88,55 +97,94 @@ export function TodayCompanionBubble({
     });
   }, []);
 
+  const handleDismiss = React.useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    onDismiss?.();
+  }, [onDismiss]);
+
+  const dismissButton = onDismiss ? (
+    <DismissCircleButton
+      colors={colors}
+      onPress={handleDismiss}
+      accessibilityLabel={dismissAccessibilityLabel ?? 'Dismiss Companion card'}
+      accessibilityHint={dismissAccessibilityHint ?? 'Hides this optional Companion card'}
+      style={styles.dismissButton}
+    />
+  ) : null;
+
+  const bubbleContent = (
+    <View style={[styles.bubble, onDismiss && styles.bubbleWithDismiss]} onLayout={handleBubbleLayout}>
+      {bubblePath ? (
+        <Svg
+          pointerEvents="none"
+          width={bubbleSize.width + BUBBLE_TAIL_WIDTH}
+          height={bubbleSize.height}
+          viewBox={`0 0 ${bubbleSize.width + BUBBLE_TAIL_WIDTH} ${bubbleSize.height}`}
+          style={[styles.bubbleShape, { left: -BUBBLE_TAIL_WIDTH }]}
+        >
+          <Path
+            d={bubblePath}
+            fill={bubbleColor}
+            stroke={bubbleBorder}
+            strokeWidth={BUBBLE_STROKE_WIDTH}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      ) : null}
+
+      {label ? (
+        <View style={styles.kickerRow}>
+          <View style={[styles.kickerRule, { backgroundColor: accentColor }]} />
+          <Text style={[styles.label, { color: accentColor }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {label}
+          </Text>
+        </View>
+      ) : null}
+
+      {children ?? (
+        <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
+          {text}
+        </Text>
+      )}
+
+      {actionLabel ? (
+        <View style={styles.actionLink}>
+          <Text style={[styles.actionText, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {actionLabel}
+          </Text>
+          <ArrowRightIcon size={13} color={accentColor} weight="light" />
+        </View>
+      ) : null}
+    </View>
+  );
+
   const content = (
     <>
       <View style={styles.orbWrap}>{icon ?? <CompanionOrb accentColor={accentColor} size={24} />}</View>
 
       <View style={styles.bubbleWrap}>
-        <View style={styles.bubble} onLayout={handleBubbleLayout}>
-          {bubblePath ? (
-            <Svg
-              pointerEvents="none"
-              width={bubbleSize.width + BUBBLE_TAIL_WIDTH}
-              height={bubbleSize.height}
-              viewBox={`0 0 ${bubbleSize.width + BUBBLE_TAIL_WIDTH} ${bubbleSize.height}`}
-              style={[styles.bubbleShape, { left: -BUBBLE_TAIL_WIDTH }]}
-            >
-              <Path
-                d={bubblePath}
-                fill={bubbleColor}
-                stroke={bubbleBorder}
-                strokeWidth={BUBBLE_STROKE_WIDTH}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          ) : null}
-
-          {label ? (
-            <View style={styles.kickerRow}>
-              <View style={[styles.kickerRule, { backgroundColor: accentColor }]} />
-              <Text style={[styles.label, { color: accentColor }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-                {label}
-              </Text>
-            </View>
-          ) : null}
-
-          {children ?? (
-            <Text style={[styles.text, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
-              {text}
-            </Text>
-          )}
-
-          {actionLabel ? (
-            <View style={styles.actionLink}>
-              <Text style={[styles.actionText, { color: colors.textSubtle }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
-                {actionLabel}
-              </Text>
-              <ArrowRightIcon size={13} color={accentColor} weight="light" />
-            </View>
-          ) : null}
-        </View>
+        {onPress ? (
+          <TouchableOpacity
+            activeOpacity={0.72}
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel ?? `${label ? `${label}: ` : ''}${text}`}
+            accessibilityHint={accessibilityHint}
+          >
+            {bubbleContent}
+          </TouchableOpacity>
+        ) : (
+          <View
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={accessibilityLabel ?? `Companion says: ${text}`}
+          >
+            {bubbleContent}
+          </View>
+        )}
+        {dismissButton}
       </View>
     </>
   );
@@ -144,34 +192,25 @@ export function TodayCompanionBubble({
   if (onPress) {
     return (
       <View style={[styles.wrapper, wrapperStyle]}>
-        <TouchableOpacity
-          activeOpacity={0.72}
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel ?? `${label ? `${label}: ` : ''}${text}`}
-          accessibilityHint={accessibilityHint}
-          style={styles.row}
-        >
+        <View style={styles.row}>
           {content}
-        </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <View
-      style={[styles.wrapper, wrapperStyle]}
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={accessibilityLabel ?? `Companion says: ${text}`}
-    >
-      <View style={styles.row}>{content}</View>
+    <View style={[styles.wrapper, wrapperStyle]}>
+      <View style={styles.row}>
+        {content}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
+    position: 'relative',
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['3'],
   },
@@ -180,12 +219,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Spacing['2.5'],
   },
+  dismissButton: {
+    position: 'absolute',
+    top: -9,
+    right: -9,
+    zIndex: 4,
+  },
   orbWrap: {
     marginTop: Spacing['2'],
   },
   bubbleWrap: {
     flex: 1,
     minWidth: 0,
+    position: 'relative',
     alignItems: 'flex-start',
   },
   bubble: {
@@ -195,6 +241,9 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['3.5'],
+  },
+  bubbleWithDismiss: {
+    paddingRight: Spacing['10'],
   },
   bubbleShape: {
     position: 'absolute',

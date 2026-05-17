@@ -517,5 +517,16 @@ if (version < 36) {
   }
 }
 
+// Migration from version 36 to 37: Add optional Today card dismissal dates.
+if (version < 37) {
+  try {
+    (state as any).dismissedBridgeCardDate = (state as any).dismissedBridgeCardDate ?? null;
+    (state as any).dismissedRememberThisCardDate = (state as any).dismissedRememberThisCardDate ?? null;
+    logger.log('[store] Migration v36→37: Added Today optional card dismiss fields');
+  } catch (err) {
+    console.error('[store] Migration v36→37 failed:', err);
+  }
+}
+
 return state;
 }

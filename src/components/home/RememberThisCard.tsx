@@ -13,9 +13,10 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { Radius } from '@/constants/radius';
-import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { useUnfoldStore, type HighlightColor } from '@/lib/store';
+import { DismissCircleButton } from '@/components/home/DismissCircleButton';
+import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 
 const HIGHLIGHT_COLORS: Record<HighlightColor, { light: string; dark: string }> = {
   yellow: { light: '#FFDC64', dark: '#C8A55C' },
@@ -36,6 +37,9 @@ export function RememberThisCard() {
   const getRandomHighlight = useUnfoldStore((s) => s.getRandomHighlight);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
   const devotionals = useUnfoldStore((s) => s.devotionals);
+  const dismissedRememberThisCardDate = useUnfoldStore((s) => s.dismissedRememberThisCardDate);
+  const setDismissedRememberThisCardDate = useUnfoldStore((s) => s.setDismissedRememberThisCardDate);
+  const todayDate = new Date().toLocaleDateString('en-CA');
 
   const highlight = getRandomHighlight();
 
@@ -51,7 +55,7 @@ export function RememberThisCard() {
     opacity: opacity.value,
   }));
 
-  if (!highlight) return null;
+  if (!highlight || dismissedRememberThisCardDate === todayDate) return null;
 
   const highlightColorHex = HIGHLIGHT_COLORS[highlight.color || 'yellow'][isDark ? 'dark' : 'light'];
   const devotional = devotionals.find((d) => d.id === highlight.devotionalId);
@@ -71,14 +75,15 @@ export function RememberThisCard() {
     });
   };
 
+  const handleDismiss = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setDismissedRememberThisCardDate(todayDate);
+  };
+
   return (
     <Animated.View style={[styles.wrapper, animatedStyle]}>
-      <TouchableOpacity
-        activeOpacity={0.72}
-        onPress={handlePress}
-        accessibilityRole="button"
-        accessibilityLabel={`Saved highlight from Day ${highlight.dayNumber}: ${highlight.highlightedText}`}
-        accessibilityHint="Opens the reading at this highlighted passage"
+      <View
         style={[
           styles.card,
           {
@@ -94,49 +99,64 @@ export function RememberThisCard() {
           <BlurView
             intensity={isDark ? 82 : 64}
             tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, styles.cardBlur]}
           />
         )}
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextGroup}>
-            <Text style={[styles.kicker, { color: highlightColorHex }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
-            <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>A line worth carrying</Text>
-          </View>
-        </View>
-
-        <View
-          style={[
-            styles.quoteBlock,
-            {
-              backgroundColor: alpha(highlightColorHex, isDark ? 0.12 : 0.14),
-              borderColor: alpha(highlightColorHex, isDark ? 0.28 : 0.26),
-            },
-          ]}
+        <TouchableOpacity
+          activeOpacity={0.72}
+          onPress={handlePress}
+          accessibilityRole="button"
+          accessibilityLabel={`Saved highlight from Day ${highlight.dayNumber}: ${highlight.highlightedText}`}
+          accessibilityHint="Opens the reading at this highlighted passage"
         >
-          <Text style={[styles.quoteMark, { color: highlightColorHex }]}>“</Text>
-          <Text
-            style={[styles.quoteText, { color: colors.text }]}
-            numberOfLines={3}
-            maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
-          >
-            {highlight.highlightedText}
-          </Text>
-        </View>
-
-        <View style={[styles.footerRow, useCompactFooter && styles.footerRowCompact]}>
-          <Text
-            style={[styles.source, useCompactFooter && styles.sourceCompact, { color: colors.textMuted }]}
-            numberOfLines={useCompactFooter ? 2 : 1}
-            maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
-          >
-            Day {highlight.dayNumber} · {sourceTitle}
-          </Text>
-          <View style={styles.ctaRow}>
-            <Text style={[styles.ctaText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Open highlight</Text>
-            <ArrowRightIcon size={12} color={colors.accent} weight="bold" />
+          <View style={styles.headerRow}>
+            <View style={styles.headerTextGroup}>
+              <Text style={[styles.kicker, { color: highlightColorHex }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Saved echo</Text>
+              <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>A line worth carrying</Text>
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
+
+          <View
+            style={[
+              styles.quoteBlock,
+              {
+                backgroundColor: alpha(highlightColorHex, isDark ? 0.12 : 0.14),
+                borderColor: alpha(highlightColorHex, isDark ? 0.28 : 0.26),
+              },
+            ]}
+          >
+            <Text style={[styles.quoteMark, { color: highlightColorHex }]}>“</Text>
+            <Text
+              style={[styles.quoteText, { color: colors.text }]}
+              numberOfLines={3}
+              maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}
+            >
+              {highlight.highlightedText}
+            </Text>
+          </View>
+
+          <View style={[styles.footerRow, useCompactFooter && styles.footerRowCompact]}>
+            <Text
+              style={[styles.source, useCompactFooter && styles.sourceCompact, { color: colors.textMuted }]}
+              numberOfLines={useCompactFooter ? 2 : 1}
+              maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
+            >
+              Day {highlight.dayNumber} · {sourceTitle}
+            </Text>
+            <View style={styles.ctaRow}>
+              <Text style={[styles.ctaText, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Open highlight</Text>
+              <ArrowRightIcon size={12} color={colors.accent} weight="bold" />
+            </View>
+          </View>
+        </TouchableOpacity>
+        <DismissCircleButton
+          colors={colors}
+          onPress={handleDismiss}
+          accessibilityLabel="Dismiss saved echo"
+          accessibilityHint="Hides this saved echo card for today without deleting the highlight"
+          style={styles.dismissButton}
+        />
+      </View>
     </Animated.View>
   );
 }
@@ -149,15 +169,25 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   card: {
+    position: 'relative',
     borderRadius: Radius.xl,
     borderWidth: 1.5,
     padding: Spacing['5'],
-    overflow: 'hidden',
-    position: 'relative',
+    overflow: 'visible',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.16,
     shadowRadius: 24,
     elevation: 6,
+  },
+  cardBlur: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+  },
+  dismissButton: {
+    position: 'absolute',
+    top: -9,
+    right: -9,
+    zIndex: 4,
   },
   headerRow: {
     flexDirection: 'row',
@@ -168,6 +198,7 @@ const styles = StyleSheet.create({
   },
   headerTextGroup: {
     flex: 1,
+    paddingRight: Spacing['10'],
   },
   kicker: {
     fontFamily: FontFamily.uiMedium,

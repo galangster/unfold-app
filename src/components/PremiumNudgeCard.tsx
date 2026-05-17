@@ -17,7 +17,6 @@ import {
   FireIcon,
   SpeakerHighIcon,
   SparkleIcon,
-  XIcon,
 } from 'phosphor-react-native';
 import { FontFamily } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -25,7 +24,9 @@ import { Duration, Ease } from '@/constants/animations';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { DismissCircleButton } from '@/components/home/DismissCircleButton';
 import { alpha } from '@/components/ui/utils/alpha';
+import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import type { NudgeType } from '@/lib/nudges';
 
 type IconWeight = 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
@@ -111,6 +112,7 @@ export function PremiumNudgeCard({
 
   const handleDismiss = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
     setDismissed(true);
     onDismiss();
   }, [onDismiss]);
@@ -122,6 +124,7 @@ export function PremiumNudgeCard({
 
   const handleSheetClose = useCallback(() => {
     setShowSheet(false);
+    animateCardDismiss();
     setDismissed(true);
     onAction();
   }, [onAction]);
@@ -155,19 +158,15 @@ export function PremiumNudgeCard({
               {tone.title}
             </Text>
           </View>
-
-          <TouchableOpacity
-            activeOpacity={0.72}
-            onPress={handleDismiss}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss premium invitation"
-            accessibilityHint="Hides this premium suggestion"
-            style={[styles.dismissButton, { backgroundColor: alpha(colors.text, 0.04) }]}
-          >
-            <XIcon size={15} color={colors.textSubtle} weight="light" />
-          </TouchableOpacity>
         </View>
+
+        <DismissCircleButton
+          colors={colors}
+          onPress={handleDismiss}
+          accessibilityLabel="Dismiss premium invitation"
+          accessibilityHint="Hides this premium suggestion"
+          style={styles.dismissButton}
+        />
 
         <Text style={[styles.message, useCompactLayout && styles.messageCompact, { color: colors.textMuted }]} numberOfLines={useCompactLayout ? 4 : 3} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>
           {message}
@@ -215,7 +214,7 @@ export function PremiumNudgeCard({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    overflow: 'hidden',
+    overflow: 'visible',
     borderRadius: Radius.xl,
     borderWidth: 1,
     padding: Spacing['5'],
@@ -252,7 +251,7 @@ const styles = StyleSheet.create({
   },
   headingGroup: {
     flex: 1,
-    paddingRight: Spacing['2'],
+    paddingRight: Spacing['7'],
   },
   kicker: {
     fontFamily: FontFamily.uiSemiBold,
@@ -269,11 +268,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.25,
   },
   dismissButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute',
+    top: -9,
+    right: -9,
+    zIndex: 4,
   },
   message: {
     width: '100%',
