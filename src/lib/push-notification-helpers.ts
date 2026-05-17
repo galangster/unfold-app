@@ -1,9 +1,9 @@
+import type { Devotional } from './store';
+
 export const LEGAL_LINKS = {
   terms: 'https://unfoldapp.co/terms',
   privacy: 'https://unfoldapp.co/privacy',
 } as const;
-
-import type { Devotional } from './store';
 
 export function normalizePreferredNotificationTime(
   preferredNotificationTime?: string,
@@ -165,6 +165,19 @@ export type ReadingRoute = {
   };
 };
 
+export type TodayNotificationRoute = {
+  pathname: '/(tabs)/(today)';
+};
+
+export type EveningWindDownNotificationRoute = {
+  pathname: '/(tabs)/(today)/evening-wind-down';
+};
+
+export type NotificationNavigationRoute =
+  | RevealNotificationRoute
+  | TodayNotificationRoute
+  | EveningWindDownNotificationRoute;
+
 export function buildRevealNotificationRoute(
   data: Record<string, unknown> | null | undefined,
 ): RevealNotificationRoute | null {
@@ -196,6 +209,23 @@ export function buildRevealNotificationRoute(
   };
 }
 
+export function buildNotificationNavigationRoute(
+  data: Record<string, unknown> | null | undefined,
+): NotificationNavigationRoute | null {
+  const revealRoute = buildRevealNotificationRoute(data);
+  if (revealRoute) return revealRoute;
+
+  if (data?.type === 'midday-checkin' || data?.type === 'midday_checkin') {
+    return { pathname: '/(tabs)/(today)' };
+  }
+
+  if (data?.type === 'evening-winddown' || data?.type === 'evening_winddown') {
+    return { pathname: '/(tabs)/(today)/evening-wind-down' };
+  }
+
+  return null;
+}
+
 export function buildReadingRouteFromRevealParams({
   devotionalId,
   dayNumber,
@@ -215,17 +245,17 @@ export function buildReadingRouteFromRevealParams({
 export type NotificationNavigationDebugEvent =
   | { type: 'ignored_invalid'; notificationKey?: string }
   | { type: 'ignored_duplicate'; notificationKey?: string }
-  | { type: 'queued'; notificationKey?: string; route: RevealNotificationRoute }
-  | { type: 'flush_skipped_not_ready'; notificationKey?: string; route: RevealNotificationRoute }
+  | { type: 'queued'; notificationKey?: string; route: NotificationNavigationRoute }
+  | { type: 'flush_skipped_not_ready'; notificationKey?: string; route: NotificationNavigationRoute }
   | { type: 'navigation_ready_changed'; ready: boolean }
-  | { type: 'flushed'; notificationKey?: string; route: RevealNotificationRoute };
+  | { type: 'flushed'; notificationKey?: string; route: NotificationNavigationRoute };
 
 export function createNotificationNavigationCoordinator({
   replace,
   onEvent,
   recentNavigationWindowMs = 5_000,
 }: {
-  replace: (route: RevealNotificationRoute) => void;
+  replace: (route: NotificationNavigationRoute) => void;
   onEvent?: (event: NotificationNavigationDebugEvent) => void;
   recentNavigationWindowMs?: number;
 }): {
@@ -237,7 +267,7 @@ export function createNotificationNavigationCoordinator({
   hasPendingRoute: () => boolean;
 } {
   let navigationReady = false;
-  let pendingRoute: RevealNotificationRoute | null = null;
+  let pendingRoute: NotificationNavigationRoute | null = null;
   let pendingNotificationKey: string | null = null;
   let lastRouteActivityAt = 0;
   const handledNotificationKeys = new Set<string>();
@@ -271,7 +301,7 @@ export function createNotificationNavigationCoordinator({
 
   return {
     queueFromData(data, notificationKey) {
-      const route = buildRevealNotificationRoute(data);
+      const route = buildNotificationNavigationRoute(data);
       if (!route) {
         onEvent?.({ type: 'ignored_invalid', notificationKey });
         return false;

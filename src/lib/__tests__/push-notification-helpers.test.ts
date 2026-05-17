@@ -1,11 +1,7 @@
-jest.mock('uuid', () => ({
-  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
-  v5: jest.fn((value: string, namespace: string) => `uuidv5:${namespace}:${value}`),
-}));
-
 import {
   LEGAL_LINKS,
   buildDevotionalReadyNotificationData,
+  buildNotificationNavigationRoute,
   buildPushRegistrationRequestBody,
   buildNotificationPreferenceRequestBody,
   buildReadingRouteFromRevealParams,
@@ -17,6 +13,11 @@ import {
   shouldMarkNotificationNavigationReady,
 } from '../push-notification-helpers';
 import { buildDevotionalSeed } from '../dev-seed';
+
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v5: jest.fn((value: string, namespace: string) => `uuidv5:${namespace}:${value}`),
+}));
 
 describe('push notification helpers', () => {
   describe('buildPushRegistrationRequestBody', () => {
@@ -162,6 +163,20 @@ describe('push notification helpers', () => {
           devotionalId: 'dev-1',
           dayNumber: '3',
         },
+      });
+    });
+  });
+
+  describe('buildNotificationNavigationRoute', () => {
+    it('routes local midday check-in notifications back to Today', () => {
+      expect(buildNotificationNavigationRoute({ type: 'midday-checkin' })).toEqual({
+        pathname: '/(tabs)/(today)',
+      });
+    });
+
+    it('routes local evening wind-down notifications to the evening flow', () => {
+      expect(buildNotificationNavigationRoute({ type: 'evening-winddown' })).toEqual({
+        pathname: '/(tabs)/(today)/evening-wind-down',
       });
     });
   });
@@ -319,6 +334,20 @@ describe('push notification helpers', () => {
           seriesTitle: 'Psalm Walk',
           totalDays: '7',
         },
+      });
+    });
+
+    it('queues a cold-start local midday check-in notification until navigation is ready', () => {
+      const replace = jest.fn();
+      const coordinator = createNotificationNavigationCoordinator({ replace });
+
+      coordinator.queueFromData({ type: 'midday-checkin' });
+      expect(replace).not.toHaveBeenCalled();
+
+      coordinator.setNavigationReady(true);
+
+      expect(replace).toHaveBeenCalledWith({
+        pathname: '/(tabs)/(today)',
       });
     });
 
