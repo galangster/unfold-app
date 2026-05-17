@@ -3,6 +3,7 @@ import {
   getTodayAmbientRiveInputs,
   getTodayLightRayInputs,
   hexToRiveRgb,
+  shouldShowCompletedBottomGlow,
 } from '../today-ambient-rive';
 
 describe('today ambient Rive mapping', () => {
@@ -14,13 +15,21 @@ describe('today ambient Rive mapping', () => {
   it('uses rain particles for completed/tomorrow rest states', () => {
     expect(getTodayAmbientMode({ stateType: 'complete-today', hasReadToday: true })).toBe('rain-particles');
     expect(getTodayAmbientMode({ stateType: 'tomorrow-locked', hasReadToday: true })).toBe('rain-particles');
+    expect(getTodayAmbientMode({ stateType: 'journey-complete', hasReadToday: true })).toBe('rain-particles');
   });
 
-  it('does not animate empty, preparing, premium-paused, or journey-complete states', () => {
+  it('does not animate empty, preparing, premium-paused, or unread journey-complete states', () => {
     expect(getTodayAmbientMode({ stateType: 'empty', hasReadToday: false })).toBe('none');
     expect(getTodayAmbientMode({ stateType: 'preparing', hasReadToday: false })).toBe('none');
     expect(getTodayAmbientMode({ stateType: 'premium-paused', hasReadToday: false })).toBe('none');
-    expect(getTodayAmbientMode({ stateType: 'journey-complete', hasReadToday: true })).toBe('none');
+    expect(getTodayAmbientMode({ stateType: 'journey-complete', hasReadToday: false })).toBe('none');
+  });
+
+  it('shows the completed-day bottom glow whenever today has been read', () => {
+    expect(shouldShowCompletedBottomGlow({ stateType: 'complete-today', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedBottomGlow({ stateType: 'tomorrow-locked', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedBottomGlow({ stateType: 'journey-complete', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedBottomGlow({ stateType: 'unread', hasReadToday: false })).toBe(false);
   });
 
   it('maps hex accent colors to normalized 0-1 Rive RGB inputs', () => {
@@ -28,72 +37,22 @@ describe('today ambient Rive mapping', () => {
     expect(hexToRiveRgb('#abc')).toEqual({ r: 170 / 255, g: 187 / 255, b: 204 / 255 });
   });
 
-  it('passes dimensions and accent color into the light-ray particle inputs', () => {
+  it('keeps bundled Rive loops self-contained until runtime color inputs exist', () => {
     expect(getTodayAmbientRiveInputs({
       mode: 'light-rays',
       stateType: 'reveal-ready',
       accent: '#d6a84f',
       width: 390.4,
       height: 843.6,
-    })).toMatchObject({
-      width: 390,
-      height: 844,
-      accentR: 214 / 255,
-      accentG: 168 / 255,
-      accentB: 79 / 255,
-    });
-  });
+    })).toEqual({});
 
-  it('tunes rain particles quietly for completed and locked rest states', () => {
     expect(getTodayAmbientRiveInputs({
       mode: 'rain-particles',
       stateType: 'complete-today',
       accent: '#d6a84f',
       width: 390,
       height: 844,
-    })).toMatchObject({
-      width: 390,
-      height: 844,
-      accentR: 214 / 255,
-      accentG: 168 / 255,
-      accentB: 79 / 255,
-      lineThickness: 0.65,
-      opacity: 0.085,
-      particleCount: 10,
-      spawnRate: 1.85,
-    });
-
-    expect(getTodayAmbientRiveInputs({
-      mode: 'rain-particles',
-      stateType: 'tomorrow-locked',
-      accent: '#d6a84f',
-      width: 390,
-      height: 844,
-    })).toMatchObject({
-      lineThickness: 0.55,
-      opacity: 0.065,
-      particleCount: 8,
-      spawnRate: 2.05,
-    });
-  });
-
-  it('keeps light rays subtle and center-masked for reveal-ready', () => {
-    const lightRays = getTodayAmbientRiveInputs({
-      mode: 'light-rays',
-      stateType: 'reveal-ready',
-      accent: '#d6a84f',
-      width: 390,
-      height: 844,
-    });
-
-    expect(lightRays).toMatchObject({
-      particleCount: 22,
-      spawnRate: 0.9,
-      lineThickness: 1.05,
-      opacity: 0.18,
-      centerMaskRadius: 0.2,
-      centerMaskSoftness: 0.32,
-    });
+    })).toEqual({});
   });
 
   it('returns no light-ray inputs for non-light-ray states', () => {

@@ -62,7 +62,6 @@ export function AmbientArtCanvas({
   const { width, height } = useWindowDimensions();
 
   const active = screenFocused && isAppActive && !lowPowerMode && !reducedMotion;
-  const qaToolsEnabled = process.env.EXPO_PUBLIC_ENABLE_QA_TOOLS === '1';
   const mode = getTodayAmbientMode({ stateType, hasReadToday });
   const riveInputs = useMemo(() => getTodayAmbientRiveInputs({
     mode,
@@ -72,7 +71,7 @@ export function AmbientArtCanvas({
     height,
   }), [accentColor, height, mode, stateType, width]);
 
-  if (qaToolsEnabled || !active || mode === 'none') return null;
+  if (!active || mode === 'none') return null;
 
   return (
     <TodayAmbientRive

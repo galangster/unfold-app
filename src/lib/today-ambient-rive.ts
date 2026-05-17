@@ -15,6 +15,11 @@ export interface TodayAmbientModeInput {
   hasReadToday: boolean;
 }
 
+export interface CompletedBottomGlowInput {
+  stateType: TodayAmbientStateType;
+  hasReadToday: boolean;
+}
+
 export interface RgbColor {
   r: number;
   g: number;
@@ -39,11 +44,19 @@ export function getTodayAmbientMode({
   stateType,
   hasReadToday,
 }: TodayAmbientModeInput): TodayAmbientMode {
-  if (hasReadToday && (stateType === 'complete-today' || stateType === 'tomorrow-locked')) {
+  if (hasReadToday && (
+    stateType === 'complete-today'
+    || stateType === 'tomorrow-locked'
+    || stateType === 'journey-complete'
+  )) {
     return 'rain-particles';
   }
 
   return 'none';
+}
+
+export function shouldShowCompletedBottomGlow({ hasReadToday }: CompletedBottomGlowInput): boolean {
+  return hasReadToday;
 }
 
 export function hexToRiveRgb(hex: string): RgbColor {
@@ -65,10 +78,6 @@ export function hexToRiveRgb(hex: string): RgbColor {
 
 export function getTodayAmbientRiveInputs({
   mode,
-  stateType,
-  accent,
-  width,
-  height,
 }: {
   mode: TodayAmbientMode;
   stateType: TodayAmbientStateType;
@@ -80,44 +89,12 @@ export function getTodayAmbientRiveInputs({
     return null;
   }
 
-  const accentRgb = hexToRiveRgb(accent);
-  const base = {
-    accentR: accentRgb.r,
-    accentG: accentRgb.g,
-    accentB: accentRgb.b,
-    width: Math.max(1, Math.round(width)),
-    height: Math.max(1, Math.round(height)),
-  };
-
-  if (mode === 'light-rays') {
-    return {
-      ...base,
-      lineThickness: 1.05,
-      opacity: 0.18,
-      particleCount: 22,
-      // Rive contract from asset handoff: higher value = slower spawning.
-      // Keep this quiet enough to feel ambient, not like a foreground effect.
-      spawnRate: 0.9,
-      centerMaskRadius: 0.2,
-      centerMaskSoftness: 0.32,
-    };
-  }
-
-  if (mode === 'rain-particles') {
-    const isTomorrowLocked = stateType === 'tomorrow-locked';
-
-    return {
-      ...base,
-      lineThickness: isTomorrowLocked ? 0.55 : 0.65,
-      opacity: isTomorrowLocked ? 0.065 : 0.085,
-      particleCount: isTomorrowLocked ? 8 : 10,
-      // Higher value = slower spawning. Keep fewer elements on-screen so the
-      // native text and frosted cards read as the foreground.
-      spawnRate: isTomorrowLocked ? 2.05 : 1.85,
-    };
-  }
-
-  return base;
+  // Current bundled .riv files play correctly as self-contained white ambient
+  // loops, but their apparent `accentR/G/B` strings are not exposed as runtime
+  // state-machine inputs in React Native. Until the animator returns updated
+  // files with real color controls, pass no numeric inputs so the runtime stays
+  // warning-free and the animation remains intentionally white.
+  return {};
 }
 
 export function getTodayLightRayInputs({

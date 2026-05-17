@@ -191,7 +191,7 @@ export function TodayAmbientRive({
           file={riveFile}
           artboardName={artboardName}
           stateMachineName={stateMachineName}
-          autoPlay={active}
+          autoPlay={false}
           fit={surfaceFit}
           alignment={Alignment.Center}
           hybridRef={setHybridRef}
