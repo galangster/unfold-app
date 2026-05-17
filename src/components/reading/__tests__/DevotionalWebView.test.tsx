@@ -103,4 +103,19 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).toContain('-webkit-user-select: text;');
     expect(html).toMatch(/#highlight-toolbar\s*\{[^}]*-webkit-touch-callout:\s*none/);
   });
+
+  it('falls back to locating saved highlight text when no restored mark is available', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={targetHighlight} existingHighlights={[]} />,
+      );
+    });
+
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+    expect(script).toContain('function locateTargetTextFallback(targetText)');
+    expect(script).toContain('best = locateTargetTextFallback(targetText);');
+    expect(script).toContain("type: 'TARGET_HIGHLIGHT_LOCATED'");
+    expect(script).toContain('Grace meets you');
+  });
 });
