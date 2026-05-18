@@ -893,6 +893,7 @@ export const useUnfoldStore = create<UnfoldState>()(
                   devotionalId,
                   isRead: existingDay.isRead || incomingDay.isRead,
                   readAt: existingDay.isRead ? existingDay.readAt : incomingDay.readAt,
+                  isRevealed: (existingDay.isRevealed ?? false) || (incomingDay.isRevealed ?? false),
                   updatedAt: now,
                 });
               }
@@ -937,7 +938,7 @@ export const useUnfoldStore = create<UnfoldState>()(
                     updatedAt: now,
                     days: d.days.map((day) =>
                       day.dayNumber === dayNumber
-                        ? { ...day, isRead: true, readAt: now, updatedAt: now }
+                        ? { ...day, isRead: true, readAt: now, isRevealed: true, updatedAt: now }
                         : day
                     ),
                   }

@@ -2,12 +2,16 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Alignment,
+  DataBindByName,
+  DataBindMode,
   Fit,
   RiveView,
   useRive,
   useRiveFile,
+  useViewModelInstance,
   type RiveFileInput,
   type RiveViewRef,
+  type ViewModelInstance,
 } from '@rive-app/react-native';
 import type { TodayAmbientMode, TodayAmbientRiveInputs } from '@/lib/today-ambient-rive';
 
@@ -36,6 +40,30 @@ function applyNumberInputs(view: RiveViewRef, inputs: TodayAmbientRiveInputs, lo
       );
     }
   }
+}
+
+function applyViewModelNumberInputs(
+  viewModelInstance: ViewModelInstance | null | undefined,
+  inputs: TodayAmbientRiveInputs,
+  logPrefix: string,
+): boolean {
+  if (!viewModelInstance) return false;
+
+  let appliedCount = 0;
+  for (const [name, value] of Object.entries(inputs)) {
+    if (typeof value !== 'number') continue;
+
+    const property = viewModelInstance.numberProperty(name);
+    if (!property) {
+      console.warn(`[${logPrefix}] Rive ViewModel number property "${name}" was not found.`);
+      continue;
+    }
+
+    property.set(value);
+    appliedCount += 1;
+  }
+
+  return appliedCount > 0;
 }
 
 function getMotionStyle(mode: Exclude<TodayAmbientMode, 'none'>, loopProgress: Animated.Value) {
@@ -83,7 +111,16 @@ export function TodayAmbientRive({
   stateMachineName = 'State Machine 1',
 }: TodayAmbientRiveProps) {
   const { riveFile, error: riveFileError } = useRiveFile(source);
+  const shouldBindParticleControls = mode === 'light-rays';
+  const { instance: particleControlsInstance, error: particleControlsError } = useViewModelInstance(
+    riveFile,
+    shouldBindParticleControls ? { viewModelName: 'ParticleControls' } : undefined,
+  );
   const { riveViewRef, setHybridRef } = useRive();
+  const particleControlsDataBind = useMemo(
+    () => (shouldBindParticleControls ? new DataBindByName('ParticleControls') : DataBindMode.Auto),
+    [shouldBindParticleControls],
+  );
   const loopProgress = useRef(new Animated.Value(0)).current;
   const logPrefix = `today-${mode}-rive`;
 
@@ -104,7 +141,10 @@ export function TodayAmbientRive({
     if (riveFileError) {
       console.warn(`[${logPrefix}] Failed to load Rive file:`, riveFileError.message);
     }
-  }, [logPrefix, riveFileError]);
+    if (particleControlsError) {
+      console.warn(`[${logPrefix}] Failed to load ParticleControls ViewModel:`, particleControlsError.message);
+    }
+  }, [logPrefix, particleControlsError, riveFileError]);
 
   useEffect(() => {
     if (!active || !inputs) {
@@ -148,7 +188,14 @@ export function TodayAmbientRive({
         await riveViewRef.awaitViewReady();
         if (cancelled) return;
 
-        applyNumberInputs(riveViewRef, inputs, logPrefix);
+        const appliedViewModelInputs = applyViewModelNumberInputs(
+          particleControlsInstance ?? riveViewRef.getViewModelInstance(),
+          inputs,
+          logPrefix,
+        );
+        if (!appliedViewModelInputs) {
+          applyNumberInputs(riveViewRef, inputs, logPrefix);
+        }
 
         if (active) {
           riveViewRef.playIfNeeded();
@@ -171,7 +218,7 @@ export function TodayAmbientRive({
     return () => {
       cancelled = true;
     };
-  }, [active, inputSignature, inputs, logPrefix, riveViewRef]);
+  }, [active, inputSignature, inputs, logPrefix, particleControlsInstance, riveViewRef]);
 
   if (!source || !riveFile || !active || !inputs) {
     return null;
@@ -191,6 +238,7 @@ export function TodayAmbientRive({
           file={riveFile}
           artboardName={artboardName}
           stateMachineName={stateMachineName}
+          dataBind={particleControlsInstance ?? particleControlsDataBind}
           autoPlay={false}
           fit={surfaceFit}
           alignment={Alignment.Center}
