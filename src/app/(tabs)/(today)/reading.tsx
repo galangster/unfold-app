@@ -1,9 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useAutoHide } from '@/hooks/useAutoHide';
-import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard } from 'react-native';
+import { View, Text, Dimensions, ActivityIndicator, AccessibilityInfo, Platform, StyleSheet, TouchableOpacity, Keyboard, ScrollView, UIManager, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -77,6 +76,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const AUTO_RETRY_MAX_ATTEMPTS = 3;
 const AUTO_RETRY_BASE_DELAY_MS = 15000;
+const LIBRARY_TARGET_TOP_INSET = 220;
 
 function parsePositiveInteger(value?: string | string[]): number | null {
   if (!value) return null;
@@ -122,7 +122,9 @@ export default function ReadingScreen() {
       return () => clearTimeout(t);
     }
   }, []);
-  const scrollViewRef = useRef<KeyboardAwareScrollViewRef>(null);
+  const scrollViewRef = useRef<ScrollView | null>(null);
+  const readerScrollNativeTargetRef = useRef<number | null>(null);
+  const targetScrollRequestIdRef = useRef(0);
 
   const currentDevotionalId = useUnfoldStore((s) => s.currentDevotionalId);
   const setCurrentDevotional = useUnfoldStore((s) => s.setCurrentDevotional);
@@ -213,6 +215,9 @@ export default function ReadingScreen() {
   const [isPreparingNextDay, setIsPreparingNextDay] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState(false);
   const [selectedStudyMethod, setSelectedStudyMethod] = useState<string | undefined>(undefined);
+  const [targetScrollRequest, setTargetScrollRequest] = useState<{ id: number; y: number } | null>(null);
+  const [readerScrollReady, setReaderScrollReady] = useState(0);
+  const [readerLayoutVersion, setReaderLayoutVersion] = useState(0);
   const mountedRef = useRef(true);
   const [studyMethodVisible, setStudyMethodVisible] = useState(false);
   const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -290,19 +295,83 @@ export default function ReadingScreen() {
     return match;
   }, [bookmarks, params.bookmarkId, effectiveDevotionalId, viewingDay]);
 
-  const handleTargetHighlightLocated = useCallback((contentY: number) => {
-    const y = Math.max(0, contentY - 96);
-    const scrollToTarget = () => {
-      scrollViewRef.current?.scrollTo({
-        y,
-        animated: true,
-      });
-    };
-
-    scrollToTarget();
-    setTimeout(scrollToTarget, 250);
-    setTimeout(scrollToTarget, 650);
+  const setReaderScrollViewRef = useCallback((node: ScrollView | null) => {
+    scrollViewRef.current = node;
+    if (node) {
+      setReaderScrollReady((version) => version + 1);
+    }
   }, []);
+
+  const handleReaderScrollViewLayout = useCallback((event: LayoutChangeEvent) => {
+    const target = (event.nativeEvent as { target?: number }).target;
+    readerScrollNativeTargetRef.current = typeof target === 'number' ? target : null;
+    setReaderScrollReady((version) => version + 1);
+  }, []);
+
+  const scrollReaderToY = useCallback((y: number) => {
+    const ref = scrollViewRef.current as unknown as Record<string, unknown> | null;
+    const proto = ref ? Object.getPrototypeOf(ref) as Record<string, unknown> | null : null;
+    const options = { x: 0, y, animated: true };
+    const nativeRef = typeof ref?.getNativeScrollRef === 'function'
+      ? (ref.getNativeScrollRef as () => unknown)()
+      : null;
+    const responder = typeof ref?.getScrollResponder === 'function'
+      ? (ref.getScrollResponder as () => unknown)()
+      : null;
+    const inner = (ref?._component ?? ref?._nativeRef ?? ref?._ref ?? null) as Record<string, unknown> | null;
+
+    let method = 'none';
+    if (typeof ref?.scrollTo === 'function') {
+      (ref.scrollTo as (value: typeof options) => void)(options);
+      method = 'direct';
+    } else if (typeof proto?.scrollTo === 'function') {
+      (proto.scrollTo as (this: unknown, value: typeof options) => void).call(ref, options);
+      method = 'proto';
+    } else if (nativeRef && typeof (nativeRef as { scrollTo?: unknown }).scrollTo === 'function') {
+      ((nativeRef as { scrollTo: (value: typeof options) => void }).scrollTo)(options);
+      method = 'native';
+    } else if (responder && typeof (responder as { scrollResponderScrollTo?: unknown }).scrollResponderScrollTo === 'function') {
+      ((responder as { scrollResponderScrollTo: (value: typeof options) => void }).scrollResponderScrollTo)(options);
+      method = 'responder';
+    } else if (typeof inner?.scrollTo === 'function') {
+      (inner.scrollTo as (value: typeof options) => void)(options);
+      method = 'inner';
+    } else if (readerScrollNativeTargetRef.current != null) {
+      UIManager.dispatchViewManagerCommand(
+        readerScrollNativeTargetRef.current,
+        'scrollTo',
+        [0, y, true],
+      );
+      return true;
+    }
+
+    return method !== 'none';
+  }, []);
+
+  const handleTargetHighlightLocated = useCallback((contentY: number) => {
+    const y = Math.max(0, contentY - LIBRARY_TARGET_TOP_INSET);
+    targetScrollRequestIdRef.current += 1;
+    setTargetScrollRequest({
+      id: targetScrollRequestIdRef.current,
+      y,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!targetScrollRequest) return;
+
+    // WebView target messages can arrive before the parent ScrollView ref or
+    // final content height has committed. Store the requested Y in React state
+    // and retry from an effect so each attempt uses the latest mounted ref.
+    const delays = [0, 250, 650, 1200, 1800, 2600];
+    const timers = delays.map((delay) => setTimeout(() => {
+      scrollReaderToY(targetScrollRequest.y);
+    }, delay));
+
+    return () => {
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, [readerLayoutVersion, readerScrollReady, scrollReaderToY, targetScrollRequest]);
   const expectedDays = Math.max(user?.devotionalLength ?? 0, totalDays);
   // Only show retry banner if this specific series has ungenerated days
   // Compare against totalDays (the series plan), not expectedDays (user preference)
@@ -730,8 +799,12 @@ export default function ReadingScreen() {
       contentOffset: { y: number };
       contentSize: { height: number };
       layoutMeasurement: { height: number };
+      target?: number;
     }
   }) => {
+    if (typeof e.nativeEvent.target === 'number') {
+      readerScrollNativeTargetRef.current = e.nativeEvent.target;
+    }
     const offsetY = e.nativeEvent.contentOffset.y;
     const totalHeight = e.nativeEvent.contentSize.height;
     const viewHeight = e.nativeEvent.layoutMeasurement.height;
@@ -1732,12 +1805,11 @@ export default function ReadingScreen() {
 
             {/* Scroll progress bar — animated thin line below header */}
             <ReadingProgressBar progress={scrollProgress} accentColor={colors.accent} />
-
             {/* Premium nudge banner — audio teaser */}
-            {/* Content - Scrollable with day-transition fade + keyboard-aware scrolling */}
+            {/* Content - scrollable with day-transition fade */}
             <Animated.View style={[{ flex: 1 }, scrollContentStyle]}>
-            <KeyboardAwareScrollView
-              ref={scrollViewRef}
+            <ScrollView
+              ref={setReaderScrollViewRef}
               style={{ flex: 1 }}
               contentContainerStyle={{
                 paddingHorizontal: Spacing['6'],
@@ -1746,10 +1818,10 @@ export default function ReadingScreen() {
               }}
               showsVerticalScrollIndicator={false}
               bounces={true}
+              onLayout={handleReaderScrollViewLayout}
               onScroll={handleScroll}
+              onContentSizeChange={() => setReaderLayoutVersion((version) => version + 1)}
               scrollEventThrottle={16}
-              bottomOffset={20}
-              extraKeyboardSpace={60}
             >
               <DevotionalContent
                 day={currentDayData}
@@ -2144,7 +2216,7 @@ export default function ReadingScreen() {
                     </Animated.View>
                   )}
               </Animated.View>
-            </KeyboardAwareScrollView>
+            </ScrollView>
             </Animated.View>
           </SafeAreaView>
         </Animated.View>

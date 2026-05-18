@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RefObject } from 'react';
-import { View, Text, TextInput, Keyboard, TouchableOpacity } from 'react-native';
-import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
+import { View, Text, TextInput, Keyboard, TouchableOpacity, type ScrollView } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -27,7 +26,7 @@ interface InlineReflectionJournalProps {
   dayNumber: number;
   onOpenFullJournal: (focusQuestion?: number) => void;
   fontSize?: FontSize;
-  scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
+  scrollViewRef?: RefObject<ScrollView | null>;
 }
 
 /**
@@ -366,7 +365,7 @@ function ReflectionQuestionCard({
   inputRefs: React.MutableRefObject<Map<number, TextInput | null>>;
   colors: any;
   typography: ReflectionTypography;
-  scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
+  scrollViewRef?: RefObject<ScrollView | null>;
   editable?: boolean;
   reducedMotion?: boolean;
 }) {
@@ -434,8 +433,11 @@ function ReflectionQuestionCard({
               editable={editable}
               onChangeText={(text) => onResponseChange(index, question, text)}
               onContentSizeChange={() => {
-                // Re-scroll to keep cursor visible as multiline text grows
-                scrollViewRef?.current?.assureFocusedInputVisible();
+                // Re-scroll to keep cursor visible as multiline text grows.
+                // The reader uses a plain ScrollView so library exact-target
+                // jumps can call its real imperative scrollTo API; keep this as
+                // an optional compatibility hook for any keyboard-aware wrapper.
+                (scrollViewRef?.current as { assureFocusedInputVisible?: () => void } | null)?.assureFocusedInputVisible?.();
               }}
               placeholder={editable ? 'Write your thoughts...' : 'Subscribe to journal your reflections'}
               placeholderTextColor={colors.textHint}

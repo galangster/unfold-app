@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent } from 'react-native';
-import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
+import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent, type ScrollView } from 'react-native';
 import { BookOpenIcon, BookmarkSimpleIcon, CaretRightIcon } from 'phosphor-react-native';
 import Animated, {
   useSharedValue,
@@ -43,7 +42,7 @@ interface DevotionalContentProps {
   dayNumber?: number;
   onOpenJournal?: (focusQuestion?: number) => void;
   onStudyMethodPress?: (methodId: string) => void;
-  scrollViewRef?: RefObject<KeyboardAwareScrollViewRef | null>;
+  scrollViewRef?: RefObject<ScrollView | null>;
 }
 
 /**
