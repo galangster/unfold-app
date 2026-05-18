@@ -1,7 +1,7 @@
 import React from 'react';
 
 import { DevotionalWebView } from '../DevotionalWebView';
-import type { DevotionalDay, Highlight } from '@/lib/store';
+import type { Bookmark, DevotionalDay, Highlight } from '@/lib/store';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const renderer = require('react-test-renderer');
@@ -65,6 +65,17 @@ const targetHighlight: Highlight = {
   contextBefore: 'The next faithful step is enough for today.',
   contextAfter: 'in the next act of trust.',
   createdAt: '2026-05-17T00:00:00.000Z',
+};
+
+const targetBookmark: Bookmark = {
+  id: 'bookmark-1',
+  devotionalId: 'dev-1',
+  devotionalTitle: 'Quiet Path Series',
+  dayNumber: 1,
+  dayTitle: 'A Quiet Path',
+  scriptureReference: 'Historical Context',
+  scriptureText: 'Grace meets you in the next act of trust.',
+  savedAt: '2026-05-17T00:00:00.000Z',
 };
 
 function getWebViewProps(tree: any) {
@@ -181,5 +192,22 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).toContain("const highlightBackground = isDark ? 'transparent' : colorConfigs[color].light;");
     expect(script).toContain("const highlightTextColor = isDark ? colorConfigs[color].textDark : 'inherit';");
     expect(script).not.toContain("dark: 'rgba(200, 165, 92, 0.22)'");
+  });
+
+  it('locates a target bookmark by saved text and reports its document position', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetBookmark={targetBookmark} />,
+      );
+    });
+
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+
+    expect(script).toContain('const targetBookmark = {"id":"bookmark-1"');
+    expect(script).toContain('function locateTargetBookmark()');
+    expect(script).toContain('best = locateTargetTextFallback(targetText);');
+    expect(script).toContain("type: 'TARGET_BOOKMARK_LOCATED'");
+    expect(script).toContain('Grace meets you in the next act of trust.');
   });
 });

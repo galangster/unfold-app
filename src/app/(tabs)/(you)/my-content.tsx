@@ -679,6 +679,7 @@ export default function MyContentScreen() {
                       params: { 
                         devotionalId: bookmark.devotionalId,
                         dayNumber: bookmark.dayNumber.toString(),
+                        bookmarkId: bookmark.id,
                       },
                     })}
                     style={{

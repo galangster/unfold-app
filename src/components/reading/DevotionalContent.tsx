@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import type { KeyboardAwareScrollViewRef } from 'react-native-keyboard-controller';
@@ -18,7 +18,7 @@ import { useTheme } from '@/lib/theme';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, HighlightColor } from '@/lib/store';
+import { DevotionalDay, FONT_SIZE_VALUES, FontSize, Highlight, HighlightColor, Bookmark } from '@/lib/store';
 import { preventOrphan } from '@/lib/cn';
 import { fetchVerseLocal, fetchVerse } from '@/lib/bible-api';
 import { DevotionalWebView } from './DevotionalWebView';
@@ -36,6 +36,8 @@ interface DevotionalContentProps {
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (contentY: number) => void;
+  targetBookmark?: Bookmark | null;
+  onTargetBookmarkLocated?: (contentY: number) => void;
   onScriptureTap?: (reference: string) => void;
   devotionalId?: string;
   dayNumber?: number;
@@ -87,6 +89,8 @@ export function DevotionalContent({
   existingHighlights,
   targetHighlight,
   onTargetHighlightLocated,
+  targetBookmark,
+  onTargetBookmarkLocated,
   onScriptureTap,
   devotionalId,
   dayNumber,
@@ -121,15 +125,44 @@ export function DevotionalContent({
   }, [day.scriptureReference]);
 
   const displayScripture = versedScripture ?? day.scriptureText;
+  const scriptureBlockTopRef = useRef<number | null>(null);
   const devotionalWebViewTopRef = useRef(0);
+  const locatedTopBookmarkRef = useRef<string | null>(null);
+  const targetBookmarkIsWebViewContent = useMemo(() => {
+    const reference = targetBookmark?.scriptureReference?.toLowerCase();
+    return reference === 'quote' || reference === 'historical context' || reference === 'word study';
+  }, [targetBookmark?.scriptureReference]);
 
   const handleDevotionalWebViewLayout = useCallback((event: LayoutChangeEvent) => {
     devotionalWebViewTopRef.current = event.nativeEvent.layout.y;
   }, []);
 
+  const locateTopBookmark = useCallback((contentY: number) => {
+    if (!targetBookmark || targetBookmarkIsWebViewContent) return;
+    if (locatedTopBookmarkRef.current === targetBookmark.id) return;
+    locatedTopBookmarkRef.current = targetBookmark.id;
+    onTargetBookmarkLocated?.(contentY);
+  }, [onTargetBookmarkLocated, targetBookmark, targetBookmarkIsWebViewContent]);
+
+  const handleScriptureBlockLayout = useCallback((event: LayoutChangeEvent) => {
+    const y = event.nativeEvent.layout.y;
+    scriptureBlockTopRef.current = y;
+    locateTopBookmark(y);
+  }, [locateTopBookmark]);
+
+  useEffect(() => {
+    const scriptureBlockTop = scriptureBlockTopRef.current;
+    if (scriptureBlockTop == null) return;
+    locateTopBookmark(scriptureBlockTop);
+  }, [locateTopBookmark]);
+
   const handleTargetHighlightLocated = useCallback((webViewY: number) => {
     onTargetHighlightLocated?.(devotionalWebViewTopRef.current + webViewY);
   }, [onTargetHighlightLocated]);
+
+  const handleTargetBookmarkLocated = useCallback((webViewY: number) => {
+    onTargetBookmarkLocated?.(devotionalWebViewTopRef.current + webViewY);
+  }, [onTargetBookmarkLocated]);
 
   // Accent line grow animation -- editorial entrance
   const accentLineWidth = useSharedValue(0);
@@ -216,6 +249,7 @@ export function DevotionalContent({
 
       {/* Scripture block */}
       <View
+        onLayout={handleScriptureBlockLayout}
         style={[
           dcStyles.scriptureBlock,
           {
@@ -285,6 +319,8 @@ export function DevotionalContent({
           existingHighlights={existingHighlights}
           targetHighlight={targetHighlight}
           onTargetHighlightLocated={handleTargetHighlightLocated}
+          targetBookmark={targetBookmarkIsWebViewContent ? targetBookmark : null}
+          onTargetBookmarkLocated={handleTargetBookmarkLocated}
           onScriptureTap={onScriptureTap}
           devotionalId={devotionalId}
           dayNumber={dayNumber}

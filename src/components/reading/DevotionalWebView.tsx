@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
 import { useReadingFont } from '@/lib/useReadingFont';
-import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, useUnfoldStore } from '@/lib/store';
+import { FONT_SIZE_VALUES, FontSize, DevotionalDay, Highlight, HighlightColor, Bookmark, useUnfoldStore } from '@/lib/store';
 import { parseScriptureReferences } from '@/lib/scripture-parser';
 import { logger } from '@/lib/logger';
 
@@ -30,6 +30,8 @@ interface DevotionalWebViewProps {
   existingHighlights?: Highlight[];
   targetHighlight?: Highlight | null;
   onTargetHighlightLocated?: (y: number) => void;
+  targetBookmark?: Bookmark | null;
+  onTargetBookmarkLocated?: (y: number) => void;
   onScriptureTap?: (reference: string) => void;
   devotionalId?: string;
   devotionalTitle?: string;
@@ -58,6 +60,8 @@ export function DevotionalWebView({
   existingHighlights = [],
   targetHighlight,
   onTargetHighlightLocated,
+  targetBookmark,
+  onTargetBookmarkLocated,
   onScriptureTap,
   devotionalId,
   devotionalTitle,
@@ -87,6 +91,14 @@ export function DevotionalWebView({
           color: targetHighlight.color,
           contextBefore: targetHighlight.contextBefore,
           contextAfter: targetHighlight.contextAfter,
+        }
+      : null;
+    const targetBookmarkPayload = targetBookmark
+      ? {
+          id: targetBookmark.id,
+          scriptureReference: targetBookmark.scriptureReference,
+          scriptureText: targetBookmark.scriptureText,
+          quotedText: targetBookmark.quotedText,
         }
       : null;
 
@@ -129,6 +141,7 @@ export function DevotionalWebView({
         // we ensure exactly one header is present at the front.
         const allRanges = ${JSON.stringify(allSerializedRanges)};
         const targetHighlight = ${JSON.stringify(targetHighlightPayload)};
+        const targetBookmark = ${JSON.stringify(targetBookmarkPayload)};
         if (allRanges.length > 0) {
           var typeHeader = 'type:textContent';
           var dataEntriesSet = {};
@@ -169,6 +182,9 @@ export function DevotionalWebView({
         setTimeout(locateTargetHighlight, 150);
         setTimeout(locateTargetHighlight, 500);
         setTimeout(locateTargetHighlight, 1000);
+        setTimeout(locateTargetBookmark, 150);
+        setTimeout(locateTargetBookmark, 500);
+        setTimeout(locateTargetBookmark, 1000);
       }
       
       function reportHeight() {
@@ -285,10 +301,45 @@ export function DevotionalWebView({
           );
 
           const node = walker.nextNode();
-          return node && node.parentElement ? node.parentElement : null;
+          if (node && node.parentElement) return node.parentElement;
+
+          const candidates = Array.from(document.querySelectorAll('mark, blockquote, .context-box, .word-study-box, p, cite'));
+          for (var i = 0; i < candidates.length; i++) {
+            const el = candidates[i];
+            if (el.closest && el.closest('#highlight-toolbar')) continue;
+            const text = normalizeText(el.textContent);
+            if (!text) continue;
+            if (text.indexOf(targetText) >= 0 || targetText.indexOf(text) >= 0) return el;
+          }
+          return null;
         } catch (_) {
           return null;
         }
+      }
+
+      function getBookmarkTargetText(bookmark) {
+        if (!bookmark) return '';
+        return normalizeText(bookmark.quotedText || bookmark.scriptureText);
+      }
+
+      function locateTargetBookmark() {
+        if (!targetBookmark) return;
+        const targetText = getBookmarkTargetText(targetBookmark);
+        if (!targetText) return;
+
+        let best = locateTargetTextFallback(targetText);
+        if (!best) return;
+        best.classList.add('target-highlight-flash');
+        setTimeout(function() {
+          best.classList.remove('target-highlight-flash');
+        }, 1800);
+
+        const rect = best.getBoundingClientRect();
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'TARGET_BOOKMARK_LOCATED',
+          bookmarkId: targetBookmark.id,
+          y: rect.top + window.scrollY,
+        }));
       }
       
       // Initialize on load
@@ -832,7 +883,7 @@ export function DevotionalWebView({
 
       true;
     `;
-  }, [existingHighlights, isDark, targetHighlight]);
+  }, [existingHighlights, isDark, targetHighlight, targetBookmark]);
 
   // Generate HTML with exact typography matching
   const htmlContent = useMemo(() => {
@@ -1357,6 +1408,8 @@ export function DevotionalWebView({
         setWebViewHeight(Math.max(data.height, 200));
       } else if (data.type === 'TARGET_HIGHLIGHT_LOCATED' && onTargetHighlightLocated) {
         onTargetHighlightLocated(Math.max(0, Number(data.y) || 0));
+      } else if (data.type === 'TARGET_BOOKMARK_LOCATED' && onTargetBookmarkLocated) {
+        onTargetBookmarkLocated(Math.max(0, Number(data.y) || 0));
       } else if (data.type === 'HAPTIC_SELECTION') {
         Haptics.selectionAsync();
       } else if (data.type === 'HAPTIC_IMPACT') {

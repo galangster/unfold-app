@@ -34,7 +34,7 @@ import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
-import type { FontSize as FontSizePreference, Highlight } from '@/lib/store';
+import type { FontSize as FontSizePreference, Highlight, Bookmark } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
@@ -101,7 +101,7 @@ function ReadingProgressBar({ progress, accentColor }: { progress: SharedValue<n
 export default function ReadingScreen() {
   console.log('[Reading] RENDER CALLED');
   const router = useRouter();
-  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string }>();
+  const params = useLocalSearchParams<{ dayNumber?: string; devotionalId?: string; highlightId?: string; bookmarkId?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -281,6 +281,14 @@ export default function ReadingScreen() {
     if (match.devotionalId !== effectiveDevotionalId || match.dayNumber !== viewingDay) return null;
     return match;
   }, [highlights, params.highlightId, effectiveDevotionalId, viewingDay]);
+
+  const targetBookmark = useMemo<Bookmark | null>(() => {
+    if (!params.bookmarkId || !effectiveDevotionalId) return null;
+    const match = bookmarks.find((b) => b.id === params.bookmarkId);
+    if (!match) return null;
+    if (match.devotionalId !== effectiveDevotionalId || match.dayNumber !== viewingDay) return null;
+    return match;
+  }, [bookmarks, params.bookmarkId, effectiveDevotionalId, viewingDay]);
 
   const handleTargetHighlightLocated = useCallback((contentY: number) => {
     const y = Math.max(0, contentY - 96);
@@ -1755,6 +1763,8 @@ export default function ReadingScreen() {
                 existingHighlights={currentDayHighlights}
                 targetHighlight={targetHighlight}
                 onTargetHighlightLocated={handleTargetHighlightLocated}
+                targetBookmark={targetBookmark}
+                onTargetBookmarkLocated={handleTargetHighlightLocated}
                 scrollViewRef={scrollViewRef}
                 onScriptureTap={(ref) => {
                   const parsed = referenceToRoute(ref);
