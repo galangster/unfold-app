@@ -267,4 +267,42 @@ describe('dismissible Today/Home surfaces', () => {
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the Today premium nudge card with shared frosted glass on iOS', () => {
+    const { Platform } = require('react-native');
+    const tree = renderInAct(
+      <PremiumNudgeCard
+        type="audio_teaser"
+        message="Let today be read aloud."
+        cta="Try audio"
+        premiumFeature="audio"
+        onAction={jest.fn()}
+        onDismiss={jest.fn()}
+      />,
+    );
+
+    const blurLayers = tree.root.findAll((node: any) => node.props.testID === 'premium-nudge-glass-blur');
+    if (Platform.OS === 'ios') {
+      expect(blurLayers.length).toBeGreaterThan(0);
+    } else {
+      expect(blurLayers).toHaveLength(0);
+    }
+  });
+
+  it('keeps the premium nudge banner variant out of the floating Today glass treatment', () => {
+    const tree = renderInAct(
+      <PremiumNudgeCard
+        type="audio_teaser"
+        message="Let today be read aloud."
+        cta="Try audio"
+        premiumFeature="audio"
+        onAction={jest.fn()}
+        onDismiss={jest.fn()}
+        variant="banner"
+      />,
+    );
+
+    const blurLayers = tree.root.findAll((node: any) => node.props.testID === 'premium-nudge-glass-blur');
+    expect(blurLayers).toHaveLength(0);
+  });
 });

@@ -8,7 +8,8 @@
 
 import { useCallback, useState } from 'react';
 import type { ComponentType } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, { FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -99,7 +100,7 @@ export function PremiumNudgeCard({
   onDismiss,
   variant = 'card',
 }: PremiumNudgeCardProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { width, fontScale } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const [dismissed, setDismissed] = useState(false);
@@ -109,6 +110,12 @@ export function PremiumNudgeCard({
   const tone = getNudgeTone(type);
   const isBanner = variant === 'banner';
   const useCompactLayout = !isBanner && (width < 400 || fontScale >= 1.18);
+  const glassBackground = isBanner
+    ? alpha(colors.backgroundElevated, 0.5)
+    : Platform.OS === 'ios'
+      ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+      : alpha(colors.backgroundElevated, 0.9);
+  const glassBorder = alpha(colors.accent, isBanner ? 0.1 : 0.25);
 
   const handleDismiss = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -141,12 +148,20 @@ export function PremiumNudgeCard({
           isBanner && styles.bannerContainer,
           useCompactLayout && styles.containerCompact,
           {
-            backgroundColor: alpha(colors.backgroundElevated, isBanner ? 0.5 : 0.66),
-            borderColor: alpha(colors.accent, isBanner ? 0.1 : 0.14),
+            backgroundColor: glassBackground,
+            borderColor: glassBorder,
             shadowColor: colors.accent,
           },
         ]}
       >
+        {!isBanner && Platform.OS === 'ios' ? (
+          <BlurView
+            intensity={isDark ? 28 : 18}
+            tint={isDark ? 'dark' : 'light'}
+            testID="premium-nudge-glass-blur"
+            style={[StyleSheet.absoluteFill, styles.glassBlur]}
+          />
+        ) : null}
         <View style={styles.headerRow}>
           <View style={[styles.iconContainer, { backgroundColor: alpha(colors.accent, 0.11), borderColor: alpha(colors.accent, 0.18) }]}>
             <IconComponent size={18} color={colors.accent} weight="light" />
@@ -222,6 +237,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 22,
     elevation: 4,
+  },
+  glassBlur: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
   },
   bannerContainer: {
     borderRadius: 0,
