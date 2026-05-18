@@ -103,6 +103,9 @@ export function DevotionalWebView({
       : null;
 
     return `
+      const targetHighlight = ${JSON.stringify(targetHighlightPayload)};
+      const targetBookmark = ${JSON.stringify(targetBookmarkPayload)};
+
       // Wait for rangy to load (loaded from CDN in HTML head)
       function initRangy() {
         if (typeof rangy === 'undefined') {
@@ -140,8 +143,6 @@ export function DevotionalWebView({
         // Each stored range may or may not include the "type:textContent" header;
         // we ensure exactly one header is present at the front.
         const allRanges = ${JSON.stringify(allSerializedRanges)};
-        const targetHighlight = ${JSON.stringify(targetHighlightPayload)};
-        const targetBookmark = ${JSON.stringify(targetBookmarkPayload)};
         if (allRanges.length > 0) {
           var typeHeader = 'type:textContent';
           var dataEntriesSet = {};
@@ -1385,6 +1386,15 @@ export function DevotionalWebView({
     `;
   }, [day, fontSize, colors, isDark, readingFont]);
 
+  const webViewTargetKey = useMemo(() => [
+    'devotional-webview',
+    day.dayNumber,
+    fontSize,
+    isDark ? 'dark' : 'light',
+    targetHighlight?.id ?? 'no-highlight',
+    targetBookmark?.id ?? 'no-bookmark',
+  ].join(':'), [day.dayNumber, fontSize, isDark, targetHighlight?.id, targetBookmark?.id]);
+
   const handleMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -1461,6 +1471,8 @@ export function DevotionalWebView({
   return (
     <View style={styles.container}>
       <WebView
+        key={webViewTargetKey}
+        testID={webViewTargetKey}
         ref={webViewRef}
         source={{ html: htmlContent }}
         style={[styles.webview, { height: webViewHeight }]}

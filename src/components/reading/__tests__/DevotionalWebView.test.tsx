@@ -142,6 +142,51 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).not.toContain('top = safeInset;');
   });
 
+  it('keeps target payloads in locator scope so delayed My Library landing callbacks can see them', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={targetHighlight} targetBookmark={targetBookmark} existingHighlights={[]} />,
+      );
+    });
+
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+    const initIndex = script.indexOf('function initRangy()');
+    const targetHighlightIndex = script.indexOf('const targetHighlight =');
+    const targetBookmarkIndex = script.indexOf('const targetBookmark =');
+    const locatorIndex = script.indexOf('function locateTargetHighlight()');
+
+    expect(targetHighlightIndex).toBeGreaterThanOrEqual(0);
+    expect(targetBookmarkIndex).toBeGreaterThanOrEqual(0);
+    expect(initIndex).toBeGreaterThanOrEqual(0);
+    expect(locatorIndex).toBeGreaterThan(initIndex);
+    expect(targetHighlightIndex).toBeLessThan(initIndex);
+    expect(targetBookmarkIndex).toBeLessThan(initIndex);
+  });
+
+  it('remounts the WebView when My Library target ids change so the injected locator reruns', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={null} targetBookmark={null} existingHighlights={[]} />,
+      );
+    });
+
+    const initialWebView = tree.root.findByType('WebView');
+    const initialTestID = initialWebView.props.testID;
+
+    act(() => {
+      tree.update(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={targetHighlight} targetBookmark={targetBookmark} existingHighlights={[]} />,
+      );
+    });
+
+    const targetedWebView = tree.root.findByType('WebView');
+    expect(targetedWebView.props.testID).toContain('highlight-1');
+    expect(targetedWebView.props.testID).toContain('bookmark-1');
+    expect(targetedWebView.props.testID).not.toBe(initialTestID);
+  });
+
   it('falls back to locating saved highlight text when no restored mark is available', () => {
     let tree: any;
     act(() => {
