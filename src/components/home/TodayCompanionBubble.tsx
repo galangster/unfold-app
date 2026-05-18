@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   LayoutChangeEvent,
+  Platform,
   StyleProp,
   StyleSheet,
   Text,
@@ -8,6 +9,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Svg, { Path } from 'react-native-svg';
 import { ArrowRightIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
@@ -19,6 +21,7 @@ import { alpha } from '@/components/ui';
 import { buildBubblePath } from '@/lib/bubble-path';
 import { DismissCircleButton } from '@/components/home/DismissCircleButton';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
+import { useTheme } from '@/lib/theme';
 import type { ColorTheme } from '@/constants/colors';
 
 interface Props {
@@ -67,9 +70,13 @@ export function TodayCompanionBubble({
   dismissAccessibilityLabel,
   dismissAccessibilityHint,
 }: Props) {
+  const { isDark } = useTheme();
   const [bubbleSize, setBubbleSize] = React.useState({ width: 0, height: 0 });
-  const bubbleColor = alpha(accentColor, 0.06);
-  const bubbleBorder = alpha(accentColor, 0.13);
+  const bubbleColor = Platform.OS === 'ios'
+    ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+    : alpha(colors.backgroundElevated, 0.9);
+  const bubbleBorder = alpha(accentColor, 0.25);
+  const blurIntensity = isDark ? 28 : 18;
   const bubblePath = React.useMemo(
     () =>
       bubbleSize.width > 0 && bubbleSize.height > 0
@@ -115,6 +122,15 @@ export function TodayCompanionBubble({
 
   const bubbleContent = (
     <View style={[styles.bubble, onDismiss && styles.bubbleWithDismiss]} onLayout={handleBubbleLayout}>
+      {Platform.OS === 'ios' ? (
+        <View pointerEvents="none" testID="today-companion-glass-blur" style={styles.bubbleGlassClip}>
+          <BlurView
+            intensity={blurIntensity}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      ) : null}
       {bubblePath ? (
         <Svg
           pointerEvents="none"
@@ -241,6 +257,14 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['3.5'],
+  },
+  bubbleGlassClip: {
+    ...StyleSheet.absoluteFillObject,
+    borderTopLeftRadius: BUBBLE_RADIUS.topLeft,
+    borderTopRightRadius: BUBBLE_RADIUS.topRight,
+    borderBottomRightRadius: BUBBLE_RADIUS.bottomRight,
+    borderBottomLeftRadius: BUBBLE_RADIUS.bottomLeft,
+    overflow: 'hidden',
   },
   bubbleWithDismiss: {
     paddingRight: Spacing['10'],

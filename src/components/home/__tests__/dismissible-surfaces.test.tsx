@@ -222,6 +222,25 @@ describe('dismissible Today/Home surfaces', () => {
     expect(expected).toHaveBeenCalledTimes(1);
   });
 
+  it('renders the companion check-in with the shared frosted glass blur layer on iOS', () => {
+    const { Platform } = require('react-native');
+    const tree = renderInAct(
+      <ContextSlot
+        colors={testColors}
+        slotType="midday"
+        onMiddayPress={jest.fn()}
+        middayMessage="Where are you being called to remain faithful today?"
+      />,
+    );
+
+    const blurLayers = tree.root.findAll((node: any) => node.props.testID === 'today-companion-glass-blur');
+    if (Platform.OS === 'ios') {
+      expect(blurLayers.length).toBeGreaterThan(0);
+    } else {
+      expect(blurLayers).toHaveLength(0);
+    }
+  });
+
   it('hides the saved echo for today when its circled X is tapped', () => {
     const tree = renderInAct(<RememberThisCard />);
 
