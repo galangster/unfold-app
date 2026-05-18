@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Alignment,
-  DataBindByName,
   DataBindMode,
   Fit,
   RiveView,
@@ -111,18 +110,22 @@ export function TodayAmbientRive({
   stateMachineName = 'State Machine 1',
 }: TodayAmbientRiveProps) {
   const { riveFile, error: riveFileError } = useRiveFile(source);
-  const shouldBindParticleControls = mode === 'light-rays';
+  const logPrefix = `today-${mode}-rive`;
   const { instance: particleControlsInstance, error: particleControlsError } = useViewModelInstance(
     riveFile,
-    shouldBindParticleControls ? { viewModelName: 'ParticleControls' } : undefined,
+    mode === 'light-rays'
+      ? {
+          viewModelName: 'ParticleControls',
+          onInit: (instance) => {
+            if (inputs) {
+              applyViewModelNumberInputs(instance, inputs, logPrefix);
+            }
+          },
+        }
+      : undefined,
   );
   const { riveViewRef, setHybridRef } = useRive();
-  const particleControlsDataBind = useMemo(
-    () => (shouldBindParticleControls ? new DataBindByName('ParticleControls') : DataBindMode.Auto),
-    [shouldBindParticleControls],
-  );
   const loopProgress = useRef(new Animated.Value(0)).current;
-  const logPrefix = `today-${mode}-rive`;
 
   const inputSignature = useMemo(() => (
     inputs
@@ -238,7 +241,7 @@ export function TodayAmbientRive({
           file={riveFile}
           artboardName={artboardName}
           stateMachineName={stateMachineName}
-          dataBind={particleControlsInstance ?? particleControlsDataBind}
+          dataBind={particleControlsInstance ?? DataBindMode.Auto}
           autoPlay={false}
           fit={surfaceFit}
           alignment={Alignment.Center}
