@@ -326,27 +326,34 @@ export function DevotionalWebView({
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
 
-        // Strategy: keep the toolbar in the opposite safe band from where iOS
-        // puts its native Copy/Look Up/Translate callout. Anchoring near the
-        // selection was still close enough for the native menu to cover our
-        // controls on tall first-paragraph selections, so use viewport bands.
+        // IMPORTANT: this WebView is not the scroller. It is height-sized to the
+        // full devotional body and the React Native parent ScrollView scrolls it.
+        // So window.innerHeight is effectively the full WebView/document height,
+        // not the visible phone viewport. Parking the picker in viewport bands
+        // sends it to the top/bottom of the entire article, off screen. Anchor it
+        // back near the selected text, which is how the working picker behaved.
         var vh = window.innerHeight;
-        var toolbarHeight = 52;
-        var safeInset = 14;
+        var scrollY = window.scrollY || window.pageYOffset || 0;
         var nativeCalloutBelow = rect.top < vh * 0.35;
 
         var top;
         if (nativeCalloutBelow) {
-          // Native menu goes below the selection — park ours in the lower band.
-          top = vh - toolbarHeight - safeInset;
+          // Native menu tends to go below this selection; put our picker above.
+          top = rect.top + scrollY - 60;
+          if (top < scrollY + 10) {
+            // Not enough room above; push below the selection and native menu.
+            top = rect.bottom + scrollY + 90;
+          }
         } else {
-          // Native menu goes above the selection — park ours in the upper band.
-          top = safeInset;
+          // Native menu tends to go above this selection; put ours below.
+          top = rect.bottom + scrollY + 20;
+          if (top > scrollY + vh - 60) top = rect.top + scrollY - 60;
         }
 
-        // Final clamp so the toolbar never leaves the viewport
-        if (top < safeInset) top = safeInset;
-        if (top > vh - toolbarHeight - safeInset) top = vh - toolbarHeight - safeInset;
+        // Clamp inside the document, not into viewport safe bands.
+        var maxTop = Math.max(10, document.body.scrollHeight - 60);
+        if (top < 10) top = 10;
+        if (top > maxTop) top = maxTop;
 
         toolbar.style.top = top + 'px';
         // Left centering handled by CSS (left:50% + margin-left)
@@ -1223,7 +1230,7 @@ export function DevotionalWebView({
 
     /* Highlight toolbar */
     #highlight-toolbar {
-      position: fixed;
+      position: absolute;
       background: ${isDark ? '#2a2a2a' : '#ffffff'};
       border-radius: 24px;
       padding: 8px 12px;

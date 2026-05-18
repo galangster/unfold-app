@@ -104,6 +104,27 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(html).toMatch(/#highlight-toolbar\s*\{[^}]*-webkit-touch-callout:\s*none/);
   });
 
+  it('anchors the custom picker near the selected text instead of the WebView document edges', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={targetHighlight} existingHighlights={[targetHighlight]} />,
+      );
+    });
+
+    const html = getWebViewProps(tree).source.html as string;
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+
+    // The WebView is height-sized to the article while the RN parent scrolls.
+    // A fixed viewport-band toolbar parks at the top/bottom of the entire
+    // document, which is off-screen after the user scrolls into the article.
+    expect(html).toMatch(/#highlight-toolbar\s*\{[^}]*position:\s*absolute/);
+    expect(script).toContain('top = rect.top + scrollY - 60;');
+    expect(script).toContain('top = rect.bottom + scrollY + 20;');
+    expect(script).not.toContain('top = vh - toolbarHeight - safeInset;');
+    expect(script).not.toContain('top = safeInset;');
+  });
+
   it('falls back to locating saved highlight text when no restored mark is available', () => {
     let tree: any;
     act(() => {
