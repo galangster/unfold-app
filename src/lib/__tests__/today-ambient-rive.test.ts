@@ -7,9 +7,12 @@ import {
 } from '../today-ambient-rive';
 
 describe('today ambient Rive mapping', () => {
-  it('keeps Today ambient quiet until the day is complete', () => {
+  it('keeps Today ambient quiet before reveal or completion', () => {
     expect(getTodayAmbientMode({ stateType: 'unread', hasReadToday: false })).toBe('none');
-    expect(getTodayAmbientMode({ stateType: 'reveal-ready', hasReadToday: false })).toBe('none');
+  });
+
+  it('uses accent-colored light rays for reveal-ready states', () => {
+    expect(getTodayAmbientMode({ stateType: 'reveal-ready', hasReadToday: false })).toBe('light-rays');
   });
 
   it('uses rain particles for completed/tomorrow rest states', () => {
@@ -37,14 +40,18 @@ describe('today ambient Rive mapping', () => {
     expect(hexToRiveRgb('#abc')).toEqual({ r: 170 / 255, g: 187 / 255, b: 204 / 255 });
   });
 
-  it('keeps bundled Rive loops self-contained until runtime color inputs exist', () => {
+  it('maps light-ray accent controls while keeping old loops self-contained', () => {
     expect(getTodayAmbientRiveInputs({
       mode: 'light-rays',
       stateType: 'reveal-ready',
       accent: '#d6a84f',
       width: 390.4,
       height: 843.6,
-    })).toEqual({});
+    })).toEqual({
+      accentR: 214 / 255,
+      accentG: 168 / 255,
+      accentB: 79 / 255,
+    });
 
     expect(getTodayAmbientRiveInputs({
       mode: 'rain-particles',

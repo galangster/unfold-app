@@ -44,6 +44,10 @@ export function getTodayAmbientMode({
   stateType,
   hasReadToday,
 }: TodayAmbientModeInput): TodayAmbientMode {
+  if (!hasReadToday && stateType === 'reveal-ready') {
+    return 'light-rays';
+  }
+
   if (hasReadToday && (
     stateType === 'complete-today'
     || stateType === 'tomorrow-locked'
@@ -78,6 +82,7 @@ export function hexToRiveRgb(hex: string): RgbColor {
 
 export function getTodayAmbientRiveInputs({
   mode,
+  accent,
 }: {
   mode: TodayAmbientMode;
   stateType: TodayAmbientStateType;
@@ -89,12 +94,19 @@ export function getTodayAmbientRiveInputs({
     return null;
   }
 
-  // Current bundled .riv files play correctly as self-contained white ambient
-  // loops, but their apparent `accentR/G/B` strings are not exposed as runtime
-  // state-machine inputs in React Native. Until the animator returns updated
-  // files with real color controls, pass no numeric inputs so the runtime stays
-  // warning-free and the animation remains intentionally white.
-  return {};
+  if (mode !== 'light-rays') {
+    // Wind/rain assets are still authored as self-contained loops. Keep their
+    // runtime contract empty until those .riv files expose the same inputs.
+    return {};
+  }
+
+  const rgb = hexToRiveRgb(accent);
+
+  return {
+    accentR: rgb.r,
+    accentG: rgb.g,
+    accentB: rgb.b,
+  };
 }
 
 export function getTodayLightRayInputs({
