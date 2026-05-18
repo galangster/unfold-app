@@ -40,13 +40,14 @@ interface DevotionalWebViewProps {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_PADDING = 24;
 
-// Color definitions for highlights
+// Color definitions for saved highlights. Match the Bible reader semantics:
+// light mode uses a marker-style background; dark mode uses vibrant text color.
 const HIGHLIGHT_COLORS = {
-  yellow: { light: 'rgba(240, 200, 80, 0.30)', dark: 'rgba(200, 165, 92, 0.22)' },
-  green: { light: 'rgba(107, 191, 123, 0.25)', dark: 'rgba(100, 200, 100, 0.18)' },
-  blue: { light: 'rgba(107, 163, 214, 0.25)', dark: 'rgba(100, 150, 255, 0.18)' },
-  purple: { light: 'rgba(168, 116, 192, 0.25)', dark: 'rgba(180, 100, 200, 0.18)' },
-  red: { light: 'rgba(232, 112, 112, 0.25)', dark: 'rgba(255, 100, 100, 0.18)' },
+  yellow: { light: 'rgba(255, 245, 112, 0.58)', textDark: '#FFE86A' },
+  green: { light: 'rgba(190, 244, 128, 0.5)', textDark: '#5CFF63' },
+  blue: { light: 'rgba(170, 220, 255, 0.46)', textDark: '#77B7FF' },
+  purple: { light: 'rgba(214, 188, 255, 0.44)', textDark: '#D7A8FF' },
+  red: { light: 'rgba(255, 190, 190, 0.46)', textDark: '#FF7A7A' },
 };
 
 export function DevotionalWebView({
@@ -107,11 +108,12 @@ export function DevotionalWebView({
         const isDark = ${isDark};
 
         Object.keys(colorConfigs).forEach(color => {
-          const bgColor = isDark ? colorConfigs[color].dark : colorConfigs[color].light;
+          const highlightBackground = isDark ? 'transparent' : colorConfigs[color].light;
+          const highlightTextColor = isDark ? colorConfigs[color].textDark : 'inherit';
           const applier = rangy.createClassApplier('rangy-highlight-' + color, {
             elementTagName: 'mark',
             elementProperties: {
-              style: 'background: ' + bgColor + '; color: inherit; padding: 0; border-radius: 2px;',
+              style: 'background: ' + highlightBackground + '; color: ' + highlightTextColor + '; padding: 0; border-radius: 2px;',
               className: 'highlight-' + color
             }
           });
@@ -1055,11 +1057,11 @@ export function DevotionalWebView({
       border-radius: 2px;
     }
     
-    mark.highlight-yellow { background: ${HIGHLIGHT_COLORS.yellow[isDark ? 'dark' : 'light']}; }
-    mark.highlight-green { background: ${HIGHLIGHT_COLORS.green[isDark ? 'dark' : 'light']}; }
-    mark.highlight-blue { background: ${HIGHLIGHT_COLORS.blue[isDark ? 'dark' : 'light']}; }
-    mark.highlight-purple { background: ${HIGHLIGHT_COLORS.purple[isDark ? 'dark' : 'light']}; }
-    mark.highlight-red { background: ${HIGHLIGHT_COLORS.red[isDark ? 'dark' : 'light']}; }
+    mark.highlight-yellow { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.yellow.light}; color: ${isDark ? HIGHLIGHT_COLORS.yellow.textDark : 'inherit'}; }
+    mark.highlight-green { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.green.light}; color: ${isDark ? HIGHLIGHT_COLORS.green.textDark : 'inherit'}; }
+    mark.highlight-blue { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.blue.light}; color: ${isDark ? HIGHLIGHT_COLORS.blue.textDark : 'inherit'}; }
+    mark.highlight-purple { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.purple.light}; color: ${isDark ? HIGHLIGHT_COLORS.purple.textDark : 'inherit'}; }
+    mark.highlight-red { background: ${isDark ? 'transparent' : HIGHLIGHT_COLORS.red.light}; color: ${isDark ? HIGHLIGHT_COLORS.red.textDark : 'inherit'}; }
 
     .target-highlight-flash {
       animation: targetHighlightFlash 1.8s ease-out;

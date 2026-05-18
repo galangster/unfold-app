@@ -7,6 +7,8 @@ import type { DevotionalDay, Highlight } from '@/lib/store';
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
+let mockIsDark = false;
+
 jest.mock('react-native-webview', () => ({
   WebView: 'WebView',
 }));
@@ -22,7 +24,7 @@ jest.mock('@/lib/theme', () => ({
     colors: {
       accent: '#C8A55C',
     },
-    isDark: false,
+    isDark: mockIsDark,
   }),
 }));
 
@@ -70,6 +72,10 @@ function getWebViewProps(tree: any) {
 }
 
 describe('DevotionalWebView highlight interactions', () => {
+  beforeEach(() => {
+    mockIsDark = false;
+  });
+
   it('refreshes injected highlight-location script when targetHighlight appears after route state settles', () => {
     let tree: any;
     act(() => {
@@ -138,5 +144,42 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).toContain('best = locateTargetTextFallback(targetText);');
     expect(script).toContain("type: 'TARGET_HIGHLIGHT_LOCATED'");
     expect(script).toContain('Grace meets you');
+  });
+
+  it('uses Bible-style saved highlights in light mode with a marker background', () => {
+    mockIsDark = false;
+
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={targetHighlight} existingHighlights={[targetHighlight]} />,
+      );
+    });
+
+    const html = getWebViewProps(tree).source.html as string;
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+
+    expect(html).toContain('mark.highlight-yellow { background: rgba(255, 245, 112, 0.58); color: inherit;');
+    expect(script).toContain("style: 'background: ' + highlightBackground + '; color: ' + highlightTextColor +");
+    expect(script).toContain("const highlightTextColor = isDark ? colorConfigs[color].textDark : 'inherit';");
+  });
+
+  it('uses Bible-style saved highlights in dark mode with vibrant text instead of a block', () => {
+    mockIsDark = true;
+
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView day={day} fontSize="medium" targetHighlight={targetHighlight} existingHighlights={[targetHighlight]} />,
+      );
+    });
+
+    const html = getWebViewProps(tree).source.html as string;
+    const script = getWebViewProps(tree).injectedJavaScript as string;
+
+    expect(html).toContain('mark.highlight-yellow { background: transparent; color: #FFE86A;');
+    expect(script).toContain("const highlightBackground = isDark ? 'transparent' : colorConfigs[color].light;");
+    expect(script).toContain("const highlightTextColor = isDark ? colorConfigs[color].textDark : 'inherit';");
+    expect(script).not.toContain("dark: 'rgba(200, 165, 92, 0.22)'");
   });
 });
