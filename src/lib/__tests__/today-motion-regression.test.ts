@@ -16,6 +16,7 @@ describe('Today tab motion guardrails', () => {
   const devotionalCardSource = readSource('components/home/DevotionalCard.tsx');
   const contextSlotSource = readSource('components/home/ContextSlot.tsx');
   const dailyBridgeCardSource = readSource('components/home/DailyBridgeCard.tsx');
+  const todayCompanionBubbleSource = readSource('components/home/TodayCompanionBubble.tsx');
   const bridgeShimmerSource = readSource('components/home/BridgeShimmer.tsx');
   const notificationCardSource = readSource('components/home/NotificationCard.tsx');
   const rememberThisCardSource = readSource('components/home/RememberThisCard.tsx');
@@ -103,16 +104,23 @@ describe('Today tab motion guardrails', () => {
     expect(rememberThisIndex).toBeGreaterThan(contextZoneIndex);
     expect(heroZoneIndex).toBeGreaterThan(rememberThisIndex);
 
-    expect(dailyBridgeCardSource).toContain('CompanionOrb');
-    expect(dailyBridgeCardSource).toContain('styles.bubble');
-    expect(dailyBridgeCardSource).toContain('Companion says:');
+    expect(dailyBridgeCardSource).toContain('TodayCompanionBubble');
+    expect(todayCompanionBubbleSource).toContain('CompanionOrb');
+    expect(todayCompanionBubbleSource).toContain('styles.bubble');
+    expect(todayCompanionBubbleSource).toContain('Companion says:');
     expect(dailyBridgeCardSource).not.toContain('Companion bridge');
+    expect(todayCompanionBubbleSource).not.toContain('Companion bridge');
     expect(dailyBridgeCardSource).not.toContain('A small thread from yesterday into today');
+    expect(todayCompanionBubbleSource).not.toContain('A small thread from yesterday into today');
     expect(dailyBridgeCardSource).not.toContain('Shadow');
+    expect(todayCompanionBubbleSource).not.toContain('Shadow');
 
-    expect(bridgeShimmerSource).toContain('styles.bubble');
+    expect(bridgeShimmerSource).toContain('TodayCompanionBubble');
+    expect(todayCompanionBubbleSource).toContain('styles.bubble');
     expect(bridgeShimmerSource).not.toContain('Companion bridge');
+    expect(todayCompanionBubbleSource).not.toContain('Companion bridge');
     expect(bridgeShimmerSource).not.toContain('Shadow');
+    expect(todayCompanionBubbleSource).not.toContain('Shadow');
 
     expect(revealSource).toContain('styles.revealOpenHero');
     expect(revealSource).not.toContain('styles.revealCard');
