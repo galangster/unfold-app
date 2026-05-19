@@ -7,10 +7,12 @@ import todayLightRaysSource from '../../../assets/rive/today-light-rays.riv';
 import todayRainParticlesSource from '../../../assets/rive/today-rain-particles.riv';
 import todayWindParticlesSource from '../../../assets/rive/today-wind-particles.riv';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { EmberAtlas } from '@/components/home/EmberAtlas';
 import { TodayAmbientRive } from '@/components/home/TodayAmbientRive';
 import {
   getTodayAmbientMode,
   getTodayAmbientRiveInputs,
+  shouldShowCompletedEmberAmbience,
   type TodayAmbientMode,
   type TodayAmbientStateType,
 } from '@/lib/today-ambient-rive';
@@ -20,8 +22,9 @@ import {
 // ---------------------------------------------------------------------------
 // Skia shaders (concentric rings + organic noise) removed — they were
 // invisible in practice but consumed ~25% CPU from continuous GPU rendering
-// and a rotation sensor. Today now owns one ambient slot at a time: wind for
-// unread, light rays for reveal-ready, and rain for completed/rest states.
+// and a rotation sensor. Today now keeps Rive motion out of pre-completion
+// states. Completed/rest states use the older looping EmberAtlas treatment plus
+// the screen-level gradient glow, avoiding the rain asset's ripple-like look.
 // ---------------------------------------------------------------------------
 
 const TODAY_RIVE_SOURCES = {
@@ -51,6 +54,7 @@ function useIsAppActive(): boolean {
 }
 
 export function AmbientArtCanvas({
+  streakLevel,
   hasReadToday,
   stateType,
   accentColor,
@@ -63,6 +67,7 @@ export function AmbientArtCanvas({
 
   const active = screenFocused && isAppActive && !lowPowerMode && !reducedMotion;
   const mode = getTodayAmbientMode({ stateType, hasReadToday });
+  const showCompletedEmbers = shouldShowCompletedEmberAmbience({ stateType, hasReadToday });
   const riveInputs = useMemo(() => getTodayAmbientRiveInputs({
     mode,
     stateType,
@@ -71,7 +76,13 @@ export function AmbientArtCanvas({
     height,
   }), [accentColor, height, mode, stateType, width]);
 
-  if (!active || mode === 'none') return null;
+  if (!active) return null;
+
+  if (showCompletedEmbers) {
+    return <EmberAtlas streakLevel={streakLevel} active />;
+  }
+
+  if (mode === 'none') return null;
 
   return (
     <TodayAmbientRive

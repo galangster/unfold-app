@@ -40,27 +40,29 @@ export interface TodayAmbientRiveInputs {
   centerMaskSoftness?: number;
 }
 
-export function getTodayAmbientMode({
-  stateType,
-  hasReadToday,
-}: TodayAmbientModeInput): TodayAmbientMode {
-  if (!hasReadToday && stateType === 'reveal-ready') {
-    return 'light-rays';
-  }
-
-  if (hasReadToday && (
-    stateType === 'complete-today'
-    || stateType === 'tomorrow-locked'
-    || stateType === 'journey-complete'
-  )) {
-    return 'rain-particles';
-  }
-
+export function getTodayAmbientMode(_input: TodayAmbientModeInput): TodayAmbientMode {
+  // Today-tab Rive motion is intentionally not state-driven before completion.
+  // Reveal-ready light rays were a regression: the reveal affordance can exist
+  // before the user finishes the day, while the product rule says Today motion
+  // should unlock only after completion. Completed/rest ambience is rendered by
+  // the native EmberAtlas layer instead of the rain Rive loop, whose asset reads
+  // visually as ripples.
   return 'none';
 }
 
-export function shouldShowCompletedBottomGlow({ hasReadToday }: CompletedBottomGlowInput): boolean {
-  return hasReadToday;
+export function shouldShowCompletedEmberAmbience({
+  stateType,
+  hasReadToday,
+}: CompletedBottomGlowInput): boolean {
+  return hasReadToday && (
+    stateType === 'complete-today'
+    || stateType === 'tomorrow-locked'
+    || stateType === 'journey-complete'
+  );
+}
+
+export function shouldShowCompletedBottomGlow(input: CompletedBottomGlowInput): boolean {
+  return shouldShowCompletedEmberAmbience(input);
 }
 
 export function hexToRiveRgb(hex: string): RgbColor {

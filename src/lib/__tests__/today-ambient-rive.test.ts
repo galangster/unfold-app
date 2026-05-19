@@ -3,22 +3,20 @@ import {
   getTodayAmbientRiveInputs,
   getTodayLightRayInputs,
   hexToRiveRgb,
+  shouldShowCompletedEmberAmbience,
   shouldShowCompletedBottomGlow,
 } from '../today-ambient-rive';
 
 describe('today ambient Rive mapping', () => {
-  it('keeps Today ambient quiet before reveal or completion', () => {
+  it('keeps Today Rive ambient quiet before completion, including reveal-ready', () => {
     expect(getTodayAmbientMode({ stateType: 'unread', hasReadToday: false })).toBe('none');
+    expect(getTodayAmbientMode({ stateType: 'reveal-ready', hasReadToday: false })).toBe('none');
   });
 
-  it('uses accent-colored light rays for reveal-ready states', () => {
-    expect(getTodayAmbientMode({ stateType: 'reveal-ready', hasReadToday: false })).toBe('light-rays');
-  });
-
-  it('uses rain particles for completed/tomorrow rest states', () => {
-    expect(getTodayAmbientMode({ stateType: 'complete-today', hasReadToday: true })).toBe('rain-particles');
-    expect(getTodayAmbientMode({ stateType: 'tomorrow-locked', hasReadToday: true })).toBe('rain-particles');
-    expect(getTodayAmbientMode({ stateType: 'journey-complete', hasReadToday: true })).toBe('rain-particles');
+  it('does not use the rain/ripple Rive loop for completed rest states', () => {
+    expect(getTodayAmbientMode({ stateType: 'complete-today', hasReadToday: true })).toBe('none');
+    expect(getTodayAmbientMode({ stateType: 'tomorrow-locked', hasReadToday: true })).toBe('none');
+    expect(getTodayAmbientMode({ stateType: 'journey-complete', hasReadToday: true })).toBe('none');
   });
 
   it('does not animate empty, preparing, premium-paused, or unread journey-complete states', () => {
@@ -28,10 +26,17 @@ describe('today ambient Rive mapping', () => {
     expect(getTodayAmbientMode({ stateType: 'journey-complete', hasReadToday: false })).toBe('none');
   });
 
-  it('shows the completed-day bottom glow whenever today has been read', () => {
+  it('shows completed embers and bottom glow only for completed/rest states', () => {
+    expect(shouldShowCompletedEmberAmbience({ stateType: 'complete-today', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedEmberAmbience({ stateType: 'tomorrow-locked', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedEmberAmbience({ stateType: 'journey-complete', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedEmberAmbience({ stateType: 'reveal-ready', hasReadToday: true })).toBe(false);
+    expect(shouldShowCompletedEmberAmbience({ stateType: 'unread', hasReadToday: false })).toBe(false);
+
     expect(shouldShowCompletedBottomGlow({ stateType: 'complete-today', hasReadToday: true })).toBe(true);
     expect(shouldShowCompletedBottomGlow({ stateType: 'tomorrow-locked', hasReadToday: true })).toBe(true);
     expect(shouldShowCompletedBottomGlow({ stateType: 'journey-complete', hasReadToday: true })).toBe(true);
+    expect(shouldShowCompletedBottomGlow({ stateType: 'reveal-ready', hasReadToday: true })).toBe(false);
     expect(shouldShowCompletedBottomGlow({ stateType: 'unread', hasReadToday: false })).toBe(false);
   });
 
