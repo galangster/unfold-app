@@ -119,12 +119,11 @@ export default function SampleDevotionalScreen() {
 
                 <Text
                   style={{
-                    fontFamily: FontFamily.mono,
+                    fontFamily: FontFamily.bodyItalic,
                     fontSize: FontSize.sm,
                     color: colors.textMuted,
                     lineHeight: 22,
                     marginBottom: Spacing['5'],
-                    fontStyle: 'italic',
                   }}
                 >
                   "{sample.passage}"

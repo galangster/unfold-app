@@ -134,7 +134,7 @@ export default function MyResponsesScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['3'] }}>
                           <Text
                             style={{
-                              fontFamily: FontFamily.mono,
+                              fontFamily: FontFamily.uiMedium,
                               fontSize: 11,
                               color: colors.textHint,
                               letterSpacing: 1,
@@ -145,7 +145,7 @@ export default function MyResponsesScreen() {
                           </Text>
                           <Text
                             style={{
-                              fontFamily: FontFamily.mono,
+                              fontFamily: FontFamily.uiMedium,
                               fontSize: 11,
                               color: colors.textHint,
                             }}

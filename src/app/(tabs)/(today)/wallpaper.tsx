@@ -314,7 +314,7 @@ export default function WallpaperScreen() {
                   </Text>
                   <Text
                     style={{
-                      fontFamily: FontFamily.mono,
+                      fontFamily: FontFamily.uiMedium,
                       fontSize: 7,
                       color: activeStyle.accentColor,
                       textAlign: 'center',

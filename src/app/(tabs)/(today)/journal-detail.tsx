@@ -138,7 +138,7 @@ export default function JournalDetailScreen() {
             >
               <Text
                 style={{
-                  fontFamily: FontFamily.mono,
+                  fontFamily: FontFamily.uiMedium,
                   fontSize: 10,
                   color: colors.accent,
                   letterSpacing: 1,
@@ -159,7 +159,7 @@ export default function JournalDetailScreen() {
             <View style={{ marginBottom: Spacing['6'] }}>
               <Text
                 style={{
-                  fontFamily: FontFamily.mono,
+                  fontFamily: FontFamily.uiMedium,
                   fontSize: 11,
                   color: colors.textHint,
                   letterSpacing: 1,
@@ -260,7 +260,7 @@ export default function JournalDetailScreen() {
                     <ChatCircleDotsIcon size={14} color={colors.accent} weight="light" />
                     <Text
                       style={{
-                        fontFamily: FontFamily.mono,
+                        fontFamily: FontFamily.uiMedium,
                         fontSize: 10,
                         color: colors.accent,
                         letterSpacing: 1.5,
@@ -318,7 +318,7 @@ export default function JournalDetailScreen() {
                   <HandsPrayingIcon size={14} color={colors.accent} weight="light" />
                   <Text
                     style={{
-                      fontFamily: FontFamily.mono,
+                      fontFamily: FontFamily.uiMedium,
                       fontSize: 10,
                       color: colors.accent,
                       letterSpacing: 1.5,

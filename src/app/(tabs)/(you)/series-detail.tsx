@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   dateLabel: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',

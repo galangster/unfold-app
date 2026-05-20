@@ -149,7 +149,7 @@ export default function DayMenuScreen() {
                 ) : (
                   <Text
                     style={{
-                      fontFamily: FontFamily.mono,
+                      fontFamily: FontFamily.uiMedium,
                       fontSize: FontSize.xs,
                       color: colors.textSubtle,
                     }}

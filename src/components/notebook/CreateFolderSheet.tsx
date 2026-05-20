@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['5'],
   },
   colorLabel: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 10,
     letterSpacing: 1,
     marginBottom: 10,
