@@ -38,6 +38,8 @@ import { Duration, Ease } from '@/constants/animations';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { RememberThisCard } from '@/components/home/RememberThisCard';
+import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
+import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
 import { pullDevotionalContent } from '@/lib/devotional-sync-pull';
 import { applyPulledDevotionalContent } from '@/lib/devotional-pulled-content';
@@ -65,10 +67,9 @@ const LABEL_TEXT_MAX_SCALE = 1.14;
 type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bridge' | 'bridge-loading'>;
 
 // Zone components
-import { getContextSlotType, type ContextSlotType } from '@/lib/context-slot-priority';
+import { type ContextSlotType } from '@/lib/context-slot-priority';
 import { computeDevotionalState, type ReflectionStatus } from '@/components/home/compute-devotional-state';
 import { DevotionalCard } from '@/components/home/DevotionalCard';
-import { ContextSlot } from '@/components/home/ContextSlot';
 import { GreetingRow } from '@/components/home/GreetingRow';
 import { BentoGrid } from '@/components/home/BentoGrid';
 import { SeriesCarousel } from '@/components/home/SeriesCarousel';
@@ -533,7 +534,7 @@ export default function HomeScreen() {
     setShowPremiumSheet(true);
   }, []);
 
-  const handleResume = () => {
+  const handleResume = useCallback(() => {
     if (!resumeContext || !resumeDevotional) return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -556,7 +557,7 @@ export default function HomeScreen() {
         dayNumber: String(resumeContext.dayNumber),
       },
     });
-  };
+  }, [resumeContext, resumeDevotional, router, setCurrentDevotional]);
 
   const openNewSeriesDiscovery = () => {
     router.push({
@@ -588,11 +589,11 @@ export default function HomeScreen() {
     }
   };
 
-  const handleCheckIn = () => {
+  const handleCheckIn = useCallback(() => {
     if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowCheckInSheet(true);
-  };
+  }, [gate]);
 
   const handleCheckInComplete = (data: {
     mood: MoodLevel;
@@ -621,7 +622,7 @@ export default function HomeScreen() {
     setShowCheckInSheet(false);
   };
 
-  const handleEveningWindDown = () => {
+  const handleEveningWindDown = useCallback(() => {
     if (!gate()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const targetDayNumber = getEveningWindDownDayNumber(currentDevotional);
@@ -636,7 +637,7 @@ export default function HomeScreen() {
       return;
     }
     router.push('/(tabs)/(today)/evening-wind-down');
-  };
+  }, [currentDevotional, gate, router]);
 
   // Check if midday/evening check-ins already completed for their target day.
   // Midday follows the currently readable day. Evening follows the day actually
@@ -778,48 +779,182 @@ export default function HomeScreen() {
   const validBridgeText = !hasDismissedBridgeCardToday && effectiveBridgeText && effectiveBridgeText.length > 20 && /[.!?…"']$/.test(effectiveBridgeText.trim())
     ? effectiveBridgeText
     : undefined;
-  const computedSlotType = getContextSlotType({
-    hasResumeContext: shouldShowResumeCard,
-    currentHour,
-    currentMinute,
-    hasDevotional: !!currentDevotional,
-    hasReadToday,
-    hasMiddayCheckIn: !!todayCheckIn || hasDismissedMiddayCardToday,
-    hasEveningCheckIn: !!todayEveningCheckIn || hasDismissedEveningCardToday,
-    hasBridgeText: !!validBridgeText,
-    isBridgeLoading: !hasDismissedBridgeCardToday && bridgeLoading && !!bridgeInput,
-    hasBridgeInput: !!bridgeInput,
-    isPremium,
-  });
-  const slotType = qaContextSlot ?? computedSlotType;
+  const isEveningWindow = (currentHour >= 17 && currentHour < 23) || (currentHour === 23 && currentMinute < 30);
+  const isMiddayWindow = currentHour >= 12 && currentHour < 17;
+  const shouldShowEveningStackCard = !!currentDevotional
+    && isPremium
+    && !hasDismissedEveningCardToday
+    && !todayEveningCheckIn
+    && ((isEveningWindow && hasReadToday) || qaContextSlot === 'evening');
+  const shouldShowMiddayStackCard = !!currentDevotional
+    && isPremium
+    && !hasDismissedMiddayCardToday
+    && !todayCheckIn
+    && (isMiddayWindow || qaContextSlot === 'midday');
+  const shouldShowBridgeStackCard = !!currentDevotional
+    && isPremium
+    && !hasReadToday
+    && !!validBridgeText
+    && (!!bridgeInput || qaContextSlot === 'bridge');
+  const shouldShowBridgeLoadingStackCard = !!currentDevotional
+    && isPremium
+    && !hasReadToday
+    && !validBridgeText
+    && !hasDismissedBridgeCardToday
+    && ((bridgeLoading && !!bridgeInput) || qaContextSlot === 'bridge-loading');
 
   const handleDismissResumeCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
     clearResumeContext();
   }, [clearResumeContext]);
 
   const handleDismissMiddayCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
     setDismissedMiddayCardDate(todayDate);
   }, [setDismissedMiddayCardDate, todayDate]);
 
   const handleDismissEveningCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
     setDismissedEveningCardDate(todayDate);
   }, [setDismissedEveningCardDate, todayDate]);
 
   const handleDismissBridgeCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
     setDismissedBridgeCardDate(todayDate);
   }, [setDismissedBridgeCardDate, todayDate]);
 
-  // Compute resume props for context slot
-  const resumeProps = shouldShowResumeCard && resumeContext && resumeDevotional ? {
-    onPress: handleResume,
-    label: resumeContext.route === 'journal'
-      ? (resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber)?.isRead
-        ? `Add to Day ${resumeContext.dayNumber}`
-        : 'Resume your reflection')
-      : 'Resume where you left off',
-    title: `${resumeDevotional.title} · Day ${resumeContext.dayNumber}${resumeContext.dayTitle ? `: ${resumeContext.dayTitle}` : ''}`,
-    timeAgo: formatResumeRelativeTime(resumeContext.touchedAt),
-  } : undefined;
+  // Compute resume props for Today card stack
+  const resumeProps = useMemo(() => {
+    if (!shouldShowResumeCard || !resumeContext || !resumeDevotional) return undefined;
+
+    return {
+      onPress: handleResume,
+      label: resumeContext.route === 'journal'
+        ? (resumeDevotional.days.find(d => d.dayNumber === resumeContext.dayNumber)?.isRead
+          ? `Add to Day ${resumeContext.dayNumber}`
+          : 'Resume your reflection')
+        : 'Resume where you left off',
+      title: `${resumeDevotional.title} · Day ${resumeContext.dayNumber}${resumeContext.dayTitle ? `: ${resumeContext.dayTitle}` : ''}`,
+      timeAgo: formatResumeRelativeTime(resumeContext.touchedAt),
+    };
+  }, [handleResume, resumeContext, resumeDevotional, shouldShowResumeCard]);
+
+  const todayStackCards = useMemo<TodayCardStackCard[]>(() => {
+    const cards: TodayCardStackCard[] = [];
+
+    if (resumeProps) {
+      const isJournalResume = resumeProps.label.toLowerCase().includes('reflection') || resumeProps.label.toLowerCase().includes('add to day');
+      cards.push({
+        id: 'today-stack-resume',
+        kind: 'resume',
+        priority: 500,
+        eyebrow: resumeProps.label,
+        title: resumeProps.title,
+        body: `${resumeProps.timeAgo}. Your place is saved quietly.`,
+        actionLabel: isJournalResume ? 'Open reflection' : 'Continue reading',
+        onPress: resumeProps.onPress,
+        onDismiss: handleDismissResumeCard,
+        accessibilityLabel: `${resumeProps.label}. ${resumeProps.title}. ${resumeProps.timeAgo}.`,
+        accessibilityHint: isJournalResume ? 'Opens the saved journal reflection' : 'Returns to the saved devotional reading',
+        dismissAccessibilityLabel: 'Dismiss resume stack card',
+        dismissAccessibilityHint: 'Clears this saved resume prompt without deleting your reading or reflection',
+        testID: 'today-stack-card-resume',
+      });
+    }
+
+    if (shouldShowEveningStackCard) {
+      cards.push({
+        id: 'today-stack-evening',
+        kind: 'evening',
+        priority: 400,
+        eyebrow: 'Evening check-in',
+        title: 'Wind down with today’s reading',
+        body: eveningMessage,
+        actionLabel: 'Wind down',
+        onPress: handleEveningWindDown,
+        onDismiss: handleDismissEveningCard,
+        accessibilityLabel: `Evening check-in. ${eveningMessage}`,
+        accessibilityHint: 'Opens the evening wind-down reflection',
+        dismissAccessibilityLabel: 'Dismiss evening stack card',
+        dismissAccessibilityHint: 'Hides this evening check-in card for today',
+        testID: 'today-stack-card-evening',
+      });
+    }
+
+    if (shouldShowMiddayStackCard) {
+      cards.push({
+        id: 'today-stack-midday',
+        kind: 'midday',
+        priority: 300,
+        eyebrow: 'Companion note',
+        title: 'Check in with today’s reading',
+        body: middayMessage,
+        actionLabel: 'Reflect',
+        onPress: handleCheckIn,
+        onDismiss: handleDismissMiddayCard,
+        accessibilityLabel: `Companion note. ${middayMessage}`,
+        accessibilityHint: 'Opens the midday check-in reflection',
+        dismissAccessibilityLabel: 'Dismiss midday stack card',
+        dismissAccessibilityHint: 'Hides this midday check-in card for today',
+        testID: 'today-stack-card-midday',
+      });
+    }
+
+    if (shouldShowBridgeStackCard && validBridgeText) {
+      cards.push({
+        id: 'today-stack-bridge',
+        kind: 'bridge',
+        priority: 200,
+        eyebrow: 'Daily thread',
+        title: 'A thread from yesterday to today',
+        body: validBridgeText,
+        onDismiss: handleDismissBridgeCard,
+        accessibilityLabel: `Daily thread. ${validBridgeText}`,
+        accessibilityHint: 'A personal bridge into today’s reading',
+        dismissAccessibilityLabel: 'Dismiss bridge stack card',
+        dismissAccessibilityHint: 'Hides this bridge text for today',
+        testID: 'today-stack-card-bridge',
+      });
+    }
+
+    if (shouldShowBridgeLoadingStackCard) {
+      cards.push({
+        id: 'today-stack-bridge-loading',
+        kind: 'bridge-loading',
+        priority: 100,
+        eyebrow: 'Daily thread',
+        title: 'Preparing today’s thread…',
+        body: 'A quiet bridge from yesterday to today will appear here when it is ready.',
+        onDismiss: handleDismissBridgeCard,
+        accessibilityLabel: 'Preparing today’s thread',
+        accessibilityHint: 'A personal bridge into today’s reading is loading',
+        dismissAccessibilityLabel: 'Dismiss bridge loading stack card',
+        dismissAccessibilityHint: 'Hides this bridge card for today',
+        testID: 'today-stack-card-bridge-loading',
+      });
+    }
+
+    return cards;
+  }, [
+    eveningMessage,
+    handleCheckIn,
+    handleDismissBridgeCard,
+    handleDismissEveningCard,
+    handleDismissMiddayCard,
+    handleDismissResumeCard,
+    handleEveningWindDown,
+    middayMessage,
+    resumeProps,
+    shouldShowBridgeLoadingStackCard,
+    shouldShowBridgeStackCard,
+    shouldShowEveningStackCard,
+    shouldShowMiddayStackCard,
+    validBridgeText,
+  ]);
 
   // Compute devotional card state
   const devotionalState = computeDevotionalState({
@@ -903,25 +1038,7 @@ export default function HomeScreen() {
             onAvatarPress={() => router.push('/(tabs)/(you)')}
           />
 
-          {/* Zone 2: Context Slot — Companion / resume / check-in support, before the hero */}
-          <View collapsable={false} onLayout={handleContextLayout}>
-            <Animated.View entering={entering(FadeIn.duration(280).delay(80).easing(Ease.out))}>
-              <ContextSlot
-                slotType={slotType}
-                colors={colors}
-                onMiddayPress={handleCheckIn}
-                middayMessage={middayMessage}
-                onEveningPress={handleEveningWindDown}
-                eveningMessage={eveningMessage}
-                bridgeText={validBridgeText}
-                resumeProps={resumeProps}
-                onDismissResume={handleDismissResumeCard}
-                onDismissMidday={handleDismissMiddayCard}
-                onDismissEvening={handleDismissEveningCard}
-                onDismissBridge={handleDismissBridgeCard}
-              />
-            </Animated.View>
-          </View>
+          {/* Zone 2: Context stack moved under the hero in Phase 3. */}
 
           {/* Remember This — daily random highlight */}
           <RememberThisCard />
@@ -936,6 +1053,16 @@ export default function HomeScreen() {
               />
             </Animated.View>
           </View>
+
+          {todayStackCards.length > 0 && (
+            <View collapsable={false} onLayout={handleContextLayout}>
+              <TodayCardStack
+                cards={todayStackCards}
+                colors={colors}
+                style={styles.todayStackWrapper}
+              />
+            </View>
+          )}
 
           {/* Zone 5: Series Carousel — removed per user request */}
 
@@ -1146,6 +1273,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 260,
     zIndex: 0,
+  },
+  todayStackWrapper: {
+    marginTop: Spacing['4'],
   },
   day1ReviewWrapper: {
     paddingHorizontal: Spacing['6'],

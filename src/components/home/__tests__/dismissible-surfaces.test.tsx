@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports, import/first */
 import React from 'react';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const renderer = require('react-test-renderer');
 const { act } = renderer;
@@ -118,6 +120,7 @@ jest.mock('@/lib/store', () => ({
 
 import { ContextSlot } from '../ContextSlot';
 import { RememberThisCard } from '../RememberThisCard';
+import { TodayCardStack, type TodayCardStackCard } from '../TodayCardStack';
 import { PremiumNudgeCard } from '../../PremiumNudgeCard';
 import type { ColorTheme } from '@/constants/colors';
 
@@ -146,6 +149,23 @@ function renderInAct(element: React.ReactElement) {
     tree = renderer.create(element);
   });
   return tree;
+}
+
+function stackCardFixture(overrides: Partial<TodayCardStackCard> = {}): TodayCardStackCard {
+  return {
+    id: 'today-stack-resume',
+    kind: 'resume',
+    priority: 500,
+    eyebrow: 'Resume where you left off',
+    title: 'Quiet Path Series · Day 2: Strength for the Middle',
+    body: 'Saved 1h ago. Your place is saved quietly.',
+    actionLabel: 'Continue reading',
+    accessibilityLabel: 'Resume where you left off. Quiet Path Series · Day 2: Strength for the Middle. Saved 1h ago.',
+    accessibilityHint: 'Returns to the saved devotional reading',
+    dismissAccessibilityLabel: 'Dismiss resume stack card',
+    dismissAccessibilityHint: 'Clears this saved resume prompt without deleting your reading',
+    ...overrides,
+  };
 }
 
 describe('dismissible Today/Home surfaces', () => {
@@ -304,5 +324,80 @@ describe('dismissible Today/Home surfaces', () => {
 
     const blurLayers = tree.root.findAll((node: any) => node.props.testID === 'premium-nudge-glass-blur');
     expect(blurLayers).toHaveLength(0);
+  });
+
+  it.each([
+    {
+      name: 'resume',
+      label: 'Dismiss resume stack card',
+      card: stackCardFixture({ kind: 'resume', priority: 500, dismissAccessibilityLabel: 'Dismiss resume stack card' }),
+    },
+    {
+      name: 'evening',
+      label: 'Dismiss evening stack card',
+      card: stackCardFixture({ id: 'today-stack-evening', kind: 'evening', priority: 400, title: 'Wind down with today’s reading', dismissAccessibilityLabel: 'Dismiss evening stack card' }),
+    },
+    {
+      name: 'midday',
+      label: 'Dismiss midday stack card',
+      card: stackCardFixture({ id: 'today-stack-midday', kind: 'midday', priority: 300, title: 'Check in with today’s reading', dismissAccessibilityLabel: 'Dismiss midday stack card' }),
+    },
+    {
+      name: 'bridge',
+      label: 'Dismiss bridge stack card',
+      card: stackCardFixture({ id: 'today-stack-bridge', kind: 'bridge', priority: 200, title: 'A thread from yesterday to today', dismissAccessibilityLabel: 'Dismiss bridge stack card' }),
+    },
+    {
+      name: 'bridge-loading',
+      label: 'Dismiss bridge loading stack card',
+      card: stackCardFixture({ id: 'today-stack-bridge-loading', kind: 'bridge-loading', priority: 100, title: 'Preparing today’s thread…', dismissAccessibilityLabel: 'Dismiss bridge loading stack card' }),
+    },
+  ])('calls the TodayCardStack inline X callback for migrated $name cards', ({ label, card }) => {
+    const onDismiss = jest.fn();
+    const onPress = jest.fn();
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={testColors}
+        cards={[{ ...card, onDismiss, onPress }]}
+      />,
+    );
+
+    pressByLabel(tree, label);
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('wires the production Today stack under the hero and above Daily Rhythm only', () => {
+    const sourcePath = path.join(__dirname, '..', '..', '..', 'app', '(tabs)', '(today)', 'index.tsx');
+    const source = fs.readFileSync(sourcePath, 'utf8');
+    const renderStart = source.indexOf('<GreetingRow');
+    const renderSource = source.slice(renderStart);
+    const heroIndex = renderSource.indexOf('<DevotionalCard');
+    const stackIndex = renderSource.indexOf('<TodayCardStack');
+    const streakIndex = renderSource.indexOf('<StreakBox');
+
+    expect(heroIndex).toBeGreaterThan(-1);
+    expect(stackIndex).toBeGreaterThan(heroIndex);
+    expect(streakIndex).toBeGreaterThan(stackIndex);
+    expect(renderSource).not.toContain('<ContextSlot');
+    expect(renderSource).not.toContain('slotType={');
+  });
+
+  it('keeps migrated production stack priority and dismiss semantics explicit', () => {
+    const sourcePath = path.join(__dirname, '..', '..', '..', 'app', '(tabs)', '(today)', 'index.tsx');
+    const source = fs.readFileSync(sourcePath, 'utf8');
+
+    expect(source).toContain("kind: 'resume',\n        priority: 500");
+    expect(source).toContain("kind: 'evening',\n        priority: 400");
+    expect(source).toContain("kind: 'midday',\n        priority: 300");
+    expect(source).toContain("kind: 'bridge',\n        priority: 200");
+    expect(source).toContain("kind: 'bridge-loading',\n        priority: 100");
+    expect(source).toContain('clearResumeContext();');
+    expect(source).toContain('setDismissedMiddayCardDate(todayDate);');
+    expect(source).toContain('setDismissedEveningCardDate(todayDate);');
+    expect(source).toContain('setDismissedBridgeCardDate(todayDate);');
+    expect(source).toContain("title: 'Preparing today’s thread…'");
+    expect(source).not.toContain('Companion is gathering');
   });
 });
