@@ -10,13 +10,12 @@ export type BibleTextLine = {
 type BibleOverlayVariant = 'saved' | 'selectedDark' | 'selectedLight';
 
 export const BIBLE_TEXT_OVERLAY_METRICS = {
-  horizontalInset: 3,
-  height: 18,
-  bottomInset: 4,
+  horizontalInset: 4,
+  minHeight: 20,
+  selectedHeightRatio: 0.82,
   radius: 6,
-  savedHorizontalInset: 2,
-  savedHeightRatio: 0.82,
-  savedBottomInsetRatio: 0.1,
+  savedHorizontalInset: 3,
+  savedHeightRatio: 0.88,
   savedRadius: 2,
 } as const;
 
@@ -38,16 +37,12 @@ export function getBibleTextOverlayStyle(
   const metrics = BIBLE_TEXT_OVERLAY_METRICS;
   const isSaved = variant === 'saved';
   const horizontalInset = isSaved ? metrics.savedHorizontalInset : metrics.horizontalInset;
-  const bottomInset = isSaved
-    ? Math.max(2, line.height * metrics.savedBottomInsetRatio)
-    : metrics.bottomInset;
-  const overlayHeight = isSaved
-    ? Math.min(line.height, Math.max(metrics.height, line.height * metrics.savedHeightRatio))
-    : Math.min(metrics.height, Math.max(1, line.height - bottomInset));
+  const heightRatio = isSaved ? metrics.savedHeightRatio : metrics.selectedHeightRatio;
+  const overlayHeight = Math.min(line.height, Math.max(metrics.minHeight, line.height * heightRatio));
   const style: ViewStyle = {
     position: 'absolute',
     left: line.x - horizontalInset,
-    top: line.y + Math.max(0, line.height - bottomInset - overlayHeight),
+    top: line.y + Math.max(0, (line.height - overlayHeight) / 2),
     width: line.width + horizontalInset * 2,
     height: overlayHeight,
     borderRadius: isSaved ? metrics.savedRadius : metrics.radius,
