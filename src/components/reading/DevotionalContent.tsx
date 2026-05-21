@@ -190,10 +190,10 @@ export function DevotionalContent({
     transform: [{ scale: bookmarkScale.value }],
   }));
 
-  // Subtle scripture background tint (accent at 4% opacity)
-  const scriptureBgColor = isDark
-    ? `${colors.accent}0A`  // ~4% opacity on dark
-    : `${colors.accent}08`; // ~3% opacity on light
+  // Editorial scripture frame: quiet horizontal rules instead of a side stripe.
+  const scriptureRuleColor = isDark
+    ? `${colors.accent}2E`  // ~18% opacity on dark
+    : `${colors.accent}26`; // ~15% opacity on light
 
   return (
     <>
@@ -252,8 +252,8 @@ export function DevotionalContent({
         style={[
           dcStyles.scriptureBlock,
           {
-            borderLeftColor: colors.accent,
-            backgroundColor: scriptureBgColor,
+            borderTopColor: scriptureRuleColor,
+            borderBottomColor: scriptureRuleColor,
           },
         ]}
       >
@@ -502,14 +502,11 @@ const dcStyles = StyleSheet.create({
     flex: 1,
   },
   scriptureBlock: {
-    borderLeftWidth: 2.5,
-    paddingLeft: 18,
-    paddingRight: 14,
-    paddingVertical: Spacing['4'],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 4,
+    paddingVertical: Spacing['5'],
     marginBottom: Spacing['2'],
-    borderRadius: 4,
-    borderTopLeftRadius: 0,
-    borderBottomLeftRadius: 0,
   },
   scriptureRefRow: {
     flexDirection: 'row',

@@ -207,7 +207,7 @@ export default function ReadingScreen() {
   const [retryError, setRetryError] = useState<string | null>(null);
   const [isGeneratingMore, setIsGeneratingMore] = useState(false);
   const [autoRetryTick, setAutoRetryTick] = useState(0);
-  const [autoRetryAttempt, setAutoRetryAttempt] = useState(0);
+  const [, setAutoRetryAttempt] = useState(0);
   const [autoRetryNextAt, setAutoRetryNextAt] = useState<number | null>(null);
   const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(true);
@@ -1212,7 +1212,7 @@ export default function ReadingScreen() {
             source,
           });
           if (source === 'manual') {
-            setRetryError('We started writing this day. Check back in a moment.');
+            setRetryError('We’re preparing this reading. Check back in a moment.');
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
           return true;
@@ -1242,7 +1242,7 @@ export default function ReadingScreen() {
       }
 
       if (source === 'manual') {
-        setRetryError('No finished day found yet. Try again in a moment, or generate the remaining days below.');
+        setRetryError('This reading is still being prepared. Try again in a moment, or prepare the next reading below.');
       }
       return false;
     } catch (err) {
@@ -1252,7 +1252,7 @@ export default function ReadingScreen() {
         source,
       });
       if (source === 'manual') {
-        setRetryError('Could not check for the latest day. Please try again.');
+        setRetryError('Could not refresh this reading. Please try again.');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
       return false;
@@ -1344,7 +1344,7 @@ export default function ReadingScreen() {
   }
 
   if (!currentDayData) {
-    console.log('[Reading] RETURNING "Still being written" — currentDayData is null', { viewingDay, daysInSeries: currentDevotional.days.length });
+    console.log('[Reading] RETURNING "Reading not ready yet" — currentDayData is null', { viewingDay, daysInSeries: currentDevotional.days.length });
     // Day hasn't been generated yet
     const daysReady = currentDevotional.days.length;
 
@@ -1495,7 +1495,7 @@ export default function ReadingScreen() {
                 marginBottom: 14,
               }}
             >
-              {isRetrying ? 'Writing...' : isCheckingForSyncedDay ? 'Checking for Day ' + viewingDay + '...' : 'Still being written'}
+              {isRetrying ? 'Preparing...' : isCheckingForSyncedDay ? 'Looking for Day ' + viewingDay + '...' : 'Reading not ready yet'}
             </Text>
 
             <Text
@@ -1508,8 +1508,8 @@ export default function ReadingScreen() {
               }}
             >
               {isRetrying
-                ? 'Generating the remaining days.\nThis may take a moment.'
-                : `Day ${viewingDay} hasn't been written yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
+                ? 'Preparing the rest of this series.\nThis may take a moment.'
+                : `Day ${viewingDay} isn't ready yet.\n${daysReady} day${daysReady !== 1 ? 's' : ''} ready so far.`}
             </Text>
 
             {isWaitingForConnection && !isRetrying && (
@@ -1536,7 +1536,7 @@ export default function ReadingScreen() {
                   marginTop: 10,
                 }}
               >
-                Retrying in {autoRetrySecondsLeft}s{autoRetryAttempt > 0 ? ` · attempt ${autoRetryAttempt}/${AUTO_RETRY_MAX_ATTEMPTS}` : ''}
+                Trying again in {autoRetrySecondsLeft}s
               </Text>
             )}
 
@@ -1607,8 +1607,8 @@ export default function ReadingScreen() {
                 onPress={handleRetryGeneration}
                 disabled={isCheckingForSyncedDay}
                 accessibilityRole="button"
-                accessibilityLabel="Generate remaining days"
-                accessibilityHint={`Generate the remaining ${expectedDays - daysReady} days of your devotional`}
+                accessibilityLabel="Prepare remaining readings"
+                accessibilityHint={`Prepare the remaining ${expectedDays - daysReady} readings in your devotional`}
                 accessibilityState={{ disabled: isCheckingForSyncedDay }}
                 style={{
                   backgroundColor: retryCtaButtonBg,
@@ -1631,7 +1631,7 @@ export default function ReadingScreen() {
                     color: btnText,
                   }}
                 >
-                  Generate Remaining Days
+                  Prepare Remaining Readings
                 </Text>
               </TouchableOpacity>
 
@@ -1999,7 +1999,7 @@ export default function ReadingScreen() {
                           marginBottom: (isWaitingForConnection || autoRetrySecondsLeft !== null) ? Spacing['2'] : Spacing['5'],
                         }}
                       >
-                        More days are on the way for this series.
+                        The rest of this series is being prepared.
                       </Text>
                       {isWaitingForConnection && !isGeneratingMore && (
                         <Text
@@ -2024,7 +2024,7 @@ export default function ReadingScreen() {
                             marginBottom: Spacing['4'],
                           }}
                         >
-                          Retrying in {autoRetrySecondsLeft}s{autoRetryAttempt > 0 ? ` · attempt ${autoRetryAttempt}/${AUTO_RETRY_MAX_ATTEMPTS}` : ''}
+                          Trying again in {autoRetrySecondsLeft}s
                         </Text>
                       )}
                       {isGeneratingMore ? (
@@ -2037,7 +2037,7 @@ export default function ReadingScreen() {
                                 color: colors.textMuted,
                               }}
                             >
-                              Writing remaining days...
+                              Preparing the rest of this series...
                             </Text>
                           </View>
                         ) : isPremium ? (
@@ -2066,7 +2066,7 @@ export default function ReadingScreen() {
                                 color: retryCtaButtonText,
                               }}
                             >
-                              Generate Remaining Days
+                              Prepare Remaining Readings
                             </Text>
                           </TouchableOpacity>
                         ) : (

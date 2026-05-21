@@ -239,6 +239,30 @@ describe('DevotionalWebView highlight interactions', () => {
     expect(script).not.toContain("dark: 'rgba(200, 165, 92, 0.22)'");
   });
 
+  it('uses editorial quote framing without side stripes or hardcoded Inter UI labels', () => {
+    let tree: any;
+    act(() => {
+      tree = renderer.create(
+        <DevotionalWebView
+          day={{
+            ...day,
+            quotes: [{ text: 'Faith waits quietly.', author: 'A. Witness' }],
+            contextNote: 'This is context.',
+          }}
+          fontSize="medium"
+        />,
+      );
+    });
+
+    const html = getWebViewProps(tree).source.html as string;
+    expect(html).not.toContain('border-left:');
+    expect(html).toContain('border-top: 1px solid');
+    expect(html).toContain('border-bottom: 1px solid');
+    expect(html).not.toContain("font-family: 'Inter', sans-serif;");
+    expect(html).not.toContain('family=Inter');
+    expect(html).toContain("-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif");
+  });
+
   it('locates a target bookmark by saved text and reports its document position', () => {
     let tree: any;
     act(() => {

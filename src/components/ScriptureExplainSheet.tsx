@@ -266,7 +266,7 @@ export function ScriptureExplainSheet({
             {status === 'loading' && (
               <View style={styles.loadingWrap}>
                 <ActivityIndicator size="small" color={colors.accent} />
-                <Text style={[styles.loadingText, { color: colors.textMuted }]}>Studying the passage...</Text>
+                <Text style={[styles.loadingText, { color: colors.textMuted }]}>Reading the passage...</Text>
               </View>
             )}
 

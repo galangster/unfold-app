@@ -174,7 +174,7 @@ describe('ScriptureExplainSheet', () => {
       translation: 'BSB',
       source: 'bible-reader',
     }));
-    expect(textContent(tree)).toContain('Studying the passage...');
+    expect(textContent(tree)).toContain('Reading the passage...');
     expect(mockLogEvent).toHaveBeenCalledWith(AnalyticsEvents.SCRIPTURE_EXPLAIN_OPENED, expect.not.objectContaining({
       passageText: expect.any(String),
       text: expect.any(String),

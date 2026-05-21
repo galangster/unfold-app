@@ -909,6 +909,8 @@ export function DevotionalWebView({
     const mutedColor = isDark ? '#E8E4DC' : '#5A534E';
     const accentColor = colors.accent;
     const inputBg = isDark ? '#1F1F1F' : '#EDE8E0';     // warmer, visible surface separation
+    const uiFontStack = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
+    const displayFontStack = "'Gupter', Georgia, serif";
 
     const bodyText = day.bodyText || '';
 
@@ -1013,7 +1015,7 @@ export function DevotionalWebView({
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Gupter:wght@400;500;700&family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gupter:wght@400;500;700&family=${encodeURIComponent(webFont)}:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   <!-- Rangy for robust text highlighting — load from CDN. Inlined fallback was overwriting the CDN-loaded global every run, breaking deserialize. -->
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-core.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/rangy@1.3.0/lib/rangy-classapplier.min.js"></script>
@@ -1147,7 +1149,7 @@ export function DevotionalWebView({
 
     /* Study method headers — standalone **BOLD** paragraphs */
     p.section-header {
-      font-family: 'Inter', sans-serif;
+      font-family: ${uiFontStack};
       font-size: ${bodyFontSize * 0.72}px;
       font-weight: 600;
       letter-spacing: 1.2px;
@@ -1173,20 +1175,20 @@ export function DevotionalWebView({
       letter-spacing: 4px;
     }
 
-    /* Quotes -- elevated with oversized decorative mark */
+    /* Quotes -- editorial frame with oversized decorative mark */
     blockquote {
       margin: 32px 0 28px;
-      padding: 24px 22px 20px;
-      border-left: 2px solid ${accentColor};
+      padding: 24px 8px 20px;
+      border-top: 1px solid ${isDark ? `${accentColor}24` : `${accentColor}2E`};
+      border-bottom: 1px solid ${isDark ? `${accentColor}14` : `${accentColor}1F`};
       position: relative;
       background: ${isDark ? `${accentColor}08` : `${accentColor}0F`};
-      border-radius: 0 8px 8px 0;
     }
 
     /* Large decorative opening quote mark */
     .deco-quote {
       display: block;
-      font-family: Georgia, 'Times New Roman', serif;
+      font-family: ${displayFontStack};
       font-size: 64px;
       line-height: 28px;
       color: ${accentColor};
@@ -1204,7 +1206,7 @@ export function DevotionalWebView({
     }
 
     blockquote cite {
-      font-family: 'Inter', sans-serif;
+      font-family: ${uiFontStack};
       font-size: 12px;
       color: ${mutedColor};
       font-style: normal;
@@ -1224,7 +1226,7 @@ export function DevotionalWebView({
     }
     
     h3 {
-      font-family: 'Inter', sans-serif;
+      font-family: ${uiFontStack};
       font-size: 11px;
       color: ${accentColor};
       letter-spacing: 1.2px;
