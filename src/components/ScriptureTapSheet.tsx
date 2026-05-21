@@ -234,8 +234,8 @@ export function ScriptureTapSheet({
                   style={[
                     s.verseBlock,
                     {
-                      backgroundColor: colors.inputBackground,
-                      borderColor: alpha(colors.accent, 0.14),
+                      borderTopColor: alpha(colors.accent, 0.18),
+                      borderBottomColor: alpha(colors.accent, 0.10),
                     },
                   ]}
                 >
@@ -391,15 +391,16 @@ const s = StyleSheet.create({
 
   // ─── Verse ──────────────────────────────────────
   verseBlock: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.lg,
-    padding: Spacing['4'],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing['1'],
+    paddingVertical: Spacing['5'],
     marginBottom: Spacing['5'],
   },
   verseText: {
-    fontFamily: FontFamily.body,
-    fontSize: 17,
-    lineHeight: 30,
+    fontFamily: FontFamily.display,
+    fontSize: 20,
+    lineHeight: 33,
   },
 
   // ─── Explain CTA ─────────────────────────────────

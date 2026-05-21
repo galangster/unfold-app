@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
-import { BookOpenIcon, WarningCircleIcon, XIcon } from 'phosphor-react-native';
+import { WarningCircleIcon, XIcon } from 'phosphor-react-native';
 
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -248,15 +248,14 @@ export function ScriptureExplainSheet({
           >
             <View
               style={[
-                styles.scriptureCard,
+                styles.scriptureBlock,
                 {
-                  backgroundColor: colors.inputBackground,
-                  borderColor: alpha(colors.accent, 0.22),
+                  borderTopColor: alpha(colors.accent, 0.18),
+                  borderBottomColor: alpha(colors.accent, 0.10),
                 },
               ]}
             >
               <View style={styles.scriptureLabelRow}>
-                <BookOpenIcon size={14} color={colors.accent} weight="light" />
                 <Text style={[styles.scriptureLabel, { color: colors.accent }]}>Scripture</Text>
               </View>
               <Text style={[styles.scriptureText, { color: colors.text }]} numberOfLines={6}>
@@ -267,7 +266,7 @@ export function ScriptureExplainSheet({
             {status === 'loading' && (
               <View style={styles.loadingWrap}>
                 <ActivityIndicator size="small" color={colors.accent} />
-                <Text style={[styles.loadingText, { color: colors.textMuted }]}>Reading the passage...</Text>
+                <Text style={[styles.loadingText, { color: colors.textMuted }]}>Studying the passage...</Text>
               </View>
             )}
 
@@ -291,10 +290,9 @@ export function ScriptureExplainSheet({
                 {response.explanation.reflectionPrompt ? (
                   <View
                     style={[
-                      styles.carryCard,
+                      styles.carryNote,
                       {
-                        backgroundColor: alpha(colors.accent, 0.08),
-                        borderColor: alpha(colors.accent, 0.18),
+                        borderTopColor: alpha(colors.accent, 0.18),
                       },
                     ]}
                   >
@@ -351,7 +349,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
     borderWidth: StyleSheet.hairlineWidth,
-    maxHeight: '78%',
+    maxHeight: '84%',
   },
   handleRow: {
     alignItems: 'center',
@@ -414,18 +412,18 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: Spacing['12'],
-    gap: Spacing['5'],
+    gap: Spacing['6'],
   },
-  scriptureCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.lg,
-    padding: Spacing['4'],
+  scriptureBlock: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing['1'],
+    paddingVertical: Spacing['5'],
   },
   scriptureLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: Spacing['2'],
+    marginBottom: Spacing['3'],
   },
   scriptureLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -434,9 +432,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   scriptureText: {
-    fontFamily: FontFamily.body,
-    fontSize: 17,
-    lineHeight: 29,
+    fontFamily: FontFamily.display,
+    fontSize: 20,
+    lineHeight: 33,
   },
   loadingWrap: {
     alignItems: 'center',
@@ -449,7 +447,7 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
   },
   explanationWrap: {
-    gap: Spacing['3'],
+    gap: Spacing['4'],
   },
   sectionLabel: {
     fontFamily: FontFamily.uiMedium,
@@ -458,24 +456,24 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   explanationBody: {
-    gap: Spacing['3'],
+    gap: Spacing['4'],
   },
   explanationText: {
     fontFamily: FontFamily.body,
     fontSize: FontSize.base,
     lineHeight: 26,
   },
-  carryCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.lg,
-    padding: Spacing['4'],
+  carryNote: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing['1'],
+    paddingTop: Spacing['4'],
     gap: Spacing['2'],
     marginTop: Spacing['2'],
   },
   promptText: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.sm,
-    lineHeight: 22,
+    fontFamily: FontFamily.display,
+    fontSize: FontSize.lg,
+    lineHeight: 27,
   },
   errorWrap: {
     alignItems: 'center',
