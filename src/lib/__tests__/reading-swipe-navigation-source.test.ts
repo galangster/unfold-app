@@ -7,6 +7,16 @@ const readingSource = readFileSync(
 );
 
 describe('reading swipe navigation source contract', () => {
+  it('opens the devotional scripture tap sheet instead of immediately routing parseable references to Bible', () => {
+    const scriptureTapBlock = readingSource.match(
+      /onScriptureTap=\{\(ref\) => \{[\s\S]{0,700}?\}\}/,
+    )?.[0] ?? '';
+
+    expect(scriptureTapBlock).toContain('setScriptureSheetRef(ref)');
+    expect(scriptureTapBlock).not.toContain("pathname: '/(tabs)/(bible)/reader'");
+    expect(scriptureTapBlock).not.toContain('referenceToRoute(ref)');
+  });
+
   it('does not cancel the day-change callback by starting the fade-in animation before setViewingDay runs', () => {
     expect(readingSource).not.toMatch(
       /contentOpacity\.value\s*=\s*withTiming\(0,[\s\S]{0,360}runOnJS\(setViewingDay\)\(day\);[\s\S]{0,120}\}\);\s*contentOpacity\.value\s*=\s*withDelay/,

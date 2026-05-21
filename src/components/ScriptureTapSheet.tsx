@@ -134,7 +134,7 @@ export function ScriptureTapSheet({
   return (
     <>
     <Modal
-      visible={visible}
+      visible={visible && !showExplainSheet}
       transparent
       animationType="fade"
       onRequestClose={onClose}

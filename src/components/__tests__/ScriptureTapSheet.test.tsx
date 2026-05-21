@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { Modal, TouchableOpacity } from 'react-native';
 import { ScriptureTapSheet } from '../ScriptureTapSheet';
 
 const renderer = require('react-test-renderer');
@@ -221,6 +221,9 @@ describe('ScriptureTapSheet Explain CTA', () => {
       explainButton.props.onPress();
       await Promise.resolve();
     });
+
+    const modalVisibility = tree.root.findAllByType(Modal).map((node: any) => node.props.visible);
+    expect(modalVisibility).toEqual([false, true]);
 
     expect(mockFetchScriptureExplanation).toHaveBeenCalledWith(expect.objectContaining({
       reference: 'John 3:16',

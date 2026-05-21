@@ -63,7 +63,7 @@ import { createReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
-import { referenceToRoute } from '@/lib/bible-constants';
+
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio, buildTtsText } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -1839,20 +1839,7 @@ export default function ReadingScreen() {
                 onTargetBookmarkLocated={handleTargetHighlightLocated}
                 scrollViewRef={scrollViewRef}
                 onScriptureTap={(ref) => {
-                  const parsed = referenceToRoute(ref);
-                  if (parsed) {
-                    router.push({
-                      pathname: '/(tabs)/(bible)/reader',
-                      params: {
-                        bookId: String(parsed.bookId),
-                        chapter: String(parsed.chapter),
-                        ...(parsed.verse ? { verse: String(parsed.verse) } : {}),
-                      },
-                    });
-                  } else {
-                    // Fallback to scripture sheet if reference can't be parsed
-                    setScriptureSheetRef(ref);
-                  }
+                  setScriptureSheetRef(ref);
                 }}
                 devotionalId={currentDevotionalId ?? ''}
                 dayNumber={viewingDay}
