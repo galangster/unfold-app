@@ -299,7 +299,7 @@ export function ScriptureExplainSheet({
                     ]}
                   >
                     <Text style={[styles.sectionLabel, { color: colors.accent }]}>Carry this</Text>
-                    <Text style={[styles.promptText, { color: colors.text }]}> 
+                    <Text style={[styles.promptText, { color: colors.text }]}>
                       {response.explanation.reflectionPrompt}
                     </Text>
                   </View>
@@ -310,7 +310,7 @@ export function ScriptureExplainSheet({
             {status === 'error' && (
               <View style={styles.errorWrap}>
                 <WarningCircleIcon size={22} color={colors.accent} weight="light" />
-                <Text style={[styles.errorText, { color: colors.text }]}> 
+                <Text style={[styles.errorText, { color: colors.text }]}>
                   {errorCode === 'SCRIPTURE_EXPLAIN_INVALID_INPUT'
                     ? 'Select a verse first.'
                     : "Couldn't explain this passage right now. Try again in a moment."}
