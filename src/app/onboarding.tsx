@@ -1631,7 +1631,7 @@ export default function OnboardingScreen() {
                     </Text>
                   </View>
                   <View style={{ marginTop: Spacing['3'] }}>
-                    <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
               </View>
@@ -1671,7 +1671,7 @@ export default function OnboardingScreen() {
                     </Text>
                   </View>
                   <View style={{ marginTop: Spacing['3'] }}>
-                    <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
               </View>
@@ -1708,7 +1708,7 @@ export default function OnboardingScreen() {
                     </Text>
                   </View>
                   <View style={{ marginTop: Spacing['3'] }}>
-                    <Text style={{ fontFamily: FontFamily.mono, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
+                    <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: FontSize.lg, color: colors.accent }}>→</Text>
                   </View>
                 </View>
               </View>
@@ -1752,7 +1752,7 @@ export default function OnboardingScreen() {
                   <View key={groupName} style={{ gap: Spacing['3'] }}>
                     <Text
                       style={{
-                        fontFamily: FontFamily.mono,
+                        fontFamily: FontFamily.uiMedium,
                         fontSize: 11,
                         color: colors.textSubtle,
                         letterSpacing: 0.8,

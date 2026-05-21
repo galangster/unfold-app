@@ -187,8 +187,6 @@ function RootLayout() {
     'SourceSerifPro_400Regular_Italic': require('../../assets/fonts/SourceSerifPro_400Regular_Italic.ttf'),
     'SourceSerifPro_600SemiBold': require('../../assets/fonts/SourceSerifPro_600SemiBold.ttf'),
     'SourceSerifPro_700Bold': require('../../assets/fonts/SourceSerifPro_700Bold.ttf'),
-    'JetBrainsMono_400Regular': require('../../assets/fonts/JetBrainsMono_400Regular.ttf'),
-    'JetBrainsMono_500Medium': require('../../assets/fonts/JetBrainsMono_500Medium.ttf'),
     'Inter_400Regular': require('../../assets/fonts/Inter_400Regular.ttf'),
     'Inter_400Regular_Italic': require('../../assets/fonts/Inter_400Regular_Italic.ttf'),
     'Inter_500Medium': require('../../assets/fonts/Inter_500Medium.ttf'),

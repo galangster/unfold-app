@@ -381,7 +381,7 @@ function DevotionalCard({ item, colors, exportingId, exportSuccessId, onSelect, 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <Text
           style={{
-            fontFamily: FontFamily.mono,
+            fontFamily: FontFamily.uiMedium,
             fontSize: 11,
             color: colors.textHint,
             letterSpacing: 1,

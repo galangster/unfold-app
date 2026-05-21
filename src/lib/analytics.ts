@@ -24,6 +24,9 @@ export const AnalyticsEvents = {
   DEVOTIONAL_COMPLETED: 'devotional_completed',
   DAY_ADVANCED: 'day_advanced',
   SCRIPTURE_COPIED: 'scripture_copied',
+  SCRIPTURE_EXPLAIN_OPENED: 'scripture_explain_opened',
+  SCRIPTURE_EXPLAIN_COMPLETED: 'scripture_explain_completed',
+  SCRIPTURE_EXPLAIN_ERROR: 'scripture_explain_error',
   
   // Journal
   JOURNAL_OPENED: 'journal_opened',

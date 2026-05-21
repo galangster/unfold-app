@@ -5,15 +5,16 @@ import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, SparkleIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
+import { XIcon, BookmarkSimpleIcon, CopyIcon, CheckIcon, BookOpenIcon, ArrowRightIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 import { useUnfoldStore } from '@/lib/store';
-import { fetchVerse, fetchVerseLocal, fetchCommentary, type VerseResult } from '@/lib/bible-api';
+import { fetchVerse, fetchVerseLocal, type VerseResult } from '@/lib/bible-api';
 import { BIBLE_BOOKS } from '@/lib/bible-constants';
+import { ScriptureExplainSheet } from '@/components/ScriptureExplainSheet';
 
 interface ScriptureTapSheetProps {
   visible: boolean;
@@ -62,8 +63,7 @@ export function ScriptureTapSheet({
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [commentary, setCommentary] = useState<string | null>(null);
-  const [commentaryLoading, setCommentaryLoading] = useState(false);
+  const [showExplainSheet, setShowExplainSheet] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const alreadyBookmarked = devotionalId && dayNumber
@@ -77,28 +77,14 @@ export function ScriptureTapSheet({
       setLoading(true);
       setCopied(false);
       setSaved(false);
-      setCommentary(null);
-      setCommentaryLoading(false);
+      setShowExplainSheet(false);
       const translation = user?.bibleTranslation ?? 'BSB';
       const fetchFn = ['BSB', 'KJV'].includes(translation.toUpperCase())
         ? () => fetchVerseLocal(reference, translation.toUpperCase() as 'BSB' | 'KJV')
             .then((local) => local ?? fetchVerse(reference, 'web'))
         : () => fetchVerse(reference, ['web', 'kjv'].includes(translation.toLowerCase()) ? translation.toLowerCase() : 'web');
       fetchFn()
-        .then((result) => {
-          setVerse(result);
-          if (result && dayTitle) {
-            setCommentaryLoading(true);
-            fetchCommentary({
-              reference: result.reference,
-              verseText: result.text,
-              todayTheme: dayTitle,
-              todayTitle: dayTitle,
-            })
-              .then((c) => setCommentary(c))
-              .finally(() => setCommentaryLoading(false));
-          }
-        })
+        .then((result) => setVerse(result))
         .finally(() => setLoading(false));
     }
   }, [visible, reference, user?.bibleTranslation, dayTitle]);
@@ -137,11 +123,18 @@ export function ScriptureTapSheet({
     }, 200);
   };
 
+  const handleExplain = () => {
+    if (!verse) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowExplainSheet(true);
+  };
+
   if (!visible) return null;
 
   return (
+    <>
     <Modal
-      visible={visible}
+      visible={visible && !showExplainSheet}
       transparent
       animationType="fade"
       onRequestClose={onClose}
@@ -236,41 +229,36 @@ export function ScriptureTapSheet({
               </View>
             ) : verse ? (
               <>
-                {/* Verse text — accent left border for visual identity */}
-                <View style={[s.verseBlock, { borderLeftColor: alpha(colors.accent, 0.25) }]}>
+                {/* Verse text — quiet editorial frame, no automatic explanation */}
+                <View
+                  style={[
+                    s.verseBlock,
+                    {
+                      borderTopColor: alpha(colors.accent, 0.18),
+                      borderBottomColor: alpha(colors.accent, 0.10),
+                    },
+                  ]}
+                >
                   <Text style={[s.verseText, { color: colors.text }]}>
                     {verse.text}
                   </Text>
                 </View>
 
-                {/* AI Commentary */}
-                {commentaryLoading && (
-                  <Animated.View
-                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-                    style={[s.commentaryLoading, { backgroundColor: colors.inputBackground }]}
-                  >
-                    <ActivityIndicator size={12} color={colors.accent} />
-                    <Text style={[s.commentaryLoadingLabel, { color: colors.textSubtle }]}>
-                      Connecting to today's theme...
-                    </Text>
-                  </Animated.View>
-                )}
-                {commentary && !commentaryLoading && (
-                  <Animated.View
-                    entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-                    style={[s.commentaryCard, { backgroundColor: colors.inputBackground }]}
-                  >
-                    <View style={s.commentaryHeaderRow}>
-                      <SparkleIcon size={11} color={colors.accent} weight="fill" />
-                      <Text style={[s.commentaryLabel, { color: colors.accent }]}>
-                        Today's Connection
-                      </Text>
-                    </View>
-                    <Text style={[s.commentaryBody, { color: colors.textMuted }]}>
-                      {commentary}
-                    </Text>
-                  </Animated.View>
-                )}
+                {/* Explain — explicit opt-in, no hidden AI call on sheet open */}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={handleExplain}
+                  style={[s.explainCta, { backgroundColor: colors.inputBackground, borderColor: alpha(colors.accent, 0.16) }]}
+                  accessibilityLabel="Explain this passage"
+                  accessibilityRole="button"
+                >
+                  <BookOpenIcon size={16} color={colors.accent} weight="light" />
+                  <View style={s.explainCtaTextGroup}>
+                    <Text style={[s.explainCtaText, { color: colors.text }]}>Explain this passage</Text>
+                    <Text style={[s.explainCtaSubtext, { color: colors.textSubtle }]}>Meaning, context, and a prompt for prayer</Text>
+                  </View>
+                  <ArrowRightIcon size={14} color={colors.accent} weight="bold" style={{ marginLeft: 'auto' }} />
+                </TouchableOpacity>
 
                 {/* Read in Bible — primary CTA */}
                 {canNavigate && (
@@ -296,6 +284,23 @@ export function ScriptureTapSheet({
         </Animated.View>
       </View>
     </Modal>
+    {verse && (
+      <ScriptureExplainSheet
+        visible={showExplainSheet}
+        onClose={() => setShowExplainSheet(false)}
+        reference={verse.reference}
+        passageText={verse.text}
+        translation={verse.translation.toUpperCase()}
+        source="devotional-scripture-sheet"
+        devotionalContext={{
+          ...(devotionalId ? { devotionalId } : {}),
+          ...(devotionalTitle ? { devotionalTitle } : {}),
+          ...(dayNumber ? { dayNumber } : {}),
+          ...(dayTitle ? { dayTitle } : {}),
+        }}
+      />
+    )}
+    </>
   );
 }
 
@@ -386,50 +391,40 @@ const s = StyleSheet.create({
 
   // ─── Verse ──────────────────────────────────────
   verseBlock: {
-    borderLeftWidth: 2,
-    paddingLeft: Spacing['4'],
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing['1'],
+    paddingVertical: Spacing['5'],
     marginBottom: Spacing['5'],
   },
   verseText: {
-    fontFamily: FontFamily.body,
-    fontSize: 17,
-    lineHeight: 30,
+    fontFamily: FontFamily.display,
+    fontSize: 20,
+    lineHeight: 33,
   },
 
-  // ─── Commentary ─────────────────────────────────
-  commentaryLoading: {
+  // ─── Explain CTA ─────────────────────────────────
+  explainCta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing['2'],
-    padding: 14,
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: Spacing['4'],
     borderRadius: Radius.md,
-    marginBottom: Spacing['4'],
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: Spacing['3'],
   },
-  commentaryLoadingLabel: {
+  explainCtaTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  explainCtaText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  explainCtaSubtext: {
     fontFamily: FontFamily.ui,
     fontSize: FontSize.xs,
-  },
-  commentaryCard: {
-    padding: 14,
-    borderRadius: Radius.md,
-    marginBottom: Spacing['4'],
-  },
-  commentaryHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 6,
-  },
-  commentaryLabel: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  commentaryBody: {
-    fontFamily: FontFamily.body,
-    fontSize: FontSize.sm,
-    lineHeight: 22,
   },
 
   // ─── Read CTA ───────────────────────────────────

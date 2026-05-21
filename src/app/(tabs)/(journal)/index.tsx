@@ -1269,7 +1269,7 @@ export default function JournalHubScreen() {
                           )}
                           <Text
                             style={{
-                              fontFamily: FontFamily.mono,
+                              fontFamily: FontFamily.uiMedium,
                               fontSize: 11,
                               color: colors.accent,
                               letterSpacing: 1,
@@ -1420,7 +1420,7 @@ export default function JournalHubScreen() {
                       >
                         <Text
                           style={{
-                            fontFamily: FontFamily.mono,
+                            fontFamily: FontFamily.uiMedium,
                             fontSize: 11,
                             color: colors.textSubtle,
                             letterSpacing: 1,

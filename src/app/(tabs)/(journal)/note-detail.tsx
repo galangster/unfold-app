@@ -1832,11 +1832,11 @@ const styles = StyleSheet.create({
     marginBottom: Spacing['1'],
   },
   metadataDot: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 11,
   },
   metadataText: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -1887,7 +1887,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['6'],
   },
   tagsSectionLabel: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 10,
     letterSpacing: 1,
     textTransform: 'uppercase',

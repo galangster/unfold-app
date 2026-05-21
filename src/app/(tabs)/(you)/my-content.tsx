@@ -701,7 +701,7 @@ export default function MyContentScreen() {
                       <BookmarkSimpleIcon size={14} color={colors.accent} weight="fill" />
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.uiMedium,
                           fontSize: FontSize.xs,
                           color: colors.accent,
                           letterSpacing: 0.5,
@@ -711,7 +711,7 @@ export default function MyContentScreen() {
                       </Text>
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.uiMedium,
                           fontSize: FontSize.xs,
                           color: colors.textSubtle,
                           letterSpacing: 0.5,

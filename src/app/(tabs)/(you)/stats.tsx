@@ -479,7 +479,7 @@ const statStyles = StyleSheet.create({
     marginTop: -4,
   },
   bestStreak: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 11,
     marginTop: Spacing['3'],
     letterSpacing: 0.5,

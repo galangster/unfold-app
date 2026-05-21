@@ -110,7 +110,7 @@ function MovementCard({
     >
       <Text
         style={{
-          fontFamily: FontFamily.mono,
+          fontFamily: FontFamily.uiMedium,
           fontSize: 10,
           color: accentColor,
           letterSpacing: 1.5,
@@ -475,7 +475,7 @@ export default function EveningWindDownScreen() {
 
                 <Text
                   style={{
-                    fontFamily: FontFamily.mono,
+                    fontFamily: FontFamily.uiMedium,
                     fontSize: 10,
                     color: colors.accent,
                     letterSpacing: 1.5,

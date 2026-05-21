@@ -1586,7 +1586,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   mainCardMethodText: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 10,
     letterSpacing: 0.8,
     textTransform: 'uppercase',

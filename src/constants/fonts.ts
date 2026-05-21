@@ -15,7 +15,9 @@ export const FontFamily = {
   bodyMedium: 'Inter_500Medium',
   bodyBold: 'Inter_700Bold',
 
-  // Aliases kept for backwards compat — now mapped to Inter
+  // Legacy aliases kept for backwards compatibility. Do not use these as a
+  // generic metadata-label style; prefer ui/uiMedium unless the text is truly
+  // technical (timer, progress, error detail). They intentionally resolve to Inter.
   mono: 'Inter_400Regular',
   monoMedium: 'Inter_500Medium',
 

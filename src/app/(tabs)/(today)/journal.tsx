@@ -1346,7 +1346,7 @@ const jStyles = StyleSheet.create({
     padding: Spacing['2'],
   },
   dayLabel: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.xs,
     letterSpacing: 1,
   },
@@ -1397,7 +1397,7 @@ const jStyles = StyleSheet.create({
   },
   freewriteInput: {
     minHeight: 160,
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.body,
     fontSize: FontSize.base,
     lineHeight: 26,
     paddingTop: 0,
@@ -1447,7 +1447,7 @@ const jStyles = StyleSheet.create({
     marginBottom: Spacing['4'],
   },
   deeperLabel: {
-    fontFamily: FontFamily.mono,
+    fontFamily: FontFamily.uiMedium,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',

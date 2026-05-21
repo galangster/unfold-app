@@ -86,7 +86,7 @@ export default function SavedPassagesScreen() {
                     <View style={{ flex: 1 }}>
                       <Text
                         style={{
-                          fontFamily: FontFamily.mono,
+                          fontFamily: FontFamily.uiMedium,
                           fontSize: 11,
                           color: colors.accent,
                           letterSpacing: 0.8,
