@@ -1,0 +1,265 @@
+/* eslint-disable @typescript-eslint/no-require-imports, import/first */
+import React from 'react';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const renderer = require('react-test-renderer');
+const { act } = renderer;
+
+type AnimationChain = {
+  duration: jest.Mock<AnimationChain, unknown[]>;
+  delay: jest.Mock<AnimationChain, unknown[]>;
+  easing: jest.Mock<AnimationChain, unknown[]>;
+};
+
+const animationChain = {} as AnimationChain;
+animationChain.duration = jest.fn(() => animationChain);
+animationChain.delay = jest.fn(() => animationChain);
+animationChain.easing = jest.fn(() => animationChain);
+
+jest.mock('react-native-reanimated', () => {
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: { View },
+    FadeIn: animationChain,
+    FadeOut: animationChain,
+    useReducedMotion: () => false,
+    Easing: {
+      cubic: jest.fn(),
+      out: jest.fn(() => 'ease-out'),
+      in: jest.fn(() => 'ease-in'),
+      inOut: jest.fn(() => 'ease-in-out'),
+    },
+  };
+});
+
+jest.mock('expo-blur', () => ({
+  BlurView: ({ children, ...props }: any) => {
+    const { View } = require('react-native');
+    return <View {...props}>{children}</View>;
+  },
+}));
+
+jest.mock('phosphor-react-native', () => ({
+  ArrowRightIcon: () => null,
+  XIcon: () => null,
+}));
+
+jest.mock('@/components/ui', () => ({
+  alpha: (color: string, opacity: number) => `${color}:${opacity}`,
+}));
+
+const mockTestColors = {
+  background: '#0a0a0a',
+  backgroundPure: '#000000',
+  backgroundElevated: '#181614',
+  text: '#f5f0e8',
+  textMuted: '#b9ad9e',
+  textSubtle: '#8c8176',
+  textHint: '#746b62',
+  inputBackground: '#111111',
+  inputBackgroundFocused: '#171717',
+  buttonBackground: '#1c1c1c',
+  buttonBackgroundPressed: '#242424',
+  border: '#2c2823',
+  borderFocused: '#3a342e',
+  borderStrong: '#4a4037',
+  glassBackground: '#181614',
+  glassBorder: '#302a23',
+  accent: '#c8a55c',
+  contrastText: '#ffffff',
+  success: '#4ade80',
+  error: '#f87171',
+};
+
+jest.mock('@/lib/theme', () => ({
+  useTheme: () => ({
+    isDark: true,
+    colors: mockTestColors,
+  }),
+}));
+
+import { TodayCardStack, type TodayCardStackCard } from '../TodayCardStack';
+import { buildTodayCardStackModel, orderTodayStackCards } from '@/lib/today-card-stack';
+
+function fixtureCard(overrides: Partial<TodayCardStackCard> = {}): TodayCardStackCard {
+  return {
+    id: 'resume-card',
+    kind: 'resume',
+    priority: 100,
+    eyebrow: 'Resume',
+    title: 'Return to today’s reading',
+    body: 'Your place is saved quietly for the next faithful step.',
+    actionLabel: 'Continue reading',
+    accessibilityLabel: 'Resume. Return to today’s reading.',
+    accessibilityHint: 'Returns to the saved devotional reading',
+    ...overrides,
+  };
+}
+
+function renderInAct(element: React.ReactElement) {
+  let tree: any;
+  act(() => {
+    tree = renderer.create(element);
+  });
+  return tree;
+}
+
+function pressByLabel(tree: any, label: string) {
+  const matches = tree.root.findAll(
+    (node: any) =>
+      node.props.accessibilityLabel === label &&
+      node.props.accessibilityRole === 'button' &&
+      typeof node.props.onPress === 'function',
+  );
+  expect(matches.length).toBeGreaterThan(0);
+  act(() => {
+    matches[0].props.onPress();
+  });
+}
+
+function textContent(node: any): string {
+  return node.children
+    .map((child: any) => (typeof child === 'string' ? child : textContent(child)))
+    .join('');
+}
+
+describe('today-card-stack helper', () => {
+  it('orders cards by priority while keeping ties stable', () => {
+    const ordered = orderTodayStackCards([
+      fixtureCard({ id: 'low', kind: 'bridge', priority: 1 }),
+      fixtureCard({ id: 'high-a', kind: 'resume', priority: 10 }),
+      fixtureCard({ id: 'high-b', kind: 'midday', priority: 10 }),
+      fixtureCard({ id: '', kind: 'evening', priority: 999 }),
+    ]);
+
+    expect(ordered.map((card) => card.id)).toEqual(['high-a', 'high-b', 'low']);
+  });
+
+  it('models top card, total count, and visible back card count', () => {
+    const model = buildTodayCardStackModel([
+      fixtureCard({ id: 'resume', kind: 'resume', priority: 90 }),
+      fixtureCard({ id: 'midday', kind: 'midday', priority: 70 }),
+      fixtureCard({ id: 'bridge', kind: 'bridge', priority: 40 }),
+      fixtureCard({ id: 'premium', kind: 'premium-nudge', priority: 5 }),
+    ]);
+
+    expect(model.topCard?.id).toBe('resume');
+    expect(model.totalCount).toBe(4);
+    expect(model.backCards.map((card) => card.id)).toEqual(['midday', 'bridge']);
+    expect(model.visibleBackCount).toBe(2);
+  });
+});
+
+describe('TodayCardStack fixture shell', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders no surface for zero fixture cards', () => {
+    const tree = renderInAct(<TodayCardStack cards={[]} colors={mockTestColors} />);
+
+    expect(tree.toJSON()).toBeNull();
+  });
+
+  it('renders one top card without stack count or back silhouettes', () => {
+    const tree = renderInAct(<TodayCardStack cards={[fixtureCard()]} colors={mockTestColors} />);
+
+    expect(tree.root.findByProps({ testID: 'today-card-stack-top-card' })).toBeTruthy();
+    expect(tree.root.findAll((node: any) => node.children?.includes('Return to today’s reading'))).toHaveLength(1);
+    expect(tree.root.findAll((node: any) => node.props.testID === 'today-card-stack-count')).toHaveLength(0);
+    expect(tree.root.findAll((node: any) => /^today-card-stack-back-card-/.test(node.props.testID))).toHaveLength(0);
+  });
+
+  it('renders the highest-priority fixture as top card with count and subdued back-card silhouettes', () => {
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        cards={[
+          fixtureCard({ id: 'bridge', kind: 'bridge', priority: 40, title: 'Bridge note' }),
+          fixtureCard({ id: 'resume', kind: 'resume', priority: 100, title: 'Resume reading' }),
+          fixtureCard({ id: 'premium', kind: 'premium-nudge', priority: 5, title: 'Premium path' }),
+        ]}
+      />,
+    );
+
+    expect(tree.root.findAll((node: any) => node.children?.includes('Resume reading'))).toHaveLength(1);
+    expect(tree.root.findAll((node: any) => node.children?.includes('Bridge note'))).toHaveLength(0);
+    expect(textContent(tree.root.findByProps({ testID: 'today-card-stack-count' }))).toBe('1/3');
+    const backCardIds = new Set(
+      tree.root
+        .findAll((node: any) => /^today-card-stack-back-card-/.test(node.props.testID))
+        .map((node: any) => node.props.testID),
+    );
+    expect([...backCardIds]).toEqual(['today-card-stack-back-card-1', 'today-card-stack-back-card-2']);
+  });
+
+  it('calls the top card inline X dismissal callback without invoking the primary action', () => {
+    const onPress = jest.fn();
+    const onDismiss = jest.fn();
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        cards={[
+          fixtureCard({
+            onPress,
+            onDismiss,
+            dismissAccessibilityLabel: 'Dismiss resume stack card',
+          }),
+        ]}
+      />,
+    );
+
+    pressByLabel(tree, 'Dismiss resume stack card');
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('keeps reduced-motion previews free of enter/exit animation props and offset transforms', () => {
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        reducedMotionOverride
+        cards={[
+          fixtureCard({ id: 'resume', kind: 'resume', priority: 100 }),
+          fixtureCard({ id: 'midday', kind: 'midday', priority: 80 }),
+        ]}
+      />,
+    );
+
+    const stack = tree.root.findByProps({ testID: 'today-card-stack' });
+    expect(stack.props.entering).toBeUndefined();
+    expect(stack.props.exiting).toBeUndefined();
+
+    const backCard = tree.root.findByProps({ testID: 'today-card-stack-back-card-1' });
+    expect(backCard.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          transform: [{ translateY: 0 }, { scale: 1 }],
+        }),
+      ]),
+    );
+  });
+
+  it('does not place the inline X inside the card body pressable', () => {
+    const sourcePath = path.join(__dirname, '..', 'TodayCardStack.tsx');
+    const source = fs.readFileSync(sourcePath, 'utf8');
+    const bodyStart = source.indexOf('function TopCardBody');
+    const bodyEnd = source.indexOf('function BackCardSilhouette');
+    const bodySource = source.slice(bodyStart, bodyEnd);
+
+    expect(bodySource).toContain('<TouchableOpacity');
+    expect(bodySource).not.toContain('StackDismissButton');
+    expect(source).toContain('<TopCardBody card={topCard} colors={colors} />\n          <StackDismissButton card={topCard} colors={colors} />');
+  });
+
+  it('is fixture-only and does not import production Today card surfaces yet', () => {
+    const sourcePath = path.join(__dirname, '..', 'TodayCardStack.tsx');
+    const source = fs.readFileSync(sourcePath, 'utf8');
+
+    expect(source).not.toMatch(/ContextSlot|NotificationCard|DailyBridgeCard|RememberThisCard|PremiumNudgeCard|useUnfoldStore/);
+    expect(source).not.toMatch(/PanGestureHandler|GestureDetector|Swipeable/);
+  });
+});

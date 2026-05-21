@@ -1,0 +1,349 @@
+import React from 'react';
+import { Platform, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { BlurView } from 'expo-blur';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
+import { Duration, Ease } from '@/constants/animations';
+import { FontFamily, FontSize } from '@/constants/fonts';
+import { Radius } from '@/constants/radius';
+import { Shadow } from '@/constants/shadows';
+import { Spacing } from '@/constants/spacing';
+import { alpha } from '@/components/ui';
+import { useAccessibleAnimation } from '@/hooks/useAccessibility';
+import { useTheme } from '@/lib/theme';
+import { buildTodayCardStackModel, type TodayStackCardItem } from '@/lib/today-card-stack';
+import type { ColorTheme } from '@/constants/colors';
+
+export interface TodayCardStackCard extends TodayStackCardItem {
+  eyebrow?: string;
+  title: string;
+  body?: string;
+  actionLabel?: string;
+  onPress?: () => void;
+  onDismiss?: () => void;
+  accessibilityLabel: string;
+  accessibilityHint?: string;
+  dismissAccessibilityLabel?: string;
+  dismissAccessibilityHint?: string;
+  testID?: string;
+}
+
+interface TodayCardStackProps {
+  cards: readonly TodayCardStackCard[];
+  colors?: ColorTheme;
+  maxBackCards?: number;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  /** Test/preview override; production should rely on useAccessibleAnimation. */
+  reducedMotionOverride?: boolean;
+}
+
+const ENTER_DURATION = Duration.normal;
+const EXIT_DURATION = Duration.fast;
+const BODY_TEXT_MAX_SCALE = 1.26;
+const LABEL_TEXT_MAX_SCALE = 1.14;
+
+function StackDismissButton({ card, colors }: { card: TodayCardStackCard; colors: ColorTheme }) {
+  if (!card.onDismiss) return null;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.72}
+      onPress={card.onDismiss}
+      accessibilityRole="button"
+      accessibilityLabel={card.dismissAccessibilityLabel ?? `Dismiss ${card.title}`}
+      accessibilityHint={card.dismissAccessibilityHint ?? 'Hides this optional Today card without deleting its content'}
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      style={[
+        styles.dismissButton,
+        {
+          backgroundColor: alpha(colors.backgroundElevated, 0.92),
+          borderColor: alpha(colors.text, 0.14),
+        },
+      ]}
+    >
+      <XIcon size={14} color={colors.textSubtle} weight="regular" />
+    </TouchableOpacity>
+  );
+}
+
+function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: ColorTheme }) {
+  const body = (
+    <View style={[styles.content, card.onDismiss && styles.contentDismissible]}>
+      {card.eyebrow ? (
+        <View style={styles.eyebrowRow}>
+          <View style={[styles.eyebrowRule, { backgroundColor: colors.accent }]} />
+          <Text style={[styles.eyebrow, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {card.eyebrow}
+          </Text>
+        </View>
+      ) : null}
+
+      <Text style={[styles.title, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={2}>
+        {card.title}
+      </Text>
+
+      {card.body ? (
+        <Text style={[styles.body, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE} numberOfLines={3}>
+          {card.body}
+        </Text>
+      ) : null}
+
+      {card.actionLabel ? (
+        <View style={[styles.actionPill, { borderColor: alpha(colors.accent, 0.22), backgroundColor: alpha(colors.accent, 0.08) }]}>
+          <Text style={[styles.actionText, { color: colors.text }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+            {card.actionLabel}
+          </Text>
+          <ArrowRightIcon size={13} color={colors.accent} weight="light" />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  if (!card.onPress) {
+    return (
+      <View accessible accessibilityRole="text" accessibilityLabel={card.accessibilityLabel} accessibilityHint={card.accessibilityHint}>
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.74}
+      onPress={card.onPress}
+      accessibilityRole="button"
+      accessibilityLabel={card.accessibilityLabel}
+      accessibilityHint={card.accessibilityHint}
+      style={styles.pressableBody}
+    >
+      {body}
+    </TouchableOpacity>
+  );
+}
+
+function BackCardSilhouette({
+  index,
+  totalCount,
+  colors,
+  reducedMotion,
+}: {
+  index: number;
+  totalCount: number;
+  colors: ColorTheme;
+  reducedMotion: boolean;
+}) {
+  const depth = index + 1;
+  const translateY = reducedMotion ? 0 : depth * 10;
+  const scale = reducedMotion ? 1 : 1 - depth * 0.035;
+  const opacity = Math.max(0.42, 0.72 - depth * 0.16);
+
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID={`today-card-stack-back-card-${depth}`}
+      style={[
+        styles.backCard,
+        {
+          backgroundColor: alpha(colors.backgroundPure ?? colors.background, 0.86),
+          borderColor: alpha(colors.accent, 0.12),
+          opacity,
+          transform: [{ translateY }, { scale }],
+          zIndex: totalCount - depth,
+        },
+      ]}
+    />
+  );
+}
+
+export function TodayCardStack({
+  cards,
+  colors: colorsOverride,
+  maxBackCards,
+  style,
+  testID = 'today-card-stack',
+  reducedMotionOverride,
+}: TodayCardStackProps) {
+  const { colors: themeColors, isDark } = useTheme();
+  const colors = colorsOverride ?? themeColors;
+  const { entering, exiting, reducedMotion: systemReducedMotion } = useAccessibleAnimation();
+  const reducedMotion = reducedMotionOverride ?? systemReducedMotion;
+  const model = buildTodayCardStackModel(cards, maxBackCards);
+
+  if (!model.topCard) return null;
+
+  const topCard = model.topCard;
+  const showCount = model.totalCount > 1;
+  const enteringAnimation = reducedMotion ? undefined : entering(FadeIn.duration(ENTER_DURATION).easing(Ease.out));
+  const exitingAnimation = reducedMotion ? undefined : exiting(FadeOut.duration(EXIT_DURATION).easing(Ease.out));
+
+  return (
+    <Animated.View
+      entering={enteringAnimation}
+      exiting={exitingAnimation}
+      style={[styles.outer, style]}
+      testID={testID}
+      accessibilityLabel={showCount ? `Today card stack, card 1 of ${model.totalCount}` : 'Today card stack'}
+    >
+      <View style={styles.stackStage} testID="today-card-stack-stage">
+        {model.backCards.map((card, index) => (
+          <BackCardSilhouette
+            key={card.id}
+            index={index}
+            totalCount={model.totalCount}
+            colors={colors}
+            reducedMotion={reducedMotion}
+          />
+        ))}
+
+        <View
+          testID={topCard.testID ?? 'today-card-stack-top-card'}
+          style={[
+            styles.topCard,
+            {
+              backgroundColor: Platform.OS === 'ios'
+                ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
+                : alpha(colors.backgroundElevated, 0.95),
+              borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24),
+              shadowColor: colors.accent,
+              zIndex: model.totalCount + 1,
+            },
+          ]}
+        >
+          {Platform.OS === 'ios' ? (
+            <BlurView
+              pointerEvents="none"
+              intensity={isDark ? 44 : 28}
+              tint={isDark ? 'dark' : 'light'}
+              style={[StyleSheet.absoluteFill, styles.cardBlur]}
+              testID="today-card-stack-glass-blur"
+            />
+          ) : null}
+
+          <View style={styles.topUtilityRow} pointerEvents="none">
+            {showCount ? (
+              <Text style={[styles.countText, { color: colors.textSubtle }]} testID="today-card-stack-count">
+                1/{model.totalCount}
+              </Text>
+            ) : null}
+          </View>
+
+          <TopCardBody card={topCard} colors={colors} />
+          <StackDismissButton card={topCard} colors={colors} />
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  outer: {
+    paddingHorizontal: Spacing['6'],
+  },
+  stackStage: {
+    minHeight: 176,
+    paddingBottom: Spacing['5'],
+    position: 'relative',
+  },
+  topCard: {
+    borderRadius: Radius.xl,
+    borderWidth: 1.5,
+    minHeight: 150,
+    overflow: 'hidden',
+    paddingHorizontal: Spacing['4'],
+    paddingVertical: Spacing['4'],
+    position: 'relative',
+    ...Shadow.md,
+  },
+  cardBlur: {
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+  },
+  backCard: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    minHeight: 150,
+    top: Spacing['3'],
+  },
+  topUtilityRow: {
+    alignItems: 'flex-end',
+    minHeight: 18,
+    position: 'absolute',
+    right: Spacing['4'],
+    top: Spacing['3'],
+    zIndex: 3,
+  },
+  countText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    lineHeight: 15,
+  },
+  pressableBody: {
+    borderRadius: Radius.lg,
+  },
+  content: {
+    gap: Spacing['2.5'],
+    paddingTop: Spacing['2'],
+  },
+  contentDismissible: {
+    paddingRight: Spacing['10'],
+  },
+  eyebrowRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing['2'],
+  },
+  eyebrowRule: {
+    height: 1,
+    opacity: 0.9,
+    width: 18,
+  },
+  eyebrow: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 10,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  title: {
+    fontFamily: FontFamily.display,
+    fontSize: FontSize.xl,
+    lineHeight: 27,
+  },
+  body: {
+    fontFamily: FontFamily.body,
+    fontSize: FontSize.sm,
+    lineHeight: 20,
+  },
+  actionPill: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: Spacing['1.5'],
+    marginTop: Spacing['1'],
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['2'],
+  },
+  actionText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  dismissButton: {
+    alignItems: 'center',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: Spacing['2'],
+    top: Spacing['2'],
+    width: 44,
+    zIndex: 4,
+  },
+});
