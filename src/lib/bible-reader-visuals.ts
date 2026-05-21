@@ -12,11 +12,11 @@ type BibleOverlayVariant = 'saved' | 'selectedDark' | 'selectedLight';
 export const BIBLE_TEXT_OVERLAY_METRICS = {
   horizontalInset: 4,
   minHeight: 20,
-  selectedHeightRatio: 0.82,
   radius: 6,
   savedHorizontalInset: 3,
-  savedHeightRatio: 0.88,
   savedRadius: 2,
+  topInset: 2,
+  bottomExtension: 1,
 } as const;
 
 export const BIBLE_SELECTED_OVERLAY_BG = {
@@ -37,12 +37,14 @@ export function getBibleTextOverlayStyle(
   const metrics = BIBLE_TEXT_OVERLAY_METRICS;
   const isSaved = variant === 'saved';
   const horizontalInset = isSaved ? metrics.savedHorizontalInset : metrics.horizontalInset;
-  const heightRatio = isSaved ? metrics.savedHeightRatio : metrics.selectedHeightRatio;
-  const overlayHeight = Math.min(line.height, Math.max(metrics.minHeight, line.height * heightRatio));
+  const overlayHeight = Math.max(
+    metrics.minHeight,
+    line.height - metrics.topInset + metrics.bottomExtension,
+  );
   const style: ViewStyle = {
     position: 'absolute',
     left: line.x - horizontalInset,
-    top: line.y + Math.max(0, (line.height - overlayHeight) / 2),
+    top: line.y + metrics.topInset,
     width: line.width + horizontalInset * 2,
     height: overlayHeight,
     borderRadius: isSaved ? metrics.savedRadius : metrics.radius,

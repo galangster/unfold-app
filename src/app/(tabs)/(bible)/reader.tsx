@@ -352,6 +352,10 @@ export default function BibleReaderScreen() {
   const verseLayoutsChapterRef = useRef<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastScrollYRef = useRef(0);
+  const setTabBarHidden = useUIState((state) => state.setTabBarHidden);
+  const tabBarHiddenRef = useRef(false);
+  // Track if tab bar was scroll-hidden BEFORE verse selection began.
+  const wasScrollHiddenRef = useRef(false);
 
   // Invalidate cached verse Y positions when chapter changes. onLayout Ys are
   // specific to the rendered verses; carrying them across chapters would make
@@ -392,6 +396,15 @@ export default function BibleReaderScreen() {
   // to the content container (after padding). scrollTo y=0 puts the first verse behind the header.
   // Subtract a small offset so the target verse sits visibly below the header, not behind it.
   const headerOverlap = 12; // slight breathing room below the fixed header
+
+  const restoreTabBarForClosedActions = useCallback(() => {
+    const tabBarState = nextBibleTabBarStateAfterActions({
+      showActions: false,
+      wasScrollHiddenBeforeActions: wasScrollHiddenRef.current,
+    });
+    setTabBarHidden(tabBarState.hidden, tabBarState.mode);
+    tabBarHiddenRef.current = tabBarState.hidden;
+  }, [setTabBarHidden]);
 
   // State-driven scroll-to-verse (runs after render when refs are guaranteed set)
   useEffect(() => {
@@ -500,10 +513,13 @@ export default function BibleReaderScreen() {
       } else {
         next.add(verseNum);
       }
+      if (next.size === 0) {
+        restoreTabBarForClosedActions();
+      }
       setShowActions(next.size > 0);
       return next;
     });
-  }, []);
+  }, [restoreTabBarForClosedActions]);
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -532,11 +548,12 @@ export default function BibleReaderScreen() {
       translation: bibleReaderSettings.translation,
     });
 
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [verses, selectedVerses, book, bookId, chapter, addBibleHighlight, removeBibleHighlight, highlights, bibleReaderSettings.translation]);
+  }, [verses, selectedVerses, book, bookId, chapter, addBibleHighlight, removeBibleHighlight, highlights, bibleReaderSettings.translation, restoreTabBarForClosedActions]);
 
   const handleCopy = useCallback(async () => {
     if (!verses || selectedVerses.size === 0 || !book) return;
@@ -549,10 +566,11 @@ export default function BibleReaderScreen() {
     await Clipboard.setStringAsync(`${selectedTexts}\n— ${refStr} (${bibleReaderSettings.translation})`);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     showToast(`${refStr} copied`);
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
-  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, showToast]);
+  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, showToast, restoreTabBarForClosedActions]);
 
   const handleExplain = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
@@ -568,10 +586,11 @@ export default function BibleReaderScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedExplanationInput(input);
     setShowExplainSheet(true);
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
-  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation]);
+  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, restoreTabBarForClosedActions]);
 
   const handleShare = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
@@ -591,10 +610,11 @@ export default function BibleReaderScreen() {
         type: 'verse',
       },
     });
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
-  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, router]);
+  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, router, restoreTabBarForClosedActions]);
 
   const handleRemoveHighlight = useCallback(() => {
     const sorted = Array.from(selectedVerses).sort((a, b) => a - b);
@@ -604,10 +624,11 @@ export default function BibleReaderScreen() {
       }
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
-  }, [selectedVerses, highlights, removeBibleHighlight]);
+  }, [selectedVerses, highlights, removeBibleHighlight, restoreTabBarForClosedActions]);
 
   const handleNote = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
@@ -619,6 +640,7 @@ export default function BibleReaderScreen() {
       sorted.some((v) => v >= h.verseStart && v <= h.verseEnd)
     );
     if (existingHL && existingHL.note && existingHL.note.trim()) {
+      restoreTabBarForClosedActions();
       setSelectedVerses(new Set());
       setShowActions(false);
       setNoteSheetHighlight(existingHL);
@@ -628,7 +650,7 @@ export default function BibleReaderScreen() {
     setShowNoteInput(true);
     setShowColorPicker(false);
     setTimeout(() => noteInputRef.current?.focus(), 100);
-  }, [verses, selectedVerses, book, highlights]);
+  }, [verses, selectedVerses, book, highlights, restoreTabBarForClosedActions]);
 
   const handleSaveNote = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
@@ -667,9 +689,10 @@ export default function BibleReaderScreen() {
     showToast(noteText.trim() ? `Note saved on ${refStr}` : `Note removed from ${refStr}`);
     setShowNoteInput(false);
     setNoteText('');
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
-  }, [verses, selectedVerses, book, chapter, highlights, noteText, bookId, bibleReaderSettings.translation, addBibleHighlight, updateBibleHighlightNote, showToast]);
+  }, [verses, selectedVerses, book, chapter, highlights, noteText, bookId, bibleReaderSettings.translation, addBibleHighlight, updateBibleHighlightNote, showToast, restoreTabBarForClosedActions]);
 
   // ─── Existing highlight color for selected verses ──────────────────────────
 
@@ -695,15 +718,17 @@ export default function BibleReaderScreen() {
     const target = dir === 1 ? nextChapter : prevChapter;
     if (!target) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
     router.setParams({ bookId: String(target.bookId), chapter: String(target.chapter) });
-  }, [nextChapter, prevChapter, router]);
+  }, [nextChapter, prevChapter, router, restoreTabBarForClosedActions]);
 
   const handleNavigatorSelect = useCallback((selectedBookId: number, selectedChapter: number, verse?: number) => {
     setShowNavigator(false);
+    restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
@@ -724,7 +749,7 @@ export default function BibleReaderScreen() {
       chapter: String(selectedChapter),
       ...(verse ? { verse: String(verse) } : {}),
     });
-  }, [router, bookId, chapter]);
+  }, [router, bookId, chapter, restoreTabBarForClosedActions]);
 
   // ─── Reading settings ─────────────────────────────────────────────────────
 
@@ -839,11 +864,6 @@ export default function BibleReaderScreen() {
   );
 
   // ─── Tab bar hide/show on scroll ──────────────────────────────────────────
-
-  const setTabBarHidden = useUIState((s) => s.setTabBarHidden);
-  const tabBarHiddenRef = useRef(false);
-  // Track if tab bar was scroll-hidden BEFORE verse selection began
-  const wasScrollHiddenRef = useRef(false);
 
   const handleScroll = useCallback((event: any) => {
     // Don't let scroll affect tab bar while context actions are visible
@@ -1063,10 +1083,9 @@ export default function BibleReaderScreen() {
       </Animated.View>
 
       {/* ─── Context Bar — replaces bottom tab bar when verses selected ──── */}
-      {/* No exiting animation — tab bar snaps on top instantly, so exit plays behind it invisibly */}
+      {/* No opacity enter/exit: the bar must cover the bottom immediately so content never flashes through. */}
       {showActions && (
         <Animated.View
-          entering={reducedMotion ? undefined : FadeIn.duration(ANIM.contextEnter).easing(Ease.out)}
           style={[
             styles.contextBarFull,
             {

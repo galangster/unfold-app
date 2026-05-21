@@ -9,11 +9,11 @@ describe('Bible reader visual polish helpers', () => {
     expect(BIBLE_TEXT_OVERLAY_METRICS).toMatchObject({
       horizontalInset: 4,
       minHeight: 20,
-      selectedHeightRatio: 0.82,
       radius: 6,
       savedHorizontalInset: 3,
-      savedHeightRatio: 0.88,
       savedRadius: 2,
+      topInset: 2,
+      bottomExtension: 1,
     });
 
     const savedStyle = getBibleTextOverlayStyle({ x: 12, y: 20, width: 180, height: 28 });
@@ -22,8 +22,16 @@ describe('Bible reader visual polish helpers', () => {
       width: 186,
       borderRadius: 2,
     });
-    expect(savedStyle.top).toBeCloseTo(21.68);
-    expect(savedStyle.height).toBeCloseTo(24.64);
+    expect(savedStyle.top).toBe(22);
+    expect(savedStyle.height).toBe(27);
+  });
+
+  it('stacks wrapped-line overlays with a tiny gap and no overlap', () => {
+    const first = getBibleTextOverlayStyle({ x: 0, y: 20, width: 100, height: 28 });
+    const second = getBibleTextOverlayStyle({ x: 0, y: 48, width: 100, height: 28 });
+
+    expect(Number(first.top) + Number(first.height)).toBe(49);
+    expect(second.top).toBe(50);
   });
 
   it('uses taller centered selected-verse overlays in dark and light mode', () => {
@@ -32,14 +40,14 @@ describe('Bible reader visual polish helpers', () => {
       left: -4,
       top: 2,
       width: 108,
-      height: 20,
+      height: 23,
     });
     expect(getBibleTextOverlayStyle({ x: 0, y: 0, width: 100, height: 24 }, 'selectedLight')).toMatchObject({
       backgroundColor: 'rgba(78, 68, 54, 0.30)',
       left: -4,
       top: 2,
       width: 108,
-      height: 20,
+      height: 23,
     });
   });
 
