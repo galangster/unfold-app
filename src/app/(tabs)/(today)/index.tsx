@@ -7,14 +7,12 @@ import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'reac
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
-import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
 import { shouldShowCompletedBottomGlow } from '@/lib/today-ambient-rive';
 import { alpha } from '@/components/ui';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
-import { HeartIcon, HandIcon, XIcon } from 'phosphor-react-native';
 import * as StoreReview from 'expo-store-review';
 import { useQuery } from '@tanstack/react-query';
 import { StreakBox } from '@/components/StreakBox';
@@ -29,7 +27,7 @@ import { generateBridge, type BridgeCheckIn } from '@/lib/bridge-service';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
-import { PremiumNudgeCard } from '@/components/PremiumNudgeCard';
+import { getPremiumNudgeCardTone } from '@/components/PremiumNudgeCard';
 import { usePremiumNudge } from '@/hooks/usePremiumNudge';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { getContentAwareMiddayMessage, getContentAwareEveningMessage } from '@/constants/check-in-messages';
@@ -37,7 +35,6 @@ import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { Duration, Ease } from '@/constants/animations';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
 import { mmkvStorage } from '@/lib/mmkv-storage';
-import { RememberThisCard } from '@/components/home/RememberThisCard';
 import { TodayCardStack, type TodayCardStackCard } from '@/components/home/TodayCardStack';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { getBibleDbStatus, downloadBibleDb } from '@/lib/bible-db';
@@ -60,9 +57,13 @@ const INFLIGHT_KEY = 'inflight-generation-job';
 const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';
-const DISPLAY_TEXT_MAX_SCALE = 1.18;
-const BODY_TEXT_MAX_SCALE = 1.28;
-const LABEL_TEXT_MAX_SCALE = 1.14;
+
+type TodayPremiumFeature = 'streak' | 'audio' | 'series' | 'general';
+
+function getTodayPremiumFeature(feature: string): TodayPremiumFeature {
+  if (feature === 'streak' || feature === 'audio' || feature === 'series') return feature;
+  return 'general';
+}
 
 type QaContextSlotPreview = Extract<ContextSlotType, 'midday' | 'evening' | 'bridge' | 'bridge-loading'>;
 
@@ -115,9 +116,12 @@ export default function HomeScreen() {
   const dismissedMiddayCardDate = useUnfoldStore((s) => s.dismissedMiddayCardDate);
   const dismissedEveningCardDate = useUnfoldStore((s) => s.dismissedEveningCardDate);
   const dismissedBridgeCardDate = useUnfoldStore((s) => s.dismissedBridgeCardDate);
+  const dismissedRememberThisCardDate = useUnfoldStore((s) => s.dismissedRememberThisCardDate);
+  const highlights = useUnfoldStore((s) => s.highlights);
   const setDismissedMiddayCardDate = useUnfoldStore((s) => s.setDismissedMiddayCardDate);
   const setDismissedEveningCardDate = useUnfoldStore((s) => s.setDismissedEveningCardDate);
   const setDismissedBridgeCardDate = useUnfoldStore((s) => s.setDismissedBridgeCardDate);
+  const setDismissedRememberThisCardDate = useUnfoldStore((s) => s.setDismissedRememberThisCardDate);
 
   const checkIns = useUnfoldStore((s) => s.checkIns);
   const journalEntries = useUnfoldStore((s) => s.journalEntries);
@@ -220,6 +224,7 @@ export default function HomeScreen() {
   const [clockNow, setClockNow] = useState(() => new Date());
   const [showCheckInSheet, setShowCheckInSheet] = useState(false);
   const [showPremiumSheet, setShowPremiumSheet] = useState(false);
+  const [stackPremiumFeature, setStackPremiumFeature] = useState<TodayPremiumFeature | null>(null);
   const { gate, showExclusiveOffer, dismissOffer } = useCreationGate();
 
   // Update clock-driven Today card visibility every minute.
@@ -660,7 +665,20 @@ export default function HomeScreen() {
   const hasDismissedEveningCardToday = dismissedEveningCardDate === todayDate;
   const hasDismissedBridgeCardToday = !qaContextSlot && dismissedBridgeCardDate === todayDate;
 
-  const handleDay1ReviewOption = async (option: 'love' | 'okay' | 'not-for-me') => {
+  const rememberedHighlight = useMemo(() => {
+    if (dismissedRememberThisCardDate === todayDate) return null;
+    if (highlights.length === 0) return null;
+    const seed = todayDate.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return highlights[seed % highlights.length];
+  }, [dismissedRememberThisCardDate, highlights, todayDate]);
+
+  const rememberedHighlightSourceTitle = useMemo(() => {
+    if (!rememberedHighlight) return 'Untitled Series';
+    const devotional = devotionals.find((d) => d.id === rememberedHighlight.devotionalId);
+    return devotional?.title || rememberedHighlight.devotionalTitle || 'Untitled Series';
+  }, [devotionals, rememberedHighlight]);
+
+  const handleDay1ReviewOption = useCallback(async (option: 'love' | 'okay' | 'not-for-me') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHasSeenDay1Review();
     if (option === 'love') {
@@ -673,7 +691,7 @@ export default function HomeScreen() {
         // Silently fail — review prompt is non-critical
       }
     }
-  };
+  }, [setHasSeenDay1Review]);
 
   const daysCompleted = currentDevotional ? (currentDevotional.days ?? []).filter(d => d.isRead).length : 0;
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
@@ -827,6 +845,50 @@ export default function HomeScreen() {
     setDismissedBridgeCardDate(todayDate);
   }, [setDismissedBridgeCardDate, todayDate]);
 
+  const handleSavedEchoPress = useCallback(() => {
+    if (!rememberedHighlight) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCurrentDevotional(rememberedHighlight.devotionalId);
+    router.push({
+      pathname: '/(tabs)/(today)/reading',
+      params: {
+        devotionalId: rememberedHighlight.devotionalId,
+        dayNumber: rememberedHighlight.dayNumber.toString(),
+        highlightId: rememberedHighlight.id,
+      },
+    });
+  }, [rememberedHighlight, router, setCurrentDevotional]);
+
+  const handleDismissRememberThisCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setDismissedRememberThisCardDate(todayDate);
+  }, [setDismissedRememberThisCardDate, todayDate]);
+
+  const handleDismissDay1ReviewCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    setHasSeenDay1Review();
+  }, [setHasSeenDay1Review]);
+
+  const handlePremiumNudgeStackAction = useCallback(() => {
+    if (!premiumNudge) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStackPremiumFeature(getTodayPremiumFeature(premiumNudge.premiumFeature));
+  }, [premiumNudge]);
+
+  const handleDismissPremiumNudgeCard = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateCardDismiss();
+    nudgeDismiss();
+  }, [nudgeDismiss]);
+
+  const handleStackPremiumSheetClose = useCallback(() => {
+    setStackPremiumFeature(null);
+    animateCardDismiss();
+    nudgeAction();
+  }, [nudgeAction]);
+
   // Compute resume props for Today card stack
   const resumeProps = useMemo(() => {
     if (!shouldShowResumeCard || !resumeContext || !resumeDevotional) return undefined;
@@ -938,19 +1000,108 @@ export default function HomeScreen() {
       });
     }
 
+    if (rememberedHighlight) {
+      cards.push({
+        id: `today-stack-remember-this-${rememberedHighlight.id}`,
+        kind: 'remember-this',
+        priority: 80,
+        eyebrow: 'Saved echo',
+        title: 'A line worth carrying',
+        body: `“${rememberedHighlight.highlightedText}” — Day ${rememberedHighlight.dayNumber} · ${rememberedHighlightSourceTitle}`,
+        actionLabel: 'Open highlight',
+        onPress: handleSavedEchoPress,
+        onDismiss: handleDismissRememberThisCard,
+        accessibilityLabel: `Saved highlight from Day ${rememberedHighlight.dayNumber}: ${rememberedHighlight.highlightedText}`,
+        accessibilityHint: 'Opens the reading at this highlighted passage',
+        dismissAccessibilityLabel: 'Dismiss saved echo stack card',
+        dismissAccessibilityHint: 'Hides this saved echo card for today without deleting the highlight',
+        testID: 'today-stack-card-remember-this',
+      });
+    }
+
+    if (showDay1Review) {
+      cards.push({
+        id: 'today-stack-day1-review',
+        kind: 'day1-review',
+        priority: 70,
+        eyebrow: 'Day 1 reflection',
+        title: 'Did today’s reading feel personal?',
+        body: 'One quiet response helps Unfold shape the next few days. No pressure — just a pulse check after your first reading.',
+        actions: [
+          {
+            label: 'This helped me',
+            onPress: () => { void handleDay1ReviewOption('love'); },
+            accessibilityLabel: 'This reading helped me',
+            accessibilityHint: 'Records a positive response and may open the App Store review prompt if available',
+            tone: 'primary',
+          },
+          {
+            label: 'Still settling',
+            onPress: () => { void handleDay1ReviewOption('okay'); },
+            accessibilityLabel: 'This reading was still settling',
+            accessibilityHint: 'Records neutral feedback and dismisses this prompt',
+            tone: 'secondary',
+          },
+          {
+            label: 'Not for me',
+            onPress: () => { void handleDay1ReviewOption('not-for-me'); },
+            accessibilityLabel: 'This reading was not for me',
+            accessibilityHint: 'Records that this devotional did not fit and dismisses this prompt',
+            tone: 'secondary',
+          },
+        ],
+        onDismiss: handleDismissDay1ReviewCard,
+        accessibilityLabel: 'Day 1 reflection. Did today’s reading feel personal?',
+        accessibilityHint: 'Choose a response to dismiss this feedback prompt',
+        dismissAccessibilityLabel: 'Dismiss Day 1 review stack card',
+        dismissAccessibilityHint: 'Dismisses this Day 1 feedback prompt',
+        testID: 'today-stack-card-day1-review',
+      });
+    }
+
+    if (premiumNudge) {
+      const premiumTone = getPremiumNudgeCardTone(premiumNudge.type);
+      cards.push({
+        id: `today-stack-premium-${premiumNudge.type}`,
+        kind: 'premium-nudge',
+        priority: 50,
+        eyebrow: premiumTone.kicker,
+        title: premiumTone.title,
+        body: `${premiumNudge.message} ${premiumTone.footnote}`,
+        actionLabel: premiumNudge.cta,
+        onPress: handlePremiumNudgeStackAction,
+        onDismiss: handleDismissPremiumNudgeCard,
+        accessibilityLabel: `${premiumTone.kicker}. ${premiumTone.title}. ${premiumNudge.message}`,
+        accessibilityHint: 'Shows details about this Premium feature',
+        dismissAccessibilityLabel: 'Dismiss premium invitation stack card',
+        dismissAccessibilityHint: 'Hides this premium suggestion',
+        testID: 'today-stack-card-premium-nudge',
+      });
+    }
+
     return cards;
   }, [
     eveningMessage,
     handleCheckIn,
+    handleDay1ReviewOption,
     handleDismissBridgeCard,
+    handleDismissDay1ReviewCard,
     handleDismissEveningCard,
     handleDismissMiddayCard,
+    handleDismissPremiumNudgeCard,
+    handleDismissRememberThisCard,
     handleDismissResumeCard,
     handleEveningWindDown,
+    handlePremiumNudgeStackAction,
+    handleSavedEchoPress,
     middayMessage,
+    premiumNudge,
+    rememberedHighlight,
+    rememberedHighlightSourceTitle,
     resumeProps,
     shouldShowBridgeLoadingStackCard,
     shouldShowBridgeStackCard,
+    showDay1Review,
     shouldShowEveningStackCard,
     shouldShowMiddayStackCard,
     validBridgeText,
@@ -1040,8 +1191,6 @@ export default function HomeScreen() {
 
           {/* Zone 2: Context stack moved under the hero in Phase 3. */}
 
-          {/* Remember This — daily random highlight */}
-          <RememberThisCard />
 
           {/* Zone 3: Hero Devotional — Today's primary act */}
           <View collapsable={false} onLayout={handleReadingLayout}>
@@ -1066,91 +1215,6 @@ export default function HomeScreen() {
 
           {/* Zone 5: Series Carousel — removed per user request */}
 
-          {/* Day 1 Review Prompt */}
-          {showDay1Review && (
-            <Animated.View
-              entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
-              style={styles.day1ReviewWrapper}
-            >
-              <View
-                style={[
-                  styles.day1ReviewCard,
-                  {
-                    backgroundColor: alpha(colors.backgroundElevated, 0.68),
-                    borderColor: alpha(colors.accent, 0.14),
-                    shadowColor: colors.accent,
-                  },
-                ]}
-              >
-                <View style={styles.day1ReviewContent}>
-                  <View style={styles.day1ReviewKickerRow}>
-                    <View style={[styles.day1ReviewRule, { backgroundColor: colors.accent }]} />
-                    <Text style={[styles.day1ReviewKicker, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Day 1 reflection</Text>
-                  </View>
-
-                  <Text style={[styles.day1ReviewTitle, { color: colors.text }]} maxFontSizeMultiplier={DISPLAY_TEXT_MAX_SCALE}>Did today’s reading feel personal?</Text>
-                  <Text style={[styles.day1ReviewSubtitle, { color: colors.textMuted }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>One quiet response helps Unfold shape the next few days. No pressure — just a pulse check after your first reading.</Text>
-
-                  <TouchableOpacity
-                    activeOpacity={0.72}
-                    onPress={() => handleDay1ReviewOption('love')}
-                    accessibilityRole="button"
-                    accessibilityLabel="This reading helped me"
-                    accessibilityHint="Records a positive response and may open the App Store review prompt if available"
-                    style={[
-                      styles.day1ReviewPrimaryOption,
-                      {
-                        backgroundColor: alpha(colors.accent, 0.1),
-                        borderColor: alpha(colors.accent, 0.28),
-                      },
-                    ]}
-                  >
-                    <HeartIcon size={17} color={colors.accent} weight="light" />
-                    <Text style={[styles.day1ReviewPrimaryText, { color: colors.text }]} maxFontSizeMultiplier={BODY_TEXT_MAX_SCALE}>This helped me</Text>
-                    <Text style={[styles.day1ReviewOptionArrow, { color: colors.accent }]}>→</Text>
-                  </TouchableOpacity>
-
-                  <View style={styles.day1ReviewSecondaryRow}>
-                    <TouchableOpacity
-                      activeOpacity={0.72}
-                      onPress={() => handleDay1ReviewOption('okay')}
-                      accessibilityRole="button"
-                      accessibilityLabel="This reading was still settling"
-                      accessibilityHint="Records neutral feedback and dismisses this prompt"
-                      style={[
-                        styles.day1ReviewSecondaryOption,
-                        {
-                          backgroundColor: alpha(colors.text, 0.045),
-                          borderColor: alpha(colors.text, 0.08),
-                        },
-                      ]}
-                    >
-                      <HandIcon size={15} color={colors.textMuted} weight="light" />
-                      <Text style={[styles.day1ReviewSecondaryText, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Still settling</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      activeOpacity={0.72}
-                      onPress={() => handleDay1ReviewOption('not-for-me')}
-                      accessibilityRole="button"
-                      accessibilityLabel="This reading was not for me"
-                      accessibilityHint="Records that this devotional did not fit and dismisses this prompt"
-                      style={[
-                        styles.day1ReviewSecondaryOption,
-                        {
-                          backgroundColor: alpha(colors.text, 0.035),
-                          borderColor: alpha(colors.text, 0.07),
-                        },
-                      ]}
-                    >
-                      <XIcon size={15} color={colors.textMuted} weight="light" />
-                      <Text style={[styles.day1ReviewSecondaryText, { color: colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>Not for me</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-          )}
 
           {/* Zone 6: Daily Rhythm */}
           <View collapsable={false} onLayout={handleRhythmLayout}>
@@ -1205,19 +1269,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Premium Nudge Card — contextual, inline upsell */}
-          {premiumNudge && (
-            <View style={styles.premiumNudgeWrapper}>
-              <PremiumNudgeCard
-                type={premiumNudge.type}
-                message={premiumNudge.message}
-                cta={premiumNudge.cta}
-                premiumFeature={premiumNudge.premiumFeature}
-                onAction={nudgeAction}
-                onDismiss={nudgeDismiss}
-              />
-            </View>
-          )}
+
         </Animated.ScrollView>
       </SafeAreaView>
 
@@ -1237,6 +1289,12 @@ export default function HomeScreen() {
         visible={showPremiumSheet}
         onClose={() => setShowPremiumSheet(false)}
         feature="series"
+      />
+
+      <PremiumFeatureSheet
+        visible={stackPremiumFeature !== null}
+        onClose={handleStackPremiumSheetClose}
+        feature={stackPremiumFeature ?? 'general'}
       />
 
       <ExclusiveOfferSheet
@@ -1277,108 +1335,8 @@ const styles = StyleSheet.create({
   todayStackWrapper: {
     marginTop: Spacing['4'],
   },
-  day1ReviewWrapper: {
-    paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['5'],
-  },
-  day1ReviewCard: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    padding: Spacing['6'],
-    overflow: 'hidden',
-    position: 'relative',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 22,
-    elevation: 5,
-  },
-  day1ReviewContent: {
-    zIndex: 2,
-  },
-  day1ReviewKickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['3'],
-    marginBottom: Spacing['4'],
-  },
-  day1ReviewRule: {
-    width: 32,
-    height: 1.5,
-    borderRadius: 1,
-  },
-  day1ReviewKicker: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    lineHeight: 16,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  day1ReviewTitle: {
-    width: '100%',
-    fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.35,
-    marginBottom: Spacing['3'],
-  },
-  day1ReviewSubtitle: {
-    width: '100%',
-    fontFamily: FontFamily.body,
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: Spacing['5'],
-  },
-  day1ReviewPrimaryOption: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing['2'],
-    paddingVertical: Spacing['3'],
-    paddingHorizontal: Spacing['4'],
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    marginBottom: Spacing['3'],
-  },
-  day1ReviewPrimaryText: {
-    flex: 1,
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 15,
-    lineHeight: 20,
-    letterSpacing: 0.2,
-  },
-  day1ReviewOptionArrow: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 17,
-    lineHeight: 20,
-    marginTop: -1,
-  },
-  day1ReviewSecondaryRow: {
-    flexDirection: 'row',
-    gap: Spacing['2'],
-  },
-  day1ReviewSecondaryOption: {
-    flex: 1,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing['1.5'],
-    paddingVertical: Spacing['2.5'],
-    paddingHorizontal: Spacing['3'],
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  day1ReviewSecondaryText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 13,
-    lineHeight: 18,
-  },
   streakWrapper: {
     paddingHorizontal: Spacing['6'],
     marginTop: Spacing['5'],
-  },
-  premiumNudgeWrapper: {
-    paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['6'],
   },
 });

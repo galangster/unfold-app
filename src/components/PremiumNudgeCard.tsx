@@ -53,7 +53,7 @@ function getNudgeIcon(type: NudgeType): ComponentType<{ size: number; color: str
   }
 }
 
-function getNudgeTone(type: NudgeType): { kicker: string; title: string; footnote: string } {
+export function getPremiumNudgeCardTone(type: NudgeType): { kicker: string; title: string; footnote: string } {
   switch (type) {
     case 'streak_freeze':
       return {
@@ -107,7 +107,7 @@ export function PremiumNudgeCard({
   const [showSheet, setShowSheet] = useState(false);
 
   const IconComponent = getNudgeIcon(type);
-  const tone = getNudgeTone(type);
+  const tone = getPremiumNudgeCardTone(type);
   const isBanner = variant === 'banner';
   const useCompactLayout = !isBanner && (width < 400 || fontScale >= 1.18);
   const glassBackground = isBanner

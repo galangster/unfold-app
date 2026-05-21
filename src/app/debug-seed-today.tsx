@@ -73,7 +73,8 @@ type TodayPreviewState =
   | 'bridge'
   | 'bridge-loading'
   | 'remember-this'
-  | 'premium-nudge';
+  | 'premium-nudge'
+  | 'phase4-stack';
 
 const todayPreviewStates = [
   'unread',
@@ -93,6 +94,7 @@ const todayPreviewStates = [
   'bridge-loading',
   'remember-this',
   'premium-nudge',
+  'phase4-stack',
 ] as const;
 
 const todayPreviewThemeModes = ['dark', 'light', 'system'] as const;
@@ -277,7 +279,7 @@ function buildTodayPreviewSeed(state: TodayPreviewState): Devotional | null {
     };
   }
 
-  if (state === 'day1-review') {
+  if (state === 'day1-review' || state === 'phase4-stack') {
     return {
       ...seeded,
       currentDay: 2,
@@ -487,16 +489,36 @@ export default function DebugSeedTodayScreen() {
       });
     }
 
-    if (seeded && previewState === 'remember-this') {
+    if (seeded && (previewState === 'remember-this' || previewState === 'phase4-stack')) {
       const createdAt = new Date().toISOString();
       useUnfoldStore.setState({
         highlights: [buildRememberThisHighlight(seeded, createdAt)],
       });
     }
 
+    if (seeded && previewState === 'phase4-stack') {
+      const resumeDay = seeded.days.find((day) => day.dayNumber === 1);
+      store.setResumeContext({
+        route: 'journal',
+        devotionalId: seeded.id,
+        dayNumber: 1,
+        devotionalTitle: seeded.title,
+        dayTitle: resumeDay?.title,
+        touchedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      });
+      useUnfoldStore.setState({
+        streakJustReset: true,
+        streakCurrent: 3,
+        streakLastReadDate: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+        nudgeImpressions: [],
+        nudgeDismissals: [],
+        nudgeShownThisSession: false,
+      });
+    }
+
     store.setHasSeenHomeTooltips(true);
     store.setHasSeenFeatureOnboarding(true);
-    if (previewState === 'day1-review') {
+    if (previewState === 'day1-review' || previewState === 'phase4-stack') {
       useUnfoldStore.setState({ hasSeenDay1Review: false });
     } else {
       store.setHasSeenDay1Review();

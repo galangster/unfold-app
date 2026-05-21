@@ -14,11 +14,20 @@ import { useTheme } from '@/lib/theme';
 import { buildTodayCardStackModel, type TodayStackCardItem } from '@/lib/today-card-stack';
 import type { ColorTheme } from '@/constants/colors';
 
+export interface TodayCardStackAction {
+  label: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityHint?: string;
+  tone?: 'primary' | 'secondary';
+}
+
 export interface TodayCardStackCard extends TodayStackCardItem {
   eyebrow?: string;
   title: string;
   body?: string;
   actionLabel?: string;
+  actions?: TodayCardStackAction[];
   onPress?: () => void;
   onDismiss?: () => void;
   accessibilityLabel: string;
@@ -95,6 +104,37 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
             {card.actionLabel}
           </Text>
           <ArrowRightIcon size={13} color={colors.accent} weight="light" />
+        </View>
+      ) : null}
+
+      {card.actions?.length ? (
+        <View style={styles.actionList}>
+          {card.actions.map((action, index) => {
+            const isPrimary = (action.tone ?? (index === 0 ? 'primary' : 'secondary')) === 'primary';
+            return (
+              <TouchableOpacity
+                key={`${action.label}-${index}`}
+                activeOpacity={0.74}
+                onPress={action.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={action.accessibilityLabel}
+                accessibilityHint={action.accessibilityHint}
+                style={[
+                  styles.actionButton,
+                  isPrimary ? styles.actionButtonPrimary : styles.actionButtonSecondary,
+                  {
+                    backgroundColor: isPrimary ? alpha(colors.accent, 0.1) : alpha(colors.text, 0.04),
+                    borderColor: isPrimary ? alpha(colors.accent, 0.28) : alpha(colors.text, 0.08),
+                  },
+                ]}
+              >
+                <Text style={[styles.actionButtonText, { color: isPrimary ? colors.text : colors.textMuted }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
+                  {action.label}
+                </Text>
+                {isPrimary ? <ArrowRightIcon size={13} color={colors.accent} weight="light" /> : null}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       ) : null}
     </View>
@@ -330,6 +370,34 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing['2'],
   },
   actionText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  actionList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing['2'],
+    marginTop: Spacing['1'],
+  },
+  actionButton: {
+    alignItems: 'center',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: Spacing['1.5'],
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingHorizontal: Spacing['3'],
+    paddingVertical: Spacing['2'],
+  },
+  actionButtonPrimary: {
+    flexBasis: '100%',
+  },
+  actionButtonSecondary: {
+    flexGrow: 1,
+  },
+  actionButtonText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 12,
     lineHeight: 16,

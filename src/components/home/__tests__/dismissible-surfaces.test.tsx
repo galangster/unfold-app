@@ -352,6 +352,21 @@ describe('dismissible Today/Home surfaces', () => {
       label: 'Dismiss bridge loading stack card',
       card: stackCardFixture({ id: 'today-stack-bridge-loading', kind: 'bridge-loading', priority: 100, title: 'Preparing today’s thread…', dismissAccessibilityLabel: 'Dismiss bridge loading stack card' }),
     },
+    {
+      name: 'saved echo',
+      label: 'Dismiss saved echo stack card',
+      card: stackCardFixture({ id: 'today-stack-remember-this-highlight-1', kind: 'remember-this', priority: 80, title: 'A line worth carrying', dismissAccessibilityLabel: 'Dismiss saved echo stack card' }),
+    },
+    {
+      name: 'Day 1 review',
+      label: 'Dismiss Day 1 review stack card',
+      card: stackCardFixture({ id: 'today-stack-day1-review', kind: 'day1-review', priority: 70, title: 'Did today’s reading feel personal?', dismissAccessibilityLabel: 'Dismiss Day 1 review stack card' }),
+    },
+    {
+      name: 'premium nudge',
+      label: 'Dismiss premium invitation stack card',
+      card: stackCardFixture({ id: 'today-stack-premium-streak-freeze', kind: 'premium-nudge', priority: 50, title: 'Grace for missed days', dismissAccessibilityLabel: 'Dismiss premium invitation stack card' }),
+    },
   ])('calls the TodayCardStack inline X callback for migrated $name cards', ({ label, card }) => {
     const onDismiss = jest.fn();
     const onPress = jest.fn();
@@ -382,6 +397,9 @@ describe('dismissible Today/Home surfaces', () => {
     expect(streakIndex).toBeGreaterThan(stackIndex);
     expect(renderSource).not.toContain('<ContextSlot');
     expect(renderSource).not.toContain('slotType={');
+    expect(renderSource).not.toContain('<RememberThisCard');
+    expect(renderSource).not.toContain('<PremiumNudgeCard');
+    expect(renderSource).not.toContain('day1ReviewWrapper');
   });
 
   it('keeps migrated production stack priority and dismiss semantics explicit', () => {
@@ -393,11 +411,29 @@ describe('dismissible Today/Home surfaces', () => {
     expect(source).toContain("kind: 'midday',\n        priority: 300");
     expect(source).toContain("kind: 'bridge',\n        priority: 200");
     expect(source).toContain("kind: 'bridge-loading',\n        priority: 100");
+    expect(source).toContain("kind: 'remember-this',\n        priority: 80");
+    expect(source).toContain("kind: 'day1-review',\n        priority: 70");
+    expect(source).toContain("kind: 'premium-nudge',\n        priority: 50");
     expect(source).toContain('clearResumeContext();');
     expect(source).toContain('setDismissedMiddayCardDate(todayDate);');
     expect(source).toContain('setDismissedEveningCardDate(todayDate);');
     expect(source).toContain('setDismissedBridgeCardDate(todayDate);');
+    expect(source).toContain('setDismissedRememberThisCardDate(todayDate);');
+    expect(source).toContain('setHasSeenDay1Review();');
+    expect(source).toContain('nudgeDismiss();');
+    expect(source).toContain('nudgeAction();');
     expect(source).toContain("title: 'Preparing today’s thread…'");
     expect(source).not.toContain('Companion is gathering');
+  });
+
+  it('keeps swipe gestures and spacing-matrix work out of Phase 4 scope', () => {
+    const stackPath = path.join(__dirname, '..', 'TodayCardStack.tsx');
+    const homePath = path.join(__dirname, '..', '..', '..', 'app', '(tabs)', '(today)', 'index.tsx');
+    const stackSource = fs.readFileSync(stackPath, 'utf8');
+    const homeSource = fs.readFileSync(homePath, 'utf8');
+
+    expect(stackSource).not.toMatch(/PanGestureHandler|GestureDetector|Swipeable/);
+    expect(homeSource).not.toContain('state matrix');
+    expect(homeSource).not.toContain('spacing contract');
   });
 });

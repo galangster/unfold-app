@@ -243,6 +243,46 @@ describe('TodayCardStack fixture shell', () => {
     );
   });
 
+  it('renders card-local action buttons without requiring a parent card press', () => {
+    const primary = jest.fn();
+    const secondary = jest.fn();
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        cards={[
+          fixtureCard({
+            id: 'day1-review',
+            kind: 'day1-review',
+            priority: 70,
+            title: 'Did today’s reading feel personal?',
+            actionLabel: undefined,
+            onPress: undefined,
+            actions: [
+              {
+                label: 'This helped me',
+                onPress: primary,
+                accessibilityLabel: 'This reading helped me',
+                tone: 'primary',
+              },
+              {
+                label: 'Still settling',
+                onPress: secondary,
+                accessibilityLabel: 'This reading was still settling',
+                tone: 'secondary',
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    pressByLabel(tree, 'This reading helped me');
+    pressByLabel(tree, 'This reading was still settling');
+
+    expect(primary).toHaveBeenCalledTimes(1);
+    expect(secondary).toHaveBeenCalledTimes(1);
+  });
+
   it('does not place the inline X inside the card body pressable', () => {
     const sourcePath = path.join(__dirname, '..', 'TodayCardStack.tsx');
     const source = fs.readFileSync(sourcePath, 'utf8');
@@ -255,7 +295,7 @@ describe('TodayCardStack fixture shell', () => {
     expect(source).toContain('<TopCardBody card={topCard} colors={colors} />\n          <StackDismissButton card={topCard} colors={colors} />');
   });
 
-  it('is fixture-only and does not import production Today card surfaces yet', () => {
+  it('keeps the stack generic and does not import production Today card surfaces or swipe gestures', () => {
     const sourcePath = path.join(__dirname, '..', 'TodayCardStack.tsx');
     const source = fs.readFileSync(sourcePath, 'utf8');
 
