@@ -229,8 +229,16 @@ export function ScriptureTapSheet({
               </View>
             ) : verse ? (
               <>
-                {/* Verse text — accent left border for visual identity */}
-                <View style={[s.verseBlock, { borderLeftColor: alpha(colors.accent, 0.25) }]}>
+                {/* Verse text — quiet editorial frame, no automatic explanation */}
+                <View
+                  style={[
+                    s.verseBlock,
+                    {
+                      backgroundColor: colors.inputBackground,
+                      borderColor: alpha(colors.accent, 0.14),
+                    },
+                  ]}
+                >
                   <Text style={[s.verseText, { color: colors.text }]}>
                     {verse.text}
                   </Text>
@@ -247,7 +255,7 @@ export function ScriptureTapSheet({
                   <BookOpenIcon size={16} color={colors.accent} weight="light" />
                   <View style={s.explainCtaTextGroup}>
                     <Text style={[s.explainCtaText, { color: colors.text }]}>Explain this passage</Text>
-                    <Text style={[s.explainCtaSubtext, { color: colors.textSubtle }]}>A short study note for what this means</Text>
+                    <Text style={[s.explainCtaSubtext, { color: colors.textSubtle }]}>Meaning, context, and a prompt for prayer</Text>
                   </View>
                   <ArrowRightIcon size={14} color={colors.accent} weight="bold" style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
@@ -383,8 +391,9 @@ const s = StyleSheet.create({
 
   // ─── Verse ──────────────────────────────────────
   verseBlock: {
-    borderLeftWidth: 2,
-    paddingLeft: Spacing['4'],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
+    padding: Spacing['4'],
     marginBottom: Spacing['5'],
   },
   verseText: {

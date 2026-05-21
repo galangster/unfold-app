@@ -215,7 +215,7 @@ export function ScriptureExplainSheet({
 
           <View style={styles.header}>
             <View style={styles.headerTextGroup}>
-              <Text style={[styles.eyebrow, { color: colors.accent }]}>Explain</Text>
+              <Text style={[styles.eyebrow, { color: colors.accent }]}>Study note</Text>
               <View style={styles.referenceRow}>
                 <Text style={[styles.reference, { color: colors.text }]} numberOfLines={1}>
                   {response?.reference ?? reference}
@@ -276,7 +276,7 @@ export function ScriptureExplainSheet({
                 entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
                 style={styles.explanationWrap}
               >
-                <Text style={[styles.sectionLabel, { color: colors.accent }]}>Explanation</Text>
+                <Text style={[styles.sectionLabel, { color: colors.accent }]}>Meaning</Text>
                 <View style={styles.explanationBody}>
                   {explanationParagraphs(response).map((paragraph, index) => (
                     <Text
@@ -313,7 +313,7 @@ export function ScriptureExplainSheet({
                 <Text style={[styles.errorText, { color: colors.text }]}>
                   {errorCode === 'SCRIPTURE_EXPLAIN_INVALID_INPUT'
                     ? 'Select a verse first.'
-                    : "Couldn't explain this passage right now. Try again in a moment."}
+                    : "The study note didn't load. Try again in a moment."}
                 </Text>
                 {showRetry ? (
                   <TouchableOpacity
@@ -418,7 +418,6 @@ const styles = StyleSheet.create({
   },
   scriptureCard: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderLeftWidth: 2,
     borderRadius: Radius.lg,
     padding: Spacing['4'],
   },
