@@ -7,7 +7,7 @@ import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
-import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, CopyIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
+import { CaretRightIcon, CaretLeftIcon, TextAaIcon, XIcon, BookOpenIcon, HighlighterCircleIcon, NotePencilIcon, UploadSimpleIcon, LockSimpleIcon } from 'phosphor-react-native';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
@@ -36,7 +36,10 @@ import {
   type BibleTextLine,
 } from '@/lib/bible-reader-visuals';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
+import { ScriptureExplainSheet } from '@/components/ScriptureExplainSheet';
 import { isHighlightColorFree } from '@/lib/premium-gating';
+import { buildSelectedPassageForExplanation } from '@/lib/bible-reader-explain';
+import type { ScriptureExplainRequest } from '@/lib/scripture-explain-api';
 // VerseShareModal removed — now uses share-card route
 
 // ─── Highlight colors ───────────────────────────────────────────────────────
@@ -340,6 +343,8 @@ export default function BibleReaderScreen() {
   const isPremium = premiumPolicy === 'granted';
   const [showHighlightPremiumSheet, setShowHighlightPremiumSheet] = useState(false);
   // shareModalData removed — share navigates to /share-card route
+  const [showExplainSheet, setShowExplainSheet] = useState(false);
+  const [selectedExplanationInput, setSelectedExplanationInput] = useState<ScriptureExplainRequest | null>(null);
   const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);
   const [scrollToVerse, setScrollToVerse] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -548,6 +553,25 @@ export default function BibleReaderScreen() {
     setShowActions(false);
     setShowColorPicker(false);
   }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, showToast]);
+
+  const handleExplain = useCallback(() => {
+    if (!verses || selectedVerses.size === 0 || !book) return;
+    const input = buildSelectedPassageForExplanation({
+      verses,
+      selectedVerses,
+      bookName: book.name,
+      chapter,
+      translation: bibleReaderSettings.translation,
+    });
+    if (!input) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedExplanationInput(input);
+    setShowExplainSheet(true);
+    setSelectedVerses(new Set());
+    setShowActions(false);
+    setShowColorPicker(false);
+  }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation]);
 
   const handleShare = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
@@ -1132,9 +1156,9 @@ export default function BibleReaderScreen() {
           ) : (
             /* Main options — 4 icon buttons */
             <View style={styles.contextIconRow}>
-              <TouchableOpacity onPress={handleCopy} style={styles.contextIconButton} activeOpacity={0.6}>
-                <CopyIcon size={22} color={colors.text} weight="light" />
-                <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Copy</Text>
+              <TouchableOpacity onPress={handleExplain} style={styles.contextIconButton} activeOpacity={0.6}>
+                <BookOpenIcon size={22} color={colors.text} weight="light" />
+                <Text style={[styles.contextIconLabel, { color: colors.textMuted }]}>Explain</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowColorPicker(true)} style={styles.contextIconButton} activeOpacity={0.6}>
                 <HighlighterCircleIcon size={22} color={colors.text} weight="light" />
@@ -1151,6 +1175,17 @@ export default function BibleReaderScreen() {
             </View>
           )}
         </Animated.View>
+      )}
+
+      {selectedExplanationInput && (
+        <ScriptureExplainSheet
+          visible={showExplainSheet}
+          onClose={() => setShowExplainSheet(false)}
+          reference={selectedExplanationInput.reference}
+          passageText={selectedExplanationInput.passageText}
+          translation={selectedExplanationInput.translation}
+          source={selectedExplanationInput.source}
+        />
       )}
 
       {/* Reading Settings Sheet */}
