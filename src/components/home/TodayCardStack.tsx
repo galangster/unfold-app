@@ -1,7 +1,19 @@
 import React from 'react';
-import { Platform, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { LayoutChangeEvent, Platform, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  Extrapolation,
+  FadeIn,
+  FadeOut,
+  interpolate,
+  runOnJS,
+  type SharedValue,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
@@ -12,6 +24,11 @@ import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
 import { useTheme } from '@/lib/theme';
 import { buildTodayCardStackModel, type TodayStackCardItem } from '@/lib/today-card-stack';
+import {
+  getTodayStackSwipeDismissal,
+  TODAY_STACK_EXIT_DISTANCE_MULTIPLIER,
+  TODAY_STACK_MAX_ROTATION_DEG,
+} from '@/lib/today-card-stack-motion';
 import type { ColorTheme } from '@/constants/colors';
 
 export interface TodayCardStackAction {
@@ -49,6 +66,8 @@ interface TodayCardStackProps {
 
 const ENTER_DURATION = Duration.normal;
 const EXIT_DURATION = Duration.fast;
+const SWIPE_EXIT_DURATION = 200;
+const SWIPE_SETTLE_DURATION = 220;
 const BODY_TEXT_MAX_SCALE = 1.26;
 const LABEL_TEXT_MAX_SCALE = 1.14;
 
@@ -162,24 +181,53 @@ function TopCardBody({ card, colors }: { card: TodayCardStackCard; colors: Color
   );
 }
 
+function commitSwipeDismiss(card: TodayCardStackCard, dismissInFlight: React.MutableRefObject<boolean>) {
+  if (!card.onDismiss || dismissInFlight.current) return;
+
+  dismissInFlight.current = true;
+  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  card.onDismiss();
+}
+
 function BackCardSilhouette({
   index,
   totalCount,
   colors,
   reducedMotion,
+  swipeX,
+  cardWidth,
 }: {
   index: number;
   totalCount: number;
   colors: ColorTheme;
   reducedMotion: boolean;
+  swipeX: SharedValue<number>;
+  cardWidth: SharedValue<number>;
 }) {
   const depth = index + 1;
   const translateY = reducedMotion ? 0 : depth * 10;
   const scale = reducedMotion ? 1 : 1 - depth * 0.035;
   const opacity = Math.max(0.42, 0.72 - depth * 0.16);
+  const promotedStyle = useAnimatedStyle(() => {
+    const width = Math.max(1, cardWidth.value);
+    const progress = depth === 1
+      ? interpolate(Math.abs(swipeX.value), [0, width * 0.28], [0, 1], Extrapolation.CLAMP)
+      : 0;
+
+    return {
+      opacity: opacity + (0.9 - opacity) * progress,
+      transform: [
+        { translateY: translateY - translateY * progress },
+        { scale: scale + (1 - scale) * progress },
+      ],
+    };
+  });
+  const cardStyle = reducedMotion
+    ? { opacity, transform: [{ translateY }, { scale }] }
+    : promotedStyle;
 
   return (
-    <View
+    <Animated.View
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
@@ -189,10 +237,9 @@ function BackCardSilhouette({
         {
           backgroundColor: alpha(colors.backgroundPure ?? colors.background, 0.86),
           borderColor: alpha(colors.accent, 0.12),
-          opacity,
-          transform: [{ translateY }, { scale }],
           zIndex: totalCount - depth,
         },
+        cardStyle,
       ]}
     />
   );
@@ -211,13 +258,128 @@ export function TodayCardStack({
   const { entering, exiting, reducedMotion: systemReducedMotion } = useAccessibleAnimation();
   const reducedMotion = reducedMotionOverride ?? systemReducedMotion;
   const model = buildTodayCardStackModel(cards, maxBackCards);
-
-  if (!model.topCard) return null;
-
   const topCard = model.topCard;
+  const swipeX = useSharedValue(0);
+  const cardWidth = useSharedValue(320);
+  const dismissInFlight = React.useRef(false);
+
+  React.useEffect(() => {
+    dismissInFlight.current = false;
+    swipeX.value = 0;
+  }, [swipeX, topCard?.id]);
+
+  const commitDismiss = React.useCallback(() => {
+    if (!topCard) return;
+    commitSwipeDismiss(topCard, dismissInFlight);
+  }, [topCard]);
+
+  const topCardAnimatedStyle = useAnimatedStyle(() => {
+    const width = Math.max(1, cardWidth.value);
+    const absX = Math.abs(swipeX.value);
+    const rotation = interpolate(
+      swipeX.value,
+      [-width, 0, width],
+      [-TODAY_STACK_MAX_ROTATION_DEG, 0, TODAY_STACK_MAX_ROTATION_DEG],
+      Extrapolation.CLAMP,
+    );
+
+    return {
+      opacity: interpolate(absX, [0, width * 0.28, width * 0.72], [1, 0.96, 0], Extrapolation.CLAMP),
+      transform: [
+        { translateX: swipeX.value },
+        { rotateZ: `${rotation}deg` },
+      ],
+    };
+  });
+
+  const handleTopCardLayout = React.useCallback((event: LayoutChangeEvent) => {
+    cardWidth.value = Math.max(1, event.nativeEvent.layout.width);
+  }, [cardWidth]);
+
+  const swipeGesture = React.useMemo(
+    () => Gesture.Pan()
+      .enabled(!reducedMotion && Boolean(topCard?.onDismiss))
+      .activeOffsetX([-14, 14])
+      .failOffsetY([-12, 12])
+      .onBegin(() => {
+        swipeX.value = 0;
+      })
+      .onUpdate((event) => {
+        swipeX.value = event.translationX;
+      })
+      .onEnd((event) => {
+        const decision = getTodayStackSwipeDismissal(
+          event.translationX,
+          event.translationY,
+          event.velocityX,
+          cardWidth.value,
+          reducedMotion,
+        );
+
+        if (decision.shouldDismiss) {
+          const exitX = decision.direction * cardWidth.value * TODAY_STACK_EXIT_DISTANCE_MULTIPLIER;
+          swipeX.value = withTiming(exitX, { duration: SWIPE_EXIT_DURATION, easing: Ease.out }, (finished) => {
+            if (finished) {
+              runOnJS(commitDismiss)();
+            }
+          });
+          return;
+        }
+
+        swipeX.value = withTiming(0, { duration: SWIPE_SETTLE_DURATION, easing: Ease.out });
+      })
+      .onFinalize((_event, success) => {
+        if (!success) {
+          swipeX.value = withTiming(0, { duration: SWIPE_SETTLE_DURATION, easing: Ease.out });
+        }
+      }),
+    [cardWidth, commitDismiss, reducedMotion, swipeX, topCard?.onDismiss],
+  );
+
+  if (!topCard) return null;
+
   const showCount = model.totalCount > 1;
   const enteringAnimation = reducedMotion ? undefined : entering(FadeIn.duration(ENTER_DURATION).easing(Ease.out));
   const exitingAnimation = reducedMotion ? undefined : exiting(FadeOut.duration(EXIT_DURATION).easing(Ease.out));
+  const topCardContent = (
+    <Animated.View
+      onLayout={handleTopCardLayout}
+      testID={topCard.testID ?? 'today-card-stack-top-card'}
+      style={[
+        styles.topCard,
+        {
+          backgroundColor: Platform.OS === 'ios'
+            ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
+            : alpha(colors.backgroundElevated, 0.95),
+          borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24),
+          shadowColor: colors.accent,
+          zIndex: model.totalCount + 1,
+        },
+        reducedMotion ? null : topCardAnimatedStyle,
+      ]}
+    >
+      {Platform.OS === 'ios' ? (
+        <BlurView
+          pointerEvents="none"
+          intensity={isDark ? 44 : 28}
+          tint={isDark ? 'dark' : 'light'}
+          style={[StyleSheet.absoluteFill, styles.cardBlur]}
+          testID="today-card-stack-glass-blur"
+        />
+      ) : null}
+
+      <View style={styles.topUtilityRow} pointerEvents="none">
+        {showCount ? (
+          <Text style={[styles.countText, { color: colors.textSubtle }]} testID="today-card-stack-count">
+            1/{model.totalCount}
+          </Text>
+        ) : null}
+      </View>
+
+      <TopCardBody card={topCard} colors={colors} />
+      <StackDismissButton card={topCard} colors={colors} />
+    </Animated.View>
+  );
 
   return (
     <Animated.View
@@ -235,44 +397,14 @@ export function TodayCardStack({
             totalCount={model.totalCount}
             colors={colors}
             reducedMotion={reducedMotion}
+            swipeX={swipeX}
+            cardWidth={cardWidth}
           />
         ))}
 
-        <View
-          testID={topCard.testID ?? 'today-card-stack-top-card'}
-          style={[
-            styles.topCard,
-            {
-              backgroundColor: Platform.OS === 'ios'
-                ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
-                : alpha(colors.backgroundElevated, 0.95),
-              borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24),
-              shadowColor: colors.accent,
-              zIndex: model.totalCount + 1,
-            },
-          ]}
-        >
-          {Platform.OS === 'ios' ? (
-            <BlurView
-              pointerEvents="none"
-              intensity={isDark ? 44 : 28}
-              tint={isDark ? 'dark' : 'light'}
-              style={[StyleSheet.absoluteFill, styles.cardBlur]}
-              testID="today-card-stack-glass-blur"
-            />
-          ) : null}
-
-          <View style={styles.topUtilityRow} pointerEvents="none">
-            {showCount ? (
-              <Text style={[styles.countText, { color: colors.textSubtle }]} testID="today-card-stack-count">
-                1/{model.totalCount}
-              </Text>
-            ) : null}
-          </View>
-
-          <TopCardBody card={topCard} colors={colors} />
-          <StackDismissButton card={topCard} colors={colors} />
-        </View>
+        {reducedMotion || !topCard.onDismiss ? topCardContent : (
+          <GestureDetector gesture={swipeGesture}>{topCardContent}</GestureDetector>
+        )}
       </View>
     </Animated.View>
   );

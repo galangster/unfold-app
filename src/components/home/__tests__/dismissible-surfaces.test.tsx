@@ -22,19 +22,41 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { View },
+    Extrapolation: { CLAMP: 'clamp' },
     FadeIn: animationChain,
     FadeOut: animationChain,
     FadeInDown: animationChain,
+    interpolate: (value: number) => value,
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
     useReducedMotion: () => false,
     useSharedValue: (value: unknown) => ({ value }),
     useAnimatedStyle: () => ({}),
-    withTiming: (value: unknown) => value,
+    withTiming: (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
+      callback?.(true);
+      return value;
+    },
     Easing: {
       cubic: jest.fn(),
       out: jest.fn(() => 'ease-out'),
       in: jest.fn(() => 'ease-in'),
       inOut: jest.fn(() => 'ease-in-out'),
     },
+  };
+});
+
+jest.mock('react-native-gesture-handler', () => {
+  const { View } = require('react-native');
+  const makePan = () => {
+    const gesture: Record<string, jest.Mock> = {};
+    ['enabled', 'activeOffsetX', 'failOffsetY', 'onBegin', 'onUpdate', 'onEnd', 'onFinalize'].forEach((method) => {
+      gesture[method] = jest.fn(() => gesture);
+    });
+    return gesture;
+  };
+
+  return {
+    Gesture: { Pan: jest.fn(makePan) },
+    GestureDetector: ({ children }: any) => <View testID="today-card-stack-gesture-detector">{children}</View>,
   };
 });
 
@@ -426,13 +448,14 @@ describe('dismissible Today/Home surfaces', () => {
     expect(source).not.toContain('Companion is gathering');
   });
 
-  it('keeps swipe gestures and spacing-matrix work out of Phase 4 scope', () => {
+  it('keeps Phase 5 limited to stack motion and leaves spacing-matrix work out of scope', () => {
     const stackPath = path.join(__dirname, '..', 'TodayCardStack.tsx');
     const homePath = path.join(__dirname, '..', '..', '..', 'app', '(tabs)', '(today)', 'index.tsx');
     const stackSource = fs.readFileSync(stackPath, 'utf8');
     const homeSource = fs.readFileSync(homePath, 'utf8');
 
-    expect(stackSource).not.toMatch(/PanGestureHandler|GestureDetector|Swipeable/);
+    expect(stackSource).toMatch(/GestureDetector|Gesture\.Pan/);
+    expect(stackSource).not.toMatch(/PanGestureHandler|Swipeable/);
     expect(homeSource).not.toContain('state matrix');
     expect(homeSource).not.toContain('spacing contract');
   });

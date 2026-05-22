@@ -22,9 +22,28 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { View },
+    Extrapolation: { CLAMP: 'clamp' },
     FadeIn: animationChain,
     FadeOut: animationChain,
+    interpolate: (value: number, input: number[], output: number[]) => {
+      if (value <= input[0]) return output[0];
+      if (value >= input[input.length - 1]) return output[output.length - 1];
+      for (let index = 0; index < input.length - 1; index += 1) {
+        if (value >= input[index] && value <= input[index + 1]) {
+          const progress = (value - input[index]) / (input[index + 1] - input[index]);
+          return output[index] + progress * (output[index + 1] - output[index]);
+        }
+      }
+      return output[0];
+    },
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+    useAnimatedStyle: (factory: () => unknown) => factory(),
     useReducedMotion: () => false,
+    useSharedValue: (value: unknown) => ({ value }),
+    withTiming: (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
+      callback?.(true);
+      return value;
+    },
     Easing: {
       cubic: jest.fn(),
       out: jest.fn(() => 'ease-out'),
@@ -33,6 +52,28 @@ jest.mock('react-native-reanimated', () => {
     },
   };
 });
+
+jest.mock('react-native-gesture-handler', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const makePan = () => {
+    const gesture: Record<string, jest.Mock> = {};
+    ['enabled', 'activeOffsetX', 'failOffsetY', 'onBegin', 'onUpdate', 'onEnd', 'onFinalize'].forEach((method) => {
+      gesture[method] = jest.fn(() => gesture);
+    });
+    return gesture;
+  };
+
+  return {
+    Gesture: { Pan: jest.fn(makePan) },
+    GestureDetector: ({ children }: any) => <View testID="today-card-stack-gesture-detector">{children}</View>,
+  };
+});
+
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn(() => Promise.resolve()),
+  ImpactFeedbackStyle: { Light: 'Light' },
+}));
 
 jest.mock('expo-blur', () => ({
   BlurView: ({ children, ...props }: any) => {
@@ -82,6 +123,7 @@ jest.mock('@/lib/theme', () => ({
 
 import { TodayCardStack, type TodayCardStackCard } from '../TodayCardStack';
 import { buildTodayCardStackModel, orderTodayStackCards } from '@/lib/today-card-stack';
+import { getTodayStackSwipeDismissal, hasTodayStackHorizontalIntent } from '@/lib/today-card-stack-motion';
 
 function fixtureCard(overrides: Partial<TodayCardStackCard> = {}): TodayCardStackCard {
   return {
@@ -152,6 +194,25 @@ describe('today-card-stack helper', () => {
   });
 });
 
+describe('today-card-stack motion helper', () => {
+  it('requires clear horizontal intent before treating a drag as a stack swipe', () => {
+    expect(hasTodayStackHorizontalIntent(18, 6)).toBe(true);
+    expect(hasTodayStackHorizontalIntent(10, 0)).toBe(false);
+    expect(hasTodayStackHorizontalIntent(24, 28)).toBe(false);
+  });
+
+  it('dismisses by distance or velocity only when reduced motion is off', () => {
+    expect(getTodayStackSwipeDismissal(91, 8, 120, 320)).toEqual({ shouldDismiss: true, direction: 1 });
+    expect(getTodayStackSwipeDismissal(-40, 4, -700, 320)).toEqual({ shouldDismiss: true, direction: -1 });
+    expect(getTodayStackSwipeDismissal(50, 4, 120, 320)).toEqual({ shouldDismiss: false, direction: 1 });
+    expect(getTodayStackSwipeDismissal(120, 4, 900, 320, true)).toEqual({ shouldDismiss: false, direction: 0 });
+  });
+
+  it('rejects vertical-scroll-looking gestures even when horizontal velocity is high', () => {
+    expect(getTodayStackSwipeDismissal(22, 44, 900, 320)).toEqual({ shouldDismiss: false, direction: 0 });
+  });
+});
+
 describe('TodayCardStack fixture shell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -217,7 +278,18 @@ describe('TodayCardStack fixture shell', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it('keeps reduced-motion previews free of enter/exit animation props and offset transforms', () => {
+  it('wraps only dismissible, motion-enabled top cards in the swipe gesture detector', () => {
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={mockTestColors}
+        cards={[fixtureCard({ onDismiss: jest.fn(), dismissAccessibilityLabel: 'Dismiss resume stack card' })]}
+      />,
+    );
+
+    expect(tree.root.findAllByProps({ testID: 'today-card-stack-gesture-detector' }).length).toBeGreaterThan(0);
+  });
+
+  it('keeps reduced-motion previews free of enter/exit animation props, swipe wrapper, and offset transforms', () => {
     const tree = renderInAct(
       <TodayCardStack
         colors={mockTestColors}
@@ -232,6 +304,7 @@ describe('TodayCardStack fixture shell', () => {
     const stack = tree.root.findByProps({ testID: 'today-card-stack' });
     expect(stack.props.entering).toBeUndefined();
     expect(stack.props.exiting).toBeUndefined();
+    expect(tree.root.findAllByProps({ testID: 'today-card-stack-gesture-detector' })).toHaveLength(0);
 
     const backCard = tree.root.findByProps({ testID: 'today-card-stack-back-card-1' });
     expect(backCard.props.style).toEqual(
@@ -287,19 +360,20 @@ describe('TodayCardStack fixture shell', () => {
     const sourcePath = path.join(__dirname, '..', 'TodayCardStack.tsx');
     const source = fs.readFileSync(sourcePath, 'utf8');
     const bodyStart = source.indexOf('function TopCardBody');
-    const bodyEnd = source.indexOf('function BackCardSilhouette');
+    const bodyEnd = source.indexOf('function commitSwipeDismiss');
     const bodySource = source.slice(bodyStart, bodyEnd);
 
     expect(bodySource).toContain('<TouchableOpacity');
     expect(bodySource).not.toContain('StackDismissButton');
-    expect(source).toContain('<TopCardBody card={topCard} colors={colors} />\n          <StackDismissButton card={topCard} colors={colors} />');
+    expect(source).toContain('<TopCardBody card={topCard} colors={colors} />\n      <StackDismissButton card={topCard} colors={colors} />');
   });
 
-  it('keeps the stack generic and does not import production Today card surfaces or swipe gestures', () => {
+  it('keeps the stack generic while owning only the shared swipe gesture shell', () => {
     const sourcePath = path.join(__dirname, '..', 'TodayCardStack.tsx');
     const source = fs.readFileSync(sourcePath, 'utf8');
 
     expect(source).not.toMatch(/ContextSlot|NotificationCard|DailyBridgeCard|RememberThisCard|PremiumNudgeCard|useUnfoldStore/);
-    expect(source).not.toMatch(/PanGestureHandler|GestureDetector|Swipeable/);
+    expect(source).toMatch(/GestureDetector|Gesture\.Pan/);
+    expect(source).not.toMatch(/PanGestureHandler|Swipeable/);
   });
 });
