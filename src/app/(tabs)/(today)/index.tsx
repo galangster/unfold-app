@@ -57,6 +57,13 @@ const INFLIGHT_KEY = 'inflight-generation-job';
 const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';
+const TODAY_RELATIONSHIP_SPACING = {
+  heroToOptionalStack: Spacing['5'],
+  heroToRhythm: Spacing['5'],
+  optionalStackToRhythm: Spacing['4'],
+  rhythmToBento: Spacing['3'],
+  bentoToNewThought: Spacing['6'],
+} as const;
 
 type TodayPremiumFeature = 'streak' | 'audio' | 'series' | 'general';
 
@@ -695,7 +702,12 @@ export default function HomeScreen() {
 
   const daysCompleted = currentDevotional ? (currentDevotional.days ?? []).filter(d => d.isRead).length : 0;
   const progressPercent = currentDevotional ? (daysCompleted / currentDevotional.totalDays) * 100 : 0;
-  const currentDayData = getHomeDevotionalDayData(currentDevotional);
+  const homeDayData = getHomeDevotionalDayData(currentDevotional);
+  const activeCurrentDayData = currentDevotional?.days.find((day) => day.dayNumber === currentDevotional.currentDay) ?? null;
+  const isCurrentDevotionalComplete = currentDevotional ? daysCompleted === currentDevotional.totalDays : false;
+  const currentDayData = !isCurrentDevotionalComplete && hasReadToday && activeCurrentDayData && !activeCurrentDayData.isRead
+    ? activeCurrentDayData
+    : homeDayData;
 
   const handleReflect = useCallback((dayNumber?: number) => {
     if (!currentDevotional) return;
@@ -749,7 +761,7 @@ export default function HomeScreen() {
 
   // --- Derived state for zone components ---
 
-  const isJourneyComplete = currentDevotional ? daysCompleted === currentDevotional.totalDays : false;
+  const isJourneyComplete = isCurrentDevotionalComplete;
   const isFirstDay = currentDevotional ? currentDevotional.currentDay === 1 && daysCompleted === 0 : false;
   const isLastDay = currentDevotional ? currentDevotional.currentDay === currentDevotional.totalDays : false;
   const showDay1Review = daysCompleted >= 1 && !hasSeenDay1Review && !isJourneyComplete;
@@ -1107,6 +1119,8 @@ export default function HomeScreen() {
     validBridgeText,
   ]);
 
+  const hasOptionalTodayStack = todayStackCards.length > 0;
+
   // Compute devotional card state
   const devotionalState = computeDevotionalState({
     currentDevotional: currentDevotional ?? null,
@@ -1203,7 +1217,7 @@ export default function HomeScreen() {
             </Animated.View>
           </View>
 
-          {todayStackCards.length > 0 && (
+          {hasOptionalTodayStack && (
             <View collapsable={false} onLayout={handleContextLayout}>
               <TodayCardStack
                 cards={todayStackCards}
@@ -1220,7 +1234,10 @@ export default function HomeScreen() {
           <View collapsable={false} onLayout={handleRhythmLayout}>
             <Animated.View
               entering={entering(FadeIn.duration(Duration.normal).delay(200).easing(Ease.out))}
-              style={styles.streakWrapper}
+              style={[
+                styles.streakWrapper,
+                hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero,
+              ]}
             >
               <StreakBox
                 streakCount={streakCurrent}
@@ -1231,7 +1248,9 @@ export default function HomeScreen() {
           </View>
 
           {/* Zone 7: Bento Grid */}
-          <BentoGrid />
+          <View style={styles.bentoWrapper}>
+            <BentoGrid />
+          </View>
 
           {/* QA: Preview reveal screen (QA builds, only when Today has no active devotional) */}
           {isQaToolsEnabled() && !currentDevotional && (
@@ -1255,7 +1274,7 @@ export default function HomeScreen() {
               }}
               style={{
                 alignSelf: 'center',
-                marginTop: Spacing['4'],
+                marginTop: TODAY_RELATIONSHIP_SPACING.bentoToNewThought,
                 paddingHorizontal: Spacing['4'],
                 paddingVertical: Spacing['2'],
                 borderWidth: 1,
@@ -1333,10 +1352,18 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   todayStackWrapper: {
-    marginTop: Spacing['4'],
+    marginTop: TODAY_RELATIONSHIP_SPACING.heroToOptionalStack,
   },
   streakWrapper: {
     paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['5'],
+  },
+  rhythmAfterHero: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.heroToRhythm,
+  },
+  rhythmAfterOptionalStack: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.optionalStackToRhythm,
+  },
+  bentoWrapper: {
+    marginTop: TODAY_RELATIONSHIP_SPACING.rhythmToBento,
   },
 });

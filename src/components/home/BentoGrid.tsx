@@ -84,7 +84,6 @@ export function BentoGrid() {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing['6'],
-    marginTop: Spacing['3'],
   },
   row: {
     flexDirection: 'row',

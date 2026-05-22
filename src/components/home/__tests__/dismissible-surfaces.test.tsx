@@ -448,15 +448,22 @@ describe('dismissible Today/Home surfaces', () => {
     expect(source).not.toContain('Companion is gathering');
   });
 
-  it('keeps Phase 5 limited to stack motion and leaves spacing-matrix work out of scope', () => {
-    const stackPath = path.join(__dirname, '..', 'TodayCardStack.tsx');
+  it('documents Phase 6 relationship-based Today spacing in named tokens', () => {
     const homePath = path.join(__dirname, '..', '..', '..', 'app', '(tabs)', '(today)', 'index.tsx');
-    const stackSource = fs.readFileSync(stackPath, 'utf8');
+    const bentoPath = path.join(__dirname, '..', 'BentoGrid.tsx');
     const homeSource = fs.readFileSync(homePath, 'utf8');
+    const bentoSource = fs.readFileSync(bentoPath, 'utf8');
 
-    expect(stackSource).toMatch(/GestureDetector|Gesture\.Pan/);
-    expect(stackSource).not.toMatch(/PanGestureHandler|Swipeable/);
-    expect(homeSource).not.toContain('state matrix');
-    expect(homeSource).not.toContain('spacing contract');
+    expect(homeSource).toContain('const TODAY_RELATIONSHIP_SPACING = {');
+    expect(homeSource).toContain("heroToOptionalStack: Spacing['5']");
+    expect(homeSource).toContain("heroToRhythm: Spacing['5']");
+    expect(homeSource).toContain("optionalStackToRhythm: Spacing['4']");
+    expect(homeSource).toContain("rhythmToBento: Spacing['3']");
+    expect(homeSource).toContain("bentoToNewThought: Spacing['6']");
+    expect(homeSource).toContain('hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero');
+    expect(homeSource).toContain('style={styles.bentoWrapper}');
+    expect(homeSource).toContain('const activeCurrentDayData = currentDevotional?.days.find');
+    expect(homeSource).toContain('hasReadToday && activeCurrentDayData && !activeCurrentDayData.isRead');
+    expect(bentoSource).not.toContain('marginTop: Spacing');
   });
 });

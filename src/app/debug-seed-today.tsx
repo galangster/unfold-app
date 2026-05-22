@@ -64,6 +64,7 @@ type TodayPreviewState =
   | 'complete-today'
   | 'tomorrow-locked'
   | 'journey-complete'
+  | 'first-time-empty'
   | 'empty'
   | 'day1-review'
   | 'resume-reading'
@@ -84,6 +85,7 @@ const todayPreviewStates = [
   'complete-today',
   'tomorrow-locked',
   'journey-complete',
+  'first-time-empty',
   'empty',
   'day1-review',
   'resume-reading',
@@ -172,7 +174,7 @@ function buildTodayPreviewSeed(state: TodayPreviewState): Devotional | null {
   const nowIso = new Date().toISOString();
   const seeded = buildDevotionalSeed({ nowIso });
 
-  if (state === 'empty') {
+  if (state === 'empty' || state === 'first-time-empty') {
     return null;
   }
 
@@ -419,7 +421,7 @@ export default function DebugSeedTodayScreen() {
     const returningMarker = buildDevotionalSeed();
     const ui = useUIState.getState();
 
-    ui.setDebugForceTrialExpired(false);
+    ui.setDebugForceTrialExpired(previewState === 'premium-nudge');
     ui.setQaPremiumOverride(isPremiumContextPreviewState(previewState));
     ui.setRevenueCatResolved();
 
@@ -427,6 +429,9 @@ export default function DebugSeedTodayScreen() {
     store.removeDevotional(returningMarker.id);
     store.clearResumeContext();
     useUnfoldStore.setState({
+      devotionals: [],
+      currentDevotionalId: null,
+      hasEverCreatedDevotional: false,
       checkIns: [],
       lastMiddayCompletedDate: null,
       lastEveningCompletedDate: null,
@@ -445,6 +450,12 @@ export default function DebugSeedTodayScreen() {
     if (seeded) {
       store.addDevotional(seeded);
       store.setCurrentDevotional(seeded.id);
+    } else if (previewState === 'first-time-empty') {
+      useUnfoldStore.setState({
+        devotionals: [],
+        currentDevotionalId: null,
+        hasEverCreatedDevotional: false,
+      });
     } else {
       // Make the empty-state preview deterministic while preserving the
       // returning-user branch: add/remove one QA devotional so the store knows
