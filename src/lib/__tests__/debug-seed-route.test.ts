@@ -94,6 +94,7 @@ describe('debug seed routes', () => {
     expect(seedTodaySource).toContain('route: \'reading\'');
     expect(seedTodaySource).toContain('route: \'journal\'');
     expect(seedTodaySource).toContain('QA_TODAY_CONTEXT_SLOT_PREFIX');
+    expect(seedTodaySource).toContain('QA_TODAY_PREPARING_LOADING_MARKER');
     expect(seedTodaySource).toContain('type AccentThemeId');
     expect(seedTodaySource).toContain('type ThemeMode');
     expect(seedTodaySource).toContain("todayPreviewThemeModes = ['dark', 'light', 'system'] as const");
@@ -101,6 +102,10 @@ describe('debug seed routes', () => {
     expect(seedTodaySource).toContain('getTodayPreviewThemeMode(theme ?? themeMode)');
     expect(seedTodaySource).toContain('getTodayPreviewAccentTheme(accent ?? accentTheme)');
     expect(seedTodaySource).toContain('buildQaTodayUser(previewState, previewThemeMode, previewAccentTheme)');
+    expect(seedTodaySource).toContain("if (state === 'preparing')");
+    expect(seedTodaySource).toContain('currentSituation: `${qaTodayUser.currentSituation} ${QA_TODAY_PREPARING_LOADING_MARKER}`');
+    expect(todayTabSource).toContain('isQaPreparingLoadingPreview');
+    expect(todayTabSource).toContain('isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}');
     expect(seedTodaySource).toContain("ui.setDebugForceTrialExpired(previewState === 'premium-nudge');");
     expect(seedTodaySource).toContain('ui.setQaPremiumOverride(isPremiumContextPreviewState(previewState));');
     expect(seedTodaySource).toContain('ui.setRevenueCatResolved();');

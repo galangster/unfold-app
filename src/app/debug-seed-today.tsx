@@ -18,6 +18,7 @@ import { useUIState } from '@/lib/ui-state';
 
 const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
+const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
 
 const qaTodayUser: UserProfile = {
   name: 'Nick',
@@ -133,6 +134,15 @@ function buildQaTodayUser(
   themeMode: ThemeMode = 'dark',
   accentTheme: AccentThemeId = 'gold',
 ): UserProfile {
+  if (state === 'preparing') {
+    return {
+      ...qaTodayUser,
+      themeMode,
+      accentTheme,
+      currentSituation: `${qaTodayUser.currentSituation} ${QA_TODAY_PREPARING_LOADING_MARKER}`,
+    };
+  }
+
   if (!isContextSlotPreviewState(state)) {
     return {
       ...qaTodayUser,

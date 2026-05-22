@@ -56,6 +56,7 @@ import {
 const INFLIGHT_KEY = 'inflight-generation-job';
 const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
+const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
 const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';
 const TODAY_RELATIONSHIP_SPACING = {
   heroToOptionalStack: Spacing['5'],
@@ -431,11 +432,13 @@ export default function HomeScreen() {
 
     const match = user.currentSituation.match(new RegExp(`${QA_TODAY_CONTEXT_SLOT_PREFIX} ([a-z-]+)`));
     const slot = match?.[1];
-    if (slot === 'midday' || slot === 'evening' || slot === 'bridge' || slot === 'bridge-loading') {
-      return slot;
-    }
+    if (slot === 'midday' || slot === 'evening' || slot === 'bridge' || slot === 'bridge-loading') return slot;
     return null;
   }, [user?.aboutMe, user?.currentSituation]);
+
+  const isQaPreparingLoadingPreview = isQaToolsEnabled()
+    && user?.aboutMe === QA_TODAY_PROFILE_MARKER
+    && user.currentSituation.includes(QA_TODAY_PREPARING_LOADING_MARKER);
 
   // Daily Bridge — generate a personalized transition from yesterday to today
   const bridgeInput = useMemo(() => {
@@ -1212,7 +1215,7 @@ export default function HomeScreen() {
               <DevotionalCard
                 state={devotionalState}
                 scrollY={scrollY}
-                isReturningUser={isReturningUser}
+                isReturningUser={isReturningUser && !isQaPreparingLoadingPreview}
               />
             </Animated.View>
           </View>
