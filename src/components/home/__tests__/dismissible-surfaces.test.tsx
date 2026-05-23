@@ -116,6 +116,8 @@ jest.mock('@/lib/theme', () => ({
 }));
 
 const mockRouterPush = jest.fn();
+const { StyleSheet: RNStyleSheet } = require('react-native');
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockRouterPush }),
 }));
@@ -171,6 +173,10 @@ function renderInAct(element: React.ReactElement) {
     tree = renderer.create(element);
   });
   return tree;
+}
+
+function flattenStyle(style: unknown) {
+  return RNStyleSheet.flatten(style) ?? {};
 }
 
 function stackCardFixture(overrides: Partial<TodayCardStackCard> = {}): TodayCardStackCard {
@@ -403,6 +409,35 @@ describe('dismissible Today/Home surfaces', () => {
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('renders Today stack dismiss X as icon-only without circular chrome', () => {
+    const tree = renderInAct(
+      <TodayCardStack
+        colors={testColors}
+        cards={[
+          stackCardFixture({
+            id: 'today-stack-evening',
+            kind: 'evening',
+            title: 'Wind down with today’s reading',
+            dismissAccessibilityLabel: 'Dismiss evening stack card',
+            onDismiss: jest.fn(),
+          }),
+        ]}
+      />,
+    );
+
+    const dismissButton = tree.root.find(
+      (node: any) => node.props.accessibilityLabel === 'Dismiss evening stack card' && typeof node.props.onPress === 'function',
+    );
+    const style = flattenStyle(dismissButton.props.style);
+
+    expect(style.backgroundColor).toBeUndefined();
+    expect(style.borderColor).toBeUndefined();
+    expect(style.borderWidth).toBeUndefined();
+    expect(style.borderRadius).toBeUndefined();
+    expect(style.shadowOpacity).toBeUndefined();
+    expect(style.elevation).toBeUndefined();
   });
 
   it('wires the production Today stack under the hero and above Daily Rhythm only', () => {

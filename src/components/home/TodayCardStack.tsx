@@ -81,16 +81,10 @@ function StackDismissButton({ card, colors }: { card: TodayCardStackCard; colors
       accessibilityRole="button"
       accessibilityLabel={card.dismissAccessibilityLabel ?? `Dismiss ${card.title}`}
       accessibilityHint={card.dismissAccessibilityHint ?? 'Hides this optional Today card without deleting its content'}
-      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-      style={[
-        styles.dismissButton,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.92),
-          borderColor: alpha(colors.text, 0.14),
-        },
-      ]}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      style={styles.dismissButton}
     >
-      <XIcon size={14} color={colors.textSubtle} weight="regular" />
+      <XIcon size={15} color={colors.textSubtle} weight="regular" />
     </TouchableOpacity>
   );
 }
@@ -541,14 +535,12 @@ const styles = StyleSheet.create({
   },
   dismissButton: {
     alignItems: 'center',
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    height: 44,
+    height: 32,
     justifyContent: 'center',
     position: 'absolute',
     right: Spacing['2'],
     top: Spacing['2'],
-    width: 44,
+    width: 32,
     zIndex: 4,
   },
 });
