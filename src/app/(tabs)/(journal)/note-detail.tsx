@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  Alert,
   AccessibilityInfo,
   ScrollView,
 } from 'react-native';
@@ -57,6 +56,7 @@ import { useUnfoldStore, type Note, type NoteCategory, type ScriptureRef } from 
 import { ScriptureRefPill } from '@/components/notebook/ScriptureRefPill';
 import { ScriptureSearchSheet } from '@/components/notebook/ScriptureSearchSheet';
 import { MoveFolderSheet } from '@/components/notebook/MoveFolderSheet';
+import { CreateFolderSheet } from '@/components/notebook/CreateFolderSheet';
 import { NoteDetailSaveIndicator } from '@/components/notebook/NoteDetailSaveIndicator';
 import { isHtmlContent, stripHtml } from '@/components/notebook/NoteEditor';
 import { logger } from '@/lib/logger';
@@ -319,6 +319,7 @@ export default function NoteDetailScreen() {
   // Menu state
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showMoveFolderSheet, setShowMoveFolderSheet] = useState(false);
+  const [showCreateFolderSheet, setShowCreateFolderSheet] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -848,28 +849,19 @@ export default function NoteDetailScreen() {
 
   const handleCreateFolderFromSheet = useCallback(() => {
     if (!gate()) return;
-    Alert.prompt(
-      'New Folder',
-      'Enter a name for the new folder.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Create',
-          onPress: async (name?: string) => {
-            const trimmed = name?.trim();
-            if (!trimmed) return;
-            const folderId = addFolder(trimmed);
-            const id = await ensureNoteSaved();
-            moveNoteToFolder(id, folderId);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ],
-      'plain-text',
-      '',
-      'default',
-    );
-  }, [addFolder, ensureNoteSaved, moveNoteToFolder, gate]);
+    setShowCreateFolderSheet(true);
+  }, [gate]);
+
+  const handleCreateFolderSubmit = useCallback(
+    async (name: string, color?: string) => {
+      if (!gate()) return;
+      const folderId = addFolder(name, color);
+      const id = await ensureNoteSaved();
+      moveNoteToFolder(id, folderId);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [addFolder, ensureNoteSaved, moveNoteToFolder, gate],
+  );
 
 
   /* ───── Scripture actions ───── */
@@ -1249,6 +1241,12 @@ export default function NoteDetailScreen() {
               onPress={handleToggleFavorite}
               style={styles.menuItem}
               activeOpacity={0.6}
+              accessible
+              testID="note-more-toggle-favorite"
+              accessibilityRole="button"
+              accessibilityLabel={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              accessibilityHint={isFavorite ? 'Removes this note from favorites' : 'Marks this note as a favorite'}
+              accessibilityState={{ selected: isFavorite }}
             >
               <StarIcon
                 size={16}
@@ -1267,6 +1265,11 @@ export default function NoteDetailScreen() {
               onPress={handleMoveToFolder}
               style={styles.menuItem}
               activeOpacity={0.6}
+              accessible
+              testID="note-more-move-to-folder"
+              accessibilityRole="button"
+              accessibilityLabel={currentFolder ? `Move note from ${currentFolder.name}` : 'Move to folder'}
+              accessibilityHint="Opens the folder picker for this note"
             >
               <FolderSimpleIcon size={16} color={colors.textMuted} weight="light" />
               <Text style={[styles.menuItemText, { color: colors.text }]}>
@@ -1281,6 +1284,11 @@ export default function NoteDetailScreen() {
               onPress={handleDelete}
               style={styles.menuItem}
               activeOpacity={0.6}
+              accessible
+              testID="note-more-delete"
+              accessibilityRole="button"
+              accessibilityLabel={deleteConfirm ? 'Confirm delete note' : noteId ? 'Delete note' : 'Discard note'}
+              accessibilityHint={deleteConfirm ? 'Deletes this note. Tap outside the menu to cancel.' : 'Shows a confirmation before deleting'}
             >
               <TrashIcon size={16} color={colors.error} weight="light" />
               <Text style={[styles.menuItemText, { color: colors.error }]}>
@@ -1379,13 +1387,16 @@ export default function NoteDetailScreen() {
             maxLength={200}
             keyboardAppearance={isDark ? 'dark' : 'light'}
             accessibilityLabel="Note title"
+            accessibilityHint="Edits the note title"
+            accessibilityValue={{ text: title }}
           />
         ) : (
           <TouchableOpacity
             onPress={handleEdit}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Tap to edit note title"
+            accessibilityLabel={`${displayTitle}. Tap to edit note title`}
+            accessibilityValue={{ text: displayTitle }}
           >
             <Text
               style={[
@@ -1445,6 +1456,9 @@ export default function NoteDetailScreen() {
               colorScheme={isDark ? 'dark' : 'light'}
               keyboardToolbarHeight={nativeEditorToolbarInset}
               bottomOverlayInset={nativeEditorBottomOverlayInset}
+              accessibilityLabel="Note body"
+              accessibilityHint={isEditing ? 'Edits the note body' : 'Shows the note body'}
+              accessibilityValue={{ text: stripHtml(latestHtmlRef.current) }}
               style={styles.richText}
             />
           ) : (
@@ -1689,6 +1703,12 @@ export default function NoteDetailScreen() {
         currentFolderId={liveNote?.folderId ?? existingNote?.folderId}
         onSelect={handleMoveFolderSelect}
         onCreateFolder={handleCreateFolderFromSheet}
+      />
+
+      <CreateFolderSheet
+        visible={showCreateFolderSheet}
+        onClose={() => setShowCreateFolderSheet(false)}
+        onSubmit={handleCreateFolderSubmit}
       />
 
       <ExclusiveOfferSheet

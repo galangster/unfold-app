@@ -132,7 +132,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
     onSubmit(folderName.trim(), selectedColor, parentFolderId);
     translateY.value = withTiming(OFFSCREEN, { duration: DISMISS_DURATION });
     setTimeout(onClose, DISMISS_DURATION);
-  }, [folderName, selectedColor, isCreateEnabled, onSubmit, onClose, translateY]);
+  }, [folderName, selectedColor, parentFolderId, isCreateEnabled, onSubmit, onClose, translateY]);
 
   const handleColorSelect = useCallback((color: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -183,25 +183,26 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
           />
 
           {/* Sheet — single unified surface, slides up from bottom */}
-          <GestureDetector gesture={panGesture}>
-            <Animated.View
-              style={[
-                styles.sheet,
-                sheetAnimatedStyle,
-                {
-                  backgroundColor: colors.backgroundElevated,
-                  paddingBottom: insets.bottom + 200,
-                },
-              ]}
-            >
-              {/* Handle indicator */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              sheetAnimatedStyle,
+              {
+                backgroundColor: colors.backgroundElevated,
+                paddingBottom: insets.bottom + 200,
+              },
+            ]}
+          >
+            {/* Handle indicator — keep the pan gesture scoped away from TextInput so taps focus reliably. */}
+            <GestureDetector gesture={panGesture}>
               <View style={styles.handleRow}>
                 <View style={[styles.handleBar, { backgroundColor: colors.borderStrong }]} />
               </View>
+            </GestureDetector>
 
-              <View style={styles.content}>
-                {/* Header */}
-                <View style={styles.headerRow}>
+            <View style={styles.content}>
+              {/* Header */}
+              <View style={styles.headerRow}>
                   <FolderSimplePlusIcon size={20} color={colors.accent} weight="light" />
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.title, { color: colors.text }]}>
@@ -218,6 +219,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                 {/* Folder name input */}
                 <TextInput
                   ref={inputRef}
+                  testID="create-folder-name-input"
                   style={[
                     styles.input,
                     {
@@ -231,12 +233,18 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                   placeholderTextColor={colors.textHint}
                   value={folderName}
                   onChangeText={setFolderName}
+                  onPressIn={() => inputRef.current?.focus()}
+                  autoFocus
+                  showSoftInputOnFocus
                   autoCapitalize="sentences"
                   autoCorrect={false}
                   returnKeyType="done"
                   onSubmitEditing={handleCreate}
                   maxLength={40}
                   textAlignVertical={CREATE_FOLDER_INPUT_LAYOUT.textAlignVertical}
+                  accessibilityLabel={parentFolderName ? 'New subfolder name' : 'New folder name'}
+                  accessibilityHint="Enter a folder name, then tap Create"
+                  accessibilityValue={{ text: folderName }}
                 />
 
                 {/* Color selection */}
@@ -254,7 +262,7 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                           activeOpacity={0.7}
                           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                           accessibilityRole="button"
-                          accessibilityLabel={`Select color`}
+                          accessibilityLabel={`Select folder color ${color}`}
                           accessibilityState={{ selected: isSelected }}
                         >
                           <View
@@ -286,7 +294,6 @@ export function CreateFolderSheet({ visible, onClose, onSubmit, parentFolderId, 
                 />
               </View>
             </Animated.View>
-          </GestureDetector>
         </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>

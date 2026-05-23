@@ -121,6 +121,8 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     // Don't let vertical drags auto-dismiss the keyboard — same rule as
     // the spike so toolbar interactions don't accidentally kill focus.
     editor.scrollView.keyboardDismissMode = .none
+    editor.accessibilityLabel = "Note body"
+    editor.accessibilityHint = "Shows the note body"
     // Apple Notes-style rubber-band scroll — always draggable even when
     // content is shorter than viewport, so the canvas feels like a real
     // document surface in both edit and view mode.
@@ -176,6 +178,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
 
     // Ensure chip strip renders above the editor in z-order
     rootView.bringSubviewToFront(chipStrip)
+    refreshEditorAccessibility()
   }
 
   deinit {
@@ -212,11 +215,13 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     guard !html.isEmpty else {
       editor.attributedText = NSAttributedString()
       refreshScriptureChips()
+      refreshEditorAccessibility()
       return
     }
     let decoded = HtmlDecoder.decode(html)
     editor.attributedText = decoded
     refreshScriptureChips()
+    refreshEditorAccessibility()
     DispatchQueue.main.async { [weak self] in
       self?.layoutOverlay()
     }
@@ -350,6 +355,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
   /// Toggles whether the editor accepts edits. Mirrors `editor.isEditable`.
   func setEditable(_ editable: Bool) {
     editor.isEditable = editable
+    refreshEditorAccessibility()
     // Proton's AutogrowingTextView starts with isScrollEnabled=false and
     // manages it dynamically during layout. When entering read mode, the
     // content likely exceeds the view bounds — force scrolling on so the
@@ -676,6 +682,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     refreshScriptureChips()
     lineDecorationOverlay.invalidate()
     needsCaretVisibilityAfterLayout = true
+    refreshEditorAccessibility()
     scheduleHtmlEmit()
     refreshSelectionState()
   }
@@ -1243,6 +1250,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
     changeDebounceTimer?.cancel()
     changeDebounceTimer = nil
     let html = getHtml()
+    refreshEditorAccessibility()
     onChangeHtml?(html)
   }
 
@@ -1256,6 +1264,7 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       DispatchQueue.main.async {
         guard let self = self else { return }
         let html = self.getHtml()
+        self.refreshEditorAccessibility()
         self.onChangeHtml?(html)
       }
     }
@@ -1305,6 +1314,31 @@ final class UnfoldEditorController: NSObject, EditorViewDelegate, UIGestureRecog
       selectedRange: editor.selectedRange,
       typingAttributes: editor.typingAttributes)
     throttleSelectionEmit(state)
+  }
+
+  private func refreshEditorAccessibility() {
+    let rawText = editor.attributedText.string
+    let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let value = trimmed.isEmpty ? "Empty" : trimmed
+    let hint = editor.isEditable ? "Edits the note body" : "Shows the note body"
+
+    editor.accessibilityLabel = "Note body"
+    editor.accessibilityValue = value
+    editor.accessibilityHint = hint
+
+    applyTextViewAccessibility(in: editor, value: value, hint: hint)
+  }
+
+  private func applyTextViewAccessibility(in view: UIView, value: String, hint: String) {
+    if let textView = view as? UITextView {
+      textView.accessibilityLabel = "Note body"
+      textView.accessibilityValue = value
+      textView.accessibilityHint = hint
+    }
+
+    for subview in view.subviews {
+      applyTextViewAccessibility(in: subview, value: value, hint: hint)
+    }
   }
 
   @objc private func handleChecklistMarkerTap(_ gestureRecognizer: UITapGestureRecognizer) {

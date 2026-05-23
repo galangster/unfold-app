@@ -314,9 +314,13 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
               key={route.key}
               onPress={onPress}
               onLongPress={onLongPress}
-              accessibilityRole="tab"
+              accessible
+              testID={`bottom-tab-${label.toLowerCase()}`}
+              importantForAccessibility="yes"
+              accessibilityRole="button"
               accessibilityState={{ selected: isFocused }}
-              accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+              accessibilityLabel={`${options.tabBarAccessibilityLabel ?? label} tab`}
+              accessibilityHint={`Switches to the ${label} tab`}
               style={{
                 flex: 1,
                 alignItems: 'center',
