@@ -51,6 +51,7 @@ import {
   getEveningWindDownDayNumber,
   getMiddayCheckInDayNumber,
 } from '@/lib/today-companion-state';
+import { getCalendarDayNumber } from '@/lib/devotional-day-access';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -509,6 +510,16 @@ export default function HomeScreen() {
     if (!dayData) return 'Today';
 
     const todayStr = new Date().toDateString();
+    const calendarDayNumber = getCalendarDayNumber(currentDevotional);
+
+    // If the current pointer is ahead of the user's calendar pace, it is the
+    // generated-ahead reading and should stay locked as tomorrow after today's
+    // completion. Otherwise, a generated day whose number is due today remains
+    // today's reading even if it was generated earlier.
+    if (!dayData.isRead && calendarDayNumber != null) {
+      if (currentDevotional.currentDay > calendarDayNumber) return 'Tomorrow';
+      return currentDevotional.currentDay < calendarDayNumber ? 'Overdue' : 'Today';
+    }
 
     // Case 1: Current day already read today — it's today's completed reading.
     // (In the old system this returned 'Tomorrow' because currentDay advanced immediately.

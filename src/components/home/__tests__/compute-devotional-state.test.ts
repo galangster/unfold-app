@@ -168,6 +168,7 @@ describe('computeDevotionalState', () => {
     const state = computeDevotionalState({
       ...baseInput,
       hasReadToday: true,
+      dayLabel: 'Tomorrow',
       daysCompleted: 1,
       progress: 14.3,
       tomorrowTeaser: teaser,
@@ -279,10 +280,29 @@ describe('computeDevotionalState', () => {
     const state = computeDevotionalState({
       ...baseInput,
       hasReadToday: true,
+      dayLabel: 'Tomorrow',
       currentDayData: makeDayData({ dayNumber: 2, isRead: false, isRevealed: false }),
       daysCompleted: 1,
     });
     expect(state.type).toBe('tomorrow-locked');
+  });
+
+  it('keeps a calendar-eligible catch-up next day revealable even when another day was read today', () => {
+    const onReveal = jest.fn();
+    const state = computeDevotionalState({
+      ...baseInput,
+      hasReadToday: true,
+      dayLabel: 'Today',
+      currentDayData: makeDayData({ dayNumber: 7, isRead: false, isRevealed: false }),
+      daysCompleted: 6,
+      onReveal,
+    });
+
+    expect(state.type).toBe('reveal-ready');
+    if (state.type === 'reveal-ready') {
+      expect(state.dayNumber).toBe(7);
+      expect(state.onReveal).toBe(onReveal);
+    }
   });
 
   it('returns reveal-ready when isRevealed is undefined (unmigrated data)', () => {
@@ -298,6 +318,7 @@ describe('computeDevotionalState', () => {
     const state = computeDevotionalState({
       ...baseInput,
       hasReadToday: true,
+      dayLabel: 'Tomorrow',
       currentDayData: makeDayData({ dayNumber: 3, isRead: false, isRevealed: false }),
       daysCompleted: 2,
     });

@@ -55,6 +55,15 @@ const DISPLAY_TEXT_MAX_SCALE = 1.18;
 const BODY_TEXT_MAX_SCALE = 1.28;
 const LABEL_TEXT_MAX_SCALE = 1.14;
 
+function formatHeroSeriesTitle(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed || /[a-z]/.test(trimmed) || trimmed !== trimmed.toUpperCase()) return title;
+
+  return trimmed.replace(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu, (word) => (
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ));
+}
+
 const RevealChar = React.memo(function RevealChar({ char, animDelay }: { char: string; animDelay: number }) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
@@ -286,6 +295,7 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
   const isVeryCompactHero = width < 370 || fontScale >= 1.32;
   const scriptureReference = state.dayData.scriptureReference || 'Today’s reading';
   const statusLabel = isYesterday ? 'Still waiting' : 'Ready to reveal';
+  const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);
   const revealMessage = isYesterday
     ? 'This thread is still sealed for you. Open it gently before moving on.'
     : 'A new thread is ready, but the words stay quiet until you choose to open them.';
@@ -299,7 +309,7 @@ function RevealReadyState({ state }: { state: Extract<DevotionalCardState, { typ
             numberOfLines={1}
             maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
           >
-            {state.seriesTitle}
+            {displaySeriesTitle}
           </Text>
 
           <Text style={[styles.heroDayMeta, { color: colors.accent }]} maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}>
@@ -926,17 +936,15 @@ const styles = StyleSheet.create({
   heroSeriesEyebrow: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 12,
-    letterSpacing: 2.2,
+    letterSpacing: 0.45,
     lineHeight: 17,
-    textTransform: 'uppercase',
     marginBottom: Spacing['5'],
   },
   heroDayMeta: {
     fontFamily: FontFamily.uiMedium,
     fontSize: 12,
-    letterSpacing: 1.8,
+    letterSpacing: 0.35,
     lineHeight: 18,
-    textTransform: 'uppercase',
     marginBottom: Spacing['3'],
   },
   heroDayMetaRow: {

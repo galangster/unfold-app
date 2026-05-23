@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Svg, { Path } from 'react-native-svg';
-import { ArrowRightIcon } from 'phosphor-react-native';
+import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
@@ -19,7 +19,6 @@ import { Radius } from '@/constants/radius';
 import { CompanionOrb } from '@/components/CompanionOrb';
 import { alpha } from '@/components/ui';
 import { buildBubblePath } from '@/lib/bubble-path';
-import { DismissCircleButton } from '@/components/home/DismissCircleButton';
 import { animateCardDismiss } from '@/lib/card-dismiss-animation';
 import { useTheme } from '@/lib/theme';
 import type { ColorTheme } from '@/constants/colors';
@@ -111,13 +110,17 @@ export function TodayCompanionBubble({
   }, [onDismiss]);
 
   const dismissButton = onDismiss ? (
-    <DismissCircleButton
-      colors={colors}
+    <TouchableOpacity
+      activeOpacity={0.64}
       onPress={handleDismiss}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      accessibilityRole="button"
       accessibilityLabel={dismissAccessibilityLabel ?? 'Dismiss Companion card'}
       accessibilityHint={dismissAccessibilityHint ?? 'Hides this optional Companion card'}
       style={styles.dismissButton}
-    />
+    >
+      <XIcon size={13} color={colors.textSubtle} weight="regular" />
+    </TouchableOpacity>
   ) : null;
 
   const bubbleContent = (
@@ -236,9 +239,13 @@ const styles = StyleSheet.create({
     gap: Spacing['2.5'],
   },
   dismissButton: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
     position: 'absolute',
-    top: -9,
-    right: -9,
+    top: -4,
+    right: -4,
+    width: 32,
     zIndex: 4,
   },
   orbWrap: {

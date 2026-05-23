@@ -11,6 +11,31 @@ function isSameLocalDate(value: string | undefined, now: Date): boolean {
   return parsed.toDateString() === now.toDateString();
 }
 
+export function getCalendarDayNumber(
+  devotional: Devotional | null | undefined,
+  now = new Date(),
+): number | null {
+  if (!devotional?.seriesStartDate) return null;
+
+  const startDate = new Date(devotional.seriesStartDate);
+  if (Number.isNaN(startDate.getTime())) return null;
+
+  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayNumber = Math.floor((today.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
+  return Math.max(1, dayNumber);
+}
+
+function isCurrentDayAfterCalendarDay(
+  devotional: Devotional,
+  now = new Date(),
+): boolean {
+  const calendarDayNumber = getCalendarDayNumber(devotional, now);
+  if (calendarDayNumber == null) return true;
+  return devotional.currentDay > calendarDayNumber;
+}
+
 export function getLatestReadDayNumberToday(
   devotional: Devotional | null | undefined,
   now = new Date(),
@@ -36,7 +61,7 @@ export function getLockedTodayDayNumber(
   const currentDay = devotional.days?.find((day) => day.dayNumber === devotional.currentDay);
   const currentDayIsTomorrowCandidate = devotional.currentDay > latestReadToday && !currentDay?.isRead;
 
-  return currentDayIsTomorrowCandidate ? latestReadToday : null;
+  return currentDayIsTomorrowCandidate && isCurrentDayAfterCalendarDay(devotional, now) ? latestReadToday : null;
 }
 
 export function getTodayReaderDayNumber(

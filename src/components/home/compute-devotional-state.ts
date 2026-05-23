@@ -172,8 +172,10 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     return { type: 'journey-complete', seriesTitle, onCreateNew };
   }
 
-  // 4. Today's reading done but series not complete — locked until tomorrow
-  if (hasReadToday && !currentDayData.isRead) {
+  // 4. Today's reading done but series not complete — locked until tomorrow.
+  // If the next current day is calendar-eligible today (for example after
+  // catching up an overdue day), let it continue into reveal/unread states.
+  if (hasReadToday && !currentDayData.isRead && dayLabel === 'Tomorrow') {
     return {
       type: 'tomorrow-locked',
       dayData: currentDayData,

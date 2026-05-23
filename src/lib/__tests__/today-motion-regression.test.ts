@@ -21,6 +21,7 @@ describe('Today tab motion guardrails', () => {
   const notificationCardSource = readSource('components/home/NotificationCard.tsx');
   const rememberThisCardSource = readSource('components/home/RememberThisCard.tsx');
   const todayIndexSource = readSource('app/(tabs)/(today)/index.tsx');
+  const todayCardStackSource = readSource('components/home/TodayCardStack.tsx');
   const crossTabBackSource = readSource('hooks/useCrossTabBack.ts');
   const seriesCarouselSource = readSource('components/home/SeriesCarousel.tsx');
   const yourSeriesSectionSource = readSource('components/home/YourSeriesSection.tsx');
@@ -92,22 +93,38 @@ describe('Today tab motion guardrails', () => {
     expect(todayIndexSource).not.toContain('day1ReviewArt');
   });
 
-  it('keeps the companion bridge above the hero as speech, not a dashboard module', () => {
-    const contextZoneIndex = todayIndexSource.indexOf('/* Zone 2: Context Slot');
-    const rememberThisIndex = todayIndexSource.indexOf('/* Remember This');
-    const heroZoneIndex = todayIndexSource.indexOf('/* Zone 3: Hero Devotional');
+  it('keeps the optional Today context stack under the hero instead of above it', () => {
+    const contextZoneIndex = todayIndexSource.indexOf('/* Zone 2: Context stack moved under the hero in Phase 3. */');
+    const heroZoneIndex = todayIndexSource.indexOf("/* Zone 3: Hero Devotional — Today's primary act */");
+    const todayCardStackIndex = todayIndexSource.indexOf('<TodayCardStack', heroZoneIndex);
+    const dailyRhythmIndex = todayIndexSource.indexOf('/* Zone 6: Daily Rhythm */', todayCardStackIndex);
     const revealStart = devotionalCardSource.indexOf('function RevealReadyState');
     const revealEnd = devotionalCardSource.indexOf('// ─── Preparing progress bar', revealStart);
     const revealSource = devotionalCardSource.slice(revealStart, revealEnd);
+    const companionDismissStyleStart = todayCompanionBubbleSource.indexOf('dismissButton: {');
+    const companionDismissStyleEnd = todayCompanionBubbleSource.indexOf('orbWrap:', companionDismissStyleStart);
+    const companionDismissStyle = todayCompanionBubbleSource.slice(companionDismissStyleStart, companionDismissStyleEnd);
 
     expect(contextZoneIndex).toBeGreaterThan(-1);
-    expect(rememberThisIndex).toBeGreaterThan(contextZoneIndex);
-    expect(heroZoneIndex).toBeGreaterThan(rememberThisIndex);
+    expect(heroZoneIndex).toBeGreaterThan(contextZoneIndex);
+    expect(todayCardStackIndex).toBeGreaterThan(heroZoneIndex);
+    expect(dailyRhythmIndex).toBeGreaterThan(todayCardStackIndex);
+    expect(todayIndexSource).toContain('hasOptionalTodayStack && (');
+    expect(todayIndexSource).toContain('cards={todayStackCards}');
+    expect(todayIndexSource).toContain('style={styles.todayStackWrapper}');
+    expect(todayIndexSource).toContain('hasOptionalTodayStack ? styles.rhythmAfterOptionalStack : styles.rhythmAfterHero');
 
     expect(dailyBridgeCardSource).toContain('TodayCompanionBubble');
     expect(todayCompanionBubbleSource).toContain('CompanionOrb');
     expect(todayCompanionBubbleSource).toContain('styles.bubble');
     expect(todayCompanionBubbleSource).toContain('Companion says:');
+    expect(todayCompanionBubbleSource).toContain('XIcon size={13}');
+    expect(todayCompanionBubbleSource).not.toContain('DismissCircleButton');
+    expect(companionDismissStyle).not.toContain('borderRadius');
+    expect(companionDismissStyle).not.toContain('borderWidth');
+    expect(companionDismissStyle).not.toContain('backgroundColor');
+    expect(companionDismissStyle).not.toContain('shadow');
+    expect(companionDismissStyle).not.toContain('elevation');
     expect(dailyBridgeCardSource).not.toContain('Companion bridge');
     expect(todayCompanionBubbleSource).not.toContain('Companion bridge');
     expect(dailyBridgeCardSource).not.toContain('A small thread from yesterday into today');
@@ -125,12 +142,26 @@ describe('Today tab motion guardrails', () => {
     expect(revealSource).toContain('styles.revealOpenHero');
     expect(revealSource).not.toContain('styles.revealCard');
     expect(devotionalCardSource).not.toContain('revealCard:');
+
+    expect(todayCardStackSource).toContain('backgroundColor: alpha(colors.accent, fillOpacity)');
+    expect(todayCardStackSource).toContain('borderColor: alpha(colors.accent, borderOpacity)');
+    expect(todayCardStackSource).toContain('const fillOpacity = Math.max(isDark ? 0.1 : 0.065');
+    expect(todayCardStackSource).not.toContain('backgroundColor: alpha(colors.backgroundPure');
   });
 
   it('keeps the open Today hero focused on title and pull quote without repeating the scripture reference', () => {
     const mainCardStart = devotionalCardSource.indexOf('function MainCard');
     const mainCardEnd = devotionalCardSource.indexOf('// ─── DevotionalCard (root)', mainCardStart);
     const mainCardSource = devotionalCardSource.slice(mainCardStart, mainCardEnd);
+    const revealStart = devotionalCardSource.indexOf('function RevealReadyState');
+    const revealEnd = devotionalCardSource.indexOf('// ─── Preparing progress bar', revealStart);
+    const revealSource = devotionalCardSource.slice(revealStart, revealEnd);
+    const heroSeriesStyleStart = devotionalCardSource.indexOf('heroSeriesEyebrow: {');
+    const heroSeriesStyleEnd = devotionalCardSource.indexOf('heroDayMeta:', heroSeriesStyleStart);
+    const heroSeriesStyle = devotionalCardSource.slice(heroSeriesStyleStart, heroSeriesStyleEnd);
+    const heroDayMetaStyleStart = devotionalCardSource.indexOf('heroDayMeta: {');
+    const heroDayMetaStyleEnd = devotionalCardSource.indexOf('heroDayMetaRow:', heroDayMetaStyleStart);
+    const heroDayMetaStyle = devotionalCardSource.slice(heroDayMetaStyleStart, heroDayMetaStyleEnd);
 
     expect(mainCardStart).toBeGreaterThan(-1);
     expect(mainCardEnd).toBeGreaterThan(mainCardStart);
@@ -138,6 +169,14 @@ describe('Today tab motion guardrails', () => {
     expect(mainCardSource).not.toContain('heroScriptureRow');
     expect(mainCardSource).not.toContain('heroScriptureRule');
     expect(mainCardSource).not.toContain('heroScripture');
+
+    expect(revealSource).toContain('const displaySeriesTitle = formatHeroSeriesTitle(state.seriesTitle);');
+    expect(revealSource).toContain('{displaySeriesTitle}');
+    expect(devotionalCardSource).toContain('function formatHeroSeriesTitle(title: string): string');
+    expect(heroSeriesStyle).not.toContain("textTransform: 'uppercase'");
+    expect(heroDayMetaStyle).not.toContain("textTransform: 'uppercase'");
+    expect(heroSeriesStyle).toContain('letterSpacing: 0.45');
+    expect(heroDayMetaStyle).toContain('letterSpacing: 0.35');
   });
 
   it('keeps devotional detail navigation in the Today stack when My Devotionals was opened from Today', () => {
