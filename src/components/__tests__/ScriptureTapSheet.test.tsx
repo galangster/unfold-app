@@ -2,6 +2,8 @@ import React from 'react';
 import { Modal, TouchableOpacity } from 'react-native';
 import { ScriptureTapSheet } from '../ScriptureTapSheet';
 
+const fs = require('fs');
+const path = require('path');
 const renderer = require('react-test-renderer');
 const { act } = renderer;
 
@@ -103,8 +105,33 @@ jest.mock('react-native-reanimated', () => ({
   FadeIn: { duration: () => ({ easing: () => undefined }) },
   FadeInDown: { duration: () => ({ easing: () => undefined }) },
   FadeOut: { duration: () => ({ easing: () => undefined }) },
+  runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+  useAnimatedStyle: (factory: () => unknown) => factory(),
   useReducedMotion: () => true,
+  useSharedValue: (value: unknown) => ({ value }),
+  withTiming: (value: unknown, _config?: unknown, callback?: (finished: boolean) => void) => {
+    callback?.(true);
+    return value;
+  },
 }));
+
+jest.mock('react-native-gesture-handler', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const makePan = () => {
+    const gesture: Record<string, jest.Mock> = {};
+    ['activeOffsetY', 'failOffsetX', 'onUpdate', 'onEnd'].forEach((name) => {
+      gesture[name] = jest.fn(() => gesture);
+    });
+    return gesture;
+  };
+
+  return {
+    Gesture: { Pan: jest.fn(makePan) },
+    GestureDetector: ({ children }: any) => <View testID="scripture-sheet-gesture-detector">{children}</View>,
+    GestureHandlerRootView: ({ children, style }: any) => <View style={style}>{children}</View>,
+  };
+});
 
 jest.mock('phosphor-react-native', () => ({
   XIcon: () => null,
@@ -237,5 +264,22 @@ describe('ScriptureTapSheet Explain CTA', () => {
         dayTitle: 'Loved First',
       }),
     }));
+  });
+
+  it('keeps swipe-to-dismiss scoped to the grabber and header instead of the scrollable scripture body', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '../ScriptureTapSheet.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('react-native-gesture-handler');
+    expect(source).toContain('GestureHandlerRootView');
+    expect(source).toContain('GestureDetector');
+    expect(source).toContain('Gesture.Pan()');
+    expect(source).toContain('testID="scripture-sheet-swipe-dismiss-region"');
+    expect(source).toMatch(/entering=\{reducedMotion \? undefined : FadeInDown[\s\S]*style=\{s\.sheetShell\}[\s\S]*<Animated\.View style=\{\[s\.sheet, sheetAnimatedStyle,/);
+    expect(source).not.toMatch(/<Animated\.View[^>]*entering=\{reducedMotion \? undefined : FadeInDown[^>]*style=\{\[s\.sheet, sheetAnimatedStyle,/s);
+    expect(source).toMatch(/<GestureDetector gesture=\{panGesture\}>[\s\S]*scripture-sheet-swipe-dismiss-region[\s\S]*<\/GestureDetector>[\s\S]*<ScrollView/);
+    expect(source).toMatch(/translationY > SWIPE_DISMISS_THRESHOLD \|\| e\.velocityY > SWIPE_DISMISS_VELOCITY/);
   });
 });

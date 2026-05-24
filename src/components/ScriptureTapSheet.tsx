@@ -1,6 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Modal, ScrollView, StyleSheet } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut, useReducedMotion } from 'react-native-reanimated';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  FadeInDown,
+  FadeOut,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -25,6 +34,10 @@ interface ScriptureTapSheetProps {
   dayTitle?: string;
   devotionalTitle?: string;
 }
+
+const SWIPE_DISMISS_THRESHOLD = 72;
+const SWIPE_DISMISS_VELOCITY = 850;
+const SWIPE_DISMISS_OFFSCREEN = 520;
 
 /** Parse "Romans 8:28" into { bookId, chapter, verse } for Bible reader navigation */
 function parseReferenceForNav(reference: string): { bookId: number; chapter: number; verse: number } | null {
@@ -71,6 +84,51 @@ export function ScriptureTapSheet({
     : false;
 
   const canNavigate = parseReferenceForNav(reference) !== null;
+  const translateY = useSharedValue(0);
+  const dismissDuration = reducedMotion ? 1 : Duration.fast;
+
+  const handleSwipeDismiss = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (visible) {
+      translateY.value = 0;
+    }
+  }, [translateY, visible]);
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY([-8, 8])
+        .failOffsetX([-24, 24])
+        .onUpdate((e) => {
+          if (e.translationY > 0) {
+            translateY.value = e.translationY;
+          }
+        })
+        .onEnd((e) => {
+          if (e.translationY > SWIPE_DISMISS_THRESHOLD || e.velocityY > SWIPE_DISMISS_VELOCITY) {
+            translateY.value = withTiming(
+              SWIPE_DISMISS_OFFSCREEN,
+              { duration: dismissDuration },
+              (finished) => {
+                if (finished) {
+                  runOnJS(handleSwipeDismiss)();
+                }
+              },
+            );
+          } else {
+            translateY.value = withTiming(0, { duration: Duration.fast });
+          }
+        }),
+    [dismissDuration, handleSwipeDismiss, translateY],
+  );
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
 
   useEffect(() => {
     if (visible && reference) {
@@ -139,82 +197,87 @@ export function ScriptureTapSheet({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={s.container}>
+      <GestureHandlerRootView style={s.container}>
         {/* Backdrop */}
         <TouchableOpacity activeOpacity={1} onPress={onClose} style={s.backdrop} />
 
-        {/* Sheet */}
+        {/* Sheet shell owns mount/unmount layout animation; inner sheet owns gesture transform. */}
         <Animated.View
           entering={reducedMotion ? undefined : FadeInDown.duration(Duration.normal).easing(Ease.out)}
           exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-          style={[s.sheet, { backgroundColor: colors.background }]}
+          style={s.sheetShell}
         >
-          {/* Drag indicator */}
-          <View style={s.handleRow}>
-            <View style={[s.handle, { backgroundColor: colors.borderStrong }]} />
-          </View>
+          <Animated.View style={[s.sheet, sheetAnimatedStyle, { backgroundColor: colors.background }]}>
+          <GestureDetector gesture={panGesture}>
+            <View testID="scripture-sheet-swipe-dismiss-region" style={s.dragRegion}>
+              {/* Drag indicator */}
+              <View style={s.handleRow}>
+                <View style={[s.handle, { backgroundColor: colors.borderStrong }]} />
+              </View>
 
-          {/* Header row: reference + translation + actions + close */}
-          <View style={s.header}>
-            <View style={s.headerLeft}>
-              <Text style={[s.reference, { color: colors.text }]} numberOfLines={1}>
-                {reference}
-              </Text>
-              {verse && (
-                <View style={[s.translationPill, { backgroundColor: alpha(colors.accent, 0.10) }]}>
-                  <Text style={[s.translationPillText, { color: colors.accent }]}>
-                    {verse.translation.toUpperCase()}
+              {/* Header row: reference + translation + actions + close */}
+              <View style={s.header}>
+                <View style={s.headerLeft}>
+                  <Text style={[s.reference, { color: colors.text }]} numberOfLines={1}>
+                    {reference}
                   </Text>
-                </View>
-              )}
-            </View>
-
-            <View style={s.headerActions}>
-              {/* Copy */}
-              {verse && (
-                <TouchableOpacity
-                  activeOpacity={0.6}
-                  onPress={handleCopy}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[s.iconBtn, { backgroundColor: copied ? alpha(colors.accent, 0.10) : 'transparent' }]}
-                >
-                  {copied ? (
-                    <CheckIcon size={16} color={colors.accent} weight="bold" />
-                  ) : (
-                    <CopyIcon size={16} color={colors.textMuted} weight="light" />
+                  {verse && (
+                    <View style={[s.translationPill, { backgroundColor: alpha(colors.accent, 0.10) }]}>
+                      <Text style={[s.translationPillText, { color: colors.accent }]}>
+                        {verse.translation.toUpperCase()}
+                      </Text>
+                    </View>
                   )}
-                </TouchableOpacity>
-              )}
+                </View>
 
-              {/* Bookmark */}
-              {verse && devotionalId && dayNumber && !alreadyBookmarked && (
-                <TouchableOpacity
-                  activeOpacity={0.6}
-                  onPress={handleBookmark}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={[s.iconBtn, { backgroundColor: saved ? alpha(colors.accent, 0.10) : 'transparent' }]}
-                >
-                  <BookmarkSimpleIcon
-                    size={16}
-                    color={saved ? colors.accent : colors.textMuted}
-                    weight={saved ? 'fill' : 'light'}
-                  />
-                </TouchableOpacity>
-              )}
+                <View style={s.headerActions}>
+                  {/* Copy */}
+                  {verse && (
+                    <TouchableOpacity
+                      activeOpacity={0.6}
+                      onPress={handleCopy}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={[s.iconBtn, { backgroundColor: copied ? alpha(colors.accent, 0.10) : 'transparent' }]}
+                    >
+                      {copied ? (
+                        <CheckIcon size={16} color={colors.accent} weight="bold" />
+                      ) : (
+                        <CopyIcon size={16} color={colors.textMuted} weight="light" />
+                      )}
+                    </TouchableOpacity>
+                  )}
 
-              {/* Close */}
-              <TouchableOpacity
-                activeOpacity={0.6}
-                onPress={onClose}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={s.iconBtn}
-                accessibilityLabel="Close scripture view"
-                accessibilityRole="button"
-              >
-                <XIcon size={18} color={colors.textSubtle} weight="light" />
-              </TouchableOpacity>
+                  {/* Bookmark */}
+                  {verse && devotionalId && dayNumber && !alreadyBookmarked && (
+                    <TouchableOpacity
+                      activeOpacity={0.6}
+                      onPress={handleBookmark}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={[s.iconBtn, { backgroundColor: saved ? alpha(colors.accent, 0.10) : 'transparent' }]}
+                    >
+                      <BookmarkSimpleIcon
+                        size={16}
+                        color={saved ? colors.accent : colors.textMuted}
+                        weight={saved ? 'fill' : 'light'}
+                      />
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Close */}
+                  <TouchableOpacity
+                    activeOpacity={0.6}
+                    onPress={onClose}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={s.iconBtn}
+                    accessibilityLabel="Close scripture view"
+                    accessibilityRole="button"
+                  >
+                    <XIcon size={18} color={colors.textSubtle} weight="light" />
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
-          </View>
+          </GestureDetector>
 
           {/* Scrollable content */}
           <ScrollView
@@ -282,7 +345,8 @@ export function ScriptureTapSheet({
             )}
           </ScrollView>
         </Animated.View>
-      </View>
+        </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
     {verse && (
       <ScriptureExplainSheet
@@ -312,17 +376,22 @@ const s = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  sheet: {
+  sheetShell: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    maxHeight: '65%',
+  },
+  sheet: {
     borderTopLeftRadius: Radius['2xl'],
     borderTopRightRadius: Radius['2xl'],
-    maxHeight: '65%',
   },
 
   // ─── Handle ─────────────────────────────────────
+  dragRegion: {
+    width: '100%',
+  },
   handleRow: {
     alignItems: 'center',
     paddingTop: Spacing['3'],
