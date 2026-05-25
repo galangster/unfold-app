@@ -45,7 +45,7 @@ Phase 1 (this PR): elevation token system + apply to `TodayCardStack`, `StreakBo
 | StreakBox per-day chip border (`isToday`) | `src/components/StreakBox.tsx:124-130, 213-218` | `alpha(accent, 0.55)` | — | — | — |
 | BentoGrid box | `src/components/home/BentoGrid.tsx:52-68, 92-104` | `borderColor: alpha(accent, 0.25)` + `borderWidth: 1` | `hidden` | (none) | yes (`intensity` 28/18) |
 
-Note: `TodayCardStack:429`'s `...Shadow.md` already does nothing because the parent has `overflow: 'hidden'`. The visible shadow Nick sees on those cards is actually `shadowColor: colors.accent` (line 353) leaking via the OS — but iOS clipping behavior is inconsistent and the value barely renders. Confirmed Codex's "we're shipping a no-op" framing for the current state.
+Note: `TodayCardStack:429`'s `...Shadow.md` already does nothing because the parent has `overflow: 'hidden'` (RN maps this to iOS `clipsToBounds`, which suppresses same-layer shadows). The `shadowColor: colors.accent` at line 353 is *not* a separate shadow — it only colors the suppressed `...Shadow.md`. Net: TodayCardStack top card currently has no rendered shadow. Confirmed Codex's "we're shipping a no-op" framing for the current state.
 
 ## Elevation token system
 
@@ -93,7 +93,7 @@ Light mode: no inner highlight (would be invisible over `#FFFFFF`). Lift comes f
 
 ```tsx
 const elevation = useElevation();
-<Animated.View style={[styles.outer, elevation.raised.shadow]}>
+<Animated.View style={[styles.outer, { borderRadius: Radius.xl }, elevation.raised.shadow]}>
   <View style={[styles.inner, { overflow: 'hidden', borderRadius: Radius.xl }]}>
     <BlurView ... />
     <View pointerEvents="none" style={elevation.raised.highlight} />
@@ -102,54 +102,91 @@ const elevation = useElevation();
 </Animated.View>
 ```
 
-- Outer wrapper: shadow only. `overflow` defaults to `visible`. No `borderRadius`, no clipping.
-- Inner wrapper: existing `overflow: 'hidden'`, `borderRadius`, padding. Houses `BlurView`, highlight overlay, and content.
-- Highlight overlay: `position: 'absolute'`, `top: 0`, `left: 0`, `right: 0`, `height: 1`, `backgroundColor: rgba(255,255,255,0.06)` in dark / `'transparent'` in light. Because it lives inside the clipped inner View, the rounded corners crop it cleanly.
+- **Outer wrapper:** shadow + matching `borderRadius`. `overflow` is the default (`visible`). The `borderRadius` is required so iOS computes a rounded shadow path (via `RCTViewComponentView.mm` / `RCTView.m` shadow-path-from-corner-radius logic) instead of a pixel-derived rectangular shadow.
+- **Inner wrapper:** owns `overflow: 'hidden'`, `borderRadius`, padding, `backgroundColor`, `borderWidth`+transparent `borderColor`. Houses `BlurView`, the highlight overlay, and content.
+- **Highlight overlay:** `position: 'absolute'`, `top: 0`, `left: 0`, `right: 0`, `height: 1`, `backgroundColor: rgba(255,255,255,0.06)` in dark / `'transparent'` in light, `pointerEvents="none"`. **Z-order: render AFTER `BlurView`, BEFORE the content View.** First-child wins lowest z, so `BlurView` must come first; the highlight goes second so its 1px line is on top of the blurred edge.
+- Because the highlight lives inside the clipped inner View, the rounded corners crop it cleanly.
 
 ## Per-card changes (Phase 1)
 
 ### 1. `TodayCardStack.tsx`
 
-**Top card:**
-- Add an outer wrapper around `topCardContent` (`Animated.View` at line 343). The shadow lives here.
-- Move the existing inner content (`BlurView`, `topUtilityRow`, `TopCardBody`, `StackDismissButton`) into the inner clipped wrapper.
-- Replace `...Shadow.md` and `shadowColor: colors.accent` on the current inline style with `elevation.raised.shadow`. Drop the `shadowColor: colors.accent` from the inner style block (line 353) — it's the wrong layer.
-- Set `borderColor: 'transparent'` (keep `borderWidth: 1.5` from `styles.topCard` line 422). Layout preserved.
-- Insert the `elevation.raised.highlight` overlay child as the first child inside the clipped inner View, above `BlurView`.
+**Top card — explicit prop ownership** (the current single `Animated.View` at line 343 splits into outer + inner):
+
+| Prop | Stays on outer (new `Animated.View`) | Moves to inner (new plain `View`) |
+|---|---|---|
+| `onLayout={handleTopCardLayout}` | ✓ | |
+| `testID={topCard.testID ?? 'today-card-stack-top-card'}` | ✓ | |
+| `topCardAnimatedStyle` (swipe `translateX` + `rotateZ`) | ✓ — entire card swipes/rotates as one | |
+| `zIndex: model.totalCount + 1` | ✓ | |
+| `elevation.raised.shadow` | ✓ | |
+| `borderRadius: Radius.xl` | ✓ (for rounded shadow path) | ✓ (for content clipping) |
+| `accessibilityLabel`, `accessible={true}` | ✓ — see a11y note below | |
+| `backgroundColor` (existing alpha blend at lines 349-351) | | ✓ |
+| `borderWidth: 1.5`, `borderColor: 'transparent'` (was `alpha(colors.accent, …)`) | | ✓ |
+| `paddingHorizontal/Vertical` (from `styles.topCard`) | | ✓ |
+| `overflow: 'hidden'` | | ✓ |
+| `BlurView` child | | ✓ (first inner child) |
+| `elevation.raised.highlight` overlay child | | ✓ (second inner child, after BlurView, before content) |
+| `TopCardBody` + `StackDismissButton` | | ✓ (third+ inner children) |
+
+- Drop `...Shadow.md` and the dangling `shadowColor: colors.accent` from the inline style entirely (lines 353-354 and the `styles.topCard` Shadow.md spread at line 429). Replace with `elevation.raised.shadow` on the outer wrapper.
+- Drop `borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24)` from the inline style (line 352). Inner keeps `borderWidth: 1.5` with `borderColor: 'transparent'`.
+- The `GestureDetector` at line 404-406 wraps the OUTER wrapper, so the swipe gesture continues to drive `topCardAnimatedStyle` on the outer (and the shadow swipes with it).
 
 **Back silhouettes (`BackCardSilhouette`):**
 - Drop `borderColor: alpha(colors.accent, borderOpacity)` from the inline style (line 237). Keep `borderWidth: 1` in `styles.backCard` (line 438) but set `borderColor: 'transparent'`. The visible silhouette is carried by `backgroundColor: alpha(accent, fillOpacity)` (line 236), which stays.
 - No shadow on back cards — they live behind the top card and would compete.
 - `borderOpacity` local var becomes unused — delete the computation at line 208.
+- See `today-motion-regression.test.ts:146` test update below.
 
 **"1/N" counter removal:**
 - Delete `topUtilityRow` View and `countText` Text entirely (lines 369-375).
 - Delete `styles.topUtilityRow` and `styles.countText` from the StyleSheet block.
 - Delete `showCount` local at line 339.
-- Update `accessibilityLabel` on the outer wrapper Animated.View (line 388):
+- Update `accessibilityLabel` on the **outer wrapper** Animated.View (currently at line 388 on `styles.outer`; moves up to the new top-card outer wrapper):
   - Was: `showCount ? 'Today card stack, card 1 of N' : 'Today card stack'`
   - New: `model.totalCount > 1 ? 'Today card stack, ${model.totalCount} cards' : 'Today card stack'`
+- **Mark the outer wrapper `accessible={true}`.** Without it, RN does NOT treat a plain View with an `accessibilityLabel` as a focusable a11y element (per `Libraries/Components/View/ViewAccessibility.js`). The current code at line 383 is missing `accessible`, so the existing "card 1 of N" label may already not be reaching VoiceOver users — this fix is a correction, not just a port.
+- Move the `accessibilityLabel`+`accessible` pair to the **outer top-card wrapper** (the new `Animated.View` that owns swipe + shadow), not the `styles.outer` ScrollView-paddings View at line 383. The card's interactive element (the GestureDetector) drives press behavior; the outer top-card wrapper announces the stack as a whole. (Alternative: put the label on the `TopCardBody`'s implicit `TouchableOpacity` if any — but `TopCardBody` is just a View, no touchable. Outer top-card wrapper is correct.)
 
-**Test updates (`src/components/home/__tests__/today-card-stack.test.tsx`):**
+**Test updates:**
+
+`src/components/home/__tests__/today-card-stack.test.tsx`:
 - Line 232 asserts `findAll(testID === 'today-card-stack-count')).toHaveLength(0)` for single-card case — still valid (no count element will exist at all).
-- Line 250 asserts `'1/3'` text exists — change to assert the outer `accessibilityLabel` contains `'3 cards'`. The `testID === 'today-card-stack-count'` lookup will return undefined; the test should assert that explicitly (`expect(... .findAll(testID === 'today-card-stack-count')).toHaveLength(0)`).
-- No new tests added.
+- Line 250 asserts `'1/3'` text exists — rewrite to: `expect(tree.root.findByProps({ testID: 'today-card-stack' }).props.accessibilityLabel).toBe('Today card stack, 3 cards')`. Drop the `findByProps({ testID: 'today-card-stack-count' })` lookup; add the explicit `findAll(...).toHaveLength(0)` assertion if not already covered.
+- **Line 368** asserts a literal source string match across `TopCardBody` and `StackDismissButton` JSX with specific indentation. Wrapping content into an outer/inner View will change indentation. Update the assertion to use a regex tolerant of leading whitespace (e.g., `expect(source).toMatch(/<TopCardBody\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>\s*<StackDismissButton\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>/)`).
+
+`src/lib/__tests__/today-motion-regression.test.ts:146`:
+- Asserts `todayCardStackSource).toContain('borderColor: alpha(colors.accent, borderOpacity)')`. We're removing this inline `borderColor` from `BackCardSilhouette`. Update the assertion to verify the back-card opacity/fill behavior is preserved (`backgroundColor: alpha(colors.accent, fillOpacity)` at line 145 stays) and drop the borderColor line. The motion guarantee being tested is that back cards visually remain after our changes, not that they have a border.
+
+`src/components/home/__tests__/dismissible-surfaces.test.tsx`:
+- No changes expected. Test exercises dismiss behavior, not chrome. Verify on first Jest run; if anything snapshots styles, snapshot updates are accepted as the visual-design diff we expect.
+
+Per-card unit tests added: only for the new `useElevation()` hook (see Implementation plan step 1). No new per-card behavior tests in Phase 1 — visual changes are validated by simulator screenshots.
 
 ### 2. `StreakBox.tsx`
 
-- Add outer wrapper around the card. Inner wrapper keeps `borderRadius`, `overflow: 'hidden'`, `borderWidth: 1`, `borderColor: 'transparent'`.
+The card is currently a `TouchableOpacity` (line 78-89 wrapping into an inner-styled card). Re-shape into:
+
+- **Outer wrapper** = `TouchableOpacity` (keeps existing `onPress`, `accessibilityRole`, `accessibilityLabel`, `accessibilityHint`, plus new `elevation.raised.shadow` and `borderRadius: Radius.lg`).
+- **Inner wrapper** = plain `View` with `borderRadius: Radius.lg`, `overflow: 'hidden'`, `borderWidth: 1`, `borderColor: 'transparent'`, padding (moved from existing `styles.card`).
 - Drop `borderColor: alpha(accent, 0.25)` from line 82.
-- Insert `elevation.raised.highlight` overlay as first clipped-inner child.
-- Apply `elevation.raised.shadow` to the new outer wrapper.
+- Insert `BlurView` (already present at line 87) as first inner child.
+- Insert `elevation.raised.highlight` overlay as second inner child (after BlurView, before content).
 - **Per-day chip border at line 129** (`day.isToday ? alpha(accent, 0.55) : 'transparent'`) — **keep**. Per-day affordance, not card chrome.
 - **Inner ring at line 217** — **keep**. Chip indicator role.
 
 ### 3. `BentoGrid.tsx`
 
-- Each of the two boxes wraps in its own outer wrapper. Inner keeps `borderRadius: Radius.lg`, `overflow: 'hidden'`, `borderWidth: 1`, `borderColor: 'transparent'`.
+Each box is currently a `TouchableOpacity` (line 42-61) with `flex: 1`, `accessibilityRole`, `accessibilityLabel`, `accessibilityHint`, press handler, and the visual styling (`styles.box`) all on the same element. Re-shape into:
+
+- **Outer wrapper** = `TouchableOpacity` (keeps `flex: 1`, `onPress`, all `accessibility*` props, plus new `elevation.raised.shadow` and `borderRadius: Radius.lg`). The pressable + flex sizing MUST stay on the outer so the row geometry and hit area are unchanged.
+- **Inner wrapper** = plain `View` with `borderRadius: Radius.lg`, `overflow: 'hidden'`, `borderWidth: 1`, `borderColor: 'transparent'`, `minHeight`, padding, the `flexDirection: 'row'` + `alignItems` + `justifyContent` + `gap` from existing `styles.box`.
 - Drop `borderColor: alpha(accent, 0.25)` from line 58.
-- Insert `elevation.raised.highlight` overlay child.
-- Apply `elevation.raised.shadow` to outer wrapper.
+- Insert `BlurView` (already present at line 62-68) as first inner child.
+- Insert `elevation.raised.highlight` overlay as second inner child (after BlurView, before content).
+- Label `Text` + `CaretRightIcon` stay as third+ inner children.
 
 ### 4. Out of scope but explicitly named for clarity
 
@@ -173,6 +210,8 @@ const elevation = useElevation();
 - `src/components/notebook/CreateFolderSheet.tsx:318` — Shadow.sheet
 - `src/components/notebook/NoteCard.tsx:195` — Shadow.sm
 - `src/components/notebook/ScriptureSearchSheet.tsx:468` — Shadow.sheet
+- `src/components/notebook/MoveFolderSheet.tsx:672` — Shadow.sheet
+- `src/components/AudioPlayerSheet.tsx:256` — Shadow.sheet
 - `src/components/ui/Sheet.tsx:202` (importing line 37) — Shadow.sheet
 
 Phase 2 migrates: `ui/Card.tsx`, `ContextSlot.tsx` (if revived), notebook/NoteCard, today/reading.tsx, bible/reader.tsx, journal+you index Shadow.sm cards.
