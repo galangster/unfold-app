@@ -247,7 +247,8 @@ describe('TodayCardStack fixture shell', () => {
 
     expect(tree.root.findAll((node: any) => node.children?.includes('Resume reading'))).toHaveLength(1);
     expect(tree.root.findAll((node: any) => node.children?.includes('Bridge note'))).toHaveLength(0);
-    expect(textContent(tree.root.findByProps({ testID: 'today-card-stack-count' }))).toBe('1/3');
+    expect(tree.root.findAll((node: any) => node.props.testID === 'today-card-stack-count')).toHaveLength(0);
+    expect(tree.root.findByProps({ testID: 'today-card-stack' }).props.accessibilityLabel).toBe('Today card stack');
     const backCardIds = new Set(
       tree.root
         .findAll((node: any) => /^today-card-stack-back-card-/.test(node.props.testID))
@@ -365,7 +366,7 @@ describe('TodayCardStack fixture shell', () => {
 
     expect(bodySource).toContain('<TouchableOpacity');
     expect(bodySource).not.toContain('StackDismissButton');
-    expect(source).toContain('<TopCardBody card={topCard} colors={colors} />\n      <StackDismissButton card={topCard} colors={colors} />');
+    expect(source).toMatch(/<TopCardBody\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>\s*<StackDismissButton\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>/);
   });
 
   it('keeps the stack generic while owning only the shared swipe gesture shell', () => {

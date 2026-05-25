@@ -18,7 +18,7 @@ import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { Shadow } from '@/constants/shadows';
+import { useElevation } from '@/constants/elevation';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -253,6 +253,7 @@ export function TodayCardStack({
 }: TodayCardStackProps) {
   const { colors: themeColors, isDark } = useTheme();
   const colors = colorsOverride ?? themeColors;
+  const elevation = useElevation();
   const { entering, exiting, reducedMotion: systemReducedMotion } = useAccessibleAnimation();
   const reducedMotion = reducedMotionOverride ?? systemReducedMotion;
   const model = buildTodayCardStackModel(cards, maxBackCards);
@@ -336,7 +337,6 @@ export function TodayCardStack({
 
   if (!topCard) return null;
 
-  const showCount = model.totalCount > 1;
   const enteringAnimation = reducedMotion ? undefined : entering(FadeIn.duration(ENTER_DURATION).easing(Ease.out));
   const exitingAnimation = reducedMotion ? undefined : exiting(FadeOut.duration(EXIT_DURATION).easing(Ease.out));
   const topCardContent = (
@@ -344,38 +344,38 @@ export function TodayCardStack({
       onLayout={handleTopCardLayout}
       testID={topCard.testID ?? 'today-card-stack-top-card'}
       style={[
-        styles.topCard,
-        {
-          backgroundColor: Platform.OS === 'ios'
-            ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
-            : alpha(colors.backgroundElevated, 0.95),
-          borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24),
-          shadowColor: colors.accent,
-          zIndex: model.totalCount + 1,
-        },
+        styles.topCardOuter,
+        elevation.raised.shadow,
+        { zIndex: model.totalCount + 1 },
         reducedMotion ? null : topCardAnimatedStyle,
       ]}
     >
-      {Platform.OS === 'ios' ? (
-        <BlurView
-          pointerEvents="none"
-          intensity={isDark ? 44 : 28}
-          tint={isDark ? 'dark' : 'light'}
-          style={[StyleSheet.absoluteFill, styles.cardBlur]}
-          testID="today-card-stack-glass-blur"
-        />
-      ) : null}
-
-      <View style={styles.topUtilityRow} pointerEvents="none">
-        {showCount ? (
-          <Text style={[styles.countText, { color: colors.textSubtle }]} testID="today-card-stack-count">
-            1/{model.totalCount}
-          </Text>
+      <View
+        style={[
+          styles.topCardInner,
+          {
+            backgroundColor: Platform.OS === 'ios'
+              ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
+              : alpha(colors.backgroundElevated, 0.95),
+            borderColor: 'transparent',
+          },
+        ]}
+      >
+        {Platform.OS === 'ios' ? (
+          <BlurView
+            pointerEvents="none"
+            intensity={isDark ? 44 : 28}
+            tint={isDark ? 'dark' : 'light'}
+            style={[StyleSheet.absoluteFill, styles.cardBlur]}
+            testID="today-card-stack-glass-blur"
+          />
         ) : null}
-      </View>
 
-      <TopCardBody card={topCard} colors={colors} />
-      <StackDismissButton card={topCard} colors={colors} />
+        <View pointerEvents="none" style={elevation.raised.highlight} />
+
+        <TopCardBody card={topCard} colors={colors} />
+        <StackDismissButton card={topCard} colors={colors} />
+      </View>
     </Animated.View>
   );
 
@@ -385,7 +385,7 @@ export function TodayCardStack({
       exiting={exitingAnimation}
       style={[styles.outer, style]}
       testID={testID}
-      accessibilityLabel={showCount ? `Today card stack, card 1 of ${model.totalCount}` : 'Today card stack'}
+      accessibilityLabel="Today card stack"
     >
       <View style={styles.stackStage} testID="today-card-stack-stage">
         {model.backCards.map((card, index) => (
@@ -418,7 +418,12 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['5'],
     position: 'relative',
   },
-  topCard: {
+  topCardOuter: {
+    borderRadius: Radius.xl,
+    minHeight: 150,
+    position: 'relative',
+  },
+  topCardInner: {
     borderRadius: Radius.xl,
     borderWidth: 1.5,
     minHeight: 150,
@@ -426,7 +431,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['4'],
     paddingVertical: Spacing['4'],
     position: 'relative',
-    ...Shadow.md,
   },
   cardBlur: {
     borderRadius: Radius.xl,
@@ -438,20 +442,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: 150,
     top: Spacing['3'],
-  },
-  topUtilityRow: {
-    alignItems: 'flex-end',
-    minHeight: 18,
-    position: 'absolute',
-    right: Spacing['4'],
-    top: Spacing['3'],
-    zIndex: 3,
-  },
-  countText: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    letterSpacing: 0.6,
-    lineHeight: 15,
   },
   pressableBody: {
     borderRadius: Radius.lg,
