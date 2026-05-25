@@ -376,6 +376,10 @@ export function useCompanionChat() {
         // ── Fallback: non-streaming ──────────────────────────────────────
 
         if (!streamSucceeded) {
+          // If the SSE attempt produced partial tokens but never emitted `done`,
+          // do not let its pending throttled write race the full fallback answer.
+          cancelThrottle();
+
           const result = await fallbackNonStreaming(
             headers,
             companionContext,
@@ -385,6 +389,11 @@ export function useCompanionChat() {
               throttledUpdate(companionId, revealed);
             }
           );
+
+          // The fallback reveal may still have a delayed prefix write queued.
+          // Cancel it before committing the authoritative full response, or a
+          // stale prefix can overwrite a complete message after suggestions render.
+          cancelThrottle();
 
           // Extract deep links from fallback response
           const { cleanContent: fallbackClean, deepLinks: fallbackLinks } = parseDeepLinks(result.responseText);
