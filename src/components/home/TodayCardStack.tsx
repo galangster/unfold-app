@@ -205,7 +205,6 @@ function BackCardSilhouette({
   const scale = reducedMotion ? 1 : 1 - depth * 0.035;
   const opacity = Math.max(0.42, 0.72 - depth * 0.16);
   const fillOpacity = Math.max(isDark ? 0.1 : 0.065, (isDark ? 0.18 : 0.12) - index * 0.035);
-  const borderOpacity = Math.max(isDark ? 0.18 : 0.14, (isDark ? 0.34 : 0.26) - index * 0.05);
   const promotedStyle = useAnimatedStyle(() => {
     const width = Math.max(1, cardWidth.value);
     const progress = depth === 1
@@ -234,7 +233,7 @@ function BackCardSilhouette({
         styles.backCard,
         {
           backgroundColor: alpha(colors.accent, fillOpacity),
-          borderColor: alpha(colors.accent, borderOpacity),
+          borderColor: 'transparent',
           zIndex: totalCount - depth,
         },
         cardStyle,

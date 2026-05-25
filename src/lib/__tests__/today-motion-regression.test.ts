@@ -144,9 +144,9 @@ describe('Today tab motion guardrails', () => {
     expect(devotionalCardSource).not.toContain('revealCard:');
 
     expect(todayCardStackSource).toContain('backgroundColor: alpha(colors.accent, fillOpacity)');
-    expect(todayCardStackSource).toContain('borderColor: alpha(colors.accent, borderOpacity)');
     expect(todayCardStackSource).toContain('const fillOpacity = Math.max(isDark ? 0.1 : 0.065');
     expect(todayCardStackSource).not.toContain('backgroundColor: alpha(colors.backgroundPure');
+    expect(todayCardStackSource).not.toContain('borderOpacity');
   });
 
   it('keeps the open Today hero focused on title and pull quote without repeating the scripture reference', () => {
