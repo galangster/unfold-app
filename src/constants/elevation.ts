@@ -17,6 +17,15 @@ export interface ElevationTier {
   shadow: ViewStyle;
   surface: ViewStyle;
   highlight: ViewStyle;
+  /**
+   * Inset hairline outline that defines the card perimeter. Active in dark
+   * mode (rgba(255,255,255,0.10)) where shadows are perceptually weak; falls
+   * back to transparent in light mode where shadow carries the depth.
+   * Consumers spread this onto the inner View alongside their existing
+   * `borderWidth: 1`. Matches Krehel's "image outlines" pattern paired with
+   * "shadows instead of borders."
+   */
+  outline: ViewStyle;
 }
 
 export interface ElevationSet {
@@ -33,7 +42,7 @@ const RAISED_HIGHLIGHT_DARK: ViewStyle = {
   left: 0,
   right: 0,
   height: 1,
-  backgroundColor: 'rgba(255,255,255,0.06)',
+  backgroundColor: 'rgba(255,255,255,0.12)',
 };
 
 const RAISED_HIGHLIGHT_LIGHT: ViewStyle = {
@@ -44,6 +53,10 @@ const RAISED_HIGHLIGHT_LIGHT: ViewStyle = {
   height: 1,
   backgroundColor: 'transparent',
 };
+
+const OUTLINE_DARK: ViewStyle = { borderColor: 'rgba(255,255,255,0.10)' };
+const OUTLINE_LIGHT: ViewStyle = { borderColor: 'transparent' };
+const NO_OUTLINE: ViewStyle = { borderColor: 'transparent' };
 
 export function useElevation(): ElevationSet {
   const { colors, isDark } = useTheme();
@@ -72,22 +85,26 @@ export function useElevation(): ElevationSet {
       };
 
   const raisedHighlight = isDark ? RAISED_HIGHLIGHT_DARK : RAISED_HIGHLIGHT_LIGHT;
+  const raisedOutline = isDark ? OUTLINE_DARK : OUTLINE_LIGHT;
 
   return {
     flat: {
       shadow: {},
       surface: { backgroundColor: colors.background },
       highlight: EMPTY_HIGHLIGHT,
+      outline: NO_OUTLINE,
     },
     raised: {
       shadow: raisedShadow,
       surface: { backgroundColor: colors.backgroundElevated },
       highlight: raisedHighlight,
+      outline: raisedOutline,
     },
     floating: {
       shadow: floatingShadow,
       surface: { backgroundColor: colors.backgroundElevated },
       highlight: raisedHighlight,
+      outline: raisedOutline,
     },
   };
 }

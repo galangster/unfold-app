@@ -51,7 +51,7 @@ describe('useElevation', () => {
       expect(elevation.raised.shadow).toEqual({ elevation: 4 });
     });
 
-    it('raised.highlight is a 1px top-edge overlay with 6% white', () => {
+    it('raised.highlight is a 1px top-edge overlay with 12% white', () => {
       const elevation = captureElevation();
       expect(elevation.raised.highlight).toEqual({
         position: 'absolute',
@@ -59,14 +59,21 @@ describe('useElevation', () => {
         left: 0,
         right: 0,
         height: 1,
-        backgroundColor: 'rgba(255,255,255,0.06)',
+        backgroundColor: 'rgba(255,255,255,0.12)',
       });
     });
 
-    it('flat tier has no shadow and no highlight', () => {
+    it('raised.outline is a 10% white inset hairline for dark mode', () => {
+      const elevation = captureElevation();
+      expect(elevation.raised.outline).toEqual({ borderColor: 'rgba(255,255,255,0.10)' });
+      expect(elevation.floating.outline).toEqual({ borderColor: 'rgba(255,255,255,0.10)' });
+    });
+
+    it('flat tier has no shadow, highlight, or outline color', () => {
       const elevation = captureElevation();
       expect(elevation.flat.shadow).toEqual({});
       expect(elevation.flat.highlight).toEqual({});
+      expect(elevation.flat.outline).toEqual({ borderColor: 'transparent' });
     });
 
     it('floating tier is stronger than raised on iOS', () => {
@@ -106,6 +113,11 @@ describe('useElevation', () => {
     it('raised.highlight is transparent in light mode', () => {
       const elevation = captureElevation();
       expect(elevation.raised.highlight.backgroundColor).toBe('transparent');
+    });
+
+    it('raised.outline is transparent in light mode (shadow carries the depth)', () => {
+      const elevation = captureElevation();
+      expect(elevation.raised.outline).toEqual({ borderColor: 'transparent' });
     });
   });
 

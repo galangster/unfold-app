@@ -356,8 +356,8 @@ export function TodayCardStack({
             backgroundColor: Platform.OS === 'ios'
               ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
               : alpha(colors.backgroundElevated, 0.95),
-            borderColor: 'transparent',
           },
+          elevation.raised.outline,
         ]}
       >
         {Platform.OS === 'ios' ? (

@@ -82,8 +82,8 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
               backgroundColor: Platform.OS === 'ios'
                 ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
                 : alpha(colors.backgroundElevated, 0.9),
-              borderColor: 'transparent',
             },
+            elevation.raised.outline,
           ]}
         >
           {Platform.OS === 'ios' && (
