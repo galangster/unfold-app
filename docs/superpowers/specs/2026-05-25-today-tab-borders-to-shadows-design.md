@@ -30,6 +30,7 @@ Phase 1 (this PR): elevation token system + apply to `TodayCardStack`, `StreakBo
 
 - No TestFlight build, App Review submission, external beta promotion, subscription/RevenueCat mutation, or production deploy in this PR.
 - No motion/animation tuning. No copy changes. No spacing changes — borderWidth retained with transparent color to preserve Yoga layout.
+- No deliberate touch/press shadow choreography. However: putting shadow on the outer `TouchableOpacity` in `StreakBox` and `BentoGrid` means the existing `activeOpacity` will naturally fade the new shadow on press (per `TouchableOpacity.js:95,302`, which wraps style in an `Animated.View` and applies opacity to the same node). This is acceptable subtle press feedback; not a goal, not a bug.
 - No app-wide sweep in this PR.
 - No changes to Today tab content, ordering, or business logic.
 - No changes to dormant legacy components (`TodayCompanionBubble`, `DailyBridgeCard`, `BridgeShimmer`, `NotificationCard`, `ContextSlot`, `RememberThisCard`).
@@ -102,7 +103,7 @@ const elevation = useElevation();
 </Animated.View>
 ```
 
-- **Outer wrapper:** shadow + matching `borderRadius`. `overflow` is the default (`visible`). The `borderRadius` is required so iOS computes a rounded shadow path (via `RCTViewComponentView.mm` / `RCTView.m` shadow-path-from-corner-radius logic) instead of a pixel-derived rectangular shadow.
+- **Outer wrapper:** shadow + matching `borderRadius`. `overflow` is the default (`visible`). The `borderRadius` is harmless and useful for Phase 2/3 surfaces with a solid background. For Phase 1's glass cards (no solid outer bg), iOS will fall back to a pixel-derived shadow path because RN only computes a rounded shadow path when background alpha > 0.999 (`RCTView.m:882` / `RCTViewComponentView.mm:904`). A YGShadowEfficiency warning may appear in dev — accept it for Phase 1 rather than adding a solid underlay that would defeat the BlurView.
 - **Inner wrapper:** owns `overflow: 'hidden'`, `borderRadius`, padding, `backgroundColor`, `borderWidth`+transparent `borderColor`. Houses `BlurView`, the highlight overlay, and content.
 - **Highlight overlay:** `position: 'absolute'`, `top: 0`, `left: 0`, `right: 0`, `height: 1`, `backgroundColor: rgba(255,255,255,0.06)` in dark / `'transparent'` in light, `pointerEvents="none"`. **Z-order: render AFTER `BlurView`, BEFORE the content View.** First-child wins lowest z, so `BlurView` must come first; the highlight goes second so its 1px line is on top of the blurred edge.
 - Because the highlight lives inside the clipped inner View, the rounded corners crop it cleanly.
@@ -121,7 +122,7 @@ const elevation = useElevation();
 | `zIndex: model.totalCount + 1` | ✓ | |
 | `elevation.raised.shadow` | ✓ | |
 | `borderRadius: Radius.xl` | ✓ (for rounded shadow path) | ✓ (for content clipping) |
-| `accessibilityLabel`, `accessible={true}` | ✓ — see a11y note below | |
+| `accessibilityLabel`, `accessible` | — (NOT marked accessible; see a11y note below) | |
 | `backgroundColor` (existing alpha blend at lines 349-351) | | ✓ |
 | `borderWidth: 1.5`, `borderColor: 'transparent'` (was `alpha(colors.accent, …)`) | | ✓ |
 | `paddingHorizontal/Vertical` (from `styles.topCard`) | | ✓ |
@@ -144,17 +145,15 @@ const elevation = useElevation();
 - Delete `topUtilityRow` View and `countText` Text entirely (lines 369-375).
 - Delete `styles.topUtilityRow` and `styles.countText` from the StyleSheet block.
 - Delete `showCount` local at line 339.
-- Update `accessibilityLabel` on the **outer wrapper** Animated.View (currently at line 388 on `styles.outer`; moves up to the new top-card outer wrapper):
-  - Was: `showCount ? 'Today card stack, card 1 of N' : 'Today card stack'`
-  - New: `model.totalCount > 1 ? 'Today card stack, ${model.totalCount} cards' : 'Today card stack'`
-- **Mark the outer wrapper `accessible={true}`.** Without it, RN does NOT treat a plain View with an `accessibilityLabel` as a focusable a11y element (per `Libraries/Components/View/ViewAccessibility.js`). The current code at line 383 is missing `accessible`, so the existing "card 1 of N" label may already not be reaching VoiceOver users — this fix is a correction, not just a port.
-- Move the `accessibilityLabel`+`accessible` pair to the **outer top-card wrapper** (the new `Animated.View` that owns swipe + shadow), not the `styles.outer` ScrollView-paddings View at line 383. The card's interactive element (the GestureDetector) drives press behavior; the outer top-card wrapper announces the stack as a whole. (Alternative: put the label on the `TopCardBody`'s implicit `TouchableOpacity` if any — but `TopCardBody` is just a View, no touchable. Outer top-card wrapper is correct.)
+- **Drop the `accessibilityLabel` on the existing `styles.outer` `Animated.View` (line 388) entirely.** Replace with `accessibilityLabel="Today card stack"` (constant; no count). Do NOT add `accessible={true}` here, and do NOT move the label to the new top-card wrapper.
+- **Do not mark the new top-card outer wrapper accessible.** `TopCardBody` already owns the card's accessibility identity: for cards with `onPress` it returns a `TouchableOpacity` (auto-accessible, line 164), and for non-press cards it returns `<View accessible accessibilityRole="text" accessibilityLabel={card.accessibilityLabel} accessibilityHint={card.accessibilityHint}>` (line 158). Either way the card is its own a11y element with the correct per-card label/hint. A parent `accessible` wrapper would group/steal focus from these and replace per-card labels with a generic stack label — regression. The corrected v2.1 claim that "TopCardBody is just a View, no touchable" was wrong; it is one of those two accessible elements depending on `card.onPress`.
+- **Count info dropped from a11y entirely.** Match the visual removal: sighted users have the stack peek; VoiceOver users navigate sequentially via per-card actions and dismiss buttons. Multi-card count is not surfaced. (Alternative if Nick wants it preserved for VoiceOver: augment `TopCardBody`'s existing `accessibilityHint` with a "Card 1 of N" suffix when `model.totalCount > 1`, plumbed via a new prop on `TopCardBody`. Default decision is drop; flag for spec review.)
 
 **Test updates:**
 
 `src/components/home/__tests__/today-card-stack.test.tsx`:
 - Line 232 asserts `findAll(testID === 'today-card-stack-count')).toHaveLength(0)` for single-card case — still valid (no count element will exist at all).
-- Line 250 asserts `'1/3'` text exists — rewrite to: `expect(tree.root.findByProps({ testID: 'today-card-stack' }).props.accessibilityLabel).toBe('Today card stack, 3 cards')`. Drop the `findByProps({ testID: 'today-card-stack-count' })` lookup; add the explicit `findAll(...).toHaveLength(0)` assertion if not already covered.
+- Line 250 asserts `'1/3'` text exists — rewrite to: `expect(tree.root.findAll((node: any) => node.props.testID === 'today-card-stack-count')).toHaveLength(0)`. Drop the `findByProps({ testID: 'today-card-stack-count' })` lookup. Then assert the existing `styles.outer` View's accessibilityLabel is the constant `'Today card stack'`: `expect(tree.root.findByProps({ testID: 'today-card-stack' }).props.accessibilityLabel).toBe('Today card stack')`. (The `testID="today-card-stack"` stays on `styles.outer` per `styles.outer` ownership in section 1 above.)
 - **Line 368** asserts a literal source string match across `TopCardBody` and `StackDismissButton` JSX with specific indentation. Wrapping content into an outer/inner View will change indentation. Update the assertion to use a regex tolerant of leading whitespace (e.g., `expect(source).toMatch(/<TopCardBody\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>\s*<StackDismissButton\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>/)`).
 
 `src/lib/__tests__/today-motion-regression.test.ts:146`:
@@ -246,7 +245,7 @@ No production IPA inspection, ASC upload, or TestFlight in Phase 1 without Nick'
 2. **Android elevation is monochromatic.** RN's Android `elevation:` is OS-rendered black; tint is not honored. Cosmetic divergence between platforms accepted in Phase 1.
 3. **Companion bubble bounding-box artifact** — *not a Phase 1 issue anymore*, since `TodayCompanionBubble` is out of scope.
 4. **Highlight overlay z-order vs BlurView.** Must render *after* `BlurView` but *before* text content, with `pointerEvents="none"` and `position: 'absolute'`, top: 0, left: 0, right: 0. Test in simulator before committing the visual.
-5. **Test rewrite at line 250 is the only mandatory test change.** Other tests are stable.
+5. **Mandatory test changes:** `today-card-stack.test.tsx:232` (still valid), `today-card-stack.test.tsx:250` (rewrite assertion), `today-card-stack.test.tsx:368` (regex-relax source string), `today-motion-regression.test.ts:146` (drop back-card border assertion). See "Test updates" section above for exact rewrites.
 6. **Existing `Shadow.md` on TodayCardStack:429 is currently a no-op due to overflow:hidden.** Replacing it changes behavior from invisible to visible — that's the entire point. But it means the baseline "before" screenshot will look slightly different from any test that mocked shadow rendering. None do — verified.
 
 ## Out of scope (will NOT do in this PR)
