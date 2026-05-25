@@ -874,7 +874,9 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
         <PreparingState
           progress={state.progress}
           onCreateNew={state.onCreateNew}
-          showNewSeriesCta={isReturningUser}
+          // Preparing means an in-progress series is missing today's row locally.
+          // Keep the recovery/loading copy instead of implying the series is gone.
+          showNewSeriesCta={false}
         />
       )}
       {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
