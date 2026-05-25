@@ -18,7 +18,7 @@ import { ArrowRightIcon, XIcon } from 'phosphor-react-native';
 import { Duration, Ease } from '@/constants/animations';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
-import { useElevation } from '@/constants/elevation';
+import { Shadow } from '@/constants/shadows';
 import { Spacing } from '@/constants/spacing';
 import { alpha } from '@/components/ui';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
@@ -205,6 +205,7 @@ function BackCardSilhouette({
   const scale = reducedMotion ? 1 : 1 - depth * 0.035;
   const opacity = Math.max(0.42, 0.72 - depth * 0.16);
   const fillOpacity = Math.max(isDark ? 0.1 : 0.065, (isDark ? 0.18 : 0.12) - index * 0.035);
+  const borderOpacity = Math.max(isDark ? 0.18 : 0.14, (isDark ? 0.34 : 0.26) - index * 0.05);
   const promotedStyle = useAnimatedStyle(() => {
     const width = Math.max(1, cardWidth.value);
     const progress = depth === 1
@@ -233,7 +234,7 @@ function BackCardSilhouette({
         styles.backCard,
         {
           backgroundColor: alpha(colors.accent, fillOpacity),
-          borderColor: 'transparent',
+          borderColor: alpha(colors.accent, borderOpacity),
           zIndex: totalCount - depth,
         },
         cardStyle,
@@ -252,7 +253,6 @@ export function TodayCardStack({
 }: TodayCardStackProps) {
   const { colors: themeColors, isDark } = useTheme();
   const colors = colorsOverride ?? themeColors;
-  const elevation = useElevation();
   const { entering, exiting, reducedMotion: systemReducedMotion } = useAccessibleAnimation();
   const reducedMotion = reducedMotionOverride ?? systemReducedMotion;
   const model = buildTodayCardStackModel(cards, maxBackCards);
@@ -343,38 +343,30 @@ export function TodayCardStack({
       onLayout={handleTopCardLayout}
       testID={topCard.testID ?? 'today-card-stack-top-card'}
       style={[
-        styles.topCardOuter,
-        elevation.raised.shadow,
-        { zIndex: model.totalCount + 1 },
+        styles.topCard,
+        {
+          backgroundColor: Platform.OS === 'ios'
+            ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
+            : alpha(colors.backgroundElevated, 0.95),
+          borderColor: alpha(colors.accent, isDark ? 0.28 : 0.24),
+          shadowColor: colors.accent,
+          zIndex: model.totalCount + 1,
+        },
         reducedMotion ? null : topCardAnimatedStyle,
       ]}
     >
-      <View
-        style={[
-          styles.topCardInner,
-          {
-            backgroundColor: Platform.OS === 'ios'
-              ? alpha(colors.backgroundElevated, isDark ? 0.72 : 0.88)
-              : alpha(colors.backgroundElevated, 0.95),
-          },
-          elevation.raised.outline,
-        ]}
-      >
-        {Platform.OS === 'ios' ? (
-          <BlurView
-            pointerEvents="none"
-            intensity={isDark ? 44 : 28}
-            tint={isDark ? 'dark' : 'light'}
-            style={[StyleSheet.absoluteFill, styles.cardBlur]}
-            testID="today-card-stack-glass-blur"
-          />
-        ) : null}
+      {Platform.OS === 'ios' ? (
+        <BlurView
+          pointerEvents="none"
+          intensity={isDark ? 44 : 28}
+          tint={isDark ? 'dark' : 'light'}
+          style={[StyleSheet.absoluteFill, styles.cardBlur]}
+          testID="today-card-stack-glass-blur"
+        />
+      ) : null}
 
-        <View pointerEvents="none" style={elevation.raised.highlight} />
-
-        <TopCardBody card={topCard} colors={colors} />
-        <StackDismissButton card={topCard} colors={colors} />
-      </View>
+      <TopCardBody card={topCard} colors={colors} />
+      <StackDismissButton card={topCard} colors={colors} />
     </Animated.View>
   );
 
@@ -417,19 +409,15 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing['5'],
     position: 'relative',
   },
-  topCardOuter: {
+  topCard: {
     borderRadius: Radius.xl,
-    minHeight: 150,
-    position: 'relative',
-  },
-  topCardInner: {
-    borderRadius: Radius.xl,
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     minHeight: 150,
     overflow: 'hidden',
     paddingHorizontal: Spacing['4'],
     paddingVertical: Spacing['4'],
     position: 'relative',
+    ...Shadow.md,
   },
   cardBlur: {
     borderRadius: Radius.xl,
@@ -438,7 +426,7 @@ const styles = StyleSheet.create({
   backCard: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: Radius.xl,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     minHeight: 150,
     top: Spacing['3'],
   },

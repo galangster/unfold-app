@@ -13,14 +13,12 @@ import { useTheme } from '@/lib/theme';
 import { alpha } from '@/components/ui';
 
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { useElevation } from '@/constants/elevation';
 
 const LABEL_TEXT_MAX_SCALE = 1.16;
 
 export function BentoGrid() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
-  const elevation = useElevation();
   const { entering } = useAccessibleAnimation();
 
   const items = [
@@ -51,38 +49,31 @@ export function BentoGrid() {
             accessibilityRole="button"
             accessibilityLabel={`Open ${item.label}`}
             accessibilityHint="Opens this section from the Today tab"
-            style={[styles.boxOuter, elevation.raised.shadow]}
+            style={[
+              styles.box,
+              {
+                backgroundColor: Platform.OS === 'ios'
+                  ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
+                  : alpha(colors.backgroundElevated, 0.9),
+                borderColor: alpha(colors.accent, 0.25),
+              },
+            ]}
           >
-            <View
-              style={[
-                styles.boxInner,
-                {
-                  backgroundColor: Platform.OS === 'ios'
-                    ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
-                    : alpha(colors.backgroundElevated, 0.9),
-                },
-                elevation.raised.outline,
-              ]}
+            {Platform.OS === 'ios' && (
+              <BlurView
+                intensity={isDark ? 28 : 18}
+                tint={isDark ? 'dark' : 'light'}
+                style={StyleSheet.absoluteFill}
+              />
+            )}
+            <Text
+              style={[styles.label, { color: colors.text }]}
+              numberOfLines={2}
+              maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
             >
-              {Platform.OS === 'ios' && (
-                <BlurView
-                  intensity={isDark ? 28 : 18}
-                  tint={isDark ? 'dark' : 'light'}
-                  style={StyleSheet.absoluteFill}
-                />
-              )}
-
-              <View pointerEvents="none" style={elevation.raised.highlight} />
-
-              <Text
-                style={[styles.label, { color: colors.text }]}
-                numberOfLines={2}
-                maxFontSizeMultiplier={LABEL_TEXT_MAX_SCALE}
-              >
-                {item.label}
-              </Text>
-              <CaretRightIcon size={13} color={colors.textSubtle} weight="light" />
-            </View>
+              {item.label}
+            </Text>
+            <CaretRightIcon size={13} color={colors.textSubtle} weight="light" />
           </TouchableOpacity>
         ))}
       </View>
@@ -98,16 +89,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing['2'],
   },
-  boxOuter: {
+  box: {
     flex: 1,
-    borderRadius: Radius.lg,
-  },
-  boxInner: {
     minHeight: 58,
     paddingVertical: Spacing['3'],
     paddingHorizontal: Spacing['3'],
     borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',

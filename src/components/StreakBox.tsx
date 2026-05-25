@@ -9,7 +9,6 @@ import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
 import { alpha } from '@/components/ui';
-import { useElevation } from '@/constants/elevation';
 
 interface DayData {
   day: string;
@@ -60,7 +59,6 @@ function generateDaysData(streakCount: number, hasReadToday: boolean): DayData[]
 
 export function StreakBox({ streakCount, hasReadToday = false, onPress }: StreakBoxProps) {
   const { colors, isDark } = useTheme();
-  const elevation = useElevation();
   const reducedMotion = useReducedMotion();
   const daysData = useMemo(() => generateDaysData(streakCount, hasReadToday), [streakCount, hasReadToday]);
   const rhythmCopy = useMemo(() => getRhythmCopy(streakCount), [streakCount]);
@@ -73,17 +71,16 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={`${streakCount} ${streakLabel} devotional rhythm. ${hasReadToday ? 'Today is complete.' : 'Today is not complete yet.'} Open streak settings`}
-        style={[styles.cardOuter, elevation.raised.shadow]}
       >
         <View
           style={[
-            styles.cardInner,
+            styles.card,
             {
               backgroundColor: Platform.OS === 'ios'
                 ? alpha(colors.backgroundElevated, isDark ? 0.56 : 0.8)
                 : alpha(colors.backgroundElevated, 0.9),
+              borderColor: alpha(colors.accent, 0.25),
             },
-            elevation.raised.outline,
           ]}
         >
           {Platform.OS === 'ios' && (
@@ -93,8 +90,6 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
               style={StyleSheet.absoluteFill}
             />
           )}
-
-          <View pointerEvents="none" style={elevation.raised.highlight} />
 
           <View style={styles.headerRow}>
             <View style={styles.headerLeft}>
@@ -149,12 +144,9 @@ export function StreakBox({ streakCount, hasReadToday = false, onPress }: Streak
 }
 
 const styles = StyleSheet.create({
-  cardOuter: {
+  card: {
     borderRadius: Radius.lg,
-  },
-  cardInner: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: Spacing['4'],
     paddingHorizontal: Spacing['4'],
     overflow: 'hidden',

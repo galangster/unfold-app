@@ -366,7 +366,7 @@ describe('TodayCardStack fixture shell', () => {
 
     expect(bodySource).toContain('<TouchableOpacity');
     expect(bodySource).not.toContain('StackDismissButton');
-    expect(source).toMatch(/<TopCardBody\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>\s*<StackDismissButton\s+card=\{topCard\}\s+colors=\{colors\}\s*\/>/);
+    expect(source).toContain('<TopCardBody card={topCard} colors={colors} />\n      <StackDismissButton card={topCard} colors={colors} />');
   });
 
   it('keeps the stack generic while owning only the shared swipe gesture shell', () => {
