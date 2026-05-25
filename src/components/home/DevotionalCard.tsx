@@ -410,26 +410,24 @@ function PreparingProgressBar({ progress, colors }: { progress: number; colors: 
 
 function PreparingState({
   progress,
-  onCreateNew,
-  showNewSeriesCta,
+  seriesTitle,
+  dayNumber,
 }: {
   progress: number;
-  onCreateNew?: () => void;
-  showNewSeriesCta?: boolean;
+  seriesTitle: string;
+  dayNumber: number;
 }) {
   const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
-  const canStartNewSeries = showNewSeriesCta && !!onCreateNew;
-
-  const shimmerOpacity = useSharedValue(0.45);
+  const shimmerOpacity = useSharedValue(0.55);
 
   useEffect(() => {
     if (reducedMotion) {
-      shimmerOpacity.value = 0.72;
+      shimmerOpacity.value = 0.78;
       return;
     }
     shimmerOpacity.value = withRepeat(
-      withTiming(0.9, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
+      withTiming(0.92, { duration: 2200, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
@@ -440,80 +438,27 @@ function PreparingState({
 
   return (
     <View
-      accessible={!canStartNewSeries}
-      accessibilityRole={!canStartNewSeries ? 'progressbar' : undefined}
-      accessibilityLabel={!canStartNewSeries ? "Preparing today's devotional reading" : undefined}
-      accessibilityValue={!canStartNewSeries ? { text: 'Checking the series and shaping today’s reading' } : undefined}
-      style={[
-        styles.preparingContainer,
-        {
-          backgroundColor: alpha(colors.backgroundElevated, 0.72),
-          borderColor: alpha(colors.accent, 0.12),
-          shadowColor: colors.accent,
-        },
-      ]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Preparing day ${dayNumber} of ${seriesTitle}`}
+      accessibilityValue={{ text: 'Your next reading will appear here automatically' }}
+      style={styles.preparingContainer}
     >
       <View style={styles.preparingContent}>
         <View style={styles.preparingKickerRow}>
-          <View style={[styles.preparingAccentBar, { backgroundColor: colors.accent }]} />
-          <Text style={[styles.preparingKicker, { color: colors.accent }]}>
-            {canStartNewSeries ? 'Premium active' : 'Preparing today'}
-          </Text>
+          <View style={[styles.preparingAccentBar, { backgroundColor: alpha(colors.accent, 0.65) }]} />
+          <Text style={[styles.preparingKicker, { color: colors.textMuted }]}>Preparing today</Text>
         </View>
 
-        <Animated.Text style={[styles.preparingTitle, { color: colors.text }, canStartNewSeries ? undefined : shimmerStyle]}>
-          {canStartNewSeries ? 'Begin your next series.' : 'We’re gathering the thread.'}
+        <Animated.Text style={[styles.preparingTitle, { color: colors.text }, shimmerStyle]}>
+          Day {dayNumber} is almost ready.
         </Animated.Text>
 
         <Text style={[styles.preparingSubtitle, { color: colors.textMuted }]}>
-          {canStartNewSeries
-            ? 'You’re back in Premium. We’ll keep checking for saved readings, but you can start a fresh devotional series now.'
-            : 'Unfold is checking your series, recovering any finished content, and shaping the next reading if it still needs to be made.'}
+          We’re getting your next reading for {seriesTitle}. It’ll appear here automatically.
         </Text>
 
-        {canStartNewSeries && (
-          <TouchableOpacity
-            activeOpacity={0.72}
-            onPress={onCreateNew}
-            accessibilityRole="button"
-            accessibilityLabel="Start a new devotional series"
-            accessibilityHint="Opens setup for a fresh devotional series"
-            style={[
-              styles.preparingCta,
-              {
-                borderColor: alpha(colors.accent, 0.28),
-                backgroundColor: alpha(colors.accent, 0.1),
-              },
-            ]}
-          >
-            <PlusIcon size={15} color={colors.accent} weight="light" />
-            <Text style={[styles.preparingCtaText, { color: colors.text }]}>Start a New Series</Text>
-            <Text style={[styles.preparingCtaArrow, { color: colors.accent }]}>→</Text>
-          </TouchableOpacity>
-        )}
-
-        {!canStartNewSeries && (
-          <View style={styles.preparingStatusRow}>
-            {['Series', 'Scripture', 'Devotional'].map((step, index) => (
-              <View
-                key={step}
-                style={[
-                  styles.preparingStatusPill,
-                  {
-                    backgroundColor: alpha(colors.accent, index === 0 ? 0.12 : 0.065),
-                    borderColor: alpha(colors.accent, index === 0 ? 0.22 : 0.12),
-                  },
-                ]}
-              >
-                <Text style={[styles.preparingStatusText, { color: index === 0 ? colors.accent : colors.textMuted }]}>
-                  {step}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <PreparingProgressBar progress={progress} colors={colors} />
+        <PreparingProgressBar progress={progress} colors={{ accent: alpha(colors.accent, 0.58), border: alpha(colors.border, 0.45) }} />
       </View>
     </View>
   );
@@ -873,10 +818,8 @@ export function DevotionalCard({ state, scrollY, inStack, isReturningUser }: Pro
       {state.type === 'preparing' && (
         <PreparingState
           progress={state.progress}
-          onCreateNew={state.onCreateNew}
-          // Preparing means an in-progress series is missing today's row locally.
-          // Keep the recovery/loading copy instead of implying the series is gone.
-          showNewSeriesCta={false}
+          seriesTitle={state.seriesTitle}
+          dayNumber={state.dayNumber}
         />
       )}
       {state.type === 'premium-paused' && <PremiumPausedState state={state} />}
@@ -1255,55 +1198,51 @@ const styles = StyleSheet.create({
 
   // Preparing state
   preparingContainer: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    overflow: 'hidden',
+    overflow: 'visible',
     position: 'relative',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 5,
   },
   preparingGlow: {
     borderRadius: Radius.xl,
   },
   preparingContent: {
-    padding: Spacing['7'],
+    paddingVertical: Spacing['7'],
+    paddingHorizontal: Spacing['4'],
     alignItems: 'center',
     zIndex: 2,
   },
   preparingAccentBar: {
-    width: 28,
-    height: 1.5,
+    width: 24,
+    height: 1,
     borderRadius: 1,
   },
   preparingKickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing['3'],
-    marginBottom: Spacing['5'],
+    gap: Spacing['2'],
+    marginBottom: Spacing['3'],
   },
   preparingKicker: {
     fontFamily: FontFamily.uiMedium,
-    fontSize: 11,
-    lineHeight: 16,
-    letterSpacing: 1.5,
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   preparingTitle: {
     fontFamily: FontFamily.display,
-    fontSize: 28,
-    lineHeight: 36,
-    letterSpacing: -0.5,
+    fontSize: 24,
+    lineHeight: 31,
+    letterSpacing: -0.35,
     textAlign: 'center',
-    marginBottom: Spacing['3'],
+    marginBottom: Spacing['2'],
   },
   preparingSubtitle: {
     fontFamily: FontFamily.body,
     fontSize: 15,
     lineHeight: 23,
     textAlign: 'center',
-    marginBottom: Spacing['5'],
+    marginBottom: Spacing['4'],
+    maxWidth: 310,
   },
   preparingStatusRow: {
     flexDirection: 'row',
@@ -1351,8 +1290,8 @@ const styles = StyleSheet.create({
   preparingProgressTrack: {
     height: 2,
     borderRadius: 1,
-    width: '100%',
-    marginHorizontal: Spacing['4'],
+    width: 112,
+    maxWidth: '42%',
   },
   preparingProgressFill: {
     height: '100%',

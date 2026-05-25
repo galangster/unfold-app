@@ -16,7 +16,7 @@ export type ReflectionStatus = 'empty' | 'started' | 'complete';
 
 export type DevotionalCardState =
   | { type: 'empty'; onCreateNew: () => void }
-  | { type: 'preparing'; progress: number; onCreateNew: () => void }
+  | { type: 'preparing'; progress: number; seriesTitle: string; dayNumber: number; onCreateNew: () => void }
   | {
       type: 'premium-paused';
       seriesTitle: string;
@@ -159,12 +159,25 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
   // Never show "preparing" if the user has already read today — the completed
   // day should remain visible while the next day generates in the background.
   if (!hasReadToday && (isPreparing || !currentDayData)) {
-    return { type: 'preparing', progress: 0, onCreateNew };
+    return {
+      type: 'preparing',
+      progress: 0,
+      seriesTitle,
+      dayNumber: currentDevotional.currentDay,
+      onCreateNew,
+    };
   }
 
-  // If we somehow have no day data even after reading today, bail to empty
+  // If we somehow have no day data even after reading today, keep the active
+  // series anchored instead of implying the series disappeared.
   if (!currentDayData) {
-    return { type: 'preparing', progress: 0, onCreateNew };
+    return {
+      type: 'preparing',
+      progress: 0,
+      seriesTitle,
+      dayNumber: currentDevotional.currentDay,
+      onCreateNew,
+    };
   }
 
   // 3. Entire series finished

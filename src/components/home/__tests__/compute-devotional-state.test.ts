@@ -79,6 +79,8 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('preparing');
     if (state.type === 'preparing') {
       expect(state.onCreateNew).toBe(onCreateNew);
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.dayNumber).toBe(1);
     }
   });
 
@@ -92,6 +94,8 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('preparing');
     if (state.type === 'preparing') {
       expect(state.onCreateNew).toBe(onCreateNew);
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.dayNumber).toBe(1);
     }
   });
 
@@ -130,7 +134,7 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('preparing');
   });
 
-  it('keeps a premium-upgraded returning user on the new-series-ready preparing path when the next day is missing', () => {
+  it('keeps a premium-upgraded returning user on the existing-series preparing path when the next day is missing', () => {
     const onCreateNew = jest.fn();
 
     const state = computeDevotionalState({
@@ -146,6 +150,8 @@ describe('computeDevotionalState', () => {
     expect(state.type).toBe('preparing');
     if (state.type === 'preparing') {
       expect(state.onCreateNew).toBe(onCreateNew);
+      expect(state.seriesTitle).toBe('Faith Foundations');
+      expect(state.dayNumber).toBe(1);
     }
   });
 
