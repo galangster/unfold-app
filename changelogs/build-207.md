@@ -1,4 +1,4 @@
-Build 207 collects three things since build 205: a Today tab visual pass that swaps stroked card chrome for an elevation system, the Day 10 missing-day handling fix from the 6:17 a.m. HST race, and the companion chat fallback race fix that build 206 was meant to ship.
+Build 207 adds two things on top of build 206: a Today tab visual pass that swaps stroked card chrome for an elevation system, and the Day 10 missing-day handling fix from the 6:17 a.m. HST race. The companion chat fallback fix that shipped in build 206 carries forward unchanged.
 
 What to test:
 
