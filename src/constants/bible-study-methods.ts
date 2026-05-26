@@ -35,7 +35,7 @@ const EXPOSITORY: BibleStudyMethodCard = {
   name: 'Expository (Verse-by-Verse)',
   description: 'Systematic line-by-line analysis unpacking what the text says, meant, and means today.',
   idealGenres: ['epistle', 'dense_narrative', 'law', 'prophecy'],
-  emotionalTexture: 'intellectual depth, layered understanding',
+  emotionalTexture: 'Intellectual depth and layered understanding.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: EXPOSITORY
 Walk through this passage line by line. For each key phrase:
@@ -50,7 +50,7 @@ const INDUCTIVE_OIA: BibleStudyMethodCard = {
   name: 'Inductive Study (OIA)',
   description: 'Self-discovery through Observation, Interpretation, Application — the reader is the detective.',
   idealGenres: ['epistle', 'narrative', 'gospel', 'prophecy'],
-  emotionalTexture: 'empowering, detective-like discovery',
+  emotionalTexture: 'Empowering, detective-like discovery.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: INDUCTIVE (OIA)
 Guide the reader to discover truth rather than receiving it. Structure:
@@ -65,7 +65,7 @@ const WORD_STUDY: BibleStudyMethodCard = {
   name: 'Word Study',
   description: 'Deep dive into one Hebrew or Greek word — its root, semantic range, and how context shapes meaning.',
   idealGenres: ['poetry', 'epistle', 'prophecy', 'wisdom'],
-  emotionalTexture: 'mind-expanding, fresh eyes on familiar text',
+  emotionalTexture: 'Mind-expanding, with fresh eyes on familiar text.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: WORD STUDY
 Center this devotional around ONE key word from the passage. Tell the word's story:
@@ -80,7 +80,7 @@ const RHETORICAL_ANALYSIS: BibleStudyMethodCard = {
   name: 'Rhetorical / Literary Analysis',
   description: 'Surface the literary architecture — parallelism, chiasmus, inclusio, repetition, irony.',
   idealGenres: ['poetry', 'narrative', 'epistle', 'prophecy'],
-  emotionalTexture: 'elegant, revelatory — seeing the artistry behind the text',
+  emotionalTexture: 'Elegant and revelatory — seeing the artistry behind the text.',
   difficulty: 'advanced',
   promptModifier: `STUDY METHOD: RHETORICAL ANALYSIS
 Reveal the literary structure of this passage, then show what it means:
@@ -95,7 +95,7 @@ const MANUSCRIPT: BibleStudyMethodCard = {
   name: 'Manuscript Study',
   description: 'Strip away verse numbers and headings — engage the raw text as the original audience received it.',
   idealGenres: ['epistle', 'narrative', 'gospel'],
-  emotionalTexture: 'immersive, raw, seeing the text as whole cloth',
+  emotionalTexture: 'Immersive and raw — seeing the text as whole cloth.',
   difficulty: 'advanced',
   promptModifier: `STUDY METHOD: MANUSCRIPT
 Present this passage as continuous text — no verse numbers, no section headers. Guide the reader to notice:
@@ -108,9 +108,9 @@ Frame it: "Read this straight through — no stopping. Where does it feel like t
 const TYPOLOGICAL: BibleStudyMethodCard = {
   id: 'typological',
   name: 'Typological Study',
-  description: 'OT people, events, and objects that foreshadow Christ — the shadow points to the substance.',
+  description: 'Old Testament people, events, and objects that foreshadow Christ — the shadow points to the substance.',
   idealGenres: ['ot_narrative', 'law', 'prophecy'],
-  emotionalTexture: 'awe-inducing, "it was all pointing here"',
+  emotionalTexture: 'Awe-inducing — "it was all pointing here."',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: TYPOLOGICAL
 Start with the Old Testament scene in vivid narrative detail. Build the reader's connection to the original story. THEN pull back to reveal the New Testament fulfillment — the antitype that is always greater than the type.
@@ -123,7 +123,7 @@ const CROSS_REFERENCE: BibleStudyMethodCard = {
   name: 'Cross-Reference / Theme Tracing',
   description: 'Trace a single theme across the entire biblical narrative — how it develops and resolves in Christ.',
   idealGenres: ['any'],
-  emotionalTexture: 'epic, cinematic — part of a story larger than any passage',
+  emotionalTexture: 'Epic and cinematic — part of a story larger than any passage.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: CROSS-REFERENCE CHAIN
 Today's passage is one link in a chain that runs through the entire Bible. Show where this link sits:
@@ -138,7 +138,7 @@ const HISTORICAL_CULTURAL: BibleStudyMethodCard = {
   name: 'Historical-Cultural Background',
   description: 'Investigate the cultural context that transforms how we read the passage.',
   idealGenres: ['gospel', 'ot_narrative', 'epistle', 'law'],
-  emotionalTexture: 'illuminating, grounding — the text becomes real',
+  emotionalTexture: 'Illuminating and grounding — the text becomes real.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: HISTORICAL-CULTURAL BACKGROUND
 Open with a cultural detail that reframes the passage — something the original audience knew but modern readers miss:
@@ -158,7 +158,7 @@ const LECTIO_DIVINA: BibleStudyMethodCard = {
   name: 'Lectio Divina (Divine Reading)',
   description: 'Ancient 4-movement contemplative practice: Read, Meditate, Pray, Contemplate.',
   idealGenres: ['poetry', 'gospel', 'short_passage'],
-  emotionalTexture: 'intimate, slow, receptive — listening TO God, not studying ABOUT God',
+  emotionalTexture: 'Intimate, slow, and receptive — listening to God, not studying about God.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: LECTIO DIVINA
 Guide the reader through four movements with pacing cues:
@@ -174,7 +174,7 @@ const IGNATIAN_CONTEMPLATION: BibleStudyMethodCard = {
   name: 'Ignatian Contemplation (Imaginative Prayer)',
   description: 'Enter a Gospel scene using all five senses and encounter Jesus within the imagined story.',
   idealGenres: ['gospel', 'ot_narrative'],
-  emotionalTexture: 'vivid, emotional, personal encounter',
+  emotionalTexture: 'Vivid, emotional, and personal.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: IGNATIAN CONTEMPLATION
 Set the scene with rich sensory detail — sight, sound, smell, texture, temperature. Place the reader IN the story:
@@ -189,7 +189,7 @@ const SCRIPTURE_MEDITATION: BibleStudyMethodCard = {
   name: 'Scripture Meditation & Memorization',
   description: 'Commit a short passage to memory and ruminate on it throughout the day.',
   idealGenres: ['poetry', 'short_passage', 'proverb'],
-  emotionalTexture: 'deeply personal, accumulative — builds over the day',
+  emotionalTexture: 'Deeply personal and accumulative — building over the day.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: SCRIPTURE MEDITATION
 Center this devotional around 1-3 verses maximum. The goal is depth, not breadth.
@@ -204,7 +204,7 @@ const BREATH_PRAYER: BibleStudyMethodCard = {
   name: 'Breath Prayer with Scripture',
   description: 'Extract a short phrase from the passage and synchronize it with breathing.',
   idealGenres: ['poetry', 'short_passage', 'psalm'],
-  emotionalTexture: 'calming, embodied — bridges theology and physiology',
+  emotionalTexture: 'Calming and embodied — bridging theology and physiology.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: BREATH PRAYER
 Extract one phrase (4-8 words) from today's passage and split it for breathing:
@@ -223,7 +223,7 @@ const SOAP_JOURNAL: BibleStudyMethodCard = {
   name: 'SOAP Journaling',
   description: 'Scripture, Observation, Application, Prayer — a structured journaling framework.',
   idealGenres: ['any'],
-  emotionalTexture: 'grounded, practical, personal',
+  emotionalTexture: 'Grounded, practical, and personal.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: SOAP JOURNALING
 Structure this devotional to model the SOAP method:
@@ -237,9 +237,9 @@ Keep the tone warm and journalistic — as if writing in a personal journal, not
 const VERSE_MAPPING: BibleStudyMethodCard = {
   id: 'verse_mapping',
   name: 'Verse Mapping',
-  description: 'Visual multi-layer annotation of a single verse — keywords, Greek/Hebrew, cross-refs, context.',
+  description: 'Visual multi-layer annotation of a single verse — keywords, Greek/Hebrew, cross-references, context.',
   idealGenres: ['any'],
-  emotionalTexture: 'creative, exploratory — unpacking layer by layer',
+  emotionalTexture: 'Creative and exploratory — unpacking layer by layer.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: VERSE MAPPING
 Focus on a single verse (or 2-3 at most). Unpack it layer by layer:
@@ -256,7 +256,7 @@ const SWEDISH_METHOD: BibleStudyMethodCard = {
   name: 'Swedish Method',
   description: 'Three symbols: lightbulb (what shines), question mark (what confuses), arrow (what applies).',
   idealGenres: ['any'],
-  emotionalTexture: 'accessible, non-threatening, warm',
+  emotionalTexture: 'Accessible, non-threatening, and warm.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: SWEDISH METHOD
 After presenting the passage, guide the reader through three questions:
@@ -271,7 +271,7 @@ const DISCOVERY_BIBLE_STUDY: BibleStudyMethodCard = {
   name: 'Discovery Bible Study (DBS)',
   description: 'Seven simple questions that let the Bible do the heavy lifting — no expertise required.',
   idealGenres: ['narrative', 'gospel', 'any'],
-  emotionalTexture: 'communal, action-oriented, externally focused',
+  emotionalTexture: 'Communal, action-oriented, and externally focused.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: DISCOVERY BIBLE STUDY
 Structure the devotional around these core discovery questions:
@@ -293,7 +293,7 @@ const TOPICAL: BibleStudyMethodCard = {
   name: 'Topical Study',
   description: 'Comprehensive examination of a topic across multiple passages, genres, and time periods.',
   idealGenres: ['cross_genre'],
-  emotionalTexture: 'comprehensive, authoritative — hearing the full biblical witness',
+  emotionalTexture: 'Comprehensive and authoritative — hearing the full biblical witness.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: TOPICAL
 Today's devotional examines a topic through multiple passages. For each passage:
@@ -308,7 +308,7 @@ const CHARACTER_STUDY: BibleStudyMethodCard = {
   name: 'Character / Biographical Study',
   description: 'Reconstruct a biblical figure\'s life, choices, failures, and growth as a mirror for the reader.',
   idealGenres: ['ot_narrative', 'gospel', 'narrative'],
-  emotionalTexture: 'relatable, narrative-driven — seeing yourself in their story',
+  emotionalTexture: 'Relatable and narrative-driven — seeing yourself in their story.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: CHARACTER STUDY
 Tell this character's story as a narrative — with tension, complexity, and humanity:
@@ -323,7 +323,7 @@ const THEMATIC_THREAD: BibleStudyMethodCard = {
   name: 'Thematic Thread',
   description: 'Trace one narrow thread through carefully selected passages — deeper than topical, more focused.',
   idealGenres: ['cross_genre'],
-  emotionalTexture: 'focused, progressive — the thread tightens each day',
+  emotionalTexture: 'Focused and progressive — the thread tightens each day.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: THEMATIC THREAD
 Today's passage carries a single thread that has been building across this series. Show:
@@ -342,7 +342,7 @@ const NARRATIVE_STUDY: BibleStudyMethodCard = {
   name: 'Narrative / Story Analysis',
   description: 'Follow the story structure: exposition, conflict, climax, resolution. Show, don\'t tell.',
   idealGenres: ['ot_narrative', 'gospel', 'narrative'],
-  emotionalTexture: 'tension and resolution — story-driven',
+  emotionalTexture: 'Tension and resolution — story-driven.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: NARRATIVE ANALYSIS
 Tell this story with its full narrative tension:
@@ -358,7 +358,7 @@ const POETRY_PSALMS: BibleStudyMethodCard = {
   name: 'Poetry & Psalms Study',
   description: 'Slow reading of Hebrew poetry — parallelism, imagery, emotional arc, the turning point.',
   idealGenres: ['poetry', 'psalm', 'song_of_songs'],
-  emotionalTexture: 'emotional, beautiful — feeling the turn',
+  emotionalTexture: 'Emotional and beautiful — feeling the turn.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: POETRY / PSALMS
 Slow the reader down. This is poetry — it rewards patience:
@@ -374,7 +374,7 @@ const WISDOM_STUDY: BibleStudyMethodCard = {
   name: 'Wisdom Literature Study',
   description: 'Proverbs as patterns (not promises), Ecclesiastes as honest observation, Job as dramatic dialogue.',
   idealGenres: ['wisdom', 'proverb', 'ecclesiastes', 'job'],
-  emotionalTexture: 'honest, challenging — permission to wrestle',
+  emotionalTexture: 'Honest and challenging — permission to wrestle.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: WISDOM LITERATURE
 Present this wisdom text as a conversation partner, not a lecture:
@@ -387,9 +387,9 @@ The tone should be honest and grounded. Wisdom literature gives permission to as
 const PROPHETIC_STUDY: BibleStudyMethodCard = {
   id: 'prophetic_study',
   name: 'Prophetic Literature Study',
-  description: 'Forth-telling before foretelling — ground in historical context, then bridge to present.',
+  description: 'Forth-telling before foretelling — historical context first, then a bridge to today.',
   idealGenres: ['prophecy', 'prophetic_oracle'],
-  emotionalTexture: 'urgent, bridging past and present',
+  emotionalTexture: 'Urgent — bridging past and present.',
   difficulty: 'advanced',
   promptModifier: `STUDY METHOD: PROPHETIC LITERATURE
 Ground the prophecy in its historical moment FIRST — who is speaking, to whom, about what crisis?
@@ -402,7 +402,7 @@ const EPISTLE_STUDY: BibleStudyMethodCard = {
   name: 'Epistle / Letter Study',
   description: 'Follow the logical flow — map the therefore-because chain, identify the problem being addressed.',
   idealGenres: ['epistle'],
-  emotionalTexture: 'logical, persuasive — following an argument',
+  emotionalTexture: 'Logical and persuasive — following an argument.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: EPISTLE
 Frame this as a letter to a real community with real problems — because it was:
@@ -421,7 +421,7 @@ const REDEMPTIVE_HISTORICAL: BibleStudyMethodCard = {
   name: 'Redemptive-Historical (Biblical Theology)',
   description: 'Read every passage through the lens of Creation → Fall → Redemption → Restoration.',
   idealGenres: ['any'],
-  emotionalTexture: 'grand-scale, purposeful — every passage has a place in the epic',
+  emotionalTexture: 'Grand-scale and purposeful — every passage has a place in the epic.',
   difficulty: 'advanced',
   promptModifier: `STUDY METHOD: REDEMPTIVE-HISTORICAL
 Place today's passage on the timeline of God's redemptive story:
@@ -436,7 +436,7 @@ const COVENANT_STUDY: BibleStudyMethodCard = {
   name: 'Covenant Study',
   description: 'Examine the passage through the lens of God\'s covenants — their promises, terms, signs, and fulfillment.',
   idealGenres: ['ot_narrative', 'law', 'prophecy', 'epistle'],
-  emotionalTexture: 'foundational, relational — God binding Himself to people',
+  emotionalTexture: 'Foundational and relational — God binding Himself to people.',
   difficulty: 'advanced',
   promptModifier: `STUDY METHOD: COVENANT
 Examine today's passage through the covenant framework:
@@ -452,7 +452,7 @@ const PARABLE_STUDY: BibleStudyMethodCard = {
   name: 'Parable Study',
   description: 'Interpret Jesus\' parables with proper guardrails — one central point, audience context, first-century culture.',
   idealGenres: ['gospel', 'parable'],
-  emotionalTexture: 'surprising, subversive — parables flip expectations',
+  emotionalTexture: 'Surprising and subversive — parables flip expectations.',
   difficulty: 'intermediate',
   promptModifier: `STUDY METHOD: PARABLE
 Parables have unique interpretive rules — honor them:
@@ -468,7 +468,7 @@ const LAMENT_STUDY: BibleStudyMethodCard = {
   name: 'Lament Study',
   description: 'Follow the lament structure: address → complaint → trust → petition → praise. Permission to grieve.',
   idealGenres: ['psalm', 'poetry', 'lament'],
-  emotionalTexture: 'raw, honest — permission to bring pain to God',
+  emotionalTexture: 'Raw and honest — permission to bring pain to God.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: LAMENT
 Walk the reader through the lament structure — this is the Bible's built-in grief process:
@@ -485,7 +485,7 @@ const COMPARATIVE_TRANSLATION: BibleStudyMethodCard = {
   name: 'Comparative Translation Study',
   description: 'Read the same verse across 4-5 translations and notice what each reveals.',
   idealGenres: ['any'],
-  emotionalTexture: 'illuminating, accessible — familiar verses become fresh',
+  emotionalTexture: 'Illuminating and accessible — familiar verses become fresh.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: COMPARATIVE TRANSLATION
 Present the key verse in 3-4 different translations (ESV, NLT, MSG, and one more):
@@ -501,7 +501,7 @@ const PRAYING_PSALMS: BibleStudyMethodCard = {
   name: 'Praying the Psalms',
   description: 'Use the psalm as an actual prayer — substitute your situation into the psalmist\'s language.',
   idealGenres: ['psalm', 'poetry'],
-  emotionalTexture: 'conversational, personal — the psalm becomes YOUR prayer',
+  emotionalTexture: 'Conversational and personal — the psalm becomes your prayer.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: PRAYING THE PSALMS
 Guide the reader to use this psalm as their own prayer:
@@ -517,7 +517,7 @@ const STORYTELLING_RENARRATION: BibleStudyMethodCard = {
   name: 'Scriptural Storytelling / Re-narration',
   description: 'Retell the biblical text in vivid detail, filling the sensory and emotional gaps the text leaves sparse.',
   idealGenres: ['ot_narrative', 'gospel', 'narrative'],
-  emotionalTexture: 'immersive, alive — the text becomes a world you enter',
+  emotionalTexture: 'Immersive and alive — the text becomes a world you enter.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: SCRIPTURAL STORYTELLING
 Retell this passage as vivid narrative — fill in what the text leaves sparse:
@@ -533,7 +533,7 @@ const EXAMEN_WITH_SCRIPTURE: BibleStudyMethodCard = {
   name: 'Examen with Scripture',
   description: 'Review the day\'s events through the lens of a passage — where did God show up? Where was He absent?',
   idealGenres: ['any'],
-  emotionalTexture: 'reflective, integrative — connecting scripture to lived experience',
+  emotionalTexture: 'Reflective and integrative — connecting Scripture to lived experience.',
   difficulty: 'accessible',
   promptModifier: `STUDY METHOD: EXAMEN WITH SCRIPTURE
 Guide the reader through an evening review of their day, filtered through today's passage:
