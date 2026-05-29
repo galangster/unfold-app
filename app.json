@@ -6,11 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "backgroundColor": "#0A0A0A",
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0A0A"
-    },
+
     "scheme": "unfold",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -27,7 +23,11 @@
         "NSMicrophoneUsageDescription": "Allow Unfold to use the microphone for voice input.",
         "NSPhotoLibraryAddUsageDescription": "Allow Unfold to save devotional quotes and wallpapers to your photo library.",
         "NSPhotoLibraryUsageDescription": "Allow Unfold to access your photos for sharing devotional content.",
-        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "audio",
+          "fetch",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -123,7 +123,25 @@
           ]
         }
       ],
-      "./plugins/withRemoveAppGroups"
+      "./plugins/withRemoveAppGroups",
+      "@react-native-community/datetimepicker",
+      "expo-asset",
+      "expo-font",
+      "expo-image",
+      "expo-mail-composer",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0A0A"
+        }
+      ],
+      "expo-sqlite",
+      "expo-status-bar",
+      "expo-video",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

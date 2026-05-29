@@ -3,7 +3,7 @@
  * Full devotional dashboard: verse of the day, streak, weekly progress,
  * and upcoming readings. For power users who want Unfold front-and-center.
  */
-import { createWidget, WidgetBase } from 'expo-widgets';
+import { createWidget } from 'expo-widgets';
 import {
   Text,
   VStack,
@@ -44,7 +44,7 @@ type DashboardWidgetProps = {
   nextDayTitle: string;
 };
 
-const DashboardWidget = (props: WidgetBase<DashboardWidgetProps>) => {
+const DashboardWidget = (props: DashboardWidgetProps) => {
   'widget';
 
   const streak = props.streakCount ?? 0;

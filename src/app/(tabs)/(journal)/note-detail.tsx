@@ -1831,7 +1831,7 @@ const styles = StyleSheet.create({
     marginVertical: Spacing['1'],
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 100,
   },
   emptyContainer: {

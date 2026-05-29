@@ -7,6 +7,7 @@
  * Phase 5: Graceful fallback to non-streaming if SSE fails.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { fetch as expoFetch } from 'expo/fetch';
 import {
   useCompanionChatStore,
   selectActiveMessages,
@@ -17,6 +18,8 @@ import { useUnfoldStore } from '@/lib/store';
 import { logger } from '@/lib/logger';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
+
+const STREAMING_UPDATE_INTERVAL_MS = 32; // ~30fps, matching the SDK 56 chat-template cadence.
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
 
@@ -56,6 +59,36 @@ interface SSECallbacks {
   onError: (message: string) => void;
 }
 
+function extractSSEPayloads(
+  buffer: string,
+  options: { flush?: boolean } = {}
+): { payloads: string[]; remainder: string } {
+  const payloads: string[] = [];
+  const normalized = buffer.replace(/\r\n/g, '\n');
+
+  const collectPayloads = (segment: string) => {
+    for (const line of segment.split('\n')) {
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      payloads.push(payload);
+    }
+  };
+
+  if (options.flush) {
+    collectPayloads(normalized);
+    return { payloads, remainder: '' };
+  }
+
+  const segments = normalized.split('\n\n');
+  const remainder = segments.pop() ?? '';
+  for (const segment of segments) {
+    collectPayloads(segment);
+  }
+
+  return { payloads, remainder };
+}
+
 async function consumeSSE(
   url: string,
   headers: Record<string, string>,
@@ -65,13 +98,11 @@ async function consumeSSE(
 ): Promise<boolean> {
   const { onToken, onThinking, onDone, onError } = callbacks;
 
-  const response = await fetch(url, {
+  const response = await expoFetch(url, {
     method: 'POST',
     headers: { ...headers, Accept: 'text/event-stream' },
     body,
     signal,
-    // @ts-ignore — React Native option for streaming responses
-    reactNative: { textStreaming: true },
   });
 
   if (!response.ok) {
@@ -86,14 +117,10 @@ async function consumeSSE(
   }
 
   const decoder = new TextDecoder();
-  let buffer = '';
+  let sseBuffer = '';
   let sawDone = false;
 
-  const processLine = (line: string) => {
-    if (!line.startsWith('data: ')) return;
-    const json = line.slice(6).trim();
-    if (!json) return;
-
+  const processPayload = (json: string) => {
     try {
       const event = JSON.parse(json);
       if (event.thinking) {
@@ -114,20 +141,23 @@ async function consumeSSE(
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        processLine(line);
+      if (done) {
+        sseBuffer += decoder.decode();
+        const flushed = extractSSEPayloads(sseBuffer, { flush: true });
+        sseBuffer = flushed.remainder;
+        for (const payload of flushed.payloads) {
+          processPayload(payload);
+        }
+        break;
       }
-    }
 
-    const trailing = buffer.trim();
-    if (trailing) {
-      processLine(trailing);
+      sseBuffer += decoder.decode(value, { stream: true });
+      const parsed = extractSSEPayloads(sseBuffer);
+      sseBuffer = parsed.remainder;
+
+      for (const payload of parsed.payloads) {
+        processPayload(payload);
+      }
     }
   } finally {
     reader.releaseLock();
@@ -141,13 +171,13 @@ async function consumeSSE(
 async function fallbackNonStreaming(
   headers: Record<string, string>,
   companionContext: Record<string, unknown>,
-  chatMessages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  chatMessages: { role: 'user' | 'assistant'; content: string }[],
   signal: AbortSignal,
   onWord: (revealed: string) => void
 ): Promise<{ responseText: string; suggestions: string[] }> {
   // Call companion/chat with stream:false — gets full JSON response
   // with the proper system prompt and companion personality.
-  const response = await fetch(
+  const response = await expoFetch(
     `${PRIMARY_BACKEND_URL}/api/companion/chat`,
     {
       method: 'POST',
@@ -198,8 +228,6 @@ export function useCompanionChat() {
   const updateMessage = useCompanionChatStore((s) => s.updateMessage);
   const startNewConversation = useCompanionChatStore((s) => s.startNewConversation);
   const checkAndArchiveStale = useCompanionChatStore((s) => s.checkAndArchiveStale);
-  const activeConversationId = useCompanionChatStore((s) => s.activeConversationId);
-
   const [isStreaming, setIsStreaming] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -264,17 +292,23 @@ export function useCompanionChat() {
 
       const abortController = new AbortController();
 
-      // Throttled store updates — batch token updates to reduce re-renders
+      // Throttled store updates — batch token updates to reduce re-renders while
+      // always flushing the newest text, not the first token in the throttle window.
       let throttleTimer: ReturnType<typeof setTimeout> | null = null;
-      const flushTokens = (id: string, text: string) => {
-        updateMessage(id, { content: text });
+      let pendingUpdate: { id: string; text: string } | null = null;
+      const flushPendingUpdate = () => {
+        if (!pendingUpdate) return;
+        const { id, text: nextText } = pendingUpdate;
+        pendingUpdate = null;
+        updateMessage(id, { content: nextText });
       };
       const throttledUpdate = (id: string, text: string) => {
+        pendingUpdate = { id, text };
         if (!throttleTimer) {
           throttleTimer = setTimeout(() => {
             throttleTimer = null;
-            flushTokens(id, text);
-          }, 100);
+            flushPendingUpdate();
+          }, STREAMING_UPDATE_INTERVAL_MS);
         }
       };
       const cancelThrottle = () => {
@@ -282,10 +316,12 @@ export function useCompanionChat() {
           clearTimeout(throttleTimer);
           throttleTimer = null;
         }
+        pendingUpdate = null;
       };
       abortRef.current = abortController;
 
       let accumulatedText = '';
+      let hasReceivedStreamingToken = false;
 
       try {
         // Build conversation context (last 10 messages)
@@ -328,8 +364,13 @@ export function useCompanionChat() {
             abortController.signal,
             {
               onToken: (token) => {
-                // Clear searching state on first real token
-                if (isSearching) setIsSearching(false);
+                // Clear searching state on first real token. This must use a local
+                // flag, not captured React state, because `onThinking` can run
+                // after this callback has already closed over the initial value.
+                if (!hasReceivedStreamingToken) {
+                  hasReceivedStreamingToken = true;
+                  setIsSearching(false);
+                }
                 accumulatedText += token;
                 throttledUpdate(companionId, accumulatedText);
               },
@@ -463,7 +504,6 @@ export function useCompanionChat() {
       companionName,
       currentDevotional,
       streakDays,
-      activeConversationId,
     ]
   );
 

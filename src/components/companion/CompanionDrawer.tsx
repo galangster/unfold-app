@@ -426,7 +426,7 @@ export function CompanionDrawer({
         pointerEvents={isOpen ? 'auto' : 'none'}
       >
         <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           onPress={onClose}
           activeOpacity={1}
           accessible={false}
@@ -486,7 +486,7 @@ export function CompanionDrawer({
 
 const styles = StyleSheet.create({
   scrim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000',
     zIndex: 10,
   },

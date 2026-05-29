@@ -6,6 +6,10 @@ const { act } = renderer;
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
+jest.mock('expo/fetch', () => ({
+  fetch: (...args: Parameters<typeof fetch>) => mockFetch(...args),
+}));
+
 jest.mock('@/lib/api-config', () => ({
   PRIMARY_BACKEND_URL: 'https://api.example.test',
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
@@ -71,6 +75,27 @@ function streamingResponseWithoutDone() {
   };
 }
 
+function streamingResponseFromChunks(chunks: string[]) {
+  const encoder = new TextEncoder();
+  const reader = {
+    read: jest.fn(async () => {
+      const chunk = chunks.shift();
+      if (chunk === undefined) {
+        return { done: true, value: undefined };
+      }
+      return { done: false, value: encoder.encode(chunk) };
+    }),
+    releaseLock: jest.fn(),
+  };
+
+  return {
+    ok: true,
+    body: {
+      getReader: () => reader,
+    },
+  };
+}
+
 function jsonResponse(payload: unknown) {
   return {
     ok: true,
@@ -89,7 +114,9 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 describe('useCompanionChat fallback streaming', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    useCompanionChatStore.getState().clearAllConversations();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
   });
 
   it('keeps the final non-streaming fallback text after delayed progressive-reveal updates fire', async () => {
@@ -137,6 +164,44 @@ describe('useCompanionChat fallback streaming', () => {
       status: 'complete',
       content: fullResponse,
       suggestions: ['Start the study'],
+    });
+  });
+
+  it('uses Expo fetch streaming without the legacy React Native textStreaming option', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Hel',
+      'lo"}\n\n',
+      'data: {"t":" world"}\r\n\r\n',
+      'data: {"d":true,"s":["Keep going"]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await hook!.sendMessage('Stream this with Expo fetch');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toBe('https://api.example.test/api/companion/chat');
+    expect(mockFetch.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      headers: expect.objectContaining({ Accept: 'text/event-stream' }),
+    });
+    expect(mockFetch.mock.calls[0][1]).not.toHaveProperty('reactNative');
+
+    const companion = useCompanionChatStore
+      .getState()
+      .conversations[0]
+      .messages.find((message) => message.role === 'companion');
+
+    expect(companion).toMatchObject({
+      status: 'complete',
+      content: 'Hello world',
+      suggestions: ['Keep going'],
     });
   });
 });

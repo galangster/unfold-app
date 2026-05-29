@@ -87,7 +87,7 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSav
         style={styles.overlay}
       >
         <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={onClose}
           accessibilityLabel="Close settings"
@@ -290,7 +290,7 @@ export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSav
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.35)',
     zIndex: 99,
   },

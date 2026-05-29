@@ -2330,13 +2330,13 @@ function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
         entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
         exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
         style={{
-          ...StyleSheet.absoluteFillObject,
+          ...StyleSheet.absoluteFill,
           backgroundColor: 'rgba(0,0,0,0.35)',
           zIndex: 99,
         }}
       >
         <TouchableOpacity
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           activeOpacity={1}
           onPress={onClose}
           accessibilityLabel="Close settings"

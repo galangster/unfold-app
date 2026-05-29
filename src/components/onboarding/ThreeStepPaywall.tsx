@@ -447,11 +447,11 @@ function ScreenProductInAction({
                       via onFirstFrameRender so the transition is seamless. */}
                   <Animated.View
                     pointerEvents="none"
-                    style={[StyleSheet.absoluteFillObject, posterStyle]}
+                    style={[StyleSheet.absoluteFill, posterStyle]}
                   >
                     <ExpoImage
                       source={require('../../../assets/video/paywall-walkthrough-poster.jpg')}
-                      style={StyleSheet.absoluteFillObject}
+                      style={StyleSheet.absoluteFill}
                       contentFit="cover"
                       cachePolicy="memory-disk"
                     />

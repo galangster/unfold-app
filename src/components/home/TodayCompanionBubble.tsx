@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing['3.5'],
   },
   bubbleGlassClip: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderTopLeftRadius: BUBBLE_RADIUS.topLeft,
     borderTopRightRadius: BUBBLE_RADIUS.topRight,
     borderBottomRightRadius: BUBBLE_RADIUS.bottomRight,

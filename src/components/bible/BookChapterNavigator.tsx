@@ -559,7 +559,7 @@ export function BookChapterNavigator({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 100,
     paddingHorizontal: Spacing['4'],
   },

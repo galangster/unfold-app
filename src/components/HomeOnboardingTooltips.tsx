@@ -471,7 +471,7 @@ export function HomeOnboardingTooltips({ layoutRects }: HomeOnboardingTooltipsPr
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000,
   },
   tooltipCard: {

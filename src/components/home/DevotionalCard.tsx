@@ -1390,7 +1390,7 @@ const styles = StyleSheet.create({
     shadowRadius: 28,
   },
   mainCardWash: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.92,
   },
   mainCardHalo: {

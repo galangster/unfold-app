@@ -1711,7 +1711,7 @@ const s = StyleSheet.create({
 
   // ─── Archetype Card (3) ───
   ringsContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

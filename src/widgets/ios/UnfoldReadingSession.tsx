@@ -4,7 +4,7 @@
  * reading or listening to a devotional. Shows title, elapsed time,
  * and progress through the reading.
  */
-import { createLiveActivity, LiveActivityLayout } from 'expo-widgets';
+import { createLiveActivity, type LiveActivityLayout } from 'expo-widgets';
 import { Text, VStack, HStack, Image, Spacer } from '@expo/ui/swift-ui';
 import {
   font,
@@ -23,17 +23,17 @@ type ReadingSessionProps = {
   streakCount: number;
 };
 
-const ReadingSession = (props?: ReadingSessionProps): LiveActivityLayout => {
+const ReadingSession = (props: ReadingSessionProps): LiveActivityLayout => {
   'widget';
 
-  const title = props?.devotionalTitle ?? 'Unfold';
-  const dayTitle = props?.dayTitle ?? 'Reading...';
-  const day = props?.dayNumber ?? 1;
-  const total = props?.totalDays ?? 7;
-  const elapsed = props?.elapsedMinutes ?? 0;
-  const totalMin = props?.totalMinutes ?? 5;
-  const isListening = props?.isListening ?? false;
-  const streak = props?.streakCount ?? 0;
+  const title = props.devotionalTitle ?? 'Unfold';
+  const dayTitle = props.dayTitle ?? 'Reading...';
+  const day = props.dayNumber ?? 1;
+  const total = props.totalDays ?? 7;
+  const elapsed = props.elapsedMinutes ?? 0;
+  const totalMin = props.totalMinutes ?? 5;
+  const isListening = props.isListening ?? false;
+  const streak = props.streakCount ?? 0;
 
   const progressPercent = totalMin > 0 ? Math.min(Math.round((elapsed / totalMin) * 100), 100) : 0;
 

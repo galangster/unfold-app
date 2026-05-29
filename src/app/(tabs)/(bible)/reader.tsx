@@ -240,7 +240,7 @@ const VerseItem = React.memo(function VerseItem({
         {/* Flash highlight overlay (full row, fades in then out) — always mounted so animation plays */}
         <Animated.View
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             { backgroundColor: flashBg, borderRadius: 6, marginHorizontal: -6, marginVertical: -2 },
             flashStyle,
           ]}

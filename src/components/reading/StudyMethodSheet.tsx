@@ -478,7 +478,7 @@ export function StudyMethodSheet({ methodId, visible, onClose }: StudyMethodShee
 
 const smStyles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   cardContainer: {

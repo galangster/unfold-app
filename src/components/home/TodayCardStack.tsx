@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   backCard: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 150,

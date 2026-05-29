@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useBottomTabBarHeight } from 'expo-router/js-tabs';
 import Animated, { FadeIn, FadeInUp, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import * as MediaLibrary from 'expo-media-library';

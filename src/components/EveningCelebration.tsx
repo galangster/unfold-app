@@ -365,7 +365,7 @@ export function EveningCelebration({
 
 const styles = StyleSheet.create({
   textContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing['12'],

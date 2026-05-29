@@ -3,7 +3,7 @@
  * Shows today's devotional with scripture reference, title, and streak.
  * Two-column layout: streak/progress left, content right.
  */
-import { createWidget, WidgetBase } from 'expo-widgets';
+import { createWidget } from 'expo-widgets';
 import { Text, VStack, HStack, Image, Spacer, Divider } from '@expo/ui/swift-ui';
 import {
   font,
@@ -31,7 +31,7 @@ type TodayWidgetProps = {
   readingMinutes: number;
 };
 
-const TodayWidget = (props: WidgetBase<TodayWidgetProps>) => {
+const TodayWidget = (props: TodayWidgetProps) => {
   'widget';
 
   const streak = props.streakCount ?? 0;

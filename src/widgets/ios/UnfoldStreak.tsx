@@ -3,7 +3,7 @@
  * Shows current reading streak with a flame icon.
  * Designed for quick glances that motivate daily reading.
  */
-import { createWidget, WidgetBase } from 'expo-widgets';
+import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 import { Text, VStack, HStack, ZStack, Image, Spacer } from '@expo/ui/swift-ui';
 import {
   font,
@@ -26,7 +26,10 @@ type StreakWidgetProps = {
   totalDays: number;
 };
 
-const StreakWidget = (props: WidgetBase<StreakWidgetProps>) => {
+const StreakWidget = (
+  props: StreakWidgetProps,
+  environment: WidgetEnvironment
+) => {
   'widget';
 
   const streak = props.streakCount ?? 0;
@@ -35,7 +38,7 @@ const StreakWidget = (props: WidgetBase<StreakWidgetProps>) => {
   const day = props.dayNumber ?? 0;
   const total = props.totalDays ?? 0;
 
-  if (props.family === 'accessoryCircular') {
+  if (environment.widgetFamily === 'accessoryCircular') {
     // Lock screen circular — use hierarchical styles for system tinting
     return (
       <ZStack

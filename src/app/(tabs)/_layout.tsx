@@ -20,8 +20,8 @@ import { Spacing } from '@/constants/spacing';
 import { useUIState } from '@/lib/ui-state';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { getNoteDraftDockOffset, useNoteDraftDock } from '@/lib/note-draft-dock';
-// expo-router bundles its own @react-navigation/bottom-tabs which has
-// type mismatches with the project-level version. Use structural typing.
+// Expo Router owns its tab navigator types in SDK 56+. Use structural typing
+// here so this custom tab bar stays decoupled from router internals.
 type TabBarProps = {
   state: { routes: { key: string; name: string; params?: object }[]; index: number };
   descriptors: Record<string, { options: Record<string, any> }>;
