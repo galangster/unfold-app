@@ -52,10 +52,11 @@ import {
   getMiddayCheckInDayNumber,
 } from '@/lib/today-companion-state';
 import { getCalendarDayNumber } from '@/lib/devotional-day-access';
+import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
-const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
+const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
 const QA_BRIDGE_TEXT = 'Nick, today’s reading picks up the thread of waiting with God before you rush toward the next decision. Isaiah slows the pace down and asks what renewed strength actually feels like.';

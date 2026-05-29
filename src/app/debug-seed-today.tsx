@@ -5,6 +5,7 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 
 import { buildDevotionalSeed } from '@/lib/dev-seed';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 import {
   useUnfoldStore,
   type AccentThemeId,
@@ -16,7 +17,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import { useUIState } from '@/lib/ui-state';
 
-const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
+const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 const QA_TODAY_CONTEXT_SLOT_PREFIX = 'QA Today context slot:';
 const QA_TODAY_PREPARING_LOADING_MARKER = 'QA Today preparing loading preview.';
 

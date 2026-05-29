@@ -19,6 +19,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from '@/lib/api-config';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
+import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
 
 interface Recommendation {
   theme: string;
@@ -44,7 +45,7 @@ function formatRecommendationType(type: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-const QA_TODAY_PROFILE_MARKER = 'Seeded Today-screen runtime QA profile.';
+const QA_TODAY_PROFILE_MARKER = getQaTodayProfileMarker();
 
 const QA_TODAY_RECOMMENDATION: Recommendation = {
   theme: 'discernment',

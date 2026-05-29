@@ -6,6 +6,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { getQaTodayProfileMarker } from '../qa-today-marker';
+
 describe('debug seed routes', () => {
   const seedRevealSource = fs.readFileSync(
     path.join(__dirname, '../../app/debug-seed-reveal.tsx'),
@@ -43,6 +45,31 @@ describe('debug seed routes', () => {
     path.join(__dirname, '../../app/(tabs)/(today)/index.tsx'),
     'utf-8',
   );
+  const recommendedSeriesCardSource = fs.readFileSync(
+    path.join(__dirname, '../../components/home/RecommendedSeriesCard.tsx'),
+    'utf-8',
+  );
+  const qaTodayMarkerSource = fs.readFileSync(
+    path.join(__dirname, '../qa-today-marker.ts'),
+    'utf-8',
+  );
+
+  it('keeps the Today QA profile marker value stable for QA comparisons', () => {
+    expect(getQaTodayProfileMarker()).toBe('Seeded Today-screen runtime QA profile.');
+  });
+
+  it('keeps the exact Today QA profile marker literal out of production-bundled sources', () => {
+    const bannedMarkers = [
+      'Seeded Today-screen runtime QA profile.',
+      'Seeded Today-screen runtime QA profile',
+    ];
+
+    for (const source of [seedTodaySource, todayTabSource, recommendedSeriesCardSource, qaTodayMarkerSource]) {
+      for (const bannedMarker of bannedMarkers) {
+        expect(source).not.toContain(bannedMarker);
+      }
+    }
+  });
 
   it('replaces any previous seeded reveal devotional before adding a fresh one', () => {
     expect(seedRevealSource).toContain('store.removeDevotional(seeded.id);');
