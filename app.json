@@ -14,6 +14,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.unfoldapp.ios",
       "buildNumber": "183",
+      "deploymentTarget": "16.4",
       "usesAppleSignIn": true,
       "config": {
         "usesNonExemptEncryption": false

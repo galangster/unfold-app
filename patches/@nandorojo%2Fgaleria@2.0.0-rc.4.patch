@@ -1,0 +1,18 @@
+diff --git a/ios/GaleriaView.swift b/ios/GaleriaView.swift
+index 394965652bd557ecd428eff8bb53350bb8d800b2..2ab85b4a3d07bbfe693a951c8bc736fccb774e9b 100644
+--- a/ios/GaleriaView.swift
++++ b/ios/GaleriaView.swift
+@@ -8,8 +8,5 @@
+-    var reactSubviews: [UIView]? = nil
+-    if RCTIsNewArchEnabled() {
+-      reactSubviews = self.subviews
+-    } else {
+-      reactSubviews = self.reactSubviews()
+-    }
+-
+-    guard let reactSubviews else { return nil }
++    #if RCT_NEW_ARCH_ENABLED
++    let reactSubviews = self.subviews
++    #else
++    let reactSubviews = self.reactSubviews()
++    #endif
