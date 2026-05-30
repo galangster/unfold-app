@@ -1,5 +1,5 @@
-import { useCallback, memo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { useCallback, useEffect, useState, memo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, Keyboard, Platform, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, runOnJS, useReducedMotion } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -58,10 +58,31 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
 }: Props) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const { height: screenHeight } = useWindowDimensions();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (event) => setKeyboardHeight(event.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const page = ALL_PAGES[currentPage];
   const isLastPage = currentPage === ALL_PAGES.length - 1;
   const isCompanionPage = 'type' in page && (page as any).type === 'companion';
+  const companionKeyboardLift = isCompanionPage && keyboardHeight > 0
+    ? Math.min(Math.round(keyboardHeight * 0.48), screenHeight < 860 ? 170 : 190)
+    : 0;
 
   const handleContinue = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -101,7 +122,10 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
             key={currentPage}
             entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
             exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-            style={StyleSheet.absoluteFill}
+            style={[
+              StyleSheet.absoluteFill,
+              companionKeyboardLift > 0 ? { transform: [{ translateY: -companionKeyboardLift }] } : null,
+            ]}
           >
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing['8'] }}>
               <View style={{ alignItems: 'center', gap: 36, alignSelf: 'stretch' }}>
@@ -159,6 +183,9 @@ export const FeatureSummaryCarousel = memo(function FeatureSummaryCarousel({
                             borderColor: colors.border,
                           }}
                           maxLength={30}
+                          returnKeyType="done"
+                          submitBehavior="blurAndSubmit"
+                          onSubmitEditing={Keyboard.dismiss}
                         />
                       </Animated.View>
                       <Animated.Text
