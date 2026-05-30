@@ -658,6 +658,7 @@ interface UnfoldState {
   bibleHighlights: BibleHighlight[];
   bibleReadingHistory: BibleReadingPosition[];
   bibleReaderSettings: BibleReaderSettings;
+  readerBrightness: number | null;
 
   // Bible Reader Actions
   addBibleHighlight: (highlight: Omit<BibleHighlight, 'id' | 'createdAt'>) => void;
@@ -667,6 +668,7 @@ interface UnfoldState {
   recordBibleReading: (position: Omit<BibleReadingPosition, 'lastReadAt'>) => void;
   getLastBiblePosition: () => BibleReadingPosition | null;
   updateBibleReaderSettings: (updates: Partial<BibleReaderSettings>) => void;
+  setReaderBrightness: (value: number | null) => void;
 
   // Notebook
   notes: Note[];
@@ -813,6 +815,7 @@ const initialState = {
     paragraphMode: false,
     translation: 'BSB' as const,
   } as BibleReaderSettings,
+  readerBrightness: null as number | null,
 };
 
 export const useUnfoldStore = create<UnfoldState>()(
@@ -1652,6 +1655,8 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => ({
           bibleReaderSettings: { ...state.bibleReaderSettings, ...updates },
         })),
+
+      setReaderBrightness: (value) => set({ readerBrightness: value }),
 
       // Notebook actions
       addNote: (note) => {
