@@ -32,8 +32,8 @@ import { Spacing } from '@/constants/spacing';
 import { Shadow } from '@/constants/shadows';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
-import { useUnfoldStore, FONT_SIZE_VALUES, READING_FONTS } from '@/lib/store';
-import type { FontSize as FontSizePreference, Highlight, Bookmark } from '@/lib/store';
+import { useUnfoldStore, FONT_SIZE_VALUES } from '@/lib/store';
+import type { Highlight, Bookmark } from '@/lib/store';
 import { refreshDailyReminder } from '@/lib/notifications';
 import { continueGeneratingDays, isFullGenerationActive } from '@/lib/devotional-service';
 import { submitGenerationJob, recoverCompletedGenerationResult, ApiError } from '@/lib/generation-api';
@@ -63,7 +63,7 @@ import { createReviewPromptManager } from '@/lib/review-prompt';
 import { useGlobalAudioPlayer } from '@/hooks/useGlobalAudioPlayer';
 import { useAudioPlayerState } from '@/lib/audio-player-state';
 import { ScriptureTapSheet } from '@/components/ScriptureTapSheet';
-
+import { DevotionalReaderPreferencesSheet } from '@/components/reading/DevotionalReaderPreferencesSheet';
 import { getDefaultVoice, prefetchDevotionalAudio, streamDevotionalAudio, buildTtsText } from '@/lib/tts-service';
 import { syncWidgets, startReadingSession, endReadingSession } from '@/lib/widget-bridge';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -2258,11 +2258,21 @@ export default function ReadingScreen() {
         feature={premiumFeature}
       />
 
-      {showReadingSettings && (
-        <DevotionalSettingsSheet
-          onClose={() => setShowReadingSettings(false)}
-        />
-      )}
+      <DevotionalReaderPreferencesSheet
+        visible={showReadingSettings}
+        onClose={() => setShowReadingSettings(false)}
+        onOpenSavedContent={() => {
+          router.push({
+            pathname: '/(tabs)/(today)/my-content',
+            params: { tab: 'highlights', source: 'devotional', from: 'reader-settings' },
+          });
+        }}
+        isPremium={isPremium}
+        onLockedFontPress={() => {
+          setPremiumFeature('general');
+          setShowPremiumSheet(true);
+        }}
+      />
 
       {/* Bookmark saved toast — entire toast is tappable */}
       {bookmarkToast && (
@@ -2300,164 +2310,6 @@ export default function ReadingScreen() {
         onClose={() => setStudyMethodVisible(false)}
       />
     </View>
-  );
-}
-
-/* ─── Devotional Reading Settings Sheet ─── */
-
-const FONT_SIZE_OPTIONS: Array<{ label: string; value: FontSizePreference }> = [
-  { label: 'Small', value: 'small' },
-  { label: 'Medium', value: 'medium' },
-  { label: 'Large', value: 'large' },
-];
-
-function DevotionalSettingsSheet({ onClose }: { onClose: () => void }) {
-  const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
-  const currentFontSize = useUnfoldStore((s) => s.user?.fontSize ?? 'medium');
-  const currentReadingFont = useUnfoldStore((s) => s.user?.readingFont ?? 'source-serif');
-  const premiumPolicy = usePremiumAccessPolicy();
-  const isPremium = premiumPolicy === 'granted';
-  const updateUser = useUnfoldStore((s) => s.updateUser);
-
-  const controlBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  const selectedBg = isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.12)';
-
-  return (
-    <>
-      {/* Overlay */}
-      <Animated.View
-        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-        exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-        style={{
-          ...StyleSheet.absoluteFill,
-          backgroundColor: 'rgba(0,0,0,0.35)',
-          zIndex: 99,
-        }}
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={onClose}
-          accessibilityLabel="Close settings"
-          accessibilityRole="button"
-        />
-      </Animated.View>
-
-      {/* Settings card */}
-      <Animated.View
-        entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)}
-        exiting={reducedMotion ? undefined : FadeOut.duration(Duration.fast).easing(Ease.out)}
-        style={{
-          position: 'absolute',
-          left: 12,
-          right: 12,
-          bottom: 100,
-          zIndex: 100,
-          borderRadius: Radius.xl,
-          backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: isDark ? 0.4 : 0.12,
-          shadowRadius: 20,
-          elevation: 12,
-          paddingBottom: Spacing['5'],
-        }}
-      >
-        {/* Handle */}
-        <View style={{ alignItems: 'center', paddingTop: Spacing['3'], paddingBottom: Spacing['2'] }}>
-          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)', alignSelf: 'center' }} />
-        </View>
-
-        {/* Font Size */}
-        <View style={{ paddingHorizontal: Spacing['5'], paddingVertical: Spacing['3'], borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }}>
-          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
-            Font Size
-          </Text>
-          <View style={{ flexDirection: 'row', gap: Spacing['2'] }}>
-            {FONT_SIZE_OPTIONS.map((opt) => {
-              const isActive = currentFontSize === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateUser({ fontSize: opt.value });
-                  }}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    backgroundColor: isActive ? selectedBg : controlBg,
-                    alignItems: 'center',
-                  }}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`${opt.label} font size`}
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={{
-                    fontFamily: isActive ? FontFamily.uiMedium : FontFamily.ui,
-                    fontSize: FontSize.sm,
-                    color: isActive ? colors.text : colors.textHint,
-                  }}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Reading Font */}
-        <View style={{ paddingHorizontal: Spacing['5'], paddingTop: Spacing['3'] }}>
-          <Text style={{ fontFamily: FontFamily.uiMedium, fontSize: 11, color: colors.textSubtle, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
-            Reading Font
-          </Text>
-          <View style={{ gap: Spacing['1.5'] }}>
-            {READING_FONTS.map((font) => {
-              const isActive = currentReadingFont === font.id;
-              const isLocked = font.id !== 'source-serif' && !isPremium;
-              return (
-                <TouchableOpacity
-                  key={font.id}
-                  onPress={() => {
-                    if (isLocked) return;
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateUser({ readingFont: font.id });
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    borderRadius: 10,
-                    backgroundColor: isActive ? selectedBg : 'transparent',
-                    opacity: isLocked ? 0.4 : 1,
-                  }}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`${font.name} font${isLocked ? ', premium' : ''}`}
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={{
-                    fontFamily: font.regular,
-                    fontSize: FontSize.base,
-                    color: isActive ? colors.text : colors.textMuted,
-                  }}>
-                    {font.name}
-                  </Text>
-                  {isLocked && (
-                    <Text style={{ fontFamily: FontFamily.ui, fontSize: 10, color: colors.accent, letterSpacing: 0.5 }}>
-                      PRO
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      </Animated.View>
-    </>
   );
 }
 
