@@ -575,9 +575,11 @@ function buildEditorCSS(colors: any): string {
       display: none !important;
     }
     blockquote {
-      border-left: 3px solid ${colors.accent};
-      padding-left: 14px;
-      margin: 8px 0 8px 0;
+      border: 1px solid ${colors.border};
+      border-radius: 12px;
+      background-color: ${colors.inputBackground ?? 'rgba(128, 128, 128, 0.06)'};
+      padding: 12px 14px;
+      margin: 10px 0;
       color: ${colors.textMuted};
       font-style: italic;
     }

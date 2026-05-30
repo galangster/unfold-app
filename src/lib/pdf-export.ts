@@ -50,13 +50,17 @@ function sanitizeFilename(title: string): string {
     .slice(0, 80);
 }
 
-/** Get the accent-light color (10% opacity version for backgrounds) */
-function accentLight(accent: string): string {
-  // Convert hex to rgba with low opacity
+/** Convert accent hex to rgba for print-safe callout tints and borders. */
+function accentRgba(accent: string, opacity: number): string {
   const r = parseInt(accent.slice(1, 3), 16);
   const g = parseInt(accent.slice(3, 5), 16);
   const b = parseInt(accent.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, 0.08)`;
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
+/** Get the accent-light color (8% opacity version for backgrounds) */
+function accentLight(accent: string): string {
+  return accentRgba(accent, 0.08);
 }
 
 /** Map mood number to emoji */
@@ -84,6 +88,7 @@ function generateLinedSpace(lineCount: number, accent: string): string {
 function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptions): string {
   const accent = safeAccentColor(options?.accentColor);
   const accentBg = accentLight(accent);
+  const accentBorder = accentRgba(accent, 0.22);
   const journalMap = new Map<number, PDFExportOptions['journalEntries']>();
   const checkInMap = new Map<number, PDFExportOptions['checkIns']>();
 
@@ -445,8 +450,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 9pt;
           color: ${MUTED_COLOR};
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
+          letter-spacing: 0.03em;
           margin-bottom: 0.25in;
         }
 
@@ -466,8 +470,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 8pt;
           color: ${MUTED_COLOR};
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
+          letter-spacing: 0.02em;
           margin-bottom: 0.12in;
         }
 
@@ -512,8 +515,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 8pt;
           font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.2em;
+          letter-spacing: 0.04em;
           color: ${MUTED_COLOR};
           display: block;
           margin-bottom: 0.08in;
@@ -542,7 +544,8 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         .scripture {
           margin: 0.3in 0;
           padding: 0.2in 0.3in;
-          border-left: 3px solid ${accent};
+          border: 1px solid ${accentBorder};
+          border-radius: 6px;
           background-color: ${accentBg};
           page-break-inside: avoid;
         }
@@ -551,8 +554,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 8pt;
           font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
+          letter-spacing: 0.03em;
           color: ${accent};
           display: block;
           margin-bottom: 0.06in;
@@ -620,8 +622,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 8pt;
           font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
+          letter-spacing: 0.03em;
           color: ${MUTED_COLOR};
           margin-bottom: 0.12in;
           padding-bottom: 0.06in;
@@ -640,8 +641,10 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
 
         .related-scripture .cross-ref {
           margin-bottom: 0.15in;
-          padding-left: 0.2in;
-          border-left: 2px solid ${accent};
+          padding: 0.12in 0.15in;
+          border: 1px solid ${accentBorder};
+          border-radius: 3px;
+          background-color: ${accentBg};
         }
 
         .related-scripture .cross-ref:last-child {
@@ -652,8 +655,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 8pt;
           font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+          letter-spacing: 0.02em;
           color: ${accent};
           display: block;
           margin-bottom: 0.04in;
@@ -673,7 +675,8 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         blockquote {
           margin: 0.15in 0;
           padding: 0.12in 0.2in;
-          border-left: 2px solid ${accent};
+          border: 1px solid ${accentBorder};
+          border-radius: 3px;
           background-color: transparent;
           page-break-inside: avoid;
         }
@@ -727,7 +730,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         .journal-response {
           margin: 0.06in 0 0.1in 0;
           padding: 0.08in 0.15in;
-          border-left: 2px solid ${accent};
+          border: 1px solid ${accentBorder};
           background-color: ${accentBg};
           border-radius: 2px;
         }
@@ -774,7 +777,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           color: #555;
           margin-bottom: 0.12in;
           padding: 0.1in 0.15in;
-          border-left: 2px solid ${accent};
+          border: 1px solid ${accentBorder};
           background-color: ${accentBg};
           border-radius: 2px;
         }
@@ -867,8 +870,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         }
 
         .page-footer .footer-brand {
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
+          letter-spacing: 0.03em;
         }
 
         .page-footer .footer-page {
@@ -936,8 +938,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
           font-family: Helvetica, Arial, sans-serif;
           font-size: 8pt;
           font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
+          letter-spacing: 0.03em;
           color: ${MUTED_COLOR};
           margin-bottom: 0.12in;
           padding-bottom: 0.06in;
@@ -1000,7 +1001,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
 
           .scripture {
             background-color: ${accentBg} !important;
-            border-left-color: ${accent} !important;
+            border-color: ${accentBorder} !important;
           }
 
           .quotable p {
@@ -1031,7 +1032,7 @@ function generateDevotionalHTML(devotional: Devotional, options?: PDFExportOptio
         <div class="cover-bottom">
           <p class="prepared-for">Prepared for</p>
           <p class="prepared-name">${escapeHTML(devotional.userContext.name)}</p>
-          <img class="brand-logo" src="data:image/png;base64,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" alt="Unfold" />
+          <img class="brand-logo" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAL4AAADGCAYAAABsBToxAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAvgSURBVHgB7d2JcdtGFAbgR0j0SLY1w1QQuAIrFYSqIEkFoSuwXEGkChxXYKoC0xWIrsByBYI7YEbHaCQeeY9e2BDMA8cusMf/zTDUYcWy9O/y7YFF59mzZwv6YZJ7iKTT6XxdLBYTfr6Q55ubmwsCsEiPTafTQ87nIef01/l8HvNzjz8Vp39EPZY6ueCXIeGXxvBJGgT/RQkaBDRJwv7w8DDgN//gxyFlgr1NneCvIq8SEv6P0hiur6/HBKCZBP7+/v41Z+yYSoQ9S3fw8yb80jPmb/Bjt9sdTyaThAAq0hH4lOng58mrwRk3ghEaAZTx/PnzPnei7+lHzV5L08HPkkbwDq8EsM3Tp0//4V7+hDRqM/jfcUse7ezsnF1dXY0IQFGD17f85oA0syL4GQk/TvEqACr05/RttkY724KfSvgx5gZwigYQJs6l1PMDMiQiO8X8GHCLv5QfADf+mCAYUtOTwdALW3v8VYZ4BfAf53HAT+/JMJeCLxIeCA9vb29PCbyzt7cX8ySH1PUxGWZrqbOO7L844cZ6qXoG8AiHXkqcmBrgWo+fh/LHE6q3v6SGuNbj58kA+PP+/v4xgdNUb98Y13v8rIR7/yP0/u5purcXrvf4WTF6fzdx6P+khvkUfNGLougt5v7dwhMWf1PDfCp18lD6OKCNMkf41uNnSelzidLHbtw5GdmLs43PwV+S0kctgYOFeEGyTy3YpQDIoheH//DJkyevuPSZEKykLvaI+c1eU5eO8t/3klrgc42/Cur+FVSdLftj+rlPGf95cWP7LCcjUMO8L3VypO4/x4zPD5n9Mf0Vnzb+8+LQ17p2tqrQgi8QfqXgprB4Op2anCBoJfihlTpZUusfhXoWEP/epbyQ0BcJnhwi9gsZ0Fb+QuzxU/ILP1cBCErJ0BO11CubFHLwxTL8IZU9Ut7w0wfyMMxlhB580Qul5m/yQg/bIfjfeD/gRegfQ/B/kPB/kGMtyDPyb0LoH0PwHzuU8JNn7u/vtR295wsE/2d9nvV4S55Qx+81vt/ddgj+asc+7Orkf8Nr3WdO+iLkBaxtnF7gUoPZz6Rp2pJ/Dh0yAAtY9pHAODnYzQxmg56r3wTB3yxWp/U6RX3PMcFaCP52A5fqfXXQ1oBgIwS/gCiK/nFhcUttR8DVZgUg+MXItgbjB5nWpS4miQm2QvCL69tc8qgSp09QCIJfgip5rJspQYlTHoJfTk8t/1ulyVOGfYHglyTL/3IaAVni4OBAtiMMCEpB8CtYLBbWzO3P53Nv9hU1CcGv5tCGga4a0MYEpSH4FVgy0MWAtiIEv7qe4WM3NlLHIsYElSD4NXCt/7qNXl+mL3mQPSCoDMGvp5Ven8ssOU8+JqgMwa+pjV4fvX19CH59jfb6mMnRA8HXgHv9Jm9lg5kcDRB8PeImVnPR2+uD4GvCff6TfTEjd8kzFYKvj59kxSpqB2afQAsEXyMe5A7IkKbv/O07BF8jmdokc/oE2iD4evVMDHLV/zMm0AbB10/7cX0NT5cGAcHXzFBI+wRaIfj6aS13UOaYgeCboa3cQZljBoJvAIf1D9KnT6Adgm9GrGMxS92dMCbQDsE35OHhQUe5E9ytSJuC4BvC5U6faup0OjpLJshA8A3h0P5ONeloPLAagm9Or06dr+p73NjBEATfoNls1qfqUN8bhOAbxKVK5fByqYTgG8TBr1zn89e+JDAGwTcrpurQ4xuE4JtVaYCLga15CL5hPMAt3XNzfY/QG4bgGzafz2Mqqc6gGIpB8A3j3jumkqp8DZSD4BtWpcdnvxIYheAbxr136RBzqYMa3zAE37w... [truncated]
         </div>
       </div>
 

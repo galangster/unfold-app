@@ -520,8 +520,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontFamily: FontFamily.uiSemiBold,
     fontSize: FontSize.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
     paddingHorizontal: Spacing['4'],
     paddingTop: Spacing['4'],
     paddingBottom: Spacing['2'],
