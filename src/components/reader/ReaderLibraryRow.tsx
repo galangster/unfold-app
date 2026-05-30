@@ -31,6 +31,7 @@ export function ReaderLibraryRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? `${label}${count != null ? `, ${count} saved` : ''}`}
+      accessibilityState={{ disabled: false }}
     >
       <BookmarkSimpleIcon size={18} color={colors.text} weight="regular" />
       <Text style={[styles.label, { color: colors.text }]}>{label}</Text>

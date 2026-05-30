@@ -445,7 +445,10 @@ export function CompanionDrawer({
           },
           drawerStyle,
         ]}
+        pointerEvents={isOpen ? 'auto' : 'none'}
         accessibilityViewIsModal={isOpen}
+        accessibilityElementsHidden={!isOpen}
+        importantForAccessibility={isOpen ? 'yes' : 'no-hide-descendants'}
       >
         {/* New Chat button */}
         <TouchableOpacity

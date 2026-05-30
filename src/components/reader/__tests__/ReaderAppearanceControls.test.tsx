@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 import { ReaderAppearanceControls } from '../ReaderAppearanceControls';
 import { ReaderLibraryRow } from '../ReaderLibraryRow';
 
@@ -93,11 +93,22 @@ describe('ReaderAppearanceControls', () => {
     const systemButton = tree.root.findByProps({ accessibilityLabel: 'Use system theme' });
     expect(systemButton.props.accessibilityState).toEqual({ selected: true });
 
+    const resetButton = tree.root.findByProps({ accessibilityLabel: 'Reset reader brightness to system level' });
+    expect(resetButton.type).toBe(TouchableOpacity);
+    expect(resetButton.props.accessibilityRole).toBe('button');
+    expect(resetButton.props.accessibilityState).toEqual({ disabled: false });
+    expect(StyleSheet.flatten(resetButton.props.style)).toEqual(expect.objectContaining({ minHeight: 44 }));
+
+    const brightnessSlider = tree.root.findByProps({ testID: 'reader-brightness-slider' });
+    expect(brightnessSlider.props.accessibilityRole).toBe('adjustable');
+    expect(brightnessSlider.props.accessibilityLabel).toBe('Reader brightness');
+    expect(brightnessSlider.props.accessibilityState).toEqual({ disabled: false });
+
     act(() => {
       tree.root.findByProps({ accessibilityLabel: 'Use dark theme' }).props.onPress();
       tree.root.findByProps({ accessibilityLabel: 'Use large text size' }).props.onPress();
-      tree.root.findByProps({ testID: 'reader-brightness-slider' }).props.onValueChange(0.7);
-      tree.root.findByProps({ accessibilityLabel: 'Reset reader brightness to system level' }).props.onPress();
+      brightnessSlider.props.onValueChange(0.7);
+      resetButton.props.onPress();
     });
 
     expect(onThemeModeChange).toHaveBeenCalledWith('dark');
@@ -180,7 +191,8 @@ describe('ReaderLibraryRow', () => {
     expect(row.type).toBe(TouchableOpacity);
     expect(row.props.accessibilityRole).toBe('button');
     expect(row.props.accessibilityLabel).toBe('Open 3 saved highlights and notes');
-    expect(row.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ minHeight: 44 })]));
+    expect(row.props.accessibilityState).toEqual({ disabled: false });
+    expect(StyleSheet.flatten(row.props.style)).toEqual(expect.objectContaining({ minHeight: 44 }));
     expect(JSON.stringify(tree.toJSON())).toContain('Saved highlights & notes');
     expect(JSON.stringify(tree.toJSON())).toContain('3');
 

@@ -141,6 +141,7 @@ export function ReaderAppearanceControls({
               activeOpacity={0.72}
               accessibilityRole="button"
               accessibilityLabel="Reset reader brightness to system level"
+              accessibilityState={{ disabled: false }}
             >
               <Text style={[styles.resetText, { color: colors.accent }]}>Reset</Text>
             </TouchableOpacity>
@@ -158,7 +159,9 @@ export function ReaderAppearanceControls({
             maximumTrackTintColor={colors.borderStrong}
             thumbTintColor={colors.text}
             onValueChange={onBrightnessChange}
+            accessibilityRole="adjustable"
             accessibilityLabel="Reader brightness"
+            accessibilityState={{ disabled: false }}
           />
         ) : (
           <Text style={[styles.helperText, { color: colors.textMuted }]}>Brightness is not available on this device.</Text>
