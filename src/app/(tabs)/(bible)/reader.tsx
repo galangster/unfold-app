@@ -1213,6 +1213,8 @@ export default function BibleReaderScreen() {
         onClose={() => setShowSettings(false)}
         tabBarHeight={tabBarHeight}
         savedVersesCount={bibleHighlights.length}
+        isPremium={isPremium}
+        onLockedFontPress={() => setShowHighlightPremiumSheet(true)}
         onOpenSavedVerses={() => {
           setShowSettings(false);
           router.push({

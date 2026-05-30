@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import Animated, { FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withTiming, Easing, useReducedMotion } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
-import { BookmarkSimpleIcon, CaretRightIcon, MinusIcon, PlusIcon, XIcon } from 'phosphor-react-native';
+import { Text, TouchableOpacity, StyleSheet, View } from 'react-native';
+import { ReaderBottomSheet } from '@/components/reader/ReaderBottomSheet';
+import { ReaderAppearanceControls } from '@/components/reader/ReaderAppearanceControls';
+import { ReaderLibraryRow } from '@/components/reader/ReaderLibraryRow';
+import { useReaderBrightness } from '@/hooks/useReaderBrightness';
 import { FontFamily, FontSize } from '@/constants/fonts';
-import { useTheme } from '@/lib/theme';
 import { Radius } from '@/constants/radius';
 import { Spacing } from '@/constants/spacing';
-import { Duration, Ease } from '@/constants/animations';
+import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
-import type { BibleReaderSettings } from '@/lib/store';
+import type { BibleReaderSettings, ReadingFontId, ThemeMode } from '@/lib/store';
 
 interface ReadingSettingsSheetProps {
   visible: boolean;
@@ -17,6 +16,8 @@ interface ReadingSettingsSheetProps {
   tabBarHeight: number;
   onOpenSavedVerses?: () => void;
   savedVersesCount?: number;
+  isPremium?: boolean;
+  onLockedFontPress?: () => void;
 }
 
 const LINE_HEIGHT_OPTIONS: Array<{ label: string; value: number }> = [
@@ -27,402 +28,183 @@ const LINE_HEIGHT_OPTIONS: Array<{ label: string; value: number }> = [
 
 const TRANSLATION_OPTIONS: Array<BibleReaderSettings['translation']> = ['BSB', 'KJV'];
 
-const MIN_FONT_SIZE = 14;
-const MAX_FONT_SIZE = 28;
-
-const EASE_OUT_QUART = Easing.bezier(0.165, 0.84, 0.44, 1);
-
-/* ─────────────────────────────────────────────────────────
- * ANIMATION STORYBOARD — Reading Settings Sheet
- *
- *    0ms   overlay fades in (200ms)
- *    0ms   card fades in + slides up 12px (250ms ease-out-quart)
- *  250ms   settled
- *
- * Exit:
- *    0ms   card fades out (180ms)
- *    0ms   overlay fades out (150ms)
- * ───────────────────────────────────────────────────────── */
-
-const ANIM = {
-  sheetEnter:   250,   // card fade + slide up
-  sheetExit:    180,   // card fade out
-  overlayEnter: 200,   // backdrop fade in
-  overlayExit:  150,   // backdrop fade out
-};
-
-export function ReadingSettingsSheet({ visible, onClose, tabBarHeight, onOpenSavedVerses, savedVersesCount }: ReadingSettingsSheetProps) {
+export function ReadingSettingsSheet({
+  visible,
+  onClose,
+  tabBarHeight,
+  onOpenSavedVerses,
+  savedVersesCount,
+  isPremium = true,
+  onLockedFontPress = () => {},
+}: ReadingSettingsSheetProps) {
   const { colors, isDark } = useTheme();
-  const reducedMotion = useReducedMotion();
-  const settings = useUnfoldStore((s) => s.bibleReaderSettings);
-  const updateSettings = useUnfoldStore((s) => s.updateBibleReaderSettings);
-  const [minusPressed, setMinusPressed] = useState(false);
-  const [plusPressed, setPlusPressed] = useState(false);
+  const settings = useUnfoldStore((state) => state.bibleReaderSettings);
+  const themeMode = useUnfoldStore((state) => state.user?.themeMode ?? 'dark');
+  const readingFont = useUnfoldStore((state) => state.user?.readingFont ?? 'source-serif');
+  const updateSettings = useUnfoldStore((state) => state.updateBibleReaderSettings);
+  const updateUser = useUnfoldStore((state) => state.updateUser);
+  const readerBrightness = useReaderBrightness();
 
-  // Slide-up animation for the settings card
-  const sheetSlideY = useSharedValue(12);
-  useEffect(() => {
-    if (visible) {
-      sheetSlideY.value = 12;
-      sheetSlideY.value = withTiming(0, { duration: ANIM.sheetEnter, easing: EASE_OUT_QUART });
-    }
-  }, [visible]);
-  const sheetSlideStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetSlideY.value }],
-  }));
-
-  if (!visible) return null;
-
-  const sectionBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
-  const controlBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
-  const pressedBg = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.15)';
-  const selectedBg = isDark ? 'rgba(255,255,255,0.20)' : 'rgba(0,0,0,0.12)';
+  const blockBackground = isDark ? 'rgba(245, 240, 235, 0.055)' : 'rgba(28, 23, 16, 0.045)';
+  const selectedBackground = isDark ? 'rgba(245, 240, 235, 0.16)' : 'rgba(28, 23, 16, 0.10)';
 
   return (
-    <>
-      {/* Dark overlay */}
-      <Animated.View
-        entering={reducedMotion ? undefined : FadeIn.duration(ANIM.overlayEnter).easing(Ease.out)}
-        exiting={reducedMotion ? undefined : FadeOut.duration(ANIM.overlayExit).easing(Ease.out)}
-        style={styles.overlay}
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={onClose}
-          accessibilityLabel="Close settings"
-          accessibilityRole="button"
+    <ReaderBottomSheet
+      visible={visible}
+      title="Reader preferences"
+      onClose={onClose}
+      bottomInset={tabBarHeight + 16}
+      maxHeightRatio={0.72}
+      testID="bible-reader-preferences-sheet"
+      accessibilityLabel="Bible reader preferences"
+    >
+      <View style={styles.content}>
+        <ReaderAppearanceControls
+          themeMode={themeMode}
+          onThemeModeChange={(mode: ThemeMode) => updateUser({ themeMode: mode })}
+          brightness={readerBrightness.brightness}
+          brightnessAvailable={readerBrightness.brightnessAvailable}
+          onBrightnessChange={readerBrightness.setBrightness}
+          onResetBrightness={readerBrightness.resetBrightness}
+          bibleFontSize={settings.fontSize}
+          onBibleFontSizeChange={(fontSize) => updateSettings({ fontSize })}
+          readingFont={readingFont}
+          onReadingFontChange={(font: ReadingFontId) => updateUser({ readingFont: font })}
+          isPremium={isPremium}
+          onLockedFontPress={onLockedFontPress}
         />
-      </Animated.View>
 
-      {/* Settings card */}
-      <Animated.View
-        entering={reducedMotion ? undefined : FadeIn.duration(ANIM.sheetEnter).easing(Ease.out)}
-        exiting={reducedMotion ? undefined : FadeOut.duration(ANIM.sheetExit).easing(Ease.out)}
-        style={[
-          styles.container,
-          {
-            backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-            shadowColor: '#000',
-            bottom: tabBarHeight + 16,
-          },
-          sheetSlideStyle,
-        ]}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: colors.text, fontFamily: FontFamily.uiMedium }]}>
-            Reading Settings
-          </Text>
-          <TouchableOpacity
-            onPress={onClose}
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-            style={[styles.closeButton, { backgroundColor: controlBg }]}
-            hitSlop={8}
-          >
-            <XIcon size={14} color={colors.textSubtle} weight="bold" />
-          </TouchableOpacity>
-        </View>
+        <View style={[styles.bibleBlock, { backgroundColor: blockBackground, borderColor: colors.border }]}>
+          <Text style={[styles.groupTitle, { color: colors.text }]}>Bible</Text>
 
-        {/* Font Size */}
-        <View style={[styles.section, { borderBottomColor: sectionBorder }]}>
-          <View style={styles.sectionRow}>
-            <Text style={[styles.sectionLabel, { color: colors.text }]}>Aa</Text>
-            <View style={styles.fontSizeControls}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (settings.fontSize > MIN_FONT_SIZE) {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateSettings({ fontSize: settings.fontSize - 1 });
-                  }
-                }}
-                onPressIn={() => setMinusPressed(true)}
-                onPressOut={() => setMinusPressed(false)}
-                disabled={settings.fontSize <= MIN_FONT_SIZE}
-                style={[
-                  styles.fontSizeButton,
-                  { backgroundColor: minusPressed && settings.fontSize > MIN_FONT_SIZE ? pressedBg : controlBg },
-                  settings.fontSize <= MIN_FONT_SIZE && styles.disabledControl,
-                ]}
-                activeOpacity={1}
-                accessibilityLabel="Decrease font size"
-                accessibilityRole="button"
-                hitSlop={4}
-              >
-                <MinusIcon
-                  size={16}
-                  color={settings.fontSize <= MIN_FONT_SIZE ? colors.textHint : colors.text}
-                  weight={minusPressed && settings.fontSize > MIN_FONT_SIZE ? 'bold' : 'light'}
-                />
-              </TouchableOpacity>
+          <View style={styles.controlGroup}>
+            <Text style={[styles.label, { color: colors.textSubtle }]}>Line height</Text>
+            <View style={styles.segmentRow}>
+              {LINE_HEIGHT_OPTIONS.map((option) => {
+                const selected = settings.lineHeightMultiplier === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.segmentButton,
+                      {
+                        backgroundColor: selected ? selectedBackground : 'transparent',
+                        borderColor: selected ? colors.borderStrong : colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.72}
+                    onPress={() => updateSettings({ lineHeightMultiplier: option.value })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${option.label} line height`}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.segmentText, { color: selected ? colors.text : colors.textMuted }]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
 
-              <Text style={[styles.fontSizeValue, { color: colors.text }]}>
-                {settings.fontSize}
-              </Text>
-
-              <TouchableOpacity
-                onPress={() => {
-                  if (settings.fontSize < MAX_FONT_SIZE) {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateSettings({ fontSize: settings.fontSize + 1 });
-                  }
-                }}
-                onPressIn={() => setPlusPressed(true)}
-                onPressOut={() => setPlusPressed(false)}
-                disabled={settings.fontSize >= MAX_FONT_SIZE}
-                style={[
-                  styles.fontSizeButton,
-                  { backgroundColor: plusPressed && settings.fontSize < MAX_FONT_SIZE ? pressedBg : controlBg },
-                  settings.fontSize >= MAX_FONT_SIZE && styles.disabledControl,
-                ]}
-                activeOpacity={1}
-                accessibilityLabel="Increase font size"
-                accessibilityRole="button"
-                hitSlop={4}
-              >
-                <PlusIcon
-                  size={16}
-                  color={settings.fontSize >= MAX_FONT_SIZE ? colors.textHint : colors.text}
-                  weight={plusPressed && settings.fontSize < MAX_FONT_SIZE ? 'bold' : 'light'}
-                />
-              </TouchableOpacity>
+          <View style={styles.controlGroup}>
+            <Text style={[styles.label, { color: colors.textSubtle }]}>Translation</Text>
+            <View style={styles.segmentRowCompact}>
+              {TRANSLATION_OPTIONS.map((translation) => {
+                const selected = settings.translation === translation;
+                return (
+                  <TouchableOpacity
+                    key={translation}
+                    style={[
+                      styles.translationButton,
+                      {
+                        backgroundColor: selected ? selectedBackground : 'transparent',
+                        borderColor: selected ? colors.borderStrong : colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.72}
+                    onPress={() => updateSettings({ translation })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${translation} translation`}
+                    accessibilityState={{ selected }}
+                  >
+                    <Text style={[styles.translationText, { color: selected ? colors.text : colors.textMuted }]}>
+                      {translation}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         </View>
 
-        {/* Line Height */}
-        <View style={[styles.section, { borderBottomColor: sectionBorder }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Line Height</Text>
-          <View style={styles.segmentedRow}>
-            {LINE_HEIGHT_OPTIONS.map((opt) => {
-              const isActive = settings.lineHeightMultiplier === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateSettings({ lineHeightMultiplier: opt.value });
-                  }}
-                  style={[
-                    styles.segmentButton,
-                    { backgroundColor: isActive ? selectedBg : controlBg },
-                  ]}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`${opt.label} line height`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={[
-                    styles.segmentLabel,
-                    { color: isActive ? colors.text : colors.textHint },
-                    isActive && { fontFamily: FontFamily.uiMedium },
-                  ]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Translation */}
-        <View style={[onOpenSavedVerses ? styles.section : styles.sectionLast, onOpenSavedVerses && { borderBottomColor: sectionBorder }]}>
-          <Text style={[styles.sectionTitle, { color: colors.textSubtle }]}>Translation</Text>
-          <View style={styles.segmentedRow}>
-            {TRANSLATION_OPTIONS.map((t) => {
-              const isActive = settings.translation === t;
-              return (
-                <TouchableOpacity
-                  key={t}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    updateSettings({ translation: t });
-                  }}
-                  style={[
-                    styles.translationButton,
-                    { backgroundColor: isActive ? selectedBg : controlBg },
-                  ]}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`${t} translation`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                >
-                  <Text style={[
-                    styles.translationLabel,
-                    { color: isActive ? colors.text : colors.textHint },
-                    isActive && { fontFamily: FontFamily.uiMedium },
-                  ]}>
-                    {t}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Library */}
-        {onOpenSavedVerses && (
-          <View style={styles.sectionLast}>
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onOpenSavedVerses();
-              }}
-              style={[styles.libraryRow, { backgroundColor: controlBg }]}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`Saved verses${savedVersesCount != null ? `, ${savedVersesCount} items` : ''}`}
-            >
-              <BookmarkSimpleIcon size={18} color={colors.text} weight="regular" />
-              <Text style={[styles.libraryLabel, { color: colors.text }]}>Saved verses</Text>
-              {savedVersesCount != null && savedVersesCount > 0 && (
-                <Text style={[styles.libraryCount, { color: colors.textSubtle }]}>{savedVersesCount}</Text>
-              )}
-              <CaretRightIcon size={14} color={colors.textSubtle} weight="regular" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </Animated.View>
-    </>
+        {onOpenSavedVerses ? (
+          <ReaderLibraryRow
+            label="Saved Bible highlights"
+            count={savedVersesCount}
+            onPress={onOpenSavedVerses}
+            accessibilityLabel={`Open saved Bible highlights${savedVersesCount != null && savedVersesCount > 0 ? `, ${savedVersesCount} saved` : ''}`}
+          />
+        ) : null}
+      </View>
+    </ReaderBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    zIndex: 99,
+  content: {
+    gap: Spacing['4'],
   },
-  container: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 100,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    borderBottomLeftRadius: Radius.xl,
-    borderBottomRightRadius: Radius.xl,
-    marginHorizontal: 8,
-    paddingHorizontal: Spacing['6'],
-    paddingTop: Spacing['5'],
-    paddingBottom: Spacing['5'],
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 12,
+  bibleBlock: {
+    gap: Spacing['4'],
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.lg,
+    padding: Spacing['3.5'],
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing['4'],
-  },
-  headerTitle: {
-    fontSize: FontSize.base,
-  },
-  closeButton: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Sections
-  section: {
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  sectionLast: {
-    paddingVertical: 14,
-  },
-  sectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionLabel: {
-    fontFamily: FontFamily.uiSemiBold,
-    fontSize: FontSize.lg,
-    letterSpacing: 0.5,
-  },
-  sectionTitle: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.xs,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-
-  // Font size controls
-  fontSizeControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  fontSizeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fontSizeValue: {
+  groupTitle: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.base,
-    minWidth: 28,
-    textAlign: 'center',
   },
-  disabledControl: {
-    opacity: 0.35,
+  controlGroup: {
+    gap: Spacing['3'],
   },
-
-  // Segmented controls
-  segmentedRow: {
+  label: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: Spacing['2'],
+  },
+  segmentRowCompact: {
     flexDirection: 'row',
     gap: Spacing['2'],
   },
   segmentButton: {
+    minHeight: 44,
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.card,
+    paddingHorizontal: Spacing['2'],
   },
-  segmentLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: 13,
+  segmentText: {
+    fontFamily: FontFamily.uiMedium,
+    fontSize: FontSize.sm,
   },
-
-  // Translation
   translationButton: {
-    paddingHorizontal: Spacing['6'],
-    paddingVertical: 10,
-    borderRadius: 10,
+    minHeight: 44,
+    minWidth: 78,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.card,
+    paddingHorizontal: Spacing['4'],
   },
-  translationLabel: {
-    fontFamily: FontFamily.ui,
-    fontSize: FontSize.sm,
-    letterSpacing: 0.5,
-  },
-
-  // Library row
-  libraryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
-  },
-  libraryLabel: {
-    flex: 1,
+  translationText: {
     fontFamily: FontFamily.uiMedium,
     fontSize: FontSize.sm,
-  },
-  libraryCount: {
-    fontFamily: FontFamily.uiMedium,
-    fontSize: FontSize.sm,
+    letterSpacing: 0.2,
   },
 });
