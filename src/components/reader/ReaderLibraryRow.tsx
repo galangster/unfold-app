@@ -36,7 +36,7 @@ export function ReaderLibraryRow({
       <BookmarkSimpleIcon size={18} color={colors.text} weight="regular" />
       <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
       {count != null && count > 0 ? (
-        <View style={[styles.countPill, { borderColor: colors.borderStrong }]}> 
+        <View style={[styles.countPill, { borderColor: colors.borderStrong }]}>
           <Text style={[styles.countText, { color: colors.textMuted }]}>{count}</Text>
         </View>
       ) : null}
