@@ -96,6 +96,49 @@ describe('pulled devotional content application', () => {
     expect(updateDevotionals).not.toHaveBeenCalled();
   });
 
+  it('does not apply pulled days beyond the server-owned series arc boundary', () => {
+    const updateDevotionalDays = jest.fn();
+    const updateDevotionals = jest.fn();
+    const dayFifteen: DevotionalDay = {
+      ...dayTwo,
+      id: 'day-devotional-1-15',
+      dayNumber: 15,
+      title: 'Over Boundary Day',
+    };
+
+    applyPulledDevotionalContent({
+      devotionalId: 'devotional-1',
+      pulled: pulledContent({
+        days: [dayFifteen],
+        devotional: {
+          id: 'devotional-1',
+          title: 'The Names That Hold You',
+          totalDays: 15,
+          currentDay: 16,
+          seriesArc: {
+            totalDaysPlanned: 14,
+            dayHints: Array.from({ length: 14 }, (_unused, index) => ({
+              dayNumber: index + 1,
+              themeHint: `Theme ${index + 1}`,
+              scriptureRegion: 'Psalms',
+              narrativeRole: 'deepening' as const,
+            })),
+            overarchingTheme: 'Boundary',
+            narrativeShape: 'Arc',
+            isOpenEnded: false,
+            createdAt: '2026-04-24T00:00:00.000Z',
+          },
+          updatedAt: '2026-04-25T13:29:48.574Z',
+        } as PulledDevotionalContent['devotional'] & { seriesArc: Devotional['seriesArc'] },
+      }),
+      updateDevotionalDays,
+      updateDevotionals,
+    });
+
+    expect(updateDevotionalDays).not.toHaveBeenCalled();
+    expect(updateDevotionals).toHaveBeenCalledTimes(1);
+  });
+
   it('creates a local series shell when pull returns server-generated content for a missing devotional', () => {
     const result = applyPulledDevotionalContentToDevotionals(
       [],

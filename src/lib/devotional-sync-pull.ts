@@ -1,5 +1,5 @@
 import { PRIMARY_BACKEND_URL, getAuthHeaders } from './api-config';
-import type { DevotionalDay } from './store';
+import type { Devotional, DevotionalDay } from './store';
 import type { SyncPullResponse, SyncPulledRecord } from './sync-types';
 
 type PulledDevotionalMetadata = {
@@ -7,6 +7,7 @@ type PulledDevotionalMetadata = {
   title?: string;
   totalDays?: number;
   currentDay?: number;
+  seriesArc?: Devotional['seriesArc'];
   updatedAt?: string;
 };
 
@@ -105,11 +106,13 @@ function mapPulledDevotionalDay(record: SyncPulledRecord): DevotionalDay | null 
 function mapPulledDevotionalMetadata(record: SyncPulledRecord): PulledDevotionalMetadata | null {
   if (record.deleted) return null;
   const data = asRecord(record.data);
+  const seriesArc = asRecord(data.seriesArc);
   return {
     id: record.id,
     title: asString(data.title),
     totalDays: asNumber(data.totalDays),
     currentDay: asNumber(data.currentDay),
+    seriesArc: seriesArc as unknown as Devotional['seriesArc'] | undefined,
     updatedAt: record.updatedAt,
   };
 }

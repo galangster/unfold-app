@@ -141,6 +141,32 @@ describe('home devotional state helpers', () => {
     expect(shouldPrepareCurrentDevotionalDay(devotional({ generationMode: 'batch' }), today)).toBe(false);
   });
 
+  it('does not prepare a day beyond the server-owned series arc boundary', () => {
+    expect(
+      shouldPrepareCurrentDevotionalDay(
+        devotional({
+          totalDays: 15,
+          currentDay: 15,
+          seriesStartDate: new Date(2026, 3, 10, 8, 0, 0).toISOString(),
+          seriesArc: {
+            totalDaysPlanned: 14,
+            dayHints: Array.from({ length: 14 }, (_unused, index) => ({
+              dayNumber: index + 1,
+              themeHint: `Theme ${index + 1}`,
+              scriptureRegion: 'Psalms',
+              narrativeRole: 'deepening' as const,
+            })),
+            overarchingTheme: 'Boundary',
+            narrativeShape: 'Arc',
+            isOpenEnded: false,
+            createdAt: '2026-04-10T08:00:00.000Z',
+          },
+        }),
+        today,
+      ),
+    ).toBe(false);
+  });
+
   it('only auto-prepares missing progressive days after premium is confirmed granted', () => {
     const missingEligibleDay = devotional({
       currentDay: 2,

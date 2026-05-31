@@ -155,7 +155,13 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     };
   }
 
-  // 3. Content is still being generated or no day data available.
+  // 3. Entire series finished. This must win over missing-data/preparing
+  // states because a completed progressive series may have currentDay = totalDays + 1.
+  if (isJourneyComplete) {
+    return { type: 'journey-complete', seriesTitle, onCreateNew };
+  }
+
+  // 4. Content is still being generated or no day data available.
   // Never show "preparing" if the user has already read today — the completed
   // day should remain visible while the next day generates in the background.
   if (!hasReadToday && (isPreparing || !currentDayData)) {
@@ -180,12 +186,7 @@ export function computeDevotionalState(input: ComputeInput): DevotionalCardState
     };
   }
 
-  // 3. Entire series finished
-  if (isJourneyComplete) {
-    return { type: 'journey-complete', seriesTitle, onCreateNew };
-  }
-
-  // 4. Today's reading done but series not complete — locked until tomorrow.
+  // 5. Today's reading done but series not complete — locked until tomorrow.
   // If the next current day is calendar-eligible today (for example after
   // catching up an overdue day), let it continue into reveal/unread states.
   if (hasReadToday && !currentDayData.isRead && dayLabel === 'Tomorrow') {

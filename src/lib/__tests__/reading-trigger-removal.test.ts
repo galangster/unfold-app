@@ -60,6 +60,12 @@ describe('reading.tsx server-side generation migration', () => {
     expect(readingSource).toContain('advanceDay(currentDevotionalId);');
   });
 
+  it('does not use mutable user devotionalLength to extend a server-owned series completion boundary', () => {
+    expect(readingSource).not.toContain('Math.max(totalDays, user?.devotionalLength ?? totalDays)');
+    expect(readingSource).not.toContain('Math.max(currentDevotional.totalDays, user.devotionalLength)');
+    expect(readingSource).not.toContain('Math.max(devoTotalDays, user.devotionalLength)');
+  });
+
   it('replaces local-only days with recovered canonical job results', () => {
     expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recovered.devotionalDay], currentDevotional.title)");
     expect(readingSource).toContain("updateDevotionalDays(currentDevotional.id, [recoveredFromExisting.devotionalDay], currentDevotional.title)");

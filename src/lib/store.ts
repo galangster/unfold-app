@@ -8,6 +8,12 @@ import { mmkvStorage } from './mmkv-storage';
 import { migrateUnfoldStore } from './store-migrations';
 import { normalizeDevotionalIdentity, normalizeGeneratedDayIdentity, normalizeGeneratedDaysIdentity } from './generation-reconciliation';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
+import {
+  clampCurrentDayToSeriesBoundary,
+  filterDaysWithinSeriesBoundary,
+  getSeriesArcTotalDays,
+  getServerOwnedSeriesTotalDays,
+} from './devotional-series-boundary';
 import { newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
@@ -875,12 +881,19 @@ export const useUnfoldStore = create<UnfoldState>()(
               if (d.id !== devotionalId) return d;
 
               const normalizedIncomingDays = normalizeGeneratedDaysIdentity(devotionalId, days);
+              const seriesArcTotalDays = getSeriesArcTotalDays(d);
+              const incomingDaysWithinBoundary = seriesArcTotalDays > 0
+                ? filterDaysWithinSeriesBoundary(normalizedIncomingDays, d)
+                : normalizedIncomingDays;
 
               // Merge incoming days with existing days by dayNumber.
               // Preserve read status/readAt from existing entries so late generation updates
               // never reset a day the user already completed.
-              const existingByDay = new Map(d.days.map((day) => [day.dayNumber, day]));
-              const incomingByDay = new Map(normalizedIncomingDays.map((day) => [day.dayNumber, day]));
+              const existingDaysWithinBoundary = seriesArcTotalDays > 0
+                ? filterDaysWithinSeriesBoundary(d.days, d)
+                : d.days;
+              const existingByDay = new Map(existingDaysWithinBoundary.map((day) => [day.dayNumber, day]));
+              const incomingByDay = new Map(incomingDaysWithinBoundary.map((day) => [day.dayNumber, day]));
               const mergedByDay = new Map<number, DevotionalDay>();
 
               for (const [dayNumber, existingDay] of existingByDay.entries()) {
@@ -913,12 +926,19 @@ export const useUnfoldStore = create<UnfoldState>()(
               }
 
               const mergedDays = [...mergedByDay.values()].sort((a, b) => a.dayNumber - b.dayNumber);
+              const nextTotalDays = seriesArcTotalDays > 0
+                ? seriesArcTotalDays
+                : Math.max(d.totalDays, mergedDays.length);
 
               return {
                 ...d,
                 days: mergedDays,
-                // Only increase totalDays, never shrink it - partial batches shouldn't lower the target
-                totalDays: Math.max(d.totalDays, mergedDays.length),
+                // Server-owned progressive arcs define the hard series length.
+                totalDays: nextTotalDays,
+                currentDay: clampCurrentDayToSeriesBoundary(d.currentDay, {
+                  totalDays: nextTotalDays,
+                  seriesArc: d.seriesArc,
+                }),
                 ...(title ? { title } : {}),
                 updatedAt: now,
               };
@@ -974,10 +994,8 @@ export const useUnfoldStore = create<UnfoldState>()(
         set((state) => ({
           devotionals: state.devotionals.map((d) => {
             if (d.id !== devotionalId) return d;
-            // Use the user's devotionalLength as fallback if totalDays was corrupted
-            const userLength = state.user?.devotionalLength ?? d.totalDays;
-            const effectiveTotal = Math.max(d.totalDays, userLength);
-            return d.currentDay < effectiveTotal
+            const effectiveTotal = getServerOwnedSeriesTotalDays(d);
+            return effectiveTotal > 0 && d.currentDay < effectiveTotal
               ? { ...d, currentDay: d.currentDay + 1, updatedAt: new Date().toISOString() }
               : d;
           }),
@@ -1584,6 +1602,8 @@ export const useUnfoldStore = create<UnfoldState>()(
           return {
             devotionals: state.devotionals.map((d) => {
               if (d.id !== devotionalId) return d;
+              const seriesTotalDays = getServerOwnedSeriesTotalDays(d);
+              if (seriesTotalDays > 0 && normalizedDay.dayNumber > seriesTotalDays) return d;
               // Don't duplicate if day already exists
               if (d.days.some((existing) => existing.dayNumber === normalizedDay.dayNumber)) return d;
               const updatedDays = [...d.days, { ...normalizedDay, updatedAt: now }].sort((a, b) => a.dayNumber - b.dayNumber);

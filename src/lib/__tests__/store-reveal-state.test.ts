@@ -116,4 +116,74 @@ describe('store reveal state', () => {
       isRevealed: true,
     });
   });
+
+  it('does not stretch a progressive series or store over-boundary days past the server-owned arc length', () => {
+    useUnfoldStore.getState().addDevotional(devotional({
+      generationMode: 'progressive',
+      totalDays: 14,
+      currentDay: 14,
+      days: Array.from({ length: 14 }, (_unused, index) => day({
+        id: `day-devotional-1-${index + 1}`,
+        devotionalId: 'devotional-1',
+        dayNumber: index + 1,
+        isRead: true,
+        isRevealed: true,
+      })),
+      seriesArc: {
+        totalDaysPlanned: 14,
+        dayHints: Array.from({ length: 14 }, (_unused, index) => ({
+          dayNumber: index + 1,
+          themeHint: `Theme ${index + 1}`,
+          scriptureRegion: 'Psalms',
+          narrativeRole: 'deepening' as const,
+        })),
+        overarchingTheme: 'Boundary',
+        narrativeShape: 'Arc',
+        isOpenEnded: false,
+        createdAt: now,
+      },
+    }));
+
+    useUnfoldStore.getState().updateDevotionalDays('devotional-1', [
+      day({
+        id: 'day-devotional-1-15',
+        devotionalId: 'devotional-1',
+        dayNumber: 15,
+        title: 'Over Boundary Day',
+      }),
+    ]);
+
+    const updated = useUnfoldStore
+      .getState()
+      .devotionals.find((item) => item.id === 'devotional-1');
+
+    expect(updated?.totalDays).toBe(14);
+    expect(updated?.days.some((item) => item.dayNumber === 15)).toBe(false);
+  });
+
+  it('allows server-pulled days to extend non-arc devotionals beyond stale local totalDays', () => {
+    useUnfoldStore.getState().addDevotional(devotional({
+      generationMode: 'batch',
+      totalDays: 1,
+      currentDay: 1,
+      days: [day({ dayNumber: 1, isRead: true, isRevealed: true })],
+      seriesArc: undefined,
+    }));
+
+    useUnfoldStore.getState().updateDevotionalDays('devotional-1', [
+      day({
+        id: 'day-devotional-1-2',
+        devotionalId: 'devotional-1',
+        dayNumber: 2,
+        title: 'Server Pulled Day 2',
+      }),
+    ]);
+
+    const updated = useUnfoldStore
+      .getState()
+      .devotionals.find((item) => item.id === 'devotional-1');
+
+    expect(updated?.totalDays).toBe(2);
+    expect(updated?.days.some((item) => item.dayNumber === 2)).toBe(true);
+  });
 });

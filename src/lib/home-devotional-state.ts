@@ -1,6 +1,7 @@
 import type { Devotional, DevotionalDay } from '@/lib/store';
 import type { PremiumAccessPolicy } from './premium-access-policy';
 import { getLockedTodayDayNumber, getLatestReadDayNumberToday } from './devotional-day-access';
+import { getServerOwnedSeriesTotalDays } from './devotional-series-boundary';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -59,6 +60,9 @@ export function shouldPrepareCurrentDevotionalDay(
   now = new Date(),
 ): boolean {
   if (!devotional || devotional.generationMode !== 'progressive') return false;
+
+  const seriesTotalDays = getServerOwnedSeriesTotalDays(devotional);
+  if (seriesTotalDays > 0 && devotional.currentDay > seriesTotalDays) return false;
 
   const dayExists = (devotional.days ?? []).some((day) => day.dayNumber === devotional.currentDay);
   if (dayExists) return false;

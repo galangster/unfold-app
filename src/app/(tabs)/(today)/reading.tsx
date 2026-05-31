@@ -52,6 +52,7 @@ import {
   getTodayReaderDayNumber,
   resolveInitialReadingDayNumber,
 } from '@/lib/devotional-day-access';
+import { getServerOwnedSeriesTotalDays } from '@/lib/devotional-series-boundary';
 import { isTransientGenerationError, toFriendlyRemainingDaysGenerationError } from '@/lib/generation-errors';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
@@ -243,7 +244,7 @@ export default function ReadingScreen() {
 
   const fontSize = user?.fontSize ?? 'medium';
 
-  const totalDays = currentDevotional?.totalDays ?? 1;
+  const totalDays = currentDevotional ? getServerOwnedSeriesTotalDays(currentDevotional) || 1 : 1;
   const renderableDays = useMemo(
     () => getHighestContiguousRenderableDayNumber(currentDevotional),
     [currentDevotional],
@@ -845,8 +846,8 @@ export default function ReadingScreen() {
       // Clear resume context since user just completed this day
       clearResumeContext();
 
-      // Use the user's intended devotional length to determine if this is truly the last day
-      const expectedTotal = Math.max(totalDays, user?.devotionalLength ?? totalDays);
+      // Use the server-owned series boundary; user devotionalLength is only a new-series preference.
+      const expectedTotal = totalDays;
       const completingLastDay = viewingDay >= expectedTotal;
       if (currentDevotional?.currentDay === viewingDay && viewingDay < expectedTotal) {
         advanceDay(currentDevotionalId);
@@ -961,7 +962,9 @@ export default function ReadingScreen() {
     }
 
     try {
-      const targetTotalDays = Math.max(currentDevotional.totalDays, user.devotionalLength);
+      const targetTotalDays = currentDevotional.generationMode === 'progressive'
+        ? getServerOwnedSeriesTotalDays(currentDevotional)
+        : Math.max(...[currentDevotional.totalDays, user.devotionalLength]);
       const fixedDevotional = { ...currentDevotional, totalDays: targetTotalDays };
       const allDays = await continueGeneratingDays(
         fixedDevotional,
@@ -1036,7 +1039,9 @@ export default function ReadingScreen() {
     if (!user || !devoId || !isPremium || isGeneratingMore) return;
 
     const devotionalId = devoId;
-    const expectedTotalDays = Math.max(devoTotalDays, user.devotionalLength);
+    const expectedTotalDays = currentDevotional?.generationMode === 'progressive'
+      ? getServerOwnedSeriesTotalDays(currentDevotional)
+      : Math.max(...[devoTotalDays, user.devotionalLength]);
     const needsMoreDays = devoDaysCount < expectedTotalDays;
 
     if (!needsMoreDays) {

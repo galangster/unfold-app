@@ -2,6 +2,11 @@ import type { Devotional, DevotionalDay } from './store';
 import type { PulledDevotionalContent } from './devotional-sync-pull';
 import { canonicalGeneratedDayId } from './devotional-canonical-days';
 import { buildDevotionalSyncMetadataPatch } from './devotional-sync-metadata';
+import {
+  clampCurrentDayToSeriesBoundary,
+  filterDaysWithinSeriesBoundary,
+  getServerOwnedSeriesTotalDays,
+} from './devotional-series-boundary';
 
 function normalizePulledDaysForDevotional(
   devotionalId: string,
@@ -25,20 +30,30 @@ function buildPulledDevotionalShell(
   if (!pulled.devotional && pulled.days.length === 0) return null;
 
   const updatedAt = pulled.devotional?.updatedAt ?? pulled.timestamp ?? new Date().toISOString();
-  const days = normalizePulledDaysForDevotional(devotionalId, pulled.days, updatedAt);
+  const normalizedDays = normalizePulledDaysForDevotional(devotionalId, pulled.days, updatedAt);
+  const boundarySource = {
+    totalDays: pulled.devotional?.totalDays ?? 0,
+    seriesArc: pulled.devotional?.seriesArc,
+  };
+  const days = filterDaysWithinSeriesBoundary(normalizedDays, boundarySource);
   const highestPulledDayNumber = days.reduce((highest, day) => Math.max(highest, day.dayNumber), 0);
+  const boundaryTotalDays = getServerOwnedSeriesTotalDays(boundarySource);
   const totalDays = Math.max(
-    pulled.devotional?.totalDays ?? 0,
+    boundaryTotalDays,
     highestPulledDayNumber,
     days.length,
     1,
+  );
+  const currentDay = clampCurrentDayToSeriesBoundary(
+    Math.max(1, pulled.devotional?.currentDay ?? days[0]?.dayNumber ?? 1),
+    { totalDays, seriesArc: pulled.devotional?.seriesArc },
   );
 
   return {
     id: devotionalId,
     title: pulled.devotional?.title ?? days[0]?.title ?? 'Your Devotional',
     totalDays,
-    currentDay: Math.max(1, pulled.devotional?.currentDay ?? days[0]?.dayNumber ?? 1),
+    currentDay,
     days,
     createdAt: days[0]?.generatedAt ?? updatedAt,
     updatedAt,
@@ -50,6 +65,7 @@ function buildPulledDevotionalShell(
       emotionalState: '',
     },
     generationMode: 'progressive',
+    ...(pulled.devotional?.seriesArc ? { seriesArc: pulled.devotional.seriesArc } : {}),
   };
 }
 
@@ -105,7 +121,14 @@ export function applyPulledDevotionalContent({
     );
   }
 
-  if (pulled.days.length > 0) {
-    updateDevotionalDays(devotionalId, pulled.days, pulled.devotional?.title);
+  const daysToApply = pulled.days.length > 0
+    ? filterDaysWithinSeriesBoundary(pulled.days, {
+      totalDays: pulled.devotional?.totalDays ?? 0,
+      seriesArc: pulled.devotional?.seriesArc,
+    })
+    : [];
+
+  if (daysToApply.length > 0) {
+    updateDevotionalDays(devotionalId, daysToApply, pulled.devotional?.title);
   }
 }

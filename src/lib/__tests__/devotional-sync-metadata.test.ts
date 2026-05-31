@@ -43,6 +43,54 @@ describe('buildDevotionalSyncMetadataPatch', () => {
     ).toEqual({ updatedAt: '2026-04-25T13:29:48.574Z' });
   });
 
+  it('ignores synced totalDays/currentDay beyond the server-owned series arc boundary', () => {
+    expect(
+      buildDevotionalSyncMetadataPatch(
+        {
+          ...baseDevotional,
+          currentDay: 14,
+          seriesArc: {
+            totalDaysPlanned: 14,
+            dayHints: Array.from({ length: 14 }, (_unused, index) => ({
+              dayNumber: index + 1,
+              themeHint: `Theme ${index + 1}`,
+              scriptureRegion: 'Psalms',
+              narrativeRole: 'deepening' as const,
+            })),
+            overarchingTheme: 'Boundary',
+            narrativeShape: 'Arc',
+            isOpenEnded: false,
+            createdAt: '2026-04-24T00:00:00.000Z',
+          },
+        },
+        {
+          id: 'devotional-1',
+          totalDays: 15,
+          currentDay: 16,
+          updatedAt: '2026-04-25T13:29:48.574Z',
+        },
+      ),
+    ).toEqual({ updatedAt: '2026-04-25T13:29:48.574Z' });
+  });
+
+  it('applies repaired server parent totals when no series arc is present', () => {
+    expect(
+      buildDevotionalSyncMetadataPatch(
+        { ...baseDevotional, totalDays: 16, currentDay: 17, seriesArc: undefined },
+        {
+          id: 'devotional-1',
+          totalDays: 14,
+          currentDay: 15,
+          updatedAt: '2026-05-31T20:29:21.896Z',
+        },
+      ),
+    ).toEqual({
+      totalDays: 14,
+      currentDay: 15,
+      updatedAt: '2026-05-31T20:29:21.896Z',
+    });
+  });
+
   it('ignores metadata for a different devotional id', () => {
     expect(
       buildDevotionalSyncMetadataPatch(baseDevotional, {

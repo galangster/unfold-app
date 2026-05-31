@@ -169,6 +169,21 @@ describe('computeDevotionalState', () => {
     }
   });
 
+  it('keeps a completed journey out of the preparing state when the next pointer has no day data', () => {
+    const state = computeDevotionalState({
+      ...baseInput,
+      currentDevotional: makeDevotional({ currentDay: 15, totalDays: 14 }),
+      currentDayData: null,
+      isJourneyComplete: true,
+      isPreparing: true,
+      daysCompleted: 14,
+      totalDays: 14,
+      progress: 100,
+    });
+
+    expect(state.type).toBe('journey-complete');
+  });
+
   it('returns tomorrow-locked when hasReadToday is true and current day is unread', () => {
     const teaser = 'Tomorrow we dive deeper into trust.';
     const state = computeDevotionalState({
@@ -333,13 +348,13 @@ describe('computeDevotionalState', () => {
 
   // ─── Priority order ──────────────────────────────────────────
 
-  it('preparing takes priority over journey-complete', () => {
+  it('journey-complete takes priority over preparing', () => {
     const state = computeDevotionalState({
       ...baseInput,
       isPreparing: true,
       isJourneyComplete: true,
     });
-    expect(state.type).toBe('preparing');
+    expect(state.type).toBe('journey-complete');
   });
 
   it('journey-complete takes priority over tomorrow-locked', () => {
