@@ -65,7 +65,7 @@ export function resolvePurchaseOutcome(
     return {
       kind: 'error',
       message:
-        'Purchase completed but premium was not activated. Please tap Restore purchases or contact support.',
+        'Premium was not activated because Apple did not return an active subscription. Please tap Restore purchases or contact support.',
     };
   }
 

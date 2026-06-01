@@ -85,6 +85,9 @@ const RESTORE_TIMEOUT_MS = 30_000;
 // loading overlay permanently stuck.
 const PURCHASE_TIMEOUT_MS = 60_000;
 
+const UNFOLD_PREMIUM_ENTITLEMENT = 'Unfold Premium';
+const POST_STORE_ACTION_REFRESH_DELAYS_MS = [0, 750, 1_500] as const;
+
 export type RevenueCatGuardReason =
   | "web_not_supported"
   | "not_configured"
@@ -121,6 +124,56 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise
       },
     );
   });
+};
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const hasUnfoldPremiumEntitlement = (customerInfo: CustomerInfo): boolean => {
+  return Boolean(customerInfo.entitlements.active?.[UNFOLD_PREMIUM_ENTITLEMENT]);
+};
+
+const refreshCustomerInfoIfPremiumMissing = async (
+  sourceAction: 'purchasePackage' | 'restorePurchases',
+  customerInfo: CustomerInfo,
+): Promise<CustomerInfo> => {
+  if (hasUnfoldPremiumEntitlement(customerInfo)) {
+    return customerInfo;
+  }
+
+  void recordPaywallDiagnosticLazy('revenuecat.customer_info.refresh_missing_entitlement_start', () => ({
+    sourceAction,
+    customerInfo: summarizeCustomerInfo(customerInfo),
+  }), 'warn');
+
+  let latestCustomerInfo = customerInfo;
+  try {
+    await Purchases.invalidateCustomerInfoCache();
+
+    for (let attemptIndex = 0; attemptIndex < POST_STORE_ACTION_REFRESH_DELAYS_MS.length; attemptIndex += 1) {
+      const delayMs = POST_STORE_ACTION_REFRESH_DELAYS_MS[attemptIndex];
+      if (delayMs > 0) {
+        await sleep(delayMs);
+      }
+
+      latestCustomerInfo = await Purchases.getCustomerInfo();
+      void recordPaywallDiagnosticLazy('revenuecat.customer_info.refresh_missing_entitlement_result', () => ({
+        sourceAction,
+        attempt: attemptIndex + 1,
+        customerInfo: summarizeCustomerInfo(latestCustomerInfo),
+      }), hasUnfoldPremiumEntitlement(latestCustomerInfo) ? 'info' : 'warn');
+
+      if (hasUnfoldPremiumEntitlement(latestCustomerInfo)) {
+        return latestCustomerInfo;
+      }
+    }
+  } catch (error) {
+    void recordPaywallDiagnosticLazy('revenuecat.customer_info.refresh_missing_entitlement_error', () => ({
+      sourceAction,
+      error: summarizeRevenueCatError(error),
+    }), 'warn');
+  }
+
+  return latestCustomerInfo;
 };
 
 // Internal guard to get consistent success/failure results from RevenueCat.
@@ -387,7 +440,7 @@ export const purchasePackage = (
       customerInfo: summarizeCustomerInfo(purchaseResult.customerInfo),
     }));
 
-    return purchaseResult.customerInfo;
+    return refreshCustomerInfoIfPremiumMissing('purchasePackage', purchaseResult.customerInfo);
   });
 };
 
@@ -440,7 +493,7 @@ export const restorePurchases = (): Promise<
       elapsedMs: Date.now() - restoreStartedAt,
       customerInfo: summarizeCustomerInfo(customerInfo),
     }));
-    return customerInfo;
+    return refreshCustomerInfoIfPremiumMissing('restorePurchases', customerInfo);
   });
 };
 

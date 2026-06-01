@@ -63,7 +63,7 @@ describe('paywall guardrails', () => {
   });
 
   describe('purchase entitlement verification', () => {
-    it('does not grant success when purchase completes without the Unfold Premium entitlement', () => {
+    it('does not claim purchase completion when no active Unfold Premium entitlement is returned', () => {
       expect(
         resolvePurchaseOutcome({
           ok: true,
@@ -72,7 +72,7 @@ describe('paywall guardrails', () => {
       ).toEqual({
         kind: 'error',
         message:
-          'Purchase completed but premium was not activated. Please tap Restore purchases or contact support.',
+          'Premium was not activated because Apple did not return an active subscription. Please tap Restore purchases or contact support.',
       });
     });
 
