@@ -45,8 +45,8 @@ export function getTodayAmbientMode(_input: TodayAmbientModeInput): TodayAmbient
   // Reveal-ready light rays were a regression: the reveal affordance can exist
   // before the user finishes the day, while the product rule says Today motion
   // should unlock only after completion. Completed/rest ambience is rendered by
-  // the native EmberAtlas layer instead of the rain Rive loop, whose asset reads
-  // visually as ripples.
+  // the higher-fidelity native GoldEmberField layer instead of the rain Rive loop,
+  // whose asset reads visually as ripples.
   return 'none';
 }
 

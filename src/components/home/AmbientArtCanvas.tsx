@@ -7,7 +7,7 @@ import todayLightRaysSource from '../../../assets/rive/today-light-rays.riv';
 import todayRainParticlesSource from '../../../assets/rive/today-rain-particles.riv';
 import todayWindParticlesSource from '../../../assets/rive/today-wind-particles.riv';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { EmberAtlas } from '@/components/home/EmberAtlas';
+import { GoldEmberField } from '@/components/home/GoldEmberField';
 import { TodayAmbientRive } from '@/components/home/TodayAmbientRive';
 import {
   getTodayAmbientMode,
@@ -23,8 +23,10 @@ import {
 // Skia shaders (concentric rings + organic noise) removed — they were
 // invisible in practice but consumed ~25% CPU from continuous GPU rendering
 // and a rotation sensor. Today now keeps Rive motion out of pre-completion
-// states. Completed/rest states use the older looping EmberAtlas treatment plus
-// the screen-level gradient glow, avoiding the rain asset's ripple-like look.
+// states. Completed/rest states use the higher-fidelity GoldEmberField layer plus
+// the screen-level gradient glow, matching the non-pixelated ember treatment used
+// in the completion celebration and paywall while avoiding the rain asset's
+// ripple-like look.
 // ---------------------------------------------------------------------------
 
 const TODAY_RIVE_SOURCES = {
@@ -79,7 +81,7 @@ export function AmbientArtCanvas({
   if (!active) return null;
 
   if (showCompletedEmbers) {
-    return <EmberAtlas streakLevel={streakLevel} active />;
+    return <GoldEmberField streakLevel={streakLevel} active />;
   }
 
   if (mode === 'none') return null;
