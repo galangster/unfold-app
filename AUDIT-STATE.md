@@ -17,9 +17,9 @@
 | Phase | Status | Notes |
 |---|---|---|
 | 0 Baseline | DONE | worktree ✅, deps ✅, gates ✅ (see below), Discord tag-ping sent ✅ |
-| 1 System map | GAP-FILL RUNNING | Round 1 done (14 agents): 52 routes / 83 surfaces / 228 risk notes → `SYSTEM-MAP.md` (commit 9afbe32), fragments in `/tmp/unfold-e2e-audit-2026-06/map/`. Synthesis flagged 11 unmapped areas → gap-fill round 2 launched (reading-screen, audio-tts, guided-reflection, share-export, streak-ui, theming, evening-wind-down, analytics-error, android-parity) + map amend. |
-| 2 Static audit (12 dims) | pending | |
-| 3 Runtime walkthrough | pending | |
+| 1 System map | DONE | 23 mapper agents over 2 rounds: 52 routes / 95 surfaces / 350 risk notes → `SYSTEM-MAP.md` (commits 9afbe32, 3af4adb). Fragments: `/tmp/unfold-e2e-audit-2026-06/map/` (22 files). Residual gaps assigned: runtime items → Phase 3; backend sweep → BCK finder; OTA/highlights/a11y/Android → respective finders. |
+| 2 Static audit (12 dims) | RUNNING | Workflow `wf_0e3dbd0c-bd9`: 12 finders (leads = map §5 + 15 headline risks) → semantic dedupe → 3-lens 2-of-3 adversarial verify (TASTE: single judge) → `/tmp/unfold-e2e-audit-2026-06/findings/LEDGER.md`. Finder caps declared (15/dim + 8 TASTE). |
+| 3 Runtime walkthrough | PREP RUNNING | FlowDeck Debug build of worktree onto iPhone 17 Pro sim (38CDF1B0…) running in background agent `flowdeck-debug-build`. |
 | 4 Fix loop | pending | |
 | 5 Re-sweep until dry | pending | needs 2 consecutive clean rounds |
 | 6 Final gates + report | pending | |
