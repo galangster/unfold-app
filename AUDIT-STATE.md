@@ -47,6 +47,11 @@
 8. Privacy: spiritual profile/journals/chat in MMKV with silent unencrypted fallback; thumbs-feedback POSTs chat content; `hasConsentedToAI` dead code; plaintext bug log.
 9. Offline fail-closed lockouts: premium policy 'unknown' indefinitely on offline cold start; onboarding hard paywall dead-ends when offerings fail; free messages burned on failed sends; no sync outbox.
 10. E2E verification hollow: 4 testIDs total, both Maestro flows assert stale UI, brittle source-string asserts, onboarding has zero analytics.
+11. **App Review 2.5.4**: `UIBackgroundModes: audio` declared while the audio/TTS stack is dark-launched in 218 (play button hidden, prefetch commented out) — unused-background-mode rejection risk.
+12. Zero production observability: analytics is a mock (no SDK), no global JS error/unhandled-rejection handler, logger.error silent in release.
+13. Journal reflections local-only despite sync-ready schema (unrecoverable on reinstall); journal.tsx has a TDZ `currentDay` use-before-declaration silently disabling SOAP auto-select/hydration on Hermes.
+14. Shipped debug/abandoned surfaces deep-linkable: /unfolded visible red debug border + debug share logging; /wallpaper orphaned 549-LOC pipeline; /debug-light-mode ships despite "remove before public release" comment.
+15. Android structurally broken if shipped (NOT shipping in 1.0 — P2 context): unguarded iOS-only import chain risks require-time boot crash; no google-services.json; ActionSheetIOS/Alert.prompt no-ops.
 
 ## Finding ledger
 
