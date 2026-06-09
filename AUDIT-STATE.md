@@ -17,7 +17,7 @@
 | Phase | Status | Notes |
 |---|---|---|
 | 0 Baseline | DONE | worktree ✅, deps ✅, gates ✅ (see below), Discord tag-ping sent ✅ |
-| 1 System map | IN PROGRESS | Workflow fan-out launched; fragments → `/tmp/unfold-e2e-audit-2026-06/map/`, synthesized map → `SYSTEM-MAP.md` in worktree |
+| 1 System map | GAP-FILL RUNNING | Round 1 done (14 agents): 52 routes / 83 surfaces / 228 risk notes → `SYSTEM-MAP.md` (commit 9afbe32), fragments in `/tmp/unfold-e2e-audit-2026-06/map/`. Synthesis flagged 11 unmapped areas → gap-fill round 2 launched (reading-screen, audio-tts, guided-reflection, share-export, streak-ui, theming, evening-wind-down, analytics-error, android-parity) + map amend. |
 | 2 Static audit (12 dims) | pending | |
 | 3 Runtime walkthrough | pending | |
 | 4 Fix loop | pending | |
@@ -34,6 +34,19 @@
 - verify:release (prod api.unfoldapp.co): PASS
 - expo install --check: FAIL — **registry drift, not repo regression**: 20 expo packages each exactly 1 patch behind versions published after the 218 cut (expo 56.0.8→~56.0.9 etc.)
 - expo-doctor: **19/21** — the known non-CNG warning + the same package-version drift as above (was 20/21 at cut time). Accepted as baseline; do NOT `expo install --fix` (mutates shipped source; gotcha `expo-install-fix-destabilizes-monorepo`). Patch-bump rec goes in the §7 upgrade roadmap / folds into 219 if we cut one.
+
+## Pre-triaged headline risks (from Phase 1 — feed Phase 2 finders; full list in SYSTEM-MAP.md §5)
+
+1. ~~Build 218 provenance / QA tools in binary~~ **REFUTED for the shipped IPA**: release-gatekeeper session 2026-06-08 inspected `/tmp/unfold-production-app-review-candidate-build218.ipa` (SHA dbb568aa…) — QA markers absent. Latent process hazard remains: eas.json `qa-testflight` profile sets `EXPO_PUBLIC_ENABLE_QA_TOOLS=1` with `distribution:store` → report as process P2.
+2. Unguarded `unfold://` scheme — every file route externally reachable, no allowlist/param validation (incl. debug-* routes in QA builds).
+3. Widgets: App Groups entitlement deliberately stripped while expo-widgets data path depends on group UserDefaults → possibly stale/blank widgets on device; Live Activity never updated/ended.
+4. Premium enforcement client-only; some paths read raw persisted `user.isPremium` bypassing tri-state policy; client rate limits fail open.
+5. Midnight/timezone/DST fragility: device-local `toDateString`, fixed-24h math, twin streak paths diverge, server cron co-writes `currentDay` in server time.
+6. Notification dual-authority: You-tab toggle vs useCheckInNotifications resurrection; reminder-OFF not persisted; payloads baked stale at schedule time.
+7. Data-loss surfaces: rehydrate validation wipes all core arrays on one malformed entry; Bible highlight overlap destroys highlights+notes; single-slot undo; resets leave sensitive caches.
+8. Privacy: spiritual profile/journals/chat in MMKV with silent unencrypted fallback; thumbs-feedback POSTs chat content; `hasConsentedToAI` dead code; plaintext bug log.
+9. Offline fail-closed lockouts: premium policy 'unknown' indefinitely on offline cold start; onboarding hard paywall dead-ends when offerings fail; free messages burned on failed sends; no sync outbox.
+10. E2E verification hollow: 4 testIDs total, both Maestro flows assert stale UI, brittle source-string asserts, onboarding has zero analytics.
 
 ## Finding ledger
 
