@@ -2,11 +2,12 @@ import { ThemeProvider as NavigationThemeProvider } from 'expo-router/react-navi
 import { Stack, usePathname, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, onlineManager, focusManager } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { Colors } from '@/constants/colors';
@@ -46,6 +47,17 @@ const queryClient = new QueryClient({
       retry: false,
     },
   },
+});
+
+// NET-7: Wire TanStack Query's onlineManager and focusManager for React Native.
+// Without this, react-query has no visibility into network state changes, so
+// stale queries (RC offerings, user profile, etc.) never refetch on reconnect.
+// refetchOnWindowFocus stays false — this primarily enables refetch-on-reconnect.
+onlineManager.setEventListener((setOnline) =>
+  NetInfo.addEventListener((state) =>
+    setOnline(Boolean(state.isConnected && state.isInternetReachable !== false))));
+AppState.addEventListener('change', (status) => {
+  if (Platform.OS !== 'web') focusManager.setFocused(status === 'active');
 });
 
 function RootLayoutNav() {

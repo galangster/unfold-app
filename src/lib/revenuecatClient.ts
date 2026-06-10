@@ -71,6 +71,7 @@ const hasRevenueCatApiKey = !!apiKey && !isWeb;
 let revenueCatConfigured = false;
 let revenueCatIdentityReadyPromise: Promise<void> | null = null;
 let revenueCatIdentityError: unknown = null;
+let configuredAppUserID: string | null = null;
 
 const LOG_PREFIX = "[RevenueCat]";
 
@@ -311,6 +312,7 @@ if (hasRevenueCatApiKey) {
     });
 
     const appUserID = buildRevenueCatAppUserId(getDeviceId());
+    configuredAppUserID = appUserID;
     void recordPaywallDiagnosticLazy('revenuecat.configure.attempt', () => ({
       keyType,
       platform: Platform.OS,
@@ -375,6 +377,34 @@ export const isRevenueCatEnabled = (): boolean => {
 
 export const hasRevenueCatConfigurationAttemptFailed = (): boolean => {
   return hasRevenueCatApiKey && !revenueCatConfigured;
+};
+
+/**
+ * Single-flight retry for a sticky identity-sync error.
+ * Called by foreground recovery listeners when `revenueCatResolved` is still
+ * false after the initial session-start attempt failed.
+ *
+ * Returns `true` if the retry succeeded (error cleared), `false` otherwise.
+ */
+let identityRetryInflight: Promise<boolean> | null = null;
+export const retryRevenueCatIdentitySync = (): Promise<boolean> => {
+  if (!revenueCatConfigured || !configuredAppUserID) return Promise.resolve(false);
+  if (!revenueCatIdentityError) return Promise.resolve(true); // nothing to repair
+  if (identityRetryInflight) return identityRetryInflight;
+  identityRetryInflight = synchronizeRevenueCatAppUserID(configuredAppUserID)
+    .then(() => {
+      revenueCatIdentityError = null;
+      revenueCatIdentityReadyPromise = Promise.resolve();
+      return true;
+    })
+    .catch((error) => {
+      revenueCatIdentityError = error;
+      return false;
+    })
+    .finally(() => {
+      identityRetryInflight = null;
+    });
+  return identityRetryInflight;
 };
 
 /**

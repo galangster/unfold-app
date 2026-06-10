@@ -9,6 +9,7 @@
  */
 
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import type { CustomerInfo } from 'react-native-purchases';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUnfoldStore } from '@/lib/store';
@@ -19,6 +20,7 @@ import {
   getOfferings,
   hasRevenueCatConfigurationAttemptFailed,
   isRevenueCatEnabled,
+  retryRevenueCatIdentitySync,
 } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import { logger } from '@/lib/logger';
@@ -108,9 +110,27 @@ export function useRevenueCatSync() {
       removeCustomerInfoListener = result.data;
     });
 
+    // Foreground recovery: if RevenueCat identity sync failed at session start
+    // and the user backgrounds+foregrounds the app (network may have returned),
+    // retry once. Naturally rate-limited to foreground transitions.
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      if (useUIState.getState().revenueCatResolved) return; // recovered already
+      void (async () => {
+        await retryRevenueCatIdentitySync();
+        const result = await getCustomerInfo();
+        if (result.ok) applyCustomerInfo(result.data);
+        if (!removeCustomerInfoListener) {
+          const reg = await addCustomerInfoUpdateListener(applyCustomerInfo);
+          if (reg.ok && !didCancel) removeCustomerInfoListener = reg.data;
+        }
+      })();
+    });
+
     return () => {
       didCancel = true;
       removeCustomerInfoListener?.();
+      appStateSub.remove();
     };
   }, [updateUser, queryClient]);
 }

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
@@ -21,7 +22,13 @@ export function useCreationGate() {
     });
 
     if (action === 'allow') return true;
-    if (action === 'blocked') return false;
+    if (action === 'blocked') {
+      Alert.alert(
+        'One moment',
+        "We’re still confirming your subscription. Check your connection and try again in a few seconds.",
+      );
+      return false;
+    }
     if (action === 'exclusive-offer') {
       setShowExclusiveOffer(true);
       return false;
