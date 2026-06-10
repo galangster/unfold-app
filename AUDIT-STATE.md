@@ -103,6 +103,10 @@ No App Review submit/release/phased-release/external-beta mutation. No subscript
 
 0 / 2 consecutive clean rounds.
 
+## Operational gotcha (save to vault at checkpoint)
+
+`flowdeck logs` in follow/stream mode never exits → hangs agent tool calls (two seg2 hangs, both right after app-logs-capture). Rule for all sim agents: bounded log reads only. Also: kill stale `flowdeck ui simulator session` processes before resuming hung UI workflows.
+
 ## Wake log
 
 - 2026-06-09 (session 1): Phase 0 — worktree created, deps installed, gates launched, tag discrepancy escalated.
