@@ -17,7 +17,7 @@ import {
 import { newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
-import { reconcileStreakState } from './streak-helpers';
+import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -1302,87 +1302,21 @@ export const useUnfoldStore = create<UnfoldState>()(
       // Streak actions
       recordStreakRead: () =>
         set((state) => {
-          const now = new Date();
-          const today = now.toDateString();
-          const lastRead = state.streakLastReadDate ? new Date(state.streakLastReadDate).toDateString() : null;
-
-          // Already read today, no change
-          if (lastRead === today) {
-            return state;
-          }
-
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const wasYesterday = lastRead === yesterday.toDateString();
-
-          // Check if we need to reset grace days (new week)
-          const currentWeekStart = getWeekStart(new Date());
-          const storedWeekStart = state.streakWeekStart;
-          const isNewWeek = !storedWeekStart || storedWeekStart !== currentWeekStart.toISOString();
-
-          let newStreak = state.streakCurrent;
-          let newGraceDays = isNewWeek ? 0 : state.streakGraceDaysUsedThisWeek;
-          let newFreezes = state.streakFreezes;
-          let missedWeekendDays = 0;
-
-          if (wasYesterday || !lastRead) {
-            // Continue streak
-            newStreak = state.streakCurrent + 1;
-          } else {
-            // Calculate days missed
-            const daysMissed = Math.floor(
-              (new Date(today).getTime() - new Date(lastRead!).getTime()) / (1000 * 60 * 60 * 24)
-            );
-
-            // Count weekend days missed (if amnesty enabled)
-            if (state.streakWeekendAmnesty) {
-              for (let i = 1; i < daysMissed; i++) {
-                const missedDate = new Date();
-                missedDate.setDate(missedDate.getDate() - i);
-                if (missedDate.getDay() === 0 || missedDate.getDay() === 6) {
-                  missedWeekendDays++;
-                }
-              }
-            }
-
-            const effectiveMissed = daysMissed - missedWeekendDays;
-
-            // Use freeze if available for first missed day (premium only)
-            if (effectiveMissed >= 1 && state.streakFreezes > 0 && state.user?.isPremium) {
-              newFreezes--;
-              newStreak = state.streakCurrent + 1;
-            } else if (effectiveMissed === 1) {
-              // Just missed yesterday but no freeze - continue
-              newStreak = state.streakCurrent + 1;
-            } else if (effectiveMissed > 1 && newGraceDays < 1) {
-              // Use grace day for extra missed day
-              newGraceDays++;
-              newStreak = state.streakCurrent + 1;
-            } else {
-              // Streak broken
-              newStreak = 1;
-              newGraceDays = 0;
-            }
-          }
-
-          // Check if earned a freeze (perfect week = 7 days, streak divisible by 7)
-          if (newStreak > 0 && newStreak % 7 === 0) {
-            // Check if we already earned for this week
-            const lastEarnedStreak = Math.floor((state.streakLongest || 0) / 7) * 7;
-            if (newStreak > lastEarnedStreak) {
-              const maxFreezes = state.user?.isPremium ? 99 : 0;
-              newFreezes = Math.min(newFreezes + 1, maxFreezes);
-            }
-          }
-
-          return {
-            streakLastReadDate: now.toISOString(),
-            streakCurrent: newStreak,
-            streakLongest: Math.max(state.streakLongest, newStreak),
-            streakGraceDaysUsedThisWeek: newGraceDays,
-            streakWeekStart: currentWeekStart.toISOString(),
-            streakFreezes: newFreezes,
-          };
+          const result = applyStreakRead(
+            {
+              streakCurrent: state.streakCurrent,
+              streakLastReadDate: state.streakLastReadDate,
+              streakGraceDaysUsedThisWeek: state.streakGraceDaysUsedThisWeek,
+              streakWeekStart: state.streakWeekStart,
+              streakWeekendAmnesty: state.streakWeekendAmnesty,
+              streakFreezes: state.streakFreezes,
+              isPremium: Boolean(state.user?.isPremium),
+              streakLongest: state.streakLongest,
+            },
+            new Date()
+          );
+          // null = already read today — no change.
+          return result ?? state;
         }),
       reconcileStreakState: () =>
         set((state) =>
@@ -1952,12 +1886,3 @@ export const useHasHydrated = () => {
   return hasHydrated;
 };
 
-// Helper function to get the start of the current week (Sunday)
-function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  const diff = d.getDate() - day;
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}

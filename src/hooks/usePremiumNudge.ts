@@ -14,6 +14,7 @@ import {
   type NudgeState,
   type EligibleNudge,
 } from '@/lib/nudges';
+import { decideStreakContinuation } from '@/lib/streak-helpers';
 
 interface UsePremiumNudgeParams {
   screen: 'home' | 'reading';
@@ -25,61 +26,6 @@ interface UsePremiumNudgeResult {
   onDismiss: () => void;
 }
 
-/**
- * Detect whether the user's streak has effectively been lost.
- *
- * Checks if the last read date is more than 2 days ago (accounting for
- * weekend amnesty and freezes) which means the streak would reset to 1
- * on next read. We consider the streak "lost" if it was previously > 0
- * and would reset.
- */
-function detectStreakLoss(
-  streakCurrent: number,
-  lastReadDate: string | null,
-  weekendAmnesty: boolean,
-  freezes: number
-): boolean {
-  if (streakCurrent === 0) return false; // Already at 0, no new loss
-  if (!lastReadDate) return false;
-
-  const today = new Date();
-  const todayStr = today.toDateString();
-  const lastRead = new Date(lastReadDate).toDateString();
-
-  // Already read today
-  if (lastRead === todayStr) return false;
-
-  // Check if yesterday
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (lastRead === yesterday.toDateString()) return false;
-
-  // More than 1 day missed — calculate effective missed days
-  const daysMissed = Math.floor(
-    (new Date(todayStr).getTime() - new Date(lastRead).getTime()) / (1000 * 60 * 60 * 24)
-  );
-
-  let missedWeekendDays = 0;
-  if (weekendAmnesty) {
-    for (let i = 1; i < daysMissed; i++) {
-      const missedDate = new Date();
-      missedDate.setDate(missedDate.getDate() - i);
-      if (missedDate.getDay() === 0 || missedDate.getDay() === 6) {
-        missedWeekendDays++;
-      }
-    }
-  }
-
-  const effectiveMissed = daysMissed - missedWeekendDays;
-
-  // Would a freeze save them?
-  if (effectiveMissed >= 1 && freezes > 0) return false;
-  // Just missed 1 effective day — streak continues
-  if (effectiveMissed === 1) return false;
-
-  // Streak would be broken
-  return effectiveMissed > 1;
-}
 
 export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNudgeResult {
   // Store selectors — all primitives or stable references
@@ -92,6 +38,9 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
   const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const streakWeekendAmnesty = useUnfoldStore((s) => s.streakWeekendAmnesty);
   const streakFreezes = useUnfoldStore((s) => s.streakFreezes);
+  const streakGraceDaysUsedThisWeek = useUnfoldStore((s) => s.streakGraceDaysUsedThisWeek);
+  const streakWeekStart = useUnfoldStore((s) => s.streakWeekStart);
+  const isPremiumUser = useUnfoldStore((s) => Boolean(s.user?.isPremium));
   const streakJustResetFlag = useUnfoldStore((s) => s.streakJustReset);
   const hasUsedAudio = useUnfoldStore((s) => s.hasUsedAudio);
   const justCompletedSeriesTitle = useUnfoldStore((s) => s.justCompletedSeriesTitle);
@@ -113,10 +62,21 @@ export function usePremiumNudge({ screen }: UsePremiumNudgeParams): UsePremiumNu
   const nudgeImpressions = useUnfoldStore((s) => s.nudgeImpressions);
   const nudgeDismissals = useUnfoldStore((s) => s.nudgeDismissals);
 
-  // Detect streak loss
+  // Detect streak loss — same decision helper as the engine, so the nudge
+  // can never disagree with what recordStreakRead/reconcileStreakState do.
   const streakJustReset = useMemo(
-    () => streakJustResetFlag || detectStreakLoss(streakCurrent, streakLastReadDate, streakWeekendAmnesty, streakFreezes),
-    [streakJustResetFlag, streakCurrent, streakLastReadDate, streakWeekendAmnesty, streakFreezes]
+    () =>
+      streakJustResetFlag ||
+      decideStreakContinuation({
+        streakCurrent,
+        streakLastReadDate,
+        streakGraceDaysUsedThisWeek,
+        streakWeekStart,
+        streakWeekendAmnesty,
+        streakFreezes,
+        isPremium: isPremiumUser,
+      }).kind === 'reset',
+    [streakJustResetFlag, streakCurrent, streakLastReadDate, streakGraceDaysUsedThisWeek, streakWeekStart, streakWeekendAmnesty, streakFreezes, isPremiumUser]
   );
 
   // Build context and evaluate
