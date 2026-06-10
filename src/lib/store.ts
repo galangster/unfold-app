@@ -18,6 +18,7 @@ import { newId } from './sync-ids';
 import type { NudgeType, NudgeImpression } from './nudges';
 import { NUDGE_INITIAL_STATE } from './nudges';
 import { applyStreakRead, getWeekStart, reconcileStreakState } from './streak-helpers';
+import { repairRehydratedState } from './store-rehydrate-repair';
 
 // Types
 export type FontSize = 'small' | 'medium' | 'large';
@@ -1793,35 +1794,13 @@ export const useUnfoldStore = create<UnfoldState>()(
           }
 
           if (state) {
-            // Validate required fields exist
-            const isValid =
-              Array.isArray(state.devotionals) &&
-              Array.isArray(state.journalEntries) &&
-              Array.isArray(state.bookmarks) &&
-              Array.isArray(state.highlights) &&
-              Array.isArray(state.usedScriptures) &&
-              state.generationSession != null &&
-              typeof state.generationSession === 'object';
-
-            if (!isValid) {
-              logger.warn('[store] Invalid state detected, resetting to initial state');
-              void logBugError('store-validation', new Error('Invalid persisted state'), {
+            const { repairedKeys } = repairRehydratedState(state, initialState);
+            if (repairedKeys.length > 0) {
+              logger.warn('[store] Repaired invalid persisted slices:', repairedKeys.join(', '));
+              void logBugError('store-validation', new Error('Invalid persisted state (repaired per-slice)'), {
+                repairedKeys,
                 stateKeys: Object.keys(state),
               });
-              // Reset to initial state on validation failure (graceful degradation)
-              state.devotionals = initialState.devotionals;
-              state.journalEntries = initialState.journalEntries;
-              state.bookmarks = initialState.bookmarks;
-              state.highlights = initialState.highlights;
-              state.usedScriptures = initialState.usedScriptures;
-              state.generationSession = initialState.generationSession;
-              state.resumeContext = initialState.resumeContext;
-              state.currentDevotionalId = initialState.currentDevotionalId;
-              state.checkIns = initialState.checkIns;
-              // Preserve user if it seems valid
-              if (!state.user || typeof state.user !== 'object') {
-                state.user = initialState.user;
-              }
             }
 
             // Reset session-scoped state on app launch (not persisted across sessions)
