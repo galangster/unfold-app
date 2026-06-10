@@ -37,7 +37,9 @@ import { FontFamily, FontSize } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Radius } from '@/constants/radius';
 import { Duration, Ease } from '@/constants/animations';
-import { purchasePackage, restorePurchases } from '@/lib/revenuecatClient';
+import { useQueryClient } from '@tanstack/react-query';
+import { purchasePackage, restorePurchases, getOfferings } from '@/lib/revenuecatClient';
+import { PURCHASE_PLANS_UNAVAILABLE_MESSAGE } from '@/lib/paywall-purchase-readiness';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
@@ -1030,6 +1032,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 }: ThreeStepPaywallProps) {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -1146,8 +1149,21 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
   // -----------------------------------------------------------------------
 
   const handlePurchase = useCallback(async () => {
-    const pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
-    if (!pkg) return;
+    let pkg = selectedPlan === 'yearly' ? yearlyPackage : monthlyPackage;
+    if (!pkg) {
+      setIsLoading(true);
+      setPurchaseError(null);
+      const fresh = await queryClient.fetchQuery({ queryKey: ['revenuecat', 'offerings'], queryFn: getOfferings, staleTime: 0 });
+      const freshOfferings = fresh?.ok ? fresh.data : null;
+      pkg = freshOfferings?.current?.availablePackages.find(
+        (p) => p.identifier === (selectedPlan === 'yearly' ? '$rc_annual' : '$rc_monthly'),
+      );
+      if (!pkg) {
+        setIsLoading(false);
+        setPurchaseError(PURCHASE_PLANS_UNAVAILABLE_MESSAGE);
+        return;
+      }
+    }
     setIsLoading(true);
     setPurchaseError(null);
     const result = await purchasePackage(pkg);
@@ -1175,7 +1191,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
     setPurchaseError(outcome.message);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-  }, [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess]);
+  }, [selectedPlan, yearlyPackage, monthlyPackage, onPurchaseSuccess, queryClient]);
 
   const handleRestore = useCallback(async () => {
     setIsLoading(true);
