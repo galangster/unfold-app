@@ -10,8 +10,10 @@
  *    by a BSB selection
  *  - Note-only entries (color: null) are never removed by the highlight tool
  *    (they may coexist with colored highlights)
- *  - Notes transfer to the first overlapping segment when an existing highlight
- *    is split or replaced
+ *  - Notes transfer to the first remainder segment, or — when a replaced
+ *    highlight leaves no remainder — to the first new segment overlapping the
+ *    source highlight; multiple notes on one segment merge ('\n\n', ordered
+ *    by source verseStart). Notes are never dropped.
  *  - Partial overlaps split the existing highlight into remainder segments
  *    (the existing color/translation are preserved on the remainders)
  */
@@ -72,9 +74,10 @@ export function planHighlightApplication(args: {
   const runs = toRuns(selectedVerses);
   const toRemove: string[] = [];
   const toAdd: Array<Omit<BibleHighlight, 'id' | 'createdAt'>> = [];
-  // Note from a fully-replaced highlight that has no remainder segments —
-  // needs to be attached to the first new-color segment.
-  let pendingNoteForFirstRun: string | undefined;
+  // Notes from fully-replaced highlights that left no remainder segments.
+  // Keyed by the index of the first new-color run that overlaps the SOURCE
+  // highlight; merged on attach (REVM-5: merge, never drop).
+  const pendingNotesByRun = new Map<number, Array<{ sourceStart: number; note: string }>>();
 
   // Find highlights that are affected (same translation, color !== null,
   // overlap with at least one run). Build remainder segments.
@@ -133,10 +136,16 @@ export function planHighlightApplication(args: {
       }
     }
 
-    // If no remainder segments, note needs to transfer to the first new-color
-    // segment. Track it with a module-local set.
+    // No remainder segments — route the note to the first new-color run that
+    // overlaps THIS highlight (guaranteed to exist: `overlaps` above used the
+    // same predicate).
     if (!noteTransferredToRemainder && noteToTransfer !== undefined) {
-      pendingNoteForFirstRun = noteToTransfer;
+      const runIndex = runs.findIndex(
+        ([rStart, rEnd]) => h.verseStart <= rEnd && h.verseEnd >= rStart,
+      );
+      const list = pendingNotesByRun.get(runIndex) ?? [];
+      list.push({ sourceStart: h.verseStart, note: noteToTransfer });
+      pendingNotesByRun.set(runIndex, list);
     }
   }
 
@@ -144,11 +153,13 @@ export function planHighlightApplication(args: {
   for (let ri = 0; ri < runs.length; ri++) {
     const [rStart, rEnd] = runs[ri];
     const text = Array.from({ length: rEnd - rStart + 1 }, (_, i) => verseText(rStart + i)).join(' ');
-    const isFirst = ri === 0;
-    const note = isFirst && pendingNoteForFirstRun !== undefined ? pendingNoteForFirstRun : undefined;
-    if (isFirst) {
-      pendingNoteForFirstRun = undefined;
-    }
+    const pendingNotes = pendingNotesByRun.get(ri);
+    const note = pendingNotes
+      ? pendingNotes
+          .sort((a, b) => a.sourceStart - b.sourceStart)
+          .map((p) => p.note)
+          .join('\n\n')
+      : undefined;
 
     toAdd.push({
       bookId,

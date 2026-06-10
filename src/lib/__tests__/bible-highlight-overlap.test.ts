@@ -113,6 +113,35 @@ describe('planHighlightApplication', () => {
     expect(plan.toRemove).toEqual([]);
   });
 
+  it('merges notes when one selection replaces two noted highlights (REVM-5)', () => {
+    const h1 = makeHighlight('h1', 2, 3, 'yellow', 'BSB', 'first thought');
+    const h2 = makeHighlight('h2', 5, 6, 'yellow', 'BSB', 'second thought');
+    const plan = planHighlightApplication({
+      ...defaultArgs,
+      chapterHighlights: [h1, h2],
+      selectedVerses: [2, 3, 4, 5, 6], // one run fully covering both → no remainders
+      color: 'blue',
+    });
+    expect(plan.toRemove).toEqual(['h1', 'h2']);
+    expect(plan.toAdd).toHaveLength(1);
+    // Merge order by source verseStart: h1 (v2) before h2 (v5).
+    expect(plan.toAdd[0].note).toBe('first thought\n\nsecond thought');
+  });
+
+  it('a transferred note lands on the run overlapping its source, not runs[0] (REVM-5)', () => {
+    const h = makeHighlight('h1', 9, 9, 'yellow', 'BSB', 'keep me');
+    const plan = planHighlightApplication({
+      ...defaultArgs,
+      chapterHighlights: [h],
+      selectedVerses: [2, 9], // two runs: [2,2] and [9,9]; h overlaps only the second
+      color: 'blue',
+    });
+    const v2 = plan.toAdd.find((a) => a.verseStart === 2)!;
+    const v9 = plan.toAdd.find((a) => a.verseStart === 9)!;
+    expect(v2.note).toBeUndefined();
+    expect(v9.note).toBe('keep me');
+  });
+
   it('text is built per run from the run\'s verses only', () => {
     const plan = planHighlightApplication({
       ...defaultArgs,
