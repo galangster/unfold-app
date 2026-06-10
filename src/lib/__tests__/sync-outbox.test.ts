@@ -47,6 +47,9 @@ function makeChange(id: string, table: string, ts: string): SyncPushChange {
 beforeEach(() => {
   jest.clearAllMocks();
   (mmkvStorage as any).__clearMockStorage?.();
+  // Explicitly clear the outbox key so the cap test's 200 entries
+  // don't leak into subsequent tests (the mock store is a shared Map).
+  mmkvStorage.removeItem(OUTBOX_KEY);
   // Clear the module-level inflight guard by re-requiring the module
   jest.resetModules();
 });
@@ -139,14 +142,81 @@ describe('sync-outbox', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('outbox is capped at 200', () => {
+  it('outbox is capped at 200, evicting the OLDEST by clientUpdatedAt', () => {
     const changes: SyncPushChange[] = [];
+    // Formula: 250 entries, one minute apart starting 2026-06-01T00:00:00Z —
+    // index i ↔ timestamp base + i minutes. Newest 200 = indices 50..249.
+    const base = Date.parse('2026-06-01T00:00:00Z');
     for (let i = 0; i < 250; i++) {
-      changes.push(makeChange(`id-${i}`, 'devotionals', `2026-06-01T${String(i).padStart(6, '0')}Z`));
+      changes.push(makeChange(`id-${i}`, 'devotionals', new Date(base + i * 60_000).toISOString()));
     }
     enqueueSyncChanges(changes);
 
     const outbox = peekSyncOutbox();
-    expect(outbox.length).toBeLessThanOrEqual(200);
+    expect(outbox).toHaveLength(200);
+    const ids = new Set(outbox.map((c) => c.id));
+    expect(ids.has('id-49')).toBe(false);  // oldest 50 (0..49) evicted
+    expect(ids.has('id-0')).toBe(false);
+    expect(ids.has('id-50')).toBe(true);   // survivor boundary
+    expect(ids.has('id-249')).toBe(true);  // newest retained
+  });
+
+  it('changes enqueued while the drain POST is in flight survive the success clear (REVM-1)', async () => {
+    const mockFetch = jest.fn().mockImplementation(async () => {
+      // Lands between the drain's snapshot and its success write — the race.
+      enqueueSyncChanges([makeChange('d-late', 'devotionals', '2026-06-03T00:00:00Z')]);
+      return {
+        ok: true,
+        json: async () => ({ results: [{ status: 'accepted' }] }),
+      };
+    });
+    global.fetch = mockFetch as any;
+
+    enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z')]);
+    await drainSyncOutbox();
+
+    const outbox = peekSyncOutbox();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].id).toBe('d-late');
+  });
+
+  it('a same-key update enqueued mid-drain with a newer clientUpdatedAt is kept', async () => {
+    const mockFetch = jest.fn().mockImplementation(async () => {
+      enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-02T00:00:00Z')]);
+      return {
+        ok: true,
+        json: async () => ({ results: [{ status: 'accepted' }] }),
+      };
+    });
+    global.fetch = mockFetch as any;
+
+    enqueueSyncChanges([makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z')]);
+    await drainSyncOutbox();
+
+    const outbox = peekSyncOutbox();
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].id).toBe('d1');
+    expect(outbox[0].clientUpdatedAt).toBe('2026-06-02T00:00:00Z');
+  });
+
+  it('partial answers drop only the answered snapshot entries, never mid-flight arrivals', async () => {
+    const mockFetch = jest.fn().mockImplementation(async () => {
+      enqueueSyncChanges([makeChange('d3', 'devotionals', '2026-06-03T00:00:00Z')]);
+      return {
+        ok: true,
+        json: async () => ({ results: [{ status: 'accepted' }] }),
+      };
+    });
+    global.fetch = mockFetch as any;
+
+    enqueueSyncChanges([
+      makeChange('d1', 'devotionals', '2026-06-01T00:00:00Z'),
+      makeChange('d2', 'devotionals', '2026-06-02T00:00:00Z'),
+    ]);
+    await drainSyncOutbox();
+
+    const outbox = peekSyncOutbox();
+    const ids = outbox.map((c) => c.id).sort();
+    expect(ids).toEqual(['d2', 'd3']);
   });
 });

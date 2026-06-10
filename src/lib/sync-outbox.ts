@@ -113,15 +113,21 @@ export function drainSyncOutbox(): Promise<void> {
       } | null;
 
       // Server is authoritative: accepted | conflict | rejected all clear from
-      // the outbox. Only keep changes the server didn't answer for (partial
-      // response / malformed payload).
+      // the outbox. Two things must survive (REVM-1):
+      //  - changes the server didn't answer for (partial response), and
+      //  - anything enqueued while the POST was in flight. So: re-read the
+      //    outbox and remove exactly the answered snapshot entries — a
+      //    same-key change with a NEWER clientUpdatedAt stays queued.
       const answeredCount = payload?.results?.length ?? 0;
-      if (answeredCount >= changes.length) {
-        writeOutbox([]);
-      } else {
-        // Partial answer: drop the answered prefix, keep the rest
-        writeOutbox(changes.slice(answeredCount));
-      }
+      const answered = changes.slice(0, answeredCount);
+      const answeredAt = new Map(
+        answered.map((c) => [`${c.table}:${c.id}`, c.clientUpdatedAt]),
+      );
+      const remaining = readOutbox().filter((c) => {
+        const sentAt = answeredAt.get(`${c.table}:${c.id}`);
+        return sentAt === undefined || c.clientUpdatedAt > sentAt;
+      });
+      writeOutbox(remaining);
     } catch {
       // Network error / timeout / abort — keep the outbox intact for retry
     } finally {
