@@ -93,6 +93,13 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof SunIcon }[]
   { value: 'system', label: 'System', icon: MonitorIcon },
 ];
 
+// Dynamic Type caps for settings rows with trailing chip groups (RT-DYN-1/2).
+// Codebase pattern: per-file *_MAX_SCALE consts + maxFontSizeMultiplier (see
+// StreakBox.tsx, PremiumNudgeCard.tsx). Labels scale further than chips so the
+// chip group can never starve the label into per-character wrapping at XXL/AX.
+const SETTINGS_LABEL_MAX_SCALE = 1.4;
+const SETTINGS_CHIP_MAX_SCALE = 1.2;
+
 const REMINDER_TIMES = [
   { value: '6:00 AM', label: 'Early morning' },
   { value: '8:00 AM', label: 'Morning' },
@@ -808,6 +815,8 @@ export default function YouScreen() {
                 }}
               >
                 <Text
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={SETTINGS_LABEL_MAX_SCALE}
                   style={{
                     fontFamily: FontFamily.ui,
                     fontSize: 15,
@@ -851,6 +860,7 @@ export default function YouScreen() {
                             weight="light"
                           />
                           <Text
+                            maxFontSizeMultiplier={SETTINGS_CHIP_MAX_SCALE}
                             style={{
                               fontFamily: FontFamily.uiMedium,
                               fontSize: FontSize.xs,
@@ -1084,6 +1094,8 @@ export default function YouScreen() {
                 }}
               >
                 <Text
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={SETTINGS_LABEL_MAX_SCALE}
                   style={{
                     fontFamily: FontFamily.ui,
                     fontSize: 15,
@@ -1120,6 +1132,7 @@ export default function YouScreen() {
                         }}
                       >
                         <Text
+                          maxFontSizeMultiplier={SETTINGS_CHIP_MAX_SCALE}
                           style={{
                             fontFamily: FontFamily.uiMedium,
                             fontSize: 13,
