@@ -437,6 +437,15 @@ export default function OnboardingScreen() {
   // Companion naming state (saved to store on continue)
   const [companionNameInput, setCompanionNameInput] = useState('');
 
+  // RT-ONB-1: the name field is uncontrolled (defaultValue) so React never
+  // writes back into the native field mid-typing; commitName is the single
+  // writer for data.name; onEndEditing reconciles from the authoritative
+  // native text; the reset key remounts the field after voice dictation.
+  const [nameInputResetKey, setNameInputResetKey] = useState(0);
+  const commitName = useCallback((text: string) => {
+    setData((prev) => (prev.name === text ? prev : { ...prev, name: text }));
+  }, []);
+
   // Form data (declared early — mirrorBackText useMemo depends on it)
   const [data, setData] = useState<OnboardingData>({
     name: existingUser?.name || '',
@@ -2023,8 +2032,10 @@ export default function OnboardingScreen() {
       return (
         <View style={{ marginTop: Spacing['2'] }}>
           <TextInput
-            value={data.name}
-            onChangeText={(text) => setData((prev) => ({ ...prev, name: text }))}
+            key={`name-input-${nameInputResetKey}`}
+            defaultValue={data.name}
+            onChangeText={commitName}
+            onEndEditing={(e) => commitName(e.nativeEvent.text)}
             placeholder={step.placeholder}
             placeholderTextColor={colors.textMuted}
             style={{
@@ -2045,7 +2056,10 @@ export default function OnboardingScreen() {
           />
           <VoiceInputBar
             value={data.name}
-            onChangeText={(text) => setData((prev) => ({ ...prev, name: text }))}
+            onChangeText={(text) => {
+              commitName(text);
+              setNameInputResetKey((k) => k + 1);
+            }}
           />
         </View>
       );
