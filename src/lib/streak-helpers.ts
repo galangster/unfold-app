@@ -183,12 +183,13 @@ export function applyStreakRead(
     newFreezes = input.streakFreezes - decision.freezesConsumed;
   }
 
-  // Earn a freeze at every 7-day milestone of the CURRENT streak (premium
-  // only — the free cap is 0). No longest-streak dedupe: after a reset the
-  // user must be able to earn again while rebuilding (COR-3).
-  if (newStreak > 0 && newStreak % 7 === 0) {
-    const maxFreezes = input.isPremium ? MAX_FREEZES : 0;
-    newFreezes = Math.min(newFreezes + 1, maxFreezes);
+  // Earn a freeze at every 7-day milestone of the CURRENT streak — premium
+  // only. Free (incl. churned-premium) users simply do not EARN here; a
+  // banked balance from a past subscription is preserved, never clamped
+  // away (REVM-3). No longest-streak dedupe: after a reset the user must be
+  // able to earn again while rebuilding (COR-3).
+  if (input.isPremium && newStreak > 0 && newStreak % 7 === 0) {
+    newFreezes = Math.min(newFreezes + 1, MAX_FREEZES);
   }
 
   return {

@@ -425,6 +425,20 @@ describe('applyStreakRead', () => {
     expect(r?.streakFreezes).toBe(0);
   });
 
+  it('a churned-premium user keeps banked freezes at a 7-day milestone (REVM-3)', () => {
+    const now = at(2026, 6, 10);
+    const r = read(now, {
+      streakCurrent: 6,
+      streakLastReadDate: iso(2026, 6, 9),
+      streakFreezes: 3, // banked while subscribed; subscription has since lapsed
+      isPremium: false,
+    });
+    // Formula: yesterday-read → 'continue', freezesConsumed 0 → newFreezes = 3.
+    // Milestone: newStreak 7 % 7 === 0, but isPremium false → NO earn, NO clamp.
+    expect(r?.streakCurrent).toBe(7);
+    expect(r?.streakFreezes).toBe(3);
+  });
+
   it('freeze earning caps at 99', () => {
     const now = at(2026, 6, 10);
     const r = read(now, {
