@@ -176,15 +176,8 @@ describe('debug seed routes', () => {
     expect(fs.existsSync(debugResetBeginningPath)).toBe(true);
     expect(debugResetBeginningSource).toContain('isQaToolsEnabled()');
     expect(debugResetBeginningSource).toContain('<Redirect href="/(tabs)/(you)" />');
-    expect(debugResetBeginningSource).toContain('await cancelAllReminders();');
-    expect(debugResetBeginningSource).toContain('useUnfoldStore.getState().reset();');
-    expect(debugResetBeginningSource).toContain('useCompanionChatStore.getState().clearAllConversations();');
-    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('unfold-storage');");
-    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('unfold-companion-chat');");
-    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('@unfold_companion_daily');");
-    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('@unfold_exclusive_offer_seen');");
-    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('@unfold_onboarding_offer_seen');");
-    expect(debugResetBeginningSource).toContain("mmkvStorage.removeItem('inflight-generation-job');");
+    // FIX-6: inline wipe calls replaced with performFullLocalReset() helper
+    expect(debugResetBeginningSource).toContain('await performFullLocalReset();');
     expect(debugResetBeginningSource).toContain('ui.setQaPremiumOverride(false);');
     expect(debugResetBeginningSource).toContain('ui.setDebugForceTrialExpired(false);');
     expect(debugResetBeginningSource).toContain('useUIState.setState({ revenueCatResolved: false });');
