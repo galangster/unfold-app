@@ -3,6 +3,19 @@ jest.mock('@/lib/api-config', () => ({
   getAuthHeaders: jest.fn(async () => ({ 'Content-Type': 'application/json' })),
 }));
 
+jest.mock('../mmkv-storage', () => {
+  const store = new Map<string, string>();
+  return {
+    mmkvStorage: {
+      getItem: jest.fn((key: string) => store.get(key) ?? null),
+      setItem: jest.fn((key: string, value: string) => { store.set(key, value); }),
+      removeItem: jest.fn((key: string) => { store.delete(key); }),
+    },
+    getDeviceId: jest.fn(() => 'test-device-id'),
+    getSharedEncryptionKey: jest.fn(() => 'test-key'),
+  };
+});
+
 import { buildDevotionalReadSyncChanges } from '@/lib/devotional-read-sync';
 import type { Devotional, DevotionalDay } from '@/lib/store';
 
@@ -64,6 +77,8 @@ describe('buildDevotionalReadSyncChanges', () => {
     expect(changes[0].data).not.toHaveProperty('bodyText');
     expect(changes[0].data).not.toHaveProperty('scriptureText');
     expect(changes[0].data).not.toHaveProperty('content');
+    expect(changes[0].data.schemaVersion).toBe(1);
+    expect(changes[1].data.schemaVersion).toBe(1);
   });
 
   it('uses the canonical sync id for progressive read state even when the local day id is not canonical', () => {

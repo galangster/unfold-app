@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { drainSyncOutbox } from '@/lib/sync-outbox';
 import { usePrevious } from '@/hooks/usePrevious';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -309,6 +310,9 @@ export default function HomeScreen() {
   // because the hero card is where users expect to discover Day 2+.
   useFocusEffect(
     useCallback(() => {
+      // Drain any queued offline completions before pulling new content
+      void drainSyncOutbox();
+
       const devotionalId = currentDevotionalId;
       if (!devotionalId) return;
 

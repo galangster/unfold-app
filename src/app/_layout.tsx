@@ -16,6 +16,7 @@ import { useCheckInNotifications } from '@/hooks/useCheckInNotifications';
 import { useDailyReminderSync } from '@/hooks/useDailyReminderSync';
 import { useStreakReconcile } from '@/hooks/useStreakReconcile';
 import { useUserProfileSync } from '@/hooks/useUserProfileSync';
+import { useSyncOutboxDrain } from '@/hooks/useSyncOutboxDrain';
 import { logger } from '@/lib/logger';
 import { useUnfoldStore } from '@/lib/store';
 import { registerPushToken, setNotificationNavigationReady, setupNotificationListeners, syncNotificationPreferences } from '@/lib/push-notifications';
@@ -70,6 +71,10 @@ function RootLayoutNav() {
   // Keep backend sync_users profile/preferences current so Day 2+ generation
   // uses Settings edits such as writing style and faith background.
   useUserProfileSync();
+
+  // Drain the sync outbox on mount and on reconnect so offline completions
+  // reach the server when connectivity returns.
+  useSyncOutboxDrain();
 
   // Register push token with backend (anonymous, keyed by X-Device-ID)
   useEffect(() => {
