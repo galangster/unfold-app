@@ -16,6 +16,14 @@
 
 Full backend + Railway audit added (overrides original §1 "skim only"): repo map + Railway infra readback, route-by-route finders, **endpoint-by-endpoint mobile↔server contract matrix** ("relationship must be perfect"), lean verify, fixes STAGED on `audit/backend-e2e-2026-06` (worktree `~/clawd/work/unfold-backend-audit`, base `78d9051` = Railway prod commit, both services). Decisions: stage fixes (not report-only); full unbiased sweep. Hard gates: read-only prod (Railway readback/logs/metrics/targeted read-only DB queries OK per precedent), NO deploy/migrations/load-tests — deploy is Nick's gate. BE- findings merge into the unified ledger/report. Backend checkout at work/unfold/backend is on stale dirty RC branch — never touch it.
 
+## Backend track status
+
+| B-Phase | Status | Notes |
+|---|---|---|
+| B1 Map | DONE | 6 readers + synthesis (12 min, ~740k tok). `BACKEND-MAP.md` committed on backend branch: 34 routes, topology, matrix skeleton. 8 headline risks; standouts: dead cron premium gate (is_premium has NO writer — explains the May-25 Day-10 race: client-fallback generation is the ONLY working path), is_premium sync-push self-grant hole (not in SERVER_MANAGED_COLUMNS), bug-report stub returns fake success, dedup index log-only catch, unauth adaptive-question route w/ spoofable IP limit, in-process limiters × replicas. COUNTER-EVIDENCE noted for verify: push DID deliver May-25 (anonymous Expo works) → "push fully non-functional" claim overstated; MODE api-vs-all conflict → resolve via Railway config. |
+| B2 Find+Matrix+Verify | RUNNING | `wf_89aa9890-91b`: 6 sonnet finders (BSEC/BJOB/BDAT/BINF/BCOST/BOBS, cap 12 each) + 3 contract-matrix agents (34 routes: match/drift/risk/unused/mobile-only per route) + lean verify w/ escalation. Findings → `/tmp/unfold-e2e-audit-2026-06/backend-findings/`. |
+| B3 Fix loop | pending | Stage on `audit/backend-e2e-2026-06`; NO deploy (Nick gate). |
+
 ## Phase status
 
 | Phase | Status | Notes |
