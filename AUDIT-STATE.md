@@ -61,6 +61,10 @@ Token efficiency mandate — same output quality, much cheaper. Advisor/executor
 14. Shipped debug/abandoned surfaces deep-linkable: /unfolded visible red debug border + debug share logging; /wallpaper orphaned 549-LOC pipeline; /debug-light-mode ships despite "remove before public release" comment.
 15. Android structurally broken if shipped (NOT shipping in 1.0 — P2 context): unguarded iOS-only import chain risks require-time boot crash; no google-services.json; ActionSheetIOS/Alert.prompt no-ops.
 
+## P0 triage (NAT-1, 2026-06-10)
+
+Strip is from `1e155db` "fix: remove App Groups entitlement that blocks IPA build" — deliberate WORKAROUND (provisioning profile lacks capability), not a documented product tradeoff (vault grep: nothing). Fix path = dev-portal App ID capability + regen profiles + remove plugin + **build 219** (native; not OTA). Portal mutation = Nick-gated. Discord ping sent asking Nick to check widgets on his physical 218 install (instant empirical test). Pending his answer → drives ship-218 vs cut-219 verdict.
+
 ## Finding ledger
 
 Schema: `{id, dimension, severity(P0/P1/P2/TASTE), file:line, claim, evidence, proposed_fix, confidence, status(new/verified/refuted/fixed/deferred), verdicts, commit}`
