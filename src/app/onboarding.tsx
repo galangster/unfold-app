@@ -29,6 +29,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeOut,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -91,8 +92,13 @@ import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 // Slow-pulsing text — opacity breathes in and out gently
 function PulsingText({ text, style }: { text: string; style: any }) {
   const opacity = useSharedValue(1);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      return;
+    }
     opacity.value = withRepeat(
       withSequence(
         withTiming(0.3, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
@@ -101,7 +107,7 @@ function PulsingText({ text, style }: { text: string; style: any }) {
       -1,
       false,
     );
-  }, []);
+  }, [reducedMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -424,6 +430,7 @@ export default function OnboardingScreen() {
     return createThemedColors(DarkColors, accent);
   }, [accentThemeId]);
   const isDark = true;
+  const reducedMotion = useReducedMotion();
 
   const iconMap = useMemo(() => getIconMap(colors.accent), [colors.accent]);
 
@@ -684,7 +691,7 @@ export default function OnboardingScreen() {
   }));
 
   useEffect(() => {
-    if (!isLoadingAdaptive) {
+    if (!isLoadingAdaptive || reducedMotion) {
       ripple1.value = 0;
       ripple2.value = 0;
       ripple3.value = 0;
@@ -704,7 +711,7 @@ export default function OnboardingScreen() {
       1100,
       withRepeat(withTiming(1, { duration: 1700, easing: Easing.out(Easing.ease) }), -1, false)
     );
-  }, [isLoadingAdaptive, ripple1, ripple2, ripple3]);
+  }, [isLoadingAdaptive, reducedMotion, ripple1, ripple2, ripple3]);
 
   // Generate AI mirror-back when reaching that step
   useEffect(() => {

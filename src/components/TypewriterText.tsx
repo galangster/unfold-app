@@ -11,6 +11,7 @@ import Animated, {
   Easing,
   cancelAnimation,
   interpolateColor,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { FontFamily } from '@/constants/fonts';
@@ -52,6 +53,7 @@ const MagicalChar = React.memo(function MagicalChar({
   isWordStart: boolean;
   shimmer?: boolean;
 }) {
+  const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(6);
   const scale = useSharedValue(0.85);
@@ -85,7 +87,7 @@ const MagicalChar = React.memo(function MagicalChar({
     );
 
     // Shimmer — gentle brightness pulse after appearing
-    if (shimmer) {
+    if (shimmer && !reducedMotion) {
       shimmerOpacity.value = withDelay(
         800,
         withRepeat(

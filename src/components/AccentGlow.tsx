@@ -7,6 +7,7 @@ import Animated, {
   withTiming,
   Easing,
   interpolate,
+  useReducedMotion,
 } from 'react-native-reanimated';
 
 const INTENSITY_RANGES = {
@@ -30,11 +31,12 @@ export function AccentGlow({
   children,
   style,
 }: AccentGlowProps) {
+  const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
   const range = INTENSITY_RANGES[intensity];
 
   useEffect(() => {
-    if (active) {
+    if (active && !reducedMotion) {
       progress.value = 0;
       progress.value = withRepeat(
         withTiming(1, { duration: 2500, easing: Easing.inOut(Easing.sin) }),
@@ -44,7 +46,7 @@ export function AccentGlow({
     } else {
       progress.value = withTiming(0, { duration: 400 });
     }
-  }, [active, progress]);
+  }, [active, reducedMotion, progress]);
 
   const glowStyle = useAnimatedStyle(() => {
     if (!active && progress.value === 0) {

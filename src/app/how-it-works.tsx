@@ -20,6 +20,7 @@ import Animated, {
   FadeOut,
   interpolate,
   runOnJS,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -1010,6 +1011,8 @@ export function AnimatedBody({ text, color, pageKey }: { text: string; color: st
 }
 
 export function CardAnimation({ type, accent }: { type: string; accent: string }) {
+  const reducedMotion = useReducedMotion();
+  if (reducedMotion) return null;
   switch (type) {
     case 'dots': return <FloatingDots accent={accent} />;
     case 'pencil': return <PencilWriting accent={accent} />;

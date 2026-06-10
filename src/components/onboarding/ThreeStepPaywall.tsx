@@ -499,6 +499,7 @@ function ScreenTrialReminder({
   colors: ColorTheme;
   trialDays: number;
 }) {
+  const reducedMotion = useReducedMotion();
   const dragY = useSharedValue(0);
   const MAX_DRAG = 60;
   const SPRING_CONFIG = { damping: 30, stiffness: 300, mass: 1 };
@@ -530,8 +531,8 @@ function ScreenTrialReminder({
             <View style={styles.bellContainer}>
               <LottieView
                 source={require('../../../assets/lottie/bell-notification.json')}
-                autoPlay
-                loop
+                autoPlay={!reducedMotion}
+                loop={!reducedMotion}
                 style={styles.bellLottie}
                 colorFilters={[
                   { keypath: 'Pre-comp 1', color: colors.accent },
@@ -870,16 +871,18 @@ function GlowingCTA({
   // withRepeat(...true) + easing curves can feel jittery because each
   // iteration re-interpolates from a fixed keyframe; a sin wave gives a
   // true continuous oscillation.
+  const reducedMotion = useReducedMotion();
   const phase = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) return;
     phase.value = withRepeat(
       withTiming(1, { duration: 3600, easing: Easing.linear }),
       -1,
       false,
     );
     return () => cancelAnimation(phase);
-  }, [phase]);
+  }, [phase, reducedMotion]);
 
   const shadowStyle = useAnimatedStyle(() => {
     // sin wave: phase 0 → sin(-π/2) = -1 → 0; phase 0.5 → sin(π/2) = 1;

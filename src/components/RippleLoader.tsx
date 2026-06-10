@@ -20,6 +20,7 @@ import Animated, {
   withDelay,
   Easing,
   cancelAnimation,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 
@@ -52,8 +53,15 @@ export function RippleLoader({
   const r2 = useSharedValue(0);
   const r3 = useSharedValue(0);
   const rings = [r0, r1, r2, r3].slice(0, ringCount);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reducedMotion) {
+      rings.forEach((sv, i) => {
+        sv.value = (i + 0.5) / rings.length;
+      });
+      return;
+    }
     rings.forEach((sv, i) => {
       sv.value = withDelay(
         i * stagger,
@@ -71,7 +79,7 @@ export function RippleLoader({
       rings.forEach((sv) => cancelAnimation(sv));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ringCount, duration, stagger]);
+  }, [ringCount, duration, stagger, reducedMotion]);
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>

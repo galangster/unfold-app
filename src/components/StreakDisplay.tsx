@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
   Easing,
   useReducedMotion,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { useTheme } from '@/lib/theme';
@@ -48,14 +49,20 @@ export function StreakDisplay({ size = 'medium', compact, showFreeze = true, hid
   // Breathing glow for active streaks
   const flamePulse = useSharedValue(1);
   useEffect(() => {
-    if (streak > 0) {
+    if (streak > 0 && !reducedMotion) {
       flamePulse.value = withRepeat(
         withTiming(1.15, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
         -1,
         true
       );
+    } else {
+      cancelAnimation(flamePulse);
+      flamePulse.value = 1;
     }
-  }, [streak, flamePulse]);
+    return () => {
+      cancelAnimation(flamePulse);
+    };
+  }, [streak, reducedMotion, flamePulse]);
 
   const flamePulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: flamePulse.value }],

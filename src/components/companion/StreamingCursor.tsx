@@ -9,6 +9,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
 
@@ -16,9 +17,14 @@ const HALF_CYCLE = 500;
 
 export function StreamingCursor() {
   const { colors } = useTheme();
+  const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(1);
 
   useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 1;
+      return;
+    }
     opacity.value = withRepeat(
       withSequence(
         withTiming(0, { duration: HALF_CYCLE }),
@@ -26,7 +32,7 @@ export function StreamingCursor() {
       ),
       -1
     );
-  }, [opacity]);
+  }, [opacity, reducedMotion]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
 

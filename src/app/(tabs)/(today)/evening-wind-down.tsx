@@ -53,8 +53,13 @@ function MoonRipples({ color }: { color: string }) {
 
 function RippleRingEvening({ delay, color }: { delay: number; color: string }) {
   const progress = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reducedMotion) {
+      progress.value = 0;
+      return;
+    }
     progress.value = withDelay(
       delay,
       withRepeat(
@@ -63,7 +68,7 @@ function RippleRingEvening({ delay, color }: { delay: number; color: string }) {
         false
       )
     );
-  }, [delay, progress]);
+  }, [delay, progress, reducedMotion]);
 
   const style = useAnimatedStyle(() => {
     const scale = interpolate(progress.value, [0, 1], [0.5, 1.5]);

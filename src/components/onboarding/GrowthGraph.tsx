@@ -18,6 +18,7 @@ import {
   withRepeat,
   withSequence,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
@@ -51,6 +52,7 @@ interface GrowthGraphProps {
 }
 
 export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: GrowthGraphProps) {
+  const reducedMotion = useReducedMotion();
   const path = useMemo(
     () => Skia.Path.MakeFromSVGString(buildCurvePath(GRAPH_WIDTH, GRAPH_HEIGHT)),
     [],
@@ -115,14 +117,16 @@ export function GrowthGraph({ colors, animationDelay = 0, onDrawComplete }: Grow
     // Gradient fill fades in after line completes
     fillOpacity.value = withDelay(animationDelay + 6000, withTiming(0.15, { duration: 800 }));
     // Dot pulse — blink continuously
-    dotPulse.value = withDelay(animationDelay, withRepeat(
-      withSequence(
-        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.4, { duration: 600, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      true,
-    ));
+    if (!reducedMotion) {
+      dotPulse.value = withDelay(animationDelay, withRepeat(
+        withSequence(
+          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.4, { duration: 600, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        true,
+      ));
+    }
 
     const timer = setTimeout(() => onDrawComplete?.(), animationDelay + 6000);
     return () => clearTimeout(timer);

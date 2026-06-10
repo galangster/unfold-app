@@ -13,6 +13,7 @@ import Animated, {
   withSequence,
   withDelay,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -108,6 +109,7 @@ interface EmberParticlesProps {
 export function EmberParticles({ color, count = 12, bidirectional = false }: EmberParticlesProps) {
   const upCount = bidirectional ? Math.ceil(count * 0.6) : count;
   const downCount = bidirectional ? count - upCount : 0;
+  const reducedMotion = useReducedMotion();
 
   const upParticles = useMemo<ParticleConfig[]>(
     () =>
@@ -134,6 +136,8 @@ export function EmberParticles({ color, count = 12, bidirectional = false }: Emb
       })),
     [downCount],
   );
+
+  if (reducedMotion) return null;
 
   return (
     <View

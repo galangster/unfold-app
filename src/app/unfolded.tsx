@@ -21,6 +21,7 @@ import Animated, {
   runOnJS,
   cancelAnimation,
   interpolate,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -399,6 +400,7 @@ const sparkleS = StyleSheet.create({
 
 // ─── Floating Ember Particles ─────────────────────────────────
 const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { index: number; color: string }) {
+  const reducedMotion = useReducedMotion();
   const translateY = useSharedValue(0);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(0);
@@ -410,6 +412,7 @@ const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { inde
   const riseDuration = 5000 + (index % 4) * 2000;
 
   useEffect(() => {
+    if (reducedMotion) return;
     opacity.value = withDelay(
       index * 150,
       withRepeat(
@@ -476,10 +479,12 @@ const FloatingEmber = React.memo(function FloatingEmber({ index, color }: { inde
 
 // ─── Pulsing Ring (for archetype card) ────────────────────────
 function PulsingRing({ delay, size, color }: { delay: number; size: number; color: string }) {
+  const reducedMotion = useReducedMotion();
   const scale = useSharedValue(0.6);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
+    if (reducedMotion) return;
     scale.value = withDelay(
       delay,
       withRepeat(
@@ -1139,6 +1144,7 @@ function StreakCard({ data }: { data: RecapData }) {
 //  CARD 8: THE CLOSING — Keep Unfolding
 // ═══════════════════════════════════════════════════════════════
 function ClosingCard({ data, userName }: { data: RecapData; userName: string }) {
+  const reducedMotion = useReducedMotion();
   const [showBurst, setShowBurst] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const shareCardRef = useRef<View>(null);
@@ -1193,7 +1199,7 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
 
   return (
     <View style={s.closingContainer}>
-      {showBurst && <SparkleBurst count={40} />}
+      {showBurst && !reducedMotion && <SparkleBurst count={40} />}
 
       <Reveal delay={300} from={30}>
         <Text style={s.closingTitle}>Keep{'\n'}Unfolding</Text>

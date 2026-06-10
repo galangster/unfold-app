@@ -9,6 +9,7 @@ import Animated, {
   withSpring,
   withDelay,
   Easing,
+  useReducedMotion,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useTheme } from '@/lib/theme';
@@ -43,6 +44,7 @@ export function AudioWaveform({
   const { colors } = useTheme();
   const color = propColor ?? colors.accent;
   const effectiveBarCount = Math.min(Math.max(1, Math.floor(barCount ?? 20)), MAX_BARS);
+  const reducedMotion = useReducedMotion();
 
   // Create all shared values at top level - hooks must be called in same order every render
   const sv0 = useSharedValue(0.3);
@@ -115,6 +117,14 @@ export function AudioWaveform({
 
   // Animate bars based on playback state
   useEffect(() => {
+    if (reducedMotion) {
+      bars.forEach((bar, i) => {
+        const barValue = barValues[i];
+        if (!barValue) return;
+        barValue.value = isPlaying ? bar.minHeight : 0.3;
+      });
+      return;
+    }
     if (isPlaying) {
       bars.forEach((bar, i) => {
         const barValue = barValues[i];
@@ -159,7 +169,7 @@ export function AudioWaveform({
         ) as any;
       });
     }
-  }, [isPlaying, bars, barValues]);
+  }, [isPlaying, bars, barValues, reducedMotion]);
 
   return (
     <View style={styles.container}>
