@@ -12,6 +12,10 @@
 - Evidence dir: `/tmp/unfold-e2e-audit-2026-06/`
 - Simulator: iPhone 17 Pro `38CDF1B0-50AB-49C3-A079-5FAB16918FA2` (per USER.md)
 
+## SCOPE EXPANSION (Nick, 2026-06-10): Backend E2E track
+
+Full backend + Railway audit added (overrides original §1 "skim only"): repo map + Railway infra readback, route-by-route finders, **endpoint-by-endpoint mobile↔server contract matrix** ("relationship must be perfect"), lean verify, fixes STAGED on `audit/backend-e2e-2026-06` (worktree `~/clawd/work/unfold-backend-audit`, base `78d9051` = Railway prod commit, both services). Decisions: stage fixes (not report-only); full unbiased sweep. Hard gates: read-only prod (Railway readback/logs/metrics/targeted read-only DB queries OK per precedent), NO deploy/migrations/load-tests — deploy is Nick's gate. BE- findings merge into the unified ledger/report. Backend checkout at work/unfold/backend is on stale dirty RC branch — never touch it.
+
 ## Phase status
 
 | Phase | Status | Notes |
