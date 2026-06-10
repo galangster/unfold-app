@@ -111,6 +111,14 @@ describe('buildDevotionalReadSyncChanges', () => {
     expect(changes[0].data).not.toHaveProperty('content');
   });
 
+  it('both changes carry the shared-protocol deleted:false flag (REVM-7 pin)', () => {
+    const readAt = '2026-04-25T12:00:00.000Z';
+    const changes = buildDevotionalReadSyncChanges({ devotional, day, readAt });
+    expect(changes).toHaveLength(2);
+    expect(changes[0].deleted).toBe(false);
+    expect(changes[1].deleted).toBe(false);
+  });
+
   it('keeps full day content only for non-canonical legacy devotionals', () => {
     const readAt = '2026-04-25T12:00:00.000Z';
     const legacyDevotional: Devotional = {
