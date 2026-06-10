@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet, Platform } from 'react-native';
+import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet, Platform, Pressable } from 'react-native';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -555,12 +555,34 @@ export default function PaywallScreen() {
       >
         <View style={{ paddingHorizontal: Spacing['7'], paddingTop: insets.top }}>
           {/* Unfold icon + close button row */}
-          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: Spacing['6'] }}>
+          <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(Duration.normal).easing(Ease.out)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing['6'] }}>
             <Image
               source={require('@/app/icon-paywall-light.png')}
               style={{ width: 28, height: 28, tintColor: colors.accent, opacity: 0.8 }}
               resizeMode="contain"
             />
+            {/* RN Pressable, NOT the RNGH TouchableOpacity imported above: RNGH
+                touchables apply `style` to an inner view, which is what kept the
+                old absolute-positioned close button off-screen (RT-PAYWALL-1). */}
+            <Pressable
+              onPress={handleClose}
+              disabled={isPurchasing}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isPurchasing }}
+              hitSlop={6}
+              style={{
+                width: 44,
+                height: 44,
+                marginVertical: -8,
+                marginRight: -11,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isPurchasing ? 0.5 : 1,
+              }}
+            >
+              <XIcon size={22} color={colors.textMuted} weight="light" />
+            </Pressable>
           </Animated.View>
 
           {/* Hero — title + subtitle */}
@@ -979,27 +1001,6 @@ export default function PaywallScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Close button — absolute, top right */}
-      <TouchableOpacity
-        activeOpacity={0.6}
-        onPress={handleClose}
-        disabled={isPurchasing}
-        accessibilityLabel="Close paywall"
-        accessibilityRole="button"
-        accessibilityState={{ disabled: isPurchasing }}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        style={{
-          position: 'absolute',
-          top: insets.top + 8,
-          right: 16,
-          padding: 8,
-          opacity: isPurchasing ? 0.5 : 1,
-          zIndex: 10,
-        }}
-      >
-        <XIcon size={22} color={colors.textMuted} weight="light" />
-      </TouchableOpacity>
 
       {/* Purchase loading overlay */}
       {isPurchasing && (
