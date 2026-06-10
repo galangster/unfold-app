@@ -35,6 +35,15 @@ const notificationNavigationCoordinator = createNotificationNavigationCoordinato
 
 let initialNotificationHydrationSettled = false;
 
+// Session-dedupe: avoid re-POSTing the push token on every foreground transition
+// once the backend POST has already succeeded this session.
+let registeredThisSession = false;
+
+/** Reset for tests that need to exercise the full registration path. */
+export function resetPushRegistrationSession(): void {
+  registeredThisSession = false;
+}
+
 function getNotificationResponseKey(
   response: Notifications.NotificationResponse | null | undefined,
 ): string | undefined {
@@ -78,11 +87,13 @@ async function hydrateLastNotificationResponse(): Promise<void> {
 }
 
 /**
- * Request push notification permissions, obtain an Expo push token,
- * and register it with the backend.
+ * Obtain an Expo push token and register it with the backend.
  *
- * Safe to call multiple times — skips gracefully on simulator,
- * when permissions are denied, or when the user is not authenticated.
+ * Safe to call multiple times — deduped per session after a successful POST.
+ * Skips on simulator and when permission is not yet granted. Does NOT request
+ * permission — the in-context ask (generating.tsx / settings) owns that.
+ * Re-register after permission is granted and on foreground to recover from
+ * any failed POST earlier in the session.
  */
 export async function registerPushToken(): Promise<void> {
   // Push tokens are only available on physical devices
@@ -91,18 +102,17 @@ export async function registerPushToken(): Promise<void> {
     return;
   }
 
+  if (registeredThisSession) {
+    return;
+  }
+
   try {
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    // NEVER request permission here — the in-context ask (generating.tsx /
+    // settings) owns requestPermissionsAsync. Background registration only
+    // proceeds when permission already exists.
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
-      logger.log('[push] Push notification permission not granted');
+      logger.log('[push] Permission not granted; skipping background registration');
       return;
     }
 
@@ -161,6 +171,7 @@ export async function registerPushToken(): Promise<void> {
       return;
     }
 
+    registeredThisSession = true;
     logger.log('[push] Push token registered with backend');
   } catch (err) {
     logger.warn('[push] Failed to register push token:', err);

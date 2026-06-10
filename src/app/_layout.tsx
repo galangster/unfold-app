@@ -88,9 +88,17 @@ function RootLayoutNav() {
   // reach the server when connectivity returns.
   useSyncOutboxDrain();
 
-  // Register push token with backend (anonymous, keyed by X-Device-ID)
+  // Register push token with backend (anonymous, keyed by X-Device-ID).
+  // Also re-attempts on foreground so the POST succeeds after any earlier
+  // failure (network down at cold start, permission granted during session).
+  // The session-dedupe flag in registerPushToken makes foreground retries free
+  // after the first successful POST.
   useEffect(() => {
     registerPushToken();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void registerPushToken();
+    });
+    return () => sub.remove();
   }, []);
 
   // Keep backend-side devotional-ready push timing aligned with the user's

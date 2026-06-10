@@ -335,3 +335,34 @@ export function createNotificationNavigationCoordinator({
     },
   };
 }
+
+// ── NET-15 helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Decision function for registerPushToken's permission check.
+ *
+ * Background registration NEVER requests permission — the in-context ask
+ * (generating.tsx / settings) owns requestPermissionsAsync. Registration
+ * only proceeds when permission was already granted.
+ */
+export function shouldProceedWithPushRegistration(args: {
+  existingStatus: string;
+}): { proceed: boolean; request: boolean } {
+  if (args.existingStatus === 'granted') {
+    return { proceed: true, request: false };
+  }
+  return { proceed: false, request: false };
+}
+
+/**
+ * Session-dedupe guard for the backend POST in registerPushToken.
+ *
+ * Returns false if the token was already successfully posted this session,
+ * preventing redundant POSTs on every foreground transition.
+ */
+export function shouldPostPushRegistration(args: {
+  alreadyRegisteredThisSession: boolean;
+}): boolean {
+  return !args.alreadyRegisteredThisSession;
+}
+

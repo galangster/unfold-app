@@ -31,6 +31,7 @@ import {
   requestNotificationPermissions,
   areNotificationsEnabled,
 } from '@/lib/notifications';
+import { registerPushToken } from '@/lib/push-notifications';
 import { logBugEvent, logBugError } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 import { mmkvStorage } from '@/lib/mmkv-storage';
@@ -324,6 +325,7 @@ export default function GeneratingScreen() {
     const granted = await requestNotificationPermissions();
     setNotificationPermission(granted ? 'granted' : 'denied');
     setShowNotificationPrompt(false);
+    if (granted) void registerPushToken();
   };
 
   const handleDismissNotificationPrompt = () => {

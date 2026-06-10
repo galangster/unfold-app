@@ -11,6 +11,8 @@ import {
   shouldHandleNotificationData,
   shouldHydrateNotificationResponse,
   shouldMarkNotificationNavigationReady,
+  shouldProceedWithPushRegistration,
+  shouldPostPushRegistration,
 } from '../push-notification-helpers';
 import { buildDevotionalSeed } from '../dev-seed';
 
@@ -398,5 +400,20 @@ describe('push notification helpers', () => {
         }),
       );
     });
+  });
+});
+
+describe('shouldProceedWithPushRegistration (NET-15)', () => {
+  it('never requests permission from background registration', () => {
+    expect(shouldProceedWithPushRegistration({ existingStatus: 'undetermined' })).toEqual({ proceed: false, request: false });
+    expect(shouldProceedWithPushRegistration({ existingStatus: 'denied' })).toEqual({ proceed: false, request: false });
+    expect(shouldProceedWithPushRegistration({ existingStatus: 'granted' })).toEqual({ proceed: true, request: false });
+  });
+});
+
+describe('shouldPostPushRegistration (NET-15)', () => {
+  it('session dedupe', () => {
+    expect(shouldPostPushRegistration({ alreadyRegisteredThisSession: true })).toBe(false);
+    expect(shouldPostPushRegistration({ alreadyRegisteredThisSession: false })).toBe(true);
   });
 });
