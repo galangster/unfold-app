@@ -771,7 +771,7 @@ export default function PaywallScreen() {
         }}
       >
         {/* Plan selection — stacked full-width cards */}
-        <View style={{ gap: Spacing['2'], marginBottom: 14 }}>
+        <View style={{ gap: Spacing['2'], marginBottom: 10 }}>
           <TouchableOpacity
             activeOpacity={1}
             onPress={() => {
@@ -863,6 +863,26 @@ export default function PaywallScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Billing disclosure — real charge amount and period (App Review 3.1.2).
+            yearlyPrice/monthlyPrice are RC priceStrings with honest fallbacks. */}
+        <Text
+          style={{
+            fontFamily: FontFamily.ui,
+            fontSize: FontSize.xs,
+            color: colors.textMuted,
+            textAlign: 'center',
+            marginBottom: 12,
+          }}
+        >
+          {selectedPlan === 'yearly'
+            ? (isTrialEligible
+              ? `${selectedTrialDuration} free trial, then ${yearlyPrice}/year \u00B7 Cancel anytime`
+              : `Billed as ${yearlyPrice}/year \u00B7 Cancel anytime`)
+            : (isTrialEligible
+              ? `${selectedTrialDuration} free trial, then ${monthlyPrice}/month \u00B7 Cancel anytime`
+              : `Billed as ${monthlyPrice}/month \u00B7 Cancel anytime`)}
+        </Text>
 
         {/* CTA button */}
         <TouchableOpacity

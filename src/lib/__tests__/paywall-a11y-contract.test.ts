@@ -23,3 +23,15 @@ describe('paywall close button (RT-PAYWALL-1)', () => {
     expect(pressableBlock).toContain('disabled={isPurchasing}');
   });
 });
+
+describe('paywall billing disclosure (RT-PAYWALL-2/RT-PAYWALL-8)', () => {
+  it('discloses the real annual charge near the plan selector, RC-derived with honest fallback', () => {
+    expect(src).toContain('`Billed as ${yearlyPrice}/year \\u00B7 Cancel anytime`');
+    expect(src).toContain('`Billed as ${monthlyPrice}/month \\u00B7 Cancel anytime`');
+    expect(src).toContain("yearlyPackage?.product.priceString ?? '$59.99'");
+  });
+
+  it('states the post-trial charge when trial-eligible', () => {
+    expect(src).toContain('`${selectedTrialDuration} free trial, then ${yearlyPrice}/year \\u00B7 Cancel anytime`');
+  });
+});
