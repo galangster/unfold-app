@@ -34,7 +34,12 @@ export interface ColorTheme {
 
   // Accent (minimal use)
   accent: string;
-  /** Text color guaranteed readable on accent backgrounds. */
+  /**
+   * Text color for accent backgrounds. NOT universally WCAG-safe: white on
+   * the dark-theme gold accent (#C8A55C) is ~2.34:1. Prefer
+   * `colors.background` as ink on accent fills (see GlowingCTA in
+   * ThreeStepPaywall) and verify contrast per surface.
+   */
   contrastText?: string;
 
   // Status

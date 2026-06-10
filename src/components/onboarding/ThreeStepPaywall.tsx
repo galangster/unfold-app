@@ -725,6 +725,9 @@ function ScreenPricing({
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => onSelectPlan('monthly')}
+          accessibilityLabel={`Monthly plan, ${monthlyPrice} per month`}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: selectedPlan === 'monthly' }}
           style={[
             styles.pricingCard,
             {
@@ -775,11 +778,15 @@ function ScreenPricing({
         <View style={[styles.yearlyCardWrapper, { width: PRICING_BOX_WIDTH }]}>
           {/* SAVE badge overlapping top border */}
           {savings > 0 && (
-            <View style={[styles.saveBadge, { backgroundColor: colors.accent }]}>
+            <View
+              style={[styles.saveBadge, { backgroundColor: colors.accent }]}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
               <Text
                 style={[
                   styles.saveBadgeText,
-                  { color: colors.contrastText ?? '#FFFFFF' },
+                  { color: colors.background },
                 ]}
               >
                 SAVE {savings}%
@@ -789,6 +796,9 @@ function ScreenPricing({
           <TouchableOpacity
             activeOpacity={1}
             onPress={() => onSelectPlan('yearly')}
+            accessibilityLabel={`Yearly plan, ${yearlyPrice} per year${savings > 0 ? `, save ${savings} percent` : ''}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: selectedPlan === 'yearly' }}
             style={[
               styles.pricingCard,
               {
