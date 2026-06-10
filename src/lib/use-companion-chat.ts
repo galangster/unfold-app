@@ -19,6 +19,14 @@ import { logger } from '@/lib/logger';
 import { parseDeepLinks } from './parse-deep-links';
 import { generateConversationTitle } from './companion-service';
 
+/**
+ * Outcome of a sendMessage call:
+ *  'sent'  — a companion response was received (including a user-stopped partial)
+ *  'noop'  — early return (empty text or already streaming)
+ *  'error' — stream + fallback both failed with no usable response
+ */
+export type SendOutcome = 'sent' | 'noop' | 'error';
+
 const STREAMING_UPDATE_INTERVAL_MS = 32; // ~30fps, matching the SDK 56 chat-template cadence.
 
 // ── Phase 4: Context-aware system prompt ──────────────────────────────────────
@@ -255,8 +263,8 @@ export function useCompanionChat() {
   // ── Send message ───────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
-    async (text: string) => {
-      if (!text.trim() || isStreaming) return;
+    async (text: string): Promise<SendOutcome> => {
+      if (!text.trim() || isStreaming) return 'noop';
 
       // Ensure an active conversation exists before sending
       if (!useCompanionChatStore.getState().activeConversationId) {
@@ -470,6 +478,7 @@ export function useCompanionChat() {
           });
         }
 
+        return 'sent';
       } catch (err: any) {
         cancelThrottle();
         if (err.name === 'AbortError') {
@@ -482,6 +491,7 @@ export function useCompanionChat() {
           updateMessage(companionId, {
             status: current?.content ? 'complete' : 'error',
           });
+          return current?.content ? 'sent' : 'error';
         } else {
           logger.warn('[CompanionChat] Error:', err);
           setError('Something went wrong. Try again?');
@@ -489,6 +499,7 @@ export function useCompanionChat() {
             status: 'error',
             content: 'Something went wrong. Tap to retry.',
           });
+          return 'error';
         }
       } finally {
         setIsStreaming(false);

@@ -66,12 +66,14 @@ const MessageItem = React.memo(function MessageItem({
   isLastMessage,
   isStreaming,
   onVersePress,
+  onRetry,
 }: {
   item: CompanionMessage;
   isFirstInGroup: boolean;
   isLastMessage: boolean;
   isStreaming: boolean;
   onVersePress: (reference: string) => void;
+  onRetry?: () => void;
 }) {
   const gapStyle = isFirstInGroup ? { marginTop: 16 } : { marginTop: 6 };
 
@@ -97,6 +99,7 @@ const MessageItem = React.memo(function MessageItem({
         showIcon={isFirstInGroup}
         isStreaming={isThisStreaming}
         onVersePress={onVersePress}
+        onRetry={onRetry}
       />
       {showActions && (
         <CompanionActions
@@ -115,7 +118,8 @@ const MessageItem = React.memo(function MessageItem({
   prev.item.feedback === next.item.feedback &&
   prev.isStreaming === next.isStreaming &&
   prev.isFirstInGroup === next.isFirstInGroup &&
-  prev.isLastMessage === next.isLastMessage
+  prev.isLastMessage === next.isLastMessage &&
+  prev.onRetry === next.onRetry
 );
 
 // Height of the custom absolutely-positioned tab bar (content + padding)
@@ -178,6 +182,7 @@ export default function CompanionScreen() {
 
   const handleSend = useCallback(
     (text: string) => {
+      // Pre-send guards run synchronously (gate check + limit check)
       if (!gate()) return;
 
       if (!isPremium && !canSendCompanionMessage()) {
@@ -186,13 +191,16 @@ export default function CompanionScreen() {
         return;
       }
 
-      sendMessage(text);
-
-      // Track daily usage for free users
-      if (!isPremium) {
-        incrementCompanionDailyCount();
-        setDailyRemaining(getCompanionDailyUsage().remaining);
-      }
+      // Charge quota ONLY on a successful response (NET-2):
+      // a free message is consumed iff a companion response was received.
+      // The isStreaming guard in sendMessage prevents concurrent over-spend.
+      void (async () => {
+        const outcome = await sendMessage(text);
+        if (!isPremium && outcome === 'sent') {
+          incrementCompanionDailyCount();
+          setDailyRemaining(getCompanionDailyUsage().remaining);
+        }
+      })();
 
       setTimeout(() => {
         listRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -234,6 +242,21 @@ export default function CompanionScreen() {
       const prevMsg = index < msgs.length - 1 ? msgs[index + 1] : null;
       const isFirstInGroup = !prevMsg || prevMsg.role !== item.role;
       const isLastMessage = index === 0;
+
+      // NET-13: for error companion messages, find the most recent preceding user
+      // message (higher inverted index = older) and wire a retry handler.
+      // Retry fires handleSend which only charges quota if the response succeeds.
+      let onRetry: (() => void) | undefined;
+      if (item.role === 'companion' && item.status === 'error') {
+        for (let i = index + 1; i < msgs.length; i++) {
+          if (msgs[i].role === 'user') {
+            const userText = msgs[i].content;
+            onRetry = () => handleSend(userText);
+            break;
+          }
+        }
+      }
+
       return (
         <MessageItem
           item={item}
@@ -241,10 +264,11 @@ export default function CompanionScreen() {
           isLastMessage={isLastMessage}
           isStreaming={isStreaming}
           onVersePress={handleVersePress}
+          onRetry={onRetry}
         />
       );
     },
-    [isStreaming, handleVersePress]
+    [isStreaming, handleVersePress, handleSend]
   );
 
   const keyExtractor = useCallback((item: CompanionMessage) => item.id, []);

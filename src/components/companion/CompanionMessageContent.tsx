@@ -7,7 +7,7 @@
  * ANIMATION: Fade in on mount (200ms, ease-out).
  */
 import { useMemo } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import Animated, { FadeIn, useReducedMotion } from 'react-native-reanimated';
 import { Duration, Ease } from '@/constants/animations';
 import { useTheme } from '@/lib/theme';
@@ -37,6 +37,7 @@ interface Props {
   isStreaming: boolean;
   isSearching?: boolean;
   onVersePress?: (reference: string) => void;
+  onRetry?: () => void;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ function StreamingText({ content, color }: { content: string; color: string }) {
   );
 }
 
-export function CompanionMessageContent({ message, showIcon, isStreaming, isSearching, onVersePress }: Props) {
+export function CompanionMessageContent({ message, showIcon, isStreaming, isSearching, onVersePress, onRetry }: Props) {
   const { colors } = useTheme();
   const reducedMotion = useReducedMotion();
 
@@ -89,24 +90,48 @@ export function CompanionMessageContent({ message, showIcon, isStreaming, isSear
       {/* Content */}
       <View style={{ flex: 1, paddingRight: Spacing['6'] }}>
         {message.status === 'error' ? (
-          <View
-            style={{
-              backgroundColor: alpha(colors.error, 0.10),
-              borderRadius: Radius.md,
-              padding: Spacing['3'],
-            }}
-          >
-            <Text
+          onRetry ? (
+            <Pressable
+              onPress={onRetry}
+              accessibilityRole="button"
+              accessibilityLabel="Retry sending your message"
               style={{
-                fontFamily: FontFamily.body,
-                fontSize: FontSize.sm,
-                color: colors.error,
-                lineHeight: 20,
+                backgroundColor: alpha(colors.error, 0.10),
+                borderRadius: Radius.md,
+                padding: Spacing['3'],
               }}
             >
-              {message.content || 'Something went wrong. Try again?'}
-            </Text>
-          </View>
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: FontSize.sm,
+                  color: colors.error,
+                  lineHeight: 20,
+                }}
+              >
+                {message.content || 'Something went wrong. Tap to retry.'}
+              </Text>
+            </Pressable>
+          ) : (
+            <View
+              style={{
+                backgroundColor: alpha(colors.error, 0.10),
+                borderRadius: Radius.md,
+                padding: Spacing['3'],
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: FontFamily.body,
+                  fontSize: FontSize.sm,
+                  color: colors.error,
+                  lineHeight: 20,
+                }}
+              >
+                {message.content || 'Something went wrong. Try again?'}
+              </Text>
+            </View>
+          )
         ) : isComplete && onVersePress ? (
           // Complete message — rich text with verse pills + blockquotes
           <>

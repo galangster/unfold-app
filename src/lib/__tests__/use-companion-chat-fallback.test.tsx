@@ -111,6 +111,90 @@ function HookHarness({ onReady }: { onReady: (hook: ReturnType<typeof useCompani
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+describe('sendMessage outcome', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    act(() => {
+      useCompanionChatStore.getState().clearAllConversations();
+    });
+  });
+
+  it('resolves "noop" when called while streaming', async () => {
+    // A fetch that never resolves — keeps the hook in streaming state
+    let resolveFirst!: () => void;
+    mockFetch
+      .mockReturnValueOnce(
+        new Promise<never>((res) => { resolveFirst = () => res(streamingResponseWithoutDone() as any); }),
+      )
+      .mockResolvedValue(streamingResponseWithoutDone());
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    // Start a send (streaming begins, never resolves)
+    let firstSend!: ReturnType<typeof useCompanionChat>['sendMessage'] extends (...a: any[]) => infer R ? R : never;
+    act(() => { firstSend = hook!.sendMessage('first message'); });
+
+    // While streaming, call sendMessage again — should return 'noop'
+    let secondOutcome!: string;
+    await act(async () => {
+      secondOutcome = await hook!.sendMessage('again');
+    });
+
+    expect(secondOutcome).toBe('noop');
+    expect(mockFetch).toHaveBeenCalledTimes(1); // only one real fetch
+
+    // Resolve the first send to clean up
+    resolveFirst();
+    await act(async () => { await firstSend; });
+  });
+
+  it('resolves "error" when stream and fallback both fail', async () => {
+    mockFetch.mockRejectedValue(new Error('Network error'));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome!: string;
+    await act(async () => {
+      outcome = await hook!.sendMessage('hi');
+    });
+
+    expect(outcome).toBe('error');
+    const companion = useCompanionChatStore
+      .getState()
+      .conversations[0]
+      ?.messages.find((m) => m.role === 'companion');
+    expect(companion?.status).toBe('error');
+  });
+
+  it('resolves "sent" on a successful exchange', async () => {
+    mockFetch.mockResolvedValueOnce(streamingResponseFromChunks([
+      'data: {"t":"Hello"}\n\n',
+      'data: {"d":true,"s":[]}\n\n',
+    ]));
+
+    let hook: ReturnType<typeof useCompanionChat> | null = null;
+    await act(async () => {
+      renderer.create(<HookHarness onReady={(next) => { hook = next; }} />);
+      await Promise.resolve();
+    });
+
+    let outcome!: string;
+    await act(async () => {
+      outcome = await hook!.sendMessage('Hello');
+    });
+
+    expect(outcome).toBe('sent');
+  });
+});
+
 describe('useCompanionChat fallback streaming', () => {
   beforeEach(() => {
     mockFetch.mockReset();
