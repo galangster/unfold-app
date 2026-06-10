@@ -63,7 +63,7 @@ Token efficiency mandate — same output quality, much cheaper. Advisor/executor
 
 ## P0 triage (NAT-1, 2026-06-10)
 
-Strip is from `1e155db` "fix: remove App Groups entitlement that blocks IPA build" — deliberate WORKAROUND (provisioning profile lacks capability), not a documented product tradeoff (vault grep: nothing). Fix path = dev-portal App ID capability + regen profiles + remove plugin + **build 219** (native; not OTA). Portal mutation = Nick-gated. Discord ping sent asking Nick to check widgets on his physical 218 install (instant empirical test). Pending his answer → drives ship-218 vs cut-219 verdict.
+Strip is from `1e155db` "fix: remove App Groups entitlement that blocks IPA build" — deliberate WORKAROUND (provisioning profile lacks capability), not a documented product tradeoff (vault grep: nothing). **DEVICE-CONFIRMED by Nick 2026-06-10: all home-screen widgets are blank on his physical iPhone running 218.** Verdict-leaning: **CUT 219** (blank widgets = App Review 2.1 rejection material + bad UX). Phase 4: stage code fix on branch (remove plugin, configure correct app group verified against widget-bridge suite id); signing: try EAS credentials capability-sync first (may auto-add App Groups at next build) before manual portal step; Nick gate = approve cutting 219 (+ portal action only if EAS sync can't).
 
 ## Finding ledger
 
