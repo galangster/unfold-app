@@ -695,7 +695,11 @@ export default function PaywallScreen() {
                 <Text style={{ flex: 1, fontFamily: FontFamily.ui, fontSize: 13, color: colors.text }}>
                   {row.label}
                 </Text>
-                <View style={{ width: 60, alignItems: 'center' }}>
+                <View
+                  style={{ width: 60, alignItems: 'center' }}
+                  accessible={typeof row.free === 'boolean'}
+                  accessibilityLabel={typeof row.free === 'boolean' ? (row.free ? 'Included in Free' : 'Not included in Free') : undefined}
+                >
                   {typeof row.free === 'boolean' ? (
                     row.free
                       ? <CheckIcon size={15} color={colors.textMuted} weight="bold" />
@@ -706,7 +710,11 @@ export default function PaywallScreen() {
                     </Text>
                   )}
                 </View>
-                <View style={{ width: 100, alignItems: 'center' }}>
+                <View
+                  style={{ width: 100, alignItems: 'center' }}
+                  accessible={typeof row.premium === 'boolean'}
+                  accessibilityLabel={typeof row.premium === 'boolean' ? 'Included in Premium' : undefined}
+                >
                   {typeof row.premium === 'boolean' ? (
                     <CheckIcon size={15} color={colors.accent} weight="bold" />
                   ) : (
@@ -778,9 +786,9 @@ export default function PaywallScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               setSelectedPlan('yearly');
             }}
-            accessibilityLabel={`Yearly plan, ${perMonthFromYearly} per month`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: selectedPlan === 'yearly' }}
+            accessibilityLabel={`Yearly plan, ${yearlyPrice} per year, equal to ${perMonthFromYearly} per month${savingsPercent > 0 ? `, save ${savingsPercent} percent` : ''}`}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: selectedPlan === 'yearly', checked: selectedPlan === 'yearly' }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -804,8 +812,12 @@ export default function PaywallScreen() {
                 Yearly
               </Text>
               {savingsPercent > 0 && (
-                <View style={{ backgroundColor: `${colors.accent}30`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 10, color: colors.accent }}>
+                <View
+                  style={{ backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Text style={{ fontFamily: FontFamily.uiSemiBold, fontSize: 10, color: colors.background }}>
                     SAVE {savingsPercent}%
                   </Text>
                 </View>
@@ -829,8 +841,8 @@ export default function PaywallScreen() {
               setSelectedPlan('monthly');
             }}
             accessibilityLabel={`Monthly plan, ${monthlyPrice} per month`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: selectedPlan === 'monthly' }}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: selectedPlan === 'monthly', checked: selectedPlan === 'monthly' }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',

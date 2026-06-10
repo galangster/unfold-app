@@ -10,18 +10,18 @@ describe('onboarding paywall accessibility contract', () => {
 
   it('exposes the Monthly plan card as a selectable tab with a price-bearing label', () => {
     expect(src).toContain('accessibilityLabel={`Monthly plan, ${monthlyPrice} per month`}');
-    expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'monthly' }}");
+    expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'monthly', checked: selectedPlan === 'monthly' }}");
   });
 
   it('exposes the Yearly plan card as a selectable tab with price and savings in the label', () => {
     expect(src).toContain(
       "accessibilityLabel={`Yearly plan, ${yearlyPrice} per year${savings > 0 ? `, save ${savings} percent` : ''}`}",
     );
-    expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'yearly' }}");
+    expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'yearly', checked: selectedPlan === 'yearly' }}");
   });
 
-  it('uses tab roles on both plan cards (paywall.tsx parity)', () => {
-    const matches = src.match(/accessibilityRole="tab"/g) ?? [];
+  it('uses radio roles on both plan cards (paywall.tsx parity)', () => {
+    const matches = src.match(/accessibilityRole="radio"/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 

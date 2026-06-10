@@ -727,8 +727,8 @@ function ScreenPricing({
           activeOpacity={1}
           onPress={() => onSelectPlan('monthly')}
           accessibilityLabel={`Monthly plan, ${monthlyPrice} per month`}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: selectedPlan === 'monthly' }}
+          accessibilityRole="radio"
+          accessibilityState={{ selected: selectedPlan === 'monthly', checked: selectedPlan === 'monthly' }}
           style={[
             styles.pricingCard,
             {
@@ -798,8 +798,8 @@ function ScreenPricing({
             activeOpacity={1}
             onPress={() => onSelectPlan('yearly')}
             accessibilityLabel={`Yearly plan, ${yearlyPrice} per year${savings > 0 ? `, save ${savings} percent` : ''}`}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: selectedPlan === 'yearly' }}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: selectedPlan === 'yearly', checked: selectedPlan === 'yearly' }}
             style={[
               styles.pricingCard,
               {

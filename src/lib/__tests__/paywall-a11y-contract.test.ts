@@ -35,3 +35,29 @@ describe('paywall billing disclosure (RT-PAYWALL-2/RT-PAYWALL-8)', () => {
     expect(src).toContain('`${selectedTrialDuration} free trial, then ${yearlyPrice}/year \\u00B7 Cancel anytime`');
   });
 });
+
+describe('paywall plan selector semantics (RT-PAYWALL-3/4/6)', () => {
+  it('exposes both plan chips as radios with checked state', () => {
+    expect((src.match(/accessibilityRole="radio"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'yearly', checked: selectedPlan === 'yearly' }}");
+    expect(src).toContain("accessibilityState={{ selected: selectedPlan === 'monthly', checked: selectedPlan === 'monthly' }}");
+    expect(src).not.toContain('accessibilityRole="tab"');
+  });
+
+  it('yearly chip label carries the real annual price', () => {
+    expect(src).toContain('`Yearly plan, ${yearlyPrice} per year, equal to ${perMonthFromYearly} per month');
+  });
+
+  it('comparison boolean cells expose Free/Premium inclusion labels', () => {
+    expect(src).toContain("row.free ? 'Included in Free' : 'Not included in Free'");
+    expect(src).toContain("'Included in Premium'");
+  });
+
+  it('SAVE badge uses background ink on solid accent and is hidden from the a11y tree', () => {
+    const badge = src.slice(src.indexOf('SAVE {savingsPercent}%') - 600, src.indexOf('SAVE {savingsPercent}%'));
+    expect(badge).toContain('backgroundColor: colors.accent,');
+    expect(badge).toContain('accessibilityElementsHidden');
+    expect(badge).toContain('color: colors.background');
+    expect(src).not.toContain('`${colors.accent}30`');
+  });
+});
