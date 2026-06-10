@@ -269,7 +269,7 @@ const ALL_STEPS = [
   // UNFOLD INTRO: The answer — what Unfold is, particles rise
   { id: 'unfoldIntro', question: '', subtext: '', type: 'unfoldIntro' as const, adaptive: false, skipIfHasValue: false, hasVariations: false },
   { id: 'name', question: "What's your name?", subtext: 'Just your first name is perfect.', type: 'text' as const, placeholder: 'Your name', adaptive: false, skipIfHasValue: true, hasVariations: false },
-  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: 'The more you share, the more personal your devotionals become. Your story stays on your device.', type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
+  { id: 'aboutMe', question: 'Tell me about\u00A0yourself.', subtext: 'The more you share, the more personal your devotionals become.', type: 'multiline' as const, placeholder: "I'm a dad, an entrepreneur, and lately I've been wrestling with...", adaptive: false, skipIfHasValue: true, hasVariations: false },
   // STYLE PREFERENCES: Faith background + life stage
   { id: 'stylePreferences1', question: "Your walk right\u00A0now.", subtext: 'This shapes the voice and depth of everything you read.', type: 'stylePreferences1' as const, placeholder: '', adaptive: false, skipIfHasValue: false, hasVariations: false },
   // STYLE PREFERENCES: Tone + depth
