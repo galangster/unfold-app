@@ -213,6 +213,7 @@ export default function JournalScreen() {
   const soapValuesRef = useRef(soapValues);
   soapValuesRef.current = soapValues;
   const hasPendingSoapRef = useRef(false);
+  const flushSoapSavesRef = useRef<() => void>(() => {});
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -356,37 +357,17 @@ export default function JournalScreen() {
     return () => {
       if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
-      // Flush any pending SOAP saves before unmount
-      if (hasPendingSoapRef.current && soapSaveTimerRef.current) {
-        clearTimeout(soapSaveTimerRef.current);
-        // Ensure an entry exists before flushing — if user typed SOAP for the
-        // first time and navigates away within the debounce window, the entry
-        // may not have been created yet.
-        let entryId = savedEntryIdRef.current;
-        if (!entryId) {
-          addJournalEntry({ devotionalId, dayNumber, content: '', journalMode: activeMode });
-          const entry = getJournalEntry(devotionalId, dayNumber);
-          if (entry) {
-            entryId = entry.id;
-            savedEntryIdRef.current = entryId;
-          }
-        }
-        if (entryId) {
-          const vals = soapValuesRef.current;
-          for (const key of ['scripture', 'observation', 'application', 'prayer'] as const) {
-            if (vals[key]) updateSoapResponse(entryId, key, vals[key]);
-          }
-        }
-      } else if (soapSaveTimerRef.current) {
-        clearTimeout(soapSaveTimerRef.current);
-      }
+      // Flush any pending SOAP saves before unmount — single owner:
+      // flushSoapSavesRef always points at the latest flushSoapSaves.
+      if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
+      flushSoapSavesRef.current();
       // Flush any pending freewrite changes on unmount
       if (hasChangesRef.current) {
         saveEntry(contentRef.current);
       }
       isMountedRef.current = false;
     };
-  }, [saveEntry, updateSoapResponse]);
+  }, [saveEntry]);
 
   useEffect(() => {
     if (!hasChanges || isSaving) return;
@@ -482,21 +463,22 @@ export default function JournalScreen() {
     }, 800);
   }, [ensureEntry, updateSoapResponse, gate]);
 
-  // Flush all pending SOAP values to the store immediately
+  // Flush all pending SOAP values to the store immediately. Writes every
+  // field that differs from the persisted entry — including cleared (empty)
+  // fields — so deletions made inside the debounce window stick (COR-6).
   const flushSoapSaves = useCallback(() => {
     if (!hasPendingSoapRef.current) return;
     if (soapSaveTimerRef.current) clearTimeout(soapSaveTimerRef.current);
     const entryId = ensureEntry();
     if (entryId) {
-      const vals = soapValuesRef.current;
-      for (const key of ['scripture', 'observation', 'application', 'prayer'] as const) {
-        if (vals[key]) {
-          updateSoapResponse(entryId, key, vals[key]);
-        }
+      const persisted = getJournalEntry(devotionalId, dayNumber)?.soapResponses;
+      for (const { field, value } of diffSoapWrites(soapValuesRef.current, persisted)) {
+        updateSoapResponse(entryId, field, value);
       }
     }
     hasPendingSoapRef.current = false;
-  }, [ensureEntry, updateSoapResponse]);
+  }, [ensureEntry, updateSoapResponse, getJournalEntry, devotionalId, dayNumber]);
+  flushSoapSavesRef.current = flushSoapSaves;
 
   const handleSoapSectionTap = useCallback((field: keyof SoapResponses) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
