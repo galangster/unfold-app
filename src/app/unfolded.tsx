@@ -1149,19 +1149,16 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
   }, []);
 
   const handleShare = useCallback(async () => {
-    logger.log('[UNFOLDED] handleShare called, isSharing:', isSharing);
     if (isSharing) return;
     setIsSharing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       if (!shareCardRef.current) {
-        logger.log('[UNFOLDED] shareCardRef is null');
         setIsSharing(false);
         return;
       }
 
-      logger.log('[UNFOLDED] capturing ref...');
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const uri = await captureRef(shareCardRef, {
@@ -1169,10 +1166,8 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
         quality: 1,
         result: 'tmpfile',
       });
-      logger.log('[UNFOLDED] captured:', uri);
 
       const isAvailable = await Sharing.isAvailableAsync();
-      logger.log('[UNFOLDED] sharing available:', isAvailable);
       if (!isAvailable) {
         setIsSharing(false);
         return;
@@ -1217,11 +1212,8 @@ function ClosingCard({ data, userName }: { data: RecapData; userName: string }) 
       </Reveal>
 
       <TouchableOpacity
-        onPress={() => {
-          logger.log('[UNFOLDED] Share button onPress fired!');
-          handleShare();
-        }}
-        style={[s.shareButton, { borderWidth: 2, borderColor: 'red' }]}
+        onPress={handleShare}
+        style={s.shareButton}
         activeOpacity={0.7}
       >
         <ShareNetworkIcon size={18} color={PALETTE.black} weight="bold" />
@@ -1391,13 +1383,11 @@ export default function UnfoldedScreen() {
 
   const [isClosing, setIsClosing] = useState(false);
   const handleClose = useCallback(() => {
-    logger.log('[UNFOLDED] handleClose called, isClosing:', isClosing);
     if (isClosing) return;
     setIsClosing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     // Unmount heavy particle animations before exit transition to prevent freeze
     setTimeout(() => {
-      logger.log('[UNFOLDED] navigating away...');
       try {
         router.dismiss();
       } catch (err) {
