@@ -1,4 +1,8 @@
-import { getChurnedCreationGateAction } from '../creation-gate-policy';
+import {
+  getChurnedCreationGateAction,
+  shouldEmitPendingFeedback,
+  PENDING_FEEDBACK_THROTTLE_MS,
+} from '../creation-gate-policy';
 
 describe('creation gate winback policy', () => {
   const originalFlag = process.env.EXPO_PUBLIC_ENABLE_CHURNED_WINBACK_OFFER;
@@ -82,5 +86,29 @@ describe('creation gate winback policy', () => {
         winbackOfferEnabled: true,
       }),
     ).toBe('blocked');
+  });
+});
+
+describe('creation gate pending feedback (unknown policy must not be silent)', () => {
+  it('still fails closed for unknown policy', () => {
+    expect(
+      getChurnedCreationGateAction({ policy: 'unknown', hasSeenExclusiveOffer: false }),
+    ).toBe('blocked');
+  });
+
+  it('emits feedback on the first blocked action', () => {
+    expect(shouldEmitPendingFeedback(0, 100_000)).toBe(true);
+  });
+
+  it('throttles repeat feedback inside the window (computed: 100000 + 30000 - 1)', () => {
+    expect(shouldEmitPendingFeedback(100_000, 129_999)).toBe(false);
+  });
+
+  it('emits again once the throttle window has elapsed (computed: 100000 + 30000)', () => {
+    expect(shouldEmitPendingFeedback(100_000, 130_000)).toBe(true);
+  });
+
+  it('uses a 30 second window', () => {
+    expect(PENDING_FEEDBACK_THROTTLE_MS).toBe(30_000);
   });
 });

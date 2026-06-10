@@ -19,3 +19,14 @@ export function getChurnedCreationGateAction({
   if (winbackOfferEnabled && !hasSeenExclusiveOffer) return 'exclusive-offer';
   return 'paywall';
 }
+
+/**
+ * Pending-feedback throttle for blocked-while-unknown creation actions.
+ * Pure (receives `now`) per vault: deterministic paths receive now as a
+ * parameter.
+ */
+export const PENDING_FEEDBACK_THROTTLE_MS = 30_000;
+
+export function shouldEmitPendingFeedback(lastEmittedAt: number, now: number): boolean {
+  return now - lastEmittedAt >= PENDING_FEEDBACK_THROTTLE_MS;
+}
