@@ -15,6 +15,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { Shadow } from '@/constants/shadows';
 import { useTheme } from '@/lib/theme';
 import { useUnfoldStore } from '@/lib/store';
+import { planHighlightApplication, planHighlightRemoval } from '@/lib/bible-highlight-overlap';
 import { useReadingFont } from '@/lib/useReadingFont';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { useBibleChapter } from '@/hooks/useBibleChapter';
@@ -529,24 +530,20 @@ export default function BibleReaderScreen() {
 
   const handleHighlight = useCallback((color: BibleHighlightColor) => {
     if (!verses || selectedVerses.size === 0 || !book) return;
-    const sorted = Array.from(selectedVerses).sort((a, b) => a - b);
-    const selectedTexts = sorted
-      .map((v) => verses.find((vr) => vr.verse === v)?.text ?? '')
-      .join(' ');
 
-    // Remove any existing highlights that overlap
-    for (const h of highlights) {
-      if (sorted.some((v) => v >= h.verseStart && v <= h.verseEnd)) {
-        removeBibleHighlight(h.id);
-      }
-    }
-
-    addBibleHighlight({
-      bookId, bookName: book.name, chapter,
-      verseStart: sorted[0], verseEnd: sorted[sorted.length - 1],
-      text: selectedTexts, color,
+    const plan = planHighlightApplication({
+      chapterHighlights: highlights,
+      selectedVerses: Array.from(selectedVerses),
+      color,
       translation: bibleReaderSettings.translation,
+      bookId,
+      bookName: book.name,
+      chapter,
+      verseText: (v) => verses.find((vr) => vr.verse === v)?.text ?? '',
     });
+
+    for (const id of plan.toRemove) removeBibleHighlight(id);
+    for (const h of plan.toAdd) addBibleHighlight(h);
 
     restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
@@ -617,18 +614,18 @@ export default function BibleReaderScreen() {
   }, [verses, selectedVerses, book, chapter, bibleReaderSettings.translation, router, restoreTabBarForClosedActions]);
 
   const handleRemoveHighlight = useCallback(() => {
-    const sorted = Array.from(selectedVerses).sort((a, b) => a - b);
-    for (const h of highlights) {
-      if (sorted.some((v) => v >= h.verseStart && v <= h.verseEnd)) {
-        removeBibleHighlight(h.id);
-      }
-    }
+    const plan = planHighlightRemoval({
+      chapterHighlights: highlights,
+      selectedVerses: Array.from(selectedVerses),
+      translation: bibleReaderSettings.translation,
+    });
+    for (const id of plan.toRemove) removeBibleHighlight(id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     restoreTabBarForClosedActions();
     setSelectedVerses(new Set());
     setShowActions(false);
     setShowColorPicker(false);
-  }, [selectedVerses, highlights, removeBibleHighlight, restoreTabBarForClosedActions]);
+  }, [selectedVerses, highlights, removeBibleHighlight, bibleReaderSettings.translation, restoreTabBarForClosedActions]);
 
   const handleNote = useCallback(() => {
     if (!verses || selectedVerses.size === 0 || !book) return;
