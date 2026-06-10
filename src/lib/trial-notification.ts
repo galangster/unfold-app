@@ -300,8 +300,9 @@ export async function syncTrialEndingNotification(): Promise<void> {
 }
 
 /**
- * Clear the MMKV mirror of scheduled trial-notification state.
- * Called by performFullLocalReset — cancels any pending OS notification first.
+ * Clear the MMKV mirror of scheduled trial-notification state. Mirror ONLY —
+ * cancelling the pending OS notification is the caller's job
+ * (performFullLocalReset awaits cancelTrialEndingNotification() first).
  */
 export function clearTrialNotificationMirror(): void {
   trialNotificationStore.clearAll();

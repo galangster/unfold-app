@@ -49,6 +49,7 @@ jest.mock('../bible-api', () => ({
 
 jest.mock('../trial-notification', () => ({
   clearTrialNotificationMirror: jest.fn(),
+  cancelTrialEndingNotification: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('../bug-logger', () => ({
@@ -63,7 +64,7 @@ import { clearBridgeCache } from '../bridge-service';
 import { clearExamenCache } from '../examen-service';
 import { clearScriptureExplainCache } from '../scripture-explain-api';
 import { clearVerseCache } from '../bible-api';
-import { clearTrialNotificationMirror } from '../trial-notification';
+import { clearTrialNotificationMirror, cancelTrialEndingNotification } from '../trial-notification';
 import { clearBugLogEntries } from '../bug-logger';
 
 beforeEach(() => {
@@ -102,6 +103,10 @@ describe('performFullLocalReset', () => {
     for (const key of required) {
       expect(FULL_RESET_MMKV_KEYS).toContain(key);
     }
+    // MMKV INSTANCE ids are not mmkvStorage keys — they must not masquerade
+    // in this list (REVM-8); the trial instance is cleared via
+    // clearTrialNotificationMirror() in step 5.
+    expect(FULL_RESET_MMKV_KEYS).not.toContain('unfold-trial-notification');
   });
 
   it('clears caches, bug log, trial mirror, and rotates identity', async () => {
@@ -114,6 +119,21 @@ describe('performFullLocalReset', () => {
     expect(clearTrialNotificationMirror).toHaveBeenCalledTimes(1);
     expect(clearBugLogEntries).toHaveBeenCalledTimes(1);
     expect(rotateDeviceId).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the trial-ending OS notification before the store reset (REVM-2)', async () => {
+    const order: string[] = [];
+    (cancelTrialEndingNotification as jest.Mock).mockImplementation(async () => {
+      order.push('cancelTrial');
+    });
+    (useUnfoldStore.getState as jest.Mock).mockImplementation(() => ({
+      reset: jest.fn(() => order.push('reset')),
+    }));
+
+    await performFullLocalReset();
+
+    expect(order.indexOf('cancelTrial')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('reset')).toBeGreaterThan(order.indexOf('cancelTrial'));
   });
 
   it('cancels reminders before store reset', async () => {

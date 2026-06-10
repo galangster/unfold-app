@@ -27,7 +27,7 @@ import { clearBridgeCache } from '@/lib/bridge-service';
 import { clearExamenCache } from '@/lib/examen-service';
 import { clearScriptureExplainCache } from '@/lib/scripture-explain-api';
 import { clearVerseCache } from '@/lib/bible-api';
-import { clearTrialNotificationMirror } from '@/lib/trial-notification';
+import { cancelTrialEndingNotification, clearTrialNotificationMirror } from '@/lib/trial-notification';
 import { clearBugLogEntries } from '@/lib/bug-logger';
 import { logger } from '@/lib/logger';
 
@@ -44,13 +44,16 @@ export const FULL_RESET_MMKV_KEYS: readonly string[] = [
   '@unfold_onboarding_offer_seen',
   'inflight-generation-job',
   'unfold-sync-outbox-v1',
-  'unfold-trial-notification',
+  // NOTE: 'unfold-trial-notification' is an MMKV INSTANCE id, not a key here — cleared via clearTrialNotificationMirror() in step 5 (REVM-8).
 ] as const;
 
 export async function performFullLocalReset(): Promise<void> {
   // 1. Cancel OS notifications BEFORE wiping store — frozen payloads
   //    would otherwise keep firing against content that no longer exists.
+  //    cancelAllReminders covers daily/midday/evening; the trial-ending
+  //    notification has its own id and cancel helper (REVM-2).
   await cancelAllReminders();
+  await cancelTrialEndingNotification();
 
   // 2. Zustand store reset
   useUnfoldStore.getState().reset();
