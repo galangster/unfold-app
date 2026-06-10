@@ -57,6 +57,7 @@ import { checkRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { VoiceInputBar } from '@/components/VoiceInputBar';
 import { alpha } from '@/components/ui';
 import { buildFreeWritePlaceholder } from '@/lib/journal-freewrite-placeholder';
+import { buildInitialQuestionResponses, diffSoapWrites, resolveInitialJournalMode } from '@/lib/journal-entry-state';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
@@ -180,6 +181,13 @@ export default function JournalScreen() {
     () => journalEntries.find((e) => e.devotionalId === devotionalId && e.dayNumber === dayNumber),
     [journalEntries, devotionalId, dayNumber],
   );
+
+  // Get devotional context — MUST stay above the useState lazy initializers
+  // below; they read currentDay during the first render (was a TDZ
+  // use-before-declaration that silently produced undefined on Hermes).
+  const currentDevotional = devotionals.find((d) => d.id === devotionalId);
+  const currentDay = currentDevotional?.days.find((d) => d.dayNumber === dayNumber);
+
   const [content, setContent] = useState(existingEntry?.content ?? '');
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -189,11 +197,9 @@ export default function JournalScreen() {
 
   // Journal mode
   // Initialize mode from existing entry, or auto-suggest based on study method
-  const [activeMode, setActiveMode] = useState<JournalMode>(() => {
-    if (existingEntry?.journalMode) return existingEntry.journalMode;
-    if (currentDay?.studyMethod === 'soap_journal') return 'soap';
-    return 'freewrite';
-  });
+  const [activeMode, setActiveMode] = useState<JournalMode>(() =>
+    resolveInitialJournalMode(existingEntry, currentDay)
+  );
 
   // SOAP state
   const [soapValues, setSoapValues] = useState<SoapResponses>(
@@ -256,16 +262,9 @@ export default function JournalScreen() {
 
   // Expandable question response state
   const [expandedQuestionIndex, setExpandedQuestionIndex] = useState<number | null>(null);
-  const [questionResponses, setQuestionResponses] = useState<Map<number, string>>(() => {
-    if (!existingEntry?.questionResponses) return new Map();
-    const initial = new Map<number, string>();
-    const allQuestions = currentDay?.reflectionQuestions ?? [];
-    for (const qr of existingEntry.questionResponses) {
-      const idx = allQuestions.findIndex((q) => q === qr.question);
-      if (idx >= 0) initial.set(idx, qr.response);
-    }
-    return initial;
-  });
+  const [questionResponses, setQuestionResponses] = useState<Map<number, string>>(() =>
+    buildInitialQuestionResponses(existingEntry, currentDay)
+  );
   const questionInputRefs = useRef<Map<number, TextInput | null>>(new Map());
 
   const inputRef = useRef<TextInput>(null);
@@ -276,10 +275,6 @@ export default function JournalScreen() {
   contentRef.current = content;
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
-
-  // Get devotional context
-  const currentDevotional = devotionals.find((d) => d.id === devotionalId);
-  const currentDay = currentDevotional?.days.find((d) => d.dayNumber === dayNumber);
 
   // Handle focusQuestion param from journal hub navigation
   useEffect(() => {
