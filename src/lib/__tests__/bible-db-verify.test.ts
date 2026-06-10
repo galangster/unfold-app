@@ -20,11 +20,6 @@ const mockLogger = {
   error: jest.fn(),
 };
 
-// MMKV store — shared across all instances (module-scope Map via closure)
-// We need to inject state before the module reads it.
-const bibleMetaStore = new Map<string, string>();
-
-// eslint-disable-next-line jest/no-mocks-without-expect
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///documents/',
   get getInfoAsync() { return mockGetInfoAsync; },
