@@ -225,3 +225,42 @@ export function reconcileStreakState(
     streakJustReset: input.streakJustReset,
   };
 }
+
+/**
+ * Calendar-day key for the unified streak engine's last-read timestamp.
+ * toDateString() matches the day arithmetic used by decideStreakContinuation
+ * and by widget-bridge's hasReadToday, so all "did I read today" definitions
+ * derived from the engine agree.
+ */
+export function getStreakDayKey(streakLastReadDate: string | null): string | null {
+  return streakLastReadDate ? new Date(streakLastReadDate).toDateString() : null;
+}
+
+export type StreakCelebrationFlipInput = {
+  /** Day key from the previous render; undefined = first render after mount. */
+  prevDayKey: string | null | undefined;
+  /** Day key for the current render. */
+  dayKey: string | null;
+  /** Fresh calendar-day key for "now" — compute at event time, not render time. */
+  todayKey: string;
+};
+
+/**
+ * Celebrate at most once per calendar day: only when the streak engine's
+ * last-read day key CHANGES (day-flip) and lands on today (COR-7/COR-8).
+ * - Mount/remount never fires (prevDayKey undefined — no observed transition).
+ * - Same-day re-reads never fire: recordStreakRead is a same-day no-op, so
+ *   streakLastReadDate (and therefore the key) never changes (kills COR-7).
+ * - A flip observed across midnight (yesterday→today) fires (kills COR-8).
+ * - A flip to a non-today day (historic QA seed, clock rollback) never fires.
+ */
+export function shouldCelebrateStreakDayFlip({
+  prevDayKey,
+  dayKey,
+  todayKey,
+}: StreakCelebrationFlipInput): boolean {
+  if (prevDayKey === undefined) return false;
+  if (dayKey === null) return false;
+  if (dayKey === prevDayKey) return false;
+  return dayKey === todayKey;
+}

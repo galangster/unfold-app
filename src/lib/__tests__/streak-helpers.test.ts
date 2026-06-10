@@ -1,8 +1,10 @@
 import {
   applyStreakRead,
   decideStreakContinuation,
+  getStreakDayKey,
   getWeekStart,
   reconcileStreakState,
+  shouldCelebrateStreakDayFlip,
   type StreakDecisionInput,
 } from '../streak-helpers';
 
@@ -483,5 +485,30 @@ describe('applyStreakRead', () => {
       );
       expect({ name: row.name, result: viaReconcile }).toEqual({ name: row.name, result: direct });
     }
+  });
+});
+
+describe('streak celebration day-flip gate (COR-7/COR-8)', () => {
+  it('derives a calendar-day key from streakLastReadDate', () => {
+    expect(getStreakDayKey(null)).toBeNull();
+    expect(getStreakDayKey('2026-06-10T08:30:00.000Z')).toBe(
+      new Date('2026-06-10T08:30:00.000Z').toDateString(),
+    );
+  });
+
+  const TODAY = new Date('2026-06-10T12:00:00.000Z').toDateString();
+  const YESTERDAY = new Date('2026-06-09T12:00:00.000Z').toDateString();
+
+  it.each([
+    // [label, prevDayKey, dayKey, todayKey, expected]
+    ['first-ever read today fires', null, TODAY, TODAY, true],
+    ['yesterday→today flip fires (post-midnight session, COR-8)', YESTERDAY, TODAY, TODAY, true],
+    ['mount with an already-read today never fires (prev undefined)', undefined, TODAY, TODAY, false],
+    ['same-day re-read never fires (key unchanged, COR-7)', TODAY, TODAY, TODAY, false],
+    ['no read recorded never fires', null, null, TODAY, false],
+    ['flip to a non-today day never fires (QA seed of historic read)', null, YESTERDAY, TODAY, false],
+    ['read date wiped (reset) never fires', TODAY, null, TODAY, false],
+  ] as const)('%s', (_label, prevDayKey, dayKey, todayKey, expected) => {
+    expect(shouldCelebrateStreakDayFlip({ prevDayKey, dayKey, todayKey })).toBe(expected);
   });
 });

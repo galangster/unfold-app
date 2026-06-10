@@ -54,6 +54,7 @@ import {
 } from '@/lib/today-companion-state';
 import { getCalendarDayNumber } from '@/lib/devotional-day-access';
 import { getQaTodayProfileMarker } from '@/lib/qa-today-marker';
+import { getStreakDayKey, shouldCelebrateStreakDayFlip } from '@/lib/streak-helpers';
 
 // Must match the key used in generating.tsx
 const INFLIGHT_KEY = 'inflight-generation-job';
@@ -114,6 +115,7 @@ export default function HomeScreen() {
   const updateUser = useUnfoldStore((s) => s.updateUser);
   const updateDevotionalDays = useUnfoldStore((s) => s.updateDevotionalDays);
   const streakCurrent = useUnfoldStore((s) => s.streakCurrent);
+  const streakLastReadDate = useUnfoldStore((s) => s.streakLastReadDate);
   const addCheckIn = useUnfoldStore((s) => s.addCheckIn);
   const markMiddayCheckInCompleted = useUnfoldStore((s) => s.markMiddayCheckInCompleted);
   const getCheckIn = useUnfoldStore((s) => s.getCheckIn);
@@ -341,19 +343,29 @@ export default function HomeScreen() {
     }, [currentDevotionalId, updateDevotionalDays])
   );
 
-  // Check if today's reading has been completed — drives ember visibility
+  // Check if today's reading has been completed — drives ember visibility.
+  // clockNow in deps + passed as `now`: recomputes each minute so "today"
+  // stays fresh across midnight while the screen stays mounted (COR-8).
   const hasReadToday = useMemo(() => (
-    hasReadDevotionalToday({ devotionals, currentDevotionalId })
-  ), [currentDevotionalId, devotionals]);
+    hasReadDevotionalToday({ devotionals, currentDevotionalId, now: clockNow })
+  ), [currentDevotionalId, devotionals, clockNow]);
 
-  // Streak celebration: show once when hasReadToday flips from false->true
+  // Streak celebration: once per calendar day, keyed off the unified streak
+  // engine's day-flip. streakLastReadDate is only written by recordStreakRead,
+  // which is a same-day no-op — so the key flips at most once per day and
+  // devotional switches cannot re-fire a misleading "+1" (COR-7).
+  const streakDayKey = getStreakDayKey(streakLastReadDate);
+  const prevStreakDayKey = usePrevious(streakDayKey);
   const [showCelebration, setShowCelebration] = useState(false);
-  const prevHasReadToday = usePrevious(hasReadToday);
   useEffect(() => {
-    if (hasReadToday && prevHasReadToday === false) {
+    if (shouldCelebrateStreakDayFlip({
+      prevDayKey: prevStreakDayKey,
+      dayKey: streakDayKey,
+      todayKey: new Date().toDateString(),
+    })) {
       setShowCelebration(true);
     }
-  }, [hasReadToday, prevHasReadToday]);
+  }, [streakDayKey, prevStreakDayKey]);
 
   const currentDevotional = useMemo(() => (
     getCurrentDevotional(devotionals, currentDevotionalId)
