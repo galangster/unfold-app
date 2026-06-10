@@ -67,12 +67,16 @@ export function DownloadBibleSheet({
               <View
                 style={[
                   styles.progressFill,
-                  { backgroundColor: colors.accent, width: `${Math.round((progress ?? 0) * 100)}%` },
+                  // progress < 0 means Content-Length is absent (no progress info)
+                  // — render full-width bar at 30% opacity as an indeterminate indicator
+                  progress != null && progress < 0
+                    ? { backgroundColor: colors.accent, width: '100%', opacity: 0.3 }
+                    : { backgroundColor: colors.accent, width: `${Math.round((progress ?? 0) * 100)}%` },
                 ]}
               />
             </View>
             <Text style={[styles.progressText, { color: colors.textSubtle }]}>
-              {Math.round((progress ?? 0) * 100)}%
+              {progress != null && progress < 0 ? 'Downloading…' : `${Math.round((progress ?? 0) * 100)}%`}
             </Text>
           </View>
         ) : (

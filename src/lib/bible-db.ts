@@ -140,6 +140,17 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
     if (fileInfo.exists) {
       const sizeBytes = 'size' in fileInfo ? (fileInfo.size ?? 0) : 0;
       if (sizeBytes >= 5 * 1024 * 1024) {
+        // DAT-5: createDownloadResumable writes progressively to the final path;
+        // an app-kill after >5 MB leaves a truncated SQLite file. Always verify
+        // before promoting to 'ready' — verifyDownloadedDb() is hoisted below.
+        const verified = await verifyDownloadedDb();
+        if (!verified) {
+          logger.warn('[BibleDB] Existing DB file failed verification — deleting partial file');
+          try { await deleteAsync(DB_FILE_PATH, { idempotent: true }); } catch {}
+          setMeta(META_KEY_STATUS, 'not_downloaded');
+          setMeta(META_KEY_ERROR, null);
+          return 'not_downloaded';
+        }
         logger.log('[BibleDB] Found existing DB file, marking as ready');
         setMeta(META_KEY_STATUS, 'ready');
         setMeta(META_KEY_VERSION, DB_VERSION);
@@ -155,6 +166,21 @@ export async function verifyBibleDb(): Promise<BibleDbStatus> {
 }
 
 // ─── Download ────────────────────────────────────────────────────────────────
+
+/**
+ * Clamp download progress to [0,1]. Returns -1 when Content-Length is absent
+ * (-1 or 0 from expo-file-system), so callers can render an indeterminate bar.
+ *
+ * NET-14: totalBytesExpectedToWrite is -1 or 0 when the server omits
+ * Content-Length — dividing by those values produces negative/Infinity.
+ */
+export function computeDownloadProgress(
+  written: number,
+  totalExpected: number,
+): number {
+  if (totalExpected <= 0) return -1;
+  return Math.min(written / totalExpected, 1);
+}
 
 /**
  * Download the Bible database file from the backend.
@@ -200,8 +226,10 @@ export async function downloadBibleDb(
       DB_FILE_PATH,
       { headers: downloadHeaders },
       (downloadProgress) => {
-        const progress =
-          downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+        const progress = computeDownloadProgress(
+          downloadProgress.totalBytesWritten,
+          downloadProgress.totalBytesExpectedToWrite,
+        );
         onProgress?.(progress);
       },
     );
