@@ -2,8 +2,11 @@
  * Unfold Today Widget — systemMedium
  * Shows today's devotional with scripture reference, title, and streak.
  * Two-column layout: streak/progress left, content right.
+ *
+ * WIDGET RUNTIME CONTRACT: see UnfoldStreak.tsx — palettes/URLs must live
+ * inside the function body.
  */
-import { createWidget } from 'expo-widgets';
+import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 import { Text, VStack, HStack, Image, Spacer, Divider } from '@expo/ui/swift-ui';
 import {
   font,
@@ -17,6 +20,7 @@ import {
   lineSpacing,
   kerning,
   accessibilityLabel,
+  widgetURL,
 } from '@expo/ui/swift-ui/modifiers';
 
 type TodayWidgetProps = {
@@ -31,7 +35,10 @@ type TodayWidgetProps = {
   readingMinutes: number;
 };
 
-const TodayWidget = (props: TodayWidgetProps) => {
+const TodayWidget = (
+  props: TodayWidgetProps,
+  environment: WidgetEnvironment
+) => {
   'widget';
 
   const streak = props.streakCount ?? 0;
@@ -44,15 +51,45 @@ const TodayWidget = (props: TodayWidgetProps) => {
   const quote = props.quotableLine ?? '';
   const minutes = props.readingMinutes ?? 5;
 
+  const deepLink = 'unfold://(tabs)/(today)';
+
+  // Dark = original shipped values; light mirrors src/constants/colors.ts
+  // LightColors with ink alphas raised for contrast. Unknown scheme → dark.
+  const isLight = environment.colorScheme === 'light';
+  const c = isLight
+    ? {
+        bg: '#FAF7F2',
+        text: '#1C1710',
+        t55: 'rgba(28,23,16,0.68)',
+        t45: 'rgba(28,23,16,0.60)',
+        t40: 'rgba(28,23,16,0.55)',
+        t35: 'rgba(28,23,16,0.50)',
+        t30: 'rgba(28,23,16,0.45)',
+        accent: '#866B2F',
+        accentSoft: 'rgba(134,107,47,0.85)',
+      }
+    : {
+        bg: '#0A0A0A',
+        text: '#F5F0EB',
+        t55: 'rgba(245,240,235,0.55)',
+        t45: 'rgba(245,240,235,0.45)',
+        t40: 'rgba(245,240,235,0.4)',
+        t35: 'rgba(245,240,235,0.35)',
+        t30: 'rgba(245,240,235,0.3)',
+        accent: '#C8A55C',
+        accentSoft: 'rgba(200,165,92,0.8)',
+      };
+
   return (
     <HStack
       modifiers={[
         padding({ all: 14 }),
         frame({ maxWidth: Infinity, maxHeight: Infinity }),
-        background('#0A0A0A'),
+        background(c.bg),
         accessibilityLabel(
           `Today's reading: ${dayTitle}. ${scripture !== '' ? scripture + '.' : ''} ${streak} day streak. ${minutes} minute read.`
         ),
+        widgetURL(deepLink),
       ]}
     >
       {/* Left column — streak + progress */}
@@ -65,12 +102,12 @@ const TodayWidget = (props: TodayWidgetProps) => {
         <Image
           systemName={hasRead ? 'flame.fill' : 'flame'}
           size={16}
-          color="#C8A55C"
+          color={c.accent}
         />
         <Text
           modifiers={[
             font({ size: 30, weight: 'bold', design: 'rounded' }),
-            foregroundStyle('#F5F0EB'),
+            foregroundStyle(c.text),
             kerning(-0.5),
           ]}
         >
@@ -79,7 +116,7 @@ const TodayWidget = (props: TodayWidgetProps) => {
         <Text
           modifiers={[
             font({ size: 10, weight: 'medium' }),
-            foregroundStyle(hasRead ? 'rgba(200,165,92,0.8)' : 'rgba(245,240,235,0.45)'),
+            foregroundStyle(hasRead ? c.accentSoft : c.t45),
           ]}
         >
           {hasRead ? 'streak' : 'read today'}
@@ -91,7 +128,7 @@ const TodayWidget = (props: TodayWidgetProps) => {
           <Text
             modifiers={[
               font({ size: 10, weight: 'medium' }),
-              foregroundStyle('rgba(245,240,235,0.3)'),
+              foregroundStyle(c.t30),
             ]}
           >
             {day}/{total}
@@ -112,7 +149,7 @@ const TodayWidget = (props: TodayWidgetProps) => {
         <Text
           modifiers={[
             font({ size: 11, weight: 'semibold' }),
-            foregroundStyle('#C8A55C'),
+            foregroundStyle(c.accent),
             kerning(1.5),
           ]}
         >
@@ -122,7 +159,7 @@ const TodayWidget = (props: TodayWidgetProps) => {
         <Text
           modifiers={[
             font({ size: 15, weight: 'semibold' }),
-            foregroundStyle('#F5F0EB'),
+            foregroundStyle(c.text),
             lineLimit(2),
             truncationMode('tail'),
             padding({ top: 1 }),
@@ -135,7 +172,7 @@ const TodayWidget = (props: TodayWidgetProps) => {
           <Text
             modifiers={[
               font({ size: 11, weight: 'regular', design: 'serif' }),
-              foregroundStyle('rgba(245,240,235,0.55)'),
+              foregroundStyle(c.t55),
               padding({ top: 2 }),
             ]}
           >
@@ -149,13 +186,13 @@ const TodayWidget = (props: TodayWidgetProps) => {
           <Text
             modifiers={[
               font({ size: 11, weight: 'regular' }),
-              foregroundStyle('rgba(245,240,235,0.4)'),
+              foregroundStyle(c.t40),
               lineLimit(2),
               truncationMode('tail'),
               lineSpacing(2),
             ]}
           >
-            {'\u201C'}{quote}{'\u201D'}
+            {'"'}{quote}{'"'}
           </Text>
         )}
 
@@ -163,12 +200,12 @@ const TodayWidget = (props: TodayWidgetProps) => {
           <Image
             systemName="clock"
             size={10}
-            color="rgba(245,240,235,0.35)"
+            color={c.t35}
           />
           <Text
             modifiers={[
               font({ size: 10, weight: 'medium' }),
-              foregroundStyle('rgba(245,240,235,0.35)'),
+              foregroundStyle(c.t35),
               padding({ leading: 2 }),
             ]}
           >
