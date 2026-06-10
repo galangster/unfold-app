@@ -23,6 +23,7 @@ import {
   retryRevenueCatIdentitySync,
 } from '@/lib/revenuecatClient';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
+import { createSingleListenerGuard } from '@/lib/listener-registration';
 import { logger } from '@/lib/logger';
 
 export function useRevenueCatSync() {
@@ -45,7 +46,6 @@ export function useRevenueCatSync() {
     }
 
     let didCancel = false;
-    let removeCustomerInfoListener: (() => boolean) | undefined;
 
     const applyCustomerInfo = (customerInfo: CustomerInfo) => {
       if (didCancel) return;
@@ -96,19 +96,17 @@ export function useRevenueCatSync() {
       }
     });
 
-    // Set up real-time listener for subscription changes. Registration also
-    // waits for the deterministic RevenueCat identity to be ready.
-    addCustomerInfoUpdateListener(applyCustomerInfo).then((result) => {
+    // Set up real-time listener for subscription changes. ONE guard owns
+    // registration for both the launch path and the foreground-recovery path
+    // (REVM-6) — registration also waits for the deterministic identity.
+    const listenerGuard = createSingleListenerGuard(async () => {
+      const result = await addCustomerInfoUpdateListener(applyCustomerInfo);
       if (!result.ok) {
         logger.log('[RevenueCat] Customer info listener not registered:', result.reason);
-        return;
       }
-      if (didCancel) {
-        result.data();
-        return;
-      }
-      removeCustomerInfoListener = result.data;
+      return result;
     });
+    void listenerGuard.ensure();
 
     // Foreground recovery: if RevenueCat identity sync failed at session start
     // and the user backgrounds+foregrounds the app (network may have returned),
@@ -120,16 +118,13 @@ export function useRevenueCatSync() {
         await retryRevenueCatIdentitySync();
         const result = await getCustomerInfo();
         if (result.ok) applyCustomerInfo(result.data);
-        if (!removeCustomerInfoListener) {
-          const reg = await addCustomerInfoUpdateListener(applyCustomerInfo);
-          if (reg.ok && !didCancel) removeCustomerInfoListener = reg.data;
-        }
+        void listenerGuard.ensure();
       })();
     });
 
     return () => {
       didCancel = true;
-      removeCustomerInfoListener?.();
+      listenerGuard.dispose();
       appStateSub.remove();
     };
   }, [updateUser, queryClient]);
