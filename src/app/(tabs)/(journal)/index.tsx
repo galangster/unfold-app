@@ -58,6 +58,7 @@ import { stripHtml, isHtmlContent } from '@/components/notebook/NoteEditor';
 import { alpha } from '@/components/ui';
 import { useCreationGate } from '@/hooks/useCreationGate';
 import { prepareJournalFolderDelete } from '@/lib/journal-folder-delete';
+import { applyUndoActions, type JournalUndoAction } from '@/lib/journal-undo';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 
 type Segment = 'reflections' | 'notebook';
@@ -513,16 +514,7 @@ export default function JournalHubScreen() {
   const [fabVisible, setFabVisible] = useState(true);
 
   // Generalized undo state — supports both note and folder deletion
-  type UndoAction =
-    | { type: 'note'; note: Note }
-    | {
-        type: 'folder';
-        folder: NoteFolder;
-        folders: NoteFolder[];
-        affectedNoteIds: string[];
-        noteFolderIds: Record<string, string | undefined>;
-      };
-  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
+  const [undoActions, setUndoActions] = useState<JournalUndoAction[]>([]);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Folder sheet state
@@ -909,7 +901,7 @@ export default function JournalHubScreen() {
               currentParentId,
             });
 
-            setUndoAction(plan.undoAction);
+            setUndoActions((prev) => [...prev, plan.undoAction]);
             storeDeleteFolder(folder.id, false);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
@@ -921,8 +913,9 @@ export default function JournalHubScreen() {
             }
 
             // Auto-dismiss undo after 4s
+            if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
             deleteTimerRef.current = setTimeout(() => {
-              setUndoAction(null);
+              setUndoActions([]);
             }, 4000);
           },
         },
@@ -936,49 +929,30 @@ export default function JournalHubScreen() {
     (note: Note) => {
       if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
 
-      setUndoAction({ type: 'note', note });
+      setUndoActions((prev) => [...prev, { type: 'note', note }]);
       deleteNote(note.id);
 
       deleteTimerRef.current = setTimeout(() => {
-        setUndoAction(null);
+        setUndoActions([]);
       }, 3000);
     },
     [deleteNote],
   );
 
   const handleUndoAction = useCallback(() => {
-    if (!undoAction) return;
+    if (undoActions.length === 0) return;
 
     if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
 
-    if (undoAction.type === 'note') {
-      // Restore the exact original note
-      useUnfoldStore.setState((state) => ({
-        notes: [undoAction.note, ...state.notes],
-      }));
-    } else if (undoAction.type === 'folder') {
-      // Restore deleted folder tree + each note's original folder placement
-      useUnfoldStore.setState((state) => ({
-        folders: [
-          ...state.folders.filter(
-            (folder) => !undoAction.folders.some((restoredFolder) => restoredFolder.id === folder.id),
-          ),
-          ...undoAction.folders,
-        ],
-        notes: state.notes.map((n) =>
-          undoAction.affectedNoteIds.includes(n.id)
-            ? { ...n, folderId: undoAction.noteFolderIds[n.id] }
-            : n,
-        ),
-      }));
-    }
-
-    setUndoAction(null);
+    useUnfoldStore.setState((state) =>
+      applyUndoActions({ notes: state.notes, folders: state.folders }, undoActions),
+    );
+    setUndoActions([]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [undoAction]);
+  }, [undoActions]);
 
   const handleUndoDismiss = useCallback(() => {
-    setUndoAction(null);
+    setUndoActions([]);
   }, []);
 
   const handleScroll = useCallback(
@@ -1672,15 +1646,17 @@ export default function JournalHubScreen() {
 
         {/* Undo toast for note/folder deletion */}
         <UndoToast
-          visible={undoAction !== null}
+          visible={undoActions.length > 0}
           message={
-            undoAction?.type === 'folder'
-              ? `${undoAction.folder.name} deleted`
+            undoActions.length > 1
+              ? `${undoActions.length} items deleted`
+              : undoActions[0]?.type === 'folder'
+              ? `${(undoActions[0] as typeof undoActions[0] & { type: 'folder'; folder: { name: string } }).folder.name} deleted`
               : 'Note deleted'
           }
           onUndo={handleUndoAction}
           onDismiss={handleUndoDismiss}
-          duration={undoAction?.type === 'folder' ? 4000 : 3000}
+          duration={undoActions.length > 0 && undoActions[undoActions.length - 1]?.type === 'folder' ? 4000 : 3000}
         />
 
         {/* Create Folder sheet */}
@@ -1723,7 +1699,7 @@ export default function JournalHubScreen() {
               currentParentId,
             });
 
-            setUndoAction(plan.undoAction);
+            setUndoActions((prev) => [...prev, plan.undoAction]);
             storeDeleteFolder(folderId, false);
 
             if (plan.navigation.activeFolderId !== activeFolderId) {
@@ -1733,8 +1709,9 @@ export default function JournalHubScreen() {
               setCurrentParentId(plan.navigation.currentParentId);
             }
 
+            if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
             deleteTimerRef.current = setTimeout(() => {
-              setUndoAction(null);
+              setUndoActions([]);
             }, 4000);
           }}
         />
