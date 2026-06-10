@@ -4,7 +4,7 @@
  * and manages Live Activity lifecycle for reading sessions.
  *
  * Widgets run in a separate process and can't access Zustand directly.
- * Data flows: App → Widget.updateSnapshot() → WidgetKit renders
+ * Data flows: App → Widget.updateTimeline([now, midnight]) → WidgetKit renders
  */
 import { logger } from '@/lib/logger';
 import UnfoldStreakWidget from '@/widgets/ios/UnfoldStreak';
@@ -13,6 +13,7 @@ import UnfoldDashboardWidget from '@/widgets/ios/UnfoldDashboard';
 import UnfoldReadingSessionActivity from '@/widgets/ios/UnfoldReadingSession';
 import { useUnfoldStore } from '@/lib/store';
 import type { LiveActivity } from 'expo-widgets';
+import { buildWidgetTimelineEntries } from '@/lib/widget-timeline';
 
 // Track active reading session
 let activeReadingSession: LiveActivity<{
@@ -27,81 +28,33 @@ let activeReadingSession: LiveActivity<{
 }> | null = null;
 
 /**
- * Push current app state to all widgets.
+ * Push current app state to all widgets as a two-entry timeline
+ * (now + next midnight) so the "read today" state self-expires at 00:00.
  * Call this whenever streak, devotional, or reading state changes.
  */
 export function syncWidgets(): void {
   try {
     const state = useUnfoldStore.getState();
-    const devotional = state.getCurrentDevotional();
 
-    const today = new Date().toDateString();
-    const hasReadToday = state.streakLastReadDate
-      ? new Date(state.streakLastReadDate).toDateString() === today
-      : false;
-
-    // Current day data
-    const currentDay = devotional?.days?.find(
-      (d) => d.dayNumber === devotional.currentDay
-    );
-    const nextDay = devotional?.days?.find(
-      (d) => d.dayNumber === (devotional?.currentDay ?? 0) + 1
+    const entries = buildWidgetTimelineEntries(
+      {
+        streakCurrent: state.streakCurrent,
+        streakLongest: state.streakLongest,
+        streakLastReadDate: state.streakLastReadDate,
+        readingDuration: state.user?.readingDuration ?? 5,
+        currentDevotional: state.getCurrentDevotional(),
+        allDevotionals: state.devotionals ?? [],
+      },
+      new Date()
     );
 
-    // Weekly progress: look back 7 days for read status
-    const weeklyProgress = getWeeklyProgress(state);
-
-    const sharedProps = {
-      streakCount: state.streakCurrent,
-      streakLongest: state.streakLongest,
-      hasReadToday,
-      devotionalTitle: devotional?.title ?? 'Unfold',
-      dayTitle: currentDay?.title ?? 'Start your series',
-      dayNumber: devotional?.currentDay ?? 0,
-      totalDays: devotional?.totalDays ?? 0,
-      scriptureReference: currentDay?.scriptureReference ?? '',
-      scriptureText: currentDay?.scriptureText ?? '',
-      quotableLine: currentDay?.quotableLine ?? '',
-      readingMinutes: state.user?.readingDuration ?? 5,
-      weeklyProgress,
-      nextDayTitle: nextDay?.title ?? '',
-    };
-
-    // Update all widgets with current data
-    UnfoldStreakWidget.updateSnapshot(sharedProps);
-    UnfoldTodayWidget.updateSnapshot(sharedProps);
-    UnfoldDashboardWidget.updateSnapshot(sharedProps);
+    UnfoldStreakWidget.updateTimeline(entries);
+    UnfoldTodayWidget.updateTimeline(entries);
+    UnfoldDashboardWidget.updateTimeline(entries);
   } catch (error) {
     // Widgets may not be configured yet — fail silently
     logger.log('[Widgets] sync error (non-fatal):', error);
   }
-}
-
-/**
- * Build a 7-character string of "0" and "1" for M-Su weekly reading.
- */
-function getWeeklyProgress(state: ReturnType<typeof useUnfoldStore.getState>): string {
-  const devotional = state.getCurrentDevotional();
-  if (!devotional) return '0,0,0,0,0,0,0';
-
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-  const bits: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + mondayOffset + i);
-    const dateStr = d.toDateString();
-
-    // Check if any day was read on this date
-    const wasRead = (devotional.days ?? []).some(
-      (day) => day.readAt && new Date(day.readAt).toDateString() === dateStr
-    );
-    bits.push(wasRead ? '1' : '0');
-  }
-
-  return bits.join(',');
 }
 
 /**
