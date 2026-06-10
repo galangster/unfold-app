@@ -380,3 +380,8 @@ export async function fetchCommentary(input: CommentaryInput): Promise<string | 
     return null;
   }
 }
+
+/** Clear all cached Bible verses and commentary (used by performFullLocalReset). */
+export function clearVerseCache(): void {
+  verseCache.clearAll();
+}

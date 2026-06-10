@@ -72,6 +72,7 @@ import { usePremiumAccessPolicy } from '@/hooks/usePremiumAccessPolicy';
 import { exportBugReportBundleToFile, logBugEvent } from '@/lib/bug-logger';
 import { analyzeNetworkError } from '@/lib/network-error-handler';
 import { useCompanionChatStore } from '@/lib/companion-chat-store';
+import { performFullLocalReset } from '@/lib/full-reset';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
@@ -289,7 +290,7 @@ export default function YouScreen() {
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              'This action cannot be undone. All your data will be permanently deleted.',
+              'This will permanently delete your data from this device and disconnect this install from your synced data. This cannot be undone.',
               [
                 { text: 'Go Back', style: 'cancel' },
                 {
@@ -299,12 +300,7 @@ export default function YouScreen() {
                     setIsDeletingAccount(true);
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     try {
-                      // Cancel every scheduled OS notification BEFORE wiping
-                      // store state — otherwise the frozen payloads keep
-                      // firing against content that no longer exists.
-                      await cancelAllReminders();
-                      reset();
-                      useCompanionChatStore.getState().clearAllConversations();
+                      await performFullLocalReset();
                       router.dismissAll();
                       setTimeout(() => router.replace('/'), 50);
                     } finally {

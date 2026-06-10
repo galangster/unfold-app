@@ -3,12 +3,9 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 
 import { isQaToolsEnabled } from '@/lib/qa-tools';
-import { mmkvStorage } from '@/lib/mmkv-storage';
-import { cancelAllReminders } from '@/lib/notifications';
-import { useCompanionChatStore } from '@/lib/companion-chat-store';
 import { useTheme } from '@/lib/theme';
 import { useUIState } from '@/lib/ui-state';
-import { useUnfoldStore } from '@/lib/store';
+import { performFullLocalReset } from '@/lib/full-reset';
 
 export default function DebugResetBeginningScreen() {
   const router = useRouter();
@@ -18,17 +15,7 @@ export default function DebugResetBeginningScreen() {
     if (!isQaToolsEnabled()) return;
 
     const resetToBeginning = async () => {
-      await cancelAllReminders();
-
-      useUnfoldStore.getState().reset();
-      useCompanionChatStore.getState().clearAllConversations();
-
-      mmkvStorage.removeItem('unfold-storage');
-      mmkvStorage.removeItem('unfold-companion-chat');
-      mmkvStorage.removeItem('@unfold_companion_daily');
-      mmkvStorage.removeItem('@unfold_exclusive_offer_seen');
-      mmkvStorage.removeItem('@unfold_onboarding_offer_seen');
-      mmkvStorage.removeItem('inflight-generation-job');
+      await performFullLocalReset();
 
       const ui = useUIState.getState();
       ui.setQaPremiumOverride(false);

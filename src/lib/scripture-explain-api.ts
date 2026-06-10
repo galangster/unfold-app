@@ -273,3 +273,8 @@ export async function fetchScriptureExplanation(
     );
   }
 }
+
+/** Clear all cached scripture explanations (used by performFullLocalReset). */
+export function clearScriptureExplainCache(): void {
+  scriptureExplainCache.clearAll();
+}
