@@ -92,6 +92,13 @@ const mmkv =
         // on a throwaway namespace; NEVER open the real file in the wrong mode.
         new MMKV({ id: 'unfold-store-v2-recovery' });
 
+if (openPlan.clearOnOpen) {
+  // Recovery sandbox must start EMPTY every session (REVM-4). This wipes only
+  // the throwaway 'unfold-store-v2-recovery' namespace — the real
+  // 'unfold-store-v2' file is untouched (clearOnOpen is never set for it).
+  mmkv.clearAll();
+}
+
 if (openPlan.mode === 'recovery') {
   logger.error(
     '[MMKV] Keychain unavailable but store is encrypted — running in recovery namespace this session; user data preserved on disk',

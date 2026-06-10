@@ -18,6 +18,10 @@ export interface MmkvOpenPlan {
   mode: MmkvMode;
   writeMarker: 'encrypted' | 'plain' | null;
   recrypt: boolean;
+  /** Recovery only: wipe the throwaway namespace so it is an EMPTY
+   *  one-session sandbox — a previous outage's writes must not resurrect
+   *  as "current" data (REVM-4). Never true for the real store file. */
+  clearOnOpen: boolean;
 }
 
 /**
@@ -25,12 +29,12 @@ export interface MmkvOpenPlan {
  * whether the encryption key is currently available.
  *
  * Decision table:
- *   marker='encrypted', keyAvailable=true  → { mode:'encrypted', writeMarker:null,        recrypt:false }
- *   marker='encrypted', keyAvailable=false → { mode:'recovery',  writeMarker:null,        recrypt:false }
- *   marker='plain',     keyAvailable=true  → { mode:'plain',     writeMarker:'encrypted', recrypt:true  }
- *   marker='plain',     keyAvailable=false → { mode:'plain',     writeMarker:null,        recrypt:false }
- *   marker=null,        keyAvailable=true  → { mode:'encrypted', writeMarker:'encrypted', recrypt:false }
- *   marker=null,        keyAvailable=false → { mode:'plain',     writeMarker:'plain',     recrypt:false }
+ *   marker='encrypted', keyAvailable=true  → { mode:'encrypted', writeMarker:null,        recrypt:false, clearOnOpen:false }
+ *   marker='encrypted', keyAvailable=false → { mode:'recovery',  writeMarker:null,        recrypt:false, clearOnOpen:true  }
+ *   marker='plain',     keyAvailable=true  → { mode:'plain',     writeMarker:'encrypted', recrypt:true,  clearOnOpen:false }
+ *   marker='plain',     keyAvailable=false → { mode:'plain',     writeMarker:null,        recrypt:false, clearOnOpen:false }
+ *   marker=null,        keyAvailable=true  → { mode:'encrypted', writeMarker:'encrypted', recrypt:false, clearOnOpen:false }
+ *   marker=null,        keyAvailable=false → { mode:'plain',     writeMarker:'plain',     recrypt:false, clearOnOpen:false }
  */
 export function resolveMmkvOpenPlan(
   marker: 'encrypted' | 'plain' | null,
@@ -38,11 +42,11 @@ export function resolveMmkvOpenPlan(
 ): MmkvOpenPlan {
   if (marker === 'encrypted') {
     if (keyAvailable) {
-      return { mode: 'encrypted', writeMarker: null, recrypt: false };
+      return { mode: 'encrypted', writeMarker: null, recrypt: false, clearOnOpen: false };
     } else {
       // Key unavailable but file IS encrypted — do NOT open in plain mode.
       // Use a throwaway recovery namespace to preserve the real file.
-      return { mode: 'recovery', writeMarker: null, recrypt: false };
+      return { mode: 'recovery', writeMarker: null, recrypt: false, clearOnOpen: true };
     }
   }
 
@@ -50,9 +54,9 @@ export function resolveMmkvOpenPlan(
     if (keyAvailable) {
       // File is plain but we now have a key — open plain (matches file),
       // then recrypt() to upgrade to encrypted.
-      return { mode: 'plain', writeMarker: 'encrypted', recrypt: true };
+      return { mode: 'plain', writeMarker: 'encrypted', recrypt: true, clearOnOpen: false };
     } else {
-      return { mode: 'plain', writeMarker: null, recrypt: false };
+      return { mode: 'plain', writeMarker: null, recrypt: false, clearOnOpen: false };
     }
   }
 
@@ -60,8 +64,8 @@ export function resolveMmkvOpenPlan(
   // Status-quo inference: if the key is available, assume the file was created
   // with encryption (the happy-path first launch). If not, assume plain.
   if (keyAvailable) {
-    return { mode: 'encrypted', writeMarker: 'encrypted', recrypt: false };
+    return { mode: 'encrypted', writeMarker: 'encrypted', recrypt: false, clearOnOpen: false };
   } else {
-    return { mode: 'plain', writeMarker: 'plain', recrypt: false };
+    return { mode: 'plain', writeMarker: 'plain', recrypt: false, clearOnOpen: false };
   }
 }
