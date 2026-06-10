@@ -19,6 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@/lib/logger';
+import { resolveMmkvOpenPlan } from '@/lib/mmkv-open-mode';
+import { resolveDeviceId } from '@/lib/device-id';
 
 // ---------------------------------------------------------------------------
 // Encryption key management — stored in iOS Keychain / Android Keystore
@@ -35,7 +37,7 @@ const ENCRYPTION_KEY_ID = 'unfold-mmkv-encryption-key';
  * so MMKV will fall back to unencrypted storage rather than crashing.
  */
 function getOrCreateEncryptionKey(): string | undefined {
-  try {
+  const tryOnce = (): string | undefined => {
     let key = SecureStore.getItem(ENCRYPTION_KEY_ID);
     if (key) return key;
 
@@ -47,9 +49,18 @@ function getOrCreateEncryptionKey(): string | undefined {
     SecureStore.setItem(ENCRYPTION_KEY_ID, key);
     logger.log('[MMKV] Created new encryption key in SecureStore');
     return key;
-  } catch (error) {
-    logger.warn('[MMKV] SecureStore unavailable, MMKV will not be encrypted', error);
-    return undefined;
+  };
+
+  try {
+    return tryOnce();
+  } catch {
+    // Transient Keychain error — retry once before giving up
+    try {
+      return tryOnce();
+    } catch (error) {
+      logger.warn('[MMKV] SecureStore unavailable after retry, MMKV will not be encrypted', error);
+      return undefined;
+    }
   }
 }
 
@@ -59,11 +70,44 @@ function getOrCreateEncryptionKey(): string | undefined {
 
 const encryptionKey = getOrCreateEncryptionKey();
 
+// ---------------------------------------------------------------------------
+// Mode-marker guard — prevents opening the store file in the wrong mode.
+// react-native-mmkv silently discards contents on mode mismatch.
+// ---------------------------------------------------------------------------
+const storageMeta = new MMKV({ id: 'unfold-storage-meta' });
+const MODE_MARKER_KEY = 'unfold-store-v2-mode';
+
+const storedMarker =
+  (storageMeta.getString(MODE_MARKER_KEY) as 'encrypted' | 'plain' | undefined) ?? null;
+const openPlan = resolveMmkvOpenPlan(storedMarker, encryptionKey !== undefined);
+
 // Use 'unfold-store-v2' for the encrypted instance.
 // The old 'unfold-store' (unencrypted) is migrated below and then cleared.
-const mmkv = encryptionKey
-  ? new MMKV({ id: 'unfold-store-v2', encryptionKey })
-  : new MMKV({ id: 'unfold-store-v2' });
+const mmkv =
+  openPlan.mode === 'encrypted'
+    ? new MMKV({ id: 'unfold-store-v2', encryptionKey })
+    : openPlan.mode === 'plain'
+      ? new MMKV({ id: 'unfold-store-v2' })
+      : // recovery: Keychain down but the real file is encrypted — run this session
+        // on a throwaway namespace; NEVER open the real file in the wrong mode.
+        new MMKV({ id: 'unfold-store-v2-recovery' });
+
+if (openPlan.mode === 'recovery') {
+  logger.error(
+    '[MMKV] Keychain unavailable but store is encrypted — running in recovery namespace this session; user data preserved on disk',
+  );
+}
+if (openPlan.recrypt && encryptionKey) {
+  try {
+    mmkv.recrypt(encryptionKey);
+    storageMeta.set(MODE_MARKER_KEY, 'encrypted');
+    logger.log('[MMKV] Upgraded plain store to encrypted via recrypt');
+  } catch (error) {
+    logger.warn('[MMKV] recrypt failed; staying plain', error);
+  }
+} else if (openPlan.writeMarker) {
+  storageMeta.set(MODE_MARKER_KEY, openPlan.writeMarker);
+}
 
 // Track whether migration has been attempted this session
 let migrationAttempted = false;
@@ -129,18 +173,60 @@ export function getSharedEncryptionKey(): string | undefined {
 // ---------------------------------------------------------------------------
 
 const DEVICE_ID_KEY = 'unfold-device-id';
+const SECURE_DEVICE_ID_KEY = 'unfold-device-id'; // SecureStore namespace is separate from MMKV
 
 /**
  * Get or create a stable device ID (UUID v4) for anonymous identification.
- * Stored in the encrypted MMKV instance — persists across app restarts.
+ *
+ * Identity is stored in the iOS Keychain / Android Keystore (via SecureStore)
+ * so it survives a reinstall — MMKV is cleared on reinstall but the Keychain
+ * is not. MMKV holds a mirror so that Keychain failures fall back gracefully.
+ *
+ * Consumers: api-config.ts (X-Device-ID header), revenuecatClient.ts (RC
+ * app-user-id seed). Both are module-scope synchronous — this must stay sync.
  */
 export function getDeviceId(): string {
-  let id = mmkv.getString(DEVICE_ID_KEY);
-  if (id) return id;
+  let secureValue: string | null = null;
+  let secureAvailable = true;
+  try {
+    secureValue = SecureStore.getItem(SECURE_DEVICE_ID_KEY);
+  } catch {
+    secureAvailable = false; // Keychain down — MMKV mirror keeps us working
+  }
 
-  id = uuidv4();
+  const plan = resolveDeviceId({
+    secureValue,
+    mmkvValue: mmkv.getString(DEVICE_ID_KEY) ?? null,
+    generate: () => uuidv4(),
+  });
+
+  if (plan.writeSecure && secureAvailable) {
+    try {
+      SecureStore.setItem(SECURE_DEVICE_ID_KEY, plan.id);
+    } catch {
+      // Best-effort; MMKV mirror provides fallback
+    }
+  }
+  if (plan.writeMmkv) mmkv.set(DEVICE_ID_KEY, plan.id);
+
+  return plan.id;
+}
+
+/**
+ * Rotate the device identity — generates a new UUID and writes it to both
+ * SecureStore and MMKV. Called by performFullLocalReset() after a data wipe
+ * so that server-side data becomes permanently unreachable (orphaned by
+ * design per product decision #1).
+ */
+export function rotateDeviceId(): string {
+  const id = uuidv4();
+  try {
+    SecureStore.setItem(SECURE_DEVICE_ID_KEY, id);
+  } catch {
+    // Best-effort
+  }
   mmkv.set(DEVICE_ID_KEY, id);
-  logger.log('[MMKV] Generated new device ID:', id);
+  logger.log('[MMKV] Device ID rotated');
   return id;
 }
 
