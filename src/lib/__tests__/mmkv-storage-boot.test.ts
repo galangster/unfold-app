@@ -448,6 +448,23 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(world.files.get(RECOVERY_ID)!.data.has(OUTBOX_KEY)).toBe(false);
   });
 
+  it('(f4) FAP-X-3: migrateData skips recovery sessions — legacy v1 data is neither cleared nor pulled into the throwaway namespace', () => {
+    // Pre-fix, module-load migration ran during recovery too: it copied the
+    // legacy v1 blob INTO the throwaway recovery namespace (wiped on the next
+    // recovery boot) and then CLEARED the legacy source — losing the data on
+    // both ends. Migration must wait for a normal boot.
+    const world = new FakeWorld({ secureThrows: true });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+    world.seedStore('unfold-store', 'plain', undefined, { [STORAGE_KEY]: 'legacy-v1-data' });
+
+    bootWith(world);
+
+    // Legacy source untouched; nothing migrated into the sandbox.
+    expect(world.files.get('unfold-store')!.data.get(STORAGE_KEY)).toBe('legacy-v1-data');
+    expect(world.files.get(RECOVERY_ID)!.data.has(STORAGE_KEY)).toBe(false);
+  });
+
   it('(f3) FAP-LIB-2/FAP-X-2: recovery-session full reset purges the REAL store files + marker → next boot is a true fresh start', () => {
     const world = new FakeWorld({ secureThrows: true });
     world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });

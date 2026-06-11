@@ -283,6 +283,16 @@ function migrateData(): void {
   if (migrationAttempted) return;
   migrationAttempted = true;
 
+  // FAP-X-3: never migrate during a recovery session. The active instance is
+  // the throwaway recovery namespace, so migrating would copy legacy sources
+  // INTO the sandbox (wiped on the next recovery boot) and then CLEAR the
+  // legacy original — losing the data on both ends. Legacy sources stay
+  // untouched until a normal boot performs the migration into the real store.
+  if (openPlan.mode === 'recovery') {
+    logger.log('[MMKV] Recovery session — deferring legacy migration to the next normal boot');
+    return;
+  }
+
   try {
     // If encrypted instance already has data, skip
     if (mmkv.getString('unfold-storage')) {
