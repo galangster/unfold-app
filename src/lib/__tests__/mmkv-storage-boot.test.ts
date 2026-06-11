@@ -28,6 +28,7 @@ const PROBE_ID = 'unfold-store-v2-probe';
 const RECOVERY_ID = 'unfold-store-v2-recovery';
 const META_ID = 'unfold-storage-meta';
 const MARKER_KEY = 'unfold-store-v2-mode';
+const OUTBOX_KEY = 'unfold-sync-outbox-v1';
 const STORAGE_KEY = 'unfold-storage';
 const DOC_DIR = '/docs';
 
@@ -355,6 +356,51 @@ describe('mmkv-storage boot (218→219 upgrade populations)', () => {
     expect(world.copyCalls).toHaveLength(0);
     expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
     expect(world.files.get(META_ID)!.data.get(MARKER_KEY)).toBe('encrypted');
+  });
+
+  it('(f2) RS5-4 back-to-back recovery boots: unmerged outbox survives the REVM-4 wipe', () => {
+    // Formula-computed fixture: an outbox entry queued during recovery
+    // session 1 that has NOT yet been drained into the real store.
+    const outboxEntry = {
+      table: 'devotionals',
+      id: 'd1',
+      clientUpdatedAt: '2026-06-09T00:00:00.000Z',
+      data: { schemaVersion: 1 },
+      deleted: false,
+    };
+    const outboxJson = JSON.stringify([outboxEntry]);
+
+    const world = new FakeWorld({ secureThrows: true });
+    world.seedStore(STORE_ID, 'encrypted', KEY, { [STORAGE_KEY]: PAYLOAD });
+    world.seedStore(META_ID, 'plain', undefined, { [MARKER_KEY]: 'encrypted' });
+    // Recovery session 1 left both queued outbox entries AND stale session data.
+    world.seedStore(RECOVERY_ID, 'plain', undefined, {
+      [OUTBOX_KEY]: outboxJson,
+      [STORAGE_KEY]: 'stale-recovery-data',
+    });
+
+    // Keychain is STILL down → recovery session 2. Before RS5-4 this wipe
+    // destroyed the unmerged outbox; the merge only runs on a normal boot.
+    const storage = bootWith(world);
+
+    expect(storage.mmkvStorage.getItem(STORAGE_KEY)).toBeNull(); // REVM-4 wipe intact
+    expect(world.files.get(RECOVERY_ID)!.data.get(OUTBOX_KEY)).toBe(outboxJson); // RS5-4 carry
+    expect(world.files.get(STORE_ID)!.data.get(STORAGE_KEY)).toBe(PAYLOAD); // real file untouched
+
+    // A third consecutive recovery boot still preserves it.
+    bootWith(world);
+    expect(world.files.get(RECOVERY_ID)!.data.get(OUTBOX_KEY)).toBe(outboxJson);
+
+    // Keychain returns → normal boot drains the queue into the REAL store and
+    // clears the recovery copy (RS2-1 merge, dedup formula: table:id, newer
+    // clientUpdatedAt wins; single entry → merged value is the entry verbatim).
+    world.opts.secureThrows = false;
+    world.opts.secureKey = KEY;
+    const normalStorage = bootWith(world);
+
+    expect(normalStorage.mmkvStorage.getItem(STORAGE_KEY)).toBe(PAYLOAD);
+    expect(world.files.get(STORE_ID)!.data.get(OUTBOX_KEY)).toBe(JSON.stringify([outboxEntry]));
+    expect(world.files.get(RECOVERY_ID)!.data.has(OUTBOX_KEY)).toBe(false);
   });
 
   it("(g) RS5-3 recrypt-throw: marker='plain' is written so the file mode is recorded truthfully", () => {

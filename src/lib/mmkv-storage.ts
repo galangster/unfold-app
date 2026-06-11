@@ -182,7 +182,20 @@ if (openPlan.clearOnOpen) {
   // Recovery sandbox must start EMPTY every session (REVM-4). This wipes only
   // the throwaway 'unfold-store-v2-recovery' namespace — the real
   // 'unfold-store-v2' file is untouched (clearOnOpen is never set for it).
+  //
+  // RS5-4 (cleanup ordering): the sync outbox queued during a PREVIOUS
+  // recovery session is only drained into the real store on a NORMAL boot
+  // (mergeRecoveryOutboxOnNormalBoot below) — but this wipe runs on every
+  // recovery boot, so back-to-back recovery sessions would destroy those
+  // unmerged entries before the merge ever gets a chance to run. Carry the
+  // outbox across the wipe: it is a pending-upload queue, not the "current"
+  // session data REVM-4 exists to keep from resurrecting, and the eventual
+  // merge dedupes per table:id (newer clientUpdatedAt wins).
+  const unmergedOutbox = mmkv.getString(RECOVERY_OUTBOX_KEY);
   mmkv.clearAll();
+  if (unmergedOutbox !== undefined) {
+    mmkv.set(RECOVERY_OUTBOX_KEY, unmergedOutbox);
+  }
 }
 
 if (openPlan.mode === 'recovery') {
