@@ -334,6 +334,37 @@ describe('decideStreakContinuation', () => {
     const d = decideStreakContinuation(base(now, { streakLastReadDate: iso(2026, 6, 12) }), now);
     expect(d).toMatchObject({ kind: 'continue', usedGrace: false, freezesConsumed: 0, missedWeekdays: 0 });
   });
+
+  // ── REVM-3: churned-premium users can CONSUME banked freezes ─────────────
+  it('churned-premium: 3 banked freezes + 2-weekday gap → grace covers 1, 1 freeze consumed, streak survives', () => {
+    // Now = Wed Jun 10; lastRead = Mon Jun 8 (same week, grace not yet used).
+    // Between = {Tue 9} → but let's use a Mon Jun 8 lastRead from the PREVIOUS
+    // week so we get 2 missed weekdays cleanly.
+    // now = Fri Jun 12, lastRead = Mon Jun 8: between = {Tue 9, Wed 10, Thu 11}
+    // = 3 missed weekdays. With grace covering 1 and 3 banked freezes covering 2 more,
+    // streak survives and freezesConsumed = 2.
+    // For the stated "2-weekday gap" scenario: now = Wed Jun 10, lastRead = Fri Jun 6
+    // (prev week); between = {Mon 8, Tue 9} = 2 missed weekdays. Grace covers 1
+    // (new week rolled), 1 freeze covers the other.
+    const now = at(2026, 6, 10); // Wed Jun 10; new week (Sun Jun 7 start)
+    const d = decideStreakContinuation(
+      base(now, {
+        streakLastReadDate: iso(2026, 6, 6), // Fri Jun 6 (prev week)
+        streakWeekStart: getWeekStart(at(2026, 6, 6)).toISOString(), // stale: prev week
+        streakGraceDaysUsedThisWeek: 1, // used in previous week — must roll to 0 at new week
+        streakFreezes: 3,
+        isPremium: false, // CHURNED — no longer premium
+      }),
+      now,
+    );
+    // Between Fri Jun 6 and Wed Jun 10: {Mon 8, Tue 9} = 2 missed weekdays (Sat/Sun forgiven).
+    // Grace rolls to 0 at new week, so graceCover = 1. freezesNeeded = 2 - 1 = 1.
+    // Churned user has 3 banked freezes → can cover the gap → streak continues.
+    expect(d.kind).toBe('continue');
+    expect(d.missedWeekdays).toBe(2);
+    expect(d.freezesConsumed).toBe(1);
+    expect(d.usedGrace).toBe(true);
+  });
 });
 
 describe('applyStreakRead', () => {
@@ -437,6 +468,27 @@ describe('applyStreakRead', () => {
     // Milestone: newStreak 7 % 7 === 0, but isPremium false → NO earn, NO clamp.
     expect(r?.streakCurrent).toBe(7);
     expect(r?.streakFreezes).toBe(3);
+  });
+
+  it('churned-premium user CONSUMES banked freezes across a 2-weekday gap (REVM-3 consume path)', () => {
+    // now = Wed Jun 10 (new week). Last read = Fri Jun 6 (prev week).
+    // Between: {Mon 8, Tue 9} = 2 missed weekdays. Grace (new week) covers 1.
+    // freezesNeeded = 1. Churned user (isPremium=false) has 3 banked freezes.
+    // FIX-C: banked freezes are consumable regardless of plan status.
+    const now = at(2026, 6, 10); // Wed Jun 10
+    const r = read(now, {
+      streakCurrent: 10,
+      streakLastReadDate: iso(2026, 6, 6), // Fri Jun 6
+      streakWeekStart: getWeekStart(at(2026, 6, 6)).toISOString(), // stale prev-week
+      streakGraceDaysUsedThisWeek: 1, // used in prev week → rolls to 0 in new week
+      streakFreezes: 3,
+      isPremium: false, // churned
+    });
+    // Grace consumed (new week → rolled to 0 then used): 1; freezesNeeded = 1 → burns 1.
+    expect(r).not.toBeNull();
+    expect(r?.streakCurrent).toBe(11); // streak survived
+    expect(r?.streakFreezes).toBe(2);  // 3 banked − 1 consumed = 2
+    expect(r?.streakGraceDaysUsedThisWeek).toBe(1);
   });
 
   it('freeze earning caps at 99', () => {

@@ -123,9 +123,12 @@ export function decideStreakContinuation(
   }
 
   // Coverage: the free weekly grace day covers one missed weekday; each
-  // premium freeze covers one more. The whole gap must be covered to continue.
+  // banked freeze covers one more. Banked freezes are CONSUMABLE regardless of
+  // current plan status — churned-premium users keep and spend their banked
+  // balance (REVM-3). Only EARNING new freezes is gated on isPremium (that
+  // guard lives in applyStreakRead's milestone block, not here).
   const graceCover = graceAfterWeekRollover < 1 ? 1 : 0;
-  const freezesAvailable = input.isPremium ? Math.max(0, input.streakFreezes) : 0;
+  const freezesAvailable = Math.max(0, input.streakFreezes);
   const freezesNeeded = missedWeekdays - graceCover;
 
   if (freezesNeeded <= freezesAvailable) {
