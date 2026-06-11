@@ -40,6 +40,7 @@ import { Duration, Ease } from '@/constants/animations';
 import { useQueryClient } from '@tanstack/react-query';
 import { purchasePackage, restorePurchases, getOfferings } from '@/lib/revenuecatClient';
 import { PURCHASE_PLANS_UNAVAILABLE_MESSAGE } from '@/lib/paywall-purchase-readiness';
+import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
@@ -952,6 +953,7 @@ function BottomCTA({
   selectedPlan,
   isLoading,
   purchaseError,
+  offeringsReady,
   onPress,
 }: {
   colors: ColorTheme;
@@ -966,6 +968,7 @@ function BottomCTA({
   selectedPlan: 'yearly' | 'monthly';
   isLoading: boolean;
   purchaseError: string | null;
+  offeringsReady: boolean;
   onPress: () => void;
 }) {
   // `hasFreeTrial` reflects yearly-plan eligibility only. Monthly has its own
@@ -975,14 +978,17 @@ function BottomCTA({
   // Guideline 3.1.2 misrepresentation risk otherwise.
   const effectiveHasTrial = hasFreeTrial && selectedPlan === 'yearly';
 
-  // Use RC's locale-aware priceStrings in disclosure — never hardcode '$' around raw numbers (FAP-UI-2).
-  // yearlyPrice/monthlyPrice are the priceString values from the RC package (e.g. "$59.99", "€49,99").
-  const disclosureText =
-    selectedPlan === 'yearly'
-      ? effectiveHasTrial
-        ? `${trialDays} days free, then ${yearlyPrice}/yr. Cancel anytime.`
-        : `${yearlyPrice}/yr. Cancel anytime.`
-      : `${monthlyPrice}/mo. Cancel anytime.`;
+  // Renewal disclosure honors the offerings loading state (RV-UI-3): null while
+  // offerings are absent (prices are '' until RC resolves — PRICE-1), otherwise
+  // RC's locale-aware priceStrings, never '$' around raw numbers (FAP-UI-2).
+  const disclosureText = getPaywallRenewalDisclosure({
+    offeringsReady,
+    selectedPlan,
+    hasFreeTrial,
+    trialDays,
+    yearlyPrice,
+    monthlyPrice,
+  });
 
   return (
     <View style={styles.ctaContainer}>
@@ -1029,19 +1035,22 @@ function BottomCTA({
         isLoading={isLoading}
       />
 
-      {/* Renewal disclosure -- reflects selected plan */}
-      <Text
-        numberOfLines={1}
-        style={{
-          fontFamily: FontFamily.ui,
-          fontSize: FontSize.xs,
-          color: colors.textSubtle,
-          textAlign: 'center',
-          marginTop: Spacing['2.5'],
-        }}
-      >
-        {disclosureText}
-      </Text>
+      {/* Renewal disclosure -- reflects selected plan; hidden until offerings
+          resolve so we never render price-less text (RV-UI-3) */}
+      {disclosureText != null && (
+        <Text
+          numberOfLines={1}
+          style={{
+            fontFamily: FontFamily.ui,
+            fontSize: FontSize.xs,
+            color: colors.textSubtle,
+            textAlign: 'center',
+            marginTop: Spacing['2.5'],
+          }}
+        >
+          {disclosureText}
+        </Text>
+      )}
     </View>
   );
 }
@@ -1353,6 +1362,7 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
             selectedPlan={selectedPlan}
             isLoading={isLoading}
             purchaseError={purchaseError}
+            offeringsReady={offeringsReady}
             onPress={currentPage === totalPages - 1 && !offeringsReady ? () => {} : handleCTAPress}
           />
         )}
