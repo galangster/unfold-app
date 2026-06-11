@@ -5,12 +5,9 @@ import { View, StyleSheet, Alert, type LayoutChangeEvent } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Spacing } from '@/constants/spacing';
 import { useTheme } from '@/lib/theme';
-import { shouldShowCompletedBottomGlow } from '@/lib/today-ambient-rive';
-import { alpha } from '@/components/ui';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
 import { useUnfoldStore, type MoodLevel } from '@/lib/store';
 import * as StoreReview from 'expo-store-review';
@@ -217,7 +214,7 @@ export default function HomeScreen() {
     }
   }, [getInsetSurfaceRect]);
 
-  // Scroll tracking for AmbientArtCanvas fade
+  // Scroll tracking for the hero DevotionalCard parallax
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -1195,30 +1192,14 @@ export default function HomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Layer 0: Ambient art — single Today ambient slot (Rive light rays or embers) */}
+      {/* Layer 0: Ambient art — single Today ambient ember slot. The glow has
+          one owner: EmberSystem's internal gradient (matches the celebration). */}
       <AmbientArtCanvas
         streakLevel={streakCurrent}
         hasReadToday={hasReadToday}
         stateType={devotionalState.type}
-        accentColor={colors.accent}
         screenFocused={isTodayFocused}
-        scrollY={scrollY}
       />
-
-      {shouldShowCompletedBottomGlow({ hasReadToday, stateType: devotionalState.type }) && (
-        <LinearGradient
-          pointerEvents="none"
-          colors={[
-            alpha(colors.accent, 0),
-            alpha(colors.accent, 0.08),
-            alpha(colors.accent, 0.2),
-          ]}
-          locations={[0, 0.58, 1]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.completedBottomGlow}
-        />
-      )}
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <Animated.ScrollView
@@ -1336,14 +1317,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  completedBottomGlow: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 260,
-    zIndex: 0,
-  },
   todayStackWrapper: {
     marginTop: TODAY_RELATIONSHIP_SPACING.heroToOptionalStack,
   },

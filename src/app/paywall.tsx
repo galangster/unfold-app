@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, ActivityIndicator, Linking, ScrollView, Image, StyleSheet, Platform, Pressable } from 'react-native';
+import { View, Text, ActivityIndicator, Linking, ScrollView, Image, Platform, Pressable } from 'react-native';
 import { LEGAL_LINKS } from '@/lib/push-notification-helpers';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -10,7 +10,8 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { XIcon, PaletteIcon, BookOpenTextIcon, InfinityIcon, PencilLineIcon, CircleNotchIcon, CheckIcon, XCircleIcon, BellIcon, CreditCardIcon, SunHorizonIcon, BooksIcon, ChatCircleDotsIcon } from 'phosphor-react-native';
 import { useTheme } from '@/lib/theme';
-import { GoldEmberField } from '@/components/home/GoldEmberField';
+import { EmberSystem } from '@/components/EmberSystem';
+import type { ExclusionZone } from '@/lib/ember-system';
 import { alpha } from '@/components/ui';
 import { FontFamily, FontSize } from '@/constants/fonts';
 import { Radius } from '@/constants/radius';
@@ -43,6 +44,12 @@ import { getPerMonthEquivalent } from '@/lib/paywall-pricing';
 import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 
 type PlanChoice = 'yearly' | 'monthly';
+
+// Hard exclusion over the pricing cards, CTA, and renewal disclosure — falling
+// embers must never collide with payment copy (normalized screen rect).
+const PAYWALL_TEXT_EXCLUSION: ReadonlyArray<ExclusionZone> = [
+  { x: 0, y: 0.52, width: 1, height: 0.48 },
+];
 
 /** Get human-readable trial duration from a package */
 function getTrialDuration(pkg: PurchasesPackage | undefined | null): string | null {
@@ -536,12 +543,14 @@ export default function PaywallScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Reversed embers — falling from top */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <View style={{ flex: 1, transform: [{ scaleY: -1 }] }}>
-          <GoldEmberField streakLevel={3} active />
-        </View>
-      </View>
+      {/* Falling embers — native down-drift, quiet near the price/disclosure copy */}
+      <EmberSystem
+        variant="ambient"
+        direction="down"
+        count={14}
+        intensity={0.6}
+        exclusionZones={PAYWALL_TEXT_EXCLUSION}
+      />
 
       {/* Drag handle — sticky, above scroll content */}
       <View style={{ position: 'absolute', top: 6, left: 0, right: 0, zIndex: 10, alignItems: 'center', pointerEvents: 'none' }}>

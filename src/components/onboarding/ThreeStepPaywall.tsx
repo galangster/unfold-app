@@ -44,7 +44,8 @@ import { getPaywallRenewalDisclosure } from '@/lib/paywall-disclosure';
 import { syncTrialEndingNotification } from '@/lib/trial-notification';
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { ColorTheme } from '@/constants/colors';
-import { EmberParticles } from '@/components/EmberParticles';
+import { EmberSystem } from '@/components/EmberSystem';
+import type { ExclusionZone } from '@/lib/ember-system';
 import { ExclusiveOfferSheet } from '@/components/ExclusiveOfferSheet';
 import { mmkvStorage } from '@/lib/mmkv-storage';
 import { isQaToolsEnabled } from '@/lib/qa-tools';
@@ -92,6 +93,13 @@ const TOTAL_PAGES_WITH_TRIAL = 3;
 const TOTAL_PAGES_NO_TRIAL = 2;
 
 const DEVICE_BEZEL_WIDTH = SCREEN_WIDTH * 0.62;
+
+// Ember exclusion zones (normalized): benefit copy band + the stacked-card
+// dot indicators — stray embers next to the dots read as faux pagination.
+const PAYWALL_COPY_EXCLUSION: ReadonlyArray<ExclusionZone> = [
+  { x: 0.08, y: 0.3, width: 0.84, height: 0.34 },
+  { x: 0.25, y: 0.66, width: 0.5, height: 0.06 },
+];
 
 const REVIEWS = [
   {
@@ -1285,10 +1293,15 @@ export const ThreeStepPaywall = memo(function ThreeStepPaywall({
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      {/* Persistent ember particles — stay mounted across all three
-          screens so the embers flow continuously as the user taps
-          Continue rather than restarting per screen. */}
-      <EmberParticles color={colors.accent} count={18} bidirectional />
+      {/* Persistent ember field — stays mounted across all three screens so
+          the embers flow continuously as the user taps Continue rather than
+          restarting per screen. Excluded over benefit copy and page dots. */}
+      <EmberSystem
+        variant="ambient"
+        direction="both"
+        count={14}
+        exclusionZones={PAYWALL_COPY_EXCLUSION}
+      />
 
       {/* Page content — fills space between onboarding header and bottom CTA */}
       <View style={styles.flex1}>

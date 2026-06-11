@@ -63,7 +63,8 @@ import {
 import type { PurchasesPackage } from 'react-native-purchases';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { alpha } from '@/components/ui';
-import { EmberParticles } from '@/components/EmberParticles';
+import { EmberSystem } from '@/components/EmberSystem';
+import type { ExclusionZone } from '@/lib/ember-system';
 import { Current } from '@/components/Current';
 import { ScatterTitle } from '@/components/ScatterTitle';
 import { PremiumFeatureSheet } from '@/components/PremiumFeatureSheet';
@@ -89,6 +90,18 @@ import { CommitmentStep } from '@/components/onboarding/CommitmentStep';
 import { ThreeStepPaywall } from '@/components/onboarding/ThreeStepPaywall';
 import { stripOuterQuotes } from '@/lib/cn';
 
+// Ember exclusion zones (normalized to the ember layer's container) — keep
+// the quiet layers legible: welcome letter copy + "Tap anywhere", and the
+// mirror-back scripture reveal.
+const ONBOARDING_WELCOME_TEXT_EXCLUSION: ReadonlyArray<ExclusionZone> = [
+  { x: 0.06, y: 0.32, width: 0.88, height: 0.4 },
+];
+const ONBOARDING_MIRROR_LOADING_EXCLUSION: ReadonlyArray<ExclusionZone> = [
+  { x: 0.15, y: 0.4, width: 0.7, height: 0.2 },
+];
+const ONBOARDING_MIRROR_VERSE_EXCLUSION: ReadonlyArray<ExclusionZone> = [
+  { x: 0, y: 0.3, width: 1, height: 0.4 },
+];
 
 // Slow-pulsing text — opacity breathes in and out gently
 function PulsingText({ text, style }: { text: string; style: any }) {
@@ -1451,20 +1464,13 @@ export default function OnboardingScreen() {
           }}
           style={{ flex: 1, paddingHorizontal: Spacing['6'] }}
         >
-          <EmberParticles color={colors.accent} count={16} bidirectional />
-          <View style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 320,
-            pointerEvents: 'none',
-          }}>
-            <LinearGradient
-              colors={['transparent', `${colors.accent}20`, `${colors.accent}40`]}
-              style={{ flex: 1 }}
-            />
-          </View>
+          <EmberSystem
+            variant="ambient"
+            direction="both"
+            count={16}
+            intensity={0.7}
+            exclusionZones={ONBOARDING_WELCOME_TEXT_EXCLUSION}
+          />
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ExpoImage
               source={require('../../assets/icon-paywall.png')}
@@ -2297,7 +2303,13 @@ export default function OnboardingScreen() {
       if (isLoadingMirrorBack && !aiMirrorBack) {
         return (
           <View style={{ minHeight: 380, position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
-            <EmberParticles color={colors.accent} count={10} />
+            <EmberSystem
+              variant="ambient"
+              direction="both"
+              count={10}
+              intensity={0.7}
+              exclusionZones={ONBOARDING_MIRROR_LOADING_EXCLUSION}
+            />
             <View style={{ alignItems: 'center', gap: Spacing['4'] }}>
               <ActivityIndicator size="small" color={colors.accent} />
               <Text style={{ fontFamily: FontFamily.body, fontSize: FontSize.sm, color: colors.textMuted }}>
@@ -2311,7 +2323,13 @@ export default function OnboardingScreen() {
       return (
         <View style={{ minHeight: 380, position: 'relative' }}>
           {/* Floating ember particles */}
-          <EmberParticles color={colors.accent} count={10} />
+          <EmberSystem
+            variant="ambient"
+            direction="both"
+            count={10}
+            intensity={0.7}
+            exclusionZones={ONBOARDING_MIRROR_VERSE_EXCLUSION}
+          />
 
           <View style={{ gap: Spacing['8'] }}>
             {/* Opening reflection */}

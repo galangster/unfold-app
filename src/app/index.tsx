@@ -13,7 +13,6 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Haptics from 'expo-haptics';
@@ -24,7 +23,7 @@ import { Radius } from '@/constants/radius';
 import { Duration } from '@/constants/animations';
 import { useUnfoldStore } from '@/lib/store';
 import { useTheme } from '@/lib/theme';
-import { EmberParticles } from '@/components/EmberParticles';
+import { EmberSystem } from '@/components/EmberSystem';
 import { hasPendingNotificationNavigation, hasSettledInitialNotificationHydration } from '@/lib/push-notifications';
 import { getCompletedUserRedirectDisposition } from '@/lib/push-notification-helpers';
 import {
@@ -341,13 +340,8 @@ export default function WelcomeScreen() {
   // ─── Render ─────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      {/* Ember particles + gradient — always visible */}
-      <EmberParticles color={colors.accent} count={22} bidirectional />
-      <LinearGradient
-        colors={['transparent', `${colors.accent}20`, `${colors.accent}40`]}
-        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 350 }}
-        pointerEvents="none"
-      />
+      {/* Ember field — shared vocabulary; EmberSystem owns the bottom glow */}
+      <EmberSystem variant="ambient" direction="both" count={20} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Features header — Skip + back arrow (only in features phase) */}

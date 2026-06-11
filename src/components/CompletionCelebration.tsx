@@ -6,9 +6,7 @@ import Animated, {
   withTiming,
   withDelay,
   withSpring,
-  withRepeat,
   Easing,
-  interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/lib/theme';
@@ -16,12 +14,10 @@ import { FontFamily } from '@/constants/fonts';
 import { Spacing } from '@/constants/spacing';
 import { Duration } from '@/constants/animations';
 import { useAccessibleAnimation } from '@/hooks/useAccessibility';
-import { GoldEmberField } from '@/components/home/GoldEmberField';
+import { EmberSystem } from '@/components/EmberSystem';
 import { formatSeriesCompletionSummary } from '@/lib/series-completion-summary';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const CENTER_X = SCREEN_WIDTH / 2;
-const CENTER_Y = SCREEN_HEIGHT / 2;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─── Pre-baked completion messages ───────────────────────────────────────────
 // God/Jesus-focused: glory goes to Him, not to the reader.
@@ -99,73 +95,6 @@ function pickRandom(arr: string[]): string {
   return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
-// ─── Luminous mote that drifts upward with organic sway ─────────────────────
-function LuminousMote({
-  startX,
-  startY,
-  size,
-  delay,
-  drift,
-  accentColor,
-  textColor,
-  isAccent,
-}: {
-  startX: number;
-  startY: number;
-  size: number;
-  delay: number;
-  drift: number;
-  accentColor: string;
-  textColor: string;
-  isAccent: boolean;
-}) {
-  const progress = useSharedValue(0);
-  const sway = useSharedValue(0);
-
-  useEffect(() => {
-    progress.value = withDelay(
-      delay,
-      withTiming(1, { duration: 3200 + Math.random() * 800, easing: Easing.out(Easing.quad) })
-    );
-    sway.value = withDelay(
-      delay,
-      withRepeat(
-        withTiming(1, { duration: 1600 + Math.random() * 600, easing: Easing.inOut(Easing.sin) }),
-        -1,
-        true,
-      )
-    );
-  }, [delay, progress, sway]);
-
-  const style = useAnimatedStyle(() => {
-    const opacity = interpolate(progress.value, [0, 0.08, 0.3, 0.75, 1], [0, 0.9, 0.7, 0.3, 0]);
-    const translateY = interpolate(progress.value, [0, 1], [0, -(SCREEN_HEIGHT * 0.35 + drift)]);
-    const translateX = interpolate(sway.value, [0, 1], [-12, 12]);
-    const s = interpolate(progress.value, [0, 0.15, 0.6, 1], [0.2, 1, 0.8, 0.3]);
-    return {
-      opacity,
-      transform: [{ translateY }, { translateX }, { scale: s }],
-    };
-  });
-
-  return (
-    <Animated.View
-      style={[
-        {
-          position: 'absolute',
-          left: startX - size / 2,
-          top: startY,
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: isAccent ? accentColor : textColor,
-        },
-        style,
-      ]}
-    />
-  );
-}
-
 // ─── Main component ─────────────────────────────────────────────────────────
 interface CompletionCelebrationProps {
   visible: boolean;
@@ -182,7 +111,7 @@ export function CompletionCelebration({
   message,
   seriesReflectionSummary,
 }: CompletionCelebrationProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { reducedMotion } = useAccessibleAnimation();
 
   // Pick a random message on each render when visible
@@ -192,21 +121,6 @@ export function CompletionCelebration({
     return pickRandom(DAY_MESSAGES);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, type, message]);
-
-  // Generate motes fresh each time celebration shows
-  const motes = useMemo(() => {
-    if (!visible) return [];
-    return Array.from({ length: 18 }, (_, i) => ({
-      id: i,
-      // Cluster motes around center with some spread
-      startX: CENTER_X + (Math.random() - 0.5) * SCREEN_WIDTH * 0.6,
-      startY: CENTER_Y + (Math.random() - 0.3) * SCREEN_HEIGHT * 0.15,
-      size: Math.random() * 4.5 + 2,
-      delay: 200 + Math.random() * 700,
-      drift: Math.random() * 80,
-      isAccent: Math.random() > 0.65,
-    }));
-  }, [visible]);
 
   // Overlay + content animation values
   const overlayOpacity = useSharedValue(0);
@@ -282,23 +196,9 @@ export function CompletionCelebration({
       <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFill} onPress={onDismiss}>
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
 
-          {/* Ember particles rising from bottom */}
-          {!reducedMotion && <GoldEmberField streakLevel={7} active />}
-
-          {/* Luminous motes drifting upward (skip if reduced motion) */}
-          {!reducedMotion && motes.map((m) => (
-            <LuminousMote
-              key={m.id}
-              startX={m.startX}
-              startY={m.startY}
-              size={m.size}
-              delay={m.delay}
-              drift={m.drift}
-              accentColor={colors.accent}
-              textColor={isDark ? colors.textMuted : colors.textSubtle}
-              isAccent={m.isAccent}
-            />
-          ))}
+          {/* Canonical celebration ember field + luminous motes. EmberSystem
+              owns reduce motion internally (designed radial still, not null). */}
+          <EmberSystem variant="celebration" motes active />
 
           {/* Content — left aligned */}
           <View
